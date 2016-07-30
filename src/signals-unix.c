@@ -28,14 +28,10 @@
 #define HAVE_TIMER
 #endif
 
-#if defined(JL_USE_INTEL_JITEVENTS)
-unsigned sig_stack_size = SIGSTKSZ;
-#elif defined(_CPU_AARCH64_)
-// The default SIGSTKSZ causes stack overflow in libunwind.
-#define sig_stack_size (1 << 16)
-#else
-#define sig_stack_size SIGSTKSZ
-#endif
+// 8M signal stack, same as default stack size and enough
+// for reasonable finalizers.
+// Should also be enough for parallel GC when we have it =)
+#define sig_stack_size (8 * 1024 * 1024)
 
 static bt_context_t *jl_to_bt_context(void *sigctx)
 {
@@ -46,17 +42,88 @@ static bt_context_t *jl_to_bt_context(void *sigctx)
 #endif
 }
 
-static void JL_NORETURN jl_throw_in_ctx(jl_value_t *e, void *sigctx)
+static int thread0_exit_count = 0;
+
+static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.gregs[REG_RSP];
+#elif defined(_OS_LINUX_) && defined(_CPU_X86_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.gregs[REG_ESP];
+#elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.sp;
+#elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.arm_sp;
+#elif defined(_OS_DARWIN_)
+    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
+    return ctx->uc_mcontext64->__ss.__rsp;
+#else
+    // TODO Add support for FreeBSD and PowerPC(64)?
+    return 0;
+#endif
+}
+
+static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
+{
+    // Modifying the ucontext should work but there is concern that
+    // sigreturn orientated programming mitigation can work against us
+    // by rejecting ucontext that is modified.
+    // The current (staged) implementation in the Linux Kernel only
+    // checks that the syscall is made in the signal handler and that
+    // the ucontext address is valid. Hopefully the value of the ucontext
+    // will not be part of the validation...
+    uintptr_t rsp = (uintptr_t)ptls->signal_stack + sig_stack_size;
+    assert(rsp % 16 == 0);
+#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    rsp -= sizeof(void*);
+    *(void**)rsp = NULL;
+    ctx->uc_mcontext.gregs[REG_RSP] = rsp;
+    ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)fptr;
+#elif defined(_OS_LINUX_) && defined(_CPU_X86_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    rsp -= sizeof(void*);
+    *(void**)rsp = NULL;
+    ctx->uc_mcontext.gregs[REG_ESP] = rsp;
+    ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)fptr;
+#elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ctx->uc_mcontext.sp = rsp;
+    ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
+    ctx->uc_mcontext.pc = (uintptr_t)fptr;
+#elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ctx->uc_mcontext.arm_sp = rsp;
+    ctx->uc_mcontext.arm_lr = 0; // Clear link register
+    ctx->uc_mcontext.arm_pc = (uintptr_t)fptr;
+#elif defined(_OS_DARWIN_)
+    // Only used for SIGFPE.
+    // This doesn't seems to be reliable when the SIGFPE is generated
+    // from a divide-by-zero exception, which is now handled by
+    // `catch_exception_raise`. It works fine when a signal is recieved
+    // due to `kill`/`raise` though.
+    ucontext64_t *ctx = (ucontext64_t*)_ctx;
+    rsp -= sizeof(void*);
+    *(void**)rsp = NULL;
+    ctx->uc_mcontext64->__ss.__rsp = rsp;
+    ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
+#else
+    // TODO Add support for FreeBSD and PowerPC(64)?
+    fptr();
+#endif
+}
+
+static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, void *sigctx)
+{
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
                                           jl_to_bt_context(sigctx));
     ptls->exception_in_transit = e;
-    // TODO throw the error by modifying sigctx for supported platforms
-    // This will avoid running the atexit handler on the signal stack
-    // if no excepiton handler is registered.
-    jl_rethrow();
+    jl_call_in_ctx(ptls, &jl_rethrow, sigctx);
 }
 
 static pthread_t signals_thread;
@@ -104,6 +171,19 @@ static void jl_unblock_signal(int sig)
 #include <signals-mach.c>
 #else
 
+static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
+{
+    // One guard page for signal_stack.
+    return !((char*)ptr < (char*)ptls->signal_stack - jl_page_size ||
+             (char*)ptr > (char*)ptls->signal_stack + sig_stack_size);
+}
+
+static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
+{
+    return (is_addr_on_sigstack(ptls, ptr) &&
+            is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
+}
+
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -117,27 +197,36 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         if (ptls->tid != 0)
             return;
 #endif
-        if (jl_get_ptls_states()->defer_signal) {
+        if (ptls->defer_signal) {
             jl_safepoint_defer_sigint();
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_ctx(jl_interrupt_exception, context);
+            jl_throw_in_ctx(ptls, jl_interrupt_exception, context);
         }
         return;
     }
-    if (ptls->safe_restore || is_addr_on_stack(jl_get_ptls_states(), info->si_addr)) { // stack overflow, or restarting jl_
+    if (ptls->safe_restore || is_addr_on_stack(ptls, info->si_addr)) { // stack overflow, or restarting jl_
         jl_unblock_signal(sig);
-        jl_throw_in_ctx(jl_stackovf_exception, context);
+        jl_throw_in_ctx(ptls, jl_stackovf_exception, context);
+    }
+    else if (jl_is_on_sigstack(ptls, info->si_addr, context)) {
+        // This mainly happens when one of the finalizers during final cleanup
+        // on the signal stack has a deep/infinite recursion.
+        // There isn't anything more we can do
+        // (we are already corrupting that stack running this function)
+        // so just call `_exit` to terminate immediately.
+        jl_safe_printf("ERROR: Signal stack overflow, exit\n");
+        _exit(sig + 128);
     }
     else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
         jl_unblock_signal(sig);
-        jl_throw_in_ctx(jl_readonlymemory_exception, context);
+        jl_throw_in_ctx(ptls, jl_readonlymemory_exception, context);
     }
     else {
 #ifdef SEGV_EXCEPTION
         jl_unblock_signal(sig);
-        jl_throw_in_ctx(jl_segv_exception, context);
+        jl_throw_in_ctx(ptls, jl_segv_exception, context);
 #else
         sigdie_handler(sig, info, context);
 #endif
@@ -199,11 +288,39 @@ static void jl_try_deliver_sigint(void)
     pthread_kill(ptls2->system_id, SIGUSR2);
 }
 
+// Write only by signal handling thread, read only by main thread
+// no sync necessary.
+static int thread0_exit_state = 0;
+static void jl_exit_thread0_cb(void)
+{
+    // This can get stuck if it happens at an unfortunate spot
+    // (unavoidable due to its async nature).
+    // Try harder to exit each time if we get multiple exit requests.
+    if (thread0_exit_count <= 1) {
+        jl_exit(thread0_exit_state);
+    }
+    else if (thread0_exit_count == 2) {
+        exit(thread0_exit_state);
+    }
+    else {
+        _exit(thread0_exit_state);
+    }
+}
+
+static void jl_exit_thread0(int state)
+{
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    thread0_exit_state = state;
+    jl_atomic_store_release(&ptls2->signal_request, 3);
+    pthread_kill(ptls2->system_id, SIGUSR2);
+}
+
 // request:
 // 0: nothing
 // 1: get state
-// 3: throw sigint if `!defer_signal && io_wait` or if force throw threshold
+// 2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
 //    is reached
+// 3: exit with `thread0_exit_state`
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -229,8 +346,12 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
-            jl_throw_in_ctx(jl_interrupt_exception, ctx);
+            jl_throw_in_ctx(ptls, jl_interrupt_exception, ctx);
         }
+    }
+    else if (request == 3) {
+        jl_unblock_signal(sig);
+        jl_call_in_ctx(ptls, jl_exit_thread0_cb, ctx);
     }
 }
 
@@ -407,6 +528,15 @@ static void *signal_listener(void *arg)
         critical |= (sig == SIGUSR1 && !profile);
 #endif
 
+        int doexit = critical;
+#ifdef SIGINFO
+        if (sig == SIGINFO)
+            doexit = 0;
+#else
+        if (sig == SIGUSR1)
+            doexit = 0;
+#endif
+
         bt_size = 0;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
@@ -446,18 +576,13 @@ static void *signal_listener(void *arg)
         // and must be thread-safe, but not necessarily signal-handler safe
         if (critical) {
             jl_critical_error(sig, NULL, bt_data, &bt_size);
-            // FIXME
-            // It is unsafe to run the exit handler on this thread
-            // (this thread is not managed and has a rather limited stack space)
-            // try harder to run this on a managed thread.
-#ifdef SIGINFO
-            if (sig != SIGINFO)
-#else
-            if (sig != SIGUSR1)
-#endif
-                jl_exit(128 + sig);
+            if (doexit) {
+                thread0_exit_count++;
+                jl_exit_thread0(128 + sig);
+            }
         }
     }
+    return NULL;
 }
 
 void restore_signals(void)
@@ -482,8 +607,9 @@ void restore_signals(void)
 void fpe_handler(int sig, siginfo_t *info, void *context)
 {
     (void)info;
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_unblock_signal(sig);
-    jl_throw_in_ctx(jl_diverror_exception, context);
+    jl_throw_in_ctx(ptls, jl_diverror_exception, context);
 }
 
 void jl_install_default_signal_handlers(void)
