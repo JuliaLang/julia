@@ -4562,16 +4562,6 @@ whichever shape has more dimensions.
 promote_shape
 
 """
-    methodswith(typ[, module or function][, showparents])
-
-Return an array of methods with an argument of type `typ`. If optional `showparents` is
-`true`, also return arguments with a parent type of `typ`, excluding type `Any`.
-
-The optional second argument restricts the search to a particular module or function.
-"""
-methodswith
-
-"""
     foldr(op, v0, itr)
 
 Like [`reduce`](:func:`reduce`), but with guaranteed right associativity. `v0` will be used
