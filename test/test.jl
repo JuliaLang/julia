@@ -313,3 +313,28 @@ end
 @test @inferred(inferrable_kwtest(1; y=1)) == 2
 @test @inferred(uninferrable_kwtest(1)) == 3
 @test_throws ErrorException @inferred(uninferrable_kwtest(1; y=2)) == 2
+
+# Issue #17462
+counter_17462_pre = 0
+counter_17462_post = 0
+@testset for x in [1,2,3,4]
+    counter_17462_pre += 1
+    if x == 1
+        @test counter_17462_pre == x
+        continue
+        @test false
+    elseif x == 3
+        @test counter_17462_pre == x
+        break
+        @test false
+    elseif x == 4
+        @test false
+    else
+        @test counter_17462_pre == x
+        @test x == 2
+        @test counter_17462_post == 0
+    end
+    counter_17462_post += 1
+end
+@test counter_17462_pre == 3
+@test counter_17462_post == 1
