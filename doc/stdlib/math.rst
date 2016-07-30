@@ -495,7 +495,7 @@ Mathematical Functions
 
    For real or complex floating-point values, ``rtol`` defaults to ``sqrt(eps(typeof(real(x-y))))``\ . This corresponds to requiring equality of about half of the significand digits. For other types, ``rtol`` defaults to zero.
 
-   ``x`` and ``y`` may also be arrays of numbers, in which case ``norm`` defaults to ``vecnorm`` but may be changed by passing a ``norm::Function`` keyword argument. (For numbers, ``norm`` is the same thing as ``abs``\ .) When ``x`` and ``y`` are arrays, if their norm is infinite (i.e. `±Inf` or `NaN`), the comparison falls back to checking whether all elements of ``x`` and ``y`` are approximately equal component-wise.
+   ``x`` and ``y`` may also be arrays of numbers, in which case ``norm`` defaults to ``vecnorm`` but may be changed by passing a ``norm::Function`` keyword argument. (For numbers, ``norm`` is the same thing as ``abs``\ .) When ``x`` and ``y`` are arrays, if their norm is infinite (i.e. ``±Inf`` or ``NaN``), the comparison falls back to checking whether all elements of ``x`` and ``y`` are approximately equal component-wise.
 
    The binary operator ``≈`` is equivalent to ``isapprox`` with the default arguments, and ``x ≉ y`` is equivalent to ``!isapprox(x,y)``\ .
 
