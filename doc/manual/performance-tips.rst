@@ -948,7 +948,7 @@ properties of the loop:
 A loop containing ``break``, ``continue``, or :obj:`@goto` will cause a
 compile-time error.
 
-To actually benefit from :obj:`@simd` current implementation, your loop
+To actually benefit from the current implementation of :obj:`@simd`, your loop
 should have the following additional properties:
 
 -  The loop must be an innermost loop.
