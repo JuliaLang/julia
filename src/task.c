@@ -188,6 +188,7 @@ static jl_function_t *task_done_hook_func=NULL;
 static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    JL_SIGATOMIC_BEGIN();
     if (t->exception != jl_nothing)
         t->state = failed_sym;
     else
@@ -211,7 +212,12 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
     }
     if (task_done_hook_func != NULL) {
         jl_value_t *args[2] = {task_done_hook_func, (jl_value_t*)t};
-        jl_apply(args, 2);
+        JL_TRY {
+            jl_apply(args, 2);
+        }
+        JL_CATCH {
+            jl_no_exc_handler(jl_exception_in_transit);
+        }
     }
     gc_debug_critical_error();
     abort();
@@ -509,6 +515,14 @@ static void init_task(jl_task_t *t, char *stack)
 #endif /* !COPY_STACKS */
 
 jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
+JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
+{
+    jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+    jl_static_show(JL_STDERR, e);
+    jl_printf(JL_STDERR, "\n");
+    jlbacktrace();
+    jl_exit(1);
+}
 
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
@@ -532,11 +546,7 @@ void JL_NORETURN throw_internal(jl_value_t *e)
         jl_longjmp(eh->eh_ctx, 1);
     }
     else {
-        jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
-        jl_static_show(JL_STDERR, e);
-        jl_printf(JL_STDERR, "\n");
-        jlbacktrace();
-        jl_exit(1);
+        jl_no_exc_handler(e);
     }
     assert(0);
 }
