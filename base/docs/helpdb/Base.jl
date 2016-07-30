@@ -647,16 +647,6 @@ A string giving the literal bit representation of a number.
 bits
 
 """
-    launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
-
-Implemented by cluster managers. For every Julia worker launched by this function, it should
-append a `WorkerConfig` entry to `launched` and notify `launch_ntfy`. The function MUST exit
-once all workers, requested by `manager` have been launched. `params` is a dictionary of all
-keyword arguments `addprocs` was called with.
-"""
-launch
-
-"""
     invdigamma(x)
 
 Compute the inverse digamma function of `x`.
@@ -1568,19 +1558,6 @@ connect(host=?, port)
 Connect to the named pipe / UNIX domain socket at `path`.
 """
 connect(path)
-
-"""
-    connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
-
-Implemented by cluster managers using custom transports. It should establish a logical
-connection to worker with id `pid`, specified by `config` and return a pair of `AsyncStream`
-objects. Messages from `pid` to current process will be read off `instrm`, while messages to
-be sent to `pid` will be written to `outstrm`. The custom transport implementation must
-ensure that messages are delivered and received completely and in order.
-`Base.connect(manager::ClusterManager.....)` sets up TCP/IP socket connections in-between
-workers.
-"""
-connect(manager, pid::Int, config::WorkerConfig)
 
 """
     mean(v[, region])
@@ -2919,109 +2896,6 @@ See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
 Float64
 
 """
-```
-addprocs(n::Integer; exeflags=``) -> List of process identifiers
-```
-
-Launches workers using the in-built `LocalManager` which only launches workers on the
-local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4
-processes on the local machine.
-"""
-addprocs(n::Integer)
-
-"""
-    addprocs() -> List of process identifiers
-
-Equivalent to `addprocs(Sys.CPU_CORES)`
-
-Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their
-global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes.
-"""
-addprocs()
-
-"""
-```
-addprocs(machines; keyword_args...) -> List of process identifiers
-```
-
-Add processes on remote machines via SSH. Requires `julia` to be installed in the same
-location on each node, or to be available via a shared file system.
-
-`machines` is a vector of machine specifications.  Worker are started for each specification.
-
-A machine specification is either a string `machine_spec` or a tuple - `(machine_spec, count)`.
-
-`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user` defaults
-to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is specified, other
-workers will connect to this worker at the specified `bind_addr` and `port`.
-
-`count` is the number of workers to be launched on the specified host. If specified as `:auto`
-it will launch as many workers as the number of cores on the specific host.
-
-
-Keyword arguments:
-
-* `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
-            master process. Default is `false`.
-
-* `sshflags`: specifies additional ssh options, e.g.
-
-  ```
-  sshflags=`-i /home/foo/bar.pem`
-  ```
-
-* `max_parallel`: specifies the maximum number of workers connected to in parallel at a host.
-                  Defaults to 10.
-
-* `dir`: specifies the working directory on the workers. Defaults to the host's current
-         directory (as found by `pwd()`)
-
-* `exename`: name of the `julia` executable. Defaults to `"\$JULIA_HOME/julia"` or
-             `"\$JULIA_HOME/julia-debug"` as the case may be.
-
-* `exeflags`: additional flags passed to the worker processes.
-
-* `topology`: Specifies how the workers connect to each other. Sending a message
-            between unconnected workers results in an error.
-
-  + `topology=:all_to_all`  :  All processes are connected to each other.
-                      This is the default.
-
-  + `topology=:master_slave`  :  Only the driver process, i.e. pid 1 connects to the
-                        workers. The workers do not connect to each other.
-
-  + `topology=:custom`  :  The `launch` method of the cluster manager specifes the
-                  connection topology via fields `ident` and `connect_idents` in
-                  `WorkerConfig`. A worker with a cluster manager identity `ident`
-                  will connect to all workers specified in `connect_idents`.
-
-
-Environment variables :
-
-If the master process fails to establish a connection with a newly launched worker within
-60.0 seconds, the worker treats it a fatal situation and terminates. This timeout can be
-controlled via environment variable `JULIA_WORKER_TIMEOUT`. The value of
-`JULIA_WORKER_TIMEOUT` on the master process, specifies the number of seconds a newly
-launched worker waits for connection establishment.
-"""
-addprocs(machines)
-
-"""
-    addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
-
-Launches worker processes via the specified cluster manager.
-
-For example Beowulf clusters are  supported via a custom cluster manager implemented in
-package `ClusterManagers`.
-
-The number of seconds a newly launched worker waits for connection establishment from the
-master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker process's
-environment. Relevant only when using TCP/IP as transport.
-"""
-addprocs(manager::ClusterManager)
-
-"""
     mkpath(path, [mode])
 
 Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
@@ -3947,15 +3821,6 @@ Send a signal to a process. The default is to terminate the process.
 kill(p::Process, signum=SIGTERM)
 
 """
-    kill(manager::FooManager, pid::Int, config::WorkerConfig)
-
-Implemented by cluster managers. It is called on the master process, by `rmprocs`. It should
-cause the remote worker specified by `pid` to exit. `Base.kill(manager::ClusterManager.....)`
-executes a remote `exit()` on `pid`
-"""
-kill(manager, pid::Int, config::WorkerConfig)
-
-"""
     sylvester(A, B, C)
 
 Computes the solution `X` to the Sylvester equation `AX + XB + C = 0`, where `A`, `B` and
@@ -4442,19 +4307,6 @@ Byte-swap an integer.
 bswap
 
 """
-    manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
-
-Implemented by cluster managers. It is called on the master process, during a worker's
-lifetime, with appropriate `op` values:
-
-- with `:register`/`:deregister` when a worker is added / removed from the Julia worker pool.
-- with `:interrupt` when `interrupt(workers)` is called. The [`ClusterManager`](:class:`ClusterManager`)
-  should signal the appropriate worker with an interrupt signal.
-- with `:finalize` for cleanup purposes.
-"""
-manage
-
-"""
     resize!(collection, n) -> collection
 
 Resize `collection` to contain `n` elements. If `n` is smaller than the current collection
@@ -4712,15 +4564,6 @@ Quit the program indicating that the processes completed successfully. This func
 `exit(0)` (see [`exit`](:func:`exit`)).
 """
 quit
-
-"""
-    init_worker(manager::FooManager)
-
-Called by cluster managers implementing custom transports. It initializes a newly launched
-process as a worker. Command line argument `--worker` has the effect of initializing a
-process as a worker using TCP/IP sockets for transport.
-"""
-init_worker
 
 """
     escape_string(io, str::AbstractString, esc::AbstractString)
@@ -8076,17 +7919,6 @@ true
 ```
 """
 applicable
-
-"""
-    Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
-
-Called by cluster managers using custom transports. It should be called when the custom
-transport implementation receives the first message from a remote worker. The custom
-transport must manage a logical connection to the remote worker and provide two
-`AsyncStream` objects, one for incoming messages and the other for messages addressed to the
-remote worker.
-"""
-Base.process_messages
 
 """
     RandomDevice()
