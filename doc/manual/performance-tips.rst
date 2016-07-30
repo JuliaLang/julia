@@ -1116,7 +1116,7 @@ should have the following additional properties:
 
 While :obj:`@simd` needs to be placed in front of a loop, that is not the case
 for :obj:`@inbounds`. It can be placed in front of any expression as long as it
-is inside a function, the only place where it could be outside of a function
+is inside a function. The only place where it can be outside of a function
 definition is in front of a loop.
 ::
     julia> x = [1]
