@@ -570,3 +570,8 @@ end
 @test repr(:(f.(X,Y))) == ":(f.(X,Y))"
 @test repr(:(f.(X))) == ":(f.(X))"
 @test repr(:(f.())) == ":(f.())"
+
+# Test compact printing of homogeneous tuples
+@test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
+@test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4,Float64}"
+@test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32,Float32,Float32}"

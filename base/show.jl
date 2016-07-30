@@ -190,24 +190,35 @@ function show_type_parameter(io::IO, p::ANY, has_tvar_env::Bool)
 end
 
 show(io::IO, x::DataType) = show_datatype(io, x)
+
 function show_datatype(io::IO, x::DataType)
-    show(io, x.name)
     # tvar_env is a `::Vector{Any}` when we are printing a method signature
     # and `true` if we are printing type parameters outside a method signature.
     has_tvar_env = get(io, :tvar_env, false) !== false
+
     if ((!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple &&
         !(has_tvar_env && x.name.primary === x))
-        # Do not print the type parameters for the primary type if we are
-        # printing a method signature or type parameter.
-        # Always print the type parameter if we are printing the type directly
-        # since this information is still useful.
-        print(io, '{')
         n = length(x.parameters)
-        for (i, p) in enumerate(x.parameters)
-            show_type_parameter(io, p, has_tvar_env)
-            i < n && print(io, ',')
+
+        # Print homogeneous tuples with more than 3 elements compactly
+        # as NTuple{N, T}
+        if length(unique(x.parameters)) == 1 && n > 3
+            show(io, "NTuple{", n, ',', x.parameters[1], "}")
+        else
+            show(io, x.name)
+            # Do not print the type parameters for the primary type if we are
+            # printing a method signature or type parameter.
+            # Always print the type parameter if we are printing the type directly
+            # since this information is still useful.
+            print(io, '{')
+            for (i, p) in enumerate(x.parameters)
+                show_type_parameter(io, p, has_tvar_env)
+                i < n && print(io, ',')
+            end
+            print(io, '}')
         end
-        print(io, '}')
+    else
+        show(io, x.name)
     end
 end
 
