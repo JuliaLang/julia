@@ -918,6 +918,9 @@ julia> @inferred max(1,2)
 ```
 """
 macro inferred(ex)
+    if Meta.isexpr(ex, :ref)
+        ex = Expr(:call, :getindex, ex.args...)
+    end
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
 
     Base.remove_linenums!(quote
