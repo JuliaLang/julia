@@ -777,14 +777,6 @@ void jl_init_threading(void)
     static jl_ptls_t _jl_all_tls_states;
     jl_all_tls_states = &_jl_all_tls_states;
     jl_n_threads = 1;
-
-#if defined(__linux__) && defined(JL_USE_INTEL_JITEVENTS)
-    if (jl_using_intel_jitevents)
-        // Intel VTune Amplifier needs at least 64k for alternate stack.
-        if (SIGSTKSZ < 1<<16)
-            sig_stack_size = 1<<16;
-#endif
-
     ti_init_master_thread();
 }
 

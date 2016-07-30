@@ -15,7 +15,7 @@
 #include <sys/_structs.h>
 #endif
 
-static void attach_exception_port(thread_port_t thread);
+static void attach_exception_port(thread_port_t thread, int segv_only);
 
 #ifdef JULIA_ENABLE_THREADING
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
@@ -99,7 +99,7 @@ static void allocate_segv_handler()
     }
     pthread_attr_destroy(&attr);
     for (int16_t tid = 0;tid < jl_n_threads;tid++) {
-        attach_exception_port(pthread_mach_thread_np(jl_all_tls_states[tid]->system_id));
+        attach_exception_port(pthread_mach_thread_np(jl_all_tls_states[tid]->system_id), 0);
     }
 }
 
@@ -120,7 +120,21 @@ enum x86_trap_flags {
     PAGE_PRESENT = 0x1
 };
 
-void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
+static void jl_call_in_state(jl_ptls_t ptls2, x86_thread_state64_t *state,
+                             void (*fptr)(void))
+{
+    uint64_t rsp = (uint64_t)ptls2->signal_stack + sig_stack_size;
+    assert(rsp % 16 == 0);
+
+    // push (null) $RIP onto the stack
+    rsp -= sizeof(void*);
+    *(void**)rsp = NULL;
+
+    state->__rsp = rsp; // set stack pointer
+    state->__rip = (uint64_t)fptr; // "call" the function
+}
+
+static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
 {
     unsigned int count = MACHINE_THREAD_STATE_COUNT;
     x86_thread_state64_t state;
@@ -131,18 +145,9 @@ void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
     ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
                                        (bt_context_t*)&state);
     ptls2->exception_in_transit = exception;
-
-    uint64_t rsp = (uint64_t)ptls2->signal_stack + sig_stack_size;
-    rsp &= -16; // ensure 16-byte alignment
-
-    // push (null) $RIP onto the stack
-    rsp -= sizeof(void*);
-    *(void**)rsp = NULL;
-
-    state.__rsp = rsp; // set stack pointer
-    state.__rip = (uint64_t)&jl_rethrow; // "call" the function
-
-    ret = thread_set_state(thread, x86_THREAD_STATE64, (thread_state_t)&state, count);
+    jl_call_in_state(ptls2, &state, &jl_rethrow);
+    ret = thread_set_state(thread, x86_THREAD_STATE64,
+                           (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state",ret);
 }
 
@@ -185,6 +190,11 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     jl_ptls_t ptls2 = &jl_tls_states;
     tid = 0;
 #endif
+    if (exception == EXC_ARITHMETIC) {
+        jl_throw_in_thread(tid, thread, jl_diverror_exception);
+        return KERN_SUCCESS;
+    }
+    assert(exception == EXC_BAD_ACCESS);
     kern_return_t ret = thread_get_state(thread, x86_EXCEPTION_STATE64, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
@@ -237,11 +247,14 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     }
 }
 
-static void attach_exception_port(thread_port_t thread)
+static void attach_exception_port(thread_port_t thread, int segv_only)
 {
     kern_return_t ret;
     // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
-    ret = thread_set_exception_ports(thread, EXC_MASK_BAD_ACCESS, segv_port, EXCEPTION_DEFAULT, MACHINE_THREAD_STATE);
+    exception_mask_t mask = EXC_MASK_BAD_ACCESS;
+    if (!segv_only)
+        mask |= EXC_MASK_ARITHMETIC;
+    ret = thread_set_exception_ports(thread, mask, segv_port, EXCEPTION_DEFAULT, MACHINE_THREAD_STATE);
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
@@ -283,7 +296,7 @@ static void jl_try_deliver_sigint(void)
     kern_return_t ret = thread_suspend(thread);
     HANDLE_MACH_ERROR("thread_suspend", ret);
 
-    // This aborts `sleep` and other syscall.
+    // This aborts `sleep` and other syscalls.
     ret = thread_abort(thread);
     HANDLE_MACH_ERROR("thread_abort", ret);
 
@@ -299,6 +312,41 @@ static void jl_try_deliver_sigint(void)
     else {
         jl_wake_libuv();
     }
+
+    ret = thread_resume(thread);
+    HANDLE_MACH_ERROR("thread_resume", ret);
+}
+
+static void jl_exit_thread0(int exitstate)
+{
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
+    kern_return_t ret = thread_suspend(thread);
+    HANDLE_MACH_ERROR("thread_suspend", ret);
+
+    // This aborts `sleep` and other syscalls.
+    ret = thread_abort(thread);
+    HANDLE_MACH_ERROR("thread_abort", ret);
+
+    unsigned int count = MACHINE_THREAD_STATE_COUNT;
+    x86_thread_state64_t state;
+    ret = thread_get_state(thread, x86_THREAD_STATE64,
+                           (thread_state_t)&state, &count);
+
+    void (*exit_func)(int) = &_exit;
+    if (thread0_exit_count <= 1) {
+        exit_func = &jl_exit;
+    }
+    else if (thread0_exit_count == 2) {
+        exit_func = &exit;
+    }
+
+    // First integer argument. Not portable but good enough =)
+    state.__rdi = exitstate;
+    jl_call_in_state(ptls2, &state, (void (*)(void))exit_func);
+    ret = thread_set_state(thread, x86_THREAD_STATE64,
+                           (thread_state_t)&state, count);
+    HANDLE_MACH_ERROR("thread_set_state",ret);
 
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
@@ -363,7 +411,7 @@ void *mach_profile_listener(void *arg)
     (void)arg;
     int i;
     const int max_size = 512;
-    attach_exception_port(mach_thread_self());
+    attach_exception_port(mach_thread_self(), 1);
 #ifdef LIBOSXUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif
