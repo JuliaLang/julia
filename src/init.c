@@ -621,6 +621,17 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 #endif
 
+
+#ifdef JL_ASAN_ENABLED
+    const char *asan_options = getenv("ASAN_OPTIONS");
+    if (!asan_options || !(strstr(asan_options, "allow_user_segv_handler=1") ||
+                           strstr(asan_options, "handle_segv=0"))) {
+        jl_printf(JL_STDERR,"WARNING: ASAN overrides Julia's SIGSEGV handler; "
+                            "disable SIGSEGV handling or allow custom handlers.\n");
+    }
+
+#endif
+
     jl_init_threading();
 
     jl_gc_init();
