@@ -66,12 +66,23 @@ gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 # total number of bytes allocated so far
 gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
+"""
+    tic()
+
+Set a timer to be read by the next call to [`toc`](:func:`toc`) or [`toq`](:func:`toq`). The
+macro call `@time expr` can also be used to time evaluation.
+"""
 function tic()
     t0 = time_ns()
     task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
     return t0
 end
 
+"""
+    toq()
+
+Return, but do not print, the time elapsed since the last [`tic`](:func:`tic`).
+"""
 function toq()
     t1 = time_ns()
     timers = get(task_local_storage(), :TIMERS, ())
@@ -83,6 +94,11 @@ function toq()
     (t1-t0)/1e9
 end
 
+"""
+    toc()
+
+Print and return the time elapsed since the last [`tic`](:func:`tic`).
+"""
 function toc()
     t = toq()
     println("elapsed time: ", t, " seconds")
@@ -149,6 +165,13 @@ function timev_print(elapsedtime, diff::GC_Diff)
     padded_nonzero_print(diff.full_sweep,   "full collections")
 end
 
+"""
+    @time
+
+A macro to execute an expression, printing the time it took to execute, the number of
+allocations, and the total number of bytes its execution caused to be allocated, before
+returning the value of the expression.
+"""
 macro time(ex)
     quote
         local stats = gc_num()
@@ -162,6 +185,13 @@ macro time(ex)
     end
 end
 
+"""
+    @timev
+
+This is a verbose version of the `@time` macro. It first prints the same information as
+`@time`, then any non-zero memory allocation counters, and then returns the value of the
+expression.
+"""
 macro timev(ex)
     quote
         local stats = gc_num()
@@ -173,7 +203,12 @@ macro timev(ex)
     end
 end
 
-# print nothing, return elapsed time
+"""
+    @elapsed
+
+A macro to evaluate an expression, discarding the resulting value, instead returning the
+number of seconds it took to execute as a floating-point number.
+"""
 macro elapsed(ex)
     quote
         local t0 = time_ns()
@@ -188,7 +223,16 @@ end
 # like:  @allocated y = foo()
 # will not work correctly, because it will set y in the context of
 # the local function made by the macro, not the current function
+"""
+    @allocated
 
+A macro to evaluate an expression, discarding the resulting value, instead returning the
+total number of bytes allocated during evaluation of the expression. Note: the expression is
+evaluated inside a local function, instead of the current context, in order to eliminate the
+effects of compilation, however, there still may be some allocations due to JIT compilation.
+This also makes the results inconsistent with the `@time` macros, which do not try to adjust
+for the effects of compilation.
+"""
 macro allocated(ex)
     quote
         let
@@ -203,7 +247,13 @@ macro allocated(ex)
     end
 end
 
-# print nothing, return value, elapsed time, bytes allocated & gc time
+"""
+    @timed
+
+A macro to execute an expression, and return the value of the expression, elapsed time,
+total bytes allocated, garbage collection time, and an object with various memory allocation
+counters.
+"""
 macro timed(ex)
     quote
         local stats = gc_num()
