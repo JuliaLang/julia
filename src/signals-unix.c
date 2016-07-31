@@ -389,7 +389,8 @@ static void *signal_listener(void *arg)
                 critical = 1;
             }
             else {
-                jl_try_deliver_sigint();
+                if (!jl_ignore_sigint())
+                    jl_try_deliver_sigint();
                 continue;
             }
         }
