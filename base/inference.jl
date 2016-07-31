@@ -1631,7 +1631,7 @@ function typeinf_loop(frame)
     #    end
         in_typeinf_loop = false
     catch ex
-        println("WARNING: An error occured during inference. Type inference is now partially disabled.")
+        println("WARNING: An error occurred during inference. Type inference is now partially disabled.")
         println(ex)
         ccall(:jlbacktrace, Void, ())
     end

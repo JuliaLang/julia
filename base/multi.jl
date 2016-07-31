@@ -1142,7 +1142,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             oldstate = werr.state
             set_worker_state(werr, W_TERMINATED)
 
-            # If unhandleable error occured talking to pid 1, exit
+            # If unhandleable error occurred talking to pid 1, exit
             if wpid == 1
                 if isopen(w_stream)
                     print(STDERR, "fatal error on ", myid(), ": ")

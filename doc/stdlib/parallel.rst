@@ -381,7 +381,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Fetch a value from a remote channel, also removing it in the processs.
+   Fetch a value from a remote channel, also removing it in the process.
 
 .. function:: take!(Channel)
 
