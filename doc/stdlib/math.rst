@@ -275,7 +275,7 @@ Mathematical Operators
 
    Unsigned right bit shift operator, ``x >>> n``\ . For ``n >= 0``\ , the result is ``x`` shifted right by ``n`` bits, where ``n >= 0``\ , filling with ``0``\ s. For ``n < 0``\ , this is equivalent to ``x [<<](:func:``\ <<``) -n``\ ].
 
-   For ``Unsigned`` integer types, this is eqivalent to :func:`>>`\ . For ``Signed`` integer types, this is equivalent to ``signed(unsigned(x) >> n)``\ .
+   For ``Unsigned`` integer types, this is equivalent to :func:`>>`\ . For ``Signed`` integer types, this is equivalent to ``signed(unsigned(x) >> n)``\ .
 
    .. doctest::
 

@@ -65,7 +65,7 @@ for exceptions of that type. If `retry_on` is a function
 
 The first retry happens after a gap of 50 milliseconds or `max_delay`,
 whichever is lower. Subsequently, the delays between retries are
-exponentially increased with a random factor upto `max_delay`.
+exponentially increased with a random factor up to `max_delay`.
 
 **Examples**
 ```julia
