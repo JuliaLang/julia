@@ -48,10 +48,8 @@
 #include <intrin.h>
 #endif
 
-#ifdef __has_feature
-#if __has_feature(memory_sanitizer)
+#ifdef JL_MSAN_ENABLED
 #include <sanitizer/msan_interface.h>
-#endif
 #endif
 
 #ifdef __cplusplus
@@ -663,14 +661,12 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
-#ifdef __has_feature
-#if __has_feature(memory_sanitizer)
+#ifdef JL_MSAN_ENABLED
     __msan_unpoison(&map,sizeof(struct link_map*));
     if (map) {
         __msan_unpoison(map, sizeof(struct link_map));
         __msan_unpoison_string(map->l_name);
     }
-#endif
 #endif
     if (map)
         return map->l_name;
