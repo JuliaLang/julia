@@ -220,7 +220,7 @@ end
 # make a collection similar to `c` and appropriate for collecting `itr`
 _similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
 _similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
-_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, convert(Dims,size(itr)))
+_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, indices(itr))
 _similar_for(c, T, itr, isz) = similar(c, T)
 
 """
@@ -286,8 +286,9 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
 end
 
 function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
-    dest[1] = v1
-    return collect_to!(dest, itr, 2, st)
+    i1 = first(linearindices(dest))
+    dest[i1] = v1
+    return collect_to!(dest, itr, i1+1, st)
 end
 
 function collect_to_with_first!(dest, v1, itr, st)
