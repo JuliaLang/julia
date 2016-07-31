@@ -161,8 +161,8 @@ void jl_init_stack_limits(int ismaster)
 
 static void jl_find_stack_bottom(void)
 {
-#if !defined(_OS_WINDOWS_) && defined(__has_feature)
-#if __has_feature(memory_sanitizer) || __has_feature(address_sanitizer)
+#if !defined(_OS_WINDOWS_)
+#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
     struct rlimit rl;
 
     // When using the sanitizers, increase stack size because they bloat
