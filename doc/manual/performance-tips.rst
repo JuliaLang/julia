@@ -1125,10 +1125,7 @@ definition is in front of a loop.
                x[2]
            end
     ERROR: BoundsError: attempt to access 1-element Array{Int64,1} at index [2]
-    in getindex(::Array{Int64,1}, ::Int64) at ./array.jl:309
-    in eval(::Module, ::Any) at ./boot.jl:225
-    in macro expansion at ./REPL.jl:92 [inlined]
-    in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at ./event.jl:46
+    in getindex(::Array{Int64,1}, ::Int64) at ./array.jl:344
 
     julia> function f(x)
                @inbounds if true
