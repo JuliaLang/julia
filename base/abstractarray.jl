@@ -50,6 +50,7 @@ end
 # comes up in other applications.
 indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
 indices1{T}(A::AbstractArray{T})   = (@_inline_meta; indices(A)[1])
+indices1(iter) = OneTo(length(iter))
 
 unsafe_indices(A) = indices(A)
 unsafe_indices(r::Range) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
