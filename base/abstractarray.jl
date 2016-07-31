@@ -40,7 +40,7 @@ indices{T,N}(A::AbstractArray{T,N}, d) = d <= N ? indices(A)[d] : OneTo(1)
 
 Returns the tuple of valid indices for array `A`.
 """
-function indices{T,N}(A::AbstractArray{T,N})
+function indices(A)
     @_inline_pure_meta
     map(s->OneTo(s), size(A))
 end
@@ -77,6 +77,7 @@ ndims{T,N}(::Type{AbstractArray{T,N}}) = N
 ndims{T<:AbstractArray}(::Type{T}) = ndims(supertype(T))
 length(t::AbstractArray) = prod(size(t))
 _length(A::AbstractArray) = prod(map(unsafe_length, indices(A))) # circumvent missing size
+_length(A) = length(A)
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
