@@ -1,5 +1,13 @@
+ __precompile__()
+
 module Tokenize
 
-# package code goes here
+include("token.jl")
+include("lexer.jl")
+
+import .Lexers: tokenize
+import .Tokens: untokenize
+
+export tokenize, untokenize
 
 end # module
