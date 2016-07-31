@@ -91,7 +91,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         end
 
         sub_reqs = Dict{String,VersionSet}(p=>VersionSet([vn, nvn]))
-        sub_deps = Query.filter_dependencies(sub_reqs, deps)
+        sub_deps = Query.prune_dependencies(sub_reqs, deps)
         interface = Interface(sub_reqs, sub_deps)
 
         red_pkgs = interface.pkgs
