@@ -52,8 +52,10 @@ end
 
 function eval_user_input(ast::ANY, backend::REPLBackend)
     iserr, lasterr = false, ((), nothing)
+    Base.sigatomic_begin()
     while true
         try
+            Base.sigatomic_end()
             if iserr
                 put!(backend.response_channel, lasterr)
                 iserr, lasterr = false, ()
@@ -74,6 +76,7 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
             iserr, lasterr = true, (err, catch_backtrace())
         end
     end
+    Base.sigatomic_end()
 end
 
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
@@ -136,8 +139,10 @@ function print_response(repl::AbstractREPL, val::ANY, bt, show_value::Bool, have
     print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
 end
 function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
+    Base.sigatomic_begin()
     while true
         try
+            Base.sigatomic_end()
             if bt !== nothing
                 display_error(errio, val, bt)
                 println(errio)
@@ -166,6 +171,7 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
             bt = catch_backtrace()
         end
     end
+    Base.sigatomic_end()
 end
 
 # A reference to a backend
