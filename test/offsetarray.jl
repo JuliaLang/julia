@@ -322,6 +322,10 @@ map!(+, dest, am, am)
 @test dest[1,8] == 4
 @test dest[1,9] == -2
 
+am = map(identity, a)
+@test isa(am, OffsetArray)
+@test am == a
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
