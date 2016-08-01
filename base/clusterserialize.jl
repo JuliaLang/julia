@@ -21,7 +21,7 @@ function deserialize(s::ClusterSerializer, ::Type{TypeName})
     if !full_body_sent
         tn = get(known_object_data, number, nothing)::TypeName
         if !haskey(object_numbers, tn)
-            # setup reverse mapping for serialize
+            # set up reverse mapping for serialize
             object_numbers[tn] = number
         end
         deserialize_cycle(s, tn)
