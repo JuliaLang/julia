@@ -17,9 +17,12 @@ import Core: arraysize, arrayset, arrayref
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array) = _size((), a)
+size(a::Array) = (@_inline_meta; _size((), a))
 _size{_,N}(out::NTuple{N}, A::Array{_,N}) = out
-_size{_,M,N}(out::NTuple{M}, A::Array{_,N}) = _size((out..., size(A,M+1)), A)
+function _size{_,M,N}(out::NTuple{M}, A::Array{_,N})
+    @_inline_meta
+    _size((out..., size(A,M+1)), A)
+end
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 

@@ -41,7 +41,7 @@ indices{T,N}(A::AbstractArray{T,N}, d) = d <= N ? indices(A)[d] : OneTo(1)
 Returns the tuple of valid indices for array `A`.
 """
 function indices(A)
-    @_inline_pure_meta
+    @_inline_meta
     map(s->OneTo(s), size(A))
 end
 
