@@ -236,7 +236,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_unblock_signal(sig);
         jl_throw_in_ctx(ptls, jl_readonlymemory_exception, context);
     }
-    else if (!info->si_addr) {
+    else if ((uintptr_t)info->si_addr <= jl_page_size * 2) {
         jl_unblock_signal(sig);
 #ifdef _OS_LINUX_
         ucontext_t *ctx = (ucontext_t*)context;

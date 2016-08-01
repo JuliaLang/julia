@@ -5862,13 +5862,23 @@ static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
     return attr;
 }
 
+static void parse_single_llvm_arg(const char *arg, const char *overview)
+{
+    const char *const argv[] = {"", arg};
+    cl::ParseCommandLineOptions(sizeof(argv) / sizeof(void*), argv, overview);
+}
+
 extern "C" void jl_init_codegen(void)
 {
-    const char *const argv_tailmerge[] = {"", "-enable-tail-merge=0"}; // NOO TOUCHIE; NO TOUCH! See #922
-    cl::ParseCommandLineOptions(sizeof(argv_tailmerge)/sizeof(argv_tailmerge[0]), argv_tailmerge, "disable-tail-merge\n");
+    // NOO TOUCHIE; NO TOUCH! See #922
+    parse_single_llvm_arg("-enable-tail-merge=0", "disable-tail-merge\n");
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    const char *const argv_copyprop[] = {"", "-disable-copyprop"}; // llvm bug 21743
-    cl::ParseCommandLineOptions(sizeof(argv_copyprop)/sizeof(argv_copyprop[0]), argv_copyprop, "disable-copyprop\n");
+    // llvm bug 21743
+    parse_single_llvm_arg("-disable-copyprop", "disable-copyprop\n");
+#endif
+#ifdef LLVM38
+    parse_single_llvm_arg("-enable-implicit-null-checks=1",
+                          "enable-implicit-null-checks\n");
 #endif
 #ifdef JL_DEBUG_BUILD
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");

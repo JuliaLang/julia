@@ -236,7 +236,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                         ExceptionInfo->ContextRecord,in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
-                else if (!ExceptionInfo->ExceptionRecord->ExceptionInformation[1]) {
+                else if (ExceptionInfo->ExceptionRecord->ExceptionInformation[1] <= jl_page_size * 2) {
                     jl_throw_in_ctx(jl_undefref_exception,
                                     ExceptionInfo->ContextRecord, in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;

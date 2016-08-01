@@ -669,7 +669,15 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
 {
     BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext,"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext,"pass");
-    builder.CreateCondBr(cond, passBB, failBB);
+    auto branch = builder.CreateCondBr(cond, passBB, failBB);
+#ifdef LLVM38
+    static auto make_implicit_md = MDNode::get(jl_LLVMContext,
+                                               ArrayRef<Metadata*>());
+    if (!exc)
+        branch->setMetadata(LLVMContext::MD_make_implicit, make_implicit_md);
+#else
+    (void)branch;
+#endif
     builder.SetInsertPoint(failBB);
     raise_exception(exc, ctx, passBB);
 }

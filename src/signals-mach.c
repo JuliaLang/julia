@@ -222,7 +222,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         }
         return KERN_SUCCESS;
     }
-    if (!fault_addr) {
+    if (fault_addr <= jl_page_size * 2) {
         jl_throw_in_thread(tid, thread, jl_undefref_exception);
         return KERN_SUCCESS;
     }
