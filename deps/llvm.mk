@@ -534,7 +534,7 @@ clean-llvm:
 distclean-llvm:
 	-rm -rf $(LLVM_TAR) $(LLVM_CLANG_TAR) \
 		$(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR) \
-		$(LLVM_SRC_DIR) $(LLVM_BUILDDIR_withtype)
+		$(LLVM_SRC_DIR) $(LLVM_SRC_DIR).extracted $(LLVM_BUILDDIR_withtype)
 
 ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
