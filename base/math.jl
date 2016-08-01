@@ -129,6 +129,21 @@ for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
     @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
 
+# functions with special cases for integer arguments
+@inline function exp2(x::Base.BitInteger)
+    if x > 1023
+        Inf64
+    elseif x <= -1023
+        # if -1073 < x <= -1023 then Result will be a subnormal number
+        # Hex literal with padding must be use to work on 32bit machine
+        reinterpret(Float64, 0x0000_0000_0000_0001  << ((x + 1074)) % UInt)
+    else
+        # We will cast everything to Int64 to avoid errors in case of Int128
+        # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
+        reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64)) % UInt)
+    end
+end
+
 # TODO: GNU libc has exp10 as an extension; should openlibm?
 exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
