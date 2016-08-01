@@ -283,7 +283,7 @@ static void jl_try_deliver_sigint(void)
     kern_return_t ret = thread_suspend(thread);
     HANDLE_MACH_ERROR("thread_suspend", ret);
 
-    // This abort `sleep` and other syscall.
+    // This aborts `sleep` and other syscall.
     ret = thread_abort(thread);
     HANDLE_MACH_ERROR("thread_abort", ret);
 

@@ -154,8 +154,7 @@ yield()
 put!(r,11)
 yield()
 
-# Test marking of AsyncStream
-
+# Test marking of IO
 r = Channel(1)
 @async begin
     port, server = listenany(2327)

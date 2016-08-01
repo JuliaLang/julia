@@ -56,7 +56,7 @@ static int jl_check_force_sigint(void)
 // Force sigint requires pressing `Ctrl-C` repeatedly.
 // Ignore sigint for a short time after that to avoid rethrowing sigint too
 // quickly again. (Code that has this issue is inherently racy but this is
-// a interactive feature anyway.)
+// an interactive feature anyway.)
 static int jl_ignore_sigint(void)
 {
     return jl_disable_sigint_time && jl_disable_sigint_time > uv_hrtime();
