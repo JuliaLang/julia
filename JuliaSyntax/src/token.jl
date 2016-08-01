@@ -21,11 +21,13 @@ export Token
   prime, # '
   macro_call, # @
 
-  dot,# .
-  dot2, # ..
-  dot3, # ...
+
 
   begin_ops,
+
+    dot,# .
+    dot2, # ..
+    dot3, # ...
 
     lazy_or, # ||
     lazy_and, # &&
