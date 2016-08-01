@@ -564,40 +564,8 @@ mktempdir() do dir
         @test !LibGit2.checkused!(creds)
         @test !LibGit2.checkused!(creds)
         @test LibGit2.checkused!(creds)
-        @test LibGit2.reset!(creds) == 3
-        @test !LibGit2.checkused!(creds)
-        @test creds.count == 2
-        @test creds[:user] == creds_user
-        @test creds[:pass] == creds_pass
-        @test creds[:pubkey] === nothing
-        @test creds[:user, "localhost"] == creds_user
-        @test creds[:pubkey, "localhost"] === nothing
-        @test creds[:usesshagent, "localhost"] == "Y"
-        creds[:usesshagent, "localhost"] = "E"
-        @test creds[:usesshagent, "localhost"] == "E"
-
-        creds = LibGit2.CachedCredentials()
-        @test !LibGit2.checkused!(creds)
-        @test !LibGit2.checkused!(creds)
-        @test !LibGit2.checkused!(creds)
-        @test LibGit2.checkused!(creds)
-        @test LibGit2.reset!(creds) == 3
-        @test !LibGit2.checkused!(creds)
-        @test creds.count == 2
-        @test creds[:user, "localhost"] === nothing
-        @test creds[:pass, "localhost"] === nothing
-        @test creds[:pubkey, "localhost"] === nothing
-        @test creds[:prvkey, "localhost"] === nothing
-        @test creds[:usesshagent, "localhost"] === nothing
-        creds[:user, "localhost"] = creds_user
-        creds[:pass, "localhost"] = creds_pass
-        creds[:usesshagent, "localhost"] = "Y"
-        @test creds[:user] === nothing
-        @test creds[:user, "localhost2"] === nothing
-        @test creds[:user, "localhost"] == creds_user
-        @test creds[:pass, "localhost"] == creds_pass
-        @test creds[:pubkey, "localhost"] === nothing
-        @test creds[:usesshagent, "localhost"] == "Y"
+        @test creds.user == creds_user
+        @test creds.pass == creds_pass
     #end
 end
 

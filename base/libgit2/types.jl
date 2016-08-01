@@ -55,19 +55,6 @@ abstract AbstractPayload
 
 "Abstract credentials payload"
 abstract AbstractCredentials <: AbstractPayload
-"Returns a credentials parameter"
-function Base.getindex(p::AbstractCredentials, key, _=nothing)
-    ks = Symbol(key)
-    isdefined(p, ks) && return getfield(p, ks)
-    return nothing
-end
-"Sets credentials with `key` parameter to a value"
-function Base.setindex!(p::AbstractCredentials, val, key, _=nothing)
-    ks = Symbol(key)
-    @assert isdefined(p, ks)
-    setfield!(p, ks, val)
-    return p
-end
 "Checks if credentials were used"
 checkused!(p::AbstractCredentials) = true
 checkused!(p::Void) = false
@@ -711,22 +698,15 @@ import Base.securezero!
 type UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
-    usesshagent::String  # used for ssh-agent authentication
     count::Int                   # authentication failure protection count
     function UserPasswordCredentials(u::AbstractString,p::AbstractString)
-        c = new(u,p,"Y",3)
+        c = new(u,p,3)
         finalizer(c, securezero!)
         return c
     end
+    UserPasswordCredentials() = UserPasswordCredentials("","")
 end
-"Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
-function checkused!(p::UserPasswordCredentials)
-    p.count <= 0 && return true
-    p.count -= 1
-    return false
-end
-"Resets authentication failure protection count"
-reset!(p::UserPasswordCredentials, cnt::Int=3) = (p.count = cnt)
+
 function securezero!(cred::UserPasswordCredentials)
     securezero!(cred.user)
     securezero!(cred.pass)
@@ -741,9 +721,10 @@ type SSHCredentials <: AbstractCredentials
     pubkey::String
     prvkey::String
     usesshagent::String  # used for ssh-agent authentication
+    count::Int
 
     function SSHCredentials(u::AbstractString,p::AbstractString)
-        c = new(u,p,"","","Y")
+        c = new(u,p,"","","Y",3)
         finalizer(c, securezero!)
         return c
     end
@@ -754,50 +735,31 @@ function securezero!(cred::SSHCredentials)
     securezero!(cred.pass)
     securezero!(cred.pubkey)
     securezero!(cred.prvkey)
+    cred.count = 0
     return cred
 end
 
 "Credentials that support caching"
 type CachedCredentials <: AbstractCredentials
-    cred::Dict{String,SSHCredentials}
+    cred::Dict{String,AbstractCredentials}
     count::Int            # authentication failure protection count
-    CachedCredentials() = new(Dict{String,SSHCredentials}(),3)
+    CachedCredentials() = new(Dict{String,AbstractCredentials}(),3)
 end
-"Returns specific credential parameter value: first index is a credential
-parameter name, second index is a host name (with schema)"
-function Base.getindex(p::CachedCredentials, keys...)
-    length(keys) != 2 && return nothing
-    key, host = keys
-    if haskey(p.cred, host)
-        creds = p.cred[host]
-        if isdefined(creds,key)
-            kval = getfield(creds, key)
-            !isempty(kval) && return kval
-        end
-    end
-    return nothing
-end
-"Sets specific credential parameter value: first index is a credential
-parameter name, second index is a host name (with schema)"
-function Base.setindex!(p::CachedCredentials, val, keys...)
-    length(keys) != 2 && return nothing
-    key, host = keys
-    if !haskey(p.cred, host)
-        p.cred[host] = SSHCredentials()
-    end
-    creds = p.cred[host]
-    @assert isdefined(creds,key)
-    setfield!(creds, key, val)
-    return p
-end
+
 "Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
-function checkused!(p::CachedCredentials)
+function checkused!(p::Union{UserPasswordCredentials, SSHCredentials})
     p.count <= 0 && return true
     p.count -= 1
     return false
 end
-"Resets authentication failure protection count"
-reset!(p::CachedCredentials, cnt::Int=3) = (p.count = cnt)
+reset!(p::Union{UserPasswordCredentials, SSHCredentials}, cnt::Int=3) = (p.count = cnt)
+reset!(p::CachedCredentials) = foreach(reset!, values(p.cred))
+
+"Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
+get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
+get_creds!(creds::AbstractCredentials, credid, default) = creds
+get_creds!(creds::Void, credid, default) = default
+
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
     return p
