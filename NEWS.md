@@ -95,6 +95,9 @@ Language changes
     When `x` is global, `x::T = ...` and `global x::T` used to mean type assertion,
     but this syntax is now reserved for type declaration ([#964]).
 
+  * Dictionary comprehension syntax `[ a=>b for x in y ]` is deprecated.
+    Use `Dict(a=>b for x in y)` instead ([#16510]).
+
 Library improvements
 --------------------
 
@@ -339,6 +342,9 @@ This section lists changes that do not have deprecation warnings.
     `:comparison` expression type ([#15524]). The `:comparison` expression type is still
     produced in ASTs when comparisons are chained (e.g. `A < B ≤ C`).
 
+  * `map` on a dictionary now expects a function that expects and returns a `Pair`.
+    The result is now another dictionary instead of an array ([#16622]).
+
 Deprecated or removed
 ---------------------
 
@@ -469,6 +475,7 @@ Language tooling improvements
 [#16466]: https://github.com/JuliaLang/julia/issues/16466
 [#16481]: https://github.com/JuliaLang/julia/issues/16481
 [#16502]: https://github.com/JuliaLang/julia/issues/16502
+[#16510]: https://github.com/JuliaLang/julia/issues/16510
 [#16621]: https://github.com/JuliaLang/julia/issues/16621
 [#16622]: https://github.com/JuliaLang/julia/issues/16622
 [#16645]: https://github.com/JuliaLang/julia/issues/16645
