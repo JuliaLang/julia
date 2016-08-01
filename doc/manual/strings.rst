@@ -553,8 +553,8 @@ contained in a string:
     julia> contains("Xylophon", 'o')
     ERROR: MethodError: no method matching contains(::String, ::Char)
     Closest candidates are:
-      contains(!Matched::Function, ::Any, !Matched::Any)
-      contains(::AbstractString, !Matched::AbstractString)
+      contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:402
+      contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:310
      ...
 
 The last error is because ``'o'`` is a character literal, and :func:`contains`

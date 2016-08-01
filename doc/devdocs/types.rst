@@ -228,7 +228,7 @@ These therefore print identically, but they have very different behavior:
    julia> candid([1],3.2)
    ERROR: MethodError: no method matching candid(::Array{Int64,1}, ::Float64)
    Closest candidates are:
-     candid{T}(::Array{T,N}, !Matched::T)
+     candid{T}(::Array{T,N}, !Matched::T) at none:1
     ...
 
    julia> sneaky([1],3.2)
@@ -319,9 +319,11 @@ the type, which is an object of type :obj:`TypeName`:
      primary: Array{T,N} <: DenseArray{T,N}
      cache: SimpleVector
        ...
+
      linearcache: SimpleVector
        ...
-     uid: Int64 47
+
+     uid: Int64 -7900426068641098781
      mt: MethodTable
        name: Symbol Array
        defs: Void nothing
