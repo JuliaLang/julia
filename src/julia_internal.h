@@ -12,6 +12,20 @@
 #define sleep(x) Sleep(1000*x)
 #endif
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define JL_ASAN_ENABLED     // Clang flavor
+#endif
+#elif defined(__SANITIZE_ADDRESS__)
+#define JL_ASAN_ENABLED     // GCC flavor
+#endif
+
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+#define JL_MSAN_ENABLED
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

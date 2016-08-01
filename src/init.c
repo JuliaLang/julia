@@ -161,8 +161,8 @@ void jl_init_stack_limits(int ismaster)
 
 static void jl_find_stack_bottom(void)
 {
-#if !defined(_OS_WINDOWS_) && defined(__has_feature)
-#if __has_feature(memory_sanitizer) || __has_feature(address_sanitizer)
+#if !defined(_OS_WINDOWS_)
+#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
     struct rlimit rl;
 
     // When using the sanitizers, increase stack size because they bloat
@@ -619,6 +619,17 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
         sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
     }
+#endif
+
+
+#ifdef JL_ASAN_ENABLED
+    const char *asan_options = getenv("ASAN_OPTIONS");
+    if (!asan_options || !(strstr(asan_options, "allow_user_segv_handler=1") ||
+                           strstr(asan_options, "handle_segv=0"))) {
+        jl_printf(JL_STDERR,"WARNING: ASAN overrides Julia's SIGSEGV handler; "
+                            "disable SIGSEGV handling or allow custom handlers.\n");
+    }
+
 #endif
 
     jl_init_threading();
