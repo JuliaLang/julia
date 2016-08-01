@@ -324,6 +324,25 @@ define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
 
+JL_HEADERS := \
+	src/julia.h \
+	src/julia_threads.h \
+	src/julia_version.h \
+	src/support/arraylist.h \
+	src/support/bitvector.h \
+	src/support/dirpath.h \
+	src/support/dtypes.h \
+	src/support/hashing.h \
+	src/support/htable.h \
+	src/support/ios.h \
+	src/support/libsupport.h \
+	src/support/platform.h \
+	src/support/ptrhash.h \
+	src/support/strtod.h \
+	src/support/timefuncs.h \
+	src/support/utf8.h \
+	src/support/utils.h
+
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html
 	@$(MAKE) $(QUIET_MAKE) all
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
@@ -372,7 +391,7 @@ ifeq ($(OS),WINNT)
 endif
 	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
 endif
-	$(INSTALL_F) $(addprefix $(JULIAHOME)/,src/julia.h src/julia_threads.h src/julia_version.h src/support/*.h) $(DESTDIR)$(includedir)/julia
+	$(INSTALL_F) $(addprefix $(JULIAHOME)/,$(JL_HEADERS)) $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
