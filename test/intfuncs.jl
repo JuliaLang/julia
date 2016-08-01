@@ -35,10 +35,13 @@ end
 @test gcdx(5, -12) == (1, 5, 2)
 @test gcdx(-25, -4) == (1, -1, 6)
 
-@test invmod(6, 31) == 26
-@test invmod(-1, 3) == 2
-@test invmod(-1, -3) == 2
-@test_throws ErrorException invmod(0, 3)
+@test invmod(6, 31) === 26
+@test invmod(-1, 3) === 2
+@test invmod(1, -3) === -2
+@test invmod(-1, -3) === -1
+@test invmod(0x2, 0x3) === 0x2
+@test invmod(2, 0x3) === 2
+@test_throws DomainError invmod(0, 3)
 
 @test powermod(2, 3, 5) == 3
 @test powermod(2, 3, -5) == -2

@@ -1266,7 +1266,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`\ .
+   Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`\ . :math:`gcdx(x,y)` returns :math:`(d,u,v)`\ .
 
    .. doctest::
 
@@ -1279,7 +1279,7 @@ Mathematical Functions
        (2,-9,47)
 
    .. note::
-      Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |\frac y d|` and :math:`|v| < |\frac x d|`\ . Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive.
+      Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclidean algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) For signed integers, these coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |y/d|` and :math:`|v| < |x/d|`\ . Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive. For unsigned integers, the coefficients ``u`` and ``v`` might be near their ``typemax``\ , and the identity then holds only via the unsigned integers' modulo arithmetic.
 
 
 .. function:: ispow2(n) -> Bool
@@ -1322,7 +1322,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Take the inverse of ``x`` modulo ``m``\ : ``y`` such that :math:`xy = 1 \pmod m`\ .
+   Take the inverse of ``x`` modulo ``m``\ : ``y`` such that :math:`x y = 1 \pmod m`\ , with :math:`div(x,y) = 0`\ . This is undefined for :math:`m = 0`\ , or if :math:`gcd(x,m) \neq 1`\ .
 
 .. function:: powermod(x, p, m)
 
