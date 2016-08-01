@@ -200,10 +200,9 @@ function show_datatype(io::IO, x::DataType)
         !(has_tvar_env && x.name.primary === x))
         n = length(x.parameters)
 
-        # Print homogeneous tuples with more than 3 elements compactly
-        # as NTuple{N, T}
-        if length(unique(x.parameters)) == 1 && n > 3
-            show(io, "NTuple{", n, ',', x.parameters[1], "}")
+        # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
+        if n > 3 && all(i -> is(x.parameters[1], i), x.parameters)
+            print(io, "NTuple{", n, ',', x.parameters[1], "}")
         else
             show(io, x.name)
             # Do not print the type parameters for the primary type if we are
