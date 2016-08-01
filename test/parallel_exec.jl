@@ -17,7 +17,7 @@ end
         1
     end
 
-addprocs(4; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
+addprocs(4; exeflags=`$cov_flag $inline_flag --check-bounds=yes --startup-file=no --depwarn=error`)
 
 # Test remote()
 let
