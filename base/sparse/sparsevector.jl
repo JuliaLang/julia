@@ -720,7 +720,13 @@ complex(x::AbstractSparseVector) =
 
 ### Concatenation
 
-function hcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
+# Without the first of these methods, horizontal concatenations of SparseVectors fall
+# back to the horizontal concatenation method that ensures that combinations of
+# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs, instead
+# of _absspvec_hcat below. The <:Integer qualifications are necessary for correct dispatch.
+hcat{Tv,Ti<:Integer}(X::SparseVector{Tv,Ti}...) = _absspvec_hcat(X...)
+hcat{Tv,Ti<:Integer}(X::AbstractSparseVector{Tv,Ti}...) = _absspvec_hcat(X...)
+function _absspvec_hcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
     # check sizes
     n = length(X)
     m = length(X[1])
@@ -749,7 +755,13 @@ function hcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, nzrow, nzval)
 end
 
-function vcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
+# Without the first of these methods, vertical concatenations of SparseVectors fall
+# back to the vertical concatenation method that ensures that combinations of
+# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs, instead
+# of _absspvec_vcat below. The <:Integer qualifications are necessary for correct dispatch.
+vcat{Tv,Ti<:Integer}(X::SparseVector{Tv,Ti}...) = _absspvec_vcat(X...)
+vcat{Tv,Ti<:Integer}(X::AbstractSparseVector{Tv,Ti}...) = _absspvec_vcat(X...)
+function _absspvec_vcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
     # check sizes
     n = length(X)
     tnnz = 0
@@ -777,10 +789,48 @@ function vcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
     SparseVector(len, rnzind, rnzval)
 end
 
-hcat(Xin::Union{AbstractSparseVector, SparseMatrixCSC}...) = hcat(map(SparseMatrixCSC, Xin)...)
-vcat(Xin::Union{AbstractSparseVector, SparseMatrixCSC}...) = vcat(map(SparseMatrixCSC, Xin)...)
 hcat(Xin::Union{Vector, AbstractSparseVector}...) = hcat(map(sparse, Xin)...)
 vcat(Xin::Union{Vector, AbstractSparseVector}...) = vcat(map(sparse, Xin)...)
+
+
+### Sparse/special/dense vector/matrix concatenation
+
+# TODO: These methods should be moved to a more appropriate location, particularly some
+# future equivalent of base/linalg/special.jl dedicated to interactions between a broader
+# set of matrix types.
+
+# TODO: A similar definition also exists in base/linalg/bidiag.jl. These definitions should
+# be consolidated in a more appropriate location, for example base/linalg/special.jl.
+SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
+
+function hcat(Xin::Union{Vector, Matrix, SparseVector, SparseMatrixCSC, SpecialArrays}...)
+    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    hcat(X...)
+end
+
+function vcat(Xin::Union{Vector, Matrix, SparseVector, SparseMatrixCSC, SpecialArrays}...)
+    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    vcat(X...)
+end
+
+function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseVector, SparseMatrixCSC, SpecialArrays}...)
+    nbr = length(rows)  # number of block rows
+
+    tmp_rows = Array{SparseMatrixCSC}(nbr)
+    k = 0
+    @inbounds for i = 1 : nbr
+        tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
+        k += rows[i]
+    end
+    vcat(tmp_rows...)
+end
+
+function cat(catdims, Xin::Union{Vector, Matrix, SparseVector, SparseMatrixCSC, SpecialArrays}...)
+    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    T = promote_eltype(Xin...)
+    Base.cat_t(catdims, T, X...)
+end
+
 
 ### math functions
 
