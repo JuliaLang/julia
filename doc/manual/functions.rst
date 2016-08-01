@@ -183,7 +183,6 @@ Expression          Calls
 ``1:n``             :func:`colon`
 ``A[i]``            :func:`getindex`
 ``A[i]=x``          :func:`setindex!`
-``A(x)``            :func:`call`
 =================== ==================
 
 These functions are included in the ``Base.Operators`` module even
