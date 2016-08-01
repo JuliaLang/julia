@@ -755,7 +755,7 @@ end
 reset!(p::Union{UserPasswordCredentials, SSHCredentials}, cnt::Int=3) = (p.count = cnt)
 reset!(p::CachedCredentials) = foreach(reset!, values(p.cred))
 
-"Obtained the cached credential for the given host+protocol (credid), or return and store the default if not found"
+"Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
 get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
 get_creds!(creds::AbstractCredentials, credid, default) = creds
 get_creds!(creds::Void, credid, default) = default
