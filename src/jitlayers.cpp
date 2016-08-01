@@ -756,9 +756,9 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
     }
 }
 
-// to finalizing a function, look up its name in the `module_for_fname` map of unfinalized functions
-// and merge it, plus any other modules it depends upon, into `collector`
-// then add `collector` to the execution engine
+// to finalize a function, look up its name in the `module_for_fname` map of
+// unfinalized functions and merge it, plus any other modules it depends upon,
+// into `collector` then add `collector` to the execution engine
 static StringMap<Module*> module_for_fname;
 static void jl_merge_recursive(Module *m, Module *collector);
 

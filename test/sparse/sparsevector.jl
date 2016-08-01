@@ -1041,7 +1041,7 @@ let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegze
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
 end
 
-# It's tempting to share data between a SparseVector and a SparseArrays,
+# It's tempting to share data between a SparseVector and a SparseMatrix,
 # but if that's done, then modifications to one or the other will cause
 # an inconsistent state:
 sv = sparse(1:10)

@@ -862,7 +862,7 @@ if !is_windows()
 
         # mv ----------------------------------------------------
         # move all 4 existing dirs
-        # As expected this will leave some absolute links brokern #11145#issuecomment-99315168
+        # As expected this will leave some absolute links broken #11145#issuecomment-99315168
         for d in [copytodir, maindir_new, maindir_new_keepsym, maindir]
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
             mv(d, d_mv; remove_destination=true)
