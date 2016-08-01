@@ -31,8 +31,8 @@ else
     dirname(abspath(Libdl.dlpath("libjulia")))
 end
 
-if isfile(joinpath(private_libdir,"julia","libccalltest."*Libdl.dlext))
-    private_libdir = joinpath(private_libdir, "julia")
+if isfile(joinpath(private_libdir, "julia", Base.VERSDIR, "libccalltest."*Libdl.dlext))
+    private_libdir = joinpath(private_libdir, "julia", Base.VERSDIR)
 end
 
 @test !isempty(Libdl.find_library(["libccalltest"], [private_libdir]))

@@ -1,15 +1,6 @@
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(JULIAHOME)/Make.inc
 
-# TODO: Code bundled with Julia should be installed into a versioned directory,
-# prefix/share/julia/VERSDIR, so that in the future one can have multiple
-# major versions of Julia installed concurrently. Third-party code that
-# is not controlled by Pkg should be installed into
-# prefix/share/julia/site/VERSDIR (not prefix/share/julia/VERSDIR/site ...
-# so that prefix/share/julia/VERSDIR can be overwritten without touching
-# third-party code).
-VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
-
 #file name of make binary-dist result
 ifeq ($(JULIA_BINARYDIST_TARNAME),)
 	JULIA_BINARYDIST_TARNAME := julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
@@ -326,6 +317,10 @@ endef
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html
 	@$(MAKE) $(QUIET_MAKE) all
+	# Third-party code that is not controlled by Pkg should be installed into
+	# prefix/share/julia/site/VERSDIR (not prefix/share/julia/VERSDIR/site)
+	# so that prefix/share/julia/VERSDIR can be overwritten without touching
+	# third-party code.
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done

@@ -156,6 +156,9 @@ SOMAJOR := $(JULIA_MAJOR_VERSION)
 SOMINOR := $(JULIA_MINOR_VERSION)
 endif
 
+# Versioned suffix for code bundled with Julia
+VERSDIR := v$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
+
 ifneq ($(NO_GIT), 1)
 JULIA_COMMIT := $(shell git rev-parse --short=10 HEAD)
 else
@@ -199,8 +202,8 @@ build_libdir := $(build_prefix)/lib/$(MULTIARCH)
 endif
 
 # Private library directories
-private_libdir := $(libdir)/julia
-build_private_libdir := $(build_libdir)/julia
+private_libdir := $(libdir)/julia/$(VERSDIR)
+build_private_libdir := $(build_libdir)/julia/$(VERSDIR)
 
 # Calculate relative paths to libdir, private_libdir, datarootdir, and sysconfdir
 build_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
@@ -848,12 +851,12 @@ else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/' -Wl,-rpath,'@loader_path/julia/'
+  RPATH_LIB := -Wl,-rpath,'@loader_path/' -Wl,-rpath,'@loader_path/julia/$(VERSDIR)'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN' -Wl,-rpath,'$$ORIGIN/julia' -Wl,-z,origin
+  RPATH_LIB := -Wl,-rpath,'$$ORIGIN' -Wl,-rpath,'$$ORIGIN/julia/$(VERSDIR)' -Wl,-z,origin
 endif
 
 # --whole-archive
