@@ -24,6 +24,7 @@
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
+#include <polly/CodeGen/CodegenCleanup.h>
 #endif
 
 #include <llvm/Transforms/Scalar.h>
@@ -175,6 +176,7 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(createInstructionCombiningPass());
     PM->add(polly::createCodePreparationPass());
     polly::registerPollyPasses(*PM);
+    PM->add(polly::createCodegenCleanupPass());
 #endif
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
