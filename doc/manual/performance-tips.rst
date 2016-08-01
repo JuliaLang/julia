@@ -1119,6 +1119,7 @@ for :obj:`@inbounds`. It can be placed in front of any expression as long as it
 is inside a function. The only place where it can be outside of a function
 definition is in front of a loop.
 ::
+
     julia> x = [1]
 
     julia> @inbounds if true
@@ -1143,6 +1144,7 @@ Be aware that using it before a function declaration will have no effect.
 To use :obj:`@inbounds` on a block of code, put it before a ``begin ... end``
 statement.
 ::
+
     julia> @inbounds function g(x)  #Won't remove bound checks nor warn you
                for i in 1:10
                    x[i] = x[i]^2
