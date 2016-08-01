@@ -412,7 +412,7 @@ function (although it often is):
     julia> baz(args...)
     ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
     Closest candidates are:
-      baz(::Any, ::Any)
+      baz(::Any, ::Any) at none:1
     ...
 
 As you can see, if the wrong number of elements are in the spliced

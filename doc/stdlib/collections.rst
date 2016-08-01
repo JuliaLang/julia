@@ -1162,7 +1162,7 @@ Dequeues
 
        julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
        ERROR: ArgumentError: indices must be unique and sorted
-        in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:534
+        in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:537
         ...
 
 .. function:: splice!(collection, index, [replacement]) -> item
