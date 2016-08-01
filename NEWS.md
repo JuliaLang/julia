@@ -196,7 +196,7 @@ Library improvements
 
     * There is now a default no-op `flush(io)` function for all `IO` types ([#16403]).
 
-  * Parellel computing:
+  * Parallel computing:
 
     * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
       Action to be taken on errors can be specified via the `on_error` keyword argument.
