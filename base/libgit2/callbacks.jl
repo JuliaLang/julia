@@ -113,7 +113,7 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
     end
 
     passphrase = if haskey(ENV,"SSH_KEY_PASS")
-       ENV["SSH_KEY_PASS"]
+        ENV["SSH_KEY_PASS"]
     else
         passdef = creds.pass # check if credentials were already used
         passdef === nothing && (passdef = "")
