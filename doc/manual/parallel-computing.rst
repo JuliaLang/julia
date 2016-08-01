@@ -860,7 +860,7 @@ Custom cluster managers would typically specify only ``io`` or ``host`` / ``port
   additional workers.
 
   - ``count`` with an integer value ``n`` will launch a total of ``n`` workers.
-  - ``count`` with a value of ``:auto`` will launch as many workers as cores on that machine.
+  - ``count`` with a value of ``:auto`` will launch as many workers as the number of cores on that machine.
   - ``exename`` is the name of the ``julia`` executable including the full path.
   - ``exeflags`` should be set to the required command line arguments for new workers.
 

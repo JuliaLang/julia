@@ -255,7 +255,6 @@
       <keyword>(Error|Interrupt|Disconnect)?Exception</keyword>
       <keyword>Algorithm</keyword>
       <keyword>Associative</keyword>
-      <keyword>AsyncStream</keyword>
       <keyword>Box</keyword>
       <keyword>BunchKaufman</keyword>
       <keyword>CPUinfo</keyword>

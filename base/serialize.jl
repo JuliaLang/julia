@@ -751,7 +751,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         known_object_data[number] = tn
     end
     if !haskey(object_numbers, tn)
-        # setup up reverse mapping for serialize
+        # set up reverse mapping for serialize
         object_numbers[tn] = number
     end
     deserialize_cycle(s, tn)

@@ -192,18 +192,18 @@ end
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
-# check exp2(::Integer) matches exp2(::Float)"
+# check exp2(::Integer) matches exp2(::Float)
 for ii in -2048:2048
     expected = exp2(float(ii))
-    @test(exp2(Int16(ii)) == expected)
-    @test(exp2(Int32(ii)) == expected)
-    @test(exp2(Int64(ii)) == expected)
-    @test(exp2(Int128(ii)) == expected)
+    @test exp2(Int16(ii)) == expected
+    @test exp2(Int32(ii)) == expected
+    @test exp2(Int64(ii)) == expected
+    @test exp2(Int128(ii)) == expected
     if ii >= 0
-        @test(exp2(UInt16(ii)) == expected)
-        @test(exp2(UInt32(ii)) == expected)
-        @test(exp2(UInt64(ii)) == expected)
-        @test(exp2(UInt128(ii)) == expected)
+        @test exp2(UInt16(ii)) == expected
+        @test exp2(UInt32(ii)) == expected
+        @test exp2(UInt64(ii)) == expected
+        @test exp2(UInt128(ii)) == expected
     end
 end
 
