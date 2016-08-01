@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# Document NTuple here where we have everything needed for the doc system
+"""
+    NTuple{N, T}
+
+A compact way of representing the type for a tuple of length `N` where all elements are of type `T`."""
+NTuple
+
 ## indexing ##
 
 length(t::Tuple) = nfields(t)
