@@ -10,6 +10,8 @@ const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 
 function scale!{T<:BlasFloat}(X::Array{T}, s::T)
+    s == 0 && return fill!(X, zero(T))
+    s == 1 && return X
     if length(X) < SCAL_CUTOFF
         generic_scale!(X, s)
     else
@@ -17,6 +19,8 @@ function scale!{T<:BlasFloat}(X::Array{T}, s::T)
     end
     X
 end
+
+scale!{T<:BlasFloat}(s::T, X::Array{T}) = scale!(X, s)
 
 scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
 function scale!{T<:BlasComplex}(X::Array{T}, s::Real)
