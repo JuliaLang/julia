@@ -98,6 +98,9 @@ Language changes
   * Dictionary comprehension syntax `[ a=>b for x in y ]` is deprecated.
     Use `Dict(a=>b for x in y)` instead ([#16510]).
 
+  * Parentheses are no longer allowed around iteration specifications, e.g.
+    `for (i = 1:n)` ([#17668]).
+
 Library improvements
 --------------------
 
