@@ -115,7 +115,7 @@ The keyword arguments can be any combination of:
    sorts in order of number of collected samples.
 
  - `noisefloor` only shows frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
-   A suggested value to try for this is 2.0 (the default is 0). This parameters hides samples for which `n <= noisefloor * √N`,
+   A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
    where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
 
  - `mincount` can also be used to limit the printout to only those
