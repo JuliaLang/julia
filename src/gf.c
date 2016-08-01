@@ -190,6 +190,7 @@ jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force)
 {
     JL_TIMING(INFERENCE);
 #ifdef ENABLE_INFERENCE
+    JL_LOCK(&codegen_lock); // use codegen lock to synchronize type-inference
     jl_module_t *mod = NULL;
     if (li->def != NULL)
         mod = li->def->module;
@@ -199,7 +200,6 @@ jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force)
     if (jl_typeinf_func != NULL && (force ||
         (mod != jl_gf_mtable(jl_typeinf_func)->module &&
         (mod != jl_core_module || !lastIn)))) { // avoid any potential recursion in calling jl_typeinf_func on itself
-        JL_LOCK(&codegen_lock); // Might GC
         assert(li->inInference == 0);
         jl_value_t *fargs[2];
         fargs[0] = (jl_value_t*)jl_typeinf_func;
@@ -211,9 +211,9 @@ jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force)
 #endif
         li = (jl_lambda_info_t*)jl_apply(fargs, 2);
         assert(li->def || li->inInference == 0); // if this is toplevel expr, make sure inference finished
-        JL_UNLOCK(&codegen_lock); // Might GC
     }
     inInference = lastIn;
+    JL_UNLOCK(&codegen_lock); // Might GC (li might be rooted?)
 #endif
     return li;
 }
@@ -614,7 +614,6 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
                                       jl_svec_t *sparams)
 {
     // caller must hold the mt->writelock
-    JL_LOCK(&codegen_lock); // Might GC
     jl_method_t *definition = m->func.method;
     jl_tupletype_t *decl = m->sig;
     jl_value_t *temp = NULL;
@@ -798,7 +797,6 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
 
     jl_typemap_insert(cache, parent, origtype, jl_emptysvec, type, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
 
-    JL_UNLOCK(&codegen_lock); // Might GC
     if (definition->traced && jl_method_tracer)
         jl_call_tracer(jl_method_tracer, (jl_value_t*)newmeth);
     JL_GC_POP();
@@ -1278,9 +1276,11 @@ jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
     if (li->functionObjectsDecls.functionObject != NULL)
         return li;
     if (li->def) {
+        JL_LOCK(&codegen_lock);
         JL_LOCK(&li->def->writelock);
         if (li->functionObjectsDecls.functionObject != NULL) {
             JL_UNLOCK(&li->def->writelock);
+            JL_UNLOCK(&codegen_lock);
             return li;
         }
         if (li->inInference || li->inCompile) {
@@ -1310,8 +1310,10 @@ jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
     if (li->functionObjectsDecls.functionObject == NULL) { // check again, because jl_type_infer may have compiled it
         jl_compile_linfo(li);
     }
-    if (li->def)
+    if (li->def) {
         JL_UNLOCK(&li->def->writelock);
+        JL_UNLOCK(&codegen_lock);
+    }
     return li;
 }
 
@@ -2286,7 +2288,12 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous);
 }
 
-static jl_mutex_t typeinf_lock;
+// TODO: separate the codegen and typeinf locks
+//   currently using a coarser lock seems like
+//   the best way to avoid acquisition priority
+//   ordering violations
+//static jl_mutex_t typeinf_lock;
+#define typeinf_lock codegen_lock
 
 JL_DLLEXPORT void jl_typeinf_begin(void)
 {
