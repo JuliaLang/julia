@@ -23,6 +23,7 @@
 #endif
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
+#include <polly/LinkAllPasses.h>
 #endif
 
 #include <llvm/Transforms/Scalar.h>
@@ -172,6 +173,7 @@ void addOptimizationPasses(PassManager *PM)
     // above passes) introduces redundant phis that hinder Polly. Therefore we
     // run InstCombine here to remove them.
     PM->add(createInstructionCombiningPass());
+    PM->add(polly::createCodePreparationPass());
     polly::registerPollyPasses(*PM);
 #endif
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
