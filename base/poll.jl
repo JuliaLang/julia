@@ -12,7 +12,7 @@ export
 
 import Base: @handle_as, wait, close, uvfinalize, eventloop, notify_error, stream_wait,
     _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close,
-    associate_julia_struct, disassociate_julia_struct, |
+    associate_julia_struct, disassociate_julia_struct, isreadable, iswritable, |
 if Sys.iswindows()
     import Base.WindowsRawSocket
 end
@@ -82,9 +82,10 @@ mutable struct PollingFileWatcher
     interval::UInt32
     notify::Condition
     active::Bool
+    busy_polling::Int32
     function PollingFileWatcher(file::AbstractString, interval::Float64=5.007) # same default as nodejs
         handle = Libc.malloc(_sizeof_uv_fs_poll)
-        this = new(handle, file, round(UInt32, interval * 1000), Condition(), false)
+        this = new(handle, file, round(UInt32, interval * 1000), Condition(), false, 0)
         associate_julia_struct(handle, this)
         err = ccall(:uv_fs_poll_init, Int32, (Ptr{Void}, Ptr{Void}), eventloop(), handle)
         if err != 0
@@ -250,7 +251,7 @@ end
 function _uv_hook_close(uv::PollingFileWatcher)
     uv.handle = C_NULL
     uv.active = false
-    notify(uv.notify, (StatStruct(), StatStruct()))
+    notify(uv.notify, (StatStruct(), EOFError()))
     nothing
 end
 
@@ -299,11 +300,10 @@ end
 
 function uv_fspollcb(handle::Ptr{Void}, status::Int32, prev::Ptr, curr::Ptr)
     t = @handle_as handle PollingFileWatcher
-    if status != 0
-        notify_error(t.notify, UVError("PollingFileWatcher", status))
-    else
+    if status == 0 || status != t.busy_polling
+        t.busy_polling = status
         prev_stat = StatStruct(convert(Ptr{UInt8}, prev))
-        curr_stat = StatStruct(convert(Ptr{UInt8}, curr))
+        curr_stat = (status == 0) ? StatStruct(convert(Ptr{UInt8}, curr)) : UVError("PollingFileWatcher", status)
         notify(t.notify, (prev_stat, curr_stat))
     end
     nothing
@@ -511,15 +511,20 @@ function watch_file(s::AbstractString, timeout_s::Real=-1)
 end
 
 """
-    poll_file(path::AbstractString, interval_s::Real=5.007, timeout_s::Real=-1) -> (previous::StatStruct, current::StatStruct)
+    poll_file(path::AbstractString, interval_s::Real=5.007, timeout_s::Real=-1) -> (previous::StatStruct, current)
 
 Monitor a file for changes by polling every `interval_s` seconds until a change occurs or
 `timeout_s` seconds have elapsed. The `interval_s` should be a long period; the default is
 5.007 seconds.
 
-Returns a pair of `StatStruct` objects `(previous, current)` when a change is detected.
+Returns a pair of status objects `(previous, current)` when a change is detected.
+The `previous` status is always a `StatStruct`, but it may have all of the fields zeroed
+(indicating the file didn't previously exist, or wasn't previously accessible).
 
-To determine when a file was modified, compare `mtime(prev) != mtime(current)` to detect
+The `current` status object may be a `StatStruct`, an `EOFError` (indicating the timeout elapsed),
+or some other `Exception` subtype (if the `stat` operation failed - for example, if the path does not exist).
+
+To determine when a file was modified, compare `current isa StatStruct && mtime(prev) != mtime(current)` to detect
 notification of changes. However, using [`watch_file`](@ref) for this operation is preferred, since
 it is more reliable and efficient, although in some situations it may not be available.
 """
@@ -532,7 +537,12 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
 
             @schedule begin
                 try
-                    result = wait(pfw)
+                    statdiff = wait(pfw)
+                    if statdiff[1] == StatStruct() && isa(statdiff[2], UVError)
+                        # file didn't initially exist, continue watching for it to be created (or the error to change)
+                        statdiff = wait(pfw)
+                    end
+                    result = statdiff
                 catch e
                     notify_error(wt, e)
                     return
@@ -543,7 +553,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
 
             wait(wt)
             if result === :timeout
-                return (StatStruct(), StatStruct())
+                return (StatStruct(), EOFError())
             end
             return result
         else
