@@ -1255,6 +1255,7 @@ static void gc_mark_stack(jl_ptls_t ptls, jl_value_t *ta, jl_gcframe_t *s,
 
 static void gc_mark_task_stack(jl_ptls_t ptls, jl_task_t *ta, int d)
 {
+    gc_scrub_record_task(ta);
     int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
     int16_t tid = ta->tid;
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
@@ -1649,7 +1650,7 @@ void jl_gc_sync_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
 #define MIN_SCAN_BYTES 1024*1024
 
 // Only one thread should be running in this function
-static void _jl_gc_collect(jl_ptls_t ptls, int full, char *stack_hi)
+static void _jl_gc_collect(jl_ptls_t ptls, int full)
 {
     JL_TIMING(GC);
     uint64_t t0 = jl_hrtime();
@@ -1785,7 +1786,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full, char *stack_hi)
     // 5. start sweeping
     sweep_weak_refs();
     gc_sweep_other(ptls, sweep_full);
-    gc_scrub(stack_hi);
+    gc_scrub();
     gc_sweep_pool(sweep_full);
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
@@ -1822,7 +1823,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full, char *stack_hi)
     gc_num.freed = 0;
 
     if (recollect) {
-        _jl_gc_collect(ptls, 0, stack_hi);
+        _jl_gc_collect(ptls, 0);
     }
 }
 
@@ -1834,7 +1835,6 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         gc_num.allocd = -(int64_t)gc_num.interval;
         return;
     }
-    char *stack_hi = (char*)gc_get_stack_ptr();
     gc_debug_print();
 
     int8_t old_state = jl_gc_state(ptls);
@@ -1851,7 +1851,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
-        _jl_gc_collect(ptls, full, stack_hi);
+        _jl_gc_collect(ptls, full);
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 
