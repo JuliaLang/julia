@@ -343,6 +343,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. note::
       This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
+
 .. function:: cholfact!(A, uplo::Symbol, Val{false}) [::] Cholesky
 
    .. Docstring generated from Julia source
@@ -401,6 +402,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
       Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
+
 
 .. function:: ldltfact!(F::Factor, A; shift = 0.0) [::] CHOLMOD.Factor
 

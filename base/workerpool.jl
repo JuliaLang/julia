@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-abstract AbstractWorkerPool
+abstract AbstractWorkerPool 
 
 # An AbstractWorkerPool should implement
 #
