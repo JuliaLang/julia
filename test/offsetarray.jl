@@ -34,7 +34,6 @@ Base.size(A::OffsetArray) = errmsg(A)
 Base.size(A::OffsetArray, d) = errmsg(A)
 Base.eachindex(::LinearSlow, A::OffsetArray) = CartesianRange(indices(A))
 Base.eachindex(::LinearFast, A::OffsetVector) = indices(A, 1)
-Base.summary(A::OffsetArray) = string(typeof(A))*" with indices "*string(indices(A))
 
 # Implementations of indices and indices1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth
@@ -195,6 +194,9 @@ show(io, v)
 str = takebuf_string(io)
 show(io, parent(v))
 @test str == takebuf_string(io)
+smry = summary(v)
+@test contains(smry, "OffsetArray{Float64,1")
+@test contains(smry, "with indices -1:1")
 function cmp_showf(printfunc, io, A)
     ioc = IOContext(io, limit=true, compact=true)
     printfunc(ioc, A)
@@ -207,6 +209,23 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&c
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # columns fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
+targets1 = ["0-dimensional OAs.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
+            "OAs.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
+            "OAs.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
+            "OAs.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
+            "OAs.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
+targets2 = ["(1.0,1.0)",
+            "([1.0],[1.0])",
+            "(\n[1.0],\n\n[1.0])",
+            "(\n[1.0],\n\n[1.0])",
+            "(\n[1.0],\n\n[1.0])"]
+for n = 0:4
+    a = OffsetArray(ones(Float64,ntuple(d->1,n)), ntuple(identity,n))
+    show(IOContext(io, limit=true), MIME("text/plain"), a)
+    @test takebuf_string(io) == targets1[n+1]
+    show(IOContext(io, limit=true), MIME("text/plain"), (a,a))
+    @test takebuf_string(io) == targets2[n+1]
+end
 
 # Similar
 B = similar(A, Float32)
@@ -302,6 +321,10 @@ map!(+, dest, am, am)
 @test dest[1,7] == 2
 @test dest[1,8] == 4
 @test dest[1,9] == -2
+
+am = map(identity, a)
+@test isa(am, OffsetArray)
+@test am == a
 
 A = OffsetArray(rand(4,4), (-3,5))
 @test maximum(A) == maximum(parent(A))
