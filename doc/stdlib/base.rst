@@ -957,13 +957,13 @@ System
 
    .. Docstring generated from Julia source
 
-   Print and return the time elapsed since the last :func:`tic`\ .
+   Print and return the time elapsed since the last :func:`tic`\ . The macro call ``@time expr`` can also be used to time evaluation.
 
 .. function:: toq()
 
    .. Docstring generated from Julia source
 
-   Return, but do not print, the time elapsed since the last :func:`tic`\ .
+   Return, but do not print, the time elapsed since the last :func:`tic`\ . The macro calls ``@timed expr`` and ``@elapsed expr`` also return evaluation time.
 
 .. function:: @time
 
@@ -971,11 +971,15 @@ System
 
    A macro to execute an expression, printing the time it took to execute, the number of allocations, and the total number of bytes its execution caused to be allocated, before returning the value of the expression.
 
+   See also ```@timev`` <:ref:@timev>`_\ , ```@timed`` <:ref:@timed>`_\ , ```@elapsed`` <:ref:@elapsed>`_\ , and ```@allocated`` <:ref:@allocated>`_\ .
+
 .. function:: @timev
 
    .. Docstring generated from Julia source
 
    This is a verbose version of the ``@time`` macro. It first prints the same information as ``@time``\ , then any non-zero memory allocation counters, and then returns the value of the expression.
+
+   See also ```@time`` <:ref:@time>`_\ , ```@timed`` <:ref:@timed>`_\ , ```@elapsed`` <:ref:@elapsed>`_\ , and ```@allocated`` <:ref:@allocated>`_\ .
 
 .. function:: @timed
 
@@ -983,17 +987,23 @@ System
 
    A macro to execute an expression, and return the value of the expression, elapsed time, total bytes allocated, garbage collection time, and an object with various memory allocation counters.
 
+   See also ```@time`` <:ref:@time>`_\ , ```@timev`` <:ref:@timev>`_\ , ```@elapsed`` <:ref:@elapsed>`_\ , and ```@allocated`` <:ref:@allocated>`_\ .
+
 .. function:: @elapsed
 
    .. Docstring generated from Julia source
 
    A macro to evaluate an expression, discarding the resulting value, instead returning the number of seconds it took to execute as a floating-point number.
 
+   See also ```@time`` <:ref:@time>`_\ , ```@timev`` <:ref:@timev>`_\ , ```@timed`` <:ref:@timed>`_\ , and ```@allocated`` <:ref:@allocated>`_\ .
+
 .. function:: @allocated
 
    .. Docstring generated from Julia source
 
    A macro to evaluate an expression, discarding the resulting value, instead returning the total number of bytes allocated during evaluation of the expression. Note: the expression is evaluated inside a local function, instead of the current context, in order to eliminate the effects of compilation, however, there still may be some allocations due to JIT compilation. This also makes the results inconsistent with the ``@time`` macros, which do not try to adjust for the effects of compilation.
+
+   See also ```@time`` <:ref:@time>`_\ , ```@timev`` <:ref:@timev>`_\ , ```@timed`` <:ref:@timed>`_\ , and ```@elapsed`` <:ref:@elapsed>`_\ .
 
 .. function:: EnvHash() -> EnvHash
 
