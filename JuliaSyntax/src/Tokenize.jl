@@ -8,6 +8,6 @@ include("lexer.jl")
 import .Lexers: tokenize
 import .Tokens: untokenize
 
-export tokenize, untokenize
+export tokenize
 
 end # module

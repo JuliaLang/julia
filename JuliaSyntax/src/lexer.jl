@@ -7,7 +7,7 @@ using Compat
 import Compat.String
 
 import ..Tokens
-import ..Tokens: Token, Kind, TokenError
+import ..Tokens: Token, Kind, TokenError, UNICODE_OPS
 
 export tokenize
 
@@ -18,9 +18,6 @@ macro debug(ex)
     return :()
 end
 
-
-ishead(c::Char) = ('A' <= c <= 'z') || c == '$' || c == '-' || c == '_' || c == '.'
-istail(c::Char) = ishead(c) || isdigit(c)
 ishex(c::Char) =  isdigit(c) || ('a' <= c <= 'f')
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
@@ -38,10 +35,11 @@ type Lexer{IO_t <: Union{IO, String}}
     current_pos::Int64
 end
 
-Lexer(io::Union{IO, String}) = Lexer(io, 1, 1, -1, 0, 1, 1, 1)
+Lexer(io) = Lexer(io, 1, 1, -1, 0, 1, 1, 1)
+
+
+# Iterator interface
 tokenize(x) = Lexer(x)
-
-
 
 if VERSION > v"v0.5.0-"
     Base.iteratorsize(::Lexer) = Base.SizeUnknown()
@@ -51,8 +49,8 @@ end
 Base.eltype(::Lexer) = Token
 
 
-function Base.start(l::Lexer)
-       seekstart(l)
+function Base.start{T}(l::Lexer{T})
+    seekstart(l)
     l.token_startpos = 0
     l.token_start_row = 1
     l.token_start_col = 1
@@ -65,19 +63,14 @@ end
 
 function Base.next(l::Lexer, isdone)
     t = next_token(l)
-    return t, t.kind == Tokens.Eof
+    return t, t.kind == Tokens.ENDMARKER
 end
 
 Base.done(l::Lexer, isdone) = isdone
 
 
 function Base.show(io::IO, l::Lexer)
-    #print(io, "Token buffer:")
-    #print(io, extract_tokenstring(l))
-    println(io, "Position: ", position(l))
-    println(io, l.current_row, l.current_col)
-    #print(io, "\n# tokens read: ", length(tokens(l)), " n errors: ", n_errors)
-    #print(io, "\n", tokens(l))
+    println(io, "Lexer at position: ", position(l))
 end
 
 
@@ -90,7 +83,8 @@ prevpos!(l::Lexer, i::Int64) = l.prevpos = i
 Base.seekstart{I <: IO}(l::Lexer{I}) = seekstart(l.io)
 Base.seekstart{I <: String}(l::Lexer{I}) = seek(l, 1)
 
-seek2startpos!(l::Lexer) = seek(l, startpos(l))
+seek2startpos!{I <: IO}(l::Lexer{I}) = seek(l, startpos(l))
+seek2startpos!{I <: String}(l::Lexer{I}) = seek(l, startpos(l) + 1)
 
 push!(l::Lexer, t::Token) = push!(l.tokens, t)
 peekchar{I <: IO}(l::Lexer{I}) = peekchar(l.io)
@@ -163,41 +157,38 @@ function accept_batch(l::Lexer, f)
 end
 
 function emit(l::Lexer, kind::Kind, str::String)
-    skipfirst, skiplast = 0,0
     tok = Token(kind, (l.token_start_row, l.token_start_col),
                 (l.current_row, l.current_col),
-                startpos(l) + skipfirst, position(l) - skiplast - 1,
+                startpos(l), position(l) - 1,
                 str)
     @debug "emitted token: $tok:"
     ignore!(l)
     return tok
 end
 
-function emit(l::Lexer, kind::Kind, err::TokenError=Tokens.unknown; skipfirst::Int = 0, skiplast::Int = 0)
-    skipfirst, skiplast = 0, 0
+function emit(l::Lexer, kind::Kind, err::TokenError=Tokens.UNKNOWN)
     str = extract_tokenstring(l)
     tok = Token(kind, (l.token_start_row, l.token_start_col),
                 (l.current_row, l.current_col),
-                startpos(l) + skipfirst, position(l) - skiplast - 1,
+                startpos(l), position(l) - 1,
                 str)
     @debug "emitted token: $tok:"
     ignore!(l)
     return tok
 end
 
-function emit_error(l::Lexer, err::TokenError=Tokens.unknown)
-    return emit(l, Tokens.Error, err)
+function emit_error(l::Lexer, err::TokenError=Tokens.UNKNOWN)
+    return emit(l, Tokens.ERROR, err)
 end
 
+# TODO, just use String mby
 function extract_tokenstring{T}(l::Lexer{T})
     isstr = T <: String
     cs = Char[]
     sizehint!(cs, position(l) - startpos(l))
     curr_pos = position(l)
     seek2startpos!(l)
-    if isstr
-        seek(l, position(l) + 1)
-    end
+
     while position(l) < curr_pos
         c = readchar(l)
         l.current_col += 1
@@ -211,16 +202,16 @@ function extract_tokenstring{T}(l::Lexer{T})
     return str
 end
 
-
 # We just consumed a " or a """
 function read_string(l::Lexer, kind::Tokens.Kind)
     while true
         c = readchar(l)
+        show(c)
         if c == '\\' && eof(readchar(l))
             return false
         end
         if c == '"'
-            if kind == Tokens.t_string
+            if kind == Tokens.STRING
                 return true
             else
                 if accept(l, "\"") && accept(l, "\"")
@@ -228,6 +219,14 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                 end
             end
         elseif eof(c)
+            show(l.io)
+
+            println("....")
+
+            println(position(l))
+            println(l.io.size)
+            println(c)
+            println("...")
             return false
         end
     end
@@ -235,59 +234,52 @@ end
 
 
 function next_token(l::Lexer)
-
     c = readchar(l)
 
-    @debug "startpos at $(l.token_startpos)"
-
-    if eof(c); return emit(l, Tokens.Eof)
+    if eof(c); return emit(l, Tokens.ENDMARKER)
     elseif iswhitespace(c); return lex_whitespace(l)
+    elseif c == '['; return emit(l, Tokens.LSQUARE)
+    elseif c == ']'; return emit(l, Tokens.RSQUARE)
+    elseif c == '{'; return emit(l, Tokens.LBRACE)
+    elseif c == ';'; return emit(l, Tokens.SEMICOLON)
+    elseif c == '}'; return emit(l, Tokens.RBRACE)
+    elseif c == '('; return emit(l, Tokens.LPAREN)
+    elseif c == ')'; return emit(l, Tokens.RPAREN)
+    elseif c == ','; return emit(l, Tokens.COMMA)
+    elseif c == '*'; return emit(l, Tokens.STAR)
+    elseif c == '@'; return emit(l, Tokens.AT_SIGN)
+    elseif c == '?'; return emit(l, Tokens.CONDITIONAL)
+    elseif c == '$'; return emit(l, Tokens.EX_OR)
+    elseif c == '~'; return emit(l, Tokens.APPROX)
+    elseif c == '\\'; return emit(l, Tokens.BACKSLASH)
     elseif c == '#'; return lex_comment(l)
     elseif c == '='; return lex_equal(l)
     elseif c == '!'; return lex_exclaim(l)
-    elseif c == '['; return emit(l, Tokens.lsquare)
-    elseif c == ']'; return emit(l, Tokens.rsquare)
-    elseif c == '{'; return emit(l, Tokens.lbrace)
-    elseif c == ';'; return emit(l, Tokens.semicolon)
-    elseif c == '}'; return emit(l, Tokens.rbrace)
-    elseif c == '('; return emit(l, Tokens.lparen)
-    elseif c == ')'; return emit(l, Tokens.rparen)
-    elseif c == ','; return emit(l, Tokens.comma)
-    elseif c == '*'; return emit(l, Tokens.star)
     elseif c == '>'; return lex_greater(l)
     elseif c == '<'; return lex_less(l)
     elseif c == ':'; return lex_colon(l)
     elseif c == '|'; return lex_bar(l)
-    elseif c == '@'; return lex_at(l)
     elseif c == '&'; return lex_amper(l)
-    elseif c == '\''; return lex_prime(l)
-    elseif c == '?'; return emit(l, Tokens.conditional)
+    elseif c == '\'';return lex_prime(l)
     elseif c == '"'; return lex_quote(l);
     elseif c == '%'; return lex_percent(l);
     elseif c == '/'; return lex_forwardslash(l);
     elseif c == '.'; return lex_dot(l);
-    elseif isdigit(c) || c == '-' || c == '+' return lex_digitorsign(l)
+    elseif c == '+'; return lex_plus(l);
+    elseif c == '-'; return lex_minus(l);
+    elseif c == '`'; return lex_cmd(l);
+    elseif isdigit(c); return lex_digit(l)
     elseif is_identifier_start_char(c); return lex_identifier(l)
+    elseif (k = get(UNICODE_OPS, c, Tokens.ERROR)) != Tokens.ERROR return emit(l, k)
     else emit_error(l)
     end
-
-    #=
-    if eof(c); return emit(l, Tokens.Eof)
-    elseif c == '$'; return lex_dollar(l);
-    elseif c == '"'; return lex_quote(l);
-    elseif c == ';'; return lex_comment(l)
-    elseif c == '!'; return lex_exclaim(l);
-
-    else emit_error(l)
-    end
-    =#
 end
 
 
 # Lex whitespace, a whitespace char has been consumed
 function lex_whitespace(l::Lexer)
     accept_batch(l, iswhitespace)
-    return emit(l, Tokens.Whitespace)
+    return emit(l, Tokens.WHITESPACE)
 end
 
 function lex_comment(l::Lexer)
@@ -296,7 +288,7 @@ function lex_comment(l::Lexer)
             c = readchar(l)
             if c == '\n' || eof(c)
                 backup!(l)
-                return emit(l, Tokens.Comment, skipfirst = 1)
+                return emit(l, Tokens.COMMENT)
             end
         end
     else
@@ -304,7 +296,7 @@ function lex_comment(l::Lexer)
         n_start, n_end = 1, 0
         while true
             if eof(c)
-                return emit_error(l, Tokens.EOF_in_multicomment)
+                return emit_error(l, Tokens.EOF_MULTICOMMENT)
             end
             nc = readchar(l)
             if c == '#' && nc == '='
@@ -313,7 +305,7 @@ function lex_comment(l::Lexer)
                 n_end += 1
             end
             if n_start == n_end
-                return emit(l, Tokens.Comment, skipfirst = 2, skiplast = 2)
+                return emit(l, Tokens.COMMENT)
             end
             c = nc
         end
@@ -325,27 +317,21 @@ function lex_greater(l::Lexer)
     if accept(l, '>') # >>
         if accept(l, '>') # >>>
             if accept(l, '=') # >>>=
-                return emit(l, Tokens.ass_bitshift_rrr)
-            elseif accept(l, iswhitespace)
-                return emit(l, Tokens.bitshift_rrr)
+                return emit(l, Tokens.UNSIGNED_BITSHIFT_EQ)
             else # >>>?, ? not a =
-                return emit_error(l)
+                return emit(l, Tokens.UNSIGNED_BITSHIFT)
             end
         else # >>?
             if accept(l, '=') # >>=
-                return emit(l, Tokens.ass_bitshift_rr)
-            elseif accept(l, iswhitespace) # '>> '
-                return emit(l, Tokens.bitshift_rr)
-            else # '>>?', ? not =, >, ' '
-                return emit_error(l)
+                return emit(l, Tokens.RBITSHIFT_EQ)
+            else accept(l, iswhitespace) # '>> '
+                return emit(l, Tokens.RBITSHIFT)
             end
         end
-    elseif accept(l, '=')
-            return emit(l, Tokens.ass_bitshift_r)
-    elseif accept(l, iswhitespace)
-            return emit(l, Tokens.comp_r) # '> '
-    else
-        return emit_error(l)
+    elseif accept(l, '=') # >=
+        return emit(l, Tokens.GREATER_EQ)
+    else  # '>'
+        return emit(l, Tokens.GREATER)
     end
 end
 
@@ -353,184 +339,171 @@ end
 function lex_less(l::Lexer)
     if accept(l, '<') # <<
         if accept(l, '=') # <<=
-            return emit(l, Tokens.ass_bitshift_ll)
-        elseif accept(l, iswhitespace) # '<< '
-            return emit(l, Tokens.bitshift_ll)
+            return emit(l, Tokens.LBITSHIFT_EQ)
         else # '<<?', ? not =, ' '
-            return emit_error(l)
+            return emit(l, Tokens.LBITSHIFT)
         end
-    elseif accept(l, '=')
-        return emit(l, Tokens.ass_bitshift_l)
+    elseif accept(l, '=') # <=
+        return emit(l, Tokens.LESS_EQ)
     elseif accept(l, ':')
-        return emit(l, Tokens.issubtype)
+        return emit(l, Tokens.ISSUBTYPE)
     elseif accept(l, '|') # <|
-        return emit(l, Tokens.pipe_l)
+        return emit(l, Tokens.LPIPE)
     else
-        return emit(l, Tokens.comp_l) # '> '
+        return emit(l, Tokens.LESS) # '<'
     end
 end
-
-
 
 # Lex all tokens that start with an = character.
 # An '=' char has been consumed
 function lex_equal(l::Lexer)
     if accept(l, '=') # ==
-        if accept(l, iswhitespace)
-            return emit(l, Tokens.ass_equal2)
-        elseif accept(l, '=') # ===
-            if accept(l, iswhitespace)
-                emit(l, Tokens.ass_equal3)
-            else # ===?, ? != ' '
-                emit_error(l)
-            end
+        if accept(l, '=') # ===
+            emit(l, Tokens.EQEQEQ)
+        else
+            emit(l, Tokens.EQEQ)
         end
     elseif accept(l, '>') # =>
-        emit(l, Tokens.ass_equal_r)
+        emit(l, Tokens.PAIR_ARROW)
     else
-        emit(l, Tokens.ass_equal)
+        emit(l, Tokens.EQ)
     end
 end
 
 # Lex a colon, a ':' has been consumed
 function lex_colon(l::Lexer)
     if accept(l, ':') # '::'
-        emit(l, Tokens.decl)
-    elseif accept(l, iswhitespace) # ': '
-        emit(l, Tokens._colon)
-    elseif accept_batch(l, is_identifier_char) # :foo32
-        emit(l, Tokens.t_symbol, skipfirst = 1)
+        emit(l, Tokens.DECLARATION)
     else
-        emit_error(l)
+        emit(l, Tokens.COLON)
     end
 end
 
 function lex_exclaim(l::Lexer)
     if accept(l, '=') # !=
-        if accept(l, '=')
-            return emit(l, Tokens.comp_neq2) # !==
+        if accept(l, '=') # !==
+            return emit(l, Tokens.NOT_IS)
         else # !=
-            return emit(l, Tokens.comp_neq)
+            return emit(l, Tokens.NOT_EQ)
         end
     else
-        return emit(l, Tokens.exclaim)
+        return emit(l, Tokens.NOT)
     end
 end
 
 function lex_percent(l::Lexer)
     if accept(l, '=')
-        return emit(l, Tokens.ass_perc)
+        return emit(l, Tokens.REM_EQ)
     else
-        return emit(l, Tokens.perc)
+        return emit(l, Tokens.REM)
     end
 end
 
 function lex_bar(l::Lexer)
-    if accept(l, iswhitespace)
-        emit(l, Tokens.pipe) # '| '
-    elseif accept(l, '=') # |=
-        return emit(l, Tokens.ass_bar)
+    if accept(l, '=') # |=
+        return emit(l, Tokens.OR_EQ)
     elseif accept(l, '>') # |>
-        return emit(l, Tokens.pipe_r)
+        return emit(l, Tokens.RPIPE)
     elseif accept(l, '|') # ||
-        return emit(l, Tokens.lazy_or)
+        return emit(l, Tokens.LAZY_OR)
     else
-        return emit_error(l)
+        emit(l, Tokens.OR) # '|'
     end
 end
 
+function lex_plus(l::Lexer)
+    accept(l, '+') && emit(l, Tokens.PLUSPLUS)
+    accept(l, isdigit) && lex_digit(l)
+    return emit(l, Tokens.PLUS)
+end
 
-function lex_digitorsign(l::Lexer)
-    # A digit is an int
-    longest, kind = position(l), Tokens.t_int
+function lex_minus(l::Lexer)
+    accept(l, '-') && return emit_error(l) # "--" is an invalid operator
+    accept(l, isdigit) && return lex_digit(l)
+    return emit(l, Tokens.MINUS)
+end
 
-    accept(l, '-')
-    if accept_batch(l, isdigit) && position(l) > longest
-        longest, kind = position(l), Tokens.t_int
-    end
 
-    seek2startpos!(l)
+# A digit has been consumed
+function lex_digit(l::Lexer)
+    backup!(l)
+    longest, kind = position(l), Tokens.ERROR
 
-    accept(l, "+-")
-    if accept_batch(l, isdigit) && accept(l, '.')
-        accept_batch(l, isdigit)
-        if position(l) > longest
-            longest, kind = position(l), Tokens.t_float
+    accept_batch(l, isdigit)
+
+    if accept(l, '.')
+        if peekchar(l) == '.' # 43.. -> [43, ..]
+            backup!(l)
+            return emit(l, Tokens.INTEGER)
         end
-        if accept(l, "eE")
+        accept_batch(l, isdigit)
+        if accept(l, '.') # 3213.313.3123 is error
+            return emit_error(l)
+        elseif position(l) > longest # 323213.3232 candidate
+            longest, kind = position(l), Tokens.FLOAT
+        end
+        if accept(l, "eE") # 1313.[0-9]*e
             accept(l, "+-")
             if accept_batch(l, isdigit) && position(l) > longest
-                longest, kind = position(l), Tokens.t_float
+                longest, kind = position(l), Tokens.FLOAT
             end
         end
+    elseif position(l) > longest
+        longest, kind = position(l), Tokens.INTEGER
     end
 
     seek2startpos!(l)
 
     # 0x[0-9A-Fa-f]+
     if accept(l, '0') && accept(l, 'x')
-        accept("o")
-        if accept_batch(ishex) && position(l) > longest
-            longest, kind = position(l), Tokens.APFloat
+        accept(l, "o")
+        if accept_batch(l, ishex) && position(l) > longest
+            longest, kind = position(l), Tokens.INTEGER
         end
     end
 
     seek(l, longest)
 
-    if kind == Tokens.Error
-        return emit_error(l)
-    else
-        return emit(l, kind)
-    end
-
+    return emit(l, kind)
 end
-
 
 # Lex a prim sign, a ''' has been consumed
 function lex_prime(l)
-    @debug "lexing prime, current char is $(peekchar(l)), pos is $(position(l))"
+     return emit(l, Tokens.PRIME)
+end
+# This does not work because a ' could be a ctranspose function call
+# and we need to parse the expression for this to work.
+#=
+function lex_prime(l)
     while true
         c = readchar(l)
         if eof(c)
-            return emit_error(l, Tokens.EOF_in_char)
+            return emit_error(l, Tokens.EOF_CHAR)
         elseif c == '\\'
             if eof(readchar(l))
-                return emit_error(l, Tokens.EOF_in_char)
+                return emit_error(l, Tokens.EOF_CHAR)
             end
         elseif c == '\''
-            return emit(l, Tokens.t_char, skipfirst=1, skiplast=1)
+            return emit(l, Tokens.CHAR)
         end
     end
 end
-
-
-# Lex all tokens that start with an @ character.
-# An '@' char has been consumed
-function lex_at(l::Lexer)
-    if accept_batch(l, is_identifier_char)
-        return emit(l, Tokens.macro_call)
-    else
-        return emit_error(l)
-    end
-end
-
+=#
 
 function lex_amper(l::Lexer)
     if accept(l, '&')
-        return emit(l, Tokens.lazy_and)
+        return emit(l, Tokens.LAZY_AND)
     elseif accept(l, "=")
-        return emit(l, Tokens.ass_ampr)
+        return emit(l, Tokens.AND_EQ)
     else
-        return emit(l, Tokens.amper)
+        return emit(l, Tokens.AND)
     end
 end
 
 function lex_identifier(l::Lexer)
-
     accept_batch(l, is_identifier_char)
-
     str = extract_tokenstring(l)
-    kind = get(Tokens.KEYWORDS, str, Tokens.Identifier)
+    kind = get(Tokens.KEYWORDS, str, Tokens.IDENTIFIER)
     return emit(l, kind, str)
 end
 
@@ -539,19 +512,19 @@ end
 function lex_quote(l::Lexer)
     if accept(l, '"') # ""
         if accept(l, '"') # """
-            if read_string(l, Tokens.t_string_triple)
-                emit(l, Tokens.t_string_triple)
+            if read_string(l, Tokens.TRIPLE_STRING)
+                emit(l, Tokens.TRIPLE_STRING)
             else
-                emit_error(l, Tokens.EOF_in_string)
+                emit_error(l, Tokens.EOF_STRING)
             end
         else # empty string
-            return emit(l, Tokens.t_string)
+            return emit(l, Tokens.STRING)
         end
     else # "?, ? != '"'
-        if read_string(l, Tokens.t_string)
-            emit(l, Tokens.t_string)
+        if read_string(l, Tokens.STRING)
+            emit(l, Tokens.STRING)
         else
-            return emit_error(l, Tokens.EOF_in_string)
+            return emit_error(l, Tokens.EOF_STRING)
         end
     end
 end
@@ -561,34 +534,40 @@ end
 function lex_forwardslash(l::Lexer)
     if accept(l, "/") # //
         if accept(l, "=") # //=
-            return emit(l, Tokens.ass_fslash2)
+            return emit(l, Tokens.FWDFWD_SLASH_EQ)
         else
-            return emit(l, Tokens.fslash2)
+            return emit(l, Tokens.FWDFWD_SLASH)
         end
     elseif accept(l, "=") # /=
-        return emit(l, Tokens.ass_fslash)
+        return emit(l, Tokens.FWD_SLASH_EQ)
     else
-        return emit(l, Tokens.fslash)
+        return emit(l, Tokens.FWD_SLASH)
     end
 end
 
-
+# TODO .op
 function lex_dot(l::Lexer)
     if accept(l, '.')
         if accept(l, '.')
-            return emit(l, Tokens.dot3)
+            return emit(l, Tokens.DDDOT)
         else
-            return emit(l, Tokens.dot2)
+            return emit(l, Tokens.DDOT)
         end
     else
-        return emit(l, Tokens.dot)
+        return emit(l, Tokens.DOT)
     end
 end
 
-
-function lex_dollar(l::Lexer)
-    return emit(l, Tokens.dollar)
+# A ` has been consumed, find the next one
+function lex_cmd(l::Lexer)
+    while true
+        c = readchar(l)
+        if c == '`'
+            return emit(l, Tokens.CMD)
+        elseif eof(c)
+            return emit_error(l, Tokens.EOF_CMD)
+        end
+    end
 end
-
 
 end # module

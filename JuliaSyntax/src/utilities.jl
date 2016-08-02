@@ -25,8 +25,10 @@ The JuliaParser.jl package is licensed under the MIT "Expat" License:
 > TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 > SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 =#
-const EOF_CHAR = convert(Char,typemax(UInt32))
 
+import Base.UTF8proc
+
+const EOF_CHAR = convert(Char,typemax(UInt32))
 
 function is_cat_id_start(ch::Char, cat::Integer)
     c = UInt32(ch)
