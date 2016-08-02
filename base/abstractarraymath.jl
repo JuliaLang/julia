@@ -67,14 +67,14 @@ function slicedim(A::AbstractArray, d::Integer, i)
 end
 
 function flipdim(A::AbstractVector, d::Integer)
-    d > 0 || throw(ArgumentError("dimension to flip must be positive"))
-    d == 1 || return copy(A)
+    d == 1 || throw(ArgumentError("dimension to flip must be 1"))
     reverse(A)
 end
 
 function flipdim(A::AbstractArray, d::Integer)
     nd = ndims(A)
-    if d > nd || isempty(A)
+    1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
+    if isempty(A)
         return copy(A)
     end
     inds = indices(A)
