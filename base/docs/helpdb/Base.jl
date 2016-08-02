@@ -2603,7 +2603,7 @@ creates a task, and does not run it.
 """
     fld(x, y)
 
-Largest integer less than or equal to `x/y`.
+Largest integer `n` such that `y * n` less than or equal to `x`.
 """
 fld
 
