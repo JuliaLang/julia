@@ -59,7 +59,7 @@ function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{In
                startbyte::Int64, endbyte::Int64, val::String)
     Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR)
 end
-Token() = Token(Nothing, (0,0), (0,0), 0, 0, "", unknown)
+Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN)
 
 function kind(t::Token)
     isoperator(t.kind) && return OP

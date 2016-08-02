@@ -14,7 +14,7 @@
         FUNCTION, GLOBAL, MACRO, QUOTE, LET, LOCAL,
         CONST, ABSTRACT, TYPE, BITSTYPE, IMMUTABLE,
         DO, MODULE, BAREMODULE, USING, IMPORT, EXPORT, IMPORTALL,
-        END, FALSE, TRUE,
+        END, FALSE, TRUE, ELSE, ELSEIF,
     end_keywords,
 
     begin_literal,
