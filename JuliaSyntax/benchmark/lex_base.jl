@@ -5,8 +5,9 @@ const BASEPATH = abspath(joinpath(JULIA_HOME, "..", ".."))
 tot_files = 0
 tot_time = 0.0
 tot_tokens = 0
+tot_errors = 0
 function testall(srcdir::AbstractString)
-    global tot_files, tot_time, tot_tokens
+    global tot_files, tot_time, tot_tokens, tot_errors
     dirs, files = [], []
 
     for fname in sort(readdir(srcdir))
@@ -31,10 +32,10 @@ function testall(srcdir::AbstractString)
             tot_files += 1
             tot_time += @elapsed tokens = collect(Tokenize.tokenize(buf))
             tot_tokens += length(tokens)
+
             for token in tokens
                 if Tokenize.Tokens.kind(token) == Tokenize.Tokens.ERROR
-                    show(token)
-                    error("Error in file $jlpath, for token $token")
+                    tot_errors += 1
                 end
             end
         end
@@ -56,4 +57,4 @@ perhaps you are using a Julia not built from source?""")
 end
 
 print("Lexed ", tot_files, " files in ", @sprintf("%3.4f", tot_time),
-      " seconds with a total of ", tot_tokens, " tokens")
+      " seconds with a total of ", tot_tokens, " tokens with ", tot_errors, " errors")

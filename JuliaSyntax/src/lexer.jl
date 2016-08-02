@@ -206,7 +206,6 @@ end
 function read_string(l::Lexer, kind::Tokens.Kind)
     while true
         c = readchar(l)
-        show(c)
         if c == '\\' && eof(readchar(l))
             return false
         end
@@ -219,14 +218,6 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                 end
             end
         elseif eof(c)
-            show(l.io)
-
-            println("....")
-
-            println(position(l))
-            println(l.io.size)
-            println(c)
-            println("...")
             return false
         end
     end
@@ -467,13 +458,6 @@ function lex_digit(l::Lexer)
     return emit(l, kind)
 end
 
-# Lex a prim sign, a ''' has been consumed
-function lex_prime(l)
-     return emit(l, Tokens.PRIME)
-end
-# This does not work because a ' could be a ctranspose function call
-# and we need to parse the expression for this to work.
-#=
 function lex_prime(l)
     while true
         c = readchar(l)
@@ -488,7 +472,6 @@ function lex_prime(l)
         end
     end
 end
-=#
 
 function lex_amper(l::Lexer)
     if accept(l, '&')
