@@ -260,6 +260,18 @@ parsehex(s) = parse(Int,s,16)
 @test_throws ArgumentError parse(Int,"2x")
 @test_throws ArgumentError parse(Int,"-")
 
+# parsing numbers with _ and .
+@test parse("1_2.3_4") == 12.34
+@test_throws ParseError parse("1._")
+@test_throws ParseError parse("1._5")
+@test_throws ParseError parse("1e.3")
+@test_throws ParseError parse("1e3.")
+@test parse("2e_1") == Expr(:call, :*, 2, :e_1)
+# issue #17705
+@test parse("2e3_") == Expr(:call, :*, 2e3, :_)
+@test parse("2e-3_") == Expr(:call, :*, 2e-3, :_)
+@test parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), "x"))
+
 # multibyte spaces
 @test parse(Int, "3\u2003\u202F") == 3
 @test_throws ArgumentError parse(Int, "3\u2003\u202F,")
