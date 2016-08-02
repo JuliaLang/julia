@@ -60,7 +60,7 @@
                              "")))
                 ((comparison) (apply string (map deparse (cdr e))))
                 ((in) (string (deparse (cadr e)) " in " (deparse (caddr e))))
-                ((ssavalue) (string "SSAValue(" (cdr e) ")"))
+                ((ssavalue) (string "SSAValue(" (cadr e) ")"))
                 ((line) (if (length= e 2)
                             (string "# line " (cadr e))
                             (string "# " (caddr e) ", line " (cadr e))))

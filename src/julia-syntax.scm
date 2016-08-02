@@ -1469,6 +1469,9 @@
            `(block ,@(cdr e)
                    ,(expand-update-operator op op= (car e) rhs T))))
         (else
+         (if (and (pair? lhs)
+                  (not (memq (car lhs) '(|.| tuple vcat typed_hcat typed_vcat))))
+             (error (string "invalid assignment location \"" (deparse lhs) "\"")))
          (expand-update-operator- op op= lhs rhs declT))))
 
 (define (lower-update-op e)

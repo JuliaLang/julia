@@ -1415,7 +1415,8 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
-  (let* ((lhs (parse-pipes s))
+  (let* ((paren? (eqv? (require-token s) #\())
+         (lhs (parse-pipes s))
          (t   (peek-token s)))
     (cond ((memq t '(= in ∈))
            (take-token s)
@@ -1428,6 +1429,13 @@
              `(= ,lhs ,rhs)))
           ((and (eq? lhs ':) (closing-token? t))
            ':)
+          ((and paren? (length= lhs 4) (eq? (car lhs) 'call)
+                (memq (cadr lhs) '(in ∈)))
+           (syntax-deprecation s "for (...)" "for ...")
+           `(= ,@(cddr lhs)))
+          ((and paren? (length= lhs 3) (eq? (car lhs) '=))
+           (syntax-deprecation s "for (...)" "for ...")
+           lhs)
           (else (error "invalid iteration specification")))))
 
 (define (parse-comma-separated-iters s)
