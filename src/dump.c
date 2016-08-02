@@ -2033,7 +2033,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
         tn->cache = (jl_svec_t*)jl_deserialize_value(&s, NULL); jl_gc_wb(tn, tn->cache);
         tn->linearcache = (jl_svec_t*)jl_deserialize_value(&s, NULL); jl_gc_wb(tn, tn->linearcache);
         jl_resort_type_cache(tn->cache);
-        jl_resort_type_cache(tn->linearcache);
     }
 
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,

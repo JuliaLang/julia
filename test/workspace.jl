@@ -15,3 +15,12 @@ show(io, Pair)
 """
 exename = Base.julia_cmd()
 run(`$exename --startup-file=no -e $script`)
+
+# issue #17764
+script2 = """
+type Foo end
+workspace()
+type Foo end
+@assert Tuple{Type{LastMain.Foo}} !== Tuple{Type{Main.Foo}}
+"""
+run(`$exename --startup-file=no -e $script2`)
