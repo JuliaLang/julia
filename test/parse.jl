@@ -648,3 +648,5 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
     @test_throws ParseError parse("$op in [+, -]")
 end
 
+# issue #17701
+@test expand(:(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3)&&i\"")
