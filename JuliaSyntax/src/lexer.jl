@@ -11,12 +11,12 @@ import ..Tokens: Token, Kind, TokenError
 
 export tokenize
 
-using Logging
-@Logging.configure(level=WARNING)
+# using Logging
+# @Logging.configure(level=WARNING)
 
-#macro debug(ex)
-#    return :()
-#end
+macro debug(ex)
+    return :()
+end
 
 
 ishead(c::Char) = ('A' <= c <= 'z') || c == '$' || c == '-' || c == '_' || c == '.'
