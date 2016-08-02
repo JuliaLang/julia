@@ -257,7 +257,6 @@ JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}}
 };
-static char *gc_stack_lo;
 
 static void gc_debug_alloc_setnext(jl_alloc_num_t *num)
 {
@@ -345,11 +344,26 @@ void gc_debug_print(void)
     gc_debug_print_status();
 }
 
-static void gc_scrub_range(char *stack_lo, char *stack_hi)
+// a list of tasks for conservative stack scan during gc_scrub
+static arraylist_t jl_gc_debug_tasks;
+
+void gc_scrub_record_task(jl_task_t *t)
 {
-    stack_lo = (char*)((uintptr_t)stack_lo & ~(uintptr_t)15);
-    for (char **stack_p = (char**)stack_lo;
-         stack_p > (char**)stack_hi;stack_p--) {
+    arraylist_push(&jl_gc_debug_tasks, t);
+}
+
+static void gc_scrub_range(char *low, char *high)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf buf;
+    if (jl_setjmp(buf, 0)) {
+        ptls->safe_restore = old_buf;
+        return;
+    }
+    ptls->safe_restore = &buf;
+    low = (char*)((uintptr_t)low & ~(uintptr_t)15);
+    for (char **stack_p = ((char**)high) - 1; stack_p > (char**)low; stack_p--) {
         char *p = *stack_p;
         size_t osize;
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
@@ -371,11 +385,42 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         // set mark to GC_MARKED (young and marked)
         tag->bits.gc = GC_MARKED;
     }
+    ptls->safe_restore = old_buf;
 }
 
-void gc_scrub(char *stack_hi)
+static void gc_scrub_task(jl_task_t *ta)
 {
-    gc_scrub_range(gc_stack_lo, stack_hi);
+    int16_t tid = ta->tid;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    if (ptls == ptls2 && ta == ptls2->current_task) {
+        // scan up to current `sp` for current thread and task
+        char *low = (char*)jl_get_frame_addr();
+#ifdef COPY_STACKS
+        gc_scrub_range(low, ptls2->stack_hi);
+#else
+        gc_scrub_range(low, (char*)ta->stkbuf + ta->ssize);
+#endif
+        return;
+    }
+    // The task that owns/is running on the threads's stack.
+#ifdef COPY_STACKS
+    jl_task_t *thread_task = ptls2->current_task;
+#else
+    jl_task_t *thread_task = ptls2->root_task;
+#endif
+    if (ta == thread_task)
+        gc_scrub_range(ptls2->stack_lo, ptls2->stack_hi);
+    if (ta->stkbuf == (void*)(intptr_t)(-1) || !ta->stkbuf)
+        return;
+    gc_scrub_range((char*)ta->stkbuf, (char*)ta->stkbuf + ta->ssize);
+}
+
+void gc_scrub(void)
+{
+    for (size_t i = 0; i < jl_gc_debug_tasks.len; i++)
+        gc_scrub_task((jl_task_t*)jl_gc_debug_tasks.items[i]);
+    jl_gc_debug_tasks.len = 0;
 }
 #else
 void gc_debug_critical_error(void)
@@ -694,7 +739,6 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
 void gc_debug_init(void)
 {
 #ifdef GC_DEBUG_ENV
-    gc_stack_lo = (char*)gc_get_stack_ptr();
     char *env = getenv("JULIA_GC_NO_GENERATIONAL");
     if (env && strcmp(env, "0") != 0)
         jl_gc_debug_env.always_full = 1;
@@ -703,6 +747,7 @@ void gc_debug_init(void)
     gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
     gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
     gc_debug_alloc_init(&jl_gc_debug_env.print, "PRINT");
+    arraylist_new(&jl_gc_debug_tasks, 0);
 #endif
 
 #ifdef GC_VERIFY
