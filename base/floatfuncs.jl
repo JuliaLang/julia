@@ -240,7 +240,7 @@ significand digits. For other types, `rtol` defaults to zero.
 
 `x` and `y` may also be arrays of numbers, in which case `norm` defaults to `vecnorm` but
 may be changed by passing a `norm::Function` keyword argument. (For numbers, `norm` is the
-same thing as `abs`.) When `x` and `y` are arrays, if their norm is infinite (i.e. `±Inf`
+same thing as `abs`.) When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
 or `NaN`), the comparison falls back to checking whether all elements of `x` and `y` are
 approximately equal component-wise.
 

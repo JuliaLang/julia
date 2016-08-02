@@ -592,7 +592,7 @@ function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S};
         return d <= atol + rtol*max(norm(x), norm(y))
     else
         # Fall back to a component-wise approximate comparison
-        return all(map((a, b) -> isapprox(a, b; rtol=rtol, atol=atol), x, y))
+        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol), zip(x, y))
     end
 end
 
