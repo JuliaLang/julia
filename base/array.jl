@@ -17,12 +17,9 @@ import Core: arraysize, arrayset, arrayref
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array) = (@_inline_meta; _size((), a))
+size(a::Array) = _size((), a)
 _size{_,N}(out::NTuple{N}, A::Array{_,N}) = out
-function _size{_,M,N}(out::NTuple{M}, A::Array{_,N})
-    @_inline_meta
-    _size((out..., size(A,M+1)), A)
-end
+_size{_,M,N}(out::NTuple{M}, A::Array{_,N}) = _size((out..., size(A,M+1)), A)
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
@@ -223,7 +220,7 @@ end
 # make a collection similar to `c` and appropriate for collecting `itr`
 _similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
 _similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
-_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, indices(itr))
+_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, convert(Dims,size(itr)))
 _similar_for(c, T, itr, isz) = similar(c, T)
 
 """
@@ -289,9 +286,8 @@ function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
 end
 
 function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
-    i1 = first(linearindices(dest))
-    dest[i1] = v1
-    return collect_to!(dest, itr, i1+1, st)
+    dest[1] = v1
+    return collect_to!(dest, itr, 2, st)
 end
 
 function collect_to_with_first!(dest, v1, itr, st)
