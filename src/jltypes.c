@@ -1891,14 +1891,36 @@ static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n)
     for(j=0; j < n; j++) {
         jl_value_t *kj = key[j], *tj = jl_svecref(tt->parameters,j);
         if (tj != kj) {
-            int dtt = jl_is_datatype(tj);
             int dtk = jl_is_datatype(kj);
-            if (!dtt && !dtk && jl_egal(tj, kj))
+            if (!jl_is_datatype(tj)) {
+                if (!dtk) {
+                    if (jl_egal(tj, kj))
+                        continue;
+                    return (jl_object_id(kj) < jl_object_id(tj) ? -1 : 1);
+                }
+                else {
+                    return 1;
+                }
+            }
+            else if (!dtk) {
+                return -1;
+            }
+            jl_datatype_t *dt = (jl_datatype_t*)tj;
+            jl_datatype_t *dk = (jl_datatype_t*)kj;
+            if (dk->uid != dt->uid) {
+                return dk->uid < dt->uid ? -1 : 1;
+            }
+            else if (dk->uid != 0) {
                 continue;
-            uintptr_t tid = (dtt && ((jl_datatype_t*)tj)->uid ? ((jl_datatype_t*)tj)->uid : jl_object_id(tj));
-            uintptr_t kid = (dtk && ((jl_datatype_t*)kj)->uid ? ((jl_datatype_t*)kj)->uid : jl_object_id(kj));
-            if (kid != tid)
-                return kid < tid ? -1 : 1;
+            }
+            else if (dk->name->hash != dt->name->hash) {
+                return dk->name->hash < dt->name->hash ? -1 : 1;
+            }
+            else {
+                int cmp = typekey_compare(dt, jl_svec_data(dk->parameters), jl_nparams(dk));
+                if (cmp != 0)
+                    return cmp;
+            }
         }
     }
     return 0;

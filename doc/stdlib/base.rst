@@ -309,7 +309,7 @@ All Objects
 
    .. Docstring generated from Julia source
 
-   Get a unique integer id for ``x``\ . ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``\ .
+   Get a hash value for ``x`` based on object identity. ``object_id(x)==object_id(y)`` if ``x === y``\ .
 
 .. function:: hash(x[, h::UInt])
 
