@@ -8,6 +8,11 @@ type Set{T} <: AbstractSet{T}
 end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
+function Set(g::Generator)
+    T = _default_eltype(typeof(g))
+    T === Union{} && return Set(collect(g))
+    return Set{T}(g)
+end
 
 eltype{T}(::Type{Set{T}}) = T
 similar{T}(s::Set{T}) = Set{T}()
