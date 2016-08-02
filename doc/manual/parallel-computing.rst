@@ -121,7 +121,7 @@ own such constructs.)
 
 An important thing to remember is that, once fetched, a :class:`Future` will cache its value
 locally. Further :func:`fetch` calls do not entail a network hop. Once all referencing
-:class:`Future`s have fetched, the remote stored value is deleted.
+:class:`Future`\ s have fetched, the remote stored value is deleted.
 
 
 .. _man-parallel-computing-code-availability:
@@ -858,10 +858,12 @@ Custom cluster managers would typically specify only ``io`` or ``host`` / ``port
 - ``count``, ``exename`` and ``exeflags`` are relevant for launching additional workers from a worker.
   For example, a cluster manager may launch a single worker per node, and use that to launch
   additional workers.
-    - ``count`` with an integer value ``n`` will launch a total of ``n`` workers.
-    - ``count`` with a value of ``:auto`` will launch as many workers as cores on that machine.
-    - ``exename`` is the name of the ``julia`` executable including the full path.
-    - ``exeflags`` should be set to the required command line arguments for new workers.
+
+  - ``count`` with an integer value ``n`` will launch a total of ``n`` workers.
+  - ``count`` with a value of ``:auto`` will launch as many workers as cores on that machine.
+  - ``exename`` is the name of the ``julia`` executable including the full path.
+  - ``exeflags`` should be set to the required command line arguments for new workers.
+
 - ``tunnel``, ``bind_addr``, ``sshflags`` and ``max_parallel`` are used when a ssh tunnel is
   required to connect to the workers from the master process.
 - ``userdata`` is provided for custom cluster managers to store their own worker specific information.

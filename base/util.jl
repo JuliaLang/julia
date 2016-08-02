@@ -174,8 +174,8 @@ A macro to execute an expression, printing the time it took to execute, the numb
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression.
 
-See also [`@timev`](:ref:@timev), [`@timed`](:ref:@timed), [`@elapsed`](:ref:@elapsed), and
-[`@allocated`](:ref:@allocated).
+See also [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`), [`@elapsed`](:func:`@elapsed`), and
+[`@allocated`](:func:`@allocated`).
 """
 macro time(ex)
     quote
@@ -197,8 +197,8 @@ This is a verbose version of the `@time` macro. It first prints the same informa
 `@time`, then any non-zero memory allocation counters, and then returns the value of the
 expression.
 
-See also [`@time`](:ref:@time), [`@timed`](:ref:@timed), [`@elapsed`](:ref:@elapsed), and
-[`@allocated`](:ref:@allocated).
+See also [`@time`](:func:`@time`), [`@timed`](:func:`@timed`), [`@elapsed`](:func:`@elapsed`), and
+[`@allocated`](:func:`@allocated`).
 """
 macro timev(ex)
     quote
@@ -217,8 +217,8 @@ end
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 number of seconds it took to execute as a floating-point number.
 
-See also [`@time`](:ref:@time), [`@timev`](:ref:@timev), [`@timed`](:ref:@timed),
-and [`@allocated`](:ref:@allocated).
+See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`),
+and [`@allocated`](:func:`@allocated`).
 """
 macro elapsed(ex)
     quote
@@ -244,8 +244,8 @@ effects of compilation, however, there still may be some allocations due to JIT 
 This also makes the results inconsistent with the `@time` macros, which do not try to adjust
 for the effects of compilation.
 
-See also [`@time`](:ref:@time), [`@timev`](:ref:@timev), [`@timed`](:ref:@timed),
-and [`@elapsed`](:ref:@elapsed).
+See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`),
+and [`@elapsed`](:func:`@elapsed`).
 """
 macro allocated(ex)
     quote
@@ -268,8 +268,8 @@ A macro to execute an expression, and return the value of the expression, elapse
 total bytes allocated, garbage collection time, and an object with various memory allocation
 counters.
 
-See also [`@time`](:ref:@time), [`@timev`](:ref:@timev), [`@elapsed`](:ref:@elapsed), and
-[`@allocated`](:ref:@allocated).
+See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@elapsed`](:func:`@elapsed`), and
+[`@allocated`](:func:`@allocated`).
 """
 macro timed(ex)
     quote
