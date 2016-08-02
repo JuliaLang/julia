@@ -86,7 +86,7 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
         else
             write(io, '0')
         end
-        write(io, typed && isa(x,Float32) ? 'f' : 'e')
+        write(io, isa(x,Float32) ? 'f' : 'e')
         write(io, dec(pt-1))
         typed && isa(x,Float16) && write(io, ")")
         return
