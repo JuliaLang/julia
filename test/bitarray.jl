@@ -861,7 +861,7 @@ for d = 1 : 4
     #end
     @check_bit_operation flipdim(b1, d) BitArray{4}
 end
-@check_bit_operation flipdim(b1, 5) BitArray{4}
+@test_throws ArgumentError flipdim(b1, 5)
 
 b1 = bitrand(n1, n2)
 for k = 1 : 4
