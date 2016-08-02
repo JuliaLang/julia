@@ -1284,7 +1284,8 @@ end
 
 function flipdim(A::BitArray, d::Integer)
     nd = ndims(A)
-    sd = d > nd ? 1 : size(A, d)
+    1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
+    sd = size(A, d)
     if sd == 1
         return copy(A)
     end

@@ -1019,12 +1019,12 @@ end
 
 # flipdim
 @test isequal(flipdim([2,3,1], 1), [1,3,2])
-@test isequal(flipdim([2,3,1], 2), [2,3,1])
+@test_throws ArgumentError flipdim([2,3,1], 2)
 @test isequal(flipdim([2 3 1], 1), [2 3 1])
 @test isequal(flipdim([2 3 1], 2), [1 3 2])
 @test_throws ArgumentError flipdim([2,3,1], -1)
 @test isequal(flipdim(1:10, 1), 10:-1:1)
-@test isequal(flipdim(1:10, 2), 1:10)
+@test_throws ArgumentError flipdim(1:10, 2)
 @test_throws ArgumentError flipdim(1:10, -1)
 @test isequal(flipdim(Array{Int}(0,0),1), Array{Int}(0,0))  # issue #5872
 
@@ -1415,7 +1415,7 @@ ctranspose!(a,b)
 # flipdim
 a = rand(5,3)
 @test flipdim(flipdim(a,2),2) == a
-@test flipdim(a,3) == a
+@test_throws ArgumentError flipdim(a,3)
 
 # bounds checking for copy!
 a = rand(5,3)
