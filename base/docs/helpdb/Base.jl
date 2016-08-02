@@ -2603,7 +2603,8 @@ creates a task, and does not run it.
 """
     fld(x, y)
 
-Largest integer `n` such that `y * n` less than or equal to `x`.
+Largest integer `n` such that `y * n` less than or equal to `x`. Note that this can be
+different from `floor(x/y)` due to floating point rounding.
 """
 fld
 
