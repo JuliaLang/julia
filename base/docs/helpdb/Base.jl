@@ -2603,7 +2603,7 @@ creates a task, and does not run it.
 """
     fld(x, y)
 
-Largest integer less than or equal to `x/y`.
+Largest integer `n` such that `y * n` less than or equal to `x`.
 """
 fld
 
@@ -5206,7 +5206,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:534
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:537
  ...
 ```
 """
