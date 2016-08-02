@@ -76,9 +76,8 @@ static void tbaa_decorate_gcframe(Instruction *inst,
                                   std::set<Instruction*> &visited,
                                   MDNode *tbaa_gcframe)
 {
-    if (visited.find(inst) != visited.end())
+    if (visited.insert(inst).second)
         return;
-    visited.insert(inst);
 #ifdef LLVM35
     Value::user_iterator I = inst->user_begin(), E = inst->user_end();
 #else
@@ -116,20 +115,23 @@ static void tbaa_decorate_gcframe(Instruction *inst, MDNode *tbaa_gcframe)
 
 class JuliaGCAllocator {
 public:
-    JuliaGCAllocator(CallInst *ptlsStates, Type *T_pjlvalue, MDNode *tbaa) :
-        F(*ptlsStates->getParent()->getParent()),
+    JuliaGCAllocator(Function &F, CallInst *ptlsStates,
+                     Type *T_pjlvalue, MDNode *tbaa) :
+        F(F),
         M(*F.getParent()),
         T_int1(Type::getInt1Ty(F.getContext())),
         T_int8(Type::getInt8Ty(F.getContext())),
         T_int32(Type::getInt32Ty(F.getContext())),
         T_int64(Type::getInt64Ty(F.getContext())),
-        V_null(Constant::getNullValue(T_pjlvalue)),
+        V_null(T_pjlvalue ? Constant::getNullValue(T_pjlvalue) : nullptr),
         ptlsStates(ptlsStates),
-        gcframe(new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0))),
+        gcframe(ptlsStates ? new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0)) : nullptr),
         gcroot_func(M.getFunction("julia.gc_root_decl")),
         gckill_func(M.getFunction("julia.gc_root_kill")),
         jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
         gcroot_flush_func(M.getFunction("julia.gcroot_flush")),
+        except_enter_func(M.getFunction("julia.except_enter")),
+        jlleave_func(M.getFunction("jl_pop_handler")),
         tbaa_gcframe(tbaa)
     {
 /* Algorithm sketch:
@@ -138,10 +140,12 @@ public:
  *  Propagate liveness from each basic block to its predecessors
  *  Allocate argument slot for each jlcall frame
  */
+        if (gcframe) {
 #ifdef JL_DEBUG_BUILD
-        gcframe->setName("gcrootframe");
+            gcframe->setName("gcrootframe");
 #endif
-        gcframe->insertAfter(ptlsStates);
+            gcframe->insertAfter(ptlsStates);
+        }
     }
 
 private:
@@ -158,6 +162,8 @@ private:
     Function *const gckill_func;
     Function *const jlcall_frame_func;
     Function *const gcroot_flush_func;
+    Function *const except_enter_func;
+    Function *const jlleave_func;
     MDNode *const tbaa_gcframe;
 
     Instruction *get_pgcstack(Instruction *ptlsStates);
@@ -171,9 +177,188 @@ private:
         std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses,
         std::map<BasicBlock*, SmallBitVector> &regs_used);
     void rearrangeRoots();
+    void lowerHandlers();
 public:
     void allocate_frame();
 };
+
+struct HandlerData {
+    // Pairs of <jl_pop_handle call inst>, number of pops left after popping
+    // this frame.
+    std::vector<std::pair<CallInst*,uint64_t>> leaves;
+    // enters that are directly nested in this frame
+    std::set<CallInst*> nested;
+    std::unique_ptr<std::vector<CallInst*>> parent_vec;
+    CallInst *parent{nullptr};
+    bool processed{false};
+};
+
+void JuliaGCAllocator::lowerHandlers()
+{
+    if (!except_enter_func)
+        return;
+    auto jlenter_func = M.getNamedValue("jl_enter_handler");
+    auto setjmp_func = M.getNamedValue(jl_setjmp_name);
+    // Collect all exception enters
+    std::map<CallInst*,HandlerData> handlers;
+    for (auto &BB: F) {
+        for (auto &I: BB) {
+            auto call = dyn_cast<CallInst>(&I);
+            if (call && call->getCalledValue() == except_enter_func) {
+                handlers[call] = HandlerData();
+            }
+        }
+    }
+
+    if (handlers.empty())
+        return;
+
+    typedef std::map<CallInst*,HandlerData>::iterator hdlr_iter_t;
+    // For each exception enter, compute the life time of the enter, find
+    // the corresponding leaves and collect a list of nested exception frames.
+    // This assumes the exception frames has simple structure. E.g.
+    // there's no recursion and different frames do no share the same leave.
+    std::function<void(hdlr_iter_t)> process_handler = [&] (hdlr_iter_t hdlr) {
+        auto enter = hdlr->first;
+        auto &data = hdlr->second;
+        if (data.processed)
+            return;
+        data.processed = true;
+        std::vector<BasicBlock::iterator> frontier = {
+            ++BasicBlock::iterator(enter)
+        };
+        // Start from the enter, the enter is live until it hits a leave
+        // or the control flow terminates.
+        std::set<Instruction*> visited;
+        auto add_inst = [&] (BasicBlock::iterator it) {
+            if (visited.insert(&*it).second) {
+                frontier.push_back(it);
+            }
+        };
+        while (!frontier.empty()) {
+            BasicBlock::iterator IT = frontier.back();
+            Instruction *I = &*IT;
+            ++IT;
+            frontier.pop_back();
+            if (I->isTerminator()) {
+                BasicBlock *bb = I->getParent();
+                for (auto S = succ_begin(bb), E = succ_end(bb); S != E; S++)
+                    add_inst(S->getFirstInsertionPt());
+                continue;
+            }
+            auto call = dyn_cast<CallInst>(I);
+            if (!call) {
+                add_inst(IT);
+                continue;
+            }
+            auto callee = call->getCalledValue();
+            if (callee == except_enter_func) {
+                // Nested frame, make sure the frame is processed and skip to
+                // its leaves.
+                auto other_it = handlers.find(call);
+                assert(other_it != handlers.end());
+                process_handler(other_it);
+                auto &other_data = other_it->second;
+                data.nested.insert(call);
+                // Record a reference to parent frame, there should be only
+                // one parent in most cases although more than one parent is
+                // also possible if LLVM split the enter call.
+                if (__unlikely(other_data.parent_vec)) {
+                    other_data.parent_vec->push_back(enter);
+                }
+                else if (__unlikely(other_data.parent)) {
+                    other_data.parent_vec.reset(
+                        new std::vector<CallInst*>{other_data.parent, enter});
+                }
+                else {
+                    other_data.parent = enter;
+                }
+                for (auto leave: other_it->second.leaves) {
+                    if (leave.second > 0) {
+                        data.leaves.push_back(std::make_pair(leave.first,
+                                                             leave.second - 1));
+                    }
+                    else {
+                        add_inst(++BasicBlock::iterator(leave.first));
+                    }
+                }
+            }
+            else if (callee == jlleave_func) {
+                // Leave, record how many pops are left on this leave.
+                assert(call->getNumArgOperands() == 1);
+                auto arg = cast<ConstantInt>(call->getArgOperand(0));
+                uint64_t pop_count = arg->getLimitedValue();
+                assert(pop_count >= 1);
+                data.leaves.push_back(std::make_pair(call, pop_count - 1));
+            }
+            else {
+                // Otherwise, go to the next instruction.
+                add_inst(IT);
+            }
+        }
+    };
+
+    // Make sure all frames are processed.
+    for (auto IT = handlers.begin(), E = handlers.end(); IT != E; ++IT)
+        process_handler(IT);
+
+    std::set<CallInst*> processing;
+    Value *handler_sz = ConstantInt::get(T_int32, sizeof(jl_handler_t));
+    // Now allocate the stack slots.
+    // At each iteration, we allocate a new handler and assign all the remaining
+    // frames that doesn't have a non-processed child to this handler.
+    Instruction *firstInst = &F.getEntryBlock().front();
+    while (!handlers.empty()) {
+        processing.clear();
+        auto buff = new AllocaInst(T_int8, handler_sz, "", firstInst);
+        buff->setAlignment(16);
+        // Collect the list of frames to process.
+        for (auto &hdlr: handlers) {
+            auto enter = hdlr.first;
+            auto &nested = hdlr.second.nested;
+            if (nested.empty()) {
+                processing.insert(enter);
+            }
+        }
+        // There shouldn't be loops so there has to be leafs
+        assert(!processing.empty());
+        for (auto enter: processing) {
+            // Lower the enter
+            auto new_enter = CallInst::Create(jlenter_func, buff, "", enter);
+#ifndef _OS_WINDOWS_
+            // For LLVM 3.3 compatibility
+            Value *args[] = {buff, ConstantInt::get(T_int32,0)};
+            auto sj = CallInst::Create(setjmp_func, args, "", enter);
+#else
+            auto sj = CallInst::Create(setjmp_func, buff, "", enter);
+#endif
+            // We need to mark this on the call site as well. See issue #6757
+            sj->setCanReturnTwice();
+#ifdef LLVM36
+            if (auto dbg = enter->getMetadata(LLVMContext::MD_dbg)) {
+                new_enter->setMetadata(LLVMContext::MD_dbg, dbg);
+                sj->setMetadata(LLVMContext::MD_dbg, dbg);
+            }
+#else
+            (void)new_enter;
+#endif
+            // Remove it from all the parents.
+            auto it = handlers.find(enter);
+            if (__unlikely(it->second.parent_vec)) {
+                for (auto parent: *it->second.parent_vec) {
+                    handlers.find(parent)->second.nested.erase(enter);
+                }
+            }
+            else if (it->second.parent) {
+                handlers.find(it->second.parent)->second.nested.erase(enter);
+            }
+            // Delete it.
+            handlers.erase(it);
+            enter->replaceAllUsesWith(sj);
+            enter->eraseFromParent();
+        }
+    }
+}
 
 Instruction *JuliaGCAllocator::get_pgcstack(Instruction *ptlsStates)
 {
@@ -528,6 +713,9 @@ void JuliaGCAllocator::rearrangeRoots()
 
 void JuliaGCAllocator::allocate_frame()
 {
+    lowerHandlers();
+    if (!ptlsStates)
+        return;
     Instruction *last_gcframe_inst = gcframe;
     collapseRedundantRoots();
     rearrangeRoots();
@@ -916,29 +1104,84 @@ void JuliaGCAllocator::allocate_frame()
 #endif
 }
 
-struct LowerGCFrame: public FunctionPass {
+struct LowerGCFrame: public ModulePass {
     static char ID;
     LowerGCFrame(MDNode *_tbaa_gcframe=nullptr)
-        : FunctionPass(ID),
+        : ModulePass(ID),
           tbaa_gcframe(_tbaa_gcframe)
     {}
 
 private:
     MDNode *tbaa_gcframe; // One `LLVMContext` only
-    bool runOnFunction(Function &F) override;
+    void runOnFunction(Module *M, Function &F, Function *ptls_getter,
+                       Type *T_pjlvalue);
+    bool runOnModule(Module &M) override;
 };
 
-bool LowerGCFrame::runOnFunction(Function &F)
+static void eraseFunction(Module &M, const char *name)
 {
-    Module *M = F.getParent();
+    if (Function *f = M.getFunction(name)) {
+        f->eraseFromParent();
+    }
+}
 
-    Function *ptls_getter = M->getFunction("jl_get_ptls_states");
-    if (!ptls_getter)
-        return true;
+static void ensure_enter_function(Module &M)
+{
+    auto T_int8  = Type::getInt8Ty(M.getContext());
+    auto T_pint8 = PointerType::get(T_int8, 0);
+    auto T_void = Type::getVoidTy(M.getContext());
+    auto T_int32 = Type::getInt32Ty(M.getContext());
+    if (!M.getNamedValue("jl_enter_handler")) {
+        std::vector<Type*> ehargs(0);
+        ehargs.push_back(T_pint8);
+        Function::Create(FunctionType::get(T_void, ehargs, false),
+                         Function::ExternalLinkage, "jl_enter_handler", &M);
+    }
+    if (!M.getNamedValue(jl_setjmp_name)) {
+        std::vector<Type*> args2(0);
+        args2.push_back(T_pint8);
+#ifndef _OS_WINDOWS_
+        args2.push_back(T_int32);
+#endif
+        Function::Create(FunctionType::get(T_int32, args2, false),
+                         Function::ExternalLinkage, jl_setjmp_name, &M)
+            ->addFnAttr(Attribute::ReturnsTwice);
+    }
+}
 
-    CallInst *ptlsStates = NULL;
+bool LowerGCFrame::runOnModule(Module &M)
+{
+    Function *ptls_getter = M.getFunction("jl_get_ptls_states");
+    ensure_enter_function(M);
+    FunctionType *functype = nullptr;
+    Type *T_pjlvalue = nullptr;
+    if (ptls_getter) {
+        functype = ptls_getter->getFunctionType();
+        auto T_ppjlvalue =
+            cast<PointerType>(functype->getReturnType())->getElementType();
+        T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
+    }
+    for (auto F = M.begin(), E = M.end(); F != E; ++F) {
+        if (F->isDeclaration())
+            continue;
+        runOnFunction(&M, *F, ptls_getter, T_pjlvalue);
+    }
+
+    // Cleanup for GC frame lowering.
+    eraseFunction(M, "julia.gc_root_decl");
+    eraseFunction(M, "julia.gc_root_kill");
+    eraseFunction(M, "julia.jlcall_frame_decl");
+    eraseFunction(M, "julia.gcroot_flush");
+    eraseFunction(M, "julia.except_enter");
+    return true;
+}
+
+void LowerGCFrame::runOnFunction(Module *M, Function &F, Function *ptls_getter,
+                                 Type *T_pjlvalue)
+{
+    CallInst *ptlsStates = nullptr;
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
-         I != E; ++I) {
+         ptls_getter && I != E; ++I) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
             if (callInst->getCalledValue() == ptls_getter) {
                 ptlsStates = callInst;
@@ -946,16 +1189,8 @@ bool LowerGCFrame::runOnFunction(Function &F)
             }
         }
     }
-    if (!ptlsStates)
-        return true;
-
-    FunctionType *functype = ptls_getter->getFunctionType();
-    auto T_ppjlvalue =
-        cast<PointerType>(functype->getReturnType())->getElementType();
-    auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
-    JuliaGCAllocator allocator(ptlsStates, T_pjlvalue, tbaa_gcframe);
+    JuliaGCAllocator allocator(F, ptlsStates, T_pjlvalue, tbaa_gcframe);
     allocator.allocate_frame();
-    return true;
 }
 
 char LowerGCFrame::ID = 0;
