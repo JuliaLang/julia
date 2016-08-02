@@ -88,7 +88,6 @@ iteratorsize{T<:AbstractArray}(::Type{T}) = HasShape()
 iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
-indices(g::Generator) = indices(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 
 iteratoreltype{I,T}(::Type{Generator{I,T}}) = EltypeUnknown()
