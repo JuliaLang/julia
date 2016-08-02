@@ -163,21 +163,8 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
 #endif
 }
 
-static void eraseFunction(Module &M, const char *name)
-{
-    if (Function *f = M.getFunction(name)) {
-        f->eraseFromParent();
-    }
-}
-
 bool LowerPTLS::runOnModule(Module &M)
 {
-    // Cleanup for GC frame lowering.
-    eraseFunction(M, "julia.gc_root_decl");
-    eraseFunction(M, "julia.gc_root_kill");
-    eraseFunction(M, "julia.jlcall_frame_decl");
-    eraseFunction(M, "julia.gcroot_flush");
-
     Function *ptls_getter = M.getFunction("jl_get_ptls_states");
     if (!ptls_getter)
         return true;
