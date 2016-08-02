@@ -663,6 +663,10 @@ function show_generator(io, ex, indent)
         show_unquoted(io, ex.args[1], indent)
         print(io, " for ")
         show_unquoted(io, ex.args[2], indent)
+        for i = 3:length(ex.args)
+            print(io, ", ")
+            show_unquoted(io, ex.args[i], indent)
+        end
     end
 end
 
@@ -802,7 +806,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_generator(io, args[1], indent)
         print(io, ']')
 
-    elseif head === :generator && length(args) == 2
+    elseif (head === :generator && length(args) >= 2) || (head === :flatten && length(args) == 1)
         print(io, '(')
         show_generator(io, ex, indent)
         print(io, ')')
@@ -811,9 +815,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_unquoted(io, args[2], indent)
         print(io, " if ")
         show_unquoted(io, args[1], indent)
-
-    elseif head === :flatten && length(args) == 1
-        show_generator(io, ex, indent)
 
     elseif is(head, :ccall)
         show_unquoted(io, :ccall, indent)
