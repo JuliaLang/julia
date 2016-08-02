@@ -10,7 +10,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia/$(VERSDIR) $(build_datarootdir)/julia/$(VERSDIR) $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/perf)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
@@ -40,7 +40,7 @@ configure:
 endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia)))
+$(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia/$(VERSDIR))))
 
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
@@ -49,7 +49,7 @@ julia_flisp.boot.inc.phony: julia-deps
 $(BUILDROOT)/doc/_build/html:
 	@$(MAKE) -C $(BUILDROOT)/doc html
 
-# doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
+# doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/$(VERSDIR)/
 CLEAN_TARGETS += clean-docdir
 clean-docdir:
 	@-rm -fr $(abspath $(build_docdir))
@@ -68,10 +68,10 @@ ifndef JULIA_VAGRANT_BUILD
 endif
 endif
 
-julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
+julia-deps: | $(DIRS) $(build_datarootdir)/julia/$(VERSDIR)/base $(build_datarootdir)/julia/$(VERSDIR)/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
-julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
+julia-base: julia-deps $(build_sysconfdir)/julia/$(VERSDIR)/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -160,12 +160,12 @@ $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
 	@mkdir -p $(build_man1dir)
 	@cp $< $@
 
-$(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/etc/juliarc.jl | $(build_sysconfdir)/julia
+$(build_sysconfdir)/julia/$(VERSDIR)/juliarc.jl: $(JULIAHOME)/etc/juliarc.jl | $(build_sysconfdir)/julia/$(VERSDIR)
 	@echo Creating usr/etc/julia/juliarc.jl
 	@cp $< $@
 ifeq ($(OS), WINNT)
-	@cat $(JULIAHOME)/contrib/windows/juliarc.jl >> $(build_sysconfdir)/julia/juliarc.jl
-$(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/contrib/windows/juliarc.jl
+	@cat $(JULIAHOME)/contrib/windows/juliarc.jl >> $(build_sysconfdir)/julia/$(VERSDIR)/juliarc.jl
+$(build_sysconfdir)/julia/$(VERSDIR)/juliarc.jl: $(JULIAHOME)/contrib/windows/juliarc.jl
 endif
 
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
@@ -321,7 +321,7 @@ install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html
 	# prefix/share/julia/site/VERSDIR (not prefix/share/julia/VERSDIR/site)
 	# so that prefix/share/julia/VERSDIR can be overwritten without touching
 	# third-party code.
-	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
+	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/$(VERSDIR) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
@@ -373,9 +373,9 @@ endif
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
-	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
+	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/$(VERSDIR)/
 	# Copy in standalone julia-config script
-	$(INSTALL_M) $(JULIAHOME)/contrib/julia-config.jl $(DESTDIR)$(datarootdir)/julia/
+	$(INSTALL_M) $(JULIAHOME)/contrib/julia-config.jl $(DESTDIR)$(datarootdir)/julia/$(VERSDIR)/
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Copy documentation
@@ -383,10 +383,10 @@ endif
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
 	-rm $(DESTDIR)$(docdir)/html/.buildinfo
 	# Remove perf suite
-	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
+	-rm -rf $(DESTDIR)$(datarootdir)/julia/$(VERSDIR)/test/perf/
 	# Remove various files which should not be installed
-	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
-	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
+	-rm -f $(DESTDIR)$(datarootdir)/julia/$(VERSDIR)/base/version_git.sh
+	-rm -f $(DESTDIR)$(datarootdir)/julia/$(VERSDIR)/test/Makefile
 	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
@@ -451,7 +451,7 @@ ifeq ($(OS), Linux)
 	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir) $(DESTDIR)$(private_libdir)
 	# We need to bundle ca certs on linux now that we're using libgit2 with ssl
 ifeq ($(shell [ -e $(shell openssl version -d | cut -d '"' -f 2)/cert.pem ] && echo exists),exists)
-	-cp $(shell openssl version -d | cut -d '"' -f 2)/cert.pem $(DESTDIR)$(datarootdir)/julia/
+	-cp $(shell openssl version -d | cut -d '"' -f 2)/cert.pem $(DESTDIR)$(datarootdir)/julia/$(VERSDIR)/
 endif
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
