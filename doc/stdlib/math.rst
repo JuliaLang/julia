@@ -122,7 +122,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Largest integer less than or equal to ``x/y``\ .
+   Largest integer ``n`` such that ``y * n`` is less than or equal to ``x``\ . Note that this can be different from ``floor(x/y)`` due to floating point rounding.
 
 .. function:: cld(x, y)
 
