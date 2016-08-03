@@ -1,7 +1,5 @@
 # Tokenize
 
-**Note:** This package does not currently work well with transpose and conjugate transpose operators like in `A' * b` and will try to tokenize this as the beginning of a `CHAR` literal.
-
 `Tokenize` is a Julia package that serves a similar purpose and API as the [tokenize module](https://docs.python.org/3/library/tokenize.html) in Python but for Julia. This is to take a string or buffer containing Julia code, perform lexical analysis and return a stream of tokens.
 
 The goals of this package is to be
@@ -9,6 +7,8 @@ The goals of this package is to be
 * Fast, it currently lexes all of Julia source files in less than a second (1.6 million Tokens)
 * Round trippable, that is, from a stream of tokens the original string should be recoverable exactly.
 * Non error throwing. Instead of throwing errors a certain error token is returned.
+
+**Note:** This package does not currently work well with transpose and conjugate transpose operators like in `A' * b` and will try to tokenize this as the beginning of a `CHAR` literal.
 
 ### API
 
