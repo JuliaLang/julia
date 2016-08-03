@@ -225,11 +225,72 @@ mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
 reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
     mapreducedim!(identity, op, R, A, zero(RT))
 
+"""
+    mapreducedim(f, op, A, region[, v0])
+
+Evaluates to the same as `reducedim(op, map(f, A), region, f(v0))`, but is generally
+faster because the intermediate array is avoided.
+
+```jldoctest
+julia> a = rand(1:5,4,4)
+4×4 Array{Int64,2}:
+ 1  2  4  1
+ 5  5  3  1
+ 2  4  3  3
+ 1  5  3  2
+
+julia> mapreducedim(isodd, *, a, 2)
+4×1 Array{Bool,2}:
+ false
+ true
+ false
+ false
+
+julia> mapreducedim(isodd, *, a, 1)
+1×4 Array{Bool,2}:
+ false  false  false  false
+
+julia> mapreducedim(isodd, |, a, 1, true)
+1×4 Array{Bool,2}:
+ true  true  true  true
+```
+"""
 mapreducedim(f, op, A::AbstractArray, region, v0) =
     mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
 mapreducedim{T}(f, op, A::AbstractArray{T}, region) =
     mapreducedim!(f, op, reducedim_init(f, op, A, region), A)
 
+"""
+    reducedim(f, A, region[, v0])
+
+Reduce 2-argument function `f` along dimensions of `A`. `region` is a vector specifying the
+dimensions to reduce, and `v0` is the initial value to use in the reductions. For `+`, `*`,
+`max` and `min` the `v0` argument is optional.
+
+The associativity of the reduction is implementation-dependent; if you need a particular
+associativity, e.g. left-to-right, you should write your own loop. See documentation for
+[`reduce`](:func:`reduce`).
+
+```jldoctest
+julia> a = rand(1:5,4,4)
+4×4 Array{Int64,2}:
+ 3  5  4  3
+ 3  2  5  5
+ 3  3  4  2
+ 5  5  5  1
+
+julia> reducedim(max,a,2)
+4×1 Array{Int64,2}:
+ 5
+ 5
+ 4
+ 5
+
+julia> reducedim(max,a,1)
+1×4 Array{Int64,2}:
+ 5  5  5  5
+```
+"""
 reducedim(op, A::AbstractArray, region, v0) = mapreducedim(identity, op, A, region, v0)
 reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
 

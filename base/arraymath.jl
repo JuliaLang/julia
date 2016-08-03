@@ -159,6 +159,25 @@ function flipdim{T}(A::Array{T}, d::Integer)
     return B
 end
 
+"""
+    rotl90(A)
+
+Rotate matrix `A` left 90 degrees.
+
+```jldoctest
+julia> a = rand(1:8,3,3)
+3×3 Array{Int64,2}:
+ 6  8  8
+ 3  1  8
+ 6  1  3
+
+julia> rotl90(a)
+3×3 Array{Int64,2}:
+ 8  8  3
+ 8  1  1
+ 6  3  6
+```
+"""
 function rotl90(A::AbstractMatrix)
     ind1, ind2 = indices(A)
     B = similar(A, (ind2,ind1))
@@ -168,6 +187,26 @@ function rotl90(A::AbstractMatrix)
     end
     return B
 end
+
+"""
+    rotr90(A)
+
+Rotate matrix `A` right 90 degrees.
+
+```jldoctest
+julia> a = rand(1:8,3,3)
+3×3 Array{Int64,2}:
+ 4  6  1
+ 8  8  1
+ 7  4  8
+
+julia> rotr90(a)
+3×3 Array{Int64,2}:
+ 7  8  4
+ 4  8  6
+ 8  1  1
+```
+"""
 function rotr90(A::AbstractMatrix)
     ind1, ind2 = indices(A)
     B = similar(A, (ind2,ind1))
@@ -177,6 +216,25 @@ function rotr90(A::AbstractMatrix)
     end
     return B
 end
+"""
+    rot180(A)
+
+Rotate matrix `A` 180 degrees.
+
+```jldoctest
+julia> a = rand(1:8,3,3)
+3×3 Array{Int64,2}:
+ 4  8  6
+ 6  4  6
+ 2  8  7
+
+julia> rot180(a)
+3×3 Array{Int64,2}:
+ 7  8  2
+ 6  4  6
+ 6  8  4
+```
+"""
 function rot180(A::AbstractMatrix)
     B = similar(A)
     ind1, ind2 = indices(A,1), indices(A,2)
@@ -186,13 +244,115 @@ function rot180(A::AbstractMatrix)
     end
     return B
 end
+"""
+    rotl90(A, k)
+
+Rotate matrix `A` left 90 degrees an integer `k` number of times.
+If `k` is zero or a multiple of four, this is equivalent to a `copy`.
+
+```jldoctest
+julia> a = rand(1:8,3,3)
+3×3 Array{Int64,2}:
+ 7  2  6
+ 2  5  2
+ 7  3  3
+
+julia> rotl90(a,1)
+3×3 Array{Int64,2}:
+ 6  2  3
+ 2  5  3
+ 7  2  7
+
+julia> rotl90(a,2)
+3×3 Array{Int64,2}:
+ 3  3  7
+ 2  5  2
+ 6  2  7
+
+julia> rotl90(a,3)
+3×3 Array{Int64,2}:
+ 7  2  7
+ 3  5  2
+ 3  2  6
+
+julia> rotl90(a,4)
+3×3 Array{Int64,2}:
+ 7  2  6
+ 2  5  2
+ 7  3  3
+```
+"""
 function rotl90(A::AbstractMatrix, k::Integer)
     k = mod(k, 4)
     k == 1 ? rotl90(A) :
     k == 2 ? rot180(A) :
     k == 3 ? rotr90(A) : copy(A)
 end
+"""
+    rotr90(A, k)
+
+Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
+multiple of four, this is equivalent to a `copy`.
+
+```jldoctest
+julia> a = rand(1:8,3,3)
+3×3 Array{Int64,2}:
+ 7  8  1
+ 3  1  6
+ 7  2  1
+
+julia> rotr90(a,1)
+3×3 Array{Int64,2}:
+ 7  3  7
+ 2  1  8
+ 1  6  1
+
+julia> rotr90(a,2)
+3×3 Array{Int64,2}:
+ 1  2  7
+ 6  1  3
+ 1  8  7
+
+julia> rotr90(a,3)
+3×3 Array{Int64,2}:
+ 1  6  1
+ 8  1  2
+ 7  3  7
+
+julia> rotr90(a,4)
+3×3 Array{Int64,2}:
+ 7  8  1
+ 3  1  6
+ 7  2  1
+```
+"""
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
+"""
+    rot180(A, k)
+
+Rotate matrix `A` 180 degrees an integer `k` number of times.
+If `k` is even, this is equivalent to a `copy`.
+
+```jldoctest
+julia> a = rand(1:8,3,3)
+3×3 Array{Int64,2}:
+ 5  6  3
+ 6  7  2
+ 2  1  6
+
+julia> rot180(a,1)
+3×3 Array{Int64,2}:
+ 6  1  2
+ 2  7  6
+ 3  6  5
+
+julia> rot180(a,2)
+3×3 Array{Int64,2}:
+ 5  6  3
+ 6  7  2
+ 2  1  6
+```
+"""
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 
 ## Transpose ##

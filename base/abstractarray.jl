@@ -1348,6 +1348,49 @@ foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
 ## transform any set of dimensions
 ## dims specifies which dimensions will be transformed. for example
 ## dims==1:2 will call f on all slices A[:,:,...]
+"""
+    mapslices(f, A, dims)
+
+Transform the given dimensions of array `A` using function `f`. `f` is called on each slice
+of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the
+colons go in this expression. The results are concatenated along the remaining dimensions.
+For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
+for all `i` and `j`.
+
+```jldoctest
+julia> A = rand(1:5, 2, 2, 2, 2)
+2×2×2×2 Array{Int64,4}:
+[:, :, 1, 1] =
+ 1  1
+ 3  4
+
+[:, :, 2, 1] =
+ 4  1
+ 5  3
+
+[:, :, 1, 2] =
+ 3  4
+ 1  3
+
+[:, :, 2, 2] =
+ 4  4
+ 4  1
+
+julia> mapslices(sum, A, [1,2])
+1×1×2×2 Array{Int64,4}:
+[:, :, 1, 1] =
+ 9
+
+[:, :, 2, 1] =
+ 13
+
+[:, :, 1, 2] =
+ 11
+
+[:, :, 2, 2] =
+ 13
+```
+"""
 mapslices(f, A::AbstractArray, dims) = mapslices(f, A, [dims...])
 function mapslices(f, A::AbstractArray, dims::AbstractVector)
     if isempty(dims)
