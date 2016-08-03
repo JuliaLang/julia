@@ -58,3 +58,5 @@ OP::Tokenize.Tokens.Kind = 60
 julia> Tokenize.Tokens.exactkind(tok)
 RIGHTWARDS_DOUBLE_ARROW::Tokenize.Tokens.Kind = 129
 ```
+
+All the different `Token.Kind` can be seen in the [`token_kinds.jl` file](https://github.com/KristofferC/Tokenize.jl/blob/master/src/token_kinds.jl)
