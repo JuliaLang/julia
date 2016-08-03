@@ -10,8 +10,8 @@ srand(0); rand(); x = rand(384)
 @test -10 <= rand(-10:-5) <= -5
 @test -10 <= rand(-10:5) <= 5
 @test minimum([rand(Int32(1):Int32(7^7)) for i = 1:100000]) > 0
-@test(typeof(rand(false:true)) === Bool)
-@test(typeof(rand(Char)) === Char)
+@test typeof(rand(false:true)) === Bool
+@test typeof(rand(Char)) === Char
 @test length(randn(4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 

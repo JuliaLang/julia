@@ -1635,7 +1635,7 @@ const worker_lock = ReentrantLock()
 Launches worker processes via the specified cluster manager.
 
 For example Beowulf clusters are  supported via a custom cluster manager implemented in
-package `ClusterManagers.jl`.
+the package `ClusterManagers.jl`.
 
 The number of seconds a newly launched worker waits for connection establishment from the
 master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker process's

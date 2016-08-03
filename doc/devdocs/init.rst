@@ -183,7 +183,7 @@ Base.eval
 
 `jl_toplevel_eval_in() <https://github.com/JuliaLang/julia/blob/master/src/builtins.c>`_ calls `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c>`_ which calls `eval() in interpreter.c <https://github.com/JuliaLang/julia/blob/master/src/interpreter.c>`_.
 
-The stack dump below shows how the interpreter works its way through various methods of :func:`Base.println` and :func:`Base.print` before arriving at `write{T}(s::AsyncStream, a::Array{T}) <https://github.com/JuliaLang/julia/blob/master/base/stream.jl>`_  which does :code:`ccall(jl_uv_write())`.
+The stack dump below shows how the interpreter works its way through various methods of :func:`Base.println` and :func:`Base.print` before arriving at `write{T}(s::IO, a::Array{T}) <https://github.com/JuliaLang/julia/blob/master/base/stream.jl>`_  which does :code:`ccall(jl_uv_write())`.
 
 `jl_uv_write() <https://github.com/JuliaLang/julia/blob/master/src/jl_uv.c>`_
 calls :c:func:`uv_write` to write "Hello World!" to :c:macro:`JL_STDOUT`. See :ref:`dev-libuv`.::
@@ -195,7 +195,7 @@ calls :c:func:`uv_write` to write "Hello World!" to :c:macro:`JL_STDOUT`. See :r
 Stack frame                   Source code        Notes
 ============================  =================  ===============================================
 jl_uv_write()                 jl_uv.c            called though :func:`Base.ccall`
-julia_write_282942            stream.jl          function write!{T}(s::AsyncStream, a::Array{T})
+julia_write_282942            stream.jl          function write!{T}(s::IO, a::Array{T})
 julia_print_284639            ascii.jl           print(io::IO, s::String) = (write(io, s);nothing)
 jlcall_print_284639
 jl_apply()                    julia.h

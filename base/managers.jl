@@ -93,7 +93,7 @@ Keyword arguments:
   + `topology=:master_slave`  :  Only the driver process, i.e. `pid` 1 connects to the
                         workers. The workers do not connect to each other.
 
-  + `topology=:custom`  :  The `launch` method of the cluster manager specifes the
+  + `topology=:custom`  :  The `launch` method of the cluster manager specifies the
                   connection topology via fields `ident` and `connect_idents` in
                   `WorkerConfig`. A worker with a cluster manager identity `ident`
                   will connect to all workers specified in `connect_idents`.
