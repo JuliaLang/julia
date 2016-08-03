@@ -401,20 +401,6 @@ Element-wise multiplication operator.
 Base.:(.*)
 
 """
-    ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation on `src` and put the result into `dest`.
-"""
-ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer)
-
-"""
-    ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation on `B`.
-"""
-ror!(B::BitArray{1}, i::Integer)
-
-"""
     range(start, [step], length)
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
@@ -804,13 +790,6 @@ macroexpand
 Returns `true` if `path` has the sticky bit set, `false` otherwise.
 """
 issticky
-
-"""
-    rol(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation.
-"""
-rol
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -4331,13 +4310,6 @@ Returns `string` with the first character converted to lowercase.
 lcfirst
 
 """
-    flipbits!(B::BitArray{N}) -> BitArray{N}
-
-Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
-"""
-flipbits!
-
-"""
     readlink(path) -> AbstractString
 
 Returns the value of a symbolic link `path`.
@@ -7466,20 +7438,6 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 fill
 
 """
-    rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation on `src` and put the result into `dest`.
-"""
-rol!(::BitArray,::BitArray,::Integer)
-
-"""
-    rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation on `B`.
-"""
-rol!(::BitArray,::Integer)
-
-"""
     issubset(a, b)
     ⊆(a,b) -> Bool
     ⊈(a,b) -> Bool
@@ -8279,13 +8237,6 @@ The asserted condition did not evaluate to `true`.
 Optional argument `msg` is a descriptive error string.
 """
 AssertionError
-
-"""
-    ror(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation.
-"""
-ror
 
 """
     Ac_ldiv_Bc(A, B)
