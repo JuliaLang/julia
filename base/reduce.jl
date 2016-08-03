@@ -286,10 +286,58 @@ end
 maximum(f::Callable, a) = mapreduce(f, scalarmax, a)
 minimum(f::Callable, a) = mapreduce(f, scalarmin, a)
 
+"""
+    maximum(itr)
+
+Returns the largest element in a collection.
+
+```jldoctest
+julia> maximum(-20.5:10)
+9.5
+
+julia> maximum([1,2,3])
+3
+```
+"""
 maximum(a) = mapreduce(identity, scalarmax, a)
+
+"""
+    minimum(itr)
+
+Returns the smallest element in a collection.
+
+```jldoctest
+julia> minimum(-20.5:10)
+-20.5
+
+julia> minimum([1,2,3])
+1
+```
+"""
 minimum(a) = mapreduce(identity, scalarmin, a)
 
+"""
+    maxabs(itr)
+
+Compute the maximum absolute value of a collection of values.
+
+```jldoctest
+julia> maxabs([-1, 3, 4*im])
+4.0
+```
+"""
 maxabs(a) = mapreduce(abs, scalarmax, a)
+
+"""
+    minabs(itr)
+
+Compute the minimum absolute value of a collection of values.
+
+```jldoctest
+julia> minabs([-1, 3, 4*im])
+1.0
+```
+"""
 minabs(a) = mapreduce(abs, scalarmin, a)
 
 ## extrema
@@ -301,6 +349,14 @@ extrema(x::Real) = (x, x)
     extrema(itr) -> Tuple
 
 Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
+
+```jldoctest
+julia> extrema(2:10)
+(2,10)
+
+julia> extrema([9,pi,4.5])
+(3.141592653589793,9.0)
+```
 """
 function extrema(itr)
     s = start(itr)
@@ -362,7 +418,18 @@ end
 
 ## all & any
 
+"""
+    any(itr) -> Bool
+
+Test whether any elements of a boolean collection are `true`.
+"""
 any(itr) = any(identity, itr)
+
+"""
+    all(itr) -> Bool
+
+Test whether all elements of a boolean collection are `true`.
+"""
 all(itr) = all(identity, itr)
 
 nonboolean_error(f, op) = throw(ArgumentError("""
@@ -375,6 +442,16 @@ or_bool_only(a::Bool, b::Bool) = a|b
 and_bool_only(a, b) = nonboolean_error(:all, :&)
 and_bool_only(a::Bool, b::Bool) = a&b
 
+"""
+    any(p, itr) -> Bool
+
+Determine whether predicate `p` returns `true` for any elements of `itr`.
+
+```jldoctest
+julia> any(i->(4<=i<=6), [3,5,7])
+true
+```
+"""
 any(f::Any, itr) = any(Predicate(f), itr)
 any(f::Predicate, itr) = mapreduce_sc_impl(f, |, itr)
 any(f::typeof(identity), itr) =
@@ -382,6 +459,16 @@ any(f::typeof(identity), itr) =
         mapreduce_sc_impl(f, |, itr) :
         reduce(or_bool_only, itr)
 
+"""
+    all(p, itr) -> Bool
+
+Determine whether predicate `p` returns `true` for all elements of `itr`.
+
+```jldoctest
+julia> all(i->(4<=i<=6), [4,5,6])
+true
+```
+"""
 all(f::Any, itr) = all(Predicate(f), itr)
 all(f::Predicate, itr) = mapreduce_sc_impl(f, &, itr)
 all(f::typeof(identity), itr) =
@@ -408,6 +495,16 @@ end
 
 ## countnz & count
 
+"""
+    count(p, itr) -> Integer
+
+Count the number of elements in `itr` for which predicate `p` returns `true`.
+
+```jldoctest
+julia> count(i->(4<=i<=6), [2,3,4,5,6])
+ 3
+```
+"""
 function count(pred, itr)
     n = 0
     for x in itr

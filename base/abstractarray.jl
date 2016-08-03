@@ -1338,6 +1338,16 @@ Call function `f` on each element of iterable `c`.
 For multiple iterable arguments, `f` is called elementwise.
 `foreach` should be used instead of `map` when the results of `f` are not
 needed, for example in `foreach(println, array)`.
+
+```jldoctest
+julia> a
+1:3:7
+
+julia> foreach(x->println(x^2),a)
+1
+16
+49
+```
 """
 foreach(f) = (f(); nothing)
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
