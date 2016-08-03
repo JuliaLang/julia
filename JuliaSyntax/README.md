@@ -47,7 +47,7 @@ kind(t)::Token.Kind # The type of the token
 exactkind(t)::Token.Kind # The exact type of the token
 ```
 
-The difference between `kind` and `exactkind` is that `kind` returns `OP` for all operators while `exactkind` returns a unique type for all different operators, ex;
+The difference between `kind` and `exactkind` is that `kind` returns `OP` for all operators and `KEYWORD` for all keywords while `exactkind` returns a unique kind for all different operators and keywords, ex;
 
 ```jl
 julia> tok = collect(tokenize("⇒"))[1];
