@@ -1424,7 +1424,6 @@ b = rand(6,7)
 @test_throws ArgumentError copy!(a,2:3,1:3,b,1:5,2:7)
 @test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 
-# return type declarations (promote_op)
 module RetTypeDecl
     using Base.Test
     import Base: +, *, .*, convert
@@ -1442,7 +1441,6 @@ module RetTypeDecl
     (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
     (.*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
     convert{T,pow}(::Type{MeterUnits{T,pow}}, y::Real) = MeterUnits{T,pow}(convert(T,y))
-    Base.promote_op{R,S}(::typeof(*), ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
 
     @test @inferred(m+[m,m]) == [m+m,m+m]
     @test @inferred([m,m]+m) == [m+m,m+m]

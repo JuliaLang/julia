@@ -1035,18 +1035,29 @@ for f in (:+, :-)
         return r
     end
 end
+
 for (f) in (:.+, :.-)
-    for (arg1, arg2, T, fargs) in ((:(B::BitArray), :(x::Bool)    , Int                                   , :(b, x)),
-                                   (:(B::BitArray), :(x::Number)  , :(promote_array_type($f, BitArray, typeof(x))), :(b, x)),
-                                   (:(x::Bool)    , :(B::BitArray), Int                                   , :(x, b)),
-                                   (:(x::Number)  , :(B::BitArray), :(promote_array_type($f, typeof(x), BitArray)), :(x, b)))
+    for (arg1, arg2, T, t) in ((:(B::BitArray), :(x::Bool)    , Int               , (:b, :x)),
+                               (:(B::BitArray), :(x::Number)  , :(Bool, typeof(x)), (:b, :x)),
+                               (:(x::Bool)    , :(B::BitArray), Int               , (:x, :b)),
+                               (:(x::Number)  , :(B::BitArray), :(typeof(x), Bool), (:x, :b)))
         @eval function ($f)($arg1, $arg2)
-            r = Array{$T}(size(B))
+            $(if T === Int
+                quote
+                    r = Array{Int}(size(B))
+                end
+            else
+                quote
+                    T = promote_op($f, $(T.args[1]), $(T.args[2]))
+                    T === Any && return [($f)($(t[1]), $(t[2])) for b in B]
+                    r = Array{T}(size(B))
+                end
+            end)
             bi = start(B)
             ri = 1
             while !done(B, bi)
                 b, bi = next(B, bi)
-                @inbounds r[ri] = ($f)($fargs...)
+                @inbounds r[ri] = ($f)($(t[1]), $(t[2]))
                 ri += 1
             end
             return r
@@ -1078,9 +1089,8 @@ function div(x::Bool, B::BitArray)
 end
 function div(x::Number, B::BitArray)
     all(B) || throw(DivideError())
-    pt = promote_array_type(div, typeof(x), BitArray)
     y = div(x, true)
-    reshape(pt[ y for i = 1:length(B) ], size(B))
+    return fill(y, size(B))
 end
 
 function mod(A::BitArray, B::BitArray)
@@ -1099,15 +1109,16 @@ function mod(x::Bool, B::BitArray)
 end
 function mod(x::Number, B::BitArray)
     all(B) || throw(DivideError())
-    pt = promote_array_type(mod, typeof(x), BitArray)
     y = mod(x, true)
-    reshape(pt[ y for i = 1:length(B) ], size(B))
+    return fill(y, size(B))
 end
 
 for f in (:div, :mod)
     @eval begin
         function ($f)(B::BitArray, x::Number)
-            F = Array{promote_array_type($f, BitArray, typeof(x))}(size(B))
+            T = promote_op($f, Bool, typeof(x))
+            T === Any && return [($f)(b, x) for b in B]
+            F = Array{T}(size(B))
             for i = 1:length(F)
                 F[i] = ($f)(B[i], x)
             end
