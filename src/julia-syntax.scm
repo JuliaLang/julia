@@ -1682,7 +1682,9 @@
                    (else
                     (cf (cdr old-fargs) (cdr old-args)
                         (cons farg new-fargs) (cons arg new-args) renames varfarg vararg))))))
-          (cf (cdadr f) args '() '() '() '() '()))
+          (if (and (= (length args) 1) (integer? (car args)))
+              e ; hack: don't compress e.g. f.(1) so that deprecation for getfield works
+              (cf (cdadr f) args '() '() '() '() '())))
         e)) ; (not (fuse? e))
   (let ((e (compress-fuse (dot-to-fuse rhs))) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place

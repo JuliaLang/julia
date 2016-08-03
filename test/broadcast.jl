@@ -174,6 +174,7 @@ rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Floa
 let x = [1,3.2,4.7], y = [3.5, pi, 1e-4], α = 0.2342
     @test sin.(x) == broadcast(sin, x)
     @test sin.(α) == broadcast(sin, α)
+    @test sin.(3.2) == broadcast(sin, 3.2) == sin(3.2)
     @test factorial.(3) == broadcast(factorial, 3)
     @test atan2.(x, y) == broadcast(atan2, x, y)
     @test atan2.(x, y') == broadcast(atan2, x, y')
