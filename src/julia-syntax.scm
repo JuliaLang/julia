@@ -2639,7 +2639,7 @@ f(x) = yt(x)
                            `(call (core apply_type) ,typ ,@type-sp)))
          (newtypes
           (if iskw
-              `(,(car types) ,(cadr types) ,closure-type ,@(cdddr types))
+              `(,(car types) ,(cadr types) ,(caddr types) ,closure-type ,@(cddddr types))
               `(,closure-type ,@(cdr types)))))
     `(call (core svec) (call (core apply_type) Tuple ,@newtypes)
            (call (core svec) ,@(append (cddr (cadddr te)) type-sp)))))
@@ -2944,7 +2944,7 @@ f(x) = yt(x)
                                             `((method #f ,(cl-convert arg-defs fname lam namemap toplevel interp)
                                                   ,(convert-lambda lam2
                                                                    (if iskw
-                                                                       (caddr (lam:args lam2))
+                                                                       (cadddr (lam:args lam2))
                                                                        (car (lam:args lam2)))
                                                                    #f closure-param-names)
                                                   ,(last e)))))))
