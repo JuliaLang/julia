@@ -141,10 +141,7 @@ temp_pkg_dir() do
     @test endswith(str, string(Pkg.installed("Example")))
     @test isempty(Pkg.dependents("Example"))
 
-
-    #-------
-    # 17364
-    #-------
+    # 17364, Pkg.checkout with specific branch
     let branch_name = "test-branch",
         branch_commit = "ba3888212e30a7974ac6803a89e64c7098f4865e"
 
@@ -153,11 +150,24 @@ temp_pkg_dir() do
             LibGit2.branch!(repo, branch_name, branch_commit, set_head=false)
         end
 
-        Pkg.clone(Pkg.dir("Example"), Pkg.dir("Example2"))
+        Pkg.clone(Pkg.dir("Example"), "Example2")
+        Pkg.clone(Pkg.dir("Example"), "Example3")
+        open(Pkg.dir("Example3", "README.md"), "w") do f
+            println(f, "overwritten")
+        end
+        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example3")) do repo
+            LibGit2.add!(repo, "README.md")
+            test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+            LibGit2.commit(repo, "testmsg"; author=test_sig, committer=test_sig)
+        end
 
         Pkg.checkout("Example2", branch_name)
+        Pkg.checkout("Example3", branch_name)
 
         LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example2")) do repo
+            @test LibGit2.head_oid(repo) == LibGit2.Oid(branch_commit)
+        end
+        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example3")) do repo
             @test LibGit2.head_oid(repo) == LibGit2.Oid(branch_commit)
         end
     end
