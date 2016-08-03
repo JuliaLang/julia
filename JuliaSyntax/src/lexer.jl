@@ -158,7 +158,7 @@ end
 
 function emit(l::Lexer, kind::Kind, str::String)
     tok = Token(kind, (l.token_start_row, l.token_start_col),
-                (l.current_row, l.current_col),
+                (l.current_row, l.current_col - 1),
                 startpos(l), position(l) - 1,
                 str)
     @debug "emitted token: $tok:"
@@ -169,7 +169,7 @@ end
 function emit(l::Lexer, kind::Kind, err::TokenError=Tokens.UNKNOWN)
     str = extract_tokenstring(l)
     tok = Token(kind, (l.token_start_row, l.token_start_col),
-                (l.current_row, l.current_col),
+                (l.current_row, l.current_col - 1),
                 startpos(l), position(l) - 1,
                 str)
     @debug "emitted token: $tok:"
