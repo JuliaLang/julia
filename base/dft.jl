@@ -395,8 +395,7 @@ if Base.USE_GPL_LIBS
 
     A multidimensional FFT simply performs this operation along each transformed dimension of `A`.
 
-    Notes
-    =====
+!!! notes
         
     * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by
     increasing number of threads. Use `FFTW.set_num_threads(np)` to use `np` threads,
