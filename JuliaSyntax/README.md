@@ -44,7 +44,7 @@ startbyte(T)::Int64 # byte offset where the token start
 endbyte(t)::Int64 # byte offset where the token ends
 untokenize(t)::String # the string representation of the token
 kind(t)::Token.Kind # The type of the token
-exactkind(t)::Token.Kind The exact type of the token
+exactkind(t)::Token.Kind # The exact type of the token
 ```
 
 The difference between `kind` and `exactkind` is that `kind` returns `OP` for all operators while `exactkind` returns a unique type for all different operators, ex;
