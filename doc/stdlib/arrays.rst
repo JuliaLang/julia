@@ -437,11 +437,57 @@ Indexing, Assignment, and Concatenation
 
    Concatenate along dimension 1.
 
+   .. doctest::
+
+       julia> a = rand(1,5)
+       1×5 Array{Float64,2}:
+        0.779721  0.929111  0.721689  0.73127  0.0877032
+
+       julia> b = rand(2,5)
+       2×5 Array{Float64,2}:
+        0.665019  0.692116  0.949552  0.866068  0.0570439
+        0.574442  0.525314  0.3796    0.486924  0.572558
+
+       julia> vcat(a,b)
+       3×5 Array{Float64,2}:
+        0.779721  0.929111  0.721689  0.73127   0.0877032
+        0.665019  0.692116  0.949552  0.866068  0.0570439
+        0.574442  0.525314  0.3796    0.486924  0.572558
+
 .. function:: hcat(A...)
 
    .. Docstring generated from Julia source
 
    Concatenate along dimension 2.
+
+   .. doctest::
+
+       julia> a = rand(6)
+       6-element Array{Float64,1}:
+        0.397239
+        0.857198
+        0.287707
+        0.602862
+        0.815096
+        0.682085
+
+       julia> b = rand(6,2)
+       6×2 Array{Float64,2}:
+        0.0369466  0.799969
+        0.507327   0.5634
+        0.367674   0.556441
+        0.835735   0.413742
+        0.36539    0.949436
+        0.179069   0.198193
+
+       julia> hcat(a,b)
+       6×3 Array{Float64,2}:
+        0.397239  0.0369466  0.799969
+        0.857198  0.507327   0.5634
+        0.287707  0.367674   0.556441
+        0.602862  0.835735   0.413742
+        0.815096  0.36539    0.949436
+        0.682085  0.179069   0.198193
 
 .. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
@@ -484,11 +530,46 @@ Indexing, Assignment, and Concatenation
 
    Reverse ``A`` in dimension ``d``\ .
 
-.. function:: circshift(A,shifts)
+   .. doctest::
+
+       julia> b = rand(2,2)
+       2×2 Array{Float64,2}:
+        0.0828743  0.0267872
+        0.179508   0.653249
+
+       julia> flipdim(b,2)
+       2×2 Array{Float64,2}:
+        0.0267872  0.0828743
+        0.653249   0.179508
+
+.. function:: circshift(A, shifts)
 
    .. Docstring generated from Julia source
 
    Circularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.
+
+   .. doctest::
+
+       julia> b = rand(4,4)
+       4×4 Array{Float64,2}:
+        0.901862  0.526361   0.851311  0.509646
+        0.671021  0.208237   0.520585  0.0912809
+        0.233433  0.0314764  0.300964  0.204917
+        0.706653  0.320038   0.985776  0.930079
+
+       julia> circshift(b, [0,2])
+       4×4 Array{Float64,2}:
+        0.851311  0.509646   0.901862  0.526361
+        0.520585  0.0912809  0.671021  0.208237
+        0.300964  0.204917   0.233433  0.0314764
+        0.985776  0.930079   0.706653  0.320038
+
+       julia> circshift(b, [-2,0])
+       4×4 Array{Float64,2}:
+        0.233433  0.0314764  0.300964  0.204917
+        0.706653  0.320038   0.985776  0.930079
+        0.901862  0.526361   0.851311  0.509646
+        0.671021  0.208237   0.520585  0.0912809
 
 .. function:: find(A)
 
@@ -608,9 +689,23 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ .
+   Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ . ``size(A,i)`` must equal 1 for all ``i`` in `dims.
 
-.. function:: vec(Array) -> Vector
+   .. doctest::
+
+       julia> b = rand(2,2,1,1)
+       2×2×1×1 Array{Float64,4}:
+       [:, :, 1, 1] =
+        0.458283  0.838564
+        0.657764  0.0915538
+
+       julia> squeeze(b,3)
+       2×2×1 Array{Float64,3}:
+       [:, :, 1] =
+        0.458283  0.838564
+        0.657764  0.0915538
+
+.. function:: vec(a::AbstractArray) -> Vector
 
    .. Docstring generated from Julia source
 

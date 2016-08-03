@@ -11,6 +11,11 @@ transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)).
 
 ## Constructors ##
 
+"""
+    vec(a::AbstractArray) -> Vector
+
+Vectorize an array using column-major convention.
+"""
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
 
@@ -18,6 +23,27 @@ _sub(::Tuple{}, ::Tuple{}) = ()
 _sub(t::Tuple, ::Tuple{}) = t
 _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
+"""
+    squeeze(A, dims)
+
+Remove the dimensions specified by `dims` from array `A`.
+Elements of `dims` must be unique and within the range `1:ndims(A)`.
+`size(A,i)` must equal 1 for all `i` in `dims.
+
+```jldoctest
+julia> b = rand(2,2,1,1)
+2×2×1×1 Array{Float64,4}:
+[:, :, 1, 1] =
+ 0.458283  0.838564
+ 0.657764  0.0915538
+
+julia> squeeze(b,3)
+2×2×1 Array{Float64,3}:
+[:, :, 1] =
+ 0.458283  0.838564
+ 0.657764  0.0915538
+```
+"""
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
@@ -71,6 +97,23 @@ function flipdim(A::AbstractVector, d::Integer)
     reverse(A)
 end
 
+"""
+    flipdim(A, d)
+
+Reverse `A` in dimension `d`.
+
+```jldoctest
+julia> b = rand(2,2)
+2×2 Array{Float64,2}:
+ 0.0828743  0.0267872
+ 0.179508   0.653249
+
+julia> flipdim(b,2)
+2×2 Array{Float64,2}:
+ 0.0267872  0.0828743
+ 0.653249   0.179508
+```
+"""
 function flipdim(A::AbstractArray, d::Integer)
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
@@ -100,6 +143,36 @@ function flipdim(A::AbstractArray, d::Integer)
 end
 
 circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [Integer(shiftamt)])
+
+"""
+    circshift(A, shifts)
+
+Circularly shift the data in an array. The second argument is a vector giving the amount to
+shift in each dimension.
+
+```jldoctest
+julia> b = rand(4,4)
+4×4 Array{Float64,2}:
+ 0.901862  0.526361   0.851311  0.509646
+ 0.671021  0.208237   0.520585  0.0912809
+ 0.233433  0.0314764  0.300964  0.204917
+ 0.706653  0.320038   0.985776  0.930079
+
+julia> circshift(b, [0,2])
+4×4 Array{Float64,2}:
+ 0.851311  0.509646   0.901862  0.526361
+ 0.520585  0.0912809  0.671021  0.208237
+ 0.300964  0.204917   0.233433  0.0314764
+ 0.985776  0.930079   0.706653  0.320038
+
+julia> circshift(b, [-2,0])
+4×4 Array{Float64,2}:
+ 0.233433  0.0314764  0.300964  0.204917
+ 0.706653  0.320038   0.985776  0.930079
+ 0.901862  0.526361   0.851311  0.509646
+ 0.671021  0.208237   0.520585  0.0912809
+```
+"""
 function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
     I = ()
     for i=1:N

@@ -1530,14 +1530,6 @@ Dict{String,Float64} with 3 entries:
 merge
 
 """
-    circshift(A,shifts)
-
-Circularly shift the data in an array. The second argument is a vector giving the amount to
-shift in each dimension.
-"""
-circshift
-
-"""
     yield()
 
 Switch to the scheduler to allow another scheduled task to run. A task that calls this
@@ -1831,13 +1823,6 @@ and/or speed.
 logdet
 
 """
-    hcat(A...)
-
-Concatenate along dimension 2.
-"""
-hcat
-
-"""
     select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Variant of `select!` which copies `v` before partially sorting it, thereby returning the
@@ -2128,13 +2113,6 @@ reverse(s::AbstractString)
 In-place version of [`reverse`](:func:`reverse`).
 """
 reverse!
-
-"""
-    flipdim(A, d)
-
-Reverse `A` in dimension `d`.
-"""
-flipdim
 
 """
     num(x)
@@ -2441,45 +2419,6 @@ Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
 """
 getfield
-
-"""
-    hvcat(rows::Tuple{Vararg{Int}}, values...)
-
-Horizontal and vertical concatenation in one call. This function is called for block matrix
-syntax. The first argument specifies the number of arguments to concatenate in each block
-row.
-
-```jldoctest
-julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
-(1,2,3,4,5,6)
-
-julia> [a b c; d e f]
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> hvcat((3,3), a,b,c,d,e,f)
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> [a b;c d; e f]
-3×2 Array{Int64,2}:
- 1  2
- 3  4
- 5  6
-
-julia> hvcat((2,2,2), a,b,c,d,e,f)
-3×2 Array{Int64,2}:
- 1  2
- 3  4
- 5  6
-```
-
-If the first argument is a single integer `n`, then all block rows are assumed to have `n`
-block columns.
-"""
-hvcat
 
 """
     besselj1(x)
@@ -3324,13 +3263,6 @@ Test whether `n` is a power of two.
 ispow2
 
 """
-    vcat(A...)
-
-Concatenate along dimension 1.
-"""
-vcat
-
-"""
     isgraph(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character is printable, and not a space, or whether this is true for all
@@ -3690,14 +3622,6 @@ Change the type-interpretation of a block of memory. For example,
 array, but with the specified element type.
 """
 reinterpret
-
-"""
-    squeeze(A, dims)
-
-Remove the dimensions specified by `dims` from array `A`. Elements of `dims` must be unique
-and within the range `1:ndims(A)`.
-"""
-squeeze
 
 """
     ~(x)
@@ -7367,13 +7291,6 @@ An error occurred when running a module's `__init__` function. The actual error 
 available in the `.error` field.
 """
 InitError
-
-"""
-    vec(Array) -> Vector
-
-Vectorize an array using column-major convention.
-"""
-vec
 
 """
     copy!(dest, src)
