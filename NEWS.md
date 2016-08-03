@@ -102,6 +102,55 @@ Language changes
   * Parentheses are no longer allowed around iteration specifications, e.g.
     `for (i = 1:n)` ([#17668]).
 
+Breaking changes
+----------------
+
+This section lists changes that do not have deprecation warnings.
+
+  * The assignment operations `.+=`, `.*=` and so on now generate calls
+    to `broadcast!` on the left-hand side (or call to `view(a, ...)` on the left-hand side
+    if the latter is an indexing expression, e.g. `a[...]`). This means that they will fail
+    if the left-hand side is immutable (or does not support `view`), and will otherwise
+    change the left-hand side in-place ([#17510], [#17546]).
+
+  * Method ambiguities no longer generate warnings when files are loaded,
+    nor do they dispatch to an arbitrarily-chosen method; instead, a call that
+    cannot be resolved to a single method results in a `MethodError` at run time,
+    rather than the previous definition-time warning. ([#6190])
+
+  * Array comprehensions preserve the dimensions of the input ranges. For example,
+    `[2x for x in A]` will have the same dimensions as `A` ([#16622]).
+
+  * The result type of an array comprehension depends only on the types of elements
+    computed, instead of using type inference ([#7258]). If the result is empty, then
+    type inference is still used to determine the element type.
+
+  * `reshape` is now defined to always share data with the original array.
+    If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
+    the desired shape ([#4211]).
+
+  * `mapslices` now re-uses temporary storage. Recipient functions that expect
+    input slices to be persistent should copy data to other storage ([#17266]).
+    All usages of `mapslices` should be carefully audited since this change can cause
+    silent, incorrect behavior, rather than failing noisily.
+
+  * Local variables and arguments are represented in lowered code as numbered `Slot`
+    objects instead of as symbols ([#15609]).
+
+  * The information that used to be in the `ast` field of the `LambdaStaticData` type
+    is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
+    `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
+
+  * `A <: B` is parsed as `Expr(:(<:), :A, :B)` in all cases ([#9503]).
+    This also applies to the `>:` operator.
+
+  * Simple 2-argument comparisons like `A < B` are parsed as calls instead of using the
+    `:comparison` expression type ([#15524]). The `:comparison` expression type is still
+    produced in ASTs when comparisons are chained (e.g. `A < B ≤ C`).
+
+  * `map` on a dictionary now expects a function that expects and returns a `Pair`.
+    The result is now another dictionary instead of an array ([#16622]).
+
 Library improvements
 --------------------
 
@@ -299,55 +348,6 @@ New architectures
 
   * [Power](https://github.com/JuliaLang/julia/issues?utf8=%E2%9C%93&q=label%3Apower):
     [#16455], [#16404]
-
-Breaking changes
-----------------
-
-This section lists changes that do not have deprecation warnings.
-
-  * The assignment operations `.+=`, `.*=` and so on now generate calls
-    to `broadcast!` on the left-hand side (or call to `view(a, ...)` on the left-hand side
-    if the latter is an indexing expression, e.g. `a[...]`). This means that they will fail
-    if the left-hand side is immutable (or does not support `view`), and will otherwise
-    change the left-hand side in-place ([#17510], [#17546]).
-
-  * Method ambiguities no longer generate warnings when files are loaded,
-    nor do they dispatch to an arbitrarily-chosen method; instead, a call that
-    cannot be resolved to a single method results in a `MethodError` at run time,
-    rather than the previous definition-time warning. ([#6190])
-
-  * Array comprehensions preserve the dimensions of the input ranges. For example,
-    `[2x for x in A]` will have the same dimensions as `A` ([#16622]).
-
-  * The result type of an array comprehension depends only on the types of elements
-    computed, instead of using type inference ([#7258]). If the result is empty, then
-    type inference is still used to determine the element type.
-
-  * `reshape` is now defined to always share data with the original array.
-    If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
-    the desired shape ([#4211]).
-
-  * `mapslices` now re-uses temporary storage. Recipient functions that expect
-    input slices to be persistent should copy data to other storage ([#17266]).
-    All usages of `mapslices` should be carefully audited since this change can cause
-    silent, incorrect behavior, rather than failing noisily.
-
-  * Local variables and arguments are represented in lowered code as numbered `Slot`
-    objects instead of as symbols ([#15609]).
-
-  * The information that used to be in the `ast` field of the `LambdaStaticData` type
-    is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
-    `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
-
-  * `A <: B` is parsed as `Expr(:(<:), :A, :B)` in all cases ([#9503]).
-    This also applies to the `>:` operator.
-
-  * Simple 2-argument comparisons like `A < B` are parsed as calls instead of using the
-    `:comparison` expression type ([#15524]). The `:comparison` expression type is still
-    produced in ASTs when comparisons are chained (e.g. `A < B ≤ C`).
-
-  * `map` on a dictionary now expects a function that expects and returns a `Pair`.
-    The result is now another dictionary instead of an array ([#16622]).
 
 Deprecated or removed
 ---------------------
