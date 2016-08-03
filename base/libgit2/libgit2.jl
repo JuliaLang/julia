@@ -201,22 +201,34 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
     # try to lookup branch first
     branch_ref = force ? nothing : lookup_branch(repo, branch_name)
     if branch_ref === nothing
+        branch_rmt_ref = isempty(track) ? nothing : lookup_branch(repo, "$track/$branch_name", true)
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
-             with(head(repo)) do head_ref
-                with(peel(GitCommit, head_ref)) do hrc
+            if branch_rmt_ref === nothing
+                with(head(repo)) do head_ref
+                    with(peel(GitCommit, head_ref)) do hrc
+                        Oid(hrc)
+                    end
+                end
+            else
+                tmpcmt = with(peel(GitCommit, branch_rmt_ref)) do hrc
                     Oid(hrc)
                 end
+                finalize(branch_rmt_ref)
+                tmpcmt
             end
         else
             Oid(commit)
         end
         iszero(commit_id) && return
         cmt =  get(GitCommit, repo, commit_id)
+        new_branch_ref = nothing
         try
-            branch_ref = create_branch(repo, branch_name, cmt, force=force)
+            new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
             finalize(cmt)
+            new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
+            branch_ref = new_branch_ref
         end
     end
     try
