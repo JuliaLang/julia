@@ -1012,6 +1012,11 @@ Mathematical Functions
 
    Return ``(min(x,y), max(x,y))``\ . See also: :func:`extrema` that returns ``(minimum(x), maximum(x))``\ .
 
+   .. doctest::
+
+       julia> minmax('c','b')
+       ('b','c')
+
 .. function:: clamp(x, lo, hi)
 
    .. Docstring generated from Julia source
