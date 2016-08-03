@@ -20,15 +20,15 @@ It takes a string or a buffer and creates an iterator that will sequentially ret
 ```jl
 julia> collect(tokenize("function f(x) end"))
 9-element Array{Tokenize.Tokens.Token,1}:
- 1,1-1,9:   KEYWORD "function"
- 1,9-1,10:   WHITESPACE " "
- 1,10-1,11:   IDENTIFIER    "f"
- 1,11-1,12:   LPAREN    "("
- 1,12-1,13:   IDENTIFIER    "x"
- 1,13-1,14:   RPAREN    ")"
- 1,14-1,15:   WHITESPACE    " "
- 1,15-1,18:   KEYWORD   "end"
- 1,18-1,18:   ENDMARKER ""
+ 1,1-1,8:   KEYWORD "function"
+ 1,9-1,9:   WHITESPACE  " "
+ 1,10-1,10:   IDENTIFIER    "f"
+ 1,11-1,11:   LPAREN    "("
+ 1,12-1,12:   IDENTIFIER    "x"
+ 1,13-1,13:   RPAREN    ")"
+ 1,14-1,14:   WHITESPACE    " "
+ 1,15-1,17:   KEYWORD   "end"
+ 1,18-1,17:   ENDMARKER ""
 ```
 
 #### `Token`s
