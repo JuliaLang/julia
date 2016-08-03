@@ -97,11 +97,9 @@ end
 ## data movement ##
 
 function flipdim{T}(A::Array{T}, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1"))
-    end
     nd = ndims(A)
-    sd = d > nd ? 1 : size(A, d)
+    1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
+    sd = size(A, d)
     if sd == 1 || isempty(A)
         return copy(A)
     end
