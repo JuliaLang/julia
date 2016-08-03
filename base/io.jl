@@ -342,7 +342,11 @@ function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
     return nr
 end
 
-# read up to nb bytes from s, returning a Vector{UInt8} of bytes read.
+"""
+    read(s::IO, nb=typemax(Int))
+
+Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
+"""
 function read(s::IO, nb=typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
