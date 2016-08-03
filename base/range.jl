@@ -332,6 +332,24 @@ isempty(r::AbstractUnitRange) = first(r) > last(r)
 isempty(r::FloatRange) = length(r) == 0
 isempty(r::LinSpace) = length(r) == 0
 
+"""
+    step(r)
+
+Get the step size of a [`Range`](:obj:`Range`) object.
+```jldoctest
+julia> step(1:10)
+1
+
+julia> step(1:2:10)
+2
+
+julia> step(2.5:0.3:10.9)
+0.3
+
+julia> step(linspace(2.5,10.9,85))
+0.1
+```
+"""
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
