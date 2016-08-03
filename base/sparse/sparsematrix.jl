@@ -40,8 +40,8 @@ countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 Return a vector of the structural nonzero values in sparse array `A`. This
 includes zeros that are explicitly stored in the sparse array. The returned
 vector points directly to the internal nonzero storage of `A`, and any
-modifications to the returned vector will mutate `A` as well. See `rowvals(A)`
-and `nzrange(A, col)`.
+modifications to the returned vector will mutate `A` as well. See
+[`rowvals`](:func:`rowvals`) and [`nzrange`](:func:`nzrange`).
 """
 nonzeros(S::SparseMatrixCSC) = S.nzval
 
@@ -51,7 +51,7 @@ nonzeros(S::SparseMatrixCSC) = S.nzval
 Return a vector of the row indices of `A`. Any modifications to the returned
 vector will mutate `A` as well. Providing access to how the row indices are
 stored internally can be useful in conjunction with iterating over structural
-nonzero values. See also `nonzeros(A)` and `nzrange(A, col)`.
+nonzero values. See also [`nonzeros`](:func:`nonzeros`) and [`nzrange`](:func:`nzrange`).
 """
 rowvals(S::SparseMatrixCSC) = S.rowval
 
@@ -59,8 +59,8 @@ rowvals(S::SparseMatrixCSC) = S.rowval
     nzrange(A::SparseMatrixCSC, col)
 
 Return the range of indices to the structural nonzero values of a sparse matrix
-column. In conjunction with `nonzeros(A)` and `rowvals(A)`, this allows for
-convenient iterating over a sparse matrix :
+column. In conjunction with [`nonzeros`](:func:`nonzeros`) and
+[`rowvals`](:func:`rowvals`), this allows for convenient iterating over a sparse matrix :
 
     A = sparse(I,J,V)
     rows = rowvals(A)
@@ -374,7 +374,7 @@ are set to `maximum(I)` and `maximum(J)` respectively. If the `combine` function
 supplied, `combine` defaults to `+` unless the elements of `V` are Booleans in which case
 `combine` defaults to `|`. All elements of `I` must satisfy `1 <= I[k] <= m`, and all
 elements of `J` must satisfy `1 <= J[k] <= n`. Numerical zeros in (`I`, `J`, `V`) are
-retained as structural nonzeros; to drop numerical zeros, use `dropzeros!`.
+retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](:func:`dropzeros!`).
 
 For additional documentation and an expert driver, see `Base.SparseArrays.sparse!`.
 """
@@ -1044,7 +1044,7 @@ droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) =
 Removes stored numerical zeros from `A`, optionally trimming resulting excess space from
 `A.rowval` and `A.nzval` when `trim` is `true`.
 
-For an out-of-place version, see [`dropzeros`](:func:`Base.SparseArrays.dropzeros`). For
+For an out-of-place version, see [`dropzeros`](:func:`dropzeros`). For
 algorithmic information, see [`Base.SparseArrays.fkeep!`](:func:`Base.SparseArrays.fkeep!`).
 """
 dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
@@ -1054,7 +1054,7 @@ dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 
 Generates a copy of `A` and removes stored numerical zeros from that copy, optionally
 trimming excess space from the result's `rowval` and `nzval` arrays when `trim` is `true`.
 
-For an in-place version and algorithmic information, see [`dropzeros!`](:func:`Base.SparseArrays.dropzeros!`).
+For an in-place version and algorithmic information, see [`dropzeros!`](:func:`dropzeros!`).
 """
 dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
@@ -1212,6 +1212,32 @@ sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n
 
 Create a sparse array with the same structure as that of `S`, but with every nonzero
 element having the value `1.0`.
+
+```jldoctest
+julia> A = sprand(5,6,0.2)
+5×6 sparse matrix with 8 Float64 nonzero entries:
+    [2, 1]  =  0.639431
+    [5, 1]  =  0.881209
+    [3, 2]  =  0.355834
+    [4, 2]  =  0.904768
+    [2, 3]  =  0.760943
+    [3, 5]  =  0.525942
+    [4, 5]  =  0.936283
+    [5, 5]  =  0.432364
+
+julia> spones(A)
+5×6 sparse matrix with 8 Float64 nonzero entries:
+    [2, 1]  =  1.0
+    [5, 1]  =  1.0
+    [3, 2]  =  1.0
+    [4, 2]  =  1.0
+    [2, 3]  =  1.0
+    [3, 5]  =  1.0
+    [4, 5]  =  1.0
+    [5, 5]  =  1.0
+```
+
+Note the difference from [`speye`](:func:`speye`).
 """
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
@@ -1240,7 +1266,31 @@ speye(m::Integer, n::Integer) = speye(Float64, m, n)
 """
     speye(S)
 
-Create a sparse identity matrix with the same structure as that of  `S`.
+Create a sparse identity matrix with the same structure as that of `S`.
+
+```jldoctest
+julia> A = sprand(5,6,0.2)
+5×6 sparse matrix with 9 Float64 nonzero entries:
+    [1, 1]  =  0.102874
+    [2, 1]  =  0.780098
+    [1, 2]  =  0.610378
+    [1, 3]  =  0.422308
+    [3, 3]  =  0.546398
+    [4, 3]  =  0.43053
+    [5, 3]  =  0.909283
+    [2, 4]  =  0.391321
+    [5, 6]  =  0.97785
+
+julia> speye(A)
+5×6 sparse matrix with 5 Float64 nonzero entries:
+    [1, 1]  =  1.0
+    [2, 2]  =  1.0
+    [3, 3]  =  1.0
+    [4, 4]  =  1.0
+    [5, 5]  =  1.0
+```
+
+Note the difference from [`spones`](:func:`spones`).
 """
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 eye(S::SparseMatrixCSC) = speye(S)
@@ -3461,6 +3511,19 @@ Construct a sparse diagonal matrix. `B` is a tuple of vectors containing the dia
 one diagonal, `B` can be a vector (instead of a tuple) and `d` can be the diagonal position
 (instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size
 of the resulting sparse matrix.
+
+```jldoctest
+julia> spdiagm((rand(4), rand(4)), (-1, 1))
+5×5 sparse matrix with 8 Float64 nonzero entries:
+    [2, 1]  =  0.962245
+    [1, 2]  =  0.919341
+    [3, 2]  =  0.59239
+    [2, 3]  =  0.628924
+    [4, 3]  =  0.694011
+    [3, 4]  =  0.0660923
+    [5, 4]  =  0.494409
+    [4, 5]  =  0.54209
+```
 """
 function spdiagm(B, d, m::Integer, n::Integer)
     (I,J,V) = spdiagm_internal(B, d)
