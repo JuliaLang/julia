@@ -15,7 +15,7 @@ The goals of this package is to be
 #### Tokenization
 
 The function `tokenize` is the main entrypoint for generating `Token`s.
-It takes a string or a buffer and creates an iterator that will sequentially return the next `Token` until the end of string or buffer.
+It takes a string or a buffer and creates an iterator that will sequentially return the next `Token` until the end of string or buffer. The argument to `tokenize` can either be a `String`, `IOBuffer` or an `IOStream`.
 
 ```jl
 julia> collect(tokenize("function f(x) end"))
