@@ -395,16 +395,15 @@ if Base.USE_GPL_LIBS
 
     A multidimensional FFT simply performs this operation along each transformed dimension of `A`.
 
-!!! notes
-        
-    * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by
-    increasing number of threads. Use `FFTW.set_num_threads(np)` to use `np` threads,
-    if you have `np` processors.
+    !!! note
+        * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by
+          increasing number of threads. Use `FFTW.set_num_threads(np)` to use `np` threads,
+          if you have `np` processors.
 
-    * This performs a multidimensional FFT by default. Other languages such as Python and Octave
-    perform a one-dimensional FFT along the first non-singleton dimension of the array. This is
-    worth noting while performing comparisons. For more details, refer to the "Noteworthy
-    Differences from other Languages" section of the manual.
+        * This performs a multidimensional FFT by default. Other languages such as Python and Octave
+          perform a one-dimensional FFT along the first non-singleton dimension of the array. This is
+          worth noting while performing comparisons. For more details, refer to the "Noteworthy
+          Differences from other Languages" section of the manual.
     """ ->
     fft
 
