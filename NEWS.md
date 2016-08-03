@@ -121,7 +121,7 @@ This section lists changes that do not have deprecation warnings.
   * Method ambiguities no longer generate warnings when files are loaded,
     nor do they dispatch to an arbitrarily-chosen method; instead, a call that
     cannot be resolved to a single method results in a `MethodError` at run time,
-    rather than the previous definition-time warning. ([#6190])
+    rather than the previous definition-time warning ([#6190]).
 
   * Array comprehensions preserve the dimensions of the input ranges. For example,
     `[2x for x in A]` will have the same dimensions as `A` ([#16622]).
@@ -170,12 +170,12 @@ Library improvements
     * The `UTF16String` and `UTF32String` types and corresponding `utf16` and
       `utf32` converter functions have been removed from the standard library.
       If you need these types, they have been moved to the
-      [`LegacyStrings`](https://github.com/JuliaArchive/LegacyStrings.jl)
-      package. In the future, more robust Unicode string support will be provided
-      by the [`StringEncodings`](https://github.com/nalimilan/StringEncodings.jl)
-      package. If you only need these types to call wide string APIs (UTF-16 on
-      Windows, UTF-32 on UNIX), consider using the new `transcode` function (see
-      below) or the `Cwstring` type as a `ccall` argument type, which also ensures
+      [LegacyStrings.jl package](https://github.com/JuliaArchive/LegacyStrings.jl).
+      In the future, more robust Unicode string support will be provided by the
+      [StringEncodings.jl package](https://github.com/nalimilan/StringEncodings.jl).
+      If you only need these types to call wide string APIs (UTF-16 on Windows,
+      UTF-32 on UNIX), consider using the new `transcode` function (see below)
+      or the `Cwstring` type as a `ccall` argument type, which also ensures
       correct NUL termination of string data.
 
     * A `transcode(T, src)` function is now exported for converting data
@@ -212,10 +212,11 @@ Library improvements
     * A new `SparseVector` type allows for one-dimensional sparse arrays.
       Slicing and reshaping sparse matrices now return vectors when
       appropriate. The `sparsevec` function returns a one-dimensional sparse
-      vector instead of a one-column sparse matrix. ([#13440])
+      vector instead of a one-column sparse matrix. The `SparseMatrix` module
+      has been renamed to `SparseArrays` ([#13440]).
 
     * Rank one update and downdate functions, `lowrankupdate`, `lowrankupdate!`, `lowrankdowndate`,
-      and `lowrankdowndate!`, for dense Cholesky factorizations ([#14243], [#14424])
+      and `lowrankdowndate!`, have been introduced for dense Cholesky factorizations ([#14243], [#14424]).
 
     * All `sparse` methods now retain provided numerical zeros as structural nonzeros; to
       drop numerical zeros, use `dropzeros!` ([#14798], [#15242]).
@@ -230,7 +231,7 @@ Library improvements
 
     * The `open` function now respects `umask` on UNIX when creating files ([#16466], [#16502]).
 
-    * A new function `walkdir()` returns an iterator that walks the directory tree of a directory. ([#8814], [#13707])
+    * A new function `walkdir()` returns an iterator that walks the tree of a directory ([#8814], [#13707]).
 
        ```
        for (root, dirs, files) in walkdir(expanduser("~/.julia/v0.5/Plots/src"))
@@ -241,7 +242,7 @@ Library improvements
        4     files in /Users/me/.julia/v0.5/Plots/src/deprecated
       ```
 
-    * A new function `chown()` changes the ownership of files. ([#15007])
+    * A new function `chown()` changes the ownership of files ([#15007]).
 
     * Display properties can now be passed among output functions (e.g. `show`)
       using an `IOContext` object ([#13825]).
@@ -269,17 +270,21 @@ Library improvements
 
     * `cov` and `cor` don't use keyword arguments anymore and are therefore now type stable ([#13465]).
 
+    * Histogram functionality has been deprecated in `Base`. Use the
+      [StatsBase.jl package](https://github.com/JuliaStats/StatsBase.jl)
+      instead ([#6842], [#16450]).
+
   * Testing:
 
     * The `Base.Test` module now has a `@testset` feature to bundle
       tests together and delay throwing an error until the end ([#13062]).
 
     * The new features are mirrored in the
-      [BaseTestNext](https://github.com/IainNZ/BaseTestNext.jl)
-      package for users who would like to use the new functionality on Julia v0.4.
+      [BaseTestNext.jl package](https://github.com/IainNZ/BaseTestNext.jl)
+      for users who would like to use the new functionality on Julia v0.4.
 
-    * The [BaseTestDeprecated](https://github.com/IainNZ/BaseTestDeprecated.jl)
-      package provides the old-style `handler` functionality, for compatibility
+    * The [BaseTestDeprecated.jl package](https://github.com/IainNZ/BaseTestDeprecated.jl)
+      provides the old-style `handler` functionality, for compatibility
       with code that needs to support both Julia v0.4 and v0.5.
 
   * Package management:
@@ -292,7 +297,7 @@ Library improvements
       have been moved to an external [PkgDev] package ([#13387]).
 
     * Updating only a subset of the packages is now supported,
-      e.g. `Pkg.update("Example")` ([#17132])
+      e.g. `Pkg.update("Example")` ([#17132]).
 
   * Miscellanous:
 
@@ -312,9 +317,10 @@ Library improvements
     * The `libjulia` library is now properly versioned and installed to the public `<prefix>/lib`
       directory, instead of the private `<prefix>/lib/julia` directory ([#16362]).
 
-    * System reflection is now more consistently exposed from Sys and not Base.
-      `OS_NAME` has been replaced by `Sys.KERNEL` and always reports the name of the
-      kernel (as reported by `uname`). The `@windows_only` and `@osx` family of macros
+    * System reflection is now more consistently exposed from `Sys` and not `Base`
+      (e.g. constants such as `WORD_SIZE` and `CPU_CORES`). `OS_NAME` has been
+      replaced by `Sys.KERNEL` and always reports the name of the kernel (as
+      reported by `uname`). The `@windows_only` and `@osx` family of macros
       have been replaced with functions such as `is_windows()` and `is_apple()`.
       There is now also a `@static` macro that will evaluate the condition of an
       if-statement at compile time, for when a static branch is required ([#16219]).
@@ -368,21 +374,64 @@ Deprecated or removed
 
   * `chol(A,Val{:U/:L})` has been deprecated in favor of `chol(A)` ([#13680]).
 
-  * `issym` is deprecated in favor of `issymmetric` to match similar functions
-    (`ishermitian`, ...) ([#15192])
+  * `rem1(x,y)` is discontinued due to inconsistency for `x==0`. Use `mod1` instead ([#14140]).
 
-  * `scale` is deprecated in favor of either `α*A`, `Diagonal(x)*A`, or `A*Diagonal(x)`. ([#15258])
+  * The `FS` module has been renamed to `Filesystem`. Calling the functions `isreadable`,
+   `iswritable`, and `isexecutable` on filesystem paths has been deprecated ([#12819]).
+
+  * `RemoteRef` has been deprecated in favor of `RemoteChannel` ([#14458]).
+
+  * `super` has been renamed to `supertype` ([#14335]).
+
+  * `parseip(str)` has been deprecated in favor of `parse(IPAddr, str)` ([#14676]).
+
+  * `readall` has been renamed to `readstring`, and `readbytes` has been renamed to `read` ([#14608], [#14660]).
+
+  * `fieldoffsets(x)` has been deprecated in favor of calling `fieldoffset(x, i)` on each field ([#14777]).
+
+  * `issym` is deprecated in favor of `issymmetric` to match similar functions
+    (`ishermitian`, ...) ([#15192]).
+
+  * `scale` is deprecated in favor of either `α*A`, `Diagonal(x)*A`, or `A*Diagonal(x)` ([#15258]).
+
+  * `istext` has been renamed to `istextmime` ([#12872], [#15708]).
+
+  * "Functor" types are no longer necessary and have been deprecated ([#15804]). To maintain
+    performance on older versions of Julia the [Compat.jl package](https://github.com/JuliaLang/Compat.jl/pull/184)
+    provides a `@functorize` macro.
+
+  * `bitunpack(B)` and `bitpack(A)` have been deprecated in favor of
+    Array(B)` and `BitArray(A)`, respectively ([#16010]).
 
   * `xdump` is removed, and `dump` now simply shows the full representation of a value.
     `dump` should not be overloaded, since it is for examining concrete structure ([#4163]).
 
-  * `sub` and `slice` have been deprecated in favor of `view` ([#16972])
+  * `sprandbool` has been deprecated in favor of `sprand(Bool, ...)` or
+    `sprand(rng, Bool, ...)` ([#11688], [#16098]).
 
-  * The no-op `transpose` fallback has been deprecated. Consider introducing suitable
-    `transpose` methods or calling `permutedims(x, [2,1])` ([#13171], [#17075], [#17374]).
+  * The lowercase `symbol` function has been deprecated in favor of the `Symbol`
+    constructor ([#16154]).
 
   * `writemime` is deprecated, and output methods specifying a MIME type are now
     methods of `show` ([#14052]).
+
+  * BLAS utility functions `blas_set_num_threads`, `blas_vendor`, and `check_blas`
+    have been moved to the BLAS module as `BLAS.set_num_threads`, `BLAS.vendor`,
+    and `BLAS.check` ([#10548], [#16600]).
+
+  * `print_escaped` has been renamed to `escape_string`, `print_unescaped` has been
+    renamed to `unescape_string`, and `print_joined` has been renamed to `join` ([#16603]).
+
+  * `pointer_to_string` has been renamed to `unsafe_wrap(String, ...)`, and
+    `pointer_to_array` has been renamed to `unsafe_wrap(Array, ...)` ([#16731]).
+
+  * `sub` and `slice` have been deprecated in favor of `view` ([#16972]).
+
+  * Sparse matrix functions `etree`, `ereach`, `csc_permute`, and `symperm` have been moved
+    to the [SuiteSparse.jl package](https://github.com/JuliaSparse/SuiteSparse.jl) ([#12231], [#17033]).
+
+  * The no-op `transpose` fallback has been deprecated. Consider introducing suitable
+    `transpose` methods or calling `permutedims(x, [2,1])` ([#13171], [#17075], [#17374]).
 
 Command-line option changes
 ---------------------------
@@ -426,6 +475,7 @@ Language tooling improvements
 [#4470]: https://github.com/JuliaLang/julia/issues/4470
 [#4867]: https://github.com/JuliaLang/julia/issues/4867
 [#6190]: https://github.com/JuliaLang/julia/issues/6190
+[#6842]: https://github.com/JuliaLang/julia/issues/6842
 [#7258]: https://github.com/JuliaLang/julia/issues/7258
 [#8036]: https://github.com/JuliaLang/julia/issues/8036
 [#8599]: https://github.com/JuliaLang/julia/issues/8599
@@ -434,8 +484,13 @@ Language tooling improvements
 [#9482]: https://github.com/JuliaLang/julia/issues/9482
 [#9503]: https://github.com/JuliaLang/julia/issues/9503
 [#9627]: https://github.com/JuliaLang/julia/issues/9627
+[#10548]: https://github.com/JuliaLang/julia/issues/10548
 [#11196]: https://github.com/JuliaLang/julia/issues/11196
 [#11242]: https://github.com/JuliaLang/julia/issues/11242
+[#11688]: https://github.com/JuliaLang/julia/issues/11688
+[#12231]: https://github.com/JuliaLang/julia/issues/12231
+[#12819]: https://github.com/JuliaLang/julia/issues/12819
+[#12872]: https://github.com/JuliaLang/julia/issues/12872
 [#13062]: https://github.com/JuliaLang/julia/issues/13062
 [#13171]: https://github.com/JuliaLang/julia/issues/13171
 [#13232]: https://github.com/JuliaLang/julia/issues/13232
@@ -458,14 +513,21 @@ Language tooling improvements
 [#13897]: https://github.com/JuliaLang/julia/issues/13897
 [#14052]: https://github.com/JuliaLang/julia/issues/14052
 [#14114]: https://github.com/JuliaLang/julia/issues/14114
+[#14140]: https://github.com/JuliaLang/julia/issues/14140
 [#14194]: https://github.com/JuliaLang/julia/issues/14194
 [#14243]: https://github.com/JuliaLang/julia/issues/14243
+[#14335]: https://github.com/JuliaLang/julia/issues/14335
 [#14413]: https://github.com/JuliaLang/julia/issues/14413
 [#14424]: https://github.com/JuliaLang/julia/issues/14424
+[#14458]: https://github.com/JuliaLang/julia/issues/14458
 [#14469]: https://github.com/JuliaLang/julia/issues/14469
 [#14519]: https://github.com/JuliaLang/julia/issues/14519
+[#14608]: https://github.com/JuliaLang/julia/issues/14608
 [#14623]: https://github.com/JuliaLang/julia/issues/14623
+[#14660]: https://github.com/JuliaLang/julia/issues/14660
+[#14676]: https://github.com/JuliaLang/julia/issues/14676
 [#14759]: https://github.com/JuliaLang/julia/issues/14759
+[#14777]: https://github.com/JuliaLang/julia/issues/14777
 [#14798]: https://github.com/JuliaLang/julia/issues/14798
 [#15007]: https://github.com/JuliaLang/julia/issues/15007
 [#15032]: https://github.com/JuliaLang/julia/issues/15032
@@ -479,24 +541,32 @@ Language tooling improvements
 [#15524]: https://github.com/JuliaLang/julia/issues/15524
 [#15550]: https://github.com/JuliaLang/julia/issues/15550
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
+[#15708]: https://github.com/JuliaLang/julia/issues/15708
 [#15731]: https://github.com/JuliaLang/julia/issues/15731
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
+[#15804]: https://github.com/JuliaLang/julia/issues/15804
 [#15975]: https://github.com/JuliaLang/julia/issues/15975
+[#16010]: https://github.com/JuliaLang/julia/issues/16010
 [#16024]: https://github.com/JuliaLang/julia/issues/16024
 [#16058]: https://github.com/JuliaLang/julia/issues/16058
 [#16071]: https://github.com/JuliaLang/julia/issues/16071
+[#16098]: https://github.com/JuliaLang/julia/issues/16098
 [#16107]: https://github.com/JuliaLang/julia/issues/16107
+[#16154]: https://github.com/JuliaLang/julia/issues/16154
 [#16219]: https://github.com/JuliaLang/julia/issues/16219
 [#16260]: https://github.com/JuliaLang/julia/issues/16260
 [#16285]: https://github.com/JuliaLang/julia/issues/16285
 [#16362]: https://github.com/JuliaLang/julia/issues/16362
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
 [#16404]: https://github.com/JuliaLang/julia/issues/16404
+[#16450]: https://github.com/JuliaLang/julia/issues/16450
 [#16455]: https://github.com/JuliaLang/julia/issues/16455
 [#16466]: https://github.com/JuliaLang/julia/issues/16466
 [#16481]: https://github.com/JuliaLang/julia/issues/16481
 [#16502]: https://github.com/JuliaLang/julia/issues/16502
 [#16510]: https://github.com/JuliaLang/julia/issues/16510
+[#16600]: https://github.com/JuliaLang/julia/issues/16600
+[#16603]: https://github.com/JuliaLang/julia/issues/16603
 [#16621]: https://github.com/JuliaLang/julia/issues/16621
 [#16622]: https://github.com/JuliaLang/julia/issues/16622
 [#16645]: https://github.com/JuliaLang/julia/issues/16645
@@ -505,6 +575,7 @@ Language tooling improvements
 [#16854]: https://github.com/JuliaLang/julia/issues/16854
 [#16953]: https://github.com/JuliaLang/julia/issues/16953
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
+[#17033]: https://github.com/JuliaLang/julia/issues/17033
 [#17037]: https://github.com/JuliaLang/julia/issues/17037
 [#17075]: https://github.com/JuliaLang/julia/issues/17075
 [#17132]: https://github.com/JuliaLang/julia/issues/17132
