@@ -404,13 +404,11 @@ end
 
 function lex_plus(l::Lexer)
     accept(l, '+') && emit(l, Tokens.PLUSPLUS)
-    accept(l, isdigit) && lex_digit(l)
     return emit(l, Tokens.PLUS)
 end
 
 function lex_minus(l::Lexer)
     accept(l, '-') && return emit_error(l) # "--" is an invalid operator
-    accept(l, isdigit) && return lex_digit(l)
     return emit(l, Tokens.MINUS)
 end
 
