@@ -3889,29 +3889,6 @@ Element-wise greater-than comparison operator.
 Base.:(.>)
 
 """
-    search(string, chars, [start])
-
-Search for the first occurrence of the given characters within the given string. The second
-argument may be a single character, a vector or a set of characters, a string, or a regular
-expression (though regular expressions are only allowed on contiguous strings, such as ASCII
-or UTF-8 strings). The third argument optionally specifies a starting index. The return
-value is a range of indexes where the matching sequence is found, such that `s[search(s,x)] == x`:
-
-`search(string, "substring")` = `start:end` such that `string[start:end] == "substring"`, or
-`0:-1` if unmatched.
-
-`search(string, 'c')` = `index` such that `string[index] == 'c'`, or `0` if unmatched.
-"""
-search
-
-"""
-    contains(haystack, needle)
-
-Determine whether the second argument is a substring of the first.
-"""
-contains
-
-"""
     flush(stream)
 
 Commit all currently buffered writes to the given stream.
@@ -4791,14 +4768,6 @@ Instances can be constructed from strings via [`parse`](:func:`parse`), or using
 string literal.
 """
 BigInt
-
-"""
-    rsearch(string, chars, [start])
-
-Similar to `search`, but returning the last occurrence of the given characters within the
-given string, searching in reverse from `start`.
-"""
-rsearch
 
 """
     isdirpath(path::AbstractString) -> Bool
@@ -5719,13 +5688,6 @@ ismatch
 Compute ``e^x``.
 """
 exp
-
-"""
-    searchindex(string, substring, [start])
-
-Similar to `search`, but return only the start index at which the substring is found, or `0` if it is not.
-"""
-searchindex
 
 """
     listenany(port_hint) -> (UInt16,TCPServer)
@@ -7078,13 +7040,6 @@ time_ns
 Get the exponent of a normalized floating-point number.
 """
 exponent
-
-"""
-    rsearchindex(string, substring, [start])
-
-Similar to `rsearch`, but return only the start index at which the substring is found, or `0` if it is not.
-"""
-rsearchindex
 
 """
     muladd(x, y, z)

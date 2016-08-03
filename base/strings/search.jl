@@ -1,5 +1,19 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    search(string, chars, [start])
+
+Search for the first occurrence of the given characters within the given string. The second
+argument may be a single character, a vector or a set of characters, a string, or a regular
+expression (though regular expressions are only allowed on contiguous strings, such as ASCII
+or UTF-8 strings). The third argument optionally specifies a starting index. The return
+value is a range of indexes where the matching sequence is found, such that `s[search(s,x)] == x`:
+
+`search(string, "substring")` = `start:end` such that `string[start:end] == "substring"`, or
+`0:-1` if unmatched.
+
+`search(string, 'c')` = `index` such that `string[index] == 'c'`, or `0` if unmatched.
+"""
 function search(s::AbstractString, c::Chars, i::Integer)
     if isempty(c)
         return 1 <= i <= nextind(s,endof(s)) ? i :
@@ -123,6 +137,11 @@ searchindex(s::AbstractString, t::AbstractString) = searchindex(s,t,start(s))
 searchindex(s::AbstractString, c::Char, i::Integer) = _searchindex(s,c,i)
 searchindex(s::AbstractString, c::Char) = searchindex(s,c,start(s))
 
+"""
+    searchindex(string, substring, [start])
+
+Similar to `search`, but return only the start index at which the substring is found, or `0` if it is not.
+"""
 function searchindex(s::String, t::String, i::Integer=1)
     # Check for fast case of a single byte
     # (for multi-byte UTF-8 sequences, use searchindex on byte arrays instead)
@@ -150,7 +169,12 @@ function search(s::AbstractString, t::AbstractString, i::Integer=start(s))
         idx:(idx > 0 ? idx + endof(t) - 1 : -1)
     end
 end
+"""
+    rsearch(string, chars, [start])
 
+Similar to `search`, but returning the last occurrence of the given characters within the
+given string, searching in reverse from `start`.
+"""
 function rsearch(s::AbstractString, c::Chars)
     j = search(RevString(s), c)
     j == 0 && return 0
@@ -263,6 +287,11 @@ rsearchindex(s::ByteArray,t::ByteArray,i) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
 
+"""
+    rsearchindex(string, substring, [start])
+
+Similar to `rsearch`, but return only the start index at which the substring is found, or `0` if it is not.
+"""
 function rsearchindex(s::String, t::String)
     # Check for fast case of a single byte
     # (for multi-byte UTF-8 sequences, use rsearchindex instead)
@@ -307,6 +336,11 @@ function rsearch(s::AbstractString, t::AbstractString, i::Integer=endof(s))
     end
 end
 
+"""
+    contains(haystack, needle) -> Bool
+
+Determine whether the second argument is a substring of the first.
+"""
 contains(haystack::AbstractString, needle::AbstractString) = searchindex(haystack,needle)!=0
 
 in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")
