@@ -1358,49 +1358,60 @@
 
 ;; lower function call containing keyword arguments
 (define (lower-kw-call f kw pa)
-  (if (any (lambda (x) (and (pair? x) (eq? (car x) 'parameters)))
-           kw)
-      (error "more than one semicolon in argument list"))
-  (receive
-   (keys restkeys) (separate kwarg? kw)
-   (let ((keyargs (apply append
-                         (map (lambda (a)
-                                (if (not (symbol? (cadr a)))
-                                    (error (string "keyword argument is not a symbol: \""
-                                                   (deparse (cadr a)) "\"")))
-                                (if (vararg? (caddr a))
-                                    (error "splicing with \"...\" cannot be used for a keyword argument value"))
-                                `((quote ,(cadr a)) ,(caddr a)))
-                              keys))))
-     (if (null? restkeys)
-         `(call (call (core kwfunc) ,f) (call (top vector_any) ,@keyargs) ,f ,@pa)
-         (let ((container (make-ssavalue)))
-           `(block
-             (= ,container (call (top vector_any) ,@keyargs))
-             ,@(map (lambda (rk)
-                      (let* ((k (make-ssavalue))
-                             (v (make-ssavalue))
-                             (push-expr `(ccall 'jl_array_ptr_1d_push2 Void
-                                                (tuple Any Any Any)
-                                                ,container
-                                                (|::| ,k (core Symbol))
-                                                ,v)))
-                        (if (vararg? rk)
-                            `(for (= (tuple ,k ,v) ,(cadr rk))
-                                  ,push-expr)
-                            `(block (= (tuple ,k ,v) ,rk)
-                                    ,push-expr))))
-                    restkeys)
-             ,(if (not (null? keys))
-                  `(call (call (core kwfunc) ,f) ,container ,f ,@pa)
-                  (let* ((expr_stmts (remove-argument-side-effects `(call ,f ,@pa)))
-                         (pa         (cddr (car expr_stmts)))
-                         (stmts      (cdr expr_stmts)))
-                    `(block
-                      ,@stmts
-                      (if (call (top isempty) ,container)
-                          (call ,f ,@pa)
-                          (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))))))
+  (let ((container (make-ssavalue)))
+    (let loop ((kw kw)
+               (initial-kw '()) ;; keyword args before any splats
+               (stmts '())
+               (has-kw #f))     ;; whether there are definitely >0 kwargs
+      (if (null? kw)
+          (if (null? stmts)
+              `(call (call (core kwfunc) ,f) (call (top vector_any) ,@(reverse initial-kw)) ,f ,@pa)
+              `(block
+                (= ,container (call (top vector_any) ,@(reverse initial-kw)))
+                ,@(reverse stmts)
+                ,(if has-kw
+                     `(call (call (core kwfunc) ,f) ,container ,f ,@pa)
+                     (let* ((expr_stmts (remove-argument-side-effects `(call ,f ,@pa)))
+                            (pa         (cddr (car expr_stmts)))
+                            (stmts      (cdr expr_stmts)))
+                       `(block
+                         ,@stmts
+                         (if (call (top isempty) ,container)
+                             (call ,f ,@pa)
+                             (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))
+          (let ((arg (car kw)))
+            (cond ((and (pair? arg) (eq? (car arg) 'parameters))
+                   (error "more than one semicolon in argument list"))
+                  ((kwarg? arg)
+                   (if (not (symbol? (cadr arg)))
+                       (error (string "keyword argument is not a symbol: \""
+                                      (deparse (cadr arg)) "\"")))
+                   (if (vararg? (caddr arg))
+                       (error "splicing with \"...\" cannot be used for a keyword argument value"))
+                   (if (null? stmts)
+                       (loop (cdr kw) (list* (caddr arg) `(quote ,(cadr arg)) initial-kw) stmts #t)
+                       (loop (cdr kw) initial-kw
+                             (cons `(ccall 'jl_array_ptr_1d_push2 Void (tuple Any Any Any)
+                                           ,container
+                                           (|::| (quote ,(cadr arg)) (core Symbol))
+                                           ,(caddr arg))
+                                   stmts)
+                             #t)))
+                  (else
+                   (loop (cdr kw) initial-kw
+                         (cons (let* ((k (make-ssavalue))
+                                      (v (make-ssavalue))
+                                      (push-expr `(ccall 'jl_array_ptr_1d_push2 Void (tuple Any Any Any)
+                                                         ,container
+                                                         (|::| ,k (core Symbol))
+                                                         ,v)))
+                                 (if (vararg? arg)
+                                     `(for (= (tuple ,k ,v) ,(cadr arg))
+                                           ,push-expr)
+                                     `(block (= (tuple ,k ,v) ,arg)
+                                             ,push-expr)))
+                               stmts)
+                         (or has-kw (not (vararg? arg)))))))))))
 
 ;; convert e.g. A'*B to Ac_mul_B(A,B)
 (define (expand-transposed-op e ops)

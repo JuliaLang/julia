@@ -510,6 +510,13 @@ tuple, explicitly after a semicolon.  For example, ``plot(x, y;
 ``plot(x, y, width=2)``.  This is useful in situations where the
 keyword name is computed at runtime.
 
+The nature of keyword arguments makes it possible to specify the same
+argument more than once. For example, in the call
+``plot(x, y; options..., width=2)`` it is possible that the ``options``
+structure also contains a value for ``width``. In such a case the
+rightmost occurrence takes precedence; in this example, ``width``
+is certain to have the value ``2``.
+
 .. _man-evaluation-scope-default-values:
 
 Evaluation Scope of Default Values
