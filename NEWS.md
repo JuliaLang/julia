@@ -30,7 +30,8 @@ New language features
 
   * The `PROGRAM_FILE` global is now available for determining the name of the running script ([#14114]).
 
-  * The syntax `x.:sym` (e.g. `Base.:+`) is now supported, and `x.(:sym)` is deprecated ([#15032]).
+  * The syntax `x.:sym` (e.g. `Base.:+`) is now supported, while using `x.(:sym)`
+    or `x.(i)` for field access are deprecated in favor of `getfield` ([#15032]).
 
   * Function return type syntax `function f()::T` has been added ([#1090]). Values returned
     from a function with such a declaration will be converted to the specified type `T`.
