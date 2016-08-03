@@ -403,7 +403,7 @@ function lex_bar(l::Lexer)
 end
 
 function lex_plus(l::Lexer)
-    accept(l, '+') && emit(l, Tokens.PLUSPLUS)
+    accept(l, '+') && return emit(l, Tokens.PLUSPLUS)
     return emit(l, Tokens.PLUS)
 end
 
