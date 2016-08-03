@@ -201,11 +201,22 @@ Mathematical Operators
 
    Divide two integers or rational numbers, giving a ``Rational`` result.
 
-.. function:: rationalize([Type=Int,] x; tol=eps(x))
+.. function:: rationalize([Type<:Integer,] x; tol::Real=eps(x))
 
    .. Docstring generated from Julia source
 
-   Approximate floating point number ``x`` as a Rational number with components of the given integer type. The result will differ from ``x`` by no more than ``tol``\ .
+   Approximate floating point number ``x`` as a ``Rational`` number with components of the given integer type. The result will differ from ``x`` by no more than ``tol``\ .
+
+   .. doctest::
+
+       julia> rationalize(5.6)
+       28//5
+
+       julia> a = rationalize(BigInt, 10.3)
+       103//10
+
+       julia> typeof(num(a))
+       BigInt
 
 .. function:: num(x)
 
@@ -1021,7 +1032,15 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Return ``x`` if ``lo <= x <= hi``\ . If ``x < lo``\ , return ``lo``\ . If ``x > hi``\ , return ``hi``\ . Arguments are promoted to a common type. Operates elementwise over ``x`` if it is an array.
+   Return ``x`` if ``lo <= x <= hi``\ . If ``x < lo``\ , return ``lo``\ . If ``x > hi``\ , return ``hi``\ . Arguments are promoted to a common type. Operates elementwise over ``x`` if ``x`` is an array.
+
+   .. doctest::
+
+       julia> clamp([pi, 1.0, big(10.)], 2., 9.)
+       3-element Array{BigFloat,1}:
+        3.141592653589793238462643383279502884197169399375105820974944592307816406286198
+        2.000000000000000000000000000000000000000000000000000000000000000000000000000000
+        9.000000000000000000000000000000000000000000000000000000000000000000000000000000
 
 .. function:: clamp!(array::AbstractArray, lo, hi)
 
@@ -1584,7 +1603,11 @@ Statistics
 
    .. Docstring generated from Julia source
 
-   Compute the mean of whole array ``v``\ , or optionally along the dimensions in ``region``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
+   Compute the mean of whole array ``v``\ , or optionally along the dimensions in ``region``\ .
+
+   .. note::
+      Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArrays.jl`` package is recommended.
+
 
 .. function:: mean(f::Function, v)
 
@@ -1598,17 +1621,25 @@ Statistics
 
    Compute the mean of ``v`` over the singleton dimensions of ``r``\ , and write results to ``r``\ .
 
-.. function:: std(v[, region])
+.. function:: std(v[, region]; corrected::Bool=true, mean=nothing)
 
    .. Docstring generated from Julia source
 
-   Compute the sample standard deviation of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
+   Compute the sample standard deviation of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``\ . A pre-computed ``mean`` may be provided. If ``corrected`` is ``true``\ , then the sum is scaled with ``n-1`` whereas the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x)``\ .
 
-.. function:: stdm(v, m)
+   .. note::
+      Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArrays.jl`` package is recommended.
+
+
+.. function:: stdm(v, m::Number; corrected::Bool=true)
 
    .. Docstring generated from Julia source
 
-   Compute the sample standard deviation of a vector ``v`` with known mean ``m``\ . Note: Julia does not ignore ``NaN`` values in the computation.
+   Compute the sample standard deviation of a vector ``v`` with known mean ``m``\ . If ``corrected`` is ``true``\ , then the sum is scaled with ``n-1`` whereas the sum is scaled with ``n`` if ``corrected`` is false``where``\ n = length(x)`.
+
+   .. note::
+      Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArrays.jl`` package is recommended.
+
 
 .. function:: var(v[, region])
 
@@ -1616,11 +1647,15 @@ Statistics
 
    Compute the sample variance of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sumabs2(v - mean(v)) / (length(v) - 1)``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
 
-.. function:: varm(v, m)
+.. function:: varm(v, m[, region]; corrected::Bool=true)
 
    .. Docstring generated from Julia source
 
-   Compute the sample variance of a vector ``v`` with known mean ``m``\ . Note: Julia does not ignore ``NaN`` values in the computation.
+   Compute the sample variance of a collection ``v`` with known mean(s) ``m``\ , optionally over ``region``\ . ``m`` may contain means for each dimension of ``v``\ . If ``corrected`` is ``true``\ , then the sum is scaled with ``n-1`` whereas the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x)``\ .
+
+   .. note::
+      Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArrays.jl`` package is recommended.
+
 
 .. function:: middle(x)
 
@@ -1638,19 +1673,46 @@ Statistics
 
    .. Docstring generated from Julia source
 
-   Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
+   Compute the middle of a range, which consists of computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
+
+   .. doctest::
+
+       julia> middle(1:10)
+       5.5
 
 .. function:: middle(array)
 
    .. Docstring generated from Julia source
 
-   Compute the middle of an array, which consists in finding its extrema and then computing their mean.
+   Compute the middle of an array, which consists of finding its extrema and then computing their mean.
+
+   .. doctest::
+
+       julia> a = rand(10)
+       10-element Array{Float64,1}:
+        0.565
+        0.863537
+        0.131032
+        0.0542658
+        0.815362
+        0.00520906
+        0.195651
+        0.968197
+        0.681406
+        0.76587
+
+       julia> middle(a)
+       0.4867032223690223
 
 .. function:: median(v[, region])
 
    .. Docstring generated from Julia source
 
-   Compute the median of whole array ``v``\ , or optionally along the dimensions in ``region``\ . For even number of elements no exact median element exists, so the result is equivalent to calculating mean of two median elements. ``NaN`` is returned if the data contains any ``NaN`` values. For applications requiring the handling of missing data, the ``DataArrays`` package is recommended.
+   Compute the median of whole array ``v``\ , or optionally along the dimensions in ``region``\ . For even number of elements no exact median element exists, so the result is equivalent to calculating mean of two median elements.
+
+   .. note::
+      Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArrays.jl`` package is recommended.
+
 
 .. function:: median!(v)
 
@@ -1674,6 +1736,10 @@ Statistics
 
    Quantiles are computed via linear interpolation between the points ``((k-1)/(n-1), v[k])``\ , for ``k = 1:n`` where ``n = length(v)``\ . This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.
 
+   .. note::
+      Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArrays.jl`` package is recommended. ``quantile`` will throw an ``ArgumentError`` in the presence of ``NaN`` values in the data array.
+
+
    * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages", *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 
 .. function:: quantile!([q, ] v, p; sorted=false)
@@ -1686,31 +1752,35 @@ Statistics
 
    Quantiles are computed via linear interpolation between the points ``((k-1)/(n-1), v[k])``\ , for ``k = 1:n`` where ``n = length(v)``\ . This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.
 
+   .. note::
+      Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArrays.jl`` package is recommended. ``quantile!`` will throw an ``ArgumentError`` in the presence of ``NaN`` values in the data array.
+
+
    * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages", *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 
 .. function:: cov(x[, corrected=true])
 
    .. Docstring generated from Julia source
 
-   Compute the variance of the vector ``x``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` wheares the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x)``\ .
+   Compute the variance of the vector ``x``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` whereas the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x)``\ .
 
 .. function:: cov(X[, vardim=1, corrected=true])
 
    .. Docstring generated from Julia source
 
-   Compute the covariance matrix of the matrix ``X`` along the dimension ``vardim``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` wheares the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = size(X, vardim)``\ .
+   Compute the covariance matrix of the matrix ``X`` along the dimension ``vardim``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` whereas the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = size(X, vardim)``\ .
 
 .. function:: cov(x, y[, corrected=true])
 
    .. Docstring generated from Julia source
 
-   Compute the covariance between the vectors ``x`` and ``y``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` wheares the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x) = length(y)``\ .
+   Compute the covariance between the vectors ``x`` and ``y``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` whereas the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x) = length(y)``\ .
 
 .. function:: cov(X, Y[, vardim=1, corrected=true])
 
    .. Docstring generated from Julia source
 
-   Compute the covariance between the vectors or matrices ``X`` and ``Y`` along the dimension ``vardim``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` wheares the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = size(X, vardim) = size(Y, vardim)``\ .
+   Compute the covariance between the vectors or matrices ``X`` and ``Y`` along the dimension ``vardim``\ . If ``corrected`` is ``true`` (the default) then the sum is scaled with ``n-1`` whereas the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = size(X, vardim) = size(Y, vardim)``\ .
 
 .. function:: cor(x)
 

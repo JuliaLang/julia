@@ -43,6 +43,21 @@ clamp{X,L,H}(x::X, lo::L, hi::H) =
 clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
 clamp{T}(x::AbstractArray{T,2}, lo, hi) =
     [clamp(x[i,j], lo, hi) for i in indices(x,1), j in indices(x,2)]
+
+"""
+    clamp(x, lo, hi)
+
+Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments
+are promoted to a common type. Operates elementwise over `x` if `x` is an array.
+
+```jldoctest
+julia> clamp([pi, 1.0, big(10.)], 2., 9.)
+3-element Array{BigFloat,1}:
+ 3.141592653589793238462643383279502884197169399375105820974944592307816406286198
+ 2.000000000000000000000000000000000000000000000000000000000000000000000000000000
+ 9.000000000000000000000000000000000000000000000000000000000000000000000000000000
+```
+"""
 clamp{T}(x::AbstractArray{T}, lo, hi) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 

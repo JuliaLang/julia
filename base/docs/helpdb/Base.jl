@@ -1390,15 +1390,6 @@ Connect to the named pipe / UNIX domain socket at `path`.
 connect(path)
 
 """
-    mean(v[, region])
-
-Compute the mean of whole array `v`, or optionally along the dimensions in `region`. Note:
-Julia does not ignore `NaN` values in the computation. For applications requiring the
-handling of missing data, the `DataArray` package is recommended.
-"""
-mean
-
-"""
     split(string, [chars]; limit=0, keep=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
@@ -2129,14 +2120,6 @@ reduce(op, itr)
 Element-wise greater-than-or-equals comparison operator.
 """
 Base.:(.>=)
-
-"""
-    stdm(v, m)
-
-Compute the sample standard deviation of a vector `v` with known mean `m`. Note: Julia does
-not ignore `NaN` values in the computation.
-"""
-stdm
 
 """
     mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
@@ -3184,17 +3167,6 @@ Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 sinc
 
 """
-    median(v[, region])
-
-Compute the median of whole array `v`, or optionally along the dimensions in `region`. For
-even number of elements no exact median element exists, so the result is equivalent to
-calculating mean of two median elements. `NaN` is returned if the data contains any `NaN`
-values. For applications requiring the handling of missing data, the `DataArrays` package is
-recommended.
-"""
-median
-
-"""
     cglobal((symbol, library) [, type=Void])
 
 Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
@@ -3211,14 +3183,6 @@ Get the multiplicative identity element for the type of `x` (`x` can also specif
 itself). For matrices, returns an identity matrix of the appropriate size and type.
 """
 one
-
-"""
-    rationalize([Type=Int,] x; tol=eps(x))
-
-Approximate floating point number `x` as a Rational number with components of the given
-integer type. The result will differ from `x` by no more than `tol`.
-"""
-rationalize
 
 """
     splice!(collection, index, [replacement]) -> item
@@ -4140,18 +4104,6 @@ ParseError
 Delete the mapping for the given key in a collection, and return the collection.
 """
 delete!
-
-"""
-    std(v[, region])
-
-Compute the sample standard deviation of a vector or array `v`, optionally along dimensions
-in `region`. The algorithm returns an estimator of the generative distribution's standard
-deviation under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
-(length(v) - 1))`. Note: Julia does not ignore `NaN` values in the computation. For
-applications requiring the handling of missing data, the `DataArray` package is recommended.
-"""
-std
 
 """
     chr2ind(string, i)
@@ -5981,14 +5933,6 @@ isinf
 Compute the secant of `x`, where `x` is in degrees.
 """
 secd
-
-"""
-    varm(v, m)
-
-Compute the sample variance of a vector `v` with known mean `m`. Note: Julia does not ignore
-`NaN` values in the computation.
-"""
-varm
 
 """
     OverflowError()
@@ -8267,14 +8211,6 @@ gcd
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 """
 signbit
-
-"""
-    clamp(x, lo, hi)
-
-Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments
-are promoted to a common type. Operates elementwise over `x` if it is an array.
-"""
-clamp
 
 """
     cscd(x)
