@@ -141,8 +141,8 @@ temp_pkg_dir() do
     @test endswith(str, string(Pkg.installed("Example")))
     @test isempty(Pkg.dependents("Example"))
 
-    # 17364, Pkg.checkout with specific branch
-    let branch_name = "test-branch",
+    # 17364 - a, Pkg.checkout with specific local branch
+    let branch_name = "test-branch-1",
         branch_commit = "ba3888212e30a7974ac6803a89e64c7098f4865e"
 
         # create a branch in Example package
@@ -169,6 +169,35 @@ temp_pkg_dir() do
         end
         LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example3")) do repo
             @test LibGit2.head_oid(repo) == LibGit2.Oid(branch_commit)
+        end
+    end
+
+    # 17364 - b, remote off-tree branch
+    let branch_name = "test-branch-2",
+        branch_commit = "ba3888212e30a7974ac6803a89e64c7098f4865e"
+
+        # create a branch in Example package
+        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
+            LibGit2.branch!(repo, branch_name, branch_commit, set_head=true)
+        end
+
+        # Make changes to local branch
+        open(Pkg.dir("Example", "README.md"), "w") do f
+            println(f, "overwritten")
+        end
+
+        test_commit = LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
+            LibGit2.add!(repo, "README.md")
+            test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+            LibGit2.commit(repo, "testmsg"; author=test_sig, committer=test_sig)
+        end
+        Pkg.checkout("Example")
+
+        Pkg.clone(Pkg.dir("Example"), "Example4")
+        Pkg.checkout("Example4", branch_name)
+
+        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example4")) do repo
+            @test LibGit2.head_oid(repo) == test_commit
         end
     end
 
