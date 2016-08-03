@@ -21,6 +21,9 @@ This section lists changes that do not have deprecation warnings.
 
   * Operations between `Float16` and `Integers` now return `Float16` instead of `Float32`. ([#17261])
 
+  * Keyword arguments are processed left-to-right: if the same keyword is specified more than
+    once, the rightmost occurrence takes precedence ([#17785]).
+
 Library improvements
 --------------------
 
@@ -616,6 +619,7 @@ Language tooling improvements
 [#17037]: https://github.com/JuliaLang/julia/issues/17037
 [#17075]: https://github.com/JuliaLang/julia/issues/17075
 [#17132]: https://github.com/JuliaLang/julia/issues/17132
+[#17261]: https://github.com/JuliaLang/julia/issues/17261
 [#17266]: https://github.com/JuliaLang/julia/issues/17266
 [#17300]: https://github.com/JuliaLang/julia/issues/17300
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
@@ -626,3 +630,4 @@ Language tooling improvements
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
 [#17546]: https://github.com/JuliaLang/julia/issues/17546
 [#17668]: https://github.com/JuliaLang/julia/issues/17668
+[#17785]: https://github.com/JuliaLang/julia/issues/17785

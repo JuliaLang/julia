@@ -218,3 +218,12 @@ end
 @test f9948(x=5) == 5
 @test_throws UndefVarError f9948()
 @test getx9948() == 3
+
+# issue #17785 - handle all sources of kwargs left-to-right
+g17785(; a=1, b=2) = (a, b)
+let opts = (:a=>3, :b=>4)
+    @test g17785(; a=5, opts...) == (3, 4)
+    @test g17785(; opts..., a=5) == (5, 4)
+    @test g17785(; opts..., a=5, b=6) == (5, 6)
+    @test g17785(; b=0, opts..., a=5) == (5, 4)
+end
