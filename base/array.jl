@@ -824,6 +824,17 @@ function findnz{T}(A::AbstractMatrix{T})
     return (I, J, NZs)
 end
 
+"""
+    findmax(itr) -> (x, index)
+
+Returns the maximum element and its index.
+The collection must not be empty.
+
+```jldoctest
+julia> findmax([8,0.1,-9,pi])
+(8.0,1)
+```
+"""
 function findmax(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
@@ -842,6 +853,17 @@ function findmax(a)
     return (m, mi)
 end
 
+"""
+    findmin(itr) -> (x, index)
+
+Returns the minimum element and its index.
+The collection must not be empty.
+
+```jldoctest
+julia> findmax([8,0.1,-9,pi])
+(-9.0,3)
+```
+"""
 function findmin(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
@@ -860,16 +882,87 @@ function findmin(a)
     return (m, mi)
 end
 
+"""
+    indmax(itr) -> Integer
+
+Returns the index of the maximum element in a collection.
+```jldoctest
+julia> indmax([8,0.1,-9,pi])
+1
+```
+"""
 indmax(a) = findmax(a)[2]
+
+"""
+    indmin(itr) -> Integer
+
+Returns the index of the minimum element in a collection.
+```jldoctest
+julia> indmin([8,0.1,-9,pi])
+3
+```
+"""
 indmin(a) = findmin(a)[2]
 
 # similar to Matlab's ismember
-# returns a vector containing the highest index in b for each value in a that is a member of b
+"""
+    indexin(a, b)
+
+Returns a vector containing the highest index in `b` for
+each value in `a` that is a member of `b` . The output
+vector contains 0 wherever `a` is not a member of `b`.
+
+```jldoctest
+julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
+
+julia> b = ['a','b','c']
+
+julia> indexin(a,b)
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 2
+ 0
+ 1
+
+julia> indexin(b,a)
+3-element Array{Int64,1}:
+ 6
+ 4
+ 3
+```
+"""
 function indexin(a::AbstractArray, b::AbstractArray)
     bdict = Dict(zip(b, 1:length(b)))
     [get(bdict, i, 0) for i in a]
 end
 
+"""
+    findin(a, b)
+
+Returns the indices of elements in collection `a` that appear in collection `b`.
+
+```jldoctest
+julia> a = collect(1:3:15)
+5-element Array{Int64,1}:
+  1
+  4
+  7
+ 10
+ 13
+
+julia> b = collect(2:4:10)
+3-element Array{Int64,1}:
+  2
+  6
+ 10
+
+julia> findin(a,b) # 10 is the only common element
+1-element Array{Int64,1}:
+ 4
+```
+"""
 function findin(a, b)
     ind = Array{Int,1}(0)
     bset = Set(b)
