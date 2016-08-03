@@ -107,6 +107,11 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * All dimensions indexed by scalars are now dropped, whereas previously only
+    trailing scalar dimensions would be omitted from the result ([#13612]). This
+    is a very major behavioral change, but should cause obvious failures. To retain
+    a dimension sliced with a scalar `i` slice with `i:i` instead.
+
   * The assignment operations `.+=`, `.*=` and so on now generate calls
     to `broadcast!` on the left-hand side (or call to `view(a, ...)` on the left-hand side
     if the latter is an indexing expression, e.g. `a[...]`). This means that they will fail
@@ -191,11 +196,6 @@ Library improvements
     * Support for Unicode 9 ([#17402]).
 
   * Arrays and linear algebra:
-
-    * All dimensions indexed by scalars are now dropped, whereas previously only
-      trailing scalar dimensions would be omitted from the result ([#13612]). This
-      is a very major behavioral change, but should cause obvious failures. To retain
-      a dimension sliced with a scalar `i` slice with `i:i` instead.
 
     * Dimensions indexed by multidimensional arrays add dimensions. More generally, the
       dimensionality of the result is the sum of the dimensionalities of the indices ([#15431]).
