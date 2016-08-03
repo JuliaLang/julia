@@ -230,7 +230,7 @@ Library improvements
 
     * The `open` function now respects `umask` on UNIX when creating files ([#16466], [#16502]).
 
-    * A new function `walkdir()` returns an iterator that walks the directory tree of a directory. ([#1765])
+    * A new function `walkdir()` returns an iterator that walks the directory tree of a directory. ([#8814], [#13707])
 
        ```
        for (root, dirs, files) in walkdir(expanduser("~/.julia/v0.5/Plots/src"))
@@ -366,7 +366,7 @@ Deprecated or removed
     in favor of versions that require the matrix to be in factored form
     ([#13496]).
 
-  * Deprecate `chol(A,Val{:U/:L})` in favor of `chol(A)` ([#13680]).
+  * `chol(A,Val{:U/:L})` has been deprecated in favor of `chol(A)` ([#13680]).
 
   * `issym` is deprecated in favor of `issymmetric` to match similar functions
     (`ishermitian`, ...) ([#15192])
@@ -383,6 +383,21 @@ Deprecated or removed
 
   * `writemime` is deprecated, and output methods specifying a MIME type are now
     methods of `show` ([#14052]).
+
+Command-line option changes
+---------------------------
+
+  * The `-F` flag to load `~/.juliarc` has been deprecated in favor of
+    `--startup-file=yes` ([#9482]).
+
+  * The `-f` and `--no-startup` flags to disable loading of `~/.juliarc` have
+    been deprecated in favor of `--startup-file=no` ([#9482]).
+
+  * The `-P` and `--post-boot` flags for evaluating an expression in "interactive mode"
+    have been deprecated in favor of `-i -e` ([#16854]).
+
+  * The `--no-history-file` flag to disable loading of `~/.julia_history` has been
+    deprecated in favor of `--history-file=no` ([#9482]).
 
 Language tooling improvements
 -----------------------------
@@ -404,7 +419,6 @@ Language tooling improvements
 [#550]: https://github.com/JuliaLang/julia/issues/550
 [#964]: https://github.com/JuliaLang/julia/issues/964
 [#1090]: https://github.com/JuliaLang/julia/issues/1090
-[#1765]: https://github.com/JuliaLang/julia/issues/1765
 [#2488]: https://github.com/JuliaLang/julia/issues/2488
 [#3737]: https://github.com/JuliaLang/julia/issues/3737
 [#4163]: https://github.com/JuliaLang/julia/issues/4163
@@ -415,7 +429,9 @@ Language tooling improvements
 [#7258]: https://github.com/JuliaLang/julia/issues/7258
 [#8036]: https://github.com/JuliaLang/julia/issues/8036
 [#8599]: https://github.com/JuliaLang/julia/issues/8599
+[#8814]: https://github.com/JuliaLang/julia/issues/8814
 [#8846]: https://github.com/JuliaLang/julia/issues/8846
+[#9482]: https://github.com/JuliaLang/julia/issues/9482
 [#9503]: https://github.com/JuliaLang/julia/issues/9503
 [#9627]: https://github.com/JuliaLang/julia/issues/9627
 [#11196]: https://github.com/JuliaLang/julia/issues/11196
@@ -434,6 +450,7 @@ Language tooling improvements
 [#13612]: https://github.com/JuliaLang/julia/issues/13612
 [#13680]: https://github.com/JuliaLang/julia/issues/13680
 [#13681]: https://github.com/JuliaLang/julia/issues/13681
+[#13707]: https://github.com/JuliaLang/julia/issues/13707
 [#13774]: https://github.com/JuliaLang/julia/issues/13774
 [#13780]: https://github.com/JuliaLang/julia/issues/13780
 [#13824]: https://github.com/JuliaLang/julia/issues/13824
@@ -485,6 +502,7 @@ Language tooling improvements
 [#16645]: https://github.com/JuliaLang/julia/issues/16645
 [#16663]: https://github.com/JuliaLang/julia/issues/16663
 [#16731]: https://github.com/JuliaLang/julia/issues/16731
+[#16854]: https://github.com/JuliaLang/julia/issues/16854
 [#16953]: https://github.com/JuliaLang/julia/issues/16953
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
 [#17037]: https://github.com/JuliaLang/julia/issues/17037
@@ -499,3 +517,4 @@ Language tooling improvements
 [#17404]: https://github.com/JuliaLang/julia/issues/17404
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
 [#17546]: https://github.com/JuliaLang/julia/issues/17546
+[#17668]: https://github.com/JuliaLang/julia/issues/17668
