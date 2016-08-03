@@ -1198,41 +1198,125 @@ to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively
 
    Performs a bitwise not operation on ``B``\ . See :ref:`~ operator <~>`\ .
 
-.. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+   .. doctest::
+
+       julia> A = bitrand(3,5)
+       3×5 BitArray{2}:
+         true   true   true   true   true
+        false  false  false   true  false
+         true  false  false  false   true
+
+       julia> flipbits!(A)
+       3×5 BitArray{2}:
+        false  false  false  false  false
+         true   true   true  false   true
+        false   true   true   true  false
+
+.. function:: rol!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
    Performs a left rotation operation on ``src`` and put the result into ``dest``\ .
 
-.. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
+   .. doctest::
+
+       julia> a = bitrand(5)
+       5-element BitArray{1}:
+        false
+        false
+         true
+         true
+         true
+
+       julia> b = falses(5);
+
+       julia> rol!(b,a,2)
+       5-element BitArray{1}:
+         true
+         true
+         true
+        false
+        false
+
+       julia> rol!(b,a,3)
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
+
+.. function:: rol!(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
    Performs a left rotation operation on ``B``\ .
 
-.. function:: rol(B::BitArray{1}, i::Integer) -> BitArray{1}
+   ```jldoctest julia> a = bitrand(5) 5-element BitArray{1}:   true  false  false   true   true
+
+   julia> rol!(a,4) 5-element BitArray{1}:   true   true  false  false   true
+
+.. function:: rol(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation.
+   Performs a left rotation operation without modifying ``B``\ . See also :func:`rol!`\ .
 
-.. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: ror!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
    Performs a right rotation operation on ``src`` and put the result into ``dest``\ .
 
-.. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+   .. doctest::
+
+       julia> a = bitrand(5)
+       5-element BitArray{1}:
+        false
+        false
+         true
+         true
+         true
+
+       julia> b = falses(5);
+
+       julia> ror!(b,a,2)
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
+
+.. function:: ror!(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
    Performs a right rotation operation on ``B``\ .
 
-.. function:: ror(B::BitArray{1}, i::Integer) -> BitArray{1}
+   .. doctest::
+
+       julia> a = bitrand(5)
+       5-element BitArray{1}:
+        false
+         true
+        false
+         true
+        false
+
+       julia> ror!(a,3)
+       5-element BitArray{1}:
+        false
+         true
+        false
+        false
+         true
+
+.. function:: ror(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation.
+   Performs a right rotation operation without modifying ``B``\ . See also :func:`ror!`\ .
 
 .. _stdlib-sparse:
 
@@ -1246,7 +1330,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``maximum(I)`` and ``maximum(J)`` respectively. If the ``combine`` function is not supplied, ``combine`` defaults to ``+`` unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ . All elements of ``I`` must satisfy ``1 <= I[k] <= m``\ , and all elements of ``J`` must satisfy ``1 <= J[k] <= n``\ . Numerical zeros in (``I``\ , ``J``\ , ``V``\ ) are retained as structural nonzeros; to drop numerical zeros, use ``dropzeros!``\ .
+   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``maximum(I)`` and ``maximum(J)`` respectively. If the ``combine`` function is not supplied, ``combine`` defaults to ``+`` unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ . All elements of ``I`` must satisfy ``1 <= I[k] <= m``\ , and all elements of ``J`` must satisfy ``1 <= J[k] <= n``\ . Numerical zeros in (``I``\ , ``J``\ , ``V``\ ) are retained as structural nonzeros; to drop numerical zeros, use :func:`dropzeros!`\ .
 
    For additional documentation and an expert driver, see ``Base.SparseArrays.sparse!``\ .
 
@@ -1304,6 +1388,32 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Create a sparse array with the same structure as that of ``S``\ , but with every nonzero element having the value ``1.0``\ .
 
+   .. doctest::
+
+       julia> A = sprand(5,6,0.2)
+       5×6 sparse matrix with 8 Float64 nonzero entries:
+           [2, 1]  =  0.639431
+           [5, 1]  =  0.881209
+           [3, 2]  =  0.355834
+           [4, 2]  =  0.904768
+           [2, 3]  =  0.760943
+           [3, 5]  =  0.525942
+           [4, 5]  =  0.936283
+           [5, 5]  =  0.432364
+
+       julia> spones(A)
+       5×6 sparse matrix with 8 Float64 nonzero entries:
+           [2, 1]  =  1.0
+           [5, 1]  =  1.0
+           [3, 2]  =  1.0
+           [4, 2]  =  1.0
+           [2, 3]  =  1.0
+           [3, 5]  =  1.0
+           [4, 5]  =  1.0
+           [5, 5]  =  1.0
+
+   Note the difference from :func:`speye`\ .
+
 .. function:: speye([type,]m[,n])
 
    .. Docstring generated from Julia source
@@ -1314,13 +1424,50 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a sparse identity matrix with the same structure as that of  ``S``\ .
+   Create a sparse identity matrix with the same structure as that of ``S``\ .
+
+   .. doctest::
+
+       julia> A = sprand(5,6,0.2)
+       5×6 sparse matrix with 9 Float64 nonzero entries:
+           [1, 1]  =  0.102874
+           [2, 1]  =  0.780098
+           [1, 2]  =  0.610378
+           [1, 3]  =  0.422308
+           [3, 3]  =  0.546398
+           [4, 3]  =  0.43053
+           [5, 3]  =  0.909283
+           [2, 4]  =  0.391321
+           [5, 6]  =  0.97785
+
+       julia> speye(A)
+       5×6 sparse matrix with 5 Float64 nonzero entries:
+           [1, 1]  =  1.0
+           [2, 2]  =  1.0
+           [3, 3]  =  1.0
+           [4, 4]  =  1.0
+           [5, 5]  =  1.0
+
+   Note the difference from :func:`spones`\ .
 
 .. function:: spdiagm(B, d[, m, n])
 
    .. Docstring generated from Julia source
 
    Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
+
+   .. doctest::
+
+       julia> spdiagm((rand(4), rand(4)), (-1, 1))
+       5×5 sparse matrix with 8 Float64 nonzero entries:
+           [2, 1]  =  0.962245
+           [1, 2]  =  0.919341
+           [3, 2]  =  0.59239
+           [2, 3]  =  0.628924
+           [4, 3]  =  0.694011
+           [3, 4]  =  0.0660923
+           [5, 4]  =  0.494409
+           [4, 5]  =  0.54209
 
 .. function:: sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
 
@@ -1338,19 +1485,19 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Return a vector of the structural nonzero values in sparse array ``A``\ . This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. See ``rowvals(A)`` and ``nzrange(A, col)``\ .
+   Return a vector of the structural nonzero values in sparse array ``A``\ . This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. See :func:`rowvals` and :func:`nzrange`\ .
 
 .. function:: rowvals(A::SparseMatrixCSC)
 
    .. Docstring generated from Julia source
 
-   Return a vector of the row indices of ``A``\ . Any modifications to the returned vector will mutate ``A`` as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also ``nonzeros(A)`` and ``nzrange(A, col)``\ .
+   Return a vector of the row indices of ``A``\ . Any modifications to the returned vector will mutate ``A`` as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also :func:`nonzeros` and :func:`nzrange`\ .
 
 .. function:: nzrange(A::SparseMatrixCSC, col)
 
    .. Docstring generated from Julia source
 
-   Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with ``nonzeros(A)`` and ``rowvals(A)``\ , this allows for convenient iterating over a sparse matrix :
+   Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with :func:`nonzeros` and :func:`rowvals`\ , this allows for convenient iterating over a sparse matrix :
 
    .. code-block:: julia
 
@@ -1372,7 +1519,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Removes stored numerical zeros from ``A``\ , optionally trimming resulting excess space from ``A.rowval`` and ``A.nzval`` when ``trim`` is ``true``\ .
 
-   For an out-of-place version, see :func:`Base.SparseArrays.dropzeros`\ . For algorithmic information, see :func:`Base.SparseArrays.fkeep!`\ .
+   For an out-of-place version, see :func:`dropzeros`\ . For algorithmic information, see :func:`Base.SparseArrays.fkeep!`\ .
 
 .. function:: dropzeros(A::SparseMatrixCSC, trim::Bool = true)
 
@@ -1380,7 +1527,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Generates a copy of ``A`` and removes stored numerical zeros from that copy, optionally trimming excess space from the result's ``rowval`` and ``nzval`` arrays when ``trim`` is ``true``\ .
 
-   For an in-place version and algorithmic information, see :func:`Base.SparseArrays.dropzeros!`\ .
+   For an in-place version and algorithmic information, see :func:`dropzeros!`\ .
 
 .. function:: dropzeros!(x::SparseVector, trim::Bool = true)
 
