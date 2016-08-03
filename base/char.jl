@@ -40,10 +40,6 @@ hash(x::Char, h::UInt) = hash_uint64(((UInt64(x)+hashchar_seed)<<32) $ UInt64(h)
 +(x::Char, y::Integer) = Char(Int32(x) + Int32(y))
 +(x::Integer, y::Char) = y + x
 
-Base.promote_op{I<:Integer}(::typeof(-), ::Type{Char}, ::Type{I}) = Char
-Base.promote_op{I<:Integer}(::typeof(+), ::Type{Char}, ::Type{I}) = Char
-Base.promote_op{I<:Integer}(::typeof(+), ::Type{I}, ::Type{Char}) = Char
-
 bswap(x::Char) = Char(bswap(UInt32(x)))
 
 print(io::IO, c::Char) = (write(io, c); nothing)
