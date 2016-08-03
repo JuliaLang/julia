@@ -168,6 +168,12 @@ General I/O
 
    See ``read`` for a description of the ``all`` option.
 
+.. function:: read(s::IO, nb=typemax(Int))
+
+   .. Docstring generated from Julia source
+
+   Read at most ``nb`` bytes from ``s``\ , returning a ``Vector{UInt8}`` of the bytes read.
+
 .. function:: read(s::IOStream, nb::Integer; all=true)
 
    .. Docstring generated from Julia source
