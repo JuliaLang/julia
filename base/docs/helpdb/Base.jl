@@ -147,13 +147,6 @@ Print (using [`print`](:func:`print`)) `x` followed by a newline.
 println
 
 """
-    besselj(nu, x)
-
-Bessel function of the first kind of order `nu`, ``J_\\nu(x)``.
-"""
-besselj
-
-"""
     //(num, den)
 
 Divide two integers or rational numbers, giving a `Rational` result.
@@ -210,13 +203,6 @@ IPv6
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 """
 prod!
-
-"""
-    airybi(x)
-
-Airy function ``\\operatorname{Bi}(x)``.
-"""
-airybi
 
 """
     gensym([tag])
@@ -355,13 +341,6 @@ Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In gene
 cannot be used with empty collections (see `reduce(op, itr)`).
 """
 foldl(op, itr)
-
-"""
-    airybiprime(x)
-
-Airy function derivative ``\\operatorname{Bi}'(x)``.
-"""
-airybiprime
 
 """
     Ac_rdiv_B(A, B)
@@ -758,13 +737,6 @@ Get the local machine's host name.
 gethostname
 
 """
-    hankelh1x(nu, x)
-
-Scaled Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x) e^{-x i}``.
-"""
-hankelh1x
-
-"""
     replace(string, pat, r[, n])
 
 Search for the given pattern `pat`, and replace each occurrence with `r`. If `n` is
@@ -914,13 +886,6 @@ This would create a 25-by-30000 `BitArray`, linked to the file associated with s
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 """
-    airyprime(x)
-
-Airy function derivative ``\\operatorname{Ai}'(x)``.
-"""
-airyprime
-
-"""
     bessely0(x)
 
 Bessel function of the second kind of order 0, ``Y_0(x)``.
@@ -949,13 +914,6 @@ filter!
 Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded bytes.
 """
 base64decode
-
-"""
-    besselkx(nu, x)
-
-Scaled modified Bessel function of the second kind of order `nu`, ``K_\\nu(x) e^x``.
-"""
-besselkx
 
 """
     oct(n, [pad])
@@ -1214,13 +1172,6 @@ Wrap an expression in a `Task` and add it to the local machine's scheduler queue
 :@schedule
 
 """
-    bessely(nu, x)
-
-Bessel function of the second kind of order `nu`, ``Y_\\nu(x)``.
-"""
-bessely
-
-"""
     gradient(F, [h])
 
 Compute differences along vector `F`, using `h` as the spacing between points. The default
@@ -1430,13 +1381,6 @@ Receive the next value passed to `produce` by the specified task. Additional arg
 be passed, to be returned from the last `produce` call in the producer.
 """
 consume
-
-"""
-    hankelh2x(nu, x)
-
-Scaled Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x) e^{x i}``.
-"""
-hankelh2x
 
 """
     ndigits(n, b = 10)
@@ -1712,13 +1656,6 @@ Construct a tuple of the given objects.
 tuple
 
 """
-    besseli(nu, x)
-
-Modified Bessel function of the first kind of order `nu`, ``I_\\nu(x)``.
-"""
-besseli
-
-"""
     eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 
 Search for all matches of a the regular expression `r` in `s` and return a iterator over the
@@ -1838,14 +1775,6 @@ exp10
 Bitwise and.
 """
 &
-
-"""
-    besselyx(nu, x)
-
-Scaled Bessel function of the second kind of order `nu`,
-``Y_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
-"""
-besselyx
 
 """
     eigmax(A)
@@ -2682,13 +2611,6 @@ Create all directories in the given `path`, with permissions `mode`. `mode` defa
 `0o777`, modified by the current file creation mask.
 """
 mkpath
-
-"""
-    besselix(nu, x)
-
-Scaled modified Bessel function of the first kind of order `nu`, ``I_\\nu(x) e^{- | \\operatorname{Re}(x) |}``.
-"""
-besselix
 
 """
     union(s1,s2...)
@@ -3785,13 +3707,6 @@ Bitwise not.
 ~
 
 """
-    hankelh1(nu, x)
-
-Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x)``.
-"""
-hankelh1
-
-"""
     rem(x, y)
     %(x, y)
 
@@ -4226,13 +4141,6 @@ Base64DecodePipe
 Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
 """
 module_parent
-
-"""
-    airyaiprime(x)
-
-Airy function derivative ``\\operatorname{Ai}'(x)``.
-"""
-airyaiprime
 
 """
     prepend!(collection, items) -> collection
@@ -4996,13 +4904,6 @@ called in last in first out (LIFO) order and run before object finalizers.
 atexit
 
 """
-    besselk(nu, x)
-
-Modified Bessel function of the second kind of order `nu`, ``K_\\nu(x)``.
-"""
-besselk
-
-"""
     readchomp(x)
 
 Read the entirety of `x` as a string and remove a single trailing newline. Equivalent to `chomp(readstring(x))`.
@@ -5606,13 +5507,6 @@ general.
 setdiff
 
 """
-    airyai(x)
-
-Airy function ``\\operatorname{Ai}(x)``.
-"""
-airyai
-
-"""
     error(message::AbstractString)
 
 Raise an `ErrorException` with the given message.
@@ -6056,13 +5950,6 @@ julia> leading_zeros(Int32(1))
 ```
 """
 leading_zeros
-
-"""
-    hankelh2(nu, x)
-
-Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x)``.
-"""
-hankelh2
 
 """
     lexcmp(x, y)
@@ -6726,13 +6613,6 @@ characters, tests whether the last character of `string` belongs to that set.
 endswith
 
 """
-    airy(k,x)
-
-The `k`th derivative of the Airy function ``\\operatorname{Ai}(x)``.
-"""
-airy
-
-"""
     !(x)
 
 Boolean not.
@@ -7135,15 +7015,6 @@ unsafe_load
 Get the backtrace of the current exception, for use within `catch` blocks.
 """
 catch_backtrace
-
-"""
-    airyx(k,x)
-
-scaled `k`th derivative of the Airy function, return ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}}``
-for `k == 0 || k == 1`, and ``\\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``
-for `k == 2 || k == 3`.
-"""
-airyx
 
 """
     get_zero_subnormals() -> Bool

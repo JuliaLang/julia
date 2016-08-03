@@ -40,6 +40,11 @@ let
     end
 end
 
+"""
+    airy(k,x)
+
+The `k`th derivative of the Airy function ``\\operatorname{Ai}(x)``.
+"""
 function airy(k::Integer, z::Complex128)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
@@ -51,17 +56,53 @@ function airy(k::Integer, z::Complex128)
     end
 end
 
+"""
+    airyprime(x)
+
+Airy function derivative ``\\operatorname{Ai}'(x)``.
+"""
 airyprime(z) = airy(1,z)
 @vectorize_1arg Number airyprime
+
+"""
+    airyai(x)
+
+Airy function ``\\operatorname{Ai}(x)``.
+"""
 airyai(z) = airy(0,z)
 @vectorize_1arg Number airyai
+
+"""
+    airyaiprime(x)
+
+Airy function derivative ``\\operatorname{Ai}'(x)``.
+"""
 airyaiprime(z) = airy(1,z)
 @vectorize_1arg Number airyaiprime
+
+"""
+    airybi(x)
+
+Airy function ``\\operatorname{Bi}(x)``.
+"""
 airybi(z) = airy(2,z)
 @vectorize_1arg Number airybi
+
+"""
+    airybiprime(x)
+
+Airy function derivative ``\\operatorname{Bi}'(x)``.
+"""
 airybiprime(z) = airy(3,z)
 @vectorize_1arg Number airybiprime
 
+"""
+    airyx(k,x)
+
+scaled `k`th derivative of the Airy function, return ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}}``
+for `k == 0 || k == 1`, and ``\\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``
+for `k == 2 || k == 3`.
+"""
 function airyx(k::Integer, z::Complex128)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
@@ -194,7 +235,8 @@ end
     besselh(nu, [k=1,] x)
 
 Bessel function of the third kind of order `nu` (the Hankel function). `k` is either 1 or 2,
-selecting `hankelh1` or `hankelh2`, respectively.  `k` defaults to 1 if it is omitted.
+selecting [`hankelh1`](:func:`hankelh1`) or [`hankelh2`](:func:`hankelh2`), respectively.
+`k` defaults to 1 if it is omitted.
 (See also [`besselhx`](:func:`besselhx`) for an exponentially scaled variant.)
 """
 function besselh end
@@ -299,7 +341,11 @@ function besselyx(nu::Float64, z::Complex128)
     end
 end
 
+"""
+    besseli(nu, x)
 
+Modified Bessel function of the first kind of order `nu`, ``I_\\nu(x)``.
+"""
 function besseli(nu::Real, x::AbstractFloat)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
@@ -307,6 +353,11 @@ function besseli(nu::Real, x::AbstractFloat)
     real(besseli(float(nu), complex(x)))
 end
 
+"""
+    besselix(nu, x)
+
+Scaled modified Bessel function of the first kind of order `nu`, ``I_\\nu(x) e^{- | \\operatorname{Re}(x) |}``.
+"""
 function besselix(nu::Real, x::AbstractFloat)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
@@ -314,6 +365,11 @@ function besselix(nu::Real, x::AbstractFloat)
     real(besselix(float(nu), complex(x)))
 end
 
+"""
+    besselj(nu, x)
+
+Bessel function of the first kind of order `nu`, ``J_\\nu(x)``.
+"""
 function besselj(nu::Real, x::AbstractFloat)
     if isinteger(nu)
         if typemin(Cint) <= nu <= typemax(Cint)
@@ -325,6 +381,11 @@ function besselj(nu::Real, x::AbstractFloat)
     real(besselj(float(nu), complex(x)))
 end
 
+"""
+    besseljx(nu, x)
+
+Scaled Bessel function of the first kind of order `nu`, ``J_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
+"""
 function besseljx(nu::Real, x::AbstractFloat)
     if x < 0 && !isinteger(nu)
         throw(DomainError())
@@ -332,6 +393,11 @@ function besseljx(nu::Real, x::AbstractFloat)
     real(besseljx(float(nu), complex(x)))
 end
 
+"""
+    besselk(nu, x)
+
+Modified Bessel function of the second kind of order `nu`, ``K_\\nu(x)``.
+"""
 function besselk(nu::Real, x::AbstractFloat)
     if x < 0
         throw(DomainError())
@@ -341,6 +407,11 @@ function besselk(nu::Real, x::AbstractFloat)
     real(besselk(float(nu), complex(x)))
 end
 
+"""
+    besselkx(nu, x)
+
+Scaled modified Bessel function of the second kind of order `nu`, ``K_\\nu(x) e^x``.
+"""
 function besselkx(nu::Real, x::AbstractFloat)
     if x < 0
         throw(DomainError())
@@ -350,6 +421,11 @@ function besselkx(nu::Real, x::AbstractFloat)
     real(besselkx(float(nu), complex(x)))
 end
 
+"""
+    bessely(nu, x)
+
+Bessel function of the second kind of order `nu`, ``Y_\\nu(x)``.
+"""
 function bessely(nu::Real, x::AbstractFloat)
     if x < 0
         throw(DomainError())
@@ -359,6 +435,12 @@ function bessely(nu::Real, x::AbstractFloat)
     real(bessely(float(nu), complex(x)))
 end
 
+"""
+    besselyx(nu, x)
+
+Scaled Bessel function of the second kind of order `nu`,
+``Y_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
+"""
 function besselyx(nu::Real, x::AbstractFloat)
     if x < 0
         throw(DomainError())
@@ -398,15 +480,34 @@ for bfn in (:besselh, :besselhx)
     end
 end
 
+"""
+    hankelh1(nu, x)
 
+Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x)``.
+"""
 hankelh1(nu, z) = besselh(nu, 1, z)
 @vectorize_2arg Number hankelh1
 
+"""
+    hankelh2(nu, x)
+
+Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x)``.
+"""
 hankelh2(nu, z) = besselh(nu, 2, z)
 @vectorize_2arg Number hankelh2
 
+"""
+    hankelh1x(nu, x)
+
+Scaled Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x) e^{-x i}``.
+"""
 hankelh1x(nu, z) = besselhx(nu, 1, z)
 @vectorize_2arg Number hankelh1x
 
+"""
+    hankelh2x(nu, x)
+
+Scaled Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x) e^{x i}``.
+"""
 hankelh2x(nu, z) = besselhx(nu, 2, z)
 @vectorize_2arg Number hankelh2x

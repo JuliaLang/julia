@@ -1514,7 +1514,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Bessel function of the third kind of order ``nu`` (the Hankel function). ``k`` is either 1 or 2, selecting ``hankelh1`` or ``hankelh2``\ , respectively.  ``k`` defaults to 1 if it is omitted. (See also :func:`besselhx` for an exponentially scaled variant.)
+   Bessel function of the third kind of order ``nu`` (the Hankel function). ``k`` is either 1 or 2, selecting :func:`hankelh1` or :func:`hankelh2`\ , respectively.  ``k`` defaults to 1 if it is omitted. (See also :func:`besselhx` for an exponentially scaled variant.)
 
 .. function:: besselhx(nu, [k=1,] z)
 
