@@ -176,6 +176,7 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 echo 'override STAGE1_DEPS = libuv' >> Make.user
 echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
+echo 'override STAGE4_DEPS = ' >> Make.user
 
 if [ -n "$USEMSVC" ]; then
   # Openlibm doesn't build well with MSVC right now
