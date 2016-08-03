@@ -57,6 +57,7 @@ their own licenses:
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html) [GPL2+]
 - [GMP](http://gmplib.org/manual/Copying.html#Copying) [LGPL3+ or GPL2+]
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
+- [CURL](https://curl.haxx.se/docs/copyright.html) [MIT/X derivative]
 - [LIBSSH2](https://github.com/libssh2/libssh2/blob/master/COPYING) [BSD-3]
 - [MBEDTLS](https://tls.mbed.org/how-to-get) [either GPLv2 or Apache 2.0]
 - [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying) [LGPL3+]
