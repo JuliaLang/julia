@@ -171,12 +171,14 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 STAGE2_DEPS += libssh2
 endif
 
+ifneq ($(OS), WINNT)
 ifeq ($(USE_SYSTEM_CURL), 0)
-STAGE2_DEPS += curl
+STAGE3_DEPS += curl
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-STAGE3_DEPS += libgit2
+STAGE4_DEPS += libgit2
 endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
@@ -215,7 +217,7 @@ endif
 
 ## Common build target prefixes
 
-DEP_LIBS := $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
+DEP_LIBS := $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS) $(STAGE4_DEPS)
 
 default: install | $(build_prefix)
 get: $(addprefix get-, $(DEP_LIBS))
