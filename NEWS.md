@@ -50,8 +50,8 @@ Experimental language features
     Loops with independent iterations can be easily parallelized with the
     `Threads.@threads` macro.
 
-  * Support for arrays with indexing starting at values different from
-    1. The array types are expected to be defined in packages, but now
+  * Support for arrays with indexing starting at values different from 1.
+    The array types are expected to be defined in packages, but now
     Julia provides an API for writing generic algorithms for arbitrary
     indexing schemes ([#16260]).
 
