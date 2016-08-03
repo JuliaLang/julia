@@ -335,3 +335,16 @@ end
 # string searchindex with a two-char UTF-8 (4 byte) string literal
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
+
+@test contains(astr, "w")
+@test contains(astr, 'w')
+@test contains(astr, ", w")
+@test !contains(astr, "x")
+@test !contains(astr, 'x')
+
+@test contains(u8str, "x")
+@test contains(u8str, 'x')
+@test contains(u8str, "∃ δ >")
+@test !contains(u8str, "9")
+@test !contains(u8str, '9')
+@test !contains(u8str, "> 0:9")

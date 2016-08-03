@@ -339,9 +339,11 @@ end
 """
     contains(haystack, needle) -> Bool
 
-Determine whether the second argument is a substring of the first.
+Determine whether the second argument is a substring of the first. The second
+argument may be a single character, a string, or a regular
+expression (though regular expressions are only allowed on contiguous strings, such as `String` or `SubString`)
 """
-contains(haystack::AbstractString, needle::AbstractString) = searchindex(haystack,needle)!=0
+contains(haystack::AbstractString, needle::Union{AbstractString, Char}) = searchindex(haystack, needle)!=0
 
 in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")
 

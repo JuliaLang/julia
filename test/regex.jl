@@ -90,3 +90,13 @@ u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 @test search("foo,bar,baz", r",b", 10) == 0:-1
 @test search("foo,bar,baz", r"az") == 10:11
 @test search("foo,bar,baz", r"az", 12) == 0:-1
+
+@test contains(astr, r"w")
+@test contains(astr, r",\sw")
+@test !contains(astr, r"x")
+
+@test contains(u8str, r"x")
+@test contains(u8str, r"∃ δ >")
+@test !contains(u8str, r"9")
+@test !contains(u8str, r"> 0:9")
+@test contains(u8str, r">\s\d:")
