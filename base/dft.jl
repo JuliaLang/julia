@@ -398,8 +398,8 @@ if Base.USE_GPL_LIBS
     Notes
     =====
         
-    * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by 
-    increasing number of threads. Use `FFTW.set_num_threads(np)` to use `np` threads, 
+    * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by
+    increasing number of threads. Use `FFTW.set_num_threads(np)` to use `np` threads,
     if you have `np` processors.
 
     * This performs a multidimensional FFT by default. Other languages such as Python and Octave
