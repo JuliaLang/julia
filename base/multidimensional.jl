@@ -496,8 +496,56 @@ for (f, fmod, op) = ((:cummin, :_cummin!, :min), (:cummax, :_cummax!, :max))
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
- cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
+"""
+    cumsum(A, dim=1)
+
+Cumulative sum along a dimension `dim` (defaults to 1). See also [`cumsum!`](:func:`cumsum!`)
+to use a preallocated output array, both for performance and to control the precision of the
+output (e.g. to avoid overflow).
+
+```jldoctest
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> cumsum(a,1)
+2×3 Array{Int64,2}:
+ 1  2  3
+ 5  7  9
+
+julia> cumsum(a,2)
+2×3 Array{Int64,2}:
+ 1  3   6
+ 4  9  15
+```
+"""
+cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
 cumsum!(B, A::AbstractArray) = cumsum!(B, A, 1)
+"""
+    cumprod(A, dim=1)
+
+Cumulative product along a dimension `dim` (defaults to 1). See also
+[`cumprod!`](:func:`cumprod!`) to use a preallocated output array, both for performance and
+to control the precision of the output (e.g. to avoid overflow).
+
+```jldoctest
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> cumprod(a,1)
+2×3 Array{Int64,2}:
+ 1   2   3
+ 4  10  18
+
+julia> cumprod(a,2)
+2×3 Array{Int64,2}:
+ 1   2    6
+ 4  20  120
+```
+"""
 cumprod(A::AbstractArray, axis::Integer=1) = cumprod!(similar(A), A, axis)
 cumprod!(B, A) = cumprod!(B, A, 1)
 
