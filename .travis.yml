@@ -5,12 +5,13 @@ os:
 julia:
   - 0.3
   - 0.4
+  - 0.5
   - nightly
 notifications:
   email: false
 sudo: false
-script:
-  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-  - julia -e 'Pkg.clone(pwd()); Pkg.test("SHA", coverage=true)'
+#script:
+#  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
+#  - julia -e 'Pkg.clone(pwd()); Pkg.test("SHA", coverage=true)'
 after_success:
   - julia -e 'cd(Pkg.dir("SHA")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
