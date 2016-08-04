@@ -8490,18 +8490,6 @@ Letter: Lowercase.
 islower
 
 """
-    read(stream::IO, nb=typemax(Int); all=true)
-
-Read at most `nb` bytes from `stream`, returning a `Vector{UInt8}` of the bytes read.
-
-If `all` is `true` (the default), this function will block repeatedly trying to read all
-requested bytes, until an error or end-of-file occurs. If `all` is `false`, at most one
-`read` call is performed, and the amount of data returned is device-dependent. Note that not
-all stream types support the `all` option.
-"""
-read
-
-"""
     eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
 Computes eigenvalues and eigenvectors of `A`. See [`eigfact`](:func:`eigfact`) for details
