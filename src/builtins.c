@@ -1479,7 +1479,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         size_t nb = jl_datatype_size(vt);
         size_t tlen = jl_datatype_nfields(vt);
         if (nb > 0 && tlen == 0) {
-            char *data = (char*)jl_data_ptr(v);
+            uint8_t *data = (uint8_t*)v;
             n += jl_printf(out, "0x");
             for(int i=nb-1; i >= 0; --i)
                 n += jl_printf(out, "%02" PRIx8, data[i]);
