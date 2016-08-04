@@ -218,7 +218,7 @@ min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
 # "Promotion" that takes a function into account. These are meant to be
-# used mainly by broadcast methods, so it is adviced against overriding them
+# used mainly by broadcast methods, so it is advised against overriding them
 if isdefined(Core, :Inference)
     function _promote_op(op, T::Type)
         G = Tuple{Generator{Tuple{T},typeof(op)}}
