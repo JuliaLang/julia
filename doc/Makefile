@@ -30,7 +30,7 @@ $(ACTIVATE):
 	touch -c $@
 
 $(SPHINX_BUILD): $(SRCDIR)/requirements.txt $(ACTIVATE)
-	. $(ACTIVATE) && pip install sphinx==1.3.1 \
+	. $(ACTIVATE) && pip install sphinx==1.4.5 \
 	              && pip install -r $<
 	touch -c $@
 
