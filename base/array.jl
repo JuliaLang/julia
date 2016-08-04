@@ -171,35 +171,6 @@ for (fname, felt) in ((:zeros,:zero), (:ones,:one))
         ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
     end
 end
-"""
-    ones([T::Type=Float64,] dims)
-
-Create an array of all ones of specified type. The type defaults to `Float64` if not specified.
-"""
-function ones(dims::Dims) end
-
-"""
-    ones(A)
-
-Create an array of all ones with the same element type and shape as `A`.
-
-```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
- 7  8  9
-
-julia> ones(A)
-3×3 Array{Int64,2}:
- 1  1  1
- 1  1  1
- 1  1  1
-```
-
-Note the difference from [`eye`](:func:`eye`).
-"""
-function ones(A) end
 
 """
     eye([T::Type=Float64,] m::Integer, n::Integer)
