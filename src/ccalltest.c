@@ -21,6 +21,7 @@ int verbose = 1;
 
 int c_int = 0;
 
+
 //////////////////////////////////
 // Test for proper argument register truncation
 
@@ -520,12 +521,17 @@ JL_DLLEXPORT void finalizer_cptr(void* v)
     set_c_int(-1);
 }
 
+
 //////////////////////////////////
 // Turn off verbose for automated tests, leave on for debugging
 
 JL_DLLEXPORT void set_verbose(int level) {
     verbose = level;
 }
+
+
+//////////////////////////////////
+// Other tests
 
 JL_DLLEXPORT void *test_echo_p(void *p) {
     return p;
@@ -723,3 +729,7 @@ JL_DLLEXPORT float32x4_t test_ppc64_vec2(int64_t d1, float32x4_t a, float32x4_t 
 }
 
 #endif
+
+JL_DLLEXPORT int threadcall_args(int a, int b) {
+    return a + b;
+}
