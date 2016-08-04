@@ -387,3 +387,20 @@ end
 @test_throws ArgumentError reduce(&, Base.AbstractCmd[])
 @test_throws ArgumentError reduce(&, Base.Cmd[])
 @test reduce(&, [`$echo abc`, `$echo def`, `$echo hij`]) == `$echo abc` & `$echo def` & `$echo hij`
+
+# test for proper handling of FD exhaustion
+let ps = Pipe[]
+    try
+        for i = 1:100_000
+            p = Pipe()
+            Base.link_pipe(p)
+            push!(ps, p)
+        end
+        @test false
+    catch ex
+        for p in ps
+            close(p)
+        end
+        @test (ex::Base.UVError).code == Base.UV_EMFILE
+    end
+end

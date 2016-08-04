@@ -403,22 +403,19 @@ end
 
 function setup_stdio(stdio::PipeEndpoint, readable::Bool)
     closeafter = false
-    if stdio.handle == C_NULL
-        io = Libc.malloc(_sizeof_uv_named_pipe)
+    if stdio.status == StatusUninit
         if readable
             link_pipe(io, false, stdio, true)
         else
             link_pipe(stdio, true, io, false)
         end
         closeafter = true
-    else
-        io = stdio.handle
     end
-    return (io, closeafter)
+    return (stdio.handle, closeafter)
 end
 
 function setup_stdio(stdio::Pipe, readable::Bool)
-    if stdio.in.handle == C_NULL && stdio.out.handle == C_NULL
+    if stdio.in.status == StatusUninit && stdio.out.status == StatusUninit
         link_pipe(stdio)
     end
     io = readable ? stdio.out : stdio.in
