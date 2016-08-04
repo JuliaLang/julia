@@ -91,10 +91,11 @@ promote_rule{T<:Integer,S<:AbstractFloat}(::Type{Rational{T}}, ::Type{S}) = prom
 widen{T}(::Type{Rational{T}}) = Rational{widen(T)}
 
 """
-    rationalize([Type<:Integer,] x; tol::Real=eps(x))
+    rationalize([T<:Integer=Int,] x; tol::Real=eps(x))
 
 Approximate floating point number `x` as a `Rational` number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
+If `T` is not provided, it defaults to `Int`.
 
 ```jldoctest
 julia> rationalize(5.6)

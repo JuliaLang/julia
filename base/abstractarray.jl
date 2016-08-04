@@ -1017,7 +1017,80 @@ function cat_t(catdims, typeC::Type, X...)
     return C
 end
 
+"""
+    vcat(A...)
+
+Concatenate along dimension 1.
+
+```jldoctest
+julia> a = [1 2 3 4 5]
+1×5 Array{Int64,2}:
+ 1  2  3  4  5
+
+julia> b = [6 7 8 9 10; 11 12 13 14 15]
+2×5 Array{Int64,2}:
+  6   7   8   9  10
+ 11  12  13  14  15
+
+julia> vcat(a,b)
+3×5 Array{Int64,2}:
+  1   2   3   4   5
+  6   7   8   9  10
+ 11  12  13  14  15
+
+julia> c = ([1 2 3], [4 5 6])
+(
+[1 2 3],
+
+[4 5 6]) # a tuple of arrays
+
+julia> vcat(c...)
+2×3 Array{Int64,2}:
+  1  2  3
+  4  5  6
+```
+"""
 vcat(X...) = cat(1, X...)
+"""
+    hcat(A...)
+
+Concatenate along dimension 2.
+
+```jldoctest
+julia> a = [1; 2; 3; 4; 5]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
+5×2 Array{Int64,2}:
+  6   7
+  8   9
+ 10  11
+ 12  13
+ 14  15
+
+julia> hcat(a,b)
+5×3 Array{Int64,2}:
+ 1   6   7
+ 2   8   9
+ 3  10  11
+ 4  12  13
+ 5  14  15
+
+julia> c = ([1; 2; 3], [4; 5; 6])
+([1,2,3],[4,5,6]) # a tuple of arrays
+
+julia> hcat(c...)
+3×2 Array{Int64,2}:
+ 1  4
+ 2  5
+ 3  6
+```
+"""
 hcat(X...) = cat(2, X...)
 
 typed_vcat(T::Type, X...) = cat_t(1, T, X...)

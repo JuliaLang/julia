@@ -439,20 +439,31 @@ Indexing, Assignment, and Concatenation
 
    .. doctest::
 
-       julia> a = rand(1,5)
-       1×5 Array{Float64,2}:
-        0.779721  0.929111  0.721689  0.73127  0.0877032
+       julia> a = [1 2 3 4 5]
+       1×5 Array{Int64,2}:
+        1  2  3  4  5
 
-       julia> b = rand(2,5)
-       2×5 Array{Float64,2}:
-        0.665019  0.692116  0.949552  0.866068  0.0570439
-        0.574442  0.525314  0.3796    0.486924  0.572558
+       julia> b = [6 7 8 9 10; 11 12 13 14 15]
+       2×5 Array{Int64,2}:
+         6   7   8   9  10
+        11  12  13  14  15
 
        julia> vcat(a,b)
-       3×5 Array{Float64,2}:
-        0.779721  0.929111  0.721689  0.73127   0.0877032
-        0.665019  0.692116  0.949552  0.866068  0.0570439
-        0.574442  0.525314  0.3796    0.486924  0.572558
+       3×5 Array{Int64,2}:
+         1   2   3   4   5
+         6   7   8   9  10
+        11  12  13  14  15
+
+       julia> c = ([1 2 3], [4 5 6])
+       (
+       [1 2 3],
+
+       [4 5 6]) # a tuple of arrays
+
+       julia> vcat(c...)
+       2×3 Array{Int64,2}:
+         1  2  3
+         4  5  6
 
 .. function:: hcat(A...)
 
@@ -462,32 +473,38 @@ Indexing, Assignment, and Concatenation
 
    .. doctest::
 
-       julia> a = rand(6)
-       6-element Array{Float64,1}:
-        0.397239
-        0.857198
-        0.287707
-        0.602862
-        0.815096
-        0.682085
+       julia> a = [1; 2; 3; 4; 5]
+       5-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
 
-       julia> b = rand(6,2)
-       6×2 Array{Float64,2}:
-        0.0369466  0.799969
-        0.507327   0.5634
-        0.367674   0.556441
-        0.835735   0.413742
-        0.36539    0.949436
-        0.179069   0.198193
+       julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
+       5×2 Array{Int64,2}:
+         6   7
+         8   9
+        10  11
+        12  13
+        14  15
 
        julia> hcat(a,b)
-       6×3 Array{Float64,2}:
-        0.397239  0.0369466  0.799969
-        0.857198  0.507327   0.5634
-        0.287707  0.367674   0.556441
-        0.602862  0.835735   0.413742
-        0.815096  0.36539    0.949436
-        0.682085  0.179069   0.198193
+       5×3 Array{Int64,2}:
+        1   6   7
+        2   8   9
+        3  10  11
+        4  12  13
+        5  14  15
+
+       julia> c = ([1; 2; 3], [4; 5; 6])
+       ([1,2,3],[4,5,6]) # a tuple of arrays
+
+       julia> hcat(c...)
+       3×2 Array{Int64,2}:
+        1  4
+        2  5
+        3  6
 
 .. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
@@ -689,27 +706,43 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ . ``size(A,i)`` must equal 1 for all ``i`` in `dims.
+   Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ . ``size(A,i)`` must equal 1 for all ``i`` in ``dims``\ .
 
    .. doctest::
 
-       julia> b = rand(2,2,1,1)
-       2×2×1×1 Array{Float64,4}:
+       julia> a = reshape(collect(1:4),(2,2,1,1))
+       2×2×1×1 Array{Int64,4}:
        [:, :, 1, 1] =
-        0.458283  0.838564
-        0.657764  0.0915538
+        1  3
+        2  4
 
-       julia> squeeze(b,3)
-       2×2×1 Array{Float64,3}:
+       julia> squeeze(a,3)
+       2×2×1 Array{Int64,3}:
        [:, :, 1] =
-        0.458283  0.838564
-        0.657764  0.0915538
+        1  3
+        2  4
 
 .. function:: vec(a::AbstractArray) -> Vector
 
    .. Docstring generated from Julia source
 
-   Vectorize an array using column-major convention.
+   Reshape array ``a`` as a one-dimensional column vector.
+
+   .. doctest::
+
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> vec(a)
+       6-element Array{Int64,1}:
+        1
+        4
+        2
+        5
+        3
+        6
 
 .. function:: promote_shape(s1, s2)
 

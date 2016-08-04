@@ -96,13 +96,6 @@ Airy function derivative ``\\operatorname{Bi}'(x)``.
 airybiprime(z) = airy(3,z)
 @vectorize_1arg Number airybiprime
 
-"""
-    airyx(k,x)
-
-scaled `k`th derivative of the Airy function, return ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}}``
-for `k == 0 || k == 1`, and ``\\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``
-for `k == 2 || k == 3`.
-"""
 function airyx(k::Integer, z::Complex128)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
@@ -128,6 +121,14 @@ for afn in (:airy,:airyx)
         @vectorize_2arg Number $afn
     end
 end
+"""
+    airyx(k,x)
+
+scaled `k`th derivative of the Airy function, return ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}}``
+for `k == 0 || k == 1`, and ``\\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``
+for `k == 2 || k == 3`.
+"""
+function airyx(k,x) end
 
 ## Bessel functions
 

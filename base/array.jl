@@ -658,40 +658,6 @@ hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Vector,Matrix}...) = typed_hvcat(promo
 cat{T}(catdims, xs::Union{Vector{T},Matrix{T}}...) = Base.cat_t(catdims, T, xs...)
 cat(catdims, xs::Union{Vector,Matrix}...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
 # concatenations of homogeneous combinations of vectors, horizontal and vertical
-"""
-    hcat(A...)
-
-Concatenate along dimension 2.
-
-```jldoctest
-julia> a = rand(6)
-6-element Array{Float64,1}:
- 0.397239
- 0.857198
- 0.287707
- 0.602862
- 0.815096
- 0.682085
-
-julia> b = rand(6,2)
-6×2 Array{Float64,2}:
- 0.0369466  0.799969
- 0.507327   0.5634
- 0.367674   0.556441
- 0.835735   0.413742
- 0.36539    0.949436
- 0.179069   0.198193
-
-julia> hcat(a,b)
-6×3 Array{Float64,2}:
- 0.397239  0.0369466  0.799969
- 0.857198  0.507327   0.5634
- 0.287707  0.367674   0.556441
- 0.602862  0.835735   0.413742
- 0.815096  0.36539    0.949436
- 0.682085  0.179069   0.198193
-```
-"""
 function hcat{T}(V::Vector{T}...)
     height = length(V[1])
     for j = 2:length(V)
@@ -701,28 +667,7 @@ function hcat{T}(V::Vector{T}...)
     end
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
-"""
-    vcat(A...)
 
-Concatenate along dimension 1.
-
-```jldoctest
-julia> a = rand(1,5)
-1×5 Array{Float64,2}:
- 0.779721  0.929111  0.721689  0.73127  0.0877032
-
-julia> b = rand(2,5)
-2×5 Array{Float64,2}:
- 0.665019  0.692116  0.949552  0.866068  0.0570439
- 0.574442  0.525314  0.3796    0.486924  0.572558
-
-julia> vcat(a,b)
-3×5 Array{Float64,2}:
- 0.779721  0.929111  0.721689  0.73127   0.0877032
- 0.665019  0.692116  0.949552  0.866068  0.0570439
- 0.574442  0.525314  0.3796    0.486924  0.572558
-```
-"""
 function vcat{T}(arrays::Vector{T}...)
     n = 0
     for a in arrays

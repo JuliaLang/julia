@@ -34,16 +34,6 @@ import Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
-clamp{X,L,H}(x::X, lo::L, hi::H) =
-    ifelse(x > hi, convert(promote_type(X,L,H), hi),
-           ifelse(x < lo,
-                  convert(promote_type(X,L,H), lo),
-                  convert(promote_type(X,L,H), x)))
-
-clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
-clamp{T}(x::AbstractArray{T,2}, lo, hi) =
-    [clamp(x[i,j], lo, hi) for i in indices(x,1), j in indices(x,2)]
-
 """
     clamp(x, lo, hi)
 
@@ -58,6 +48,16 @@ julia> clamp([pi, 1.0, big(10.)], 2., 9.)
  9.000000000000000000000000000000000000000000000000000000000000000000000000000000
 ```
 """
+clamp{X,L,H}(x::X, lo::L, hi::H) =
+    ifelse(x > hi, convert(promote_type(X,L,H), hi),
+           ifelse(x < lo,
+                  convert(promote_type(X,L,H), lo),
+                  convert(promote_type(X,L,H), x)))
+
+clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
+clamp{T}(x::AbstractArray{T,2}, lo, hi) =
+    [clamp(x[i,j], lo, hi) for i in indices(x,1), j in indices(x,2)]
+
 clamp{T}(x::AbstractArray{T}, lo, hi) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
@@ -65,6 +65,7 @@ clamp{T}(x::AbstractArray{T}, lo, hi) =
     clamp!(array::AbstractArray, lo, hi)
 
 Restrict values in `array` to the specified range, in-place.
+See also [`clamp`](:func:`clamp`).
 """
 function clamp!{T}(x::AbstractArray{T}, lo, hi)
     @inbounds for i in eachindex(x)

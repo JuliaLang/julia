@@ -14,7 +14,23 @@ transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)).
 """
     vec(a::AbstractArray) -> Vector
 
-Vectorize an array using column-major convention.
+Reshape array `a` as a one-dimensional column vector.
+
+```jldoctest
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> vec(a)
+6-element Array{Int64,1}:
+ 1
+ 4
+ 2
+ 5
+ 3
+ 6
+```
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
@@ -28,20 +44,20 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
-`size(A,i)` must equal 1 for all `i` in `dims.
+`size(A,i)` must equal 1 for all `i` in `dims`.
 
 ```jldoctest
-julia> b = rand(2,2,1,1)
-2×2×1×1 Array{Float64,4}:
+julia> a = reshape(collect(1:4),(2,2,1,1))
+2×2×1×1 Array{Int64,4}:
 [:, :, 1, 1] =
- 0.458283  0.838564
- 0.657764  0.0915538
+ 1  3
+ 2  4
 
-julia> squeeze(b,3)
-2×2×1 Array{Float64,3}:
+julia> squeeze(a,3)
+2×2×1 Array{Int64,3}:
 [:, :, 1] =
- 0.458283  0.838564
- 0.657764  0.0915538
+ 1  3
+ 2  4
 ```
 """
 function squeeze(A::AbstractArray, dims::Dims)
