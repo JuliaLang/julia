@@ -94,3 +94,21 @@ end
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-){T<:TimeType}(x::OrdinalRange{T}, y::OrdinalRange{T}) = collect(x) - collect(y)
 (-){T<:TimeType}(x::Range{T}, y::Range{T}) = collect(x) - collect(y)
+
+# promotion rules
+
+for op in (:+, :-, :.+, :.-)
+    @eval begin
+        Base.promote_op{P<:Period}(::typeof($op), ::Type{P}, ::Type{P}) = P
+        Base.promote_op{P1<:Period,P2<:Period}(::typeof($op), ::Type{P1}, ::Type{P2}) = CompoundPeriod
+        Base.promote_op{D<:Date}(::typeof($op), ::Type{D}, ::Type{D}) = Day
+        Base.promote_op{D<:DateTime}(::typeof($op), ::Type{D}, ::Type{D}) = Millisecond
+    end
+end
+
+for op in (:/, :%, :div, :mod, :./, :.%)
+    @eval begin
+        Base.promote_op{P<:Period}(::typeof($op), ::Type{P}, ::Type{P}) = typeof($op(1,1))
+        Base.promote_op{P<:Period,R<:Real}(::typeof($op), ::Type{P}, ::Type{R}) = P
+    end
+end
