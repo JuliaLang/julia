@@ -665,17 +665,20 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:8,3,4)
-       3×4 Array{Int64,2}:
-        8  1  7  8
-        7  2  3  6
-        5  3  6  6
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> cumprod(a,1)
+       2×3 Array{Int64,2}:
+        1   2   3
+        4  10  18
 
        julia> cumprod(a,2)
-       3×4 Array{Int64,2}:
-        8   8  56  448
-        7  14  42  252
-        5  15  90  540
+       2×3 Array{Int64,2}:
+        1   2    6
+        4  20  120
 
 .. function:: cumprod!(B, A, [dim])
 
@@ -691,17 +694,20 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:8,3,4)
-       3×4 Array{Int64,2}:
-        7  4  1  1
-        7  6  5  4
-        3  5  7  7
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> cumsum(a,1)
+       2×3 Array{Int64,2}:
+        1  2  3
+        5  7  9
 
        julia> cumsum(a,2)
-       3×4 Array{Int64,2}:
-        7  11  12  13
-        7  13  18  22
-        3   8  15  22
+       2×3 Array{Int64,2}:
+        1  3   6
+        4  9  15
 
 .. function:: cumsum!(B, A, [dim])
 
@@ -747,17 +753,15 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:8,3,3)
-       3×3 Array{Int64,2}:
-        4  8  6
-        6  4  6
-        2  8  7
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
        julia> rot180(a)
-       3×3 Array{Int64,2}:
-        7  8  2
-        6  4  6
-        6  8  4
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
 
 .. function:: rot180(A, k)
 
@@ -767,23 +771,20 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:8,3,3)
-       3×3 Array{Int64,2}:
-        5  6  3
-        6  7  2
-        2  1  6
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
        julia> rot180(a,1)
-       3×3 Array{Int64,2}:
-        6  1  2
-        2  7  6
-        3  6  5
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
 
        julia> rot180(a,2)
-       3×3 Array{Int64,2}:
-        5  6  3
-        6  7  2
-        2  1  6
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
 .. function:: rotl90(A)
 
@@ -793,17 +794,15 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:8,3,3)
-       3×3 Array{Int64,2}:
-        6  8  8
-        3  1  8
-        6  1  3
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
        julia> rotl90(a)
-       3×3 Array{Int64,2}:
-        8  8  3
-        8  1  1
-        6  3  6
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
 
 .. function:: rotl90(A, k)
 
@@ -813,35 +812,30 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:8,3,3)
-       3×3 Array{Int64,2}:
-        7  2  6
-        2  5  2
-        7  3  3
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
        julia> rotl90(a,1)
-       3×3 Array{Int64,2}:
-        6  2  3
-        2  5  3
-        7  2  7
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
 
        julia> rotl90(a,2)
-       3×3 Array{Int64,2}:
-        3  3  7
-        2  5  2
-        6  2  7
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
 
        julia> rotl90(a,3)
-       3×3 Array{Int64,2}:
-        7  2  7
-        3  5  2
-        3  2  6
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
 
        julia> rotl90(a,4)
-       3×3 Array{Int64,2}:
-        7  2  6
-        2  5  2
-        7  3  3
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
 .. function:: rotr90(A)
 
@@ -851,17 +845,15 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:8,3,3)
-       3×3 Array{Int64,2}:
-        4  6  1
-        8  8  1
-        7  4  8
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
        julia> rotr90(a)
-       3×3 Array{Int64,2}:
-        7  8  4
-        4  8  6
-        8  1  1
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
 
 .. function:: rotr90(A, k)
 
@@ -871,35 +863,30 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:8,3,3)
-       3×3 Array{Int64,2}:
-        7  8  1
-        3  1  6
-        7  2  1
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
        julia> rotr90(a,1)
-       3×3 Array{Int64,2}:
-        7  3  7
-        2  1  8
-        1  6  1
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
 
        julia> rotr90(a,2)
-       3×3 Array{Int64,2}:
-        1  2  7
-        6  1  3
-        1  8  7
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
 
        julia> rotr90(a,3)
-       3×3 Array{Int64,2}:
-        1  6  1
-        8  1  2
-        7  3  7
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
 
        julia> rotr90(a,4)
-       3×3 Array{Int64,2}:
-        7  8  1
-        3  1  6
-        7  2  1
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
 .. function:: reducedim(f, A, region[, v0])
 
@@ -911,23 +898,23 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:5,4,4)
+       julia> a = reshape(collect(1:16), (4,4))
        4×4 Array{Int64,2}:
-        3  5  4  3
-        3  2  5  5
-        3  3  4  2
-        5  5  5  1
+        1  5   9  13
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
 
-       julia> reducedim(max,a,2)
+       julia> reducedim(max, a, 2)
        4×1 Array{Int64,2}:
-        5
-        5
-        4
-        5
+        13
+        14
+        15
+        16
 
-       julia> reducedim(max,a,1)
+       julia> reducedim(max, a, 1)
        1×4 Array{Int64,2}:
-        5  5  5  5
+        4  8  12  16
 
 .. function:: mapreducedim(f, op, A, region[, v0])
 
@@ -937,19 +924,12 @@ Array functions
 
    .. doctest::
 
-       julia> a = rand(1:5,4,4)
+       julia> a = reshape(collect(1:16), (4,4))
        4×4 Array{Int64,2}:
-        1  2  4  1
-        5  5  3  1
-        2  4  3  3
-        1  5  3  2
-
-       julia> mapreducedim(isodd, *, a, 2)
-       4×1 Array{Bool,2}:
-        false
-        true
-        false
-        false
+        1  5   9  13
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
 
        julia> mapreducedim(isodd, *, a, 1)
        1×4 Array{Bool,2}:
@@ -967,37 +947,37 @@ Array functions
 
    .. doctest::
 
-       julia> A = rand(1:5, 2, 2, 2, 2)
+       julia> a = reshape(collect(1:16),(2,2,2,2))
        2×2×2×2 Array{Int64,4}:
        [:, :, 1, 1] =
-        1  1
-        3  4
+        1  3
+        2  4
 
        [:, :, 2, 1] =
-        4  1
-        5  3
+        5  7
+        6  8
 
        [:, :, 1, 2] =
-        3  4
-        1  3
+         9  11
+        10  12
 
        [:, :, 2, 2] =
-        4  4
-        4  1
+        13  15
+        14  16
 
-       julia> mapslices(sum, A, [1,2])
+       julia> mapslices(sum, a, [1,2])
        1×1×2×2 Array{Int64,4}:
        [:, :, 1, 1] =
-        9
+        10
 
        [:, :, 2, 1] =
-        13
+        26
 
        [:, :, 1, 2] =
-        11
+        42
 
        [:, :, 2, 2] =
-        13
+        58
 
 .. function:: sum_kbn(A)
 

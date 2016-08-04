@@ -232,19 +232,12 @@ Evaluates to the same as `reducedim(op, map(f, A), region, f(v0))`, but is gener
 faster because the intermediate array is avoided.
 
 ```jldoctest
-julia> a = rand(1:5,4,4)
+julia> a = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
- 1  2  4  1
- 5  5  3  1
- 2  4  3  3
- 1  5  3  2
-
-julia> mapreducedim(isodd, *, a, 2)
-4×1 Array{Bool,2}:
- false
- true
- false
- false
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
 
 julia> mapreducedim(isodd, *, a, 1)
 1×4 Array{Bool,2}:
@@ -272,23 +265,23 @@ associativity, e.g. left-to-right, you should write your own loop. See documenta
 [`reduce`](:func:`reduce`).
 
 ```jldoctest
-julia> a = rand(1:5,4,4)
+julia> a = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
- 3  5  4  3
- 3  2  5  5
- 3  3  4  2
- 5  5  5  1
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
 
-julia> reducedim(max,a,2)
+julia> reducedim(max, a, 2)
 4×1 Array{Int64,2}:
- 5
- 5
- 4
- 5
+ 13
+ 14
+ 15
+ 16
 
-julia> reducedim(max,a,1)
+julia> reducedim(max, a, 1)
 1×4 Array{Int64,2}:
- 5  5  5  5
+ 4  8  12  16
 ```
 """
 reducedim(op, A::AbstractArray, region, v0) = mapreducedim(identity, op, A, region, v0)

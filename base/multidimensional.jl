@@ -504,17 +504,20 @@ to use a preallocated output array, both for performance and to control the prec
 output (e.g. to avoid overflow).
 
 ```jldoctest
-julia> a = rand(1:8,3,4)
-3×4 Array{Int64,2}:
- 7  4  1  1
- 7  6  5  4
- 3  5  7  7
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> cumsum(a,1)
+2×3 Array{Int64,2}:
+ 1  2  3
+ 5  7  9
 
 julia> cumsum(a,2)
-3×4 Array{Int64,2}:
- 7  11  12  13
- 7  13  18  22
- 3   8  15  22
+2×3 Array{Int64,2}:
+ 1  3   6
+ 4  9  15
 ```
 """
 cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
@@ -527,17 +530,20 @@ Cumulative product along a dimension `dim` (defaults to 1). See also
 to control the precision of the output (e.g. to avoid overflow).
 
 ```jldoctest
-julia> a = rand(1:8,3,4)
-3×4 Array{Int64,2}:
- 8  1  7  8
- 7  2  3  6
- 5  3  6  6
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> cumprod(a,1)
+2×3 Array{Int64,2}:
+ 1   2   3
+ 4  10  18
 
 julia> cumprod(a,2)
-3×4 Array{Int64,2}:
- 8   8  56  448
- 7  14  42  252
- 5  15  90  540
+2×3 Array{Int64,2}:
+ 1   2    6
+ 4  20  120
 ```
 """
 cumprod(A::AbstractArray, axis::Integer=1) = cumprod!(similar(A), A, axis)

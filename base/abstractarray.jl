@@ -1358,37 +1358,37 @@ For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[
 for all `i` and `j`.
 
 ```jldoctest
-julia> A = rand(1:5, 2, 2, 2, 2)
+julia> a = reshape(collect(1:16),(2,2,2,2))
 2×2×2×2 Array{Int64,4}:
 [:, :, 1, 1] =
- 1  1
- 3  4
+ 1  3
+ 2  4
 
 [:, :, 2, 1] =
- 4  1
- 5  3
+ 5  7
+ 6  8
 
 [:, :, 1, 2] =
- 3  4
- 1  3
+  9  11
+ 10  12
 
 [:, :, 2, 2] =
- 4  4
- 4  1
+ 13  15
+ 14  16
 
-julia> mapslices(sum, A, [1,2])
+julia> mapslices(sum, a, [1,2])
 1×1×2×2 Array{Int64,4}:
 [:, :, 1, 1] =
- 9
+ 10
 
 [:, :, 2, 1] =
- 13
+ 26
 
 [:, :, 1, 2] =
- 11
+ 42
 
 [:, :, 2, 2] =
- 13
+ 58
 ```
 """
 mapslices(f, A::AbstractArray, dims) = mapslices(f, A, [dims...])
