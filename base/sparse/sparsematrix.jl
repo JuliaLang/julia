@@ -1216,17 +1216,17 @@ element having the value `1.0`.
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
 4×4 sparse matrix with 4 Float64 nonzero entries:
-    [4, 1]  =  2.0
-    [1, 2]  =  5.0
-    [3, 3]  =  3.0
-    [2, 4]  =  4.0
+        [4, 1]  =  2.0
+        [1, 2]  =  5.0
+        [3, 3]  =  3.0
+        [2, 4]  =  4.0
 
 julia> spones(A)
 4×4 sparse matrix with 4 Float64 nonzero entries:
-    [4, 1]  =  1.0
-    [1, 2]  =  1.0
-    [3, 3]  =  1.0
-    [2, 4]  =  1.0
+        [4, 1]  =  1.0
+        [1, 2]  =  1.0
+        [3, 3]  =  1.0
+        [2, 4]  =  1.0
 ```
 
 Note the difference from [`speye`](:func:`speye`).
@@ -1263,17 +1263,17 @@ Create a sparse identity matrix with the same size as that of `S`.
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
 4×4 sparse matrix with 4 Float64 nonzero entries:
-    [4, 1]  =  2.0
-    [1, 2]  =  5.0
-    [3, 3]  =  3.0
-    [2, 4]  =  4.0
+        [4, 1]  =  2.0
+        [1, 2]  =  5.0
+        [3, 3]  =  3.0
+        [2, 4]  =  4.0
 
 julia> speye(A)
 4×4 sparse matrix with 4 Float64 nonzero entries:
-    [1, 1]  =  1.0
-    [2, 2]  =  1.0
-    [3, 3]  =  1.0
-    [4, 4]  =  1.0
+        [1, 1]  =  1.0
+        [2, 2]  =  1.0
+        [3, 3]  =  1.0
+        [4, 4]  =  1.0
 ```
 
 Note the difference from [`spones`](:func:`spones`).
@@ -3501,14 +3501,14 @@ of the resulting sparse matrix.
 ```jldoctest
 julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
 5×5 sparse matrix with 8 Int64 nonzero entries:
-    [2, 1]  =  1
-    [1, 2]  =  4
-    [3, 2]  =  2
-    [2, 3]  =  3
-    [4, 3]  =  3
-    [3, 4]  =  2
-    [5, 4]  =  4
-    [4, 5]  =  1
+        [2, 1]  =  1
+        [1, 2]  =  4
+        [3, 2]  =  2
+        [2, 3]  =  3
+        [4, 3]  =  3
+        [3, 4]  =  2
+        [5, 4]  =  4
+        [4, 5]  =  1
 ```
 """
 function spdiagm(B, d, m::Integer, n::Integer)

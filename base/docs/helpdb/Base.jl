@@ -1196,6 +1196,20 @@ of the problem that is solved on each processor.
 peakflops
 
 """
+    ones(type, dims)
+
+Create an array of all ones of specified type. The type defaults to `Float64` if not specified.
+"""
+ones(t,dims)
+
+"""
+    ones(A)
+
+Create an array of all ones with the same element type and shape as `A`.
+"""
+ones(A)
+
+"""
     ind2chr(string, i)
 
 Convert a byte index to a character index.
@@ -3988,6 +4002,20 @@ sum_kbn
 Euler integral of the first kind ``\\operatorname{B}(x,y) = \\Gamma(x)\\Gamma(y)/\\Gamma(x+y)``.
 """
 beta
+
+"""
+    eye(n)
+
+`n`-by-`n` identity matrix.
+"""
+eye(n::Int)
+
+"""
+    eye(m, n)
+
+`m`-by-`n` identity matrix.
+"""
+eye(m, n)
 
 """
     diagind(M[, k])
