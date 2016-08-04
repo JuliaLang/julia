@@ -589,6 +589,10 @@ threadcall_test_func(x) =
 @test threadcall_test_func(3) == 1
 @test threadcall_test_func(259) == 1
 
+# issue 17819
+# NOTE: can't use cfunction or reuse ccalltest Struct methods, as those call into the runtime
+@test @threadcall((:threadcall_args, libccalltest), Cint, (Cint, Cint), 1, 2) == 3
+
 let n=3
     tids = Culong[]
     @sync for i in 1:10^n
