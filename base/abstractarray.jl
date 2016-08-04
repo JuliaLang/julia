@@ -625,6 +625,13 @@ convert{T,S,N}(::Type{AbstractArray{T  }}, A::AbstractArray{S,N}) = convert(Abst
 
 convert{T,N}(::Type{Array}, A::AbstractArray{T,N}) = convert(Array{T,N}, A)
 
+"""
+   of_indices(x, y)
+
+Represents the array `y` as an array having the same indices type as `x`.
+"""
+of_indices(x, y) = similar(dims->y, oftype(indices(x), indices(y)))
+
 full(x::AbstractArray) = x
 
 map(::Type{Integer},  a::Array) = map!(Integer, similar(a,typeof(Integer(one(eltype(a))))), a)
