@@ -80,13 +80,6 @@ the woken task.
 schedule
 
 """
-    step(r)
-
-Get the step size of a [`Range`](:obj:`Range`) object.
-"""
-step
-
-"""
     takebuf_array(b::IOBuffer)
 
 Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
@@ -112,13 +105,6 @@ Return `string` with any leading whitespace removed. If `chars` (a character, or
 set of characters) is provided, instead remove characters contained in it.
 """
 lstrip
-
-"""
-    indmin(itr) -> Integer
-
-Returns the index of the minimum element in a collection.
-"""
-indmin
 
 """
     powermod(x, p, m)
@@ -1214,14 +1200,6 @@ greater than 1, and `x` must not be less than 1.
 prevpow
 
 """
-    indexin(a, b)
-
-Returns a vector containing the highest index in `b` for each value in `a` that is a member
-of `b` . The output vector contains 0 wherever `a` is not a member of `b`.
-"""
-indexin
-
-"""
     permutedims(A, perm)
 
 Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
@@ -1375,13 +1353,6 @@ reshape
 Like `randsubseq`, but the results are stored in `S` (which is resized as needed).
 """
 randsubseq!
-
-"""
-    maximum(itr)
-
-Returns the largest element in a collection.
-"""
-maximum(itr)
 
 """
     maximum(A, dims)
@@ -2474,13 +2445,6 @@ Largest integer less than or equal to `x/y`.
 fld
 
 """
-    indmax(itr) -> Integer
-
-Returns the index of the maximum element in a collection.
-"""
-indmax
-
-"""
     writecsv(filename, A)
 
 Equivalent to `writedlm` with `delim` set to comma.
@@ -3010,13 +2974,6 @@ Get the concrete type of `x`.
 typeof
 
 """
-    drop(iter, n)
-
-An iterator that generates all but the first `n` elements of `iter`.
-"""
-drop
-
-"""
     acsc(x)
 
 Compute the inverse cosecant of `x`, where the output is in radians
@@ -3169,13 +3126,6 @@ Compute the inverse error complementary function of a real `x`, defined by
 ``\\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x``.
 """
 erfcinv
-
-"""
-    minabs(itr)
-
-Compute the minimum absolute value of a collection of values.
-"""
-minabs(itr)
 
 """
     minabs(A, dims)
@@ -3558,16 +3508,6 @@ An operation allocated too much memory for either the system or the garbage coll
 handle properly.
 """
 OutOfMemoryError
-
-"""
-    zip(iters...)
-
-For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
-the `i`th component of each input iterable.
-
-Note that [`zip`](:func:`zip`) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
-"""
-zip
 
 """
     SystemError(prefix::AbstractString, [errno::Int32])
@@ -4648,13 +4588,6 @@ Compute the inverse hyperbolic sine of `x`.
 asinh
 
 """
-    count(p, itr) -> Integer
-
-Count the number of elements in `itr` for which predicate `p` returns `true`.
-"""
-count
-
-"""
     atreplinit(f)
 
 Register a one-argument function to be called before the REPL interface is initialized in
@@ -4671,20 +4604,6 @@ Return `string` with any leading and trailing whitespace removed. If `chars` (a 
 or vector or set of characters) is provided, instead remove characters contained in it.
 """
 strip
-
-"""
-    findin(a, b)
-
-Returns the indices of elements in collection `a` that appear in collection `b`.
-"""
-findin
-
-"""
-    minimum(itr)
-
-Returns the smallest element in a collection.
-"""
-minimum(itr)
 
 """
     minimum(A, dims)
@@ -4740,13 +4659,6 @@ Like redirect_stdout, but for STDIN. Note that the order of the return tuple is 
 (rd,wr), i.e. data to be read from STDIN, may be written to wr.
 """
 redirect_stdin
-
-"""
-    minmax(x, y)
-
-Return `(min(x,y), max(x,y))`. See also: [`extrema`](:func:`extrema`) that returns `(minimum(x), maximum(x))`.
-"""
-minmax
 
 """
     mktemp([parent=tempdir()])
@@ -4883,13 +4795,6 @@ from or written to respectively. By default the buffer is readable but not writa
 last argument optionally specifies a size beyond which the buffer may not be grown.
 """
 IOBuffer(data=?)
-
-"""
-    findmax(itr) -> (x, index)
-
-Returns the maximum element and its index.
-"""
-findmax(itr)
 
 """
     findmax(A, dims) -> (maxval, index)
@@ -5503,30 +5408,11 @@ The highest value representable by the given (real) numeric `DataType`.
 typemax
 
 """
-    all(itr) -> Bool
-
-Test whether all elements of a boolean collection are `true`.
-"""
-all(itr)
-
-"""
     all(A, dims)
 
 Test whether all values along the given dimensions of an array are `true`.
 """
 all(A::AbstractArray, dims)
-
-"""
-    all(p, itr) -> Bool
-
-Determine whether predicate `p` returns `true` for all elements of `itr`.
-
-```jldoctest
-julia> all(i->(4<=i<=6), [4,5,6])
-true
-```
-"""
-all(p, itr)
 
 """
     bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false)
@@ -6969,13 +6855,6 @@ Compute the trigamma function of `x` (the logarithmic second derivative of `gamm
 trigamma
 
 """
-    findmin(itr) -> (x, index)
-
-Returns the minimum element and its index.
-"""
-findmin(itr)
-
-"""
     findmin(A, dims) -> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given dimensions.
@@ -7471,13 +7350,6 @@ Convert a string to `String` type and check that it contains only ASCII data, ot
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 """
 ascii(s)
-
-"""
-    maxabs(itr)
-
-Compute the maximum absolute value of a collection of values.
-"""
-maxabs(itr)
 
 """
     maxabs(A, dims)
@@ -8075,25 +7947,11 @@ Get the additive identity element for the type of `x` (`x` can also specify the 
 zero
 
 """
-    any(itr) -> Bool
-
-Test whether any elements of a boolean collection are `true`.
-"""
-any(itr)
-
-"""
     any(A, dims)
 
 Test whether any values along the given dimensions of an array are `true`.
 """
 any(::AbstractArray,dims)
-
-"""
-    any(p, itr) -> Bool
-
-Determine whether predicate `p` returns `true` for any elements of `itr`.
-"""
-any(p,itr)
 
 """
     cosc(x)
@@ -8229,13 +8087,6 @@ not required) to convert subnormal inputs or outputs to zero. Returns `true` unl
 break identities such as `(x-y==0) == (x==y)`.
 """
 set_zero_subnormals
-
-"""
-    take(iter, n)
-
-An iterator that generates at most the first `n` elements of `iter`.
-"""
-take
 
 """
     frexp(val)
@@ -8828,14 +8679,6 @@ julia> A
 pop!(collection)
 
 """
-    filter(function, collection)
-
-Return a copy of `collection`, removing elements for which `function` is `false`. For
-associative collections, the function is passed two arguments (key and value).
-"""
-filter
-
-"""
     randperm([rng,] n)
 
 Construct a random permutation of length `n`. The optional `rng` argument specifies a random
@@ -8929,27 +8772,6 @@ unsafe_pointer_to_objref
 Remove a single trailing newline from a string.
 """
 chomp
-
-"""
-    enumerate(iter)
-
-An iterator that yields `(i, x)` where `i` is an index starting at 1, and
-`x` is the `i`th value from the given iterator. It's useful when you need
-not only the values `x` over which you are iterating, but also the index `i`
-of the iterations.
-
-```jldoctest
-julia> a = ["a", "b", "c"];
-
-julia> for (index, value) in enumerate(a)
-           println("\$index \$value")
-       end
-1 a
-2 b
-3 c
-```
-"""
-enumerate
 
 """
     >=(x, y)

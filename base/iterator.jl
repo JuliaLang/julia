@@ -17,7 +17,27 @@ _diff_length(a, b, A, B) = max(length(a)-length(b), 0)
 immutable Enumerate{I}
     itr::I
 end
-enumerate(itr) = Enumerate(itr)
+
+"""
+    enumerate(iter)
+
+An iterator that yields `(i, x)` where `i` is an index starting at 1, and
+`x` is the `i`th value from the given iterator. It's useful when you need
+not only the values `x` over which you are iterating, but also the index `i`
+of the iterations.
+
+```jldoctest
+julia> a = ["a", "b", "c"];
+
+julia> for (index, value) in enumerate(a)
+           println("\$index \$value")
+       end
+1 a
+2 b
+3 c
+```
+"""
+enumerate(iter) = Enumerate(iter)
 
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
@@ -83,6 +103,37 @@ immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
     a::I
     z::Z
 end
+
+"""
+    zip(iters...)
+
+For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
+the `i`th component of each input iterable.
+
+Note that [`zip`](:func:`zip`) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
+
+```jldoctest
+julia> a = 1:5
+1:5
+
+julia> b = ["e","d","b","c","a"]
+5-element Array{String,1}:
+ "e"
+ "d"
+ "b"
+ "c"
+ "a"
+
+julia> c = zip(a,b)
+Base.Zip2{UnitRange{Int64},Array{String,1}}(1:5,String["e","d","b","c","a"])
+
+julia> length(c)
+5
+
+julia> first(c)
+(1,"e")
+```
+"""
 zip(a, b, c...) = Zip(a, zip(b, c...))
 length(z::Zip) = _min_length(z.a, z.z, iteratorsize(z.a), iteratorsize(z.z))
 size(z::Zip) = promote_shape(size(z.a), size(z.z))
@@ -109,6 +160,26 @@ immutable Filter{F,I}
     flt::F
     itr::I
 end
+
+"""
+    filter(function, collection)
+
+Return a copy of `collection`, removing elements for which `function` is `false`. For
+associative collections, the function is passed two arguments (key and value).
+
+```jldocttest
+julia> a = 1:10
+1:10
+
+julia> filter(isodd, a)
+5-element Array{Int64,1}:
+ 1
+ 3
+ 5
+ 7
+ 9
+```
+"""
 filter(flt, itr) = Filter(flt, itr)
 
 start(f::Filter) = start_filter(f.flt, f.itr)
@@ -204,6 +275,32 @@ immutable Take{I}
     xs::I
     n::Int
 end
+
+"""
+    take(iter, n)
+
+An iterator that generates at most the first `n` elements of `iter`.
+
+```jldoctest
+julia> a = 1:2:11
+1:2:11
+
+julia> collect(a)
+6-element Array{Int64,1}:
+  1
+  3
+  5
+  7
+  9
+  11
+
+julia> collect(take(a,3))
+3-element Array{Int64,1}:
+  1
+  3
+  5
+```
+"""
 take(xs, n::Int) = Take(xs, n)
 
 eltype{I}(::Type{Take{I}}) = eltype(I)
@@ -232,6 +329,31 @@ immutable Drop{I}
     xs::I
     n::Int
 end
+
+"""
+    drop(iter, n)
+
+An iterator that generates all but the first `n` elements of `iter`.
+
+```jldoctest
+julia> a = 1:2:11
+1:2:11
+
+julia> collect(a)
+6-element Array{Int64,1}:
+  1
+  3
+  5
+  7
+  9
+  11
+
+julia> collect(drop(a,4))
+2-element Array{Int64,1}:
+  9
+  11
+```
+"""
 drop(xs, n::Int) = Drop(xs, n)
 
 eltype{I}(::Type{Drop{I}}) = eltype(I)
