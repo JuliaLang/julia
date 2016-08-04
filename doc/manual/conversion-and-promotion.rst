@@ -274,8 +274,8 @@ the catch-all method definitions given in
     *(x::Number, y::Number) = *(promote(x,y)...)
     /(x::Number, y::Number) = /(promote(x,y)...)
 
-In certain cases, the result type also depends on the operator; how to
-handle such scenarios is described :ref:`elsewhere <devdocs-promote-op>`.
+In certain cases, the result type also depends on the operator;
+such scenarios are handled by the ``promote_op`` function.
 
 These method definitions say that in the absence of more specific rules
 for adding, subtracting, multiplying and dividing pairs of numeric

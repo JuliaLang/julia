@@ -405,7 +405,7 @@ Deprecated or removed
     provides a `@functorize` macro.
 
   * `bitunpack(B)` and `bitpack(A)` have been deprecated in favor of
-    Array(B)` and `BitArray(A)`, respectively ([#16010]).
+    `Array(B)` and `BitArray(A)`, respectively ([#16010]).
 
   * `xdump` is removed, and `dump` now simply shows the full representation of a value.
     `dump` should not be overloaded, since it is for examining concrete structure ([#4163]).
@@ -525,6 +525,7 @@ Language tooling improvements
 [#14424]: https://github.com/JuliaLang/julia/issues/14424
 [#14458]: https://github.com/JuliaLang/julia/issues/14458
 [#14469]: https://github.com/JuliaLang/julia/issues/14469
+[#14474]: https://github.com/JuliaLang/julia/issues/14474
 [#14519]: https://github.com/JuliaLang/julia/issues/14519
 [#14608]: https://github.com/JuliaLang/julia/issues/14608
 [#14623]: https://github.com/JuliaLang/julia/issues/14623
