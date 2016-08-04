@@ -1363,15 +1363,15 @@ julia> a = reshape(collect(1:16),(2,2,2,2))
 [:, :, 1, 1] =
  1  3
  2  4
-
+<BLANKLINE>
 [:, :, 2, 1] =
  5  7
  6  8
-
+<BLANKLINE>
 [:, :, 1, 2] =
   9  11
  10  12
-
+<BLANKLINE>
 [:, :, 2, 2] =
  13  15
  14  16
@@ -1380,13 +1380,13 @@ julia> mapslices(sum, a, [1,2])
 1×1×2×2 Array{Int64,4}:
 [:, :, 1, 1] =
  10
-
+<BLANKLINE>
 [:, :, 2, 1] =
  26
-
+<BLANKLINE>
 [:, :, 1, 2] =
  42
-
+<BLANKLINE>
 [:, :, 2, 2] =
  58
 ```
