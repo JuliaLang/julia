@@ -271,3 +271,27 @@ This prints a version number corresponding to the specified commit of the form
 is at least this version by `VERSION >= v"X.Y.Z-aaa+NNNN"`.
 
 [#15032]: https://github.com/JuliaLang/julia/issues/15032
+
+### Tagging the correct minimum version of Compat 
+
+One of the most frequent problems package developers encounter is finding the right
+version of `Compat` to add to their REQUIRE. This is meant to be a guide on how to
+specify the right lower bound. 
+
+* Find the appropriate fix needed for your package from the `Compat` README. Every
+function or feature added to `Compat` is documented in its README, so you are
+guaranteed to find it.
+
+* Navigate to the [blame page of the README](https://github.com/JuliaLang/Compat.jl/blame/master/README.md)
+by clicking on the README file on GitHub, and then clicking on the `blame` button
+which can be found in the top-right corner.
+
+* Now find your fix, and then find the corresponding commit ID of that fix on the
+left-hand side. Click on the commit ID. This navigates to a page which recorded
+that particular commit.
+
+* On the top pane, you should find the list of the tagged versions of Compat that
+includes this fix. Find the minimum version from there.
+
+* Now specify the correct minimum version for Compat in your REQUIRE file by
+`Compat <version>`
