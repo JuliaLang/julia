@@ -589,6 +589,10 @@ threadcall_test_func(x) =
 @test threadcall_test_func(3) == 1
 @test threadcall_test_func(259) == 1
 
+f17819(a,b) = Cint(a+b)
+cf17819 = cfunction(f17819, Cint, (Cint,Cint))
+@test @threadcall(cf17819, Cint, (Cint, Cint), 1, 2) == 3
+
 let n=3
     tids = Culong[]
     @sync for i in 1:10^n
