@@ -1355,6 +1355,12 @@ Reflection
 
    Determine the module containing the definition of a ``DataType``\ .
 
+.. function:: Base.datatype_name(t::DataType) -> Symbol
+
+   .. Docstring generated from Julia source
+
+   Get the name of a ``DataType`` (without its parent module) as a symbol.
+
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
    .. Docstring generated from Julia source

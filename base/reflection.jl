@@ -71,6 +71,13 @@ fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
 fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
 
 """
+    Base.datatype_name(t::DataType) -> Symbol
+
+Get the name of a `DataType` (without its parent module) as a symbol.
+"""
+datatype_name(t::DataType) = t.name.name
+
+"""
     Base.datatype_module(t::DataType) -> Module
 
 Determine the module containing the definition of a `DataType`.
