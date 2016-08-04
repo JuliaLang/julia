@@ -56,8 +56,8 @@ cp julia-$version-win32.exe julia-$majmin-latest-win32.exe
 echo "Note: if windows code signing is not working on the buildbots, then the"
 echo "checksums need to be re-calculated after the binaries are manually signed!"
 
-shasum -a 256 julia-$version* | grep -v sha256 | grep -v md5 > julia-$version.sha256
-md5sum julia-$version* | grep -v sha256 | grep -v md5 > julia-$version.md5
+shasum -a 256 julia-$version* | grep -v -e sha256 -e md5 -e asc > julia-$version.sha256
+md5sum julia-$version* | grep -v -e sha256 -e md5 -e asc > julia-$version.md5
 
 gpg -u julia --armor --detach-sig julia-$version-full.tar.gz
 gpg -u julia --armor --detach-sig julia-$version.tar.gz
