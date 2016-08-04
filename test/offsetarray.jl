@@ -339,9 +339,11 @@ am = map(identity, a)
 
 # other functions
 v = OffsetArray(v0, (-3,))
+@test_approx_eq v v
 @test parent(v') == v0'
 @test indices(v') === (1:1,-2:1)
 A = OffsetArray(rand(4,4), (-3,5))
+@test_approx_eq A A
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
