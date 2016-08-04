@@ -113,16 +113,21 @@ type PipeEndpoint <: LibuvStream
     lock::ReentrantLock
     throttle::Int
 
-    PipeEndpoint(handle::Ptr{Void} = C_NULL) = new(
-        handle,
-        StatusUninit,
-        PipeBuffer(),
-        true,
-        false,Condition(),
-        false,Condition(),
-        false,Condition(),
-        nothing, ReentrantLock(),
-        DEFAULT_READ_BUFFER_SZ)
+    PipeEndpoint() = PipeEndpoint(Libc.malloc(_sizeof_uv_named_pipe), StatusUninit)
+    function PipeEndpoint(handle::Ptr{Void}, status)
+        p = new(handle,
+                status,
+                PipeBuffer(),
+                true,
+                false,Condition(),
+                false,Condition(),
+                false,Condition(),
+                nothing, ReentrantLock(),
+                DEFAULT_READ_BUFFER_SZ)
+        associate_julia_struct(handle, p)
+        finalizer(p, uvfinalize)
+        return p
+    end
 end
 
 type PipeServer <: LibuvServer
@@ -132,26 +137,22 @@ type PipeServer <: LibuvServer
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    PipeServer(handle) = new(
-        handle,
-        StatusUninit,
-        false,Condition(),
-        false,Condition())
+    function PipeServer(handle::Ptr{Void}, status)
+        p = new(handle,
+                status,
+                false,Condition(),
+                false,Condition())
+        associate_julia_struct(p.handle, p)
+        finalizer(p, uvfinalize)
+        return p
+    end
 end
 
 typealias LibuvPipe Union{PipeEndpoint, PipeServer}
 
 function PipeServer()
-    handle = Libc.malloc(_sizeof_uv_named_pipe)
-    try
-        ret = PipeServer(handle)
-        associate_julia_struct(ret.handle,ret)
-        finalizer(ret,uvfinalize)
-        return init_pipe!(ret;readable=true)
-    catch
-        Libc.free(handle)
-        rethrow()
-    end
+    p = PipeServer(Libc.malloc(_sizeof_uv_named_pipe), StatusUninit)
+    return init_pipe!(p; readable=true)
 end
 
 type TTY <: LibuvStream
@@ -167,16 +168,19 @@ type TTY <: LibuvStream
     lock::ReentrantLock
     throttle::Int
     @static if is_windows(); ispty::Bool; end
-    function TTY(handle)
+    TTY() = TTY(Libc.malloc(_sizeof_uv_tty), StatusUninit)
+    function TTY(handle::Ptr{Void}, status)
         tty = new(
             handle,
-            StatusUninit,
+            status,
             true,
             PipeBuffer(),
             false,Condition(),
             false,Condition(),
             nothing, ReentrantLock(),
             DEFAULT_READ_BUFFER_SZ)
+        associate_julia_struct(handle, tty)
+        finalizer(tty, uvfinalize)
         @static if is_windows()
             tty.ispty = ccall(:jl_ispty, Cint, (Ptr{Void},), handle) != 0
         end
@@ -185,16 +189,15 @@ type TTY <: LibuvStream
 end
 
 function TTY(fd::RawFD; readable::Bool = false)
-    handle = Libc.malloc(_sizeof_uv_tty)
-    ret = TTY(handle)
-    associate_julia_struct(handle,ret)
-    finalizer(ret,uvfinalize)
+    tty = TTY()
     # This needs to go after associate_julia_struct so that there
     # is no garbage in the ->data field
-    uv_error("TTY",ccall(:uv_tty_init,Int32,(Ptr{Void},Ptr{Void},Int32,Int32),eventloop(),handle,fd.fd,readable))
-    ret.status = StatusOpen
-    ret.line_buffered = false
-    return ret
+    err = ccall(:uv_tty_init, Int32, (Ptr{Void}, Ptr{Void}, Int32, Int32),
+            eventloop(), tty.handle, fd.fd, readable)
+    uv_error("TTY", err)
+    tty.status = StatusOpen
+    tty.line_buffered = false
+    return tty
 end
 
 show(io::IO,stream::LibuvServer) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
@@ -230,18 +233,15 @@ function init_stdio(handle::Ptr{Void})
 #       return File(RawFD(ccall(:jl_uv_file_handle,Int32,(Ptr{Void},),handle)))
     else
         if t == UV_TTY
-            ret = TTY(handle)
+            ret = TTY(handle, StatusOpen)
         elseif t == UV_TCP
-            ret = TCPSocket(handle)
+            ret = TCPSocket(handle, StatusOpen)
         elseif t == UV_NAMED_PIPE
-            ret = PipeEndpoint(handle)
+            ret = PipeEndpoint(handle, StatusOpen)
         else
             throw(ArgumentError("invalid stdio type: $t"))
         end
-        ret.status = StatusOpen
         ret.line_buffered = false
-        associate_julia_struct(ret.handle, ret)
-        finalizer(ret, uvfinalize)
         return ret
     end
 end
@@ -322,7 +322,9 @@ function wait_close(x::Union{LibuvStream, LibuvServer})
 end
 
 function close(stream::Union{LibuvStream, LibuvServer})
-    if isopen(stream)
+    if stream.status == StatusInit
+        ccall(:jl_forceclose_uv, Void, (Ptr{Void},), stream.handle)
+    elseif isopen(stream)
         if stream.status != StatusClosing
             ccall(:jl_close_uv, Void, (Ptr{Void},), stream.handle)
             stream.status = StatusClosing
@@ -337,11 +339,13 @@ end
 function uvfinalize(uv::Union{LibuvStream, LibuvServer})
     if uv.handle != C_NULL
         disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
-        if uv.status != StatusUninit && uv.status != StatusInit
+        if uv.status != StatusUninit
             close(uv)
-            uv.handle = C_NULL
-            uv.status = StatusClosed
+        else
+            Libc.free(uv.handle)
         end
+        uv.status = StatusClosed
+        uv.handle = C_NULL
     end
     nothing
 end
@@ -571,22 +575,21 @@ function init_pipe!(pipe::LibuvPipe;
     if pipe.status != StatusUninit
         error("pipe is already initialized")
     end
-    if pipe.handle == C_NULL
-        malloc_julia_pipe!(pipe)
-    end
-    uv_error("init_pipe",ccall(:jl_init_pipe, Cint,
+    err = ccall(:jl_init_pipe, Cint,
         (Ptr{Void}, Int32, Int32, Int32),
-        pipe.handle, writable, readable, julia_only))
+        pipe.handle, writable, readable, julia_only)
+    uv_error(
+        if readable && writable
+            "init_pipe(ipc)"
+        elseif readable
+            "init_pipe(read)"
+        elseif writable
+            "init_pipe(write)"
+        else
+            "init_pipe(none)"
+        end, err)
     pipe.status = StatusInit
     return pipe
-end
-
-function malloc_julia_pipe!(x::LibuvPipe)
-    assert(x.handle == C_NULL)
-    x.handle = Libc.malloc(_sizeof_uv_named_pipe)
-    associate_julia_struct(x.handle, x)
-    finalizer(x, uvfinalize)
-    nothing
 end
 
 function _link_pipe(read_end::Ptr{Void}, write_end::Ptr{Void})
@@ -620,9 +623,6 @@ end
 
 function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
                    write_end::Ptr{Void}, writable_julia_only::Bool)
-    if read_end.handle == C_NULL
-        malloc_julia_pipe!(read_end)
-    end
     init_pipe!(read_end;
         readable = true, writable = false, julia_only = readable_julia_only)
     uv_error("init_pipe",
@@ -634,9 +634,6 @@ end
 
 function link_pipe(read_end::Ptr{Void}, readable_julia_only::Bool,
                    write_end::PipeEndpoint, writable_julia_only::Bool)
-    if write_end.handle == C_NULL
-        malloc_julia_pipe!(write_end)
-    end
     uv_error("init_pipe",
         ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32), read_end, 0, 1, readable_julia_only))
     init_pipe!(write_end;
@@ -648,12 +645,6 @@ end
 
 function link_pipe(read_end::PipeEndpoint, readable_julia_only::Bool,
                    write_end::PipeEndpoint, writable_julia_only::Bool)
-    if write_end.handle == C_NULL
-        malloc_julia_pipe!(write_end)
-    end
-    if read_end.handle == C_NULL
-        malloc_julia_pipe!(read_end)
-    end
     init_pipe!(read_end;
         readable = true, writable = false, julia_only = readable_julia_only)
     init_pipe!(write_end;
