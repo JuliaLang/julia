@@ -211,7 +211,7 @@ The result has the same shape and number of dimensions as `collection`.
 collect{T}(::Type{T}, itr) = _collect(T, itr, iteratorsize(itr))
 
 _collect{T}(::Type{T}, itr, isz::HasLength) = copy!(Array{T,1}(Int(length(itr)::Integer)), itr)
-_collect{T}(::Type{T}, itr, isz::HasShape)  = copy!(Array{T}(convert(Dims,size(itr))), itr)
+_collect{T}(::Type{T}, itr, isz::HasShape)  = copy!(similar(Array{T}, indices(itr)), itr)
 function _collect{T}(::Type{T}, itr, isz::SizeUnknown)
     a = Array{T,1}(0)
     for x in itr
@@ -259,7 +259,7 @@ end
 _default_eltype{I,T}(::Type{Generator{I,Type{T}}}) = T
 
 _array_for(T, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
-_array_for(T, itr, ::HasShape) = Array{T}(convert(Dims,size(itr)))
+_array_for(T, itr, ::HasShape) = similar(Array{T}, indices(itr))
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
