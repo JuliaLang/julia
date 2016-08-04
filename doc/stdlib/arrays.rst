@@ -187,7 +187,7 @@ Constructors
 
    Create an array of all zeros with the same element type and shape as ``A``\ .
 
-.. function:: ones(type, dims)
+.. function:: ones([T::Type=Float64,] dims)
 
    .. Docstring generated from Julia source
 
@@ -198,6 +198,22 @@ Constructors
    .. Docstring generated from Julia source
 
    Create an array of all ones with the same element type and shape as ``A``\ .
+
+   .. doctest::
+
+       julia> A = [1 2 3; 4 5 6; 7 8 9]
+       3×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+        7  8  9
+
+       julia> ones(A)
+       3×3 Array{Int64,2}:
+        1  1  1
+        1  1  1
+        1  1  1
+
+   Note the difference from :func:`eye`\ .
 
 .. function:: trues(dims)
 
@@ -309,23 +325,39 @@ Constructors
 
    Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, UInt32(7))`` interprets the 4 bytes corresponding to ``UInt32(7)`` as a ``Float32``\ . For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
 
-.. function:: eye(n)
+.. function:: eye([T::Type=Float64,] n::Integer)
 
    .. Docstring generated from Julia source
 
-   ``n``\ -by-``n`` identity matrix.
+   ``n``\ -by-``n`` identity matrix. The default element type is ``Float64``\ .
 
-.. function:: eye(m, n)
+.. function:: eye([T::Type=Float64,] m::Integer, n::Integer)
 
    .. Docstring generated from Julia source
 
-   ``m``\ -by-``n`` identity matrix.
+   ``m``\ -by-``n`` identity matrix. The default element type is ``Float64``\ .
 
 .. function:: eye(A)
 
    .. Docstring generated from Julia source
 
    Constructs an identity matrix of the same dimensions and type as ``A``\ .
+
+   .. doctest::
+
+       julia> A = [1 2 3; 4 5 6; 7 8 9]
+       3×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+        7  8  9
+
+       julia> eye(A)
+       3×3 Array{Int64,2}:
+        1  0  0
+        0  1  0
+        0  0  1
+
+   Note the difference from :func:`ones`\ .
 
 .. function:: linspace(start, stop, n=50)
 
@@ -1216,107 +1248,105 @@ to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation on ``src`` and put the result into ``dest``\ .
-
-   .. doctest::
-
-       julia> a = bitrand(5)
-       5-element BitArray{1}:
-        false
-        false
-         true
-         true
-         true
-
-       julia> b = falses(5);
-
-       julia> rol!(b,a,2)
-       5-element BitArray{1}:
-         true
-         true
-         true
-        false
-        false
-
-       julia> rol!(b,a,3)
-       5-element BitArray{1}:
-         true
-         true
-        false
-        false
-         true
+   Performs a left rotation operation on ``src`` and puts the result into ``dest``\ . ``i`` controls how far to rotate each bit.
 
 .. function:: rol!(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation on ``B``\ .
-
-   ```jldoctest julia> a = bitrand(5) 5-element BitArray{1}:   true  false  false   true   true
-
-   julia> rol!(a,4) 5-element BitArray{1}:   true   true  false  false   true
+   Performs a left rotation operation in-place on ``B``\ . ``i`` controls how far to rotate each bit.
 
 .. function:: rol(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation without modifying ``B``\ . See also :func:`rol!`\ .
+   Performs a left rotation operation, returning a new ``BitVector``\ . ``i`` controls how far to rotate each bit. See also :func:`rol!`\ .
+
+   .. doctest::
+
+       julia> A = BitArray([true, true, false, false, true])
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
+
+       julia> rol(A,1)
+       5-element BitArray{1}:
+         true
+        false
+        false
+         true
+         true
+
+       julia> rol(A,2)
+       5-element BitArray{1}:
+        false
+        false
+         true
+         true
+         true
+
+       julia> rol(A,5)
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
 
 .. function:: ror!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation on ``src`` and put the result into ``dest``\ .
-
-   .. doctest::
-
-       julia> a = bitrand(5)
-       5-element BitArray{1}:
-        false
-        false
-         true
-         true
-         true
-
-       julia> b = falses(5);
-
-       julia> ror!(b,a,2)
-       5-element BitArray{1}:
-         true
-         true
-        false
-        false
-         true
+   Performs a right rotation operation on ``src`` and puts the result into ``dest``\ . ``i`` controls how far to rotate each bit.
 
 .. function:: ror!(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation on ``B``\ .
-
-   .. doctest::
-
-       julia> a = bitrand(5)
-       5-element BitArray{1}:
-        false
-         true
-        false
-         true
-        false
-
-       julia> ror!(a,3)
-       5-element BitArray{1}:
-        false
-         true
-        false
-        false
-         true
+   Performs a right rotation operation in-place on ``B``\ . ``i`` controls how far to rotate each bit.
 
 .. function:: ror(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation without modifying ``B``\ . See also :func:`ror!`\ .
+   Performs a right rotation operation on ``B``\ , returning a new ``BitVector``\ . ``i`` controls how far to rotate each bit. See also :func:`ror!`\ .
+
+   .. doctest::
+
+       julia> A = BitArray([true, true, false, false, true])
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
+
+       julia> ror(A,1)
+       5-element BitArray{1}:
+         true
+         true
+         true
+        false
+        false
+
+       julia> ror(A,2)
+       5-element BitArray{1}:
+        false
+         true
+         true
+         true
+        false
+
+       julia> ror(A,5)
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
 
 .. _stdlib-sparse:
 
@@ -1390,27 +1420,19 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. doctest::
 
-       julia> A = sprand(5,6,0.2)
-       5×6 sparse matrix with 8 Float64 nonzero entries:
-           [2, 1]  =  0.639431
-           [5, 1]  =  0.881209
-           [3, 2]  =  0.355834
-           [4, 2]  =  0.904768
-           [2, 3]  =  0.760943
-           [3, 5]  =  0.525942
-           [4, 5]  =  0.936283
-           [5, 5]  =  0.432364
+       julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
+       4×4 sparse matrix with 4 Float64 nonzero entries:
+           [4, 1]  =  2.0
+           [1, 2]  =  5.0
+           [3, 3]  =  3.0
+           [2, 4]  =  4.0
 
        julia> spones(A)
-       5×6 sparse matrix with 8 Float64 nonzero entries:
-           [2, 1]  =  1.0
-           [5, 1]  =  1.0
-           [3, 2]  =  1.0
-           [4, 2]  =  1.0
-           [2, 3]  =  1.0
-           [3, 5]  =  1.0
-           [4, 5]  =  1.0
-           [5, 5]  =  1.0
+       4×4 sparse matrix with 4 Float64 nonzero entries:
+           [4, 1]  =  1.0
+           [1, 2]  =  1.0
+           [3, 3]  =  1.0
+           [2, 4]  =  1.0
 
    Note the difference from :func:`speye`\ .
 
@@ -1424,29 +1446,23 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a sparse identity matrix with the same structure as that of ``S``\ .
+   Create a sparse identity matrix with the same size as that of ``S``\ .
 
    .. doctest::
 
-       julia> A = sprand(5,6,0.2)
-       5×6 sparse matrix with 9 Float64 nonzero entries:
-           [1, 1]  =  0.102874
-           [2, 1]  =  0.780098
-           [1, 2]  =  0.610378
-           [1, 3]  =  0.422308
-           [3, 3]  =  0.546398
-           [4, 3]  =  0.43053
-           [5, 3]  =  0.909283
-           [2, 4]  =  0.391321
-           [5, 6]  =  0.97785
+       julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
+       4×4 sparse matrix with 4 Float64 nonzero entries:
+           [4, 1]  =  2.0
+           [1, 2]  =  5.0
+           [3, 3]  =  3.0
+           [2, 4]  =  4.0
 
        julia> speye(A)
-       5×6 sparse matrix with 5 Float64 nonzero entries:
+       4×4 sparse matrix with 4 Float64 nonzero entries:
            [1, 1]  =  1.0
            [2, 2]  =  1.0
            [3, 3]  =  1.0
            [4, 4]  =  1.0
-           [5, 5]  =  1.0
 
    Note the difference from :func:`spones`\ .
 
@@ -1458,16 +1474,16 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. doctest::
 
-       julia> spdiagm((rand(4), rand(4)), (-1, 1))
-       5×5 sparse matrix with 8 Float64 nonzero entries:
-           [2, 1]  =  0.962245
-           [1, 2]  =  0.919341
-           [3, 2]  =  0.59239
-           [2, 3]  =  0.628924
-           [4, 3]  =  0.694011
-           [3, 4]  =  0.0660923
-           [5, 4]  =  0.494409
-           [4, 5]  =  0.54209
+       julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
+       5×5 sparse matrix with 8 Int64 nonzero entries:
+           [2, 1]  =  1
+           [1, 2]  =  4
+           [3, 2]  =  2
+           [2, 3]  =  3
+           [4, 3]  =  3
+           [3, 4]  =  2
+           [5, 4]  =  4
+           [4, 5]  =  1
 
 .. function:: sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
 
