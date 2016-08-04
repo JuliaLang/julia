@@ -322,26 +322,9 @@ function wait_close(x::Union{LibuvStream, LibuvServer})
 end
 
 function close(stream::Union{LibuvStream, LibuvServer})
-    if isopen(stream)
-        if stream.status != StatusClosing
-            ccall(:jl_close_uv, Void, (Ptr{Void},), stream.handle)
-            stream.status = StatusClosing
-        end
-        if uv_handle_data(stream) != C_NULL
-            stream_wait(stream, stream.closenotify)
-        end
-    end
-    nothing
-end
-
-function uvfinalize(uv::Union{LibuvStream, LibuvServer})
-    if uv.handle != C_NULL
-        disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
-        if uv.status != StatusUninit && uv.status != StatusInit
-            close(uv)
-            uv.handle = C_NULL
-            uv.status = StatusClosed
-        end
+    if isopen(stream) && stream.status != StatusClosing
+        ccall(:jl_close_uv,Void, (Ptr{Void},), stream.handle)
+        stream.status = StatusClosing
     end
     nothing
 end
@@ -489,10 +472,8 @@ function uv_readcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void})
                 stream.status = StatusEOF # libuv called stop_reading already
                 notify(stream.readnotify)
                 notify(stream.closenotify)
-            elseif stream.status != StatusClosing
-                # begin shutdown of the stream
-                ccall(:jl_close_uv, Void, (Ptr{Void},), stream.handle)
-                stream.status = StatusClosing
+            else
+                close(stream)
             end
         else
             # This is a fatal connection error. Shutdown requests as per the usual
@@ -1038,8 +1019,6 @@ function close(s::BufferStream)
     notify(s.close_c; all=true)
     nothing
 end
-uvfinalize(s::BufferStream) = nothing
-
 read(s::BufferStream, ::Type{UInt8}) = (wait_readnb(s, 1); read(s.buffer, UInt8))
 unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt) = (wait_readnb(s, Int(nb)); unsafe_read(s.buffer, a, nb))
 nb_available(s::BufferStream) = nb_available(s.buffer)
