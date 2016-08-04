@@ -1693,7 +1693,7 @@ Statistics
          1.0
          2.0
          3.6
-         10.9
+        10.9
 
        julia> middle(a)
        5.95

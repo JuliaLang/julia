@@ -119,15 +119,15 @@ end
 Reverse `A` in dimension `d`.
 
 ```jldoctest
-julia> b = rand(2,2)
-2×2 Array{Float64,2}:
- 0.0828743  0.0267872
- 0.179508   0.653249
+julia> b = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
 
 julia> flipdim(b,2)
-2×2 Array{Float64,2}:
- 0.0267872  0.0828743
- 0.653249   0.179508
+2×2 Array{Int64,2}:
+ 2  1
+ 4  3
 ```
 """
 function flipdim(A::AbstractArray, d::Integer)
@@ -167,26 +167,26 @@ Circularly shift the data in an array. The second argument is a vector giving th
 shift in each dimension.
 
 ```jldoctest
-julia> b = rand(4,4)
-4×4 Array{Float64,2}:
- 0.901862  0.526361   0.851311  0.509646
- 0.671021  0.208237   0.520585  0.0912809
- 0.233433  0.0314764  0.300964  0.204917
- 0.706653  0.320038   0.985776  0.930079
+julia> b = reshape(collect(1:16), (4,4))
+4×4 Array{Int64,2}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
 
 julia> circshift(b, [0,2])
-4×4 Array{Float64,2}:
- 0.851311  0.509646   0.901862  0.526361
- 0.520585  0.0912809  0.671021  0.208237
- 0.300964  0.204917   0.233433  0.0314764
- 0.985776  0.930079   0.706653  0.320038
+4×4 Array{Int64,2}:
+  9  13  1  5
+ 10  14  2  6
+ 11  15  3  7
+ 12  16  4  8
 
-julia> circshift(b, [-2,0])
-4×4 Array{Float64,2}:
- 0.233433  0.0314764  0.300964  0.204917
- 0.706653  0.320038   0.985776  0.930079
- 0.901862  0.526361   0.851311  0.509646
- 0.671021  0.208237   0.520585  0.0912809
+julia> circshift(b, [-1,0])
+4×4 Array{Int64,2}:
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+ 1  5   9  13
 ```
 """
 function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)

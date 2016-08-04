@@ -1041,13 +1041,13 @@ julia> vcat(a,b)
 julia> c = ([1 2 3], [4 5 6])
 (
 [1 2 3],
-
-[4 5 6]) # a tuple of arrays
+<BLANKLINE>
+[4 5 6])
 
 julia> vcat(c...)
 2×3 Array{Int64,2}:
-  1  2  3
-  4  5  6
+ 1  2  3
+ 4  5  6
 ```
 """
 vcat(X...) = cat(1, X...)
@@ -1082,7 +1082,7 @@ julia> hcat(a,b)
  5  14  15
 
 julia> c = ([1; 2; 3], [4; 5; 6])
-([1,2,3],[4,5,6]) # a tuple of arrays
+([1,2,3],[4,5,6])
 
 julia> hcat(c...)
 3×2 Array{Int64,2}:
@@ -1450,8 +1450,7 @@ For multiple iterable arguments, `f` is called elementwise.
 needed, for example in `foreach(println, array)`.
 
 ```jldoctest
-julia> a
-1:3:7
+julia> a = 1:3:7;
 
 julia> foreach(x->println(x^2),a)
 1
