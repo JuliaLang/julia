@@ -208,13 +208,13 @@ A `VersionNumber` object describing which version of Julia is in use. For detail
 const VERSION = try
     ver = convert(VersionNumber, VERSION_STRING)
     if !isempty(ver.prerelease)
-        build_number = GIT_VERSION_INFO.build_number
-        if ver == v"0.5.0-pre"
-            # due to change of reference for counting commits from last tag to last change of VERSION file
-            build_number += 5578
+        if GIT_VERSION_INFO.build_number >= 0
+            ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
+        else
+            println("WARNING: no build number found for pre-release version")
+            ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., "unknown"), ver.build)
         end
-        ver = VersionNumber(ver.major, ver.minor, ver.patch, ver.prerelease, (build_number,))
-    elseif GIT_VERSION_INFO.build_number != 0
+    elseif GIT_VERSION_INFO.build_number > 0
         println("WARNING: ignoring non-zero build number for VERSION")
     end
     ver

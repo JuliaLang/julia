@@ -1,8 +1,8 @@
 #!/bin/sh
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Need to be run from a julia repo clone
-# First argument (Optional) is a ref to the commit
+# Needs to be run from a julia repo clone
+# First argument (optional) is a ref to the commit
 
 gitref=${1:-HEAD}
 
@@ -32,7 +32,11 @@ else
         nb=$(expr $nb + 5578)
     fi
     if [ -n "$pre" ]; then
-        echo "$ver+$nb"
+        if [ $major = 0 -a $minor -le 5 ]; then
+            echo "$ver+$nb"
+        else
+            echo "$ver.$nb"
+        fi
     else
         echo $ver
     fi
