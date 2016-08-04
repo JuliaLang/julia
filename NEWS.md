@@ -43,6 +43,10 @@ New language features
     operator names like `Base.≤` should now use `Base.:≤` (prefixed by `@compat`
     if you need 0.4 compatibility via the `Compat` package).
 
+  * User-extensible bounds check elimination is now possible with the new
+    `@boundscheck` macro ([#14474]). This macro marks bounds checking code blocks,
+    which the compiler may remove when encountered inside an `@inbounds` call.
+
 Experimental language features
 ------------------------------
 
