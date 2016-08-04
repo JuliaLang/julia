@@ -55,6 +55,28 @@ type.
 
    Note that :func:`zip` is its own inverse: ``collect(zip(zip(a...)...)) == collect(a)``\ .
 
+   .. doctest::
+
+       julia> a = 1:5
+       1:5
+
+       julia> b = ["e","d","b","c","a"]
+       5-element Array{String,1}:
+        "e"
+        "d"
+        "b"
+        "c"
+        "a"
+
+       julia> c = zip(a,b)
+       Base.Zip2{UnitRange{Int64},Array{String,1}}(1:5,String["e","d","b","c","a"])
+
+       julia> length(c)
+       5
+
+       julia> first(c)
+       (1,"e")
+
 .. function:: enumerate(iter)
 
    .. Docstring generated from Julia source
@@ -90,11 +112,50 @@ type.
 
    An iterator that generates at most the first ``n`` elements of ``iter``\ .
 
+   .. doctest::
+
+       julia> a = 1:2:11
+       1:2:11
+
+       julia> collect(a)
+       6-element Array{Int64,1}:
+         1
+         3
+         5
+         7
+         9
+         11
+
+       julia> collect(take(a,3))
+       3-element Array{Int64,1}:
+         1
+         3
+         5
+
 .. function:: drop(iter, n)
 
    .. Docstring generated from Julia source
 
    An iterator that generates all but the first ``n`` elements of ``iter``\ .
+
+   .. doctest::
+
+       julia> a = 1:2:11
+       1:2:11
+
+       julia> collect(a)
+       6-element Array{Int64,1}:
+         1
+         3
+         5
+         7
+         9
+         11
+
+       julia> collect(drop(a,4))
+       2-element Array{Int64,1}:
+         9
+         11
 
 .. function:: cycle(iter)
 
@@ -230,11 +291,52 @@ Iterable Collections
 
    Returns a vector containing the highest index in ``b`` for each value in ``a`` that is a member of ``b`` . The output vector contains 0 wherever ``a`` is not a member of ``b``\ .
 
+   .. doctest::
+
+       julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
+
+       julia> b = ['a','b','c']
+
+       julia> indexin(a,b)
+       6-element Array{Int64,1}:
+        1
+        2
+        3
+        2
+        0
+        1
+
+       julia> indexin(b,a)
+       3-element Array{Int64,1}:
+        6
+        4
+        3
+
 .. function:: findin(a, b)
 
    .. Docstring generated from Julia source
 
    Returns the indices of elements in collection ``a`` that appear in collection ``b``\ .
+
+   .. doctest::
+
+       julia> a = collect(1:3:15)
+       5-element Array{Int64,1}:
+         1
+         4
+         7
+        10
+        13
+
+       julia> b = collect(2:4:10)
+       3-element Array{Int64,1}:
+         2
+         6
+        10
+
+       julia> findin(a,b) # 10 is the only common element
+       1-element Array{Int64,1}:
+        4
 
 .. function:: unique(itr[, dim])
 
@@ -308,6 +410,14 @@ Iterable Collections
 
    Returns the largest element in a collection.
 
+   .. doctest::
+
+       julia> maximum(-20.5:10)
+       9.5
+
+       julia> maximum([1,2,3])
+       3
+
 .. function:: maximum(A, dims)
 
    .. Docstring generated from Julia source
@@ -325,6 +435,14 @@ Iterable Collections
    .. Docstring generated from Julia source
 
    Returns the smallest element in a collection.
+
+   .. doctest::
+
+       julia> minimum(-20.5:10)
+       -20.5
+
+       julia> minimum([1,2,3])
+       1
 
 .. function:: minimum(A, dims)
 
@@ -344,6 +462,14 @@ Iterable Collections
 
    Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
 
+   .. doctest::
+
+       julia> extrema(2:10)
+       (2,10)
+
+       julia> extrema([9,pi,4.5])
+       (3.141592653589793,9.0)
+
 .. function:: extrema(A,dims) -> Array{Tuple}
 
    .. Docstring generated from Julia source
@@ -356,17 +482,32 @@ Iterable Collections
 
    Returns the index of the maximum element in a collection.
 
+   .. doctest::
+
+       julia> indmax([8,0.1,-9,pi])
+       1
+
 .. function:: indmin(itr) -> Integer
 
    .. Docstring generated from Julia source
 
    Returns the index of the minimum element in a collection.
 
+   .. doctest::
+
+       julia> indmin([8,0.1,-9,pi])
+       3
+
 .. function:: findmax(itr) -> (x, index)
 
    .. Docstring generated from Julia source
 
-   Returns the maximum element and its index.
+   Returns the maximum element and its index. The collection must not be empty.
+
+   .. doctest::
+
+       julia> findmax([8,0.1,-9,pi])
+       (8.0,1)
 
 .. function:: findmax(A, dims) -> (maxval, index)
 
@@ -378,7 +519,12 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Returns the minimum element and its index.
+   Returns the minimum element and its index. The collection must not be empty.
+
+   .. doctest::
+
+       julia> findmax([8,0.1,-9,pi])
+       (-9.0,3)
 
 .. function:: findmin(A, dims) -> (minval, index)
 
@@ -404,6 +550,11 @@ Iterable Collections
 
    Compute the maximum absolute value of a collection of values.
 
+   .. doctest::
+
+       julia> maxabs([-1, 3, 4*im])
+       4.0
+
 .. function:: maxabs(A, dims)
 
    .. Docstring generated from Julia source
@@ -421,6 +572,11 @@ Iterable Collections
    .. Docstring generated from Julia source
 
    Compute the minimum absolute value of a collection of values.
+
+   .. doctest::
+
+       julia> minabs([-1, 3, 4*im])
+       1.0
 
 .. function:: minabs(A, dims)
 
@@ -554,11 +710,21 @@ Iterable Collections
 
    Count the number of elements in ``itr`` for which predicate ``p`` returns ``true``\ .
 
+   .. doctest::
+
+       julia> count(i->(4<=i<=6), [2,3,4,5,6])
+        3
+
 .. function:: any(p, itr) -> Bool
 
    .. Docstring generated from Julia source
 
    Determine whether predicate ``p`` returns ``true`` for any elements of ``itr``\ .
+
+   .. doctest::
+
+       julia> any(i->(4<=i<=6), [3,5,7])
+       true
 
 .. function:: all(p, itr) -> Bool
 
@@ -576,6 +742,16 @@ Iterable Collections
    .. Docstring generated from Julia source
 
    Call function ``f`` on each element of iterable ``c``\ . For multiple iterable arguments, ``f`` is called elementwise. ``foreach`` should be used instead of ``map`` when the results of ``f`` are not needed, for example in ``foreach(println, array)``\ .
+
+   .. doctest::
+
+       julia> a
+       1:3:7
+
+       julia> foreach(x->println(x^2),a)
+       1
+       16
+       49
 
 .. function:: map(f, c...) -> collection
 
@@ -672,6 +848,20 @@ Iterable Collections
 
    Get the step size of a :obj:`Range` object.
 
+   .. doctest::
+
+       julia> step(1:10)
+       1
+
+       julia> step(1:2:10)
+       2
+
+       julia> step(2.5:0.3:10.9)
+       0.3
+
+       julia> step(linspace(2.5,10.9,85))
+       0.1
+
 .. function:: collect(collection)
 
    .. Docstring generated from Julia source
@@ -698,6 +888,19 @@ Iterable Collections
    .. Docstring generated from Julia source
 
    Return a copy of ``collection``\ , removing elements for which ``function`` is ``false``\ . For associative collections, the function is passed two arguments (key and value).
+
+   .. code-block:: julia
+
+       julia> a = 1:10
+       1:10
+
+       julia> filter(isodd, a)
+       5-element Array{Int64,1}:
+        1
+        3
+        5
+        7
+        9
 
 .. function:: filter!(function, collection)
 
