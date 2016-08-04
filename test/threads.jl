@@ -64,37 +64,70 @@ test_threaded_atomic_minmax(Int16(-5000),Int16(5000))
 test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
 
 function threaded_add_locked{LockT}(::Type{LockT}, x, n)
-    lock = LockT()
+    critical = LockT()
     @threads for i = 1:n
-        lock!(lock)
+        @test lock(critical) === nothing
+        @test islocked(critical)
         x = x + 1
-        unlock!(lock)
+        @test unlock(critical) === nothing
     end
+    @test !islocked(critical)
+    nentered = 0
+    nfailed = Atomic()
+    @threads for i = 1:n
+        if trylock(critical)
+            @test islocked(critical)
+            nentered += 1
+            @test unlock(critical) === nothing
+        else
+            atomic_add!(nfailed, 1)
+        end
+    end
+    @test 0 < nentered <= n
+    @test nentered + nfailed[] == n
+    @test !islocked(critical)
     return x
 end
 
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
-@test threaded_add_locked(Threads.RecursiveSpinLock, 0, 10000) == 10000
+@test threaded_add_locked(RecursiveSpinLock, 0, 10000) == 10000
 @test threaded_add_locked(Mutex, 0, 10000) == 10000
 
 # Check if the recursive lock can be locked and unlocked correctly.
-let lock = Threads.RecursiveSpinLock()
-    @test lock!(lock) == 0
-    @test lock!(lock) == 0
-    @test unlock!(lock) == 0
-    @test unlock!(lock) == 0
-    @test unlock!(lock) == 1
+let critical = RecursiveSpinLock()
+    @test !islocked(critical)
+    @test_throws AssertionError unlock(critical)
+    @test lock(critical) === nothing
+    @test islocked(critical)
+    @test lock(critical) === nothing
+    @test trylock(critical) == true
+    @test islocked(critical)
+    @test unlock(critical) === nothing
+    @test islocked(critical)
+    @test unlock(critical) === nothing
+    @test islocked(critical)
+    @test unlock(critical) === nothing
+    @test !islocked(critical)
+    @test_throws AssertionError unlock(critical)
+    @test trylock(critical) == true
+    @test islocked(critical)
+    @test unlock(critical) === nothing
+    @test !islocked(critical)
+    @test_throws AssertionError unlock(critical)
+    @test !islocked(critical)
 end
 
 # Make sure doing a GC while holding a lock doesn't cause dead lock
 # PR 14190. (This is only meaningful for threading)
 function threaded_gc_locked{LockT}(::Type{LockT})
-    lock = LockT()
+    critical = LockT()
     @threads for i = 1:20
-        lock!(lock)
+        @test lock(critical) === nothing
+        @test islocked(critical)
         gc(false)
-        unlock!(lock)
+        @test unlock(critical) === nothing
     end
+    @test !islocked(critical)
 end
 
 threaded_gc_locked(SpinLock)

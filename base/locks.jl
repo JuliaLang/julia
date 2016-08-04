@@ -1,33 +1,60 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base: _uv_hook_close, unsafe_convert
+import Base: _uv_hook_close, unsafe_convert,
+    lock, trylock, unlock, islocked
 
-export SpinLock, Mutex,
-    init_lock!, destroy_lock!, lock!, trylock!, unlock!
+export SpinLock, RecursiveSpinLock, Mutex
 
 
 ##########################################
 # Atomic Locks
 ##########################################
 
+"""
+    AbstractLock
+
+Abstract supertype describing types that
+implement the thread-safe synchronization primitives:
+`lock`, `trylock`, `unlock`, and `islocked`
+"""
 abstract AbstractLock
 
 # Test-and-test-and-set spin locks are quickest up to about 30ish
 # contending threads. If you have more contention than that, perhaps
 # a lock is the wrong way to synchronize.
+"""
+    TatasLock()
+
+See SpinLock.
+"""
 immutable TatasLock <: AbstractLock
     handle::Atomic{Int}
     TatasLock() = new(Atomic{Int}(0))
 end
 
+"""
+    SpinLock()
+
+Creates a non-reentrant lock.
+Recursive use will result in a deadlock.
+Each `lock` must be matched with an `unlock`.
+
+Test-and-test-and-set spin locks are quickest up to about 30ish
+contending threads. If you have more contention than that, perhaps
+a lock is the wrong way to synchronize.
+
+See also RecursiveSpinLock for a version that permits recursion.
+
+See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
+"""
 typealias SpinLock TatasLock
 
-function lock!(l::TatasLock)
+function lock(l::TatasLock)
     while true
         if l.handle[] == 0
             p = atomic_xchg!(l.handle, 1)
             if p == 0
-                return 0
+                return
             end
         end
         ccall(:jl_cpu_pause, Void, ())
@@ -36,39 +63,58 @@ function lock!(l::TatasLock)
     end
 end
 
-function trylock!(l::TatasLock)
+function trylock(l::TatasLock)
     if l.handle[] == 0
-        return atomic_xchg!(l.handle, 1)
+        return atomic_xchg!(l.handle, 1) == 0
     end
-    return 1
+    return false
 end
 
-function unlock!(l::TatasLock)
+function unlock(l::TatasLock)
     l.handle[] = 0
     ccall(:jl_cpu_wake, Void, ())
-    return 0
+    return
+end
+
+function islocked(l::TatasLock)
+    return l.handle[] != 0
 end
 
 
-# Recursive test-and-test-and-set lock. Slower.
+"""
+    RecursiveTatasLock()
+
+See RecursiveSpinLock.
+"""
 immutable RecursiveTatasLock <: AbstractLock
     ownertid::Atomic{Int16}
     handle::Atomic{Int}
     RecursiveTatasLock() = new(Atomic{Int16}(0), Atomic{Int}(0))
 end
 
+"""
+    RecursiveSpinLock()
+
+Creates a reentrant lock.
+The same thread can acquire the lock as many times as required.
+Each `lock` must be matched with an `unlock`.
+
+See also SpinLock for a slightly faster version.
+
+See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
+"""
 typealias RecursiveSpinLock RecursiveTatasLock
 
-function lock!(l::RecursiveTatasLock)
+function lock(l::RecursiveTatasLock)
     if l.ownertid[] == threadid()
         l.handle[] += 1
-        return 0
+        return
     end
     while true
         if l.handle[] == 0
             if atomic_cas!(l.handle, 0, 1) == 0
                 l.ownertid[] = threadid()
-                return 0
+                return
             end
         end
         ccall(:jl_cpu_pause, Void, ())
@@ -77,25 +123,24 @@ function lock!(l::RecursiveTatasLock)
     end
 end
 
-function trylock!(l::RecursiveTatasLock)
+function trylock(l::RecursiveTatasLock)
     if l.ownertid[] == threadid()
         l.handle[] += 1
-        return 0
+        return true
     end
     if l.handle[] == 0
         if atomic_cas!(l.handle, 0, 1) == 0
             l.ownertid[] = threadid()
-            return 0
+            return true
         end
-        return 1
+        return false
     end
-    return 1
+    return false
 end
 
-function unlock!(l::RecursiveTatasLock)
-    if l.ownertid[] != threadid()
-        return 1
-    end
+function unlock(l::RecursiveTatasLock)
+    @assert(l.ownertid[] == threadid(), "unlock from wrong thread")
+    @assert(l.handle[] != 0, "unlock count must match lock count")
     if l.handle[] == 1
         l.ownertid[] = 0
         l.handle[] = 0
@@ -103,7 +148,11 @@ function unlock!(l::RecursiveTatasLock)
     else
         l.handle[] -= 1
     end
-    return 0
+    return
+end
+
+function islocked(l::RecursiveTatasLock)
+    return l.handle[] != 0
 end
 
 
@@ -111,8 +160,7 @@ end
 # System Mutexes
 ##########################################
 
-# These are mutexes from libuv, which abstract pthread mutexes and
-# Windows critical sections. We're doing some error checking (and
+# These are mutexes from libuv. We're doing some error checking (and
 # paying for it in overhead), but regardless, in some situations,
 # passing a bad parameter will cause an abort.
 
@@ -121,6 +169,16 @@ end
 
 const UV_MUTEX_SIZE = ccall(:jl_sizeof_uv_mutex, Cint, ())
 
+"""
+    Mutex()
+
+These are standard system mutexes for locking critical sections of logic.
+
+On Windows, this is a critical section object,
+on pthreads, this is a `pthread_mutex_t`.
+
+See also SpinLock for a lighter-weight lock.
+"""
 type Mutex <: AbstractLock
     ownertid::Int16
     handle::Ptr{Void}
@@ -136,15 +194,17 @@ unsafe_convert(::Type{Ptr{Void}}, m::Mutex) = m.handle
 
 function _uv_hook_close(x::Mutex)
     h = x.handle
-    x.handle = C_NULL
-    ccall(:uv_mutex_destroy, Void, (Ptr{Void},), h)
-    Libc.free(h)
-    nothing
+    if h != C_NULL
+        x.handle = C_NULL
+        ccall(:uv_mutex_destroy, Void, (Ptr{Void},), h)
+        Libc.free(h)
+        nothing
+    end
 end
 
-function lock!(m::Mutex)
+function lock(m::Mutex)
     if m.ownertid == threadid()
-        return 0
+        return
     end
     # Temporary solution before we have gc transition support in codegen.
     # This could mess up gc state when we add codegen support.
@@ -152,25 +212,27 @@ function lock!(m::Mutex)
     ccall(:uv_mutex_lock, Void, (Ptr{Void},), m)
     ccall(:jl_gc_safe_leave, Void, (Int8,), gc_state)
     m.ownertid = threadid()
-    return 0
+    return
 end
 
-function trylock!(m::Mutex)
+function trylock(m::Mutex)
     if m.ownertid == threadid()
-        return 0
+        return true
     end
     r = ccall(:uv_mutex_trylock, Cint, (Ptr{Void},), m)
     if r == 0
         m.ownertid = threadid()
     end
-    return r
+    return r == 0
 end
 
-function unlock!(m::Mutex)
-    if m.ownertid != threadid()
-        return Base.UV_EPERM
-    end
+function unlock(m::Mutex)
+    @assert(m.ownertid == threadid(), "unlock from wrong thread")
     m.ownertid = 0
     ccall(:uv_mutex_unlock, Void, (Ptr{Void},), m)
-    return 0
+    return
+end
+
+function islocked(m::Mutex)
+    return m.ownertid != 0
 end
