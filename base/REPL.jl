@@ -837,18 +837,26 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             input = takebuf_string(sbuffer)
             oldpos = start(input)
             firstline = true
+            isprompt_paste = false
             while !done(input, oldpos) # loop until all lines have been executed
                 # Check if the next statement starts with "julia> ", in that case
                 # skip it. But first skip whitespace
-                c = oldpos
-                while c <= sizeof(input) && (input[c] == '\n' || input[c] == ' ' || input[c] == '\t')
-                    c = nextind(input, c)
+                while input[oldpos] in ('\n', ' ', '\t')
+                    oldpos = nextind(input, oldpos)
+                    oldpos >= sizeof(input) && return
                 end
-                n_whitespace_chars = c - oldpos
-                # Skip over prompt prefix if statement starts with it
+                # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
                 jl_prompt_len = 7
-                if c + jl_prompt_len <= sizeof(input) && input[c:c+jl_prompt_len-1] == "julia> "
-                    oldpos += jl_prompt_len + n_whitespace_chars
+                 if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == "julia> ")
+                    isprompt_paste = true
+                    oldpos += jl_prompt_len
+                # If we are prompt pasting and current statement does not begin with julia> , skip to next line
+                elseif isprompt_paste
+                    while input[oldpos] != '\n'
+                        oldpos = nextind(input, oldpos)
+                        oldpos >= sizeof(input) && return
+                    end
+                    continue
                 end
                 ast, pos = Base.syntax_deprecation_warnings(false) do
                     Base.parse(input, oldpos, raise=false)

@@ -424,7 +424,7 @@ begin
     sendrepl2("""\e[200~
             julia> type T17599; a::Int; end
 
-                function foo(julia)
+            julia> function foo(julia)
             julia> 3
                 end
 
@@ -436,21 +436,21 @@ begin
     @test T17599(3).a == 3
     @test !foo(2)
 
+    sendrepl2("""\e[200~
+            julia> goo(x) = x + 1
+            error()
+
+            julia> A = 4
+            4\e[201~
+             """)
+    wait(c)
+    @test A == 4
+    @test goo(4) == 5
+
     # Test prefix removal only active in bracket paste mode
     sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
     wait(c)
     @test A == 1
-
-    # Test shell> mode
-    mktempdir() do tmpdir
-        curr_dir = pwd()
-        write(stdin_write, ";")
-        write(stdin_write, "\e[200~shell> cd $(escape_string(tmpdir))\e[201~\n")
-        sendrepl2("tmpdirnow = pwd()")
-        wait(c)
-        @test tmpdirnow == realpath(tmpdir)
-        cd(curr_dir)
-    end
 
     # Close repl
     write(stdin_write, '\x04')
