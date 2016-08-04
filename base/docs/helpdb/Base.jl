@@ -491,19 +491,6 @@ Get a backtrace object for the current program point.
 backtrace
 
 """
-    reducedim(f, A, dims[, initial])
-
-Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the
-dimensions to reduce, and `initial` is the initial value to use in the reductions. For `+`, `*`,
-`max` and `min` the `initial` argument is optional.
-
-The associativity of the reduction is implementation-dependent; if you need a particular
-associativity, e.g. left-to-right, you should write your own loop. See documentation for
-`reduce`.
-"""
-reducedim
-
-"""
     -(x)
 
 Unary minus operator.
@@ -1104,17 +1091,6 @@ representable.
 `digits` and `base` work as for [`round`](:func:`round`).
 """
 ceil
-
-"""
-    mapslices(f, A, dims)
-
-Transform the given dimensions of array `A` using function `f`. `f` is called on each slice
-of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the
-colons go in this expression. The results are concatenated along the remaining dimensions.
-For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
-for all `i` and `j`.
-"""
-mapslices
 
 """
     issocket(path) -> Bool
@@ -2322,15 +2298,6 @@ Bessel function of the second kind of order 1, ``Y_1(x)``.
 bessely1
 
 """
-    cumprod(A, [dim])
-
-Cumulative product along a dimension `dim` (defaults to 1). See also
-[`cumprod!`](:func:`cumprod!`) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow).
-"""
-cumprod
-
-"""
     besseljx(nu, x)
 
 Scaled Bessel function of the first kind of order `nu`, ``J_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
@@ -3055,21 +3022,6 @@ block to create a new scope with copies of all variables referenced in the expre
 :@async
 
 """
-    rotr90(A)
-
-Rotate matrix `A` right 90 degrees.
-"""
-rotr90(A)
-
-"""
-    rotr90(A, k)
-
-Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
-multiple of four, this is equivalent to a `copy`.
-"""
-rotr90(A, k)
-
-"""
     readdir([dir]) -> Vector{String}
 
 Returns the files and directories in the directory `dir` (or the current working directory if not given).
@@ -3524,21 +3476,6 @@ Number of ways to choose `k` out of `n` items.
 binomial
 
 """
-    rot180(A)
-
-Rotate matrix `A` 180 degrees.
-"""
-rot180(A)
-
-"""
-    rot180(A, k)
-
-Rotate matrix `A` 180 degrees an integer `k` number of times. If `k` is even, this is
-equivalent to a `copy`.
-"""
-rot180(A, k)
-
-"""
     .<=(x, y)
     .≤(x,y)
 
@@ -3902,21 +3839,6 @@ x == div(x,y)*y + rem(x,y)
 ```
 """
 rem
-
-"""
-    rotl90(A)
-
-Rotate matrix `A` left 90 degrees.
-"""
-rotl90(A)
-
-"""
-    rotl90(A, k)
-
-Rotate matrix `A` left 90 degrees an integer `k` number of times. If `k` is zero or a
-multiple of four, this is equivalent to a `copy`.
-"""
-rotl90(A, k)
 
 """
     info(msg)
@@ -5624,14 +5546,6 @@ handle comparison to other types via promotion rules where possible.
 Base.:(==)
 
 """
-    mapreducedim(f, op, A, dims[, initial])
-
-Evaluates to the same as `reducedim(op, map(f, A), dims, f(initial))`, but is generally
-faster because the intermediate array is avoided.
-"""
-mapreducedim
-
-"""
     seekstart(s)
 
 Seek a stream to its beginning.
@@ -6414,15 +6328,6 @@ Like uperm but gets the permissions for people who neither own the file nor are 
 the group owning the file
 """
 operm
-
-"""
-    cumsum(A, [dim])
-
-Cumulative sum along a dimension `dim` (defaults to 1). See also [`cumsum!`](:func:`cumsum!`)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
-"""
-cumsum
 
 """
     rpad(string, n, p)

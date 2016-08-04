@@ -657,11 +657,28 @@ Indexing, Assignment, and Concatenation
 Array functions
 ---------------
 
-.. function:: cumprod(A, [dim])
+.. function:: cumprod(A, dim=1)
 
    .. Docstring generated from Julia source
 
    Cumulative product along a dimension ``dim`` (defaults to 1). See also :func:`cumprod!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow).
+
+   .. doctest::
+
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> cumprod(a,1)
+       2×3 Array{Int64,2}:
+        1   2   3
+        4  10  18
+
+       julia> cumprod(a,2)
+       2×3 Array{Int64,2}:
+        1   2    6
+        4  20  120
 
 .. function:: cumprod!(B, A, [dim])
 
@@ -669,11 +686,28 @@ Array functions
 
    Cumulative product of ``A`` along a dimension, storing the result in ``B``\ . The dimension defaults to 1.
 
-.. function:: cumsum(A, [dim])
+.. function:: cumsum(A, dim=1)
 
    .. Docstring generated from Julia source
 
    Cumulative sum along a dimension ``dim`` (defaults to 1). See also :func:`cumsum!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow).
+
+   .. doctest::
+
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> cumsum(a,1)
+       2×3 Array{Int64,2}:
+        1  2  3
+        5  7  9
+
+       julia> cumsum(a,2)
+       2×3 Array{Int64,2}:
+        1  3   6
+        4  9  15
 
 .. function:: cumsum!(B, A, [dim])
 
@@ -717,11 +751,40 @@ Array functions
 
    Rotate matrix ``A`` 180 degrees.
 
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rot180(a)
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
+
 .. function:: rot180(A, k)
 
    .. Docstring generated from Julia source
 
    Rotate matrix ``A`` 180 degrees an integer ``k`` number of times. If ``k`` is even, this is equivalent to a ``copy``\ .
+
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rot180(a,1)
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
+
+       julia> rot180(a,2)
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
 .. function:: rotl90(A)
 
@@ -729,11 +792,50 @@ Array functions
 
    Rotate matrix ``A`` left 90 degrees.
 
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rotl90(a)
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
+
 .. function:: rotl90(A, k)
 
    .. Docstring generated from Julia source
 
    Rotate matrix ``A`` left 90 degrees an integer ``k`` number of times. If ``k`` is zero or a multiple of four, this is equivalent to a ``copy``\ .
+
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rotl90(a,1)
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
+
+       julia> rotl90(a,2)
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
+
+       julia> rotl90(a,3)
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
+
+       julia> rotl90(a,4)
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
 .. function:: rotr90(A)
 
@@ -741,31 +843,141 @@ Array functions
 
    Rotate matrix ``A`` right 90 degrees.
 
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rotr90(a)
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
+
 .. function:: rotr90(A, k)
 
    .. Docstring generated from Julia source
 
    Rotate matrix ``A`` right 90 degrees an integer ``k`` number of times. If ``k`` is zero or a multiple of four, this is equivalent to a ``copy``\ .
 
-.. function:: reducedim(f, A, dims[, initial])
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rotr90(a,1)
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
+
+       julia> rotr90(a,2)
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
+
+       julia> rotr90(a,3)
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
+
+       julia> rotr90(a,4)
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+.. function:: reducedim(f, A, region[, v0])
 
    .. Docstring generated from Julia source
 
-   Reduce 2-argument function ``f`` along dimensions of ``A``\ . ``dims`` is a vector specifying the dimensions to reduce, and ``initial`` is the initial value to use in the reductions. For ``+``\ , ``*``\ , ``max`` and ``min`` the ``initial`` argument is optional.
+   Reduce 2-argument function ``f`` along dimensions of ``A``\ . ``region`` is a vector specifying the dimensions to reduce, and ``v0`` is the initial value to use in the reductions. For ``+``\ , ``*``\ , ``max`` and ``min`` the ``v0`` argument is optional.
 
-   The associativity of the reduction is implementation-dependent; if you need a particular associativity, e.g. left-to-right, you should write your own loop. See documentation for ``reduce``\ .
+   The associativity of the reduction is implementation-dependent; if you need a particular associativity, e.g. left-to-right, you should write your own loop. See documentation for :func:`reduce`\ .
 
-.. function:: mapreducedim(f, op, A, dims[, initial])
+   .. doctest::
+
+       julia> a = reshape(collect(1:16), (4,4))
+       4×4 Array{Int64,2}:
+        1  5   9  13
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
+
+       julia> reducedim(max, a, 2)
+       4×1 Array{Int64,2}:
+        13
+        14
+        15
+        16
+
+       julia> reducedim(max, a, 1)
+       1×4 Array{Int64,2}:
+        4  8  12  16
+
+.. function:: mapreducedim(f, op, A, region[, v0])
 
    .. Docstring generated from Julia source
 
-   Evaluates to the same as ``reducedim(op, map(f, A), dims, f(initial))``\ , but is generally faster because the intermediate array is avoided.
+   Evaluates to the same as ``reducedim(op, map(f, A), region, f(v0))``\ , but is generally faster because the intermediate array is avoided.
+
+   .. doctest::
+
+       julia> a = reshape(collect(1:16), (4,4))
+       4×4 Array{Int64,2}:
+        1  5   9  13
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
+
+       julia> mapreducedim(isodd, *, a, 1)
+       1×4 Array{Bool,2}:
+        false  false  false  false
+
+       julia> mapreducedim(isodd, |, a, 1, true)
+       1×4 Array{Bool,2}:
+        true  true  true  true
 
 .. function:: mapslices(f, A, dims)
 
    .. Docstring generated from Julia source
 
    Transform the given dimensions of array ``A`` using function ``f``\ . ``f`` is called on each slice of ``A`` of the form ``A[...,:,...,:,...]``\ . ``dims`` is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if ``dims`` is ``[1,2]`` and ``A`` is 4-dimensional, ``f`` is called on ``A[:,:,i,j]`` for all ``i`` and ``j``\ .
+
+   .. doctest::
+
+       julia> a = reshape(collect(1:16),(2,2,2,2))
+       2×2×2×2 Array{Int64,4}:
+       [:, :, 1, 1] =
+        1  3
+        2  4
+       <BLANKLINE>
+       [:, :, 2, 1] =
+        5  7
+        6  8
+       <BLANKLINE>
+       [:, :, 1, 2] =
+         9  11
+        10  12
+       <BLANKLINE>
+       [:, :, 2, 2] =
+        13  15
+        14  16
+
+       julia> mapslices(sum, a, [1,2])
+       1×1×2×2 Array{Int64,4}:
+       [:, :, 1, 1] =
+        10
+       <BLANKLINE>
+       [:, :, 2, 1] =
+        26
+       <BLANKLINE>
+       [:, :, 1, 2] =
+        42
+       <BLANKLINE>
+       [:, :, 2, 2] =
+        58
 
 .. function:: sum_kbn(A)
 
