@@ -369,6 +369,14 @@ pmax, ipmax = findmax(parent(A))
 @test amax == pmax
 @test A[iamax] == amax
 @test amax == parent(A)[ipmax]
+z = OffsetArray([0 0; 2 0; 0 0; 0 0], (-3,-1))
+I,J = findn(z)
+@test I == [-1]
+@test J == [0]
+I,J,N = findnz(z)
+@test I == [-1]
+@test J == [0]
+@test N == [2]
 
 v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
 v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
