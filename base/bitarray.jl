@@ -1011,17 +1011,15 @@ end
 Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
 
 ```jldoctest
-julia> A = bitrand(3,5)
-3×5 BitArray{2}:
-  true   true   true   true   true
- false  false  false   true  false
-  true  false  false  false   true
+julia> A = trues(2,2)
+2×2 BitArray{2}:
+ true  true
+ true  true
 
 julia> flipbits!(A)
-3×5 BitArray{2}:
- false  false  false  false  false
-  true   true   true  false   true
- false   true   true   true  false
+2×2 BitArray{2}:
+ false  false
+ false  false
 ```
 """
 function flipbits!(B::BitArray)

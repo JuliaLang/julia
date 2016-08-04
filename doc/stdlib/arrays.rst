@@ -187,7 +187,7 @@ Constructors
 
    Create an array of all zeros with the same element type and shape as ``A``\ .
 
-.. function:: ones([T::Type=Float64,] dims)
+.. function:: ones(type, dims)
 
    .. Docstring generated from Julia source
 
@@ -198,22 +198,6 @@ Constructors
    .. Docstring generated from Julia source
 
    Create an array of all ones with the same element type and shape as ``A``\ .
-
-   .. doctest::
-
-       julia> A = [1 2 3; 4 5 6; 7 8 9]
-       3×3 Array{Int64,2}:
-        1  2  3
-        4  5  6
-        7  8  9
-
-       julia> ones(A)
-       3×3 Array{Int64,2}:
-        1  1  1
-        1  1  1
-        1  1  1
-
-   Note the difference from :func:`eye`\ .
 
 .. function:: trues(dims)
 
@@ -1232,17 +1216,15 @@ to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively
 
    .. doctest::
 
-       julia> A = bitrand(3,5)
-       3×5 BitArray{2}:
-         true   true   true   true   true
-        false  false  false   true  false
-         true  false  false  false   true
+       julia> A = trues(2,2)
+       2×2 BitArray{2}:
+        true  true
+        true  true
 
        julia> flipbits!(A)
-       3×5 BitArray{2}:
-        false  false  false  false  false
-         true   true   true  false   true
-        false   true   true   true  false
+       2×2 BitArray{2}:
+        false  false
+        false  false
 
 .. function:: rol!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
@@ -1422,17 +1404,17 @@ dense counterparts. The following functions are specific to sparse arrays.
 
        julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
        4×4 sparse matrix with 4 Float64 nonzero entries:
-           [4, 1]  =  2.0
-           [1, 2]  =  5.0
-           [3, 3]  =  3.0
-           [2, 4]  =  4.0
+               [4, 1]  =  2.0
+               [1, 2]  =  5.0
+               [3, 3]  =  3.0
+               [2, 4]  =  4.0
 
        julia> spones(A)
        4×4 sparse matrix with 4 Float64 nonzero entries:
-           [4, 1]  =  1.0
-           [1, 2]  =  1.0
-           [3, 3]  =  1.0
-           [2, 4]  =  1.0
+               [4, 1]  =  1.0
+               [1, 2]  =  1.0
+               [3, 3]  =  1.0
+               [2, 4]  =  1.0
 
    Note the difference from :func:`speye`\ .
 
@@ -1452,17 +1434,17 @@ dense counterparts. The following functions are specific to sparse arrays.
 
        julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
        4×4 sparse matrix with 4 Float64 nonzero entries:
-           [4, 1]  =  2.0
-           [1, 2]  =  5.0
-           [3, 3]  =  3.0
-           [2, 4]  =  4.0
+               [4, 1]  =  2.0
+               [1, 2]  =  5.0
+               [3, 3]  =  3.0
+               [2, 4]  =  4.0
 
        julia> speye(A)
        4×4 sparse matrix with 4 Float64 nonzero entries:
-           [1, 1]  =  1.0
-           [2, 2]  =  1.0
-           [3, 3]  =  1.0
-           [4, 4]  =  1.0
+               [1, 1]  =  1.0
+               [2, 2]  =  1.0
+               [3, 3]  =  1.0
+               [4, 4]  =  1.0
 
    Note the difference from :func:`spones`\ .
 
@@ -1476,14 +1458,14 @@ dense counterparts. The following functions are specific to sparse arrays.
 
        julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
        5×5 sparse matrix with 8 Int64 nonzero entries:
-           [2, 1]  =  1
-           [1, 2]  =  4
-           [3, 2]  =  2
-           [2, 3]  =  3
-           [4, 3]  =  3
-           [3, 4]  =  2
-           [5, 4]  =  4
-           [4, 5]  =  1
+               [2, 1]  =  1
+               [1, 2]  =  4
+               [3, 2]  =  2
+               [2, 3]  =  3
+               [4, 3]  =  3
+               [3, 4]  =  2
+               [5, 4]  =  4
+               [4, 5]  =  1
 
 .. function:: sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
 
