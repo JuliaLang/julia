@@ -795,7 +795,7 @@ function findn(A::AbstractMatrix)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
     count = 1
-    for j=1:size(A,2), i=1:size(A,1)
+    for j=indices(A,2), i=indices(A,1)
         if A[i,j] != 0
             I[count] = i
             J[count] = j
@@ -812,7 +812,7 @@ function findnz{T}(A::AbstractMatrix{T})
     NZs = Array{T,1}(nnzA)
     count = 1
     if nnzA > 0
-        for j=1:size(A,2), i=1:size(A,1)
+        for j=indices(A,2), i=indices(A,1)
             Aij = A[i,j]
             if Aij != 0
                 I[count] = i
