@@ -217,6 +217,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
 
 void jl_init_timing(void);
 void jl_destroy_timing(void);
+void jl_uv_call_close_callback(jl_value_t *val);
 
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
@@ -270,6 +271,13 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                     continue;
                 }
                 switch(handle->type) {
+                case UV_PROCESS:
+                    // cause Julia to forget about the Process object
+                    if (handle->data)
+                        jl_uv_call_close_callback((jl_value_t*)handle->data);
+                    // and make libuv think it is already dead
+                    ((uv_process_t*)handle)->pid = 0;
+                    // fall-through
                 case UV_TTY:
                 case UV_UDP:
                 case UV_TCP:
@@ -283,7 +291,6 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 case UV_PREPARE:
                 case UV_CHECK:
                 case UV_SIGNAL:
-                case UV_PROCESS:
                 case UV_FILE:
                     // These will be shutdown as appropriate by jl_close_uv
                     jl_close_uv(handle);
