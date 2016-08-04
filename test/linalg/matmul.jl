@@ -320,10 +320,10 @@ end
 immutable RootInt
     i::Int
 end
-import Base: *, transpose
+import Base: *, transpose, promote_op
 (*)(x::RootInt, y::RootInt) = x.i*y.i
 transpose(x::RootInt) = x
-@test Base.promote_op(*, RootInt, RootInt) === Int
+promote_op(::typeof(*), ::Type{RootInt}, ::Type{RootInt}) = Int
 
 a = [RootInt(3)]
 C = [0]

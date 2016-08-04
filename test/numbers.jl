@@ -2791,21 +2791,21 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
     for S in types
         for op in (+, -)
-            T = @inferred Base._promote_op(op, S)
+            T = @inferred Base.promote_op(op, S)
             t = @inferred op(one(S))
             @test T === typeof(t)
         end
-
-        for R in types
-            for op in (+, -, *, /, ^)
-                T = @inferred Base._promote_op(op, S, R)
-                t = @inferred op(one(S), one(R))
-                @test T === typeof(t)
-            end
-        end
     end
 
-    @test @inferred(Base._promote_op(!, Bool)) === Bool
+    @test @inferred(Base.promote_op(!, Bool)) === Bool
+
+    for R in types, S in types
+        for op in (+, -, *, /, ^)
+            T = @inferred Base.promote_op(op, R, S)
+            t = @inferred op(one(R), one(S))
+            @test T === typeof(t)
+        end
+    end
 end
 
 let types = (Base.BitInteger_types..., BigInt, Bool,
@@ -2813,23 +2813,23 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Float16, Float32, Float64, BigFloat)
     for S in types, T in types
         for op in (<, >, <=, >=, (==))
-            @test @inferred(Base._promote_op(op, S, T)) === Bool
+            @test @inferred(Base.promote_op(op, S, T)) === Bool
         end
     end
 end
 
 let types = (Base.BitInteger_types..., BigInt, Bool)
     for S in types
-        T = @inferred Base._promote_op(~, S)
+        T = @inferred Base.promote_op(~, S)
         t = @inferred ~one(S)
         @test T === typeof(t)
+    end
 
-        for R in types
-            for op in (&, |, <<, >>, (>>>), %, ÷)
-                T = @inferred Base._promote_op(op, S, R)
-                t = @inferred op(one(S), one(R))
-                @test T === typeof(t)
-            end
+    for S in types, T in types
+        for op in (&, |, <<, >>, (>>>), %, ÷)
+            T = @inferred Base.promote_op(op, S, T)
+            t = @inferred op(one(S), one(T))
+            @test T === typeof(t)
         end
     end
 end

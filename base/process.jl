@@ -289,7 +289,7 @@ type Process <: AbstractPipe
                    typemin(fieldtype(Process, :termsignal)),
                    false, Condition(), false, Condition())
         finalizer(this, uvfinalize)
-        return this
+        this
     end
 end
 pipe_reader(p::Process) = p.out
@@ -325,12 +325,9 @@ function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
 end
 
 function uvfinalize(proc::Process)
-    if proc.handle != C_NULL
-        disassociate_julia_struct(proc.handle)
-        ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
-        proc.handle = C_NULL
-    end
-    nothing
+    proc.handle != C_NULL && ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
+    disassociate_julia_struct(proc)
+    proc.handle = C_NULL
 end
 
 function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
@@ -339,9 +336,7 @@ function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
-    if isa(proc.exitcb, Function)
-        proc.exitcb(proc, exit_status, termsignal)
-    end
+    if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     notify(proc.exitnotify)
     nothing
@@ -349,9 +344,7 @@ end
 
 function _uv_hook_close(proc::Process)
     proc.handle = C_NULL
-    if isa(proc.closecb, Function)
-        proc.closecb(proc)
-    end
+    if isa(proc.closecb, Function) proc.closecb(proc) end
     notify(proc.closenotify)
 end
 

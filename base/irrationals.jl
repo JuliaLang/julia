@@ -10,6 +10,13 @@ promote_rule{s}(::Type{Irrational{s}}, ::Type{Float32}) = Float32
 promote_rule{s,t}(::Type{Irrational{s}}, ::Type{Irrational{t}}) = Float64
 promote_rule{s,T<:Number}(::Type{Irrational{s}}, ::Type{T}) = promote_type(Float64,T)
 
+promote_op{S<:Irrational,T<:Irrational}(op::Any, ::Type{S}, ::Type{T}) =
+    promote_op(op, Float64, Float64)
+promote_op{S<:Irrational,T<:Number}(op::Any, ::Type{S}, ::Type{T}) =
+    promote_op(op, Float64, T)
+promote_op{S<:Irrational,T<:Number}(op::Any, ::Type{T}, ::Type{S}) =
+    promote_op(op, T, Float64)
+
 convert(::Type{AbstractFloat}, x::Irrational) = Float64(x)
 convert(::Type{Float16}, x::Irrational) = Float16(Float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::Irrational) = convert(Complex{T}, convert(T,x))
