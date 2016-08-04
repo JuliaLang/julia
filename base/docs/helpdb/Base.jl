@@ -2975,14 +2975,6 @@ lower-case. Returns a `String`.
 bytes2hex
 
 """
-    unlock(l::ReentrantLock)
-
-Releases ownership of the lock by the current task. If the lock had been acquired before, it
-just decrements an internal counter and returns immediately.
-"""
-unlock
-
-"""
     BigFloat(x)
 
 Create an arbitrary precision floating point number. `x` may be an `Integer`, a `Float64` or
@@ -3705,14 +3697,6 @@ Return an iterator over all keys in a collection. `collect(keys(d))` returns an 
 keys
 
 """
-    ReentrantLock()
-
-Creates a reentrant lock. The same task can acquire the lock as many times as required. Each
-lock must be matched with an unlock.
-"""
-ReentrantLock
-
-"""
     real(z)
 
 Return the real part of the complex number `z`.
@@ -4360,15 +4344,6 @@ string. A character is classified as alphabetic if it belongs to the Unicode gen
 category Letter, i.e. a character whose category code begins with 'L'.
 """
 isalpha
-
-"""
-    lock(l::ReentrantLock)
-
-Associates `l` with the current task. If `l` is already locked by a different task, waits
-for it to become available. The same task can acquire the lock multiple times. Each "lock"
-must be matched by an "unlock"
-"""
-lock
 
 """
     transpose(A)
