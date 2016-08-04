@@ -1438,35 +1438,8 @@ end
 """
     rol!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
-Performs a left rotation operation on `src` and put the result into `dest`.
-
-```jldoctest
-julia> a = bitrand(5)
-5-element BitArray{1}:
- false
- false
-  true
-  true
-  true
-
-julia> b = falses(5);
-
-julia> rol!(b,a,2)
-5-element BitArray{1}:
-  true
-  true
-  true
- false
- false
-
-julia> rol!(b,a,3)
-5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
-```
+Performs a left rotation operation on `src` and puts the result into `dest`.
+`i` controls how far to rotate each bit.
 """
 function rol!(dest::BitVector, src::BitVector, i::Integer)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
@@ -1483,24 +1456,8 @@ end
 """
     rol!(B::BitVector, i::Integer) -> BitVector
 
-Performs a left rotation operation on `B`.
-
-```jldoctest
-julia> a = bitrand(5)
-5-element BitArray{1}:
-  true
- false
- false
-  true
-  true
-
-julia> rol!(a,4)
-5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
+Performs a left rotation operation in-place on `B`.
+`i` controls how far to rotate each bit.
 """
 function rol!(B::BitVector, i::Integer)
     return rol!(B, B, i)
@@ -1509,8 +1466,43 @@ end
 """
     rol(B::BitVector, i::Integer) -> BitVector
 
-Performs a left rotation operation without modifying `B`.
+Performs a left rotation operation, returning a new `BitVector`.
+`i` controls how far to rotate each bit.
 See also [`rol!`](:func:`rol!`).
+
+```jldoctest
+julia> A = BitArray([true, true, false, false, true])
+5-element BitArray{1}:
+  true
+  true
+ false
+ false
+  true
+
+julia> rol(A,1)
+5-element BitArray{1}:
+  true
+ false
+ false
+  true
+  true
+
+julia> rol(A,2)
+5-element BitArray{1}:
+ false
+ false
+  true
+  true
+  true
+
+julia> rol(A,5)
+5-element BitArray{1}:
+  true
+  true
+ false
+ false
+  true
+```
 """
 function rol(B::BitVector, i::Integer)
     return rol!(similar(B), B, i)
@@ -1519,27 +1511,8 @@ end
 """
     ror!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
-Performs a right rotation operation on `src` and put the result into `dest`.
-
-```jldoctest
-julia> a = bitrand(5)
-5-element BitArray{1}:
- false
- false
-  true
-  true
-  true
-
-julia> b = falses(5);
-
-julia> ror!(b,a,2)
-5-element BitArray{1}:
-  true
-  true
- false
- false
-  true
-```
+Performs a right rotation operation on `src` and puts the result into `dest`.
+`i` controls how far to rotate each bit.
 """
 function ror!(dest::BitVector, src::BitVector, i::Integer)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
@@ -1556,25 +1529,8 @@ end
 """
     ror!(B::BitVector, i::Integer) -> BitVector
 
-Performs a right rotation operation on `B`.
-
-```jldoctest
-julia> a = bitrand(5)
-5-element BitArray{1}:
- false
-  true
- false
-  true
- false
-
-julia> ror!(a,3)
-5-element BitArray{1}:
- false
-  true
- false
- false
-  true
-```
+Performs a right rotation operation in-place on `B`.
+`i` controls how far to rotate each bit.
 """
 function ror!(B::BitVector, i::Integer)
     return ror!(B, B, i)
@@ -1583,8 +1539,43 @@ end
 """
     ror(B::BitVector, i::Integer) -> BitVector
 
-Performs a right rotation operation without modifying `B`.
+Performs a right rotation operation on `B`, returning a new `BitVector`.
+`i` controls how far to rotate each bit.
 See also [`ror!`](:func:`ror!`).
+
+```jldoctest
+julia> A = BitArray([true, true, false, false, true])
+5-element BitArray{1}:
+  true
+  true
+ false
+ false
+  true
+
+julia> ror(A,1)
+5-element BitArray{1}:
+  true
+  true
+  true
+ false
+ false
+
+julia> ror(A,2)
+5-element BitArray{1}:
+ false
+  true
+  true
+  true
+ false
+
+julia> ror(A,5)
+5-element BitArray{1}:
+  true
+  true
+ false
+ false
+  true
+```
 """
 function ror(B::BitVector, i::Integer)
     return ror!(similar(B), B, i)

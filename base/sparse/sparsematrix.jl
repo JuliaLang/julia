@@ -1214,27 +1214,19 @@ Create a sparse array with the same structure as that of `S`, but with every non
 element having the value `1.0`.
 
 ```jldoctest
-julia> A = sprand(5,6,0.2)
-5×6 sparse matrix with 8 Float64 nonzero entries:
-    [2, 1]  =  0.639431
-    [5, 1]  =  0.881209
-    [3, 2]  =  0.355834
-    [4, 2]  =  0.904768
-    [2, 3]  =  0.760943
-    [3, 5]  =  0.525942
-    [4, 5]  =  0.936283
-    [5, 5]  =  0.432364
+julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
+4×4 sparse matrix with 4 Float64 nonzero entries:
+    [4, 1]  =  2.0
+    [1, 2]  =  5.0
+    [3, 3]  =  3.0
+    [2, 4]  =  4.0
 
 julia> spones(A)
-5×6 sparse matrix with 8 Float64 nonzero entries:
-    [2, 1]  =  1.0
-    [5, 1]  =  1.0
-    [3, 2]  =  1.0
-    [4, 2]  =  1.0
-    [2, 3]  =  1.0
-    [3, 5]  =  1.0
-    [4, 5]  =  1.0
-    [5, 5]  =  1.0
+4×4 sparse matrix with 4 Float64 nonzero entries:
+    [4, 1]  =  1.0
+    [1, 2]  =  1.0
+    [3, 3]  =  1.0
+    [2, 4]  =  1.0
 ```
 
 Note the difference from [`speye`](:func:`speye`).
@@ -1266,28 +1258,22 @@ speye(m::Integer, n::Integer) = speye(Float64, m, n)
 """
     speye(S)
 
-Create a sparse identity matrix with the same structure as that of `S`.
+Create a sparse identity matrix with the same size as that of `S`.
 
 ```jldoctest
-julia> A = sprand(5,6,0.2)
-5×6 sparse matrix with 9 Float64 nonzero entries:
-    [1, 1]  =  0.102874
-    [2, 1]  =  0.780098
-    [1, 2]  =  0.610378
-    [1, 3]  =  0.422308
-    [3, 3]  =  0.546398
-    [4, 3]  =  0.43053
-    [5, 3]  =  0.909283
-    [2, 4]  =  0.391321
-    [5, 6]  =  0.97785
+julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
+4×4 sparse matrix with 4 Float64 nonzero entries:
+    [4, 1]  =  2.0
+    [1, 2]  =  5.0
+    [3, 3]  =  3.0
+    [2, 4]  =  4.0
 
 julia> speye(A)
-5×6 sparse matrix with 5 Float64 nonzero entries:
+4×4 sparse matrix with 4 Float64 nonzero entries:
     [1, 1]  =  1.0
     [2, 2]  =  1.0
     [3, 3]  =  1.0
     [4, 4]  =  1.0
-    [5, 5]  =  1.0
 ```
 
 Note the difference from [`spones`](:func:`spones`).
@@ -3513,16 +3499,16 @@ one diagonal, `B` can be a vector (instead of a tuple) and `d` can be the diagon
 of the resulting sparse matrix.
 
 ```jldoctest
-julia> spdiagm((rand(4), rand(4)), (-1, 1))
-5×5 sparse matrix with 8 Float64 nonzero entries:
-    [2, 1]  =  0.962245
-    [1, 2]  =  0.919341
-    [3, 2]  =  0.59239
-    [2, 3]  =  0.628924
-    [4, 3]  =  0.694011
-    [3, 4]  =  0.0660923
-    [5, 4]  =  0.494409
-    [4, 5]  =  0.54209
+julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
+5×5 sparse matrix with 8 Int64 nonzero entries:
+    [2, 1]  =  1
+    [1, 2]  =  4
+    [3, 2]  =  2
+    [2, 3]  =  3
+    [4, 3]  =  3
+    [3, 4]  =  2
+    [5, 4]  =  4
+    [4, 5]  =  1
 ```
 """
 function spdiagm(B, d, m::Integer, n::Integer)
