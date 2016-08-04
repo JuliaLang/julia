@@ -287,7 +287,12 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
         @test_throws ArgumentError write(out, "now closed error")
         @test isreadable(out)
         @test !iswritable(out)
-        is_windows() && Base.process_events(false) # should be enough steps to fully propagate EOF now
+        if is_windows()
+            # WINNT kernel does not provide a fast mechanism for async propagation
+            # of EOF for a blocking stream, so just wait for it to catch up.
+            # This shouldn't take much more than 32ms.
+            Base.wait_close(out)
+        end
         @test !isopen(out)
     end
     wait(ready) # wait for writer task to be ready before using `out`
