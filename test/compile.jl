@@ -31,6 +31,17 @@ try
                   include_dependency("bar.jl")
               end
 
+              # test for creation of some reasonably complicated type
+              immutable MyType{T} end
+              const t17809s = Any[
+                    Tuple{
+                        Type{Ptr{MyType{i}}},
+                        Array{Ptr{MyType{MyType{:sym}()}}(0), 0},
+                        Val{Complex{Int}(1, 2)},
+                        Val{3},
+                        Val{nothing}}
+                    for i = 0:25]
+
               # test that types and methods get reconnected correctly
               # issue 16529 (adding a method to a type with no instances)
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
@@ -110,6 +121,14 @@ try
         @test Vector{Foo.NominalValue{Int32, Int64}}() == 3
         @test Vector{Foo.NominalValue{UInt, UInt}}() == 4
         @test Vector{Foo.NominalValue{Int, Int}}() == 5
+        @test all(i -> Foo.t17809s[i + 1] ===
+            Tuple{
+                Type{Ptr{Foo.MyType{i}}},
+                Array{Ptr{Foo.MyType{Foo.MyType{:sym}()}}(0), 0},
+                Val{Complex{Int}(1, 2)},
+                Val{3},
+                Val{nothing}},
+            0:25)
     end
 
     Baz_file = joinpath(dir, "Baz.jl")
