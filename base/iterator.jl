@@ -69,6 +69,7 @@ end
 zip(a) = Zip1(a)
 length(z::Zip1) = length(z.a)
 size(z::Zip1) = size(z.a)
+indices(z::Zip1) = indices(z.a)
 eltype{I}(::Type{Zip1{I}}) = Tuple{eltype(I)}
 @inline start(z::Zip1) = start(z.a)
 @inline function next(z::Zip1, st)
@@ -87,6 +88,7 @@ end
 zip(a, b) = Zip2(a, b)
 length(z::Zip2) = _min_length(z.a, z.b, iteratorsize(z.a), iteratorsize(z.b))
 size(z::Zip2) = promote_shape(size(z.a), size(z.b))
+indices(z::Zip2) = promote_shape(indices(z.a), indices(z.b))
 eltype{I1,I2}(::Type{Zip2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
 @inline start(z::Zip2) = (start(z.a), start(z.b))
 @inline function next(z::Zip2, st)
@@ -137,6 +139,7 @@ julia> first(c)
 zip(a, b, c...) = Zip(a, zip(b, c...))
 length(z::Zip) = _min_length(z.a, z.z, iteratorsize(z.a), iteratorsize(z.z))
 size(z::Zip) = promote_shape(size(z.a), size(z.z))
+indices(z::Zip) = promote_shape(indices(z.a), indices(z.z))
 tuple_type_cons{S}(::Type{S}, ::Type{Union{}}) = Union{}
 function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
     @_pure_meta
@@ -430,8 +433,10 @@ iteratoreltype{O}(::Type{Repeated{O}}) = HasEltype()
 abstract AbstractProdIterator
 
 length(p::AbstractProdIterator) = prod(size(p))
+_length(p::AbstractProdIterator) = prod(map(unsafe_length, indices(p)))
 size(p::AbstractProdIterator) = _prod_size(p.a, p.b, iteratorsize(p.a), iteratorsize(p.b))
-ndims(p::AbstractProdIterator) = length(size(p))
+indices(p::AbstractProdIterator) = _prod_indices(p.a, p.b, iteratorsize(p.a), iteratorsize(p.b))
+ndims(p::AbstractProdIterator) = length(indices(p))
 
 # generic methods to handle size of Prod* types
 _prod_size(a, ::HasShape)  = size(a)
@@ -445,6 +450,17 @@ _prod_size(a, b, ::HasShape,  ::HasShape)   = (size(a)..., size(b)...)
 _prod_size(a, b, A, B) =
     throw(ArgumentError("Cannot construct size for objects of types $(typeof(a)) and $(typeof(b))"))
 
+_prod_indices(a, ::HasShape)  = indices(a)
+_prod_indices(a, ::HasLength) = (OneTo(length(a)), )
+_prod_indices(a, A) =
+    throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
+_prod_indices(a, b, ::HasLength, ::HasLength)  = (OneTo(length(a)),  OneTo(length(b)))
+_prod_indices(a, b, ::HasLength, ::HasShape)   = (OneTo(length(a)),  indices(b)...)
+_prod_indices(a, b, ::HasShape,  ::HasLength)  = (indices(a)..., OneTo(length(b)))
+_prod_indices(a, b, ::HasShape,  ::HasShape)   = (indices(a)..., indices(b)...)
+_prod_indices(a, b, A, B) =
+    throw(ArgumentError("Cannot construct indices for objects of types $(typeof(a)) and $(typeof(b))"))
+
 # one iterator
 immutable Prod1{I} <: AbstractProdIterator
     a::I
@@ -453,6 +469,7 @@ product(a) = Prod1(a)
 
 eltype{I}(::Type{Prod1{I}}) = Tuple{eltype(I)}
 size(p::Prod1) = _prod_size(p.a, iteratorsize(p.a))
+indices(p::Prod1) = _prod_indices(p.a, iteratorsize(p.a))
 
 @inline start(p::Prod1) = start(p.a)
 @inline function next(p::Prod1, st)
