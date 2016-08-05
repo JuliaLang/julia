@@ -120,11 +120,9 @@ end
 let eps = 1//BigInt(2)^7, one_eps = 1+eps,
     eps16 = Float16(Float32(eps)), one_eps16 = Float16(Float32(one_eps))
     @test eps16 == Float16(Float32(eps))
-    # Currently broken in Julia -- enable when "rationalize" is fixed;
-    # see <https://github.com/JuliaLang/julia/issues/9897>
-    # @test rationalize(BigInt, eps16, tol=0) == eps
+    @test rationalize(BigInt, eps16, tol=0) == eps
     @test one_eps16 == Float16(Float32(one_eps))
-    # @test rationalize(BigInt, one_eps16, tol=0) == one_eps
+    @test rationalize(BigInt, one_eps16, tol=0) == one_eps
     @test one_eps16 * one_eps16 - 1 != Float16(Float32(one_eps * one_eps - 1))
     @test (fma(one_eps16, one_eps16, -1) ==
            Float16(Float32(one_eps * one_eps - 1)))
