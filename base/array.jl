@@ -667,6 +667,7 @@ function hcat{T}(V::Vector{T}...)
     end
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
+
 function vcat{T}(arrays::Vector{T}...)
     n = 0
     for a in arrays
@@ -860,7 +861,7 @@ Returns the minimum element and its index.
 The collection must not be empty.
 
 ```jldoctest
-julia> findmax([8,0.1,-9,pi])
+julia> findmin([8,0.1,-9,pi])
 (-9.0,3)
 ```
 """
@@ -915,7 +916,7 @@ vector contains 0 wherever `a` is not a member of `b`.
 ```jldoctest
 julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
 
-julia> b = ['a','b','c']
+julia> b = ['a','b','c'];
 
 julia> indexin(a,b)
 6-element Array{Int64,1}:

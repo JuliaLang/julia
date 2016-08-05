@@ -437,11 +437,74 @@ Indexing, Assignment, and Concatenation
 
    Concatenate along dimension 1.
 
+   .. doctest::
+
+       julia> a = [1 2 3 4 5]
+       1×5 Array{Int64,2}:
+        1  2  3  4  5
+
+       julia> b = [6 7 8 9 10; 11 12 13 14 15]
+       2×5 Array{Int64,2}:
+         6   7   8   9  10
+        11  12  13  14  15
+
+       julia> vcat(a,b)
+       3×5 Array{Int64,2}:
+         1   2   3   4   5
+         6   7   8   9  10
+        11  12  13  14  15
+
+       julia> c = ([1 2 3], [4 5 6])
+       (
+       [1 2 3],
+       <BLANKLINE>
+       [4 5 6])
+
+       julia> vcat(c...)
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
 .. function:: hcat(A...)
 
    .. Docstring generated from Julia source
 
    Concatenate along dimension 2.
+
+   .. doctest::
+
+       julia> a = [1; 2; 3; 4; 5]
+       5-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
+
+       julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
+       5×2 Array{Int64,2}:
+         6   7
+         8   9
+        10  11
+        12  13
+        14  15
+
+       julia> hcat(a,b)
+       5×3 Array{Int64,2}:
+        1   6   7
+        2   8   9
+        3  10  11
+        4  12  13
+        5  14  15
+
+       julia> c = ([1; 2; 3], [4; 5; 6])
+       ([1,2,3],[4,5,6])
+
+       julia> hcat(c...)
+       3×2 Array{Int64,2}:
+        1  4
+        2  5
+        3  6
 
 .. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
@@ -484,11 +547,46 @@ Indexing, Assignment, and Concatenation
 
    Reverse ``A`` in dimension ``d``\ .
 
-.. function:: circshift(A,shifts)
+   .. doctest::
+
+       julia> b = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> flipdim(b,2)
+       2×2 Array{Int64,2}:
+        2  1
+        4  3
+
+.. function:: circshift(A, shifts)
 
    .. Docstring generated from Julia source
 
    Circularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.
+
+   .. doctest::
+
+       julia> b = reshape(collect(1:16), (4,4))
+       4×4 Array{Int64,2}:
+        1  5   9  13
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
+
+       julia> circshift(b, [0,2])
+       4×4 Array{Int64,2}:
+         9  13  1  5
+        10  14  2  6
+        11  15  3  7
+        12  16  4  8
+
+       julia> circshift(b, [-1,0])
+       4×4 Array{Int64,2}:
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
+        1  5   9  13
 
 .. function:: find(A)
 
@@ -608,13 +706,43 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ .
+   Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ . ``size(A,i)`` must equal 1 for all ``i`` in ``dims``\ .
 
-.. function:: vec(Array) -> Vector
+   .. doctest::
+
+       julia> a = reshape(collect(1:4),(2,2,1,1))
+       2×2×1×1 Array{Int64,4}:
+       [:, :, 1, 1] =
+        1  3
+        2  4
+
+       julia> squeeze(a,3)
+       2×2×1 Array{Int64,3}:
+       [:, :, 1] =
+        1  3
+        2  4
+
+.. function:: vec(a::AbstractArray) -> Vector
 
    .. Docstring generated from Julia source
 
-   Vectorize an array using column-major convention.
+   Reshape array ``a`` as a one-dimensional column vector.
+
+   .. doctest::
+
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> vec(a)
+       6-element Array{Int64,1}:
+        1
+        4
+        2
+        5
+        3
+        6
 
 .. function:: promote_shape(s1, s2)
 
