@@ -554,6 +554,22 @@ function insert!{T}(a::Array{T,1}, i::Integer, item)
     return a
 end
 
+"""
+    deleteat!(a::Vector, i::Integer)
+
+Remove the item at the given `i` and return the modified `a`. Subsequent items
+are shifted to fill the resulting gap.
+
+```jldoctest
+julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
+5-element Array{Int64,1}:
+ 6
+ 4
+ 3
+ 2
+ 1
+```
+"""
 deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
 
 function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
@@ -562,6 +578,25 @@ function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
     return a
 end
 
+"""
+    deleteat!(a::Vector, inds)
+
+Remove the items at the indices given by `inds`, and return the modified `a`.
+Subsequent items are shifted to fill the resulting gap. `inds` must be sorted and unique.
+
+```jldoctest
+julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
+3-element Array{Int64,1}:
+ 5
+ 3
+ 1
+
+julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
+ERROR: ArgumentError: indices must be unique and sorted
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:576
+ ...
+```
+"""
 function deleteat!(a::Vector, inds)
     n = length(a)
     s = start(inds)
@@ -732,7 +767,24 @@ end
 
 ## find ##
 
-# returns the index of the next non-zero element, or 0 if all zeros
+"""
+    findnext(A, i::Integer)
+
+Find the next linear index >= `i` of a non-zero element of `A`, or `0` if not found.
+
+```jldoctest
+julia> A = [0 0; 1 0]
+2×2 Array{Int64,2}:
+ 0  0
+ 1  0
+
+julia> findnext(A,1)
+2
+
+julia> findnext(A,3)
+0
+```
+"""
 function findnext(A, start::Integer)
     for i = start:length(A)
         if A[i] != 0
@@ -741,9 +793,43 @@ function findnext(A, start::Integer)
     end
     return 0
 end
+
+"""
+    findfirst(A)
+
+Return the linear index of the first non-zero value in `A` (determined by `A[i]!=0`).
+Returns `0` if no such value is found.
+
+```jldoctest
+julia> A = [0 0; 1 0]
+2×2 Array{Int64,2}:
+ 0  0
+ 1  0
+
+julia> findfirst(A)
+2
+```
+"""
 findfirst(A) = findnext(A, 1)
 
-# returns the index of the next matching element
+"""
+    findnext(A, v, i::Integer)
+
+Find the next linear index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
+
+```jldoctest
+julia> A = [1 4; 2 2]
+2×2 Array{Int64,2}:
+ 1  4
+ 2  2
+
+julia> findnext(A,4,4)
+0
+
+julia> findnext(A,4,3)
+3
+```
+"""
 function findnext(A, v, start::Integer)
     for i = start:length(A)
         if A[i] == v
@@ -752,9 +838,45 @@ function findnext(A, v, start::Integer)
     end
     return 0
 end
+"""
+    findfirst(A, v)
+
+Return the linear index of the first element equal to `v` in `A`.
+Returns `0` if `v` is not found.
+
+```jldoctest
+julia> A = [4 6; 2 2]
+2×2 Array{Int64,2}:
+ 4  6
+ 2  2
+
+julia> findfirst(A,2)
+2
+
+julia> findfirst(A,3)
+0
+```
+"""
 findfirst(A, v) = findnext(A, v, 1)
 
-# returns the index of the next element for which the function returns true
+"""
+    findnext(predicate::Function, A, i::Integer)
+
+Find the next linear index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
+
+```jldoctest
+julia> A = [1 4; 2 2]
+2×2 Array{Int64,2}:
+ 1  4
+ 2  2
+
+julia> findnext(isodd, A, 1)
+1
+
+julia> findnext(isodd, A, 2)
+0
+```
+"""
 function findnext(testf::Function, A, start::Integer)
     for i = start:length(A)
         if testf(A[i])
@@ -763,35 +885,193 @@ function findnext(testf::Function, A, start::Integer)
     end
     return 0
 end
+
+"""
+    findfirst(predicate::Function, A)
+
+Return the linear index of the first element of `A` for which `predicate` returns `true`.
+Returns `0` if there is no such element.
+
+```jldoctest
+julia> A = [1 4; 2 2]
+2×2 Array{Int64,2}:
+ 1  4
+ 2  2
+
+julia> findfirst(iseven, A)
+2
+
+julia> findfirst(x -> x>10, A)
+0
+```
+"""
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
-# returns the index of the previous non-zero element, or 0 if all zeros
+"""
+    findprev(A, i::Integer)
+
+Find the previous linear index <= `i` of a non-zero element of `A`, or `0` if not found.
+
+```jldoctest
+julia> A = [0 0; 1 2]
+2×2 Array{Int64,2}:
+ 0  0
+ 1  2
+
+julia> findprev(A,2)
+2
+
+julia> findprev(A,1)
+0
+```
+"""
 function findprev(A, start::Integer)
     for i = start:-1:1
         A[i] != 0 && return i
     end
     return 0
 end
+
+"""
+    findlast(A)
+
+Return the linear index of the last non-zero value in `A` (determined by `A[i]!=0`).
+Returns `0` if there is no non-zero value in `A`.
+
+```jldoctest
+julia> A = [1 0; 1 0]
+2×2 Array{Int64,2}:
+ 1  0
+ 1  0
+
+julia> findlast(A)
+2
+
+julia> A = zeros(2,2)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+julia> findlast(A)
+0
+```
+"""
 findlast(A) = findprev(A, length(A))
 
-# returns the index of the matching element, or 0 if no matching
+"""
+    findprev(A, v, i::Integer)
+
+Find the previous linear index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
+
+```jldoctest
+julia> A = [0 0; 1 2]
+2×2 Array{Int64,2}:
+ 0  0
+ 1  2
+
+julia> findprev(A, 1, 4)
+2
+
+julia> findprev(A, 1, 1)
+0
+```
+"""
 function findprev(A, v, start::Integer)
     for i = start:-1:1
         A[i] == v && return i
     end
     return 0
 end
+
+"""
+    findlast(A, v)
+
+Return the linear index of the last element equal to `v` in `A`.
+Returns `0` if there is no element of `A` equal to `v`.
+
+```jldoctest
+julia> A = [1 2; 2 1]
+2×2 Array{Int64,2}:
+ 1  2
+ 2  1
+
+julia> findlast(A,1)
+4
+
+julia> findlast(A,2)
+3
+
+julia> findlast(A,3)
+0
+```
+"""
 findlast(A, v) = findprev(A, v, length(A))
 
-# returns the index of the previous element for which the function returns true, or zero if it never does
+"""
+    findprev(predicate::Function, A, i::Integer)
+
+Find the previous linear index <= `i` of an element of `A` for which `predicate` returns `true`, or
+`0` if not found.
+
+```jldoctest
+julia> A = [4 6; 1 2]
+2×2 Array{Int64,2}:
+ 4  6
+ 1  2
+
+julia> findprev(isodd, A, 1)
+0
+
+julia> findprev(isodd, A, 3)
+2
+```
+"""
 function findprev(testf::Function, A, start::Integer)
     for i = start:-1:1
         testf(A[i]) && return i
     end
     return 0
 end
+
+"""
+    findlast(predicate::Function, A)
+
+Return the linear index of the last element of `A` for which `predicate` returns `true`.
+Returns `0` if there is no such element.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> findlast(isodd, A)
+2
+
+julia> findlast(x -> x > 5, A)
+0
+```
+"""
 findlast(testf::Function, A) = findprev(testf, A, length(A))
 
+"""
+    find(f::Function, A)
+
+Return a vector `I` of the linear indexes of `A` where `f(A[I])` returns `true`.
+If there are no such elements of `A`, find returns an empty array.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> find(isodd,A)
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
 function find(testf::Function, A)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
@@ -806,6 +1086,25 @@ function find(testf::Function, A)
     return I
 end
 
+"""
+    find(A)
+
+Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[i]!=0`). A
+common use of this is to convert a boolean array to an array of indexes of the `true`
+elements. If there are no non-zero elements of `A`, `find` returns an empty array.
+
+```jldoctest
+julia> A = [true false; false true]
+2×2 Array{Bool,2}:
+  true  false
+ false   true
+
+julia> find(A)
+2-element Array{Int64,1}:
+ 1
+ 4
+```
+"""
 function find(A)
     nnzA = countnz(A)
     I = Vector{Int}(nnzA)
@@ -824,6 +1123,32 @@ find(testf::Function, x::Number) = !testf(x) ? Array{Int,1}(0) : [1]
 
 findn(A::AbstractVector) = find(A)
 
+"""
+    findn(A)
+
+Return a vector of indexes for each dimension giving the locations of the non-zeros in `A`
+(determined by `A[i]!=0`).
+If there are no non-zero elements of `A`, `findn` returns a 2-tuple of empty arrays.
+
+```jldoctest
+julia> A = [1 2 0; 0 0 3; 0 4 0]
+3×3 Array{Int64,2}:
+ 1  2  0
+ 0  0  3
+ 0  4  0
+
+julia> findn(A)
+([1,1,3,2],[1,2,2,3])
+
+julia> A = zeros(2,2)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+julia> findn(A)
+(Int64[],Int64[])
+```
+"""
 function findn(A::AbstractMatrix)
     nnzA = countnz(A)
     I = similar(A, Int, nnzA)
@@ -839,6 +1164,23 @@ function findn(A::AbstractMatrix)
     return (I, J)
 end
 
+"""
+    findnz(A)
+
+Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
+values in matrix `A`, and `V` is a vector of the non-zero values.
+
+```jldoctest
+julia> A = [1 2 0; 0 0 3; 0 4 0]
+3×3 Array{Int64,2}:
+ 1  2  0
+ 0  0  3
+ 0  4  0
+
+julia> findnz(A)
+([1,1,3,2],[1,2,2,3],[1,2,4,3])
+```
+"""
 function findnz{T}(A::AbstractMatrix{T})
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
@@ -921,6 +1263,8 @@ end
     indmax(itr) -> Integer
 
 Returns the index of the maximum element in a collection.
+The collection must not be empty.
+
 ```jldoctest
 julia> indmax([8,0.1,-9,pi])
 1
@@ -932,6 +1276,8 @@ indmax(a) = findmax(a)[2]
     indmin(itr) -> Integer
 
 Returns the index of the minimum element in a collection.
+The collection must not be empty.
+
 ```jldoctest
 julia> indmin([8,0.1,-9,pi])
 3
@@ -1091,6 +1437,22 @@ function union(vs...)
     ret
 end
 # setdiff only accepts two args
+
+"""
+    setdiff(a, b)
+
+Construct the set of elements in `a` but not `b`. Maintains order with arrays. Note that
+both arguments must be collections, and both will be iterated over. In particular,
+`setdiff(set,element)` where `element` is a potential member of `set`, will not work in
+general.
+
+```jldoctest
+julia> setdiff([1,2,3],[3,4,5])
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
 function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
     bset = Set(b)
@@ -1111,4 +1473,18 @@ end
 # store counts with a Dict.
 symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
+"""
+    symdiff(a, b, rest...)
+
+Construct the symmetric difference of elements in the passed in sets or arrays.
+Maintains order with arrays.
+
+```jldoctest
+julia> symdiff([1,2,3],[3,4,5],[4,5,6])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 6
+```
+"""
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
