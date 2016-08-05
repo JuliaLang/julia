@@ -1095,34 +1095,39 @@ let
 end
 
 # Test addprocs enable_threaded_blas parameter
-function check_remote_num_threads(processes_added, num_threads)
-    for proc_id in processes_added
-        remote_thread_count = remotecall_fetch(BLAS.get_num_threads, proc_id)
-        @test remote_thread_count == num_threads
-    end
+function get_remote_num_threads(processes_added)
+    return [remotecall_fetch(BLAS.get_num_threads, proc_id) for proc_id in processes_added]
 end
 
-try
-    BLAS.set_num_threads(4)
-    @test BLAS.get_num_threads() == 4
-    processes_added = addprocs(2)
+BLAS.set_num_threads(4)
+@test BLAS.get_num_threads() == 4
 
-    @test BLAS.get_num_threads() == 4
-    # Threading disabled in children by default
-    check_remote_num_threads(processes_added, 1)
+# Test with default enable_threaded_blas false
+processes_added = addprocs(2)
 
-    rmprocs(processes_added)
+# Master thread was set to 4, should not have changed
+@test BLAS.get_num_threads() == 4
 
-    BLAS.set_num_threads(4)
-    @test BLAS.get_num_threads() == 4
-    processes_added = addprocs(2, enable_threaded_blas=true)
-    # Master thread default is 4
-    @test BLAS.get_num_threads() == 4
-    # Remote thread default is 2
-    check_remote_num_threads(processes_added, 2)
-    rmprocs(processes_added)
-catch err
-    if !isa(err, BLAS.MKLNotImplementedException)
-        rethrow(err)
-    end
+# Threading disabled in children by default
+thread_counts_by_process = get_remote_num_threads(processes_added)
+for thread_count in thread_counts_by_process
+    @test thread_count == 1
 end
+rmprocs(processes_added)
+
+processes_added = addprocs(2, enable_threaded_blas=true)
+# Master thread was set to 4, should not have changed
+@test BLAS.get_num_threads() == 4
+
+# OpenBLAS default number of threads is based on the number of cores.
+# We just want to make sure it's using the default, so check that we're
+# using at least min_blas_threads.
+min_blas_threads = 2
+if Sys.CPU_CORES <= 2
+    min_blas_threads = 1
+end
+thread_counts_by_process = get_remote_num_threads(processes_added)
+for thread_count in thread_counts_by_process
+    @test thread_count >= min_blas_threads
+end
+rmprocs(processes_added)

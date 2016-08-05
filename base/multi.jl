@@ -1481,7 +1481,6 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
 
             if !isempty(launched)
                 wconfig = shift!(launched)
-                wconfig.enable_threaded_blas = Nullable{Bool}(params[:enable_threaded_blas])
                 let wconfig=wconfig
                     @async setup_launched_worker(manager, wconfig, launched_q)
                 end
