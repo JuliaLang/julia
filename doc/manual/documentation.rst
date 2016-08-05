@@ -99,14 +99,29 @@ documentation:
        ...
        """
 
-5. Group examples under an ``# Examples`` section and use ````julia`` blocks instead of
+5. Group examples under an ``# Examples`` section and use `````julia`` blocks instead of
    standard text.
 
    Examples should consist of verbatim copies of the Julia REPL, including the ``julia>``
-   prompt (see example above). This will be used in the future to allow running examples
-   automatically and checking that their actual output is consistent with that presented
-   in the documentation (a feature called *doctests*). This way, the code will be tested and
-   examples won't get out of date without notice.
+   prompt (see example above). This is used to allow running examples automatically and
+   checking that their actual output is consistent with that presented in the
+   documentation (a feature called *doctests*). This way, the code will be tested and
+   examples won't get out of date without notice. An example::
+
+       """
+       Some nice documentation here.
+
+       ```jldoctest
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+       ```
+       """
+
+   You can then run ``make -C doc doctest`` to run all the doctests, which will ensure
+   that your example works. Note that whitespace in your doctest is significant! The
+   doctest will fail if you misalign the output of pretty-printing an array, for example.
 
 6. Use backticks to identify code and equations.
 
