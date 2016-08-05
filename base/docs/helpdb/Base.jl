@@ -10,17 +10,11 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 systemerror
 
 """
-    writedlm(f, A, delim='\\t')
+    digamma(x)
 
-Write `A` (a vector, matrix or an iterable collection of iterable rows) as text to `f`
-(either a filename string or an `IO` stream) using the given delimiter `delim` (which
-defaults to tab, but can be any printable Julia object, typically a `Char` or
-`AbstractString`).
-
-For example, two vectors `x` and `y` of the same length can be written as two columns of
-tab-delimited text to `f` by either `writedlm(f, [x y])` or by `writedlm(f, zip(x, y))`.
+Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
 """
-writedlm
+digamma
 
 """
     fill!(A, x)
@@ -2237,13 +2231,6 @@ Largest integer less than or equal to `x/y`.
 fld
 
 """
-    writecsv(filename, A)
-
-Equivalent to `writedlm` with `delim` set to comma.
-"""
-writecsv
-
-"""
     withenv(f::Function, kv::Pair...)
 
 Execute `f()` in an environment that is temporarily modified (not replaced as in `setenv`)
@@ -2859,80 +2846,6 @@ Pop the topmost backend off of the display-backend stack, or the topmost copy of
 second variant.
 """
 popdisplay
-
-"""
-    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')
-
-Read a matrix from the source where each line (separated by `eol`) gives one row, with
-elements separated by the given delimiter. The source can be a text file, stream or byte
-array. Memory mapped files can be used by passing the byte array representation of the
-mapped segment as source.
-
-If `T` is a numeric type, the result is an array of that type, with any non-numeric elements
-as `NaN` for floating-point types, or zero. Other useful values of `T` include
-`String`, `AbstractString`, and `Any`.
-
-If `header` is `true`, the first row of data will be read as header and the tuple
-`(data_cells, header_cells)` is returned instead of only `data_cells`.
-
-Specifying `skipstart` will ignore the corresponding number of initial lines from the input.
-
-If `skipblanks` is `true`, blank lines in the input will be ignored.
-
-If `use_mmap` is `true`, the file specified by `source` is memory mapped for potential
-speedups. Default is `true` except on Windows. On Windows, you may want to specify `true` if
-the file is large, and is only read once and not written to.
-
-If `quotes` is `true`, columns enclosed within double-quote (\") characters are allowed to
-contain new lines and column delimiters. Double-quote characters within a quoted field must
-be escaped with another double-quote.  Specifying `dims` as a tuple of the expected rows and
-columns (including header, if any) may speed up reading of large files.  If `comments` is
-`true`, lines beginning with `comment_char` and text following `comment_char` in any line
-are ignored.
-"""
-readdlm(source, delim, T, eol)
-
-"""
-    readdlm(source, delim::Char, eol::Char; options...)
-
-If all data is numeric, the result will be a numeric array. If some elements cannot be
-parsed as numbers, a heterogeneous array of numbers and strings is returned.
-"""
-readdlm(source, delim::Char, eol::Char)
-
-"""
-    readdlm(source, delim::Char, T::Type; options...)
-
-The end of line delimiter is taken as `\\n`.
-"""
-readdlm(source, delim::Char, T::Type)
-
-"""
-    readdlm(source, delim::Char; options...)
-
-The end of line delimiter is taken as `\\n`. If all data is numeric, the result will be a
-numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of
-numbers and strings is returned.
-"""
-readdlm(source, delim::Char)
-
-"""
-    readdlm(source, T::Type; options...)
-
-The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `\\n`.
-"""
-readdlm(source, T::Type)
-
-"""
-    readdlm(source; options...)
-
-The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `\\n`. If all data is numeric, the result will be a numeric array. If
-some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings
-is returned.
-"""
-readdlm(source)
 
 """
     filesize(path...)
