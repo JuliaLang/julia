@@ -23,6 +23,8 @@
 #endif
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
+#include <polly/LinkAllPasses.h>
+#include <polly/CodeGen/CodegenCleanup.h>
 #endif
 
 #include <llvm/Transforms/Scalar.h>
@@ -163,12 +165,17 @@ void addOptimizationPasses(PassManager *PM)
 
     PM->add(createEarlyCSEPass()); //// ****
 
-#ifdef USE_POLLY
-    polly::registerPollyPasses(*PM);
-#endif
-
     PM->add(createLoopIdiomPass()); //// ****
     PM->add(createLoopRotatePass());           // Rotate loops.
+#ifdef USE_POLLY
+    // LCSSA (which has already run at this point due to the dependencies of the
+    // above passes) introduces redundant phis that hinder Polly. Therefore we
+    // run InstCombine here to remove them.
+    PM->add(createInstructionCombiningPass());
+    PM->add(polly::createCodePreparationPass());
+    polly::registerPollyPasses(*PM);
+    PM->add(polly::createCodegenCleanupPass());
+#endif
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
     PM->add(createLICMPass());                 // Hoist loop invariants
