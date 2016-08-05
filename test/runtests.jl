@@ -1302,7 +1302,6 @@ let
     δ = inv(prevfloat(typemax(Float64)))
     v = [δ, -δ]
 
-    @test norm(v) === 7.866824069956793e-309
     w = normalize(v)
     @test w ≈ [1/√2, -1/√2]
     @test norm(w) === 1.0
