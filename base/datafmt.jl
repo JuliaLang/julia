@@ -690,11 +690,11 @@ function writedlm(fname::AbstractString, a, dlm; opts...)
 end
 
 """
-    writedlm(f, A, dl='\\t'; opts)
+    writedlm(f, A, delim='\\t'; opts)
 
-Write `A` (a vector, matrix or an iterable collection of iterable rows) as text to `f`
-(either a filename string or an `IO` stream) using the given delimiter `delim` (which
-defaults to tab, but can be any printable Julia object, typically a `Char` or
+Write `A` (a vector, matrix, or an iterable collection of iterable rows) as text to `f`
+(either a filename string or an [`IO`](:class:`IO`) stream) using the given delimiter
+`delim` (which defaults to tab, but can be any printable Julia object, typically a `Char` or
 `AbstractString`).
 
 For example, two vectors `x` and `y` of the same length can be written as two columns of
@@ -705,7 +705,7 @@ writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 """
     writecsv(filename, A; opts)
 
-Equivalent to `writedlm` with `delim` set to comma.
+Equivalent to [`writedlm`](:func:`writedlm`) with `delim` set to comma.
 """
 writecsv(io, a; opts...) = writedlm(io, a, ','; opts...)
 
