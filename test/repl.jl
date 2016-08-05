@@ -433,6 +433,10 @@ begin
     sendrepl3("(\"\b\bB = 5\n")
     wait(c)
     @test B == 5
+
+    sendrepl3("\\sigma\t\\Sigma\t\e[D\b\e[C=3")
+    wait(c)
+    @test Σ == 3
     # close repl
     write(stdin_write, '\x04')
     wait(repltask)

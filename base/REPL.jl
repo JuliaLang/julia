@@ -917,8 +917,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 edit_move_right(s)
             # Prev char or next char is not whitespace
             elseif AUTOMATIC_BRACKET_MATCH[] &&
-                    (position(b) > 0 && leftpeek(b) in all_brackets_ws) ||
-                    (!eof(b) && peek(b) in right_brackets_ws)
+                    ((position(b) > 0 && leftpeek(b) in all_brackets_ws) ||
+                     (!eof(b) && peek(b) in right_brackets_ws) ||
+                     b.size == 0)
                 edit_insert(s, v)
                 edit_insert(s, v)
                 edit_move_left(s)
@@ -941,10 +942,10 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 edit_move_right(s)
                 edit_backspace(s)
                 edit_backspace(s)
+                return
             end
-        else
-            edit_backspace(s)
         end
+        edit_backspace(s)
     end
 
     prefix_prompt, prefix_keymap = LineEdit.setup_prefix_keymap(hp, julia_prompt)
