@@ -4464,8 +4464,8 @@ end
 
 # Issue 4914
 let
-    a(a) = a
-    @test a(1) == 1
-    b(x) = (b = x; x)
-    @test b(1) == 1
+    j(j) = j
+    @test j(1) == 1
+    k(x) = (k = x; x)
+    @test k(1) == 1
 end
