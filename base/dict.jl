@@ -390,11 +390,18 @@ end
 
 dict_with_eltype{K,V}(kv, ::Type{Tuple{K,V}}) = Dict{K,V}(kv)
 dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
-dict_with_eltype(kv, t) = grow_to!(Dict{Union{},Union{}}(), kv)
+dict_with_eltype{K,V}(::Type{Pair{K,V}}) = Dict{K,V}()
+dict_with_eltype(::Type) = Dict()
+dict_with_eltype(kv, t) = grow_to!(dict_with_eltype(_default_eltype(typeof(kv))), kv)
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
 # and (2) Pair being invariant. a bit annoying.
-function grow_to!{K,V}(dest::Associative{K,V}, itr, st = start(itr))
+function grow_to!(dest::Associative, itr)
+    out = grow_to!(similar(dest, Pair{Union{},Union{}}), itr, start(itr))
+    return isempty(out) ? dest : out
+end
+
+function grow_to!{K,V}(dest::Associative{K,V}, itr, st)
     while !done(itr, st)
         (k,v), st = next(itr, st)
         if isa(k,K) && isa(v,V)

@@ -249,14 +249,10 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
 end
 
 if isdefined(Core, :Inference)
-    function _default_eltype(itrt::ANY)
-        rt = Core.Inference.return_type(first, Tuple{itrt})
-        return isleaftype(rt) ? rt : Union{}
-    end
+    _default_eltype(itrt::ANY) = Core.Inference.return_type(first, Tuple{itrt})
 else
-    _default_eltype(itr::ANY) = Union{}
+    _default_eltype(itr::ANY) = Any
 end
-_default_eltype{I,T}(::Type{Generator{I,Type{T}}}) = T
 
 _array_for(T, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
 _array_for(T, itr, ::HasShape) = similar(Array{T}, indices(itr))
@@ -320,7 +316,12 @@ function collect_to!{T}(dest::AbstractArray{T}, itr, offs, st)
     return dest
 end
 
-function grow_to!(dest, itr, st = start(itr))
+function grow_to!(dest, itr)
+    out = grow_to!(similar(dest,Union{}), itr, start(itr))
+    return isempty(out) ? dest : out
+end
+
+function grow_to!(dest, itr, st)
     T = eltype(dest)
     while !done(itr, st)
         el, st = next(itr, st)
