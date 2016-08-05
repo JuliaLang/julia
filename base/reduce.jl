@@ -502,7 +502,7 @@ Count the number of elements in `itr` for which predicate `p` returns `true`.
 
 ```jldoctest
 julia> count(i->(4<=i<=6), [2,3,4,5,6])
- 3
+3
 ```
 """
 function count(pred, itr)

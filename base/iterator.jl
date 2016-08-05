@@ -295,13 +295,13 @@ julia> collect(a)
   5
   7
   9
-  11
+ 11
 
 julia> collect(take(a,3))
 3-element Array{Int64,1}:
-  1
-  3
-  5
+ 1
+ 3
+ 5
 ```
 """
 take(xs, n::Int) = Take(xs, n)
@@ -349,12 +349,12 @@ julia> collect(a)
   5
   7
   9
-  11
+ 11
 
 julia> collect(drop(a,4))
 2-element Array{Int64,1}:
   9
-  11
+ 11
 ```
 """
 drop(xs, n::Int) = Drop(xs, n)

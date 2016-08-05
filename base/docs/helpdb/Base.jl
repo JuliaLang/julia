@@ -147,13 +147,6 @@ Print (using [`print`](:func:`print`)) `x` followed by a newline.
 println
 
 """
-    besselj(nu, x)
-
-Bessel function of the first kind of order `nu`, ``J_\\nu(x)``.
-"""
-besselj
-
-"""
     //(num, den)
 
 Divide two integers or rational numbers, giving a `Rational` result.
@@ -210,13 +203,6 @@ IPv6
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 """
 prod!
-
-"""
-    airybi(x)
-
-Airy function ``\\operatorname{Bi}(x)``.
-"""
-airybi
 
 """
     gensym([tag])
@@ -355,13 +341,6 @@ Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In gene
 cannot be used with empty collections (see `reduce(op, itr)`).
 """
 foldl(op, itr)
-
-"""
-    airybiprime(x)
-
-Airy function derivative ``\\operatorname{Bi}'(x)``.
-"""
-airybiprime
 
 """
     Ac_rdiv_B(A, B)
@@ -758,13 +737,6 @@ Get the local machine's host name.
 gethostname
 
 """
-    hankelh1x(nu, x)
-
-Scaled Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x) e^{-x i}``.
-"""
-hankelh1x
-
-"""
     replace(string, pat, r[, n])
 
 Search for the given pattern `pat`, and replace each occurrence with `r`. If `n` is
@@ -914,13 +886,6 @@ This would create a 25-by-30000 `BitArray`, linked to the file associated with s
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 """
-    airyprime(x)
-
-Airy function derivative ``\\operatorname{Ai}'(x)``.
-"""
-airyprime
-
-"""
     bessely0(x)
 
 Bessel function of the second kind of order 0, ``Y_0(x)``.
@@ -949,13 +914,6 @@ filter!
 Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded bytes.
 """
 base64decode
-
-"""
-    besselkx(nu, x)
-
-Scaled modified Bessel function of the second kind of order `nu`, ``K_\\nu(x) e^x``.
-"""
-besselkx
 
 """
     oct(n, [pad])
@@ -1214,13 +1172,6 @@ Wrap an expression in a `Task` and add it to the local machine's scheduler queue
 :@schedule
 
 """
-    bessely(nu, x)
-
-Bessel function of the second kind of order `nu`, ``Y_\\nu(x)``.
-"""
-bessely
-
-"""
     gradient(F, [h])
 
 Compute differences along vector `F`, using `h` as the spacing between points. The default
@@ -1390,15 +1341,6 @@ Connect to the named pipe / UNIX domain socket at `path`.
 connect(path)
 
 """
-    mean(v[, region])
-
-Compute the mean of whole array `v`, or optionally along the dimensions in `region`. Note:
-Julia does not ignore `NaN` values in the computation. For applications requiring the
-handling of missing data, the `DataArray` package is recommended.
-"""
-mean
-
-"""
     split(string, [chars]; limit=0, keep=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
@@ -1439,13 +1381,6 @@ Receive the next value passed to `produce` by the specified task. Additional arg
 be passed, to be returned from the last `produce` call in the producer.
 """
 consume
-
-"""
-    hankelh2x(nu, x)
-
-Scaled Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x) e^{x i}``.
-"""
-hankelh2x
 
 """
     ndigits(n, b = 10)
@@ -1595,14 +1530,6 @@ Dict{String,Float64} with 3 entries:
 merge
 
 """
-    circshift(A,shifts)
-
-Circularly shift the data in an array. The second argument is a vector giving the amount to
-shift in each dimension.
-"""
-circshift
-
-"""
     yield()
 
 Switch to the scheduler to allow another scheduled task to run. A task that calls this
@@ -1719,13 +1646,6 @@ process_exited
 Construct a tuple of the given objects.
 """
 tuple
-
-"""
-    besseli(nu, x)
-
-Modified Bessel function of the first kind of order `nu`, ``I_\\nu(x)``.
-"""
-besseli
 
 """
     eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
@@ -1849,14 +1769,6 @@ Bitwise and.
 &
 
 """
-    besselyx(nu, x)
-
-Scaled Bessel function of the second kind of order `nu`,
-``Y_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
-"""
-besselyx
-
-"""
     eigmax(A)
 
 Returns the largest eigenvalue of `A`.
@@ -1909,13 +1821,6 @@ Log of matrix determinant. Equivalent to `log(det(M))`, but may provide increase
 and/or speed.
 """
 logdet
-
-"""
-    hcat(A...)
-
-Concatenate along dimension 2.
-"""
-hcat
 
 """
     select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -2131,14 +2036,6 @@ Element-wise greater-than-or-equals comparison operator.
 Base.:(.>=)
 
 """
-    stdm(v, m)
-
-Compute the sample standard deviation of a vector `v` with known mean `m`. Note: Julia does
-not ignore `NaN` values in the computation.
-"""
-stdm
-
-"""
     mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
 Move the file, link, or directory from `src` to `dst`. `remove_destination=true` will first
@@ -2218,13 +2115,6 @@ In-place version of [`reverse`](:func:`reverse`).
 reverse!
 
 """
-    flipdim(A, d)
-
-Reverse `A` in dimension `d`.
-"""
-flipdim
-
-"""
     num(x)
 
 Numerator of the rational representation of `x`.
@@ -2296,13 +2186,6 @@ UndefRefError
 Bessel function of the second kind of order 1, ``Y_1(x)``.
 """
 bessely1
-
-"""
-    besseljx(nu, x)
-
-Scaled Bessel function of the first kind of order `nu`, ``J_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
-"""
-besseljx
 
 """
     print(x)
@@ -2531,45 +2414,6 @@ Extract a named field from a `value` of composite type. The syntax `a.b` calls
 getfield
 
 """
-    hvcat(rows::Tuple{Vararg{Int}}, values...)
-
-Horizontal and vertical concatenation in one call. This function is called for block matrix
-syntax. The first argument specifies the number of arguments to concatenate in each block
-row.
-
-```jldoctest
-julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
-(1,2,3,4,5,6)
-
-julia> [a b c; d e f]
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> hvcat((3,3), a,b,c,d,e,f)
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> [a b;c d; e f]
-3×2 Array{Int64,2}:
- 1  2
- 3  4
- 5  6
-
-julia> hvcat((2,2,2), a,b,c,d,e,f)
-3×2 Array{Int64,2}:
- 1  2
- 3  4
- 5  6
-```
-
-If the first argument is a single integer `n`, then all block rows are assumed to have `n`
-block columns.
-"""
-hvcat
-
-"""
     besselj1(x)
 
 Bessel function of the first kind of order 1, ``J_1(x)``.
@@ -2699,13 +2543,6 @@ Create all directories in the given `path`, with permissions `mode`. `mode` defa
 `0o777`, modified by the current file creation mask.
 """
 mkpath
-
-"""
-    besselix(nu, x)
-
-Scaled modified Bessel function of the first kind of order `nu`, ``I_\\nu(x) e^{- | \\operatorname{Re}(x) |}``.
-"""
-besselix
 
 """
     union(s1,s2...)
@@ -3184,17 +3021,6 @@ Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 sinc
 
 """
-    median(v[, region])
-
-Compute the median of whole array `v`, or optionally along the dimensions in `region`. For
-even number of elements no exact median element exists, so the result is equivalent to
-calculating mean of two median elements. `NaN` is returned if the data contains any `NaN`
-values. For applications requiring the handling of missing data, the `DataArrays` package is
-recommended.
-"""
-median
-
-"""
     cglobal((symbol, library) [, type=Void])
 
 Obtain a pointer to a global variable in a C-exported shared library, specified exactly as
@@ -3211,14 +3037,6 @@ Get the multiplicative identity element for the type of `x` (`x` can also specif
 itself). For matrices, returns an identity matrix of the appropriate size and type.
 """
 one
-
-"""
-    rationalize([Type=Int,] x; tol=eps(x))
-
-Approximate floating point number `x` as a Rational number with components of the given
-integer type. The result will differ from `x` by no more than `tol`.
-"""
-rationalize
 
 """
     splice!(collection, index, [replacement]) -> item
@@ -3436,13 +3254,6 @@ ifelse
 Test whether `n` is a power of two.
 """
 ispow2
-
-"""
-    vcat(A...)
-
-Concatenate along dimension 1.
-"""
-vcat
 
 """
     isgraph(c::Union{Char,AbstractString}) -> Bool
@@ -3806,26 +3617,11 @@ array, but with the specified element type.
 reinterpret
 
 """
-    squeeze(A, dims)
-
-Remove the dimensions specified by `dims` from array `A`. Elements of `dims` must be unique
-and within the range `1:ndims(A)`.
-"""
-squeeze
-
-"""
     ~(x)
 
 Bitwise not.
 """
 ~
-
-"""
-    hankelh1(nu, x)
-
-Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x)``.
-"""
-hankelh1
 
 """
     rem(x, y)
@@ -4142,18 +3938,6 @@ Delete the mapping for the given key in a collection, and return the collection.
 delete!
 
 """
-    std(v[, region])
-
-Compute the sample standard deviation of a vector or array `v`, optionally along dimensions
-in `region`. The algorithm returns an estimator of the generative distribution's standard
-deviation under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
-(length(v) - 1))`. Note: Julia does not ignore `NaN` values in the computation. For
-applications requiring the handling of missing data, the `DataArray` package is recommended.
-"""
-std
-
-"""
     chr2ind(string, i)
 
 Convert a character index to a byte index.
@@ -4274,13 +4058,6 @@ Base64DecodePipe
 Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
 """
 module_parent
-
-"""
-    airyaiprime(x)
-
-Airy function derivative ``\\operatorname{Ai}'(x)``.
-"""
-airyaiprime
 
 """
     prepend!(collection, items) -> collection
@@ -5044,13 +4821,6 @@ called in last in first out (LIFO) order and run before object finalizers.
 atexit
 
 """
-    besselk(nu, x)
-
-Modified Bessel function of the second kind of order `nu`, ``K_\\nu(x)``.
-"""
-besselk
-
-"""
     readchomp(x)
 
 Read the entirety of `x` as a string and remove a single trailing newline. Equivalent to `chomp(readstring(x))`.
@@ -5654,13 +5424,6 @@ general.
 setdiff
 
 """
-    airyai(x)
-
-Airy function ``\\operatorname{Ai}(x)``.
-"""
-airyai
-
-"""
     error(message::AbstractString)
 
 Raise an `ErrorException` with the given message.
@@ -5983,14 +5746,6 @@ Compute the secant of `x`, where `x` is in degrees.
 secd
 
 """
-    varm(v, m)
-
-Compute the sample variance of a vector `v` with known mean `m`. Note: Julia does not ignore
-`NaN` values in the computation.
-"""
-varm
-
-"""
     OverflowError()
 
 The result of an expression is too large for the specified type and will cause a wraparound.
@@ -6112,13 +5867,6 @@ julia> leading_zeros(Int32(1))
 ```
 """
 leading_zeros
-
-"""
-    hankelh2(nu, x)
-
-Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x)``.
-"""
-hankelh2
 
 """
     lexcmp(x, y)
@@ -6782,13 +6530,6 @@ characters, tests whether the last character of `string` belongs to that set.
 endswith
 
 """
-    airy(k,x)
-
-The `k`th derivative of the Airy function ``\\operatorname{Ai}(x)``.
-"""
-airy
-
-"""
     !(x)
 
 Boolean not.
@@ -7193,15 +6934,6 @@ Get the backtrace of the current exception, for use within `catch` blocks.
 catch_backtrace
 
 """
-    airyx(k,x)
-
-scaled `k`th derivative of the Airy function, return ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}}``
-for `k == 0 || k == 1`, and ``\\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``
-for `k == 2 || k == 3`.
-"""
-airyx
-
-"""
     get_zero_subnormals() -> Bool
 
 Returns `false` if operations on subnormal floating-point values ("denormals") obey rules
@@ -7552,13 +7284,6 @@ An error occurred when running a module's `__init__` function. The actual error 
 available in the `.error` field.
 """
 InitError
-
-"""
-    vec(Array) -> Vector
-
-Vectorize an array using column-major convention.
-"""
-vec
 
 """
     copy!(dest, src)
@@ -8160,58 +7885,6 @@ Compute ``x \\times 2^n``.
 ldexp
 
 """
-    quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)
-
-Numerically integrate the function `f(x)` from `a` to `b`, and optionally over additional
-intervals `b` to `c` and so on. Keyword options include a relative error tolerance `reltol`
-(defaults to `sqrt(eps)` in the precision of the endpoints), an absolute error tolerance
-`abstol` (defaults to 0), a maximum number of function evaluations `maxevals` (defaults to
-`10^7`), and the `order` of the integration rule (defaults to 7).
-
-Returns a pair `(I,E)` of the estimated integral `I` and an estimated upper bound on the
-absolute error `E`. If `maxevals` is not exceeded then `E <= max(abstol, reltol*norm(I))`
-will hold. (Note that it is useful to specify a positive `abstol` in cases where `norm(I)`
-may be zero.)
-
-The endpoints `a` etcetera can also be complex (in which case the integral is performed over
-straight-line segments in the complex plane). If the endpoints are `BigFloat`, then the
-integration will be performed in `BigFloat` precision as well (note: it is advisable to
-increase the integration `order` in rough proportion to the precision, for smooth
-integrands). More generally, the precision is set by the precision of the integration
-endpoints (promoted to floating-point types).
-
-The integrand `f(x)` can return any numeric scalar, vector, or matrix type, or in fact any
-type supporting `+`, `-`, multiplication by real values, and a `norm` (i.e., any normed
-vector space). Alternatively, a different norm can be specified by passing a `norm`-like
-function as the `norm` keyword argument (which defaults to `vecnorm`).
-
-\[Only one-dimensional integrals are provided by this function. For multi-dimensional
-integration (cubature), there are many different algorithms (often much better than simple
-nested 1d integrals) and the optimal choice tends to be very problem-dependent. See the
-Julia external-package listing for available algorithms for multidimensional integration or
-other specialized tasks (such as integrals of highly oscillatory or singular functions).\]
-
-The algorithm is an adaptive Gauss-Kronrod integration technique: the integral in each
-interval is estimated using a Kronrod rule (`2*order+1` points) and the error is estimated
-using an embedded Gauss rule (`order` points). The interval with the largest error is then
-subdivided into two intervals and the process is repeated until the desired error tolerance
-is achieved.
-
-These quadrature rules work best for smooth functions within each interval, so if your
-function has a known discontinuity or other singularity, it is best to subdivide your
-interval to put the singularity at an endpoint. For example, if `f` has a discontinuity at
-`x=0.7` and you want to integrate from 0 to 1, you should use `quadgk(f, 0,0.7,1)` to
-subdivide the interval at the point of discontinuity. The integrand is never evaluated
-exactly at the endpoints of the intervals, so it is possible to integrate functions that
-diverge at the endpoints as long as the singularity is integrable (for example, a `log(x)`
-or `1/sqrt(x)` singularity).
-
-For real-valued endpoints, the starting and/or ending points may be infinite. (A coordinate
-transformation is performed internally to map the infinite interval to a finite one.)
-"""
-quadgk
-
-"""
     islower(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character is a lowercase letter, or whether this is true for all elements of
@@ -8267,14 +7940,6 @@ gcd
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 """
 signbit
-
-"""
-    clamp(x, lo, hi)
-
-Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments
-are promoted to a common type. Operates elementwise over `x` if it is an array.
-"""
-clamp
 
 """
     cscd(x)

@@ -1024,7 +1024,80 @@ function cat_t(catdims, typeC::Type, X...)
     return C
 end
 
+"""
+    vcat(A...)
+
+Concatenate along dimension 1.
+
+```jldoctest
+julia> a = [1 2 3 4 5]
+1×5 Array{Int64,2}:
+ 1  2  3  4  5
+
+julia> b = [6 7 8 9 10; 11 12 13 14 15]
+2×5 Array{Int64,2}:
+  6   7   8   9  10
+ 11  12  13  14  15
+
+julia> vcat(a,b)
+3×5 Array{Int64,2}:
+  1   2   3   4   5
+  6   7   8   9  10
+ 11  12  13  14  15
+
+julia> c = ([1 2 3], [4 5 6])
+(
+[1 2 3],
+<BLANKLINE>
+[4 5 6])
+
+julia> vcat(c...)
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+```
+"""
 vcat(X...) = cat(1, X...)
+"""
+    hcat(A...)
+
+Concatenate along dimension 2.
+
+```jldoctest
+julia> a = [1; 2; 3; 4; 5]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
+5×2 Array{Int64,2}:
+  6   7
+  8   9
+ 10  11
+ 12  13
+ 14  15
+
+julia> hcat(a,b)
+5×3 Array{Int64,2}:
+ 1   6   7
+ 2   8   9
+ 3  10  11
+ 4  12  13
+ 5  14  15
+
+julia> c = ([1; 2; 3], [4; 5; 6])
+([1,2,3],[4,5,6])
+
+julia> hcat(c...)
+3×2 Array{Int64,2}:
+ 1  4
+ 2  5
+ 3  6
+```
+"""
 hcat(X...) = cat(2, X...)
 
 typed_vcat(T::Type, X...) = cat_t(1, T, X...)
@@ -1061,6 +1134,43 @@ function hvcat(nbc::Integer, as...)
     hvcat(ntuple(i->nbc, nbr), as...)
 end
 
+"""
+    hvcat(rows::Tuple{Vararg{Int}}, values...)
+
+Horizontal and vertical concatenation in one call. This function is called for block matrix
+syntax. The first argument specifies the number of arguments to concatenate in each block
+row.
+
+```jldoctest
+julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
+(1,2,3,4,5,6)
+
+julia> [a b c; d e f]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> hvcat((3,3), a,b,c,d,e,f)
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> [a b;c d; e f]
+3×2 Array{Int64,2}:
+ 1  2
+ 3  4
+ 5  6
+
+julia> hvcat((2,2,2), a,b,c,d,e,f)
+3×2 Array{Int64,2}:
+ 1  2
+ 3  4
+ 5  6
+```
+
+If the first argument is a single integer `n`, then all block rows are assumed to have `n`
+block columns.
+"""
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractMatrix...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
 hvcat{T}(rows::Tuple{Vararg{Int}}, xs::AbstractMatrix{T}...) = typed_hvcat(T, rows, xs...)
 
@@ -1347,8 +1457,7 @@ For multiple iterable arguments, `f` is called elementwise.
 needed, for example in `foreach(println, array)`.
 
 ```jldoctest
-julia> a
-1:3:7
+julia> a = 1:3:7;
 
 julia> foreach(x->println(x^2),a)
 1
