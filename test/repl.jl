@@ -226,7 +226,6 @@ fakehistory = """
 # mode: julia
 \t2 + 2
 """
-
 # Test various history related issues
 begin
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
@@ -397,6 +396,48 @@ begin
     # Try entering search mode while in custom repl mode
     LineEdit.enter_search(s, custom_histp, true)
 end
+
+# Test some completion features of the REPL with brackets
+begin
+    stdin_write, stdout_read, stderr_read, repl = fake_repl()
+
+    repl.interface = REPL.setup_interface(repl)
+    repl_mode = repl.interface.modes[1]
+    shell_mode = repl.interface.modes[2]
+    help_mode = repl.interface.modes[3]
+
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
+
+    c = Condition()
+
+    sendrepl3 = cmd -> write(stdin_write,"$cmd\n notify(c)\n")
+
+    # Test [B, =, (, 1, rightarrow enter]
+    sendrepl3("B = (1,\e[C \n")
+    wait(c)
+    @test B == (1,)
+
+    # Test [B, =, ", f, rightarrow enter]
+    sendrepl3("B = \"f\e[C \n")
+    wait(c)
+    @test B == "f"
+    # Test [B. =. (, (, (, 1, enter]
+    sendrepl3("B = (((1\n")
+    wait(c)
+    @test B == 1
+
+    # Test [(, ", , backspace, backspace, B, =, 5]
+    # The autocompleted bracers should be removed by backspace
+    sendrepl3("(\"\b\bB = 5\n")
+    wait(c)
+    @test B == 5
+    # close repl
+    write(stdin_write, '\x04')
+    wait(repltask)
+end
+
 # Simple non-standard REPL tests
 if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stdout_read, repl = fake_repl()

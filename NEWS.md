@@ -1,3 +1,8 @@
+Julia v0.6.0 Release Notes
+==========================
+
+* Some automatic completion of brackets and quotations has been added to the REPL and are enabled by default. These can be disabled or enabled with the function `Base.REPL.enable_bracketmatch(enable::Bool)`.
+
 Julia v0.5.0 Release Notes
 ==========================
 

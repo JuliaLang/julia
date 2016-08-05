@@ -30,7 +30,12 @@ import ..LineEdit:
     history_prev_prefix,
     history_search,
     accept_result,
-    terminal
+    terminal,
+    buffer,
+    edit_insert,
+    edit_move_right,
+    edit_move_left,
+    edit_backspace
 
 abstract AbstractREPL
 
@@ -692,6 +697,9 @@ end
 repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(length(hp.history)-hp.start_idx)]"
 repl_filename(repl, hp) = "REPL"
 
+const AUTOMATIC_BRACKET_MATCH = Ref(true)
+enable_bracketmatch(b::Bool) = AUTOMATIC_BRACKET_MATCH[] = b
+
 function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_repl_keymap = Dict{Any,Any}[])
     ###
     #
@@ -872,6 +880,72 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             end
         end,
     )
+
+    # Convenience completions for brackets and single/double quote
+    peek(b::IOBuffer) = (p = position(b); c = read(b, Char); seek(b, p); return c)
+    leftpeek(b::IOBuffer) = (p = position(b); c = LineEdit.char_move_left(b); seek(b, p); return c)
+    left_brackets = ['(', '{', '[']
+    right_brackets = [')', '}', ']']
+    right_brackets_ws = [')', '}', ']', ' ', '\t']
+    all_brackets_ws = vcat(left_brackets, right_brackets_ws)
+    for (l, r) in zip(left_brackets, right_brackets)
+        # If we enter a left bracket automatically complete it if the next
+        # char is a whitespace or a right bracket
+        repl_keymap[l] = (s, o...) -> begin
+            edit_insert(s, l)
+            if AUTOMATIC_BRACKET_MATCH[] && (eof(buffer(s)) || peek(buffer(s)) in right_brackets_ws)
+                edit_insert(s, r)
+                edit_move_left(s)
+            end
+        end
+        # If we enter a right bracket and the next char is that right bracket just move right
+        repl_keymap[r] = (s, o...) -> begin
+            if AUTOMATIC_BRACKET_MATCH[] && !eof(buffer(s)) && peek(buffer(s)) == r
+                edit_move_right(s)
+            else
+                edit_insert(s, r)
+            end
+        end
+    end
+
+    # Similar to above but with quotation marks that need to be handled a bit differently
+    for v in ['\"', '\'']
+        repl_keymap[v] = (s, o...) -> begin
+            b = buffer(s)
+            # Next char is the quote symbol so just move right
+            if AUTOMATIC_BRACKET_MATCH[] && !eof(b) && peek(b) == v
+                edit_move_right(s)
+            # Prev char or next char is not whitespace
+            elseif AUTOMATIC_BRACKET_MATCH[] &&
+                    (position(b) > 0 && leftpeek(b) in all_brackets_ws) ||
+                    (!eof(b) && peek(b) in right_brackets_ws)
+                edit_insert(s, v)
+                edit_insert(s, v)
+                edit_move_left(s)
+            else
+                edit_insert(s, v)
+            end
+        end
+    end
+
+    # On backspace, also remove a corresponding right bracket
+    # to the right if we remove a left bracket
+    left_brackets2 = ['(', '{', '[', '\"', '\'']
+    right_brackets2 = [')', '}', ']', '\"', '\'']
+    repl_keymap['\b'] = (s, data, c) -> begin
+        b = buffer(s)
+        str = String(b)
+        if AUTOMATIC_BRACKET_MATCH[] && !eof(buffer(s))
+            i = findfirst(left_brackets2, str[prevind(str, position(b) + 1)])
+            if i != 0 && peek(b) == right_brackets2[i]
+                edit_move_right(s)
+                edit_backspace(s)
+                edit_backspace(s)
+            end
+        else
+            edit_backspace(s)
+        end
+    end
 
     prefix_prompt, prefix_keymap = LineEdit.setup_prefix_keymap(hp, julia_prompt)
 
