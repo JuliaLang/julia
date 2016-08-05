@@ -16,6 +16,7 @@ file_patterns='
 *.scm
 *.inc
 *.make
+*.mk
 *.md
 *.rst
 *.sh

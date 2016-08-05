@@ -2,10 +2,17 @@
 
 LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
-$(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,build/libgit2.$(SHLIB_EXT),$(SRCDIR)/srccache))
+$(eval $(call git-external,libgit2,LIBGIT2,,,$(SRCDIR)/srccache))
 
-LIBGIT2_OBJ_SOURCE := $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/libgit2.$(SHLIB_EXT)
-LIBGIT2_OBJ_TARGET := $(build_shlibdir)/libgit2.$(SHLIB_EXT)
+ifeq ($(USE_SYSTEM_LIBSSH2), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_prefix)/manifest/libssh2
+endif
+
+ifneq ($(OS),WINNT)
+ifeq ($(USE_SYSTEM_CURL), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_prefix)/manifest/curl
+endif
+endif
 
 LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON
 ifeq ($(OS),WINNT)
@@ -29,56 +36,51 @@ ifeq ($(OS),Linux)
 LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied: | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
+$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
+$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-require-openssl.patch
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
+$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
+$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-openssl-hang.patch
 	echo 1 > $@
 
-ifeq ($(OS),Linux)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied
-endif
-ifneq ($(OS),WINNT)
-ifeq ($(USE_SYSTEM_CURL), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(CURL_OBJ_TARGET)
-endif
-endif
-ifeq ($(USE_SYSTEM_LIBSSH2), 0)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(LIBSSH2_OBJ_TARGET)
-endif
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
+	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied \
+	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied \
+	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied \
+	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied
+
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
-	touch -c $@
+	echo 1 > $@
 
-$(LIBGIT2_OBJ_SOURCE): $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
 	$(MAKE) -C $(dir $<)
-	touch -c $@
+	echo 1 > $@
 
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/checked: $(LIBGIT2_OBJ_SOURCE)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) test
 endif
 	echo 1 > $@
 
-$(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
+$(build_prefix)/manifest/libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled | $(build_shlibdir) $(build_prefix)/manifest
 ifeq ($(OS),WINNT)
-	cp $< $@
+	cp $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/libgit2.$(SHLIB_EXT) $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 else
 	$(call make-install,$(LIBGIT2_SRC_DIR),)
 endif
-	$(INSTALL_NAME_CMD)libgit2.$(SHLIB_EXT) $@
+	$(INSTALL_NAME_CMD)libgit2.$(SHLIB_EXT) $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 ifeq ($(OS),Linux)
 	@# If we're on linux, copy over libssl and libcrypto for libgit2
 	-LIBGIT_LIBS=$$(ldd "$@" | tail -n +2 | awk '{print $$(NF-1)}'); \
@@ -88,14 +90,15 @@ ifeq ($(OS),Linux)
 		[ ! -z "$$LIB_PATH" ] && cp -v -f "$$LIB_PATH" $(build_shlibdir); \
 	done
 endif
-	touch -c $@
+	echo $(LIBGIT2_SHA1) > $@
 
 clean-libgit2:
+	-rm -f $(build_prefix)/manifest/libgit2 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
-	-rm -f $(build_shlibdir)/libgit2* $(build_shlibdir)/libssl* $(build_shlibdir)/libcrypto*
 
 get-libgit2: $(LIBGIT2_SRC_FILE)
-configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile
-compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
-check-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/checked
-install-libgit2: $(LIBGIT2_OBJ_TARGET)
+extract-libgit2: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
+configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
+compile-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
+check-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked
+install-libgit2: $(build_prefix)/manifest/libgit2
