@@ -513,11 +513,3 @@ let s = "Monkey 🙈🙊🙊"
     @test tf(2) == "Mo|nk|ey| 🙈|🙊🙊"
     @test tf(1) == "M|o|n|k|e|y| |🙈|🙊|🙊"
 end
-
-# Issue 4914
-let
-    a(a) = a
-    @test a(1) == 1
-    b(x) = (b = x; x)
-    @test b(1) == 1
-end

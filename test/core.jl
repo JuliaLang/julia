@@ -4461,3 +4461,11 @@ end
 #end
 #@test local_innersig(Int32(2)) == ((Int32(2), Int32(1), Int32(2)im), (Int32(2), UInt32(1)))
 #@test local_innersig(Int64(3)) == ((Int64(3), Int64(1), Int64(3)im), (Int64(3), UInt64(1)))
+
+# Issue 4914
+let
+    a(a) = a
+    @test a(1) == 1
+    b(x) = (b = x; x)
+    @test b(1) == 1
+end
