@@ -418,9 +418,10 @@ The following distributions include julia, but the versions may be out of date d
 
 Currently, Julia editing mode support is available for a number of
 editors. While Julia modes for
-[Emacs](https://github.com/JuliaLang/julia-emacs) and
+[Emacs](https://github.com/JuliaLang/julia-emacs),
+[Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and
 [Vim](https://github.com/JuliaLang/julia-vim) have their own repos,
-others such as Textmate, Sublime Text, Notepad++, and Kate, are in
+others such as Textmate, Notepad++, and Kate, are in
 `contrib/`.
 
 Two major IDEs are supported for Julia: [Juno](http://junolab.org/),
