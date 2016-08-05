@@ -2222,35 +2222,46 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
 {
     if (v == NULL)
         v = dt->instance; // the instance before unique'ing
+    jl_svec_t *tt = dt->parameters;
+    if (dt->uid == 0 || dt->uid == -1) {
+        // recache all type parameters
+        size_t i, l = jl_svec_len(tt);
+        for (i = 0; i < l; i++) {
+            jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
+            if (jl_is_datatype(p)) {
+                if (p->uid == -1 || p->uid == 0) {
+                    jl_datatype_t *cachep = jl_recache_type(p, start, NULL);
+                    if (p != cachep) {
+                        assert(jl_types_equal((jl_value_t*)p, (jl_value_t*)cachep));
+                        jl_svecset(tt, i, cachep);
+                    }
+                }
+            }
+            else {
+                jl_datatype_t *tp = (jl_datatype_t*)jl_typeof(p);
+                assert(tp->uid != 0);
+                if (tp->uid == -1) {
+                    tp = jl_recache_type(tp, start, NULL);
+                }
+                if (tp->instance && (jl_value_t*)p != tp->instance)
+                    jl_svecset(tt, i, tp->instance);
+            }
+        }
+    }
+
     jl_datatype_t *t; // the type after unique'ing
-    if (dt->uid == -1) {
-        jl_svec_t *tt = dt->parameters;
-        size_t l = jl_svec_len(tt);
-        if (l == 0) { // jl_cache_type doesn't work if length(parameters) == 0
+    if (dt->uid == 0) {
+        return dt;
+    }
+    else if (dt->uid == -1) {
+        if (jl_svec_len(tt) == 0) { // jl_cache_type doesn't work if length(parameters) == 0
             dt->uid = jl_assign_type_uid();
             t = dt;
         }
         else {
-            // recache all type parameters, then type type itself
-            size_t i;
-            for (i = 0; i < l; i++) {
-                jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
-                if (jl_is_datatype(p) && p->uid == -1) {
-                    jl_datatype_t *cachep = jl_recache_type(p, start, NULL);
-                    if (p != cachep)
-                        jl_svecset(tt, i, cachep);
-                }
-                jl_datatype_t *tp = (jl_datatype_t*)jl_typeof(p);
-                if (jl_is_datatype_singleton(tp)) {
-                    if (tp->uid == -1) {
-                        tp = jl_recache_type(tp, start, NULL);
-                    }
-                    if ((jl_value_t*)p != tp->instance)
-                        jl_svecset(tt, i, tp->instance);
-                }
-            }
             dt->uid = 0;
             t = (jl_datatype_t*)jl_cache_type_(dt);
+            assert(jl_types_equal((jl_value_t*)t, (jl_value_t*)dt));
         }
     }
     else {
