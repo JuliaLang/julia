@@ -19,7 +19,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-#if defined(LLVM37) && defined(JULIA_ENABLE_THREADING)
+#if JL_LLVM_VERSION >= 30700 && defined(JULIA_ENABLE_THREADING)
 #  include <llvm/IR/InlineAsm.h>
 #endif
 
@@ -55,7 +55,7 @@ static void ensure_global(const char *name, Type *t, Module &M,
     // setting JL_DLLEXPORT correctly only matters when building a binary
     // (global_proto will strip this from the JIT)
     if (dllimport) {
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
         // add the __declspec(dllimport) attribute
         proto->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
 #else
@@ -100,7 +100,7 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::NoUnwind);
     }
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     else if (jl_tls_offset != -1) {
         auto T_int8 = Type::getInt8Ty(ctx);
         auto T_pint8 = PointerType::get(T_int8, 0);

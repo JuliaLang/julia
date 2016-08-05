@@ -9,8 +9,8 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-#ifdef LLVM37
-#ifndef LLVM38
+#if JL_LLVM_VERSION >= 30700
+#if JL_LLVM_VERSION < 30800
 #  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 #endif
 #ifdef _OS_LINUX_
@@ -727,7 +727,7 @@ public:
     uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
                                  unsigned SectionID, StringRef SectionName,
                                  bool isReadOnly) override;
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
     void notifyObjectLoaded(RuntimeDyld &Dyld,
                             const object::ObjectFile &Obj) override;
 #endif
@@ -802,7 +802,7 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
                                                      SectionName, isReadOnly);
 }
 
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
 void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
                                                const object::ObjectFile &Obj)
 {
@@ -855,7 +855,7 @@ void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
 
 }
 
-#ifndef LLVM38
+#if JL_LLVM_VERSION < 30800
 void notifyObjectLoaded(RTDyldMemoryManager *memmgr,
                         llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT H)
 {
@@ -870,9 +870,9 @@ void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
 }
 #endif
 
-#else // LLVM37
+#else // JL_LLVM_VERSION >= 30700
 typedef SectionMemoryManager RTDyldMemoryManagerJL;
-#endif // LLVM37
+#endif // JL_LLVM_VERSION >= 30700
 
 RTDyldMemoryManager* createRTDyldMemoryManager()
 {
