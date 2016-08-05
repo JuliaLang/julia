@@ -147,7 +147,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host. This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine. If ``restrict`` is ``true``\ , binding is restricted to ``127.0.0.1``\ .
+   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host. This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine. If ``restrict`` is ``true``\ , binding is restricted to ``127.0.0.1``\ . Keyword args ``dir``\ , ``exename``\ , ``exeflags``\ , ``topology``\ , and ``enable_threaded_blas`` have the same effect as documented for ``addprocs(machines)``\ .
 
 .. function:: addprocs(; kwargs...) -> List of process identifiers
 

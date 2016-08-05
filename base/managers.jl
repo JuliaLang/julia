@@ -110,6 +110,7 @@ This timeout can be controlled via environment variable `JULIA_WORKER_TIMEOUT`.
 The value of JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a
 newly launched worker waits for connection establishment.
 """
+
 function addprocs(machines::AbstractVector; tunnel=false, sshflags=``, max_parallel=10, kwargs...)
     check_addprocs_args(kwargs)
     addprocs(SSHManager(machines); tunnel=tunnel, sshflags=sshflags, max_parallel=max_parallel, kwargs...)
@@ -213,6 +214,8 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     wconfig.exename = exename
     wconfig.count = cnt
     wconfig.max_parallel = params[:max_parallel]
+    wconfig.enable_threaded_blas = params[:enable_threaded_blas]
+
 
     push!(launched, wconfig)
     notify(launch_ntfy)
@@ -302,7 +305,8 @@ addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
 Launches workers using the in-built `LocalManager` which only launches workers on the
 local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4
 processes on the local machine. If `restrict` is `true`, binding is restricted to
-`127.0.0.1`.
+`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, and
+`enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
 """
 function addprocs(np::Integer; restrict=true, kwargs...)
     check_addprocs_args(kwargs)
@@ -324,6 +328,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io
+        wconfig.enable_threaded_blas = params[:enable_threaded_blas]
         push!(launched, wconfig)
     end
 
