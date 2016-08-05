@@ -192,6 +192,9 @@ end
 
 ## Conversions ##
 
+convert{T}(::Type{Vector}, x::AbstractVector{T}) = convert(Vector{T}, x)
+convert{T}(::Type{Matrix}, x::AbstractMatrix{T}) = convert(Matrix{T}, x)
+
 convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 
