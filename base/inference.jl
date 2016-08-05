@@ -286,6 +286,9 @@ add_tfunc(is, 2, 2,
             return Const(x.parameters[1]===y.parameters[1])
         elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
             return Const(false)
+        elseif (isa(x,Const) && y === typeof(x.val) && isdefined(y,:instance)) ||
+               (isa(y,Const) && x === typeof(y.val) && isdefined(x,:instance))
+            return Const(true)
         else
             return Bool
         end
