@@ -23,7 +23,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Get the currently running ``Task``\ .
+   Get the currently running :class:`Task`\ .
 
 .. function:: istaskdone(task) -> Bool
 
@@ -55,29 +55,29 @@ Tasks
 
    Switch to the scheduler to allow another scheduled task to run. A task that calls this function is still runnable, and will be restarted immediately if there are no other runnable tasks.
 
-.. function:: task_local_storage(symbol)
+.. function:: task_local_storage(key)
 
    .. Docstring generated from Julia source
 
-   Look up the value of a symbol in the current task's task-local storage.
+   Look up the value of a key in the current task's task-local storage.
 
-.. function:: task_local_storage(symbol, value)
-
-   .. Docstring generated from Julia source
-
-   Assign a value to a symbol in the current task's task-local storage.
-
-.. function:: task_local_storage(body, symbol, value)
+.. function:: task_local_storage(key, value)
 
    .. Docstring generated from Julia source
 
-   Call the function ``body`` with a modified task-local storage, in which ``value`` is assigned to ``symbol``\ ; the previous value of ``symbol``\ , or lack thereof, is restored afterwards. Useful for emulating dynamic scoping.
+   Assign a value to a key in the current task's task-local storage.
+
+.. function:: task_local_storage(body, key, value)
+
+   .. Docstring generated from Julia source
+
+   Call the function ``body`` with a modified task-local storage, in which ``value`` is assigned to ``key``\ ; the previous value of ``key``\ , or lack thereof, is restored afterwards. Useful for emulating dynamic scoping.
 
 .. function:: Condition()
 
    .. Docstring generated from Julia source
 
-   Create an edge-triggered event source that tasks can wait for. Tasks that call ``wait`` on a ``Condition`` are suspended and queued. Tasks are woken up when ``notify`` is later called on the ``Condition``\ . Edge triggering means that only tasks waiting at the time ``notify`` is called can be woken up. For level-triggered notifications, you must keep extra state to keep track of whether a notification has happened. The ``Channel`` type does this, and so can be used for level-triggered events.
+   Create an edge-triggered event source that tasks can wait for. Tasks that call ``wait`` on a ``Condition`` are suspended and queued. Tasks are woken up when ``notify`` is later called on the ``Condition``\ . Edge triggering means that only tasks waiting at the time ``notify`` is called can be woken up. For level-triggered notifications, you must keep extra state to keep track of whether a notification has happened. The :class:`Channel` type does this, and so can be used for level-triggered events.
 
 .. function:: notify(condition, val=nothing; all=true, error=false)
 
@@ -91,7 +91,7 @@ Tasks
 
    Add a task to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as ``wait``\ .
 
-   If a second argument is provided, it will be passed to the task (via the return value of ``yieldto``\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
+   If a second argument ``val`` is provided, it will be passed to the task (via the return value of ``yieldto``\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
 
 .. function:: @schedule
 
@@ -103,7 +103,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Wrap an expression in a ``Task`` without executing it, and return the ``Task``\ . This only creates a task, and does not run it.
+   Wrap an expression in a :class:`Task` without executing it, and return the :class:`Task`\ . This only creates a task, and does not run it.
 
 .. function:: sleep(seconds)
 

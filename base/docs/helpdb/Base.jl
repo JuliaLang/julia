@@ -68,18 +68,6 @@ Subtype operator, equivalent to `issubtype(T1,T2)`.
 Base.:(<:)
 
 """
-    schedule(t::Task, [val]; error=false)
-
-Add a task to the scheduler's queue. This causes the task to run constantly when the system
-is otherwise idle, unless the task performs a blocking operation such as `wait`.
-
-If a second argument is provided, it will be passed to the task (via the return value of
-`yieldto`) when it runs again. If `error` is `true`, the value is raised as an exception in
-the woken task.
-"""
-schedule
-
-"""
     takebuf_array(b::IOBuffer)
 
 Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
@@ -270,29 +258,6 @@ dirname
 Returns `true` if `path` is a regular file, `false` otherwise.
 """
 isfile
-
-"""
-    task_local_storage(symbol)
-
-Look up the value of a symbol in the current task's task-local storage.
-"""
-task_local_storage(symbol)
-
-"""
-    task_local_storage(symbol, value)
-
-Assign a value to a symbol in the current task's task-local storage.
-"""
-task_local_storage(symbol, value)
-
-"""
-    task_local_storage(body, symbol, value)
-
-Call the function `body` with a modified task-local storage, in which `value` is assigned to
-`symbol`; the previous value of `symbol`, or lack thereof, is restored afterwards. Useful
-for emulating dynamic scoping.
-"""
-task_local_storage(body, symbol, value)
 
 """
     diff(A, [dim])
@@ -1165,13 +1130,6 @@ Convert all arguments to their common promotion type (if any), and return them a
 promote
 
 """
-    @schedule
-
-Wrap an expression in a `Task` and add it to the local machine's scheduler queue.
-"""
-:@schedule
-
-"""
     gradient(F, [h])
 
 Compute differences along vector `F`, using `h` as the spacing between points. The default
@@ -1528,15 +1486,6 @@ Dict{String,Float64} with 3 entries:
 ```
 """
 merge
-
-"""
-    yield()
-
-Switch to the scheduler to allow another scheduled task to run. A task that calls this
-function is still runnable, and will be restarted immediately if there are no other runnable
-tasks.
-"""
-yield
 
 """
     transpose!(dest,src)
@@ -2280,14 +2229,6 @@ Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
 lu
 
 """
-    @task
-
-Wrap an expression in a `Task` without executing it, and return the `Task`. This only
-creates a task, and does not run it.
-"""
-:@task
-
-"""
     fld(x, y)
 
 Largest integer less than or equal to `x/y`.
@@ -2847,16 +2788,6 @@ warn
 Compute the inverse error function of a real `x`, defined by ``\\operatorname{erf}(\\operatorname{erfinv}(x)) = x``.
 """
 erfinv
-
-"""
-    @async
-
-Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
-machine's scheduler queue. Additionally it adds the task to the set of items that the
-nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...`
-block to create a new scope with copies of all variables referenced in the expression.
-"""
-:@async
 
 """
     readdir([dir]) -> Vector{String}
@@ -4229,13 +4160,6 @@ Like `selectperm`, but accepts a preallocated index vector `ix`. If `initialized
 selectperm!
 
 """
-    istaskdone(task) -> Bool
-
-Tell whether a task has exited.
-"""
-istaskdone
-
-"""
     .>(x, y)
 
 Element-wise greater-than comparison operator.
@@ -4380,15 +4304,6 @@ mktemp(::Function, ?)
 Determine whether a stream is read-only.
 """
 isreadonly
-
-"""
-    notify(condition, val=nothing; all=true, error=false)
-
-Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
-all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
-is raised as an exception in the woken tasks.
-"""
-notify
 
 """
     view(A, inds...)
@@ -5082,15 +4997,6 @@ min
 Type conversion cannot be done exactly.
 """
 InexactError
-
-"""
-    @sync
-
-Wait until all dynamically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@parallel`
-are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
-"""
-:@sync
 
 """
     typemax(T)
@@ -6961,18 +6867,6 @@ base64-encoded string.
 base64encode
 
 """
-    Condition()
-
-Create an edge-triggered event source that tasks can wait for. Tasks that call `wait` on a
-`Condition` are suspended and queued. Tasks are woken up when `notify` is later called on
-the `Condition`. Edge triggering means that only tasks waiting at the time `notify` is
-called can be woken up. For level-triggered notifications, you must keep extra state to keep
-track of whether a notification has happened. The `Channel` type does this, and so can be
-used for level-triggered events.
-"""
-Condition
-
-"""
     filt!(out, b, a, x, [si])
 
 Same as [`filt`](:func:`filt`) but writes the result into the `out` argument, which may
@@ -8186,16 +8080,6 @@ Bitwise or.
 Base.:(|)
 
 """
-    yieldto(task, arg = nothing)
-
-Switch to the given task. The first time a task is switched to, the task's function is
-called with no arguments. On subsequent switches, `arg` is returned from the task's last
-call to `yieldto`. This is a low-level call that only switches tasks, not considering states
-or scheduling in any way. Its use is discouraged.
-"""
-yieldto
-
-"""
     readandwrite(command)
 
 Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the
@@ -8358,13 +8242,6 @@ Compute the Dawson function (scaled imaginary error function) of `x`, defined by
 ``\\frac{\\sqrt{\\pi}}{2} e^{-x^2} \\operatorname{erfi}(x)``.
 """
 dawson
-
-"""
-    current_task()
-
-Get the currently running `Task`.
-"""
-current_task
 
 """
     randjump(r::MersenneTwister, jumps, [jumppoly]) -> Vector{MersenneTwister}

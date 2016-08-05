@@ -50,11 +50,28 @@ function show(io::IO, t::Task)
     print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), Sys.WORD_SIZE>>2))")
 end
 
+"""
+    @task
+
+Wrap an expression in a [`Task`](:class:`Task`) without executing it, and return the [`Task`](:class:`Task`). This only
+creates a task, and does not run it.
+"""
 macro task(ex)
     :(Task(()->$(esc(ex))))
 end
 
+"""
+    current_task()
+
+Get the currently running [`Task`](:class:`Task`).
+"""
 current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
+
+"""
+    istaskdone(task) -> Bool
+
+Tell whether a task has exited.
+"""
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
 
 """
@@ -71,9 +88,28 @@ function get_task_tls(t::Task)
     end
     (t.storage)::ObjectIdDict
 end
+
+"""
+    task_local_storage(key)
+
+Look up the value of a key in the current task's task-local storage.
+"""
 task_local_storage(key) = task_local_storage()[key]
+
+"""
+    task_local_storage(key, value)
+
+Assign a value to a key in the current task's task-local storage.
+"""
 task_local_storage(key, val) = (task_local_storage()[key] = val)
 
+"""
+    task_local_storage(body, key, value)
+
+Call the function `body` with a modified task-local storage, in which `value` is assigned to
+`key`; the previous value of `key`, or lack thereof, is restored afterwards. Useful
+for emulating dynamic scoping.
+"""
 function task_local_storage(body::Function, key, val)
     tls = task_local_storage()
     hadkey = haskey(tls,key)
@@ -277,6 +313,13 @@ function sync_end()
     nothing
 end
 
+"""
+    @sync
+
+Wait until all dynamically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@parallel`
+are complete. All exceptions thrown by enclosed async operations are collected and thrown as
+a `CompositeException`.
+"""
 macro sync(block)
     quote
         sync_begin()
@@ -305,6 +348,14 @@ function async_run_thunk(thunk)
     t
 end
 
+"""
+    @async
+
+Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
+machine's scheduler queue. Additionally it adds the task to the set of items that the
+nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...`
+block to create a new scope with copies of all variables referenced in the expression.
+"""
 macro async(expr)
     expr = localize_vars(esc(:(()->($expr))), false)
     :(async_run_thunk($expr))
