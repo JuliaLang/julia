@@ -23,13 +23,6 @@ tab-delimited text to `f` by either `writedlm(f, [x y])` or by `writedlm(f, zip(
 writedlm
 
 """
-    digamma(x)
-
-Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
-"""
-digamma
-
-"""
     fill!(A, x)
 
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
@@ -510,13 +503,6 @@ A string giving the literal bit representation of a number.
 bits
 
 """
-    invdigamma(x)
-
-Compute the inverse digamma function of `x`.
-"""
-invdigamma
-
-"""
     getindex(type[, elements...])
 
 Construct a 1-d array of the specified type. This is usually called with the syntax
@@ -594,13 +580,6 @@ Print elements of `items` to `io` with `delim` between them. If `last` is specif
 used as the final delimiter instead of `delim`.
 """
 join(io, items, delim, last)
-
-"""
-    lfact(x)
-
-Compute the logarithmic factorial of `x`
-"""
-lfact
 
 """
     deconv(b,a)
@@ -985,15 +964,6 @@ islink
 Test whether a matrix is lower triangular.
 """
 istril
-
-"""
-    lgamma(x)
-
-Compute the logarithm of the absolute value of [`gamma`](:func:`gamma`) for
-[`Real`](:obj:`Real`) `x`, while for [`Complex`](:obj:`Complex`) `x` it computes the
-logarithm of `gamma(x)`.
-"""
-lgamma
 
 """
     bin(n, [pad])
@@ -1423,13 +1393,6 @@ sum!
 Close an I/O stream. Performs a `flush` first.
 """
 close(stream::IO)
-
-"""
-    cospi(x)
-
-Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
-"""
-cospi
 
 """
     parentindexes(A)
@@ -2400,13 +2363,6 @@ Bessel function of the first kind of order 1, ``J_1(x)``.
 besselj1
 
 """
-    sinpi(x)
-
-Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
-"""
-sinpi
-
-"""
     select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
@@ -2852,13 +2808,6 @@ Seek a stream to the given position.
 seek
 
 """
-    acosd(x)
-
-Compute the inverse cosine of `x`, where the output is in degrees.
-"""
-acosd
-
-"""
     triu(M)
 
 Upper triangle of a matrix.
@@ -2991,13 +2940,6 @@ readdlm(source)
 Equivalent to `stat(file).size`.
 """
 filesize
-
-"""
-    sinc(x)
-
-Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
-"""
-sinc
 
 """
     cglobal((symbol, library) [, type=Void])
@@ -3630,13 +3572,6 @@ Returns the smallest eigenvalue of `A`.
 eigmin
 
 """
-    acscd(x)
-
-Compute the inverse cosecant of `x`, where the output is in degrees.
-"""
-acscd
-
-"""
     ltoh(x)
 
 Converts the endianness of a value from Little-endian to that used by the Host.
@@ -4113,13 +4048,6 @@ Change the owner and/or group of `path` to `owner` and/or `group`. If the value 
 is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
 """
 chown
-
-"""
-    gamma(x)
-
-Compute the gamma function of `x`.
-"""
-gamma
 
 """
     sin(x)
@@ -4821,13 +4749,6 @@ For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 pinv
 
 """
-    asecd(x)
-
-Compute the inverse secant of `x`, where the output is in degrees.
-"""
-asecd
-
-"""
     readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b); all=true)
 
 Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
@@ -4852,13 +4773,6 @@ The parameters to a function call do not match a valid signature. Argument `msg`
 descriptive error string.
 """
 ArgumentError
-
-"""
-    atand(x)
-
-Compute the inverse tangent of `x`, where the output is in degrees.
-"""
-atand
 
 """
     KeyError(key)
@@ -5026,13 +4940,6 @@ ndims
 Test whether a matrix is Hermitian.
 """
 ishermitian
-
-"""
-    sind(x)
-
-Compute sine of `x`, where `x` is in degrees.
-"""
-sind
 
 """
     min(x, y, ...)
@@ -5344,14 +5251,6 @@ two strings. For example
 `strings` can be any iterable over elements `x` which are convertible to strings via `print(io::IOBuffer, x)`.
 """
 join(strings, delim, last)
-
-"""
-    polygamma(m, x)
-
-Compute the polygamma function of order `m` of argument `x` (the `(m+1)th` derivative of the
-logarithm of `gamma(x)`)
-"""
-polygamma
 
 """
     isless(x, y)
@@ -6021,13 +5920,6 @@ Returns `string` with all characters converted to uppercase.
 uppercase
 
 """
-    cosd(x)
-
-Compute cosine of `x`, where `x` is in degrees.
-"""
-cosd
-
-"""
     cycle(iter)
 
 An iterator that cycles through `iter` forever.
@@ -6464,13 +6356,6 @@ lengths of dimensions you asked for.
     (4,3)
 """
 size
-
-"""
-    trigamma(x)
-
-Compute the trigamma function of `x` (the logarithmic second derivative of `gamma(x)`).
-"""
-trigamma
 
 """
     findmin(A, dims) -> (minval, index)
@@ -7154,13 +7039,6 @@ but throws an error for unordered arguments.
 cmp
 
 """
-    tand(x)
-
-Compute tangent of `x`, where `x` is in degrees.
-"""
-tand
-
-"""
     issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
@@ -7535,14 +7413,6 @@ Test whether any values along the given dimensions of an array are `true`.
 any(::AbstractArray,dims)
 
 """
-    cosc(x)
-
-Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
-``x = 0``. This is the derivative of `sinc(x)`.
-"""
-cosc
-
-"""
     getkey(collection, key, default)
 
 Return the key matching argument `key` if one exists in `collection`, otherwise return `default`.
@@ -7562,13 +7432,6 @@ At_ldiv_Bt
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
 """
 Ac_mul_Bc
-
-"""
-    acotd(x)
-
-Compute the inverse cotangent of `x`, where the output is in degrees.
-"""
-acotd
 
 """
     zeros(type, dims)
@@ -8256,13 +8119,6 @@ julia> f(apple)
 ```
 """
 :@enum
-
-"""
-    asind(x)
-
-Compute the inverse sine of `x`, where the output is in degrees.
-"""
-asind
 
 """
     widemul(x, y)
