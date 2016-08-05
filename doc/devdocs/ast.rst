@@ -267,7 +267,7 @@ Input                    AST
 ``a:b``                  ``(: a b)``
 ``a:b:c``                ``(: a b c)``
 ``a,b``                  ``(tuple a b)``
-``a==b``                 ``(comparison a == b)``
+``a==b``                 ``(call == a b)``
 ``1<i<=n``               ``(comparison 1 < i <= n)``
 ``a.b``                  ``(. a (quote b))``
 ``a.(b)``                ``(. a b)``
