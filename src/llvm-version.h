@@ -2,53 +2,32 @@
 
 #include <llvm/Config/llvm-config.h>
 
-#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 4 && LLVM_VERSION_MINOR >= 0
-#define LLVM40 1
+// The LLVM version used, JL_LLVM_VERSION, is represented as a 5-digit integer
+// of the form ABBCC, where A is the major version, B is minor, and C is patch.
+// So for example, LLVM 3.7.0 is 30700.
+#define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
+                        + LLVM_VERSION_PATCH)
+
+#if JL_LLVM_VERSION != 30300 && JL_LLVM_VERSION < 30701
+    #error Only LLVM versions 3.3 and >= 3.7.1 are supported by Julia
 #endif
 
-#if defined(LLVM40) || (defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 9)
-#define LLVM39 1
-#endif
-
-#if defined(LLVM40) || (defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 8)
-#define LLVM38 1
-#define USE_ORCJIT
-#endif
-
-#if defined(LLVM40) || (defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 7)
-#define LLVM37 1
-
+#if JL_LLVM_VERSION >= 30800
+    #define USE_ORCJIT
 // We enable ORCJIT only if we have our custom patches
-#ifndef SYSTEM_LLVM
-#define USE_ORCJIT
+#elif JL_LLVM_VERSION >= 30700 && !defined(SYSTEM_LLVM)
+    #define USE_ORCJIT
 #endif
 
+#if JL_LLVM_VERSION >= 30400
+    #define USE_MCJIT
 #endif
 
-#if defined(LLVM40) || (defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6)
-#define LLVM36 1
-#endif
 
-#if defined(LLVM40) || (defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5)
-#define LLVM35 1
+//temporary, since in some places USE_MCJIT may be used instead of the correct LLVM version test
+#ifdef USE_ORCJIT
+    #define USE_MCJIT
 #endif
-
-#if defined(LLVM40) || (defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4)
-#define LLVM34 1
-#define USE_MCJIT
-#endif
-
-#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR >= 3
-#if defined(LLVM40) || LLVM_VERSION_MINOR >= 3
-#define LLVM33 1
-#endif
-#else
-#error LLVM versions < 3.3 are not supported by Julia
-#endif
-
-#ifdef USE_ORCJIT //temporary, since in some places USE_MCJIT may be used instead of the correct LLVM version test
-#define USE_MCJIT
-#endif
-#ifdef USE_ORCMCJIT //temporary, since in some places USE_MCJIT may be used instead of the correct LLVM version test
-#define USE_MCJIT
+#ifdef USE_ORCMCJIT
+    #define USE_MCJIT
 #endif
