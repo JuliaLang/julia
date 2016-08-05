@@ -101,6 +101,12 @@ using OAs
 
 let
 # Basics
+v0 = rand(4)
+v = OffsetArray(v0, (-3,))
+@test indices(v) == (-2:1,)
+@test_throws ErrorException size(v)
+@test_throws ErrorException size(v, 1)
+
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # LinearFast
 S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # LinearSlow
@@ -179,6 +185,10 @@ end
 
 # show
 io = IOBuffer()
+show(io, v)
+str = takebuf_string(io)
+show(io, v0)
+@test str == takebuf_string(io)
 show(io, A)
 str = takebuf_string(io)
 @test str == "[1 3; 2 4]"
@@ -261,7 +271,7 @@ v = view(A0, 1:1, i1)
 # logical indexing
 @test A[A .> 2] == [3,4]
 
-# copy!
+# copy! and fill!
 a = OffsetArray{Int}((-3:-1,))
 fill!(a, -1)
 copy!(a, (1,2))   # non-array iterables
@@ -316,6 +326,7 @@ copy!(am, b)
 @test am[1,8] == 2
 @test am[1,9] == -1
 
+# map
 dest = similar(am)
 map!(+, dest, am, am)
 @test dest[1,7] == 2
@@ -326,7 +337,13 @@ am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
 
+# other functions
+v = OffsetArray(v0, (-3,))
+@test_approx_eq v v
+@test parent(v') == v0'
+@test indices(v') === (1:1,-2:1)
 A = OffsetArray(rand(4,4), (-3,5))
+@test_approx_eq A A
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
@@ -352,6 +369,14 @@ pmax, ipmax = findmax(parent(A))
 @test amax == pmax
 @test A[iamax] == amax
 @test amax == parent(A)[ipmax]
+z = OffsetArray([0 0; 2 0; 0 0; 0 0], (-3,-1))
+I,J = findn(z)
+@test I == [-1]
+@test J == [0]
+I,J,N = findnz(z)
+@test I == [-1]
+@test J == [0]
+@test N == [2]
 
 v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
 v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
