@@ -26,6 +26,23 @@ function vect(X...)
     copy!(Array{T,1}(length(X)), X)
 end
 
+"""
+    size(A::AbstractArray, [dim...])
+
+Returns a tuple containing the dimensions of `A`. Optionally you can specify the
+dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
+lengths of dimensions you asked for.
+
+```jldoctest
+julia> A = ones(2,3,4);
+
+julia> size(A, 2)
+3
+
+julia> size(A,3,2)
+(4,3)
+```
+"""
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
 size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) = (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val{N})...)
 
@@ -72,9 +89,34 @@ linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,N}(::Type{AbstractArray{T,N}}) = T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
+"""
+    ndims(A::AbstractArray) -> Integer
+
+Returns the number of dimensions of `A`.
+
+```jldoctest
+julia> A = ones(3,4,5);
+
+julia> ndims(A)
+3
+```
+"""
 ndims{T,N}(::AbstractArray{T,N}) = N
 ndims{T,N}(::Type{AbstractArray{T,N}}) = N
 ndims{T<:AbstractArray}(::Type{T}) = ndims(supertype(T))
+
+"""
+    length(A::AbstractArray) -> Integer
+
+Returns the number of elements in `A`.
+
+```jldoctest
+julia> A = ones(3,4,5);
+
+julia> length(A)
+60
+```
+"""
 length(t::AbstractArray) = prod(size(t))
 _length(A::AbstractArray) = prod(map(unsafe_length, indices(A))) # circumvent missing size
 _length(A) = length(A)
@@ -89,9 +131,19 @@ end
 last(a) = a[end]
 
 """
-    stride(A, k)
+    stride(A, k::Integer)
 
 Returns the distance in memory (in number of elements) between adjacent elements in dimension `k`.
+
+```jldoctest
+julia> A = ones(3,4,5);
+
+julia> stride(A,2)
+3
+
+julia> stride(A,3)
+12
+```
 """
 function stride(a::AbstractArray, i::Integer)
     if i > ndims(a)
@@ -109,6 +161,13 @@ strides{T}(A::AbstractArray{T,0}) = ()
     strides(A)
 
 Returns a tuple of the memory strides in each dimension.
+
+```jldoctest
+julia> A = ones(3,4,5);
+
+julia> strides(A)
+(1,3,12)
+```
 """
 strides(A::AbstractArray) = _strides((1,), A)
 _strides{T,N}(out::NTuple{N}, A::AbstractArray{T,N}) = out
@@ -146,6 +205,22 @@ abstract LinearIndexing
 immutable LinearFast <: LinearIndexing end
 immutable LinearSlow <: LinearIndexing end
 
+"""
+    Base.linearindexing(A)
+
+`linearindexing` defines how an AbstractArray most efficiently accesses its elements. If
+`Base.linearindexing(A)` returns `Base.LinearFast()`, this means that linear indexing with
+only one index is an efficient operation. If it instead returns `Base.LinearSlow()` (by
+default), this means that the array intrinsically accesses its elements with indices
+specified for every dimension. Since converting a linear index to multiple indexing
+subscripts is typically very expensive, this provides a traits-based mechanism to enable
+efficient generic code for all array types.
+
+An abstract array subtype `MyArray` that wishes to opt into fast linear indexing behaviors
+should define `linearindexing` in the type-domain:
+
+    Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
+"""
 linearindexing(A::AbstractArray) = linearindexing(typeof(A))
 linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
 linearindexing{T<:Array}(::Type{T}) = LinearFast()
