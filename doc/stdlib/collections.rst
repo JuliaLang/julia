@@ -124,13 +124,13 @@ type.
          5
          7
          9
-         11
+        11
 
        julia> collect(take(a,3))
        3-element Array{Int64,1}:
-         1
-         3
-         5
+        1
+        3
+        5
 
 .. function:: drop(iter, n)
 
@@ -150,12 +150,12 @@ type.
          5
          7
          9
-         11
+        11
 
        julia> collect(drop(a,4))
        2-element Array{Int64,1}:
          9
-         11
+        11
 
 .. function:: cycle(iter)
 
@@ -295,7 +295,7 @@ Iterable Collections
 
        julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
 
-       julia> b = ['a','b','c']
+       julia> b = ['a','b','c'];
 
        julia> indexin(a,b)
        6-element Array{Int64,1}:
@@ -523,7 +523,7 @@ Iterable Collections
 
    .. doctest::
 
-       julia> findmax([8,0.1,-9,pi])
+       julia> findmin([8,0.1,-9,pi])
        (-9.0,3)
 
 .. function:: findmin(A, dims) -> (minval, index)
@@ -713,7 +713,7 @@ Iterable Collections
    .. doctest::
 
        julia> count(i->(4<=i<=6), [2,3,4,5,6])
-        3
+       3
 
 .. function:: any(p, itr) -> Bool
 
@@ -745,8 +745,7 @@ Iterable Collections
 
    .. doctest::
 
-       julia> a
-       1:3:7
+       julia> a = 1:3:7;
 
        julia> foreach(x->println(x^2),a)
        1

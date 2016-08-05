@@ -37,6 +37,15 @@ momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
 momenttype{T<:Union{Float64,Int32,Int64,UInt32,UInt64}}(::Type{T}) = Float64
 
+"""
+    mean(v[, region])
+
+Compute the mean of whole array `v`, or optionally along the dimensions in `region`.
+
+!!! note
+    Julia does not ignore `NaN` values in the computation. For applications requiring the
+    handling of missing data, the `DataArrays.jl` package is recommended.
+"""
 mean{T}(A::AbstractArray{T}, region) =
     mean!(reducedim_initarray(A, region, 0, momenttype(T)), A)
 
@@ -147,6 +156,19 @@ function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corre
     return R
 end
 
+"""
+    varm(v, m[, region]; corrected::Bool=true)
+
+Compute the sample variance of a collection `v` with known mean(s) `m`,
+optionally over `region`. `m` may contain means for each dimension of
+`v`. If `corrected` is `true`, then the sum is scaled with `n-1`,
+whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
+
+!!! note
+    Julia does not ignore `NaN` values in the computation. For
+    applications requiring the handling of missing data, the
+    `DataArrays.jl` package is recommended.
+"""
 varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
     varm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A, m; corrected=corrected)
 
@@ -198,12 +220,41 @@ stdm(A::AbstractArray, m::Number; corrected::Bool=true) =
 std(A::AbstractArray; corrected::Bool=true, mean=nothing) =
     sqrt(var(A; corrected=corrected, mean=mean))
 
+"""
+    std(v[, region]; corrected::Bool=true, mean=nothing)
+
+Compute the sample standard deviation of a vector or array `v`, optionally along dimensions
+in `region`. The algorithm returns an estimator of the generative distribution's standard
+deviation under the assumption that each entry of `v` is an IID drawn from that generative
+distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
+(length(v) - 1))`. A pre-computed `mean` may be provided. If `corrected` is `true`,
+then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is
+`false` where `n = length(x)`.
+
+!!! note
+    Julia does not ignore `NaN` values in the computation. For
+    applications requiring the handling of missing data, the
+    `DataArrays.jl` package is recommended.
+"""
 std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
     sqrt!(var(A, region; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
     sqrt(var(iterable, corrected=corrected, mean=mean))
 
+"""
+    stdm(v, m::Number; corrected::Bool=true)
+
+Compute the sample standard deviation of a vector `v`
+with known mean `m`. If `corrected` is `true`,
+then the sum is scaled with `n-1`, whereas the sum is
+scaled with `n` if `corrected` is `false` where `n = length(x)`.
+
+!!! note
+    Julia does not ignore `NaN` values in the computation. For
+    applications requiring the handling of missing data, the
+    `DataArrays.jl` package is recommended.
+"""
 stdm(iterable, m::Number; corrected::Bool=true) =
     std(iterable, corrected=corrected, mean=m)
 
@@ -266,7 +317,7 @@ covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1, corr
     cov(x[, corrected=true])
 
 Compute the variance of the vector `x`. If `corrected` is `true` (the default) then the sum
-is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
+is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 """
 cov(x::AbstractVector, corrected::Bool) = covm(x, Base.mean(x), corrected)
 # This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
@@ -276,7 +327,7 @@ cov{T<:AbstractVector}(x::T) = covm(x, Base.mean(x), true)
     cov(X[, vardim=1, corrected=true])
 
 Compute the covariance matrix of the matrix `X` along the dimension `vardim`. If `corrected`
-is `true` (the default) then the sum is scaled with `n-1` wheares the sum is scaled with `n`
+is `true` (the default) then the sum is scaled with `n-1`, whereas the sum is scaled with `n`
 if `corrected` is `false` where `n = size(X, vardim)`.
 """
 cov(X::AbstractMatrix, vardim::Int, corrected::Bool=true) =
@@ -288,7 +339,7 @@ cov{T<:AbstractMatrix}(X::T) = cov(X, 1, true)
     cov(x, y[, corrected=true])
 
 Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the default)
-then the sum is scaled with `n-1` wheares the sum is scaled with `n` if `corrected` is `false`
+then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is `false`
 where `n = length(x) = length(y)`.
 """
 cov(x::AbstractVector, y::AbstractVector, corrected::Bool) =
@@ -301,7 +352,7 @@ cov{T<:AbstractVector,S<:AbstractVector}(x::T, y::S) =
     cov(X, Y[, vardim=1, corrected=true])
 
 Compute the covariance between the vectors or matrices `X` and `Y` along the dimension
-`vardim`. If `corrected` is `true` (the default) then the sum is scaled with `n-1` wheares
+`vardim`. If `corrected` is `true` (the default) then the sum is scaled with `n-1`, whereas
 the sum is scaled with `n` if `corrected` is `false` where `n = size(X, vardim) = size(Y, vardim)`.
 """
 cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool=true) =
@@ -457,21 +508,41 @@ middle(x::Real) = (x + zero(x)) / 1
 """
     middle(x, y)
 
-Compute the middle of two reals `x` and `y`, which is equivalent in both value and type to computing their mean (`(x + y) / 2`).
+Compute the middle of two reals `x` and `y`, which is
+equivalent in both value and type to computing their mean (`(x + y) / 2`).
 """
 middle(x::Real, y::Real) = x/2 + y/2
 
 """
     middle(range)
 
-Compute the middle of a range, which consists in computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.
+Compute the middle of a range, which consists of computing the mean of its extrema.
+Since a range is sorted, the mean is performed with the first and last element.
+
+```jldoctest
+julia> middle(1:10)
+5.5
+```
 """
 middle(a::Range) = middle(a[1], a[end])
 
 """
-    middle(array)
+    middle(a)
 
-Compute the middle of an array, which consists in finding its extrema and then computing their mean.
+Compute the middle of an array `a`, which consists of finding its
+extrema and then computing their mean.
+
+```jldoctest
+julia> a = [1,2,3.6,10.9]
+4-element Array{Float64,1}:
+  1.0
+  2.0
+  3.6
+ 10.9
+
+julia> middle(a)
+5.95
+```
 """
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
@@ -493,6 +564,18 @@ end
 median!{T}(v::AbstractArray{T}) = median!(vec(v))
 median{T}(v::AbstractArray{T}) = median!(copy!(Array{T,1}(length(v)), v))
 
+"""
+    median(v[, region])
+
+Compute the median of an entire array `v`, or, optionally,
+along the dimensions in `region`. For an even number of
+elements no exact median element exists, so the result is
+equivalent to calculating mean of two median elements.
+
+!!! note
+    Julia does not ignore `NaN` values in the computation. For applications requiring the
+    handling of missing data, the `DataArrays.jl` package is recommended.
+"""
 median{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
 
 # for now, use the R/S definition of quantile; may want variants later
@@ -512,12 +595,19 @@ Quantiles are computed via linear interpolation between the points `((k-1)/(n-1)
 for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman and Fan
 (1996), and is the same as the R default.
 
+!!! note
+    Julia does not ignore `NaN` values in the computation. For applications requiring the
+    handling of missing data, the `DataArrays.jl` package is recommended. `quantile!` will
+    throw an `ArgumentError` in the presence of `NaN` values in the data array.
+
 * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 """
 function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
                    sorted::Bool=false)
-    size(p) == size(q) || throw(DimensionMismatch())
+    if size(p) != size(q)
+        throw(DimensionMismatch("size of p, $(size(p)), must equal size of q, $(size(q))"))
+    end
 
     isempty(v) && throw(ArgumentError("empty data vector"))
 
@@ -592,6 +682,11 @@ The `p` should be on the interval [0,1], and `v` should not have any `NaN` value
 Quantiles are computed via linear interpolation between the points `((k-1)/(n-1), v[k])`,
 for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman and Fan
 (1996), and is the same as the R default.
+
+!!! note
+    Julia does not ignore `NaN` values in the computation. For applications requiring the
+    handling of missing data, the `DataArrays.jl` package is recommended. `quantile` will
+    throw an `ArgumentError` in the presence of `NaN` values in the data array.
 
 * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
