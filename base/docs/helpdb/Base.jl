@@ -2188,13 +2188,6 @@ Bessel function of the second kind of order 1, ``Y_1(x)``.
 bessely1
 
 """
-    besseljx(nu, x)
-
-Scaled Bessel function of the first kind of order `nu`, ``J_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
-"""
-besseljx
-
-"""
     print(x)
 
 Write (to the default output stream) a canonical (un-decorated) text representation of a
