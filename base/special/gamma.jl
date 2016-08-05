@@ -2,6 +2,12 @@
 
 gamma(x::Float64) = nan_dom_err(ccall((:tgamma,libm),  Float64, (Float64,), x), x)
 gamma(x::Float32) = nan_dom_err(ccall((:tgammaf,libm),  Float32, (Float32,), x), x)
+
+"""
+    gamma(x)
+
+Compute the gamma function of `x`.
+"""
 gamma(x::Real) = gamma(float(x))
 @vectorize_1arg Number gamma
 
@@ -19,6 +25,11 @@ lgamma_r(x::Real) = lgamma_r(float(x))
 lgamma_r(x::Number) = lgamma(x), 1 # lgamma does not take abs for non-real x
 "`lgamma_r(x)`: return L,s such that `gamma(x) = s * exp(L)`" lgamma_r
 
+"""
+    lfact(x)
+
+Compute the logarithmic factorial of `x`
+"""
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
 @vectorize_1arg Number lfact
 
@@ -47,6 +58,13 @@ function clgamma_lanczos(z)
     return log(zz) - temp
 end
 
+"""
+    lgamma(x)
+
+Compute the logarithm of the absolute value of [`gamma`](:func:`gamma`) for
+[`Real`](:obj:`Real`) `x`, while for [`Complex`](:obj:`Complex`) `x` it computes the
+logarithm of `gamma(x)`.
+"""
 function lgamma(z::Complex)
     if real(z) <= 0.5
         a = clgamma_lanczos(1-z)
@@ -69,6 +87,11 @@ gamma(z::Complex) = exp(lgamma(z))
 #   const A002445 = [1,6,30,42,30,66,2730,6,510,798,330,138,2730,6,870,14322,510,6,1919190,6,13530]
 #   const bernoulli = A000367 .// A002445 # even-index Bernoulli numbers
 
+"""
+    digamma(x)
+
+Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
+"""
 function digamma(z::Union{Float64,Complex{Float64}})
     # Based on eq. (12), without looking at the accompanying source
     # code, of: K. S. Kölbig, "Programs for computing the logarithm of
@@ -98,6 +121,11 @@ function digamma(z::Union{Float64,Complex{Float64}})
     ψ -= t * @evalpoly(t,0.08333333333333333,-0.008333333333333333,0.003968253968253968,-0.004166666666666667,0.007575757575757576,-0.021092796092796094,0.08333333333333333,-0.4432598039215686)
 end
 
+"""
+    trigamma(x)
+
+Compute the trigamma function of `x` (the logarithmic second derivative of `gamma(x)`).
+"""
 function trigamma(z::Union{Float64,Complex{Float64}})
     # via the derivative of the Kölbig digamma formulation
     x = real(z)
@@ -360,6 +388,12 @@ function zeta(s::Union{Int,Float64,Complex{Float64}},
     return ζ
 end
 
+"""
+    polygamma(m, x)
+
+Compute the polygamma function of order `m` of argument `x` (the `(m+1)th` derivative of the
+logarithm of `gamma(x)`)
+"""
 function polygamma(m::Integer, z::Union{Float64,Complex{Float64}})
     m == 0 && return digamma(z)
     m == 1 && return trigamma(z)
@@ -445,6 +479,12 @@ function invdigamma(y::Float64)
     return x_new
 end
 invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
+
+"""
+    invdigamma(x)
+
+Compute the inverse digamma function of `x`.
+"""
 invdigamma(x::Real) = invdigamma(Float64(x))
 @vectorize_1arg Real invdigamma
 
