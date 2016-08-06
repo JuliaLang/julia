@@ -29,13 +29,13 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Tell whether a task has exited.
+   Determine whether a task has exited.
 
 .. function:: istaskstarted(task) -> Bool
 
    .. Docstring generated from Julia source
 
-   Tell whether a task has started executing.
+   Determine whether a task has started executing.
 
 .. function:: consume(task, values...)
 

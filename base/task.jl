@@ -70,14 +70,14 @@ current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 """
     istaskdone(task) -> Bool
 
-Tell whether a task has exited.
+Determine whether a task has exited.
 """
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
 
 """
     istaskstarted(task) -> Bool
 
-Tell whether a task has started executing.
+Determine whether a task has started executing.
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
