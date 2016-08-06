@@ -1258,7 +1258,7 @@ speye(m::Integer, n::Integer) = speye(Float64, m, n)
 """
     speye(S)
 
-Create a sparse identity matrix with the same size as that of `S`.
+Create a sparse identity matrix with the same size as `S`.
 
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])

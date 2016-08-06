@@ -1426,7 +1426,7 @@ end
     rol!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
 Performs a left rotation operation on `src` and puts the result into `dest`.
-`i` controls how far to rotate each bit.
+`i` controls how far to rotate the bits.
 """
 function rol!(dest::BitVector, src::BitVector, i::Integer)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
@@ -1444,7 +1444,7 @@ end
     rol!(B::BitVector, i::Integer) -> BitVector
 
 Performs a left rotation operation in-place on `B`.
-`i` controls how far to rotate each bit.
+`i` controls how far to rotate the bits.
 """
 function rol!(B::BitVector, i::Integer)
     return rol!(B, B, i)
@@ -1454,7 +1454,7 @@ end
     rol(B::BitVector, i::Integer) -> BitVector
 
 Performs a left rotation operation, returning a new `BitVector`.
-`i` controls how far to rotate each bit.
+`i` controls how far to rotate the bits.
 See also [`rol!`](:func:`rol!`).
 
 ```jldoctest
@@ -1499,7 +1499,7 @@ end
     ror!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
 Performs a right rotation operation on `src` and puts the result into `dest`.
-`i` controls how far to rotate each bit.
+`i` controls how far to rotate the bits.
 """
 function ror!(dest::BitVector, src::BitVector, i::Integer)
     length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
@@ -1517,7 +1517,7 @@ end
     ror!(B::BitVector, i::Integer) -> BitVector
 
 Performs a right rotation operation in-place on `B`.
-`i` controls how far to rotate each bit.
+`i` controls how far to rotate the bits.
 """
 function ror!(B::BitVector, i::Integer)
     return ror!(B, B, i)
@@ -1527,7 +1527,7 @@ end
     ror(B::BitVector, i::Integer) -> BitVector
 
 Performs a right rotation operation on `B`, returning a new `BitVector`.
-`i` controls how far to rotate each bit.
+`i` controls how far to rotate the bits.
 See also [`ror!`](:func:`ror!`).
 
 ```jldoctest
