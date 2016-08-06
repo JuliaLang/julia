@@ -71,7 +71,7 @@ print(io::IO, s::AbstractString) = (write(io, s); nothing)
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
-write(to::AbstractIOBuffer, s::SubString{String}) =
+write(to::IOBufferBase, s::SubString{String}) =
     s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset + 1, nextind(s, s.endof) - 1)
 
 ## printing literal quoted string data ##

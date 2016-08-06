@@ -426,7 +426,7 @@ end
 
 @deprecate bytestring(s::Cstring) unsafe_string(s)
 @deprecate bytestring(v::Vector{UInt8}) String(copy(v))
-@deprecate bytestring(io::Base.AbstractIOBuffer) String(io)
+@deprecate bytestring(io::Base.IOBufferBase) String(io)
 @deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}) unsafe_string(p)
 @deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) unsafe_string(p,len)
 @deprecate bytestring(s::AbstractString...) string(s...)
@@ -774,6 +774,8 @@ function transpose(x)
         :transpose)
     return x
 end
+
+@deprecate_binding AbstractIOBuffer IOBufferBase
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

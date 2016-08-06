@@ -13,7 +13,7 @@ abstract LibuvServer <: IOServer
 abstract LibuvStream <: IO
 
 # IO
-# +- AbstractIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
+# +- IOBufferBase{T<:AbstractArray{UInt8,1}} (not exported)
 # +- AbstractPipe (not exported)
 # .  +- Pipe
 # .  +- Process (not exported)
@@ -28,7 +28,7 @@ abstract LibuvStream <: IO
 # .  +- TCPSocket
 # .  +- TTY (not exported)
 # .  +- UDPSocket
-# +- IOBuffer = Base.AbstractIOBuffer{Array{UInt8,1}}
+# +- IOBuffer = Base.IOBufferBase{Array{UInt8,1}}
 # +- IOStream
 
 # IOServer
