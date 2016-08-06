@@ -319,10 +319,13 @@ for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
     end
 end
 
-for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
-                    (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
+for (fa, fainv, fn) in ((:asec, :acos, "secant"), (:acsc, :asin, "cosecant"), (:acot, :atan, "cotangent"),
+                        (:asech, :acosh, "hyperbolic secant"), (:acsch, :asinh, "hyperbolic cosecant"), (:acoth, :atanh, "hyperbolic cotangent"))
+    name = string(fa)
     @eval begin
-        ($fa){T<:Number}(y::T) = ($fainv)(one(T) / y)
+        @doc """
+            $($name)(x)
+        Compute the $($fn) of `x`, where the output is in radians. """ ($fa){T<:Number}(y::T) = ($fainv)(one(T) / y)
         ($fa){T<:Number}(y::AbstractArray{T}) = ($fainv)(one(T) ./ y)
     end
 end
