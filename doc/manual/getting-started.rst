@@ -162,7 +162,7 @@ In addition to this manual, there are various other resources that may
 help new users get started with Julia:
 
 - `Julia and IJulia cheatsheet <http://math.mit.edu/~stevenj/Julia-cheatsheet.pdf>`_
-- `Learn Julia in a few minutes <http://learnxinyminutes.com/docs/julia/>`_
+- `Learn Julia in a few minutes <https://learnxinyminutes.com/docs/julia/>`_
 - `Learn Julia the Hard Way <https://github.com/chrisvoncsefalvay/learn-julia-the-hard-way>`_
 - `Julia by Example <http://samuelcolvin.github.io/JuliaByExample/>`_
 - `Hands-on Julia <https://github.com/dpsanders/hands_on_julia>`_
