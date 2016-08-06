@@ -238,7 +238,7 @@ Similarly for the :func:`monthname` function, a mapping of ``locale=>Dict{Int,UT
 TimeType-Period Arithmetic
 --------------------------
 
-It's good practice when using any language/date framework to be familiar with how date-period arithmetic is handled as there are some `tricky issues <http://codeblog.jonskeet.uk/2010/12/01/the-joys-of-date-time-arithmetic>`_ to deal with (though much less so for day-precision types).
+It's good practice when using any language/date framework to be familiar with how date-period arithmetic is handled as there are some `tricky issues <https://codeblog.jonskeet.uk/2010/12/01/the-joys-of-date-time-arithmetic/>`_ to deal with (though much less so for day-precision types).
 
 The :mod:`Dates` module approach tries to follow the simple principle of trying to change as little as possible when doing :class:`Period` arithmetic. This approach is also often known as *calendrical* arithmetic or what you would probably guess if someone were to ask you the same calculation in a conversation. Why all the fuss about this? Let's take a classic example: add 1 month to January 31st, 2014. What's the answer? Javascript will say `March 3 <http://www.markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/>`_ (assumes 31 days). PHP says `March 2 <http://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month>`_ (assumes 30 days). The fact is, there is no right answer. In the :mod:`Dates` module, it gives the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7 gambling game in casinos.
 
