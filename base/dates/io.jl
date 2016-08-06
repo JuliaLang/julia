@@ -40,18 +40,19 @@ immutable DelimitedSlot{T<:Any} <: Slot{T}
     parser::Type{T}
     letter::Char
     width::Int
-    transition::Union{Regex,AbstractString}
+    prefix::AbstractString
+    suffix::Union{Regex,AbstractString}
 end
 
 immutable FixedWidthSlot{T<:Any} <: Slot{T}
     parser::Type{T}
     letter::Char
     width::Int
+    prefix::AbstractString
 end
 
 immutable DateFormat
     slots::Array{Slot,1}
-    prefix::AbstractString # optional transition from the start of a string to the 1st slot
     locale::AbstractString
 end
 
@@ -69,7 +70,6 @@ setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(k
 keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el) && c.rules[el] != Void, eachindex(c.rules)))
 
 SLOT_RULE['y'] = Year
-SLOT_RULE['Y'] = Year
 SLOT_RULE['m'] = Month
 SLOT_RULE['u'] = Month
 SLOT_RULE['U'] = Month
@@ -101,122 +101,128 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
         letter = f[m.offset]
         typ = SLOT_RULE[letter]
-
         width = length(m.match)
-        tran = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
 
-        if isempty(params)
-            prefix = tran
-        else
-            slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
+        suffix = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
+        if !isempty(params)
+            slot = if suffix == ""
+                FixedWidthSlot(params..., prefix)
+            else
+                DelimitedSlot(params..., prefix, suffix)
+            end
             push!(slots,slot)
         end
 
         params = (typ,letter,width)
         last_offset = m.offset + width
+        prefix = suffix
     end
 
+    suffix = last_offset > endof(f) ? r"(?=\s|$)" : replace(f[last_offset:end], r"\\(.)", s"\1")
     if !isempty(params)
-        if last_offset > endof(f)
-            slot = DelimitedSlot(params..., r"(?=\s|$)")
+        slot = if suffix == ""
+            FixedWidthSlot(params..., prefix)
         else
-            tran = replace(f[last_offset:end], r"\\(.)", s"\1")
-            if tran == ""
-                slot = FixedWidthSlot(params...)
-            else
-                slot = DelimitedSlot(params..., tran)
-            end
+            DelimitedSlot(params..., prefix, suffix)
         end
         push!(slots,slot)
     end
 
     duplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
-    return DateFormat(slots,prefix,locale)
+    return DateFormat(slots,locale)
 end
 
 const SLOTERROR = ArgumentError("Non-digit character encountered")
-slotparse(slot,x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(x) : throw(SLOTERROR)
-function slotparse(slot::Slot{Month},x,locale)
-    if slot.letter == 'm'
-        ismatch(r"[^0-9\s]",x) ? throw(SLOTERROR) : return Month(x)
+slotparse(slot,str,locale) = isdigit(str) ? slot.parser(str) : throw(SLOTERROR)
+function slotparse(slot::Slot{Month},str,locale)
+    s = if slot.letter == 'm'
+        isdigit(str) ? str : throw(SLOTERROR)
     elseif slot.letter == 'u'
-        return Month(MONTHTOVALUEABBR[locale][lowercase(x)])
+        MONTHTOVALUEABBR[locale][lowercase(str)]
     else
-        return Month(MONTHTOVALUE[locale][lowercase(x)])
+        MONTHTOVALUE[locale][lowercase(str)]
     end
+    return Month(s)
 end
-slotparse(slot::Slot{Millisecond},x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
-slotparse(slot::Slot{DayOfWeekSlot},x,locale) = nothing
+function slotparse(slot::Slot{Millisecond},str,locale)
+    isdigit(str) || throw(SLOTERROR)
+    return slot.parser(endswith(slot.prefix, '.') ? rpad(str, 3, '0') : str)
+end
+slotparse(slot::Slot{DayOfWeekSlot},str,locale) = nothing
 
-function getslot(x,slot::DelimitedSlot,locale,cursor)
-    endind = first(search(x,slot.transition,nextind(x,cursor)))
-    if endind == 0 # we didn't find the next delimiter
-        s = x[cursor:end]
-        index = endof(x)+1
+function getslot(str,slot::DelimitedSlot,locale,cursor)
+    index = search(str, slot.suffix, nextind(str, cursor))
+    if first(index) == 0  # we didn't find the next delimiter
+        s = str[cursor:end]
+        cursor = endof(str) + 1
     else
-        s = x[cursor:(endind-1)]
-        index = nextind(x,endind)
+        s = str[cursor:(first(index) - 1)]
+        cursor = nextind(str, last(index))
     end
-    return index, slotparse(slot,s,locale)
+    return cursor, slotparse(slot, strip(s),locale)
 end
-getslot(x,slot,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)], locale))
+function getslot(str,slot,locale,cursor)
+    cursor + slot.width, slotparse(slot, strip(str[cursor:(cursor + slot.width - 1)]), locale)
+end
 
-function parse(x::AbstractString,df::DateFormat)
-    x = strip(x)
-    startswith(x, df.prefix) && (x = replace(x, df.prefix, "", 1))
-    isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
-    if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].transition)) == 0
-        throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].transition)\", in date string"))
+function parse(str::AbstractString,df::DateFormat)
+    str = strip(str)
+    startswith(str, df.slots[1].prefix) && (str = replace(str, df.slots[1].prefix, "", 1))
+    isempty(str) && throw(ArgumentError("Cannot parse empty format string"))
+    if isa(df.slots[1], DelimitedSlot) && first(search(str, df.slots[1].suffix)) == 0
+        throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].suffix)\", in date string"))
     end
     periods = Period[]
     extra = Any[]  # Supports custom slot types such as TimeZone
     cursor = 1
     for slot in df.slots
-        cursor, pe = getslot(x,slot,df.locale,cursor)
-        pe !== nothing && (isa(pe,Period) ? push!(periods,pe) : push!(extra,pe))
-        cursor > endof(x) && break
+        cursor, pe = getslot(str, slot, df.locale, cursor)
+        pe !== nothing && (isa(pe, Period) ? push!(periods, pe) : push!(extra, pe))
+        cursor > endof(str) && break
     end
     sort!(periods,rev=true,lt=periodisless)
-    if isempty(extra)
-        return periods
-    else
-        return vcat(periods, extra)
-    end
+    return isempty(extra) ? periods : vcat(periods, extra)
 end
 
-slotformat(slot,dt,locale) = lpad(string(value(slot.parser(dt))),slot.width,"0")
-function slotformat(slot::Slot{Year},dt,locale)
-    s = lpad(string(value(slot.parser(dt))),slot.width,"0")
-    if slot.letter == 'y'
-        return s[(end-slot.width+1):end]  # Truncate the year
-    else # == 'Y'
-        return s
-    end
+function slotformat(slot,dt)
+    s = string(value(slot.parser(dt)))
+    return slot.width > 1 ? lpad(s, slot.width, '0')[(end - slot.width + 1):end] : s
 end
+slotformat(slot,dt,locale) = slotformat(slot,dt)
 function slotformat(slot::Slot{Month},dt,locale)
-    if slot.letter == 'm'
-        return lpad(month(dt),slot.width,"0")
+    s = if slot.letter == 'm'
+        slotformat(slot,dt)
     elseif slot.letter == 'u'
-        return VALUETOMONTHABBR[locale][month(dt)]
+        VALUETOMONTHABBR[locale][month(dt)]
     else
-        return VALUETOMONTH[locale][month(dt)]
+        VALUETOMONTH[locale][month(dt)]
     end
+    return rpad(s, slot.width, ' ')
 end
 function slotformat(slot::Slot{DayOfWeekSlot},dt,locale)
-    if slot.letter == 'e'
-        return VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
+    s = if slot.letter == 'e'
+        VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
     else # == 'E'
-        return VALUETODAYOFWEEK[locale][dayofweek(dt)]
+        VALUETODAYOFWEEK[locale][dayofweek(dt)]
+    end
+    return rpad(s, slot.width, ' ')
+end
+function slotformat(slot::Slot{Millisecond},dt,locale)
+    if endswith(slot.prefix, '.')
+        s = string(millisecond(dt) / 1000)[3:end]
+        return slot.width > 1 ? rpad(s, slot.width, '0')[1:slot.width] : s
+    else
+        s = string(millisecond(dt))
+        return slot.width > 1 ? lpad(s, slot.width, '0')[(end - slot.width + 1):end] : s
     end
 end
-slotformat(slot::Slot{Millisecond},dt,locale) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")
 
 function format(dt::TimeType,df::DateFormat)
-    f = df.prefix
+    f = first(df.slots).prefix
     for slot in df.slots
         f *= slotformat(slot,dt,df.locale)
         if isa(slot, DelimitedSlot)
-            f *= isa(slot.transition, AbstractString) ? slot.transition : ""
+            f *= isa(slot.suffix, AbstractString) ? slot.suffix : ""
         end
     end
     return f
@@ -237,23 +243,35 @@ string:
 | Code       | Matches   | Comment                                                      |
 |:-----------|:----------|:-------------------------------------------------------------|
 | `y`        | 1996, 96  | Returns year of 1996, 0096                                   |
-| `Y`        | 1996, 96  | Returns year of 1996, 0096. Equivalent to `y`                |
-| `m`        | 1, 01     | Matches 1 or 2-digit months                                  |
+| `m`        | 1, 01     | Matches numeric month                                        |
 | `u`        | Jan       | Matches abbreviated months according to the `locale` keyword |
 | `U`        | January   | Matches full month names according to the `locale` keyword   |
-| `d`        | 1, 01     | Matches 1 or 2-digit days                                    |
+| `d`        | 1, 01     | Matches the day of the month                                 |
 | `H`        | 00        | Matches hours                                                |
 | `M`        | 00        | Matches minutes                                              |
 | `S`        | 00        | Matches seconds                                              |
-| `s`        | .500      | Matches milliseconds                                         |
+| `s`        | 500       | Matches milliseconds                                         |
 | `e`        | Mon, Tues | Matches abbreviated days of the week                         |
 | `E`        | Monday    | Matches full name days of the week                           |
-| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
 
-Characters not listed above are normally treated as delimiters between date and time slots.
-For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
-"y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using
-backslash. The date "1995y01m" would have the format "y\\ym\\m".
+Any non-code characters are treated as delimiters between date and time slots. For example:
+```jldoctest
+julia> DateTime("1996-01-15T00:00:00.0", "y-m-dTH:M:S.s")
+1996-01-15T00:00:00
+```
+
+When delimiters do not exist then the width of the code character controls how the string is
+parsed.
+```jldoctest
+julia> DateTime("19960115", "yyyymmdd")
+1996-01-15T00:00:00
+```
+
+If you need to use a code character as a delimiter you can escape it using backslash.
+```jldoctest
+julia> DateTime("1995y01m", "y\\ym\\m")
+1995-01-01T00:00:00
+```
 """
 DateTime(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = DateTime(dt,DateFormat(format,locale))
 
@@ -292,30 +310,56 @@ following character codes can be used to construct the `format` string:
 
 | Code       | Examples  | Comment                                                      |
 |:-----------|:----------|:-------------------------------------------------------------|
-| `y`        | 6         | Numeric year with a fixed width                              |
-| `Y`        | 1996      | Numeric year with a minimum width                            |
-| `m`        | 1, 12     | Numeric month with a minimum width                           |
-| `u`        | Jan       | Month name shortened to 3-chars according to the `locale`    |
+| `y`        | 1996      | Numeric year                                                 |
+| `m`        | 1, 12     | Numeric month                                                |
+| `u`        | Jan       | Month name abbreviation according to the `locale` keyword    |
 | `U`        | January   | Full month name according to the `locale` keyword            |
-| `d`        | 1, 31     | Day of the month with a minimum width                        |
-| `H`        | 0, 23     | Hour (24-hour clock) with a minimum width                    |
-| `M`        | 0, 59     | Minute with a minimum width                                  |
-| `S`        | 0, 59     | Second with a minimum width                                  |
-| `s`        | 000, 500  | Millisecond with a minimum width of 3                        |
-| `e`        | Mon, Tue  | Abbreviated days of the week                                 |
-| `E`        | Monday    | Full day of week name                                        |
+| `d`        | 1, 31     | Day of the month                                             |
+| `H`        | 0, 23     | Hour (24-hour clock)                                         |
+| `M`        | 0, 59     | Minute                                                       |
+| `S`        | 0, 59     | Second                                                       |
+| `s`        | 0, 999    | Millisecond                                                  |
+| `e`        | Mon, Tue  | Abbreviated day of the week                                  |
+| `E`        | Monday    | Named day of the week                                        |
 
 The number of sequential code characters indicate the width of the code. A format of
 `yyyy-mm` specifies that the code `y` should have a width of four while `m` a width of two.
-Codes that yield numeric digits have an associated mode: fixed-width or minimum-width.
-The fixed-width mode left-pads the value with zeros when it is shorter than the specified
-width and truncates the value when longer. Minimum-width mode works the same as fixed-width
-except that it does not truncate values longer than the width.
+Codes that yield numeric digits and have a width greater than one will be truncated or
+left-padded with zeros to match the specified width. Codes with a width of one are not
+truncated.
 
-When creating a `format` you can use any non-code characters as a separator. For example to
-generate the string "1996-01-15T00:00:00" you could use `format`: "yyyy-mm-ddTHH:MM:SS".
-Note that if you need to use a code character as a literal you can use the escape character
-backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
+Any non-code characters are treated as separator between date and time slots. For example:
+```jldoctest
+julia> Dates.format(DateTime(1996,1,15), "y-mm-ddTHH:MM:SS")
+"1996-01-15T00:00:00"
+```
+
+The millisecond code `s` has a special behaviour when it is directly preceeded by a period:
+```jldoctest
+julia> dt = DateTime(1,1,1,0,0,0,25)
+0001-01-01T00:00:00.025
+
+julia> Dates.format(dt, "s")
+"25"
+
+julia> Dates.format(dt, ".s")
+".025"
+
+julia> dt = DateTime(1,1,1,0,0,0,250)
+0001-01-01T00:00:00.25
+
+julia> Dates.format(dt, "s")
+"250"
+
+julia> Dates.format(dt, ".s")
+".25"
+```
+
+If you need to use a code character as a separator you can escape it using backslash.
+```jldoctest
+julia> Dates.format(DateTime(1995), "yyyy\\ymm\\m")
+"1995y01m"
+```
 """
 format(dt::TimeType,f::AbstractString;locale::AbstractString="english") = format(dt,DateFormat(f,locale))
 

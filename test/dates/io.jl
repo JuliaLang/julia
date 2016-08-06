@@ -17,7 +17,7 @@
 @test string(Dates.DateTime(2000,1,1,0,0,0,998)) == "2000-01-01T00:00:00.998"
 @test string(Dates.DateTime(2000,1,1,0,0,0,999)) == "2000-01-01T00:00:00.999"
 
-# DateTime parsing
+# DateTime parsing and formatting
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
 # Using parse directly allows for more flexibility.
@@ -29,6 +29,65 @@ end
 
 # Issue #13644: Ensure that Dates.parse returns a Period array when no custom slots are used.
 @test eltype(Dates.parse("1942-12-25T01:23:45", Dates.DateFormat("yyyy-mm-ddTHH:MM:SS", "english"))) == Dates.Period
+
+let d = Dates.Date(1996, 1, 15)
+    @test Dates.format(d, "y") == "1996"
+    @test Dates.format(d, "yy") == "96"
+    @test Dates.format(d, "yyyy") == "1996"
+    @test Dates.format(d, "yyyyyy") == "001996"
+    @test Dates.format(d, "m") == "1"
+    @test Dates.format(d, "mm") == "01"
+    @test Dates.format(d, "d") == "15"
+    @test Dates.format(d, "dd") == "15"
+end
+
+# Issue 15195
+let d = Dates.Date(typemax(Dates.Date))
+    @test Dates.format(d, "y") == "252522163911149"
+    @test Dates.format(d, "yy") == "49"
+    @test Dates.format(d, "yyyy") == "1149"
+end
+
+# Milliseconds formatting works differently when preceeded by a period
+let dt = Dates.DateTime(1,1,1,0,0,0,250)
+    @test Dates.format(dt, "s") == "250"
+    @test Dates.format(dt, "ss") == "50"
+    @test Dates.format(dt, "sss") == "250"
+    @test Dates.format(dt, "ssss") == "0250"
+    @test Dates.format(dt, ".s") == ".25"
+    @test Dates.format(dt, ".ss") == ".25"
+    @test Dates.format(dt, ".sss") == ".250"
+    @test Dates.format(dt, ".ssss") == ".2500"
+
+    @test Dates.DateTime("250", "s") == dt
+    @test Dates.DateTime("250", "ss") == dt
+    @test Dates.DateTime("250", "sss") == dt
+    @test Dates.DateTime("250", "ssss") == dt
+    @test Dates.DateTime(".25", ".s") == dt
+    @test Dates.DateTime(".25", ".ss") == dt
+    @test Dates.DateTime(".25", ".sss") == dt
+    @test Dates.DateTime(".25", ".ssss") == dt
+end
+
+let dt = Dates.DateTime(1,1,1,0,0,0,25)
+    @test Dates.format(dt, "s") == "25"
+    @test Dates.format(dt, "ss") == "25"
+    @test Dates.format(dt, "sss") == "025"
+    @test Dates.format(dt, "ssss") == "0025"
+    @test Dates.format(dt, ".s") == ".025"
+    @test Dates.format(dt, ".ss") == ".02"
+    @test Dates.format(dt, ".sss") == ".025"
+    @test Dates.format(dt, ".ssss") == ".0250"
+
+    @test Dates.DateTime("25", "s") == dt
+    @test Dates.DateTime("25", "ss") == dt
+    @test Dates.DateTime("25", "sss") == dt
+    @test Dates.DateTime("25", "ssss") == dt
+    @test Dates.DateTime(".025", ".s") == dt
+    @test Dates.DateTime(".025", ".ss") == dt
+    @test Dates.DateTime(".025", ".sss") == dt
+    @test Dates.DateTime(".025", ".ssss") == dt
+end
 
 # Common Parsing Patterns
 #'1996-January-15'
@@ -203,6 +262,8 @@ f = "/yyyy/m/d"
 # from Jiahao
 @test Dates.Date("2009年12月01日","yyyy年mm月dd日") == Dates.Date(2009,12,1)
 @test Dates.format(Dates.Date(2009,12,1),"yyyy年mm月dd日") == "2009年12月01日"
+@test Dates.Date("2009(年)12(月)01(日)","yyyy(年)mm(月)dd(日)") == Dates.Date(2009,12,1)
+@test Dates.format(Dates.Date(2009,12,1),"yyyy(年)mm(月)dd(日)") == "2009(年)12(月)01(日)"
 @test Dates.Date("2009-12-01","yyyy-mm-dd") == Dates.Date(2009,12,1)
 
 # French: from Milan
@@ -215,7 +276,7 @@ const french = Dict("janv"=>1,"févr"=>2,"mars"=>3,"avril"=>4,"mai"=>5,"juin"=>6
 Dates.MONTHTOVALUEABBR["french"] = french
 Dates.VALUETOMONTHABBR["french"] = Dict(v=>k for (k,v) in french)
 
-f = "dd uuuuu yyyy"
+f = "dd uuu yyyy"
 @test Dates.Date("28 mai 2014",f;locale="french") == Dates.Date(2014,5,28)
 @test Dates.format(Dates.Date(2014,5,28),f;locale="french") == "28 mai 2014"
 @test Dates.Date("28 févr 2014",f;locale="french") == Dates.Date(2014,2,28)
@@ -238,13 +299,13 @@ f = "dduuuyy"
 f = "dduuuyyyy"
 @test Dates.Date("01Dec2009",f) == Dates.Date(2009,12,1)
 @test Dates.format(Dates.Date(2009,12,1),f) == "01Dec2009"
-f = "duy"
+f = "duyy"
 const globex = Dict("f"=>Dates.Jan,"g"=>Dates.Feb,"h"=>Dates.Mar,"j"=>Dates.Apr,"k"=>Dates.May,"m"=>Dates.Jun,
                     "n"=>Dates.Jul,"q"=>Dates.Aug,"u"=>Dates.Sep,"v"=>Dates.Oct,"x"=>Dates.Nov,"z"=>Dates.Dec)
 Dates.MONTHTOVALUEABBR["globex"] = globex
 Dates.VALUETOMONTHABBR["globex"] = Dict(v=>uppercase(k) for (k,v) in globex)
-@test Dates.Date("1F4",f;locale="globex") + Dates.Year(2010) == Dates.Date(2014,1,1)
-@test Dates.format(Dates.Date(2014,1,1),f;locale="globex") == "1F4"
+@test Dates.Date("1F14",f;locale="globex") + Dates.Year(2000) == Dates.Date(2014,1,1)
+@test Dates.format(Dates.Date(2014,1,1),f;locale="globex") == "1F14"
 
 # From Matt Bauman
 f = "yyyy-mm-ddTHH:MM:SS"
@@ -324,14 +385,11 @@ dt = Dates.DateTime(2014,8,23,17,22,15)
 @test Dates.format(Dates.DateTime(2014,11,2,0,0,0,9),Dates.RFC1123Format) == "Sun, 02 Nov 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,12,5,0,0,0,9),Dates.RFC1123Format) == "Fri, 05 Dec 2014 00:00:00"
 
-# Issue 15195
-let f = "YY"
-    @test Dates.format(Dates.Date(1999), f) == "1999"
-    @test Dates.format(Dates.Date(9), f) == "09"
-    @test Dates.format(typemax(Dates.Date), f) == "252522163911149"
-end
-
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
+let
+    @test Dates.DateTime("1995y01m", "y\\ym\\m") == Dates.DateTime(1995)
+    @test Dates.DateTime("1995yy01", "y\\y\\ym") == Dates.DateTime(1995)
+end
 let
     ds = "2015-07-24T05:38:19.591Z"
     dt = Dates.DateTime(2015,7,24,5,38,19,591)
@@ -359,3 +417,35 @@ let
     @test DateTime(ds, format) == dt
     @test DateTime(ds, escaped_format) == dt
 end
+
+# PR: 15588
+let dt = Dates.DateTime(1991, 2, 3, 4, 5, 6, 7)
+    @test Dates.format(dt, "y") == "1991"
+    @test Dates.format(dt, "yy") == "91"
+    @test Dates.format(dt, "yyyy") == "1991"
+    @test Dates.format(dt, "yyyyyy") == "001991"
+    @test Dates.format(dt, "m") == "2"
+    @test Dates.format(dt, "mm") == "02"
+    @test Dates.format(dt, "mmm") == "002"
+    @test Dates.format(dt, "s") == "7"
+    @test Dates.format(dt, "ssss") == "0007"
+    @test Dates.format(dt, ".s") == ".007"
+    @test Dates.format(dt, ".ssss") == ".0070"
+end
+
+let dt = Dates.DateTime(54321, 12, 13, 14, 55, 56, 997)
+    @test Dates.format(dt, "y") == "54321"
+    @test Dates.format(dt, "yy") == "21"
+    @test Dates.format(dt, "yyyy") == "4321"
+    @test Dates.format(dt, "yyyyyy") == "054321"
+    @test Dates.format(dt, "m") == "12"
+    @test Dates.format(dt, "mm") == "12"
+    @test Dates.format(dt, "mmm") == "012"
+    @test Dates.format(dt, "s") == "997"
+    @test Dates.format(dt, "ssss") == "0997"
+    @test Dates.format(dt, ".s") == ".997"
+    @test Dates.format(dt, ".ssss") == ".9970"
+end
+
+@test Dates.DateTime("25", "s") == Dates.DateTime(1,1,1,0,0,0,25)
+@test Dates.DateTime(".25", ".s") == Dates.DateTime(1,1,1,0,0,0,250)
