@@ -1230,19 +1230,19 @@ to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation on ``src`` and puts the result into ``dest``\ . ``i`` controls how far to rotate each bit.
+   Performs a left rotation operation on ``src`` and puts the result into ``dest``\ . ``i`` controls how far to rotate the bits.
 
 .. function:: rol!(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation in-place on ``B``\ . ``i`` controls how far to rotate each bit.
+   Performs a left rotation operation in-place on ``B``\ . ``i`` controls how far to rotate the bits.
 
 .. function:: rol(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation, returning a new ``BitVector``\ . ``i`` controls how far to rotate each bit. See also :func:`rol!`\ .
+   Performs a left rotation operation, returning a new ``BitVector``\ . ``i`` controls how far to rotate the bits. See also :func:`rol!`\ .
 
    .. doctest::
 
@@ -1282,19 +1282,19 @@ to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation on ``src`` and puts the result into ``dest``\ . ``i`` controls how far to rotate each bit.
+   Performs a right rotation operation on ``src`` and puts the result into ``dest``\ . ``i`` controls how far to rotate the bits.
 
 .. function:: ror!(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation in-place on ``B``\ . ``i`` controls how far to rotate each bit.
+   Performs a right rotation operation in-place on ``B``\ . ``i`` controls how far to rotate the bits.
 
 .. function:: ror(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation on ``B``\ , returning a new ``BitVector``\ . ``i`` controls how far to rotate each bit. See also :func:`ror!`\ .
+   Performs a right rotation operation on ``B``\ , returning a new ``BitVector``\ . ``i`` controls how far to rotate the bits. See also :func:`ror!`\ .
 
    .. doctest::
 
@@ -1428,7 +1428,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a sparse identity matrix with the same size as that of ``S``\ .
+   Create a sparse identity matrix with the same size as ``S``\ .
 
    .. doctest::
 
