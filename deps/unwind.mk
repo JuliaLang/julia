@@ -26,17 +26,19 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-#todo: libunwind tests are known to fail, so they aren't run
-$(build_prefix)/manifest/unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled | $(build_prefix)/manifest
-	$(call make-install,libunwind-$(UNWIND_VER),)
+define LIBUNWIND_INSTALL
+	$(call MAKE_INSTALL,$1,$2,$3)
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 	@# workaround for configure script bug
-	mv $(build_prefix)/lib64/libunwind*.a $(build_libdir)
-endif
-	echo $(UNWIND_VER) > $@
+	mv $2/$$(build_prefix)/lib64/libunwind*.a $2/$$(build_libdir)
+  endif
+endef
+$(eval $(call staged-install, \
+	unwind,libunwind-$(UNWIND_VER), \
+	LIBUNWIND_INSTALL,,,))
 
 clean-unwind:
-	-rm -f $(build_prefix)/manifest/unwind $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
+	-rm $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
 
 distclean-unwind:
@@ -48,8 +50,9 @@ get-unwind: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
 extract-unwind: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted
 configure-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
 compile-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
+#todo: libunwind tests are known to fail, so they aren't run
+fastcheck-unwind: #none
 check-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-checked
-install-unwind: $(build_prefix)/manifest/unwind
 
 
 ## OS X Unwind ##
@@ -78,6 +81,8 @@ $(build_prefix)/manifest/osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/bu
 
 clean-osxunwind:
 	-rm $(build_prefix)/manifest/libuv $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled
+	-rm -r $(build_libdir)/libosxunwind.a $(build_shlibdir)/libosxunwind.$(SHLIB_EXT) \
+		$(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
 	-$(MAKE) -C $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER) clean $(OSXUNWIND_FLAGS)
 
 distclean-osxunwind:
@@ -89,5 +94,6 @@ get-osxunwind: $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz
 extract-osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/source-extracted
 configure-osxunwind: extract-osxunwind
 compile-osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled
+fastcheck-osxunwind: check-osxunwind
 check-osxunwind: compile-osxunwind
 install-osxunwind: $(build_prefix)/manifest/osxunwind

@@ -16,11 +16,11 @@ $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted: $(SRCDIR)/srccache/gmp-$(GMP
 	cd $(dir $<) && $(TAR) jxf $<
 	echo 1 > $@
 
-$(SRCDIR)/srccache/gmp-$(GMP_VER)/patched: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted
+$(SRCDIR)/srccache/gmp-$(GMP_VER)/build-patched: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted
 	cd $(dir $@) && patch < $(SRCDIR)/patches/gmp-exception.patch
 	echo 1 > $@
 
-$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted $(SRCDIR)/srccache/gmp-$(GMP_VER)/patched
+$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted $(SRCDIR)/srccache/gmp-$(GMP_VER)/build-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static $(GMP_CONFIGURE_OPTS)
@@ -36,17 +36,21 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-$(build_prefix)/manifest/gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled | $(build_shlibdir) $(build_includedir) $(build_prefix)/manifest
+define GMP_INSTALL
+	mkdir -p $2/$(build_shlibdir) $2/$(build_includedir)
 ifeq ($(BUILD_OS),WINNT)
-	-mv $(BUILDDIR)/gmp-$(GMP_VER)/.libs/gmp.dll $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.dll
+	-mv $1/.libs/gmp.dll $1/.libs/libgmp.dll
 endif
-	$(INSTALL_M) $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
-	$(INSTALL_F) $(BUILDDIR)/gmp-$(GMP_VER)/gmp.h $(build_includedir)
-	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $(build_shlibdir)/libgmp.$(SHLIB_EXT)
-	echo $(GMP_VER) > $@
+	$(INSTALL_M) $1/.libs/libgmp.*$(SHLIB_EXT)* $2/$(build_shlibdir)
+	$(INSTALL_F) $1/gmp.h $2/$(build_includedir)
+endef
+$(eval $(call staged-install, \
+	gmp,gmp-$(GMP_VER), \
+	GMP_INSTALL,,, \
+	$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$(build_shlibdir)/libgmp.$$(SHLIB_EXT)))
 
 clean-gmp:
-	-rm -f $(build_prefix)/manifest/gmp $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
+	-rm $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean
 
 distclean-gmp:
@@ -58,5 +62,5 @@ get-gmp: $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
 extract-gmp: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted
 configure-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-configured
 compile-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
+fastcheck-gmp: check-gmp
 check-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-checked
-install-gmp: $(build_prefix)/manifest/gmp

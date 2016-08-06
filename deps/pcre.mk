@@ -30,22 +30,22 @@ endif
 endif
 	echo 1 > $@
 
-$(build_prefix)/manifest/pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled | $(build_prefix)/manifest
-	$(call make-install,pcre2-$(PCRE_VER),$(LIBTOOL_CCLD))
-	$(INSTALL_NAME_CMD)libpcre2-8.$(SHLIB_EXT) $(build_shlibdir)/libpcre2-8.$(SHLIB_EXT)
-	echo $(PCRE_VER) > $@
+$(eval $(call staged-install, \
+	pcre,pcre2-$$(PCRE_VER), \
+	MAKE_INSTALL,$$(LIBTOOL_CCLD),, \
+	$$(INSTALL_NAME_CMD)libpcre2-8.$$(SHLIB_EXT) $$(build_shlibdir)/libpcre2-8.$$(SHLIB_EXT)))
 
 clean-pcre:
-	-rm -f $(build_shlibdir)/libpcre* $(build_prefix)/manifest/pcre \
-		$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
+	-rm $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean
 
 distclean-pcre:
 	-rm -rf $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2 $(SRCDIR)/srccache/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
 
+
 get-pcre: $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2
 extract-pcre: $(SRCDIR)/srccache/pcre2-$(PCRE_VER)/source-extracted
 configure-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured
 compile-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
+fastcheck-pcre: check-pcre
 check-pcre: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-checked
-install-pcre: $(build_prefix)/manifest/pcre

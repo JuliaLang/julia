@@ -52,7 +52,6 @@ endif
 # they will override the values passed above to ./configure
 MAKE_COMMON := DESTDIR="" prefix=$(build_prefix) bindir=$(build_depsbindir) libdir=$(build_libdir) shlibdir=$(build_shlibdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir) O=
 
-
 #Platform specific flags
 
 ifeq ($(OS), WINNT)
@@ -100,26 +99,71 @@ $(build_prefix): | $(DIRS)
 $(eval $(call dir_target,$(SRCDIR)/srccache))
 
 
+upper = $(shell echo $1 | tr a-z A-Z)
+
 ## A rule for calling `make install` ##
-#	rule: dependencies
-#   	$(call make-install,rel-build-directory,add-args)
-#   	touch -c $@
+# example usage:
+#   $(call staged-install, \
+#       1 target, \               # name
+#       2 rel-build-directory, \  # BUILDDIR-relative path to binaries
+#       3 MAKE_INSTALL, \         # will be called with args SRCDIR,DESTDIR,$4
+#       4 add-args, \             # extra args for $3
+#       5 (unused), \
+#       6 post-install)           # post-install commands
+#
 # this rule ensures that make install is more nearly atomic
 # so it's harder to get half-installed (or half-reinstalled) dependencies
-MAKE_DESTDIR = "$(build_staging)/$1"
-define staged-install
-	rm -rf $(build_staging)/$1
-	$2
-	mkdir -p $(build_prefix)
-	cp -af $(build_staging)/$1$(build_prefix)/* $(build_prefix)
+# # and enables sharing deps compiles, uninstall, and fast reinstall
+MAKE_INSTALL = +$$(MAKE) -C $1 install $$(MAKE_COMMON) $3 DESTDIR="$2"
+
+define SHLIBFILE_INSTALL
+	mkdir -p $2/$$(build_shlibdir)
+	cp $3 $2/$$(build_shlibdir)
 endef
 
-define make-install
-	$(call staged-install,$1,+$(MAKE) -C $(BUILDDIR)/$1 install $(MAKE_COMMON) $2 DESTDIR=$(call MAKE_DESTDIR,$1))
+define BINFILE_INSTALL
+	mkdir -p $2/$$(build_depsbindir)
+	cp $3 $2/$$(build_depsbindir)
 endef
+
+define staged-install
+stage-$(strip $1): $$(build_staging)/$2.tgz
+install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
+uninstall-$(strip $1): | $$(build_staging)/$2.tgz
+	-rm $$(build_prefix)/manifest/$(strip $1)
+	-cd $$(build_prefix) && rm -dv -- $$$$($(TAR) tzf $$(build_staging)/$2.tgz --exclude './$$$$')
+distclean-$(strip $1) clean-$(strip $1): uninstall-$(strip $1)
+
+reinstall-$(strip $1):
+	+$$(MAKE) uninstall-$(strip $1)
+	-rm $$(build_staging)/$2.tgz
+	+$$(MAKE) stage-$(strip $1)
+	+$$(MAKE) install-$(strip $1)
+
+$$(build_staging)/$2.tgz: $$(BUILDDIR)/$2/build-compiled
+	rm -rf $$(build_staging)/$2
+	mkdir -p $$(build_staging)/$2$$(build_prefix)
+	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
+	cd $$(build_staging)/$2$$(build_prefix) && tar -czf $$@ .
+
+$$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix)/manifest
+	mkdir -p $$(build_prefix)
+	$(UNTAR) $$< -C $$(build_prefix)
+	$6
+	echo $2 > $$@
+endef
+
+ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
+#gnu make
+UNTAR = $(TAR) xzf
+else
+#bsd make
+UNTAR = $(TAR) xUzf
+endif
+
 
 ## phony targets ##
 
-.PHONY: default get extract configure compile install cleanall distcleanall \
-	get-* extract-* configure-* compile-* check-* install-* \
-	clean-* distclean-* reinstall-* update-llvm
+.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall \
+	get-* extract-* configure-* compile-* fastcheck-* check-* install-* uninstall-* reinstall-* clean-* distclean-* \
+	update-llvm

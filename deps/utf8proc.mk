@@ -18,23 +18,23 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-$(UTF8PROC_OBJ_LIB): $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
-	cp -f $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/libutf8proc.a $@
-
-$(UTF8PROC_OBJ_HEADER): $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
-	cp -f $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/utf8proc.h $@
-
-$(build_prefix)/manifest/utf8proc : $(UTF8PROC_OBJ_LIB) $(UTF8PROC_OBJ_HEADER) | $(build_prefix)/manifest
-	echo $(UTF8PROC_SHA1) > $@
+define UTF8PROC_INSTALL
+	mkdir -p $2/$$(build_includedir) $2/$$(build_libdir)
+	cp $1/utf8proc.h $2/$$(build_includedir)
+	cp $1/libutf8proc.a $2/$$(build_libdir)
+endef
+$(eval $(call staged-install, \
+	utf8proc,$(UTF8PROC_SRC_DIR), \
+	UTF8PROC_INSTALL,,,))
 
 clean-utf8proc:
-	-rm -rf $(build_prefix)/manifest/utf8proc $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
-	-rm -rf $(build_libdir)/libutf8proc.a $(build_includedir)/utf8proc.h
+	-rm $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(UTF8PROC_SRC_DIR) clean
 
 get-utf8proc: $(UTF8PROC_SRC_FILE)
 extract-utf8proc: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/source-extracted
 configure-utf8proc: extract-utf8proc
 compile-utf8proc: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
+# utf8proc tests disabled since they require a download
+fastcheck-utf8proc: #check-utf8proc
 check-utf8proc: $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-checked
-install-utf8proc: $(build_prefix)/manifest/utf8proc

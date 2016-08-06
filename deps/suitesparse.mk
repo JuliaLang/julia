@@ -73,12 +73,20 @@ $(build_prefix)/manifest/suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)
 	$(INSTALL_NAME_CMD)libspqr.$(SHLIB_EXT) $(build_shlibdir)/libspqr.$(SHLIB_EXT)
 	echo $(SUITESPARSE_VER) > $@
 
-clean-suitesparse:
-	-rm -f $(build_prefix)/manifest/suitesparse $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
+clean-suitesparse: clean-suitesparse-wrapper
+	-rm $(build_prefix)/manifest/suitesparse $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
+	-rm $(build_shlibdir)/libsuitesparseconfig.$(SHLIB_EXT) \
+		$(build_shlibdir)/libamd.$(SHLIB_EXT) \
+		$(build_shlibdir)/libcolamd.$(SHLIB_EXT) \
+		$(build_shlibdir)/libcamd.$(SHLIB_EXT) \
+		$(build_shlibdir)/libccolamd.$(SHLIB_EXT) \
+		$(build_shlibdir)/libcholmod.$(SHLIB_EXT) \
+		$(build_shlibdir)/libumfpack.$(SHLIB_EXT) \
+		$(build_shlibdir)/libspqr.$(SHLIB_EXT)
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/lib
 	-$(MAKE) -C $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER) clean
 
-distclean-suitesparse:
+distclean-suitesparse: clean-suitesparse-wrapper
 	-rm -rf $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz \
 		$(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)
 
@@ -86,6 +94,7 @@ get-suitesparse: $(SRCDIR)/srccache/SuiteSparse-$(SUITESPARSE_VER).tar.gz
 extract-suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/source-extracted
 configure-suitesparse: extract-suitesparse
 compile-suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
+fastcheck-suitesparse: #none
 check-suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-checked
 install-suitesparse: $(build_prefix)/manifest/suitesparse install-suitesparse-wrapper
 
@@ -115,5 +124,6 @@ get-suitesparse-wrapper:
 extract-suitesparse-wrapper:
 configure-suitesparse-wrapper:
 compile-suitesparse-wrapper:
+fastcheck-suitesparse-wrapper: #none
 check-suitesparse-wrapper:
 install-suitesparse-wrapper: $(build_shlibdir)/libsuitesparse_wrapper.$(SHLIB_EXT)

@@ -49,21 +49,27 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-$(build_prefix)/manifest/mbedtls: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-compiled | $(build_shlibdir) $(build_prefix)/manifest
-ifeq ($(OS), WINNT)
-	cp $(dir $<)/library/libmbedcrypto.$(SHLIB_EXT) $(build_shlibdir)
-	cp $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedx509.$(SHLIB_EXT) $(build_shlibdir)
-	cp $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedtls.$(SHLIB_EXT) $(build_shlibdir)
+ifeq ($(OS),WINNT)
+define MBEDTLS_INSTALL
+	cp $1/library/libmbedcrypto.$$(SHLIB_EXT) $2/$$(build_shlibdir)
+	cp $1/library/libmbedx509.$$(SHLIB_EXT) $2/$$(build_shlibdir)
+	cp $1/library/libmbedtls.$$(SHLIB_EXT) $2/$$(build_shlibdir)
+endef
 else
-	$(call make-install,mbedtls-$(MBEDTLS_VER),)
+define MBEDTLS_INSTALL
+	$(call MAKE_INSTALL,$1,$2,)
+endef
 endif
-	$(INSTALL_NAME_CMD)libmbedx509.$(SHLIB_EXT) $(build_shlibdir)/libmbedx509.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)libmbedtls.$(SHLIB_EXT) $(build_shlibdir)/libmbedtls.$(SHLIB_EXT)
-	$(INSTALL_NAME_CHANGE_CMD) libmbedx509.0.dylib @rpath/libmbedx509.$(SHLIB_EXT) $(build_shlibdir)/libmbedtls.$(SHLIB_EXT)
-	$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.0.dylib @rpath/libmbedcrypto.$(SHLIB_EXT) $(build_shlibdir)/libmbedtls.$(SHLIB_EXT)
-	$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.0.dylib @rpath/libmbedcrypto.$(SHLIB_EXT) $(build_shlibdir)/libmbedx509.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)libmbedcrypto.$(SHLIB_EXT) $(build_shlibdir)/libmbedcrypto.$(SHLIB_EXT)
-	echo $(MBEDTLS_VER) > $@
+$(eval $(call staged-install, \
+	mbedtls,mbedtls-$(MBEDTLS_VER), \
+	MBEDTLS_INSTALL,,, \
+	$$(INSTALL_NAME_CMD)libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CMD)libmbedtls.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedx509.0.dylib @rpath/libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.0.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.0.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CMD)libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedcrypto.$$(SHLIB_EXT)))
+
 
 clean-mbedtls:
 	-rm -f $(build_prefix)/manifest/mbedtls \
@@ -76,9 +82,11 @@ distclean-mbedtls:
 		$(SRCDIR)/srccache/$(MBEDTLS_SRC) \
 		$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)
 
+
 get-mbedtls: $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz
 extract-mbedtls: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
 configure-mbedtls: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-configured
 compile-mbedtls: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-compiled
+# tests disabled since they are known to fail
+fastcheck-mbedtls: #check-mbedtls
 check-mbedtls: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-checked
-install-mbedtls: $(build_prefix)/manifest/mbedtls

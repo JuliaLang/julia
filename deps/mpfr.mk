@@ -48,13 +48,13 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-$(build_prefix)/manifest/mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled | $(build_prefix)/manifest
-	$(call make-install,mpfr-$(MPFR_VER),$(LIBTOOL_CCLD))
-	$(INSTALL_NAME_CMD)libmpfr.$(SHLIB_EXT) $(build_shlibdir)/libmpfr.$(SHLIB_EXT)
-	echo $(MPFR_VER) > $@
+$(eval $(call staged-install, \
+	mpfr,mpfr-$(MPFR_VER), \
+	MAKE_INSTALL,$$(LIBTOOL_CCLD),, \
+	$$(INSTALL_NAME_CMD)libmpfr.$$(SHLIB_EXT) $$(build_shlibdir)/libmpfr.$$(SHLIB_EXT)))
 
 clean-mpfr:
-	-rm -f $(build_prefix)/manifest/mpfr $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
+	-rm $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/mpfr-$(MPFR_VER) clean
 
 distclean-mpfr:
@@ -66,5 +66,5 @@ get-mpfr: $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
 extract-mpfr: $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/source-extracted
 configure-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured
 compile-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
+fastcheck-mpfr: check-mpfr
 check-mpfr: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-checked
-install-mpfr: $(build_prefix)/manifest/mpfr

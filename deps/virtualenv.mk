@@ -32,5 +32,6 @@ get-virtualenv: $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz
 extract-virtualenv: $(VIRTUALENV_SOURCE)
 configure-virtualenv: extract-virtualenv
 compile-virtualenv: configure-virtualenv
+fastcheck-virtualenv: check-virtualenv
 check-virtualenv: compile-virtualenv
 install-virtualenv: $(VIRTUALENV_TARGET)

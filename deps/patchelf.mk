@@ -25,13 +25,12 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-$(build_prefix)/manifest/patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled | $(build_prefix)/manifest
-	$(call make-install,patchelf-$(PATCHELF_VER),)
-	echo $(PATCHELF_VER) > $@
+$(eval $(call staged-install, \
+	patchelf,patchelf-$(PATCHELF_VER), \
+	MAKE_INSTALL,$$(LIBTOOL_CCLD),,))
 
 clean-patchelf:
-	-rm -f $(build_prefix)/manifest/patchelf \
-		$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured \
+	-rm $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean
 
@@ -40,9 +39,9 @@ distclean-patchelf:
 		$(SRCDIR)/srccache/patchelf-$(PATCHELF_VER) \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)
 
+
 get-patchelf: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz
 extract-patchelf: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/source-extracted
 configure-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured
 compile-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 check-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-checked
-install-patchelf: $(build_prefix)/manifest/patchelf

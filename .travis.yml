@@ -42,7 +42,8 @@ matrix:
 cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps/srccache
-    - $TRAVIS_BUILD_DIR/deps/build
+    - $TRAVIS_BUILD_DIR/deps/scratch
+    - $TRAVIS_BUILD_DIR/deps/usr-staging
 branches:
   only:
     - master
@@ -95,7 +96,7 @@ before_install:
 script:
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
-    - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps" bar > deps.log || cat deps.log
+    - moreutils/mispipe "make $BUILDOPTS VERBOSE=0 -C deps" bar > deps.log || cat deps.log
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
@@ -112,9 +113,9 @@ script:
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
     - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia &&
-        rm -rf julia/deps/build/julia-env &&
-        rm -rf julia/deps/build/libssh2-*/CMakeFiles/Makefile2 &&
-        rm -rf julia/deps/build/curl-*/config.log &&
-        rm -rf julia/deps/build/curl-*/libtool
+        rm -rf julia/deps/scratch/julia-env &&
+        rm -rf julia/deps/scratch/libssh2-*/CMakeFiles/Makefile2 &&
+        rm -rf julia/deps/scratch/curl-*/config.log &&
+        rm -rf julia/deps/scratch/curl-*/libtool
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
