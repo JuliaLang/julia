@@ -259,10 +259,10 @@ In such cases, possible solutions are forcing the new feature to be used with
 qualified name in `Compat.jl` (e.g. use `Compat.<name>`) or
 reimplementing the old features on a later Julia version.
 
-If you're adding additional compatibility code to this package, the [`bin/version.sh`](https://github.com/JuliaLang/Compat.jl/blob/master/bin/version.sh) script is useful for extracting the version number from a git commit SHA. For example, from the git repository of `julia`, run something like this:
+If you're adding additional compatibility code to this package, the [`contrib/commit-name.sh`](https://github.com/JuliaLang/julia/blob/master/contrib/commit-name.sh) script in the base Julia repository is useful for extracting the version number from a git commit SHA. For example, from the git repository of `julia`, run something like this:
 
 ```sh
-bash $ /path/to/Compat/bin/version.sh a378b60fe483130d0d30206deb8ba662e93944da
+bash $ contrib/commit-name.sh a378b60fe483130d0d30206deb8ba662e93944da
 0.5.0-dev+2023
 ```
 
