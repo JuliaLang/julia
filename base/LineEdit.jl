@@ -457,7 +457,7 @@ function edit_insert(s::PromptState, c)
     end
     str = string(c)
     edit_insert(buf, str)
-    if !('\n' in str) && eof(buf) && 
+    if !('\n' in str) && eof(buf) &&
         ((line_size(s) + sizeof(s.p.prompt) + sizeof(str) - 1) < width(terminal(s)))
         # Avoid full update when appending characters to the end
         # and an update of curs_row isn't necessary (conservatively estimated)
