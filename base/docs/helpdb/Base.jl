@@ -394,20 +394,6 @@ Element-wise multiplication operator.
 Base.:(.*)
 
 """
-    ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation on `src` and put the result into `dest`.
-"""
-ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer)
-
-"""
-    ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation on `B`.
-"""
-ror!(B::BitArray{1}, i::Integer)
-
-"""
     range(start, [step], length)
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
@@ -783,13 +769,6 @@ macroexpand
 Returns `true` if `path` has the sticky bit set, `false` otherwise.
 """
 issticky
-
-"""
-    rol(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation.
-"""
-rol
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -4039,13 +4018,6 @@ eye(n::Int)
 eye(m, n)
 
 """
-    eye(A)
-
-Constructs an identity matrix of the same dimensions and type as `A`.
-"""
-eye(A)
-
-"""
     diagind(M[, k])
 
 A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
@@ -4257,13 +4229,6 @@ var
 Returns `string` with the first character converted to lowercase.
 """
 lcfirst
-
-"""
-    flipbits!(B::BitArray{N}) -> BitArray{N}
-
-Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
-"""
-flipbits!
 
 """
     readlink(path) -> AbstractString
@@ -4542,7 +4507,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:541
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:575
  ...
 ```
 """
@@ -7344,20 +7309,6 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 fill
 
 """
-    rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation on `src` and put the result into `dest`.
-"""
-rol!(::BitArray,::BitArray,::Integer)
-
-"""
-    rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation on `B`.
-"""
-rol!(::BitArray,::Integer)
-
-"""
     issubset(a, b)
     ⊆(a,b) -> Bool
     ⊈(a,b) -> Bool
@@ -8142,13 +8093,6 @@ The asserted condition did not evaluate to `true`.
 Optional argument `msg` is a descriptive error string.
 """
 AssertionError
-
-"""
-    ror(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation.
-"""
-ror
 
 """
     Ac_ldiv_Bc(A, B)
