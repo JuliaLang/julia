@@ -22,18 +22,19 @@ $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENSPECFUN_SRC
 	$(MAKE) -C $(dir $<) $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	echo 1 > $@
 
-$(build_prefix)/manifest/openspecfun: $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/build-compiled
-	$(call make-install,$(OPENSPECFUN_SRC_DIR),$(OPENSPECFUN_FLAGS))
-	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $(build_shlibdir)/libopenspecfun.$(SHLIB_EXT)
-	echo $(OPENSPECFUN_SHA1) > $@
+$(eval $(call staged-install, \
+	openspecfun,$$(OPENSPECFUN_SRC_DIR), \
+	MAKE_INSTALL,$$(OPENSPECFUN_FLAGS),, \
+	$$(INSTALL_NAME_CMD)libopenspecfun.$$(SHLIB_EXT) $$(build_shlibdir)/libopenspecfun.$$(SHLIB_EXT)))
 
 clean-openspecfun:
-	-rm $(build_prefix)/manifest/openspecfun $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/build-compiled $(build_libdir)/libopenspecfun.a
+	-rm $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR) distclean $(OPENSPECFUN_FLAGS)
+
 
 get-openspecfun: $(OPENSPECFUN_SRC_FILE)
 extract-openspecfun: $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/source-extracted
 configure-openspecfun: extract-openspecfun
 compile-openspecfun: $(BUILDDIR)/$(OPENSPECFUN_SRC_DIR)/build-compiled
+fastcheck-openspecfun: check-openspecfun
 check-openspecfun: compile-openspecfun
-install-openspecfun: $(build_prefix)/manifest/openspecfun

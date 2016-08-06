@@ -39,7 +39,7 @@ endif
 
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
-OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="$(LIBBLASNAME)"
+OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="libopenblas$(OPENBLAS_LIBNAMESUFFIX)"
 ifeq ($(OS), Darwin)
 OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(BUILDDIR)/objconv/objconv)
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(BUILDDIR)/objconv/build-compiled
@@ -83,23 +83,28 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/
 	@$(MAKE) -C $(dir $<) $(OPENBLAS_BUILD_OPTS) || (echo $(WARNCOLOR)"*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0' if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"$(ENDCOLOR) && false)
 	echo 1 > $@
 
-$(build_prefix)/manifest/openblas: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled | $(build_shlibdir) $(build_prefix)/manifest
-	cp -f $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/$(LIBBLASNAME).$(SHLIB_EXT) $(build_shlibdir)/$(LIBBLASNAME).$(SHLIB_EXT)
-ifeq ($(OS), Linux)
-	ln -sf $(LIBBLASNAME).$(SHLIB_EXT) $(build_shlibdir)/$(LIBBLASNAME).$(SHLIB_EXT).0
+define OPENBLAS_INSTALL
+    $(call SHLIBFILE_INSTALL,$1,$2,$3)
+ifeq ($$(OS), Linux)
+	ln -sf libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT) $2/$$(build_libdir)/libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT).0
 endif
-	$(INSTALL_NAME_CMD)$(LIBBLASNAME).$(SHLIB_EXT) $(build_shlibdir)/$(LIBBLASNAME).$(SHLIB_EXT)
-	echo $(OPENBLAS_SHA1) > $@
+endef
+$(eval $(call staged-install, \
+	openblas,$(OPENBLAS_SRC_DIR), \
+	OPENBLAS_INSTALL,$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/$(LIBBLASNAME).$(SHLIB_EXT),, \
+	$$(INSTALL_NAME_CMD)libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT) $$(build_shlibdir)/libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT)))
 
 clean-openblas:
+	-rm $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(OPENBLAS_SRC_DIR) clean
+
 
 get-openblas: $(OPENBLAS_SRC_FILE)
 extract-openblas: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
 configure-openblas: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured
 compile-openblas: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
+fastcheck-openblas: check-openblas
 check-openblas: compile-openblas
-install-openblas: $(build_prefix)/manifest/openblas
 
 
 ## Mac gfortran BLAS wrapper ##
@@ -112,6 +117,7 @@ $(build_shlibdir)/libgfortblas.$(SHLIB_EXT): $(BUILDDIR)/libgfortblas.$(SHLIB_EX
 	cp -f $< $@
 	$(INSTALL_NAME_CMD)libgfortblas.$(SHLIB_EXT) $@
 endif
+
 
 ## LAPACK ##
 
@@ -151,13 +157,13 @@ $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled: $(BUILDDIR)/lapack-$(LAPACK_VER
 		-o $(dir $<)/liblapack.$(SHLIB_EXT)
 	echo 1 > $@
 
-$(build_prefix)/manifest/lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled | $(build_shlibdir)
-	cp $(dir $<)/liblapack.$(SHLIB_EXT) $(build_shlibdir)/liblapack.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)liblapack.$(SHLIB_EXT) $(build_shlibdir)/liblapack.$(SHLIB_EXT)
-	echo $(LAPACK_VER) > $@
+$(eval $(call staged-install, \
+	lapack,lapack-$(LAPACK_VER), \
+	SHLIBFILE_INSTALL,$(BUILDDIR)/lapack-$(LAPACK_VER)/liblapack.$(SHLIB_EXT),, \
+	$$(INSTALL_NAME_CMD)liblapack.$$(SHLIB_EXT) $$(build_shlibdir)/liblapack.$$(SHLIB_EXT)))
 
 clean-lapack:
-	-rm -f $(build_prefix)/manifest/lapack $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
+	-rm $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
 
 distclean-lapack:
@@ -168,5 +174,5 @@ get-lapack: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
 extract-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted
 configure-lapack: extract-lapack
 compile-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
+fastcheck-lapack: check-lapack
 check-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-checked
-install-lapack: $(build_prefix)/manifest/lapack

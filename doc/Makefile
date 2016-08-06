@@ -18,7 +18,7 @@ ALLSPHINXOPTS    := -d $(BUILDDIR)/_build/doctrees $(PAPEROPT_$(PAPER)) $(SPHINX
 I18NSPHINXOPTS   := $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
 ifeq ($(abspath .),$(abspath $(SRCDIR)))
-JULIA_ENV        := $(BUILDDIR)/../deps/build/julia-env
+JULIA_ENV        := $(BUILDDIR)/../deps/scratch/julia-env
 else
 JULIA_ENV        := $(BUILDDIR)/../deps/julia-env
 endif

@@ -35,14 +35,20 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-$(build_prefix)/manifest/dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled | $(build_includedir) $(build_shlibdir) $(build_prefix)/manifest
-	cp $(dir $<)/dSFMT.h $(build_includedir)
-	cp $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT) $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
-	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
-	echo $(DSFMT_VER) > $@
+define DSFMT_INSTALL
+	mkdir -p $2/$$(build_includedir) $2/$$(build_libdir)
+	cp $1/dSFMT.h $2/$$(build_includedir)
+	cp $1/libdSFMT.$$(SHLIB_EXT) $2/$$(build_shlibdir)
+endef
+$(eval $(call staged-install, \
+	dsfmt,dsfmt-$(DSFMT_VER), \
+	DSFMT_INSTALL,, \
+	$$(DSFMT_OBJ_TARGET), \
+	$$(INSTALL_NAME_CMD)libdSFMT.$$(SHLIB_EXT) $$(build_shlibdir)/libdSFMT.$$(SHLIB_EXT)))
 
 clean-dsfmt:
-	-rm -f $(build_prefix)/manifest/dsfmt $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
+	-rm $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled
+	-rm $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 distclean-dsfmt:
 	-rm -rf $(SRCDIR)/srccache/dsfmt*.tar.gz $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
@@ -51,5 +57,5 @@ get-dsfmt: $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz
 extract-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted
 configure-dsfmt: extract-dsfmt
 compile-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled
+fastcheck-dsfmt: check-dsfmt
 check-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-checked
-install-dsfmt: $(build_prefix)/manifest/dsfmt

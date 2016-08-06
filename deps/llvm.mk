@@ -514,27 +514,24 @@ endif
 $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
 ifeq ($(LLVM_USE_CMAKE),1)
-	$(call staged-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
-	                      cd $(BUILDDIR)/llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) &&\
-	                      $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE))$(build_prefix)" -P cmake_install.cmake)
+CMAKE_INSTALL_LLVM = \
+	cd $1 && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$2" -P cmake_install.cmake
+$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
+	CMAKE_INSTALL_LLVM,,,))
 else
-	$(call   make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
-	                      $(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
+$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
+	MAKE_INSTALL,$$(LLVM_MFLAGS) PATH="$$(llvm_python_workaround):$$$$PATH",,))
 endif # LLVM_USE_CMAKE
-	echo $(LLVM_VER) > $@
-
-reinstall-llvm:
-	-rm $(build_prefix)/manifest/llvm $(LLVM_BUILDDIR_withtype)/build-compiled
-	$(MAKE) -f $(SRCDIR)/Makefile -s install-llvm
 
 clean-llvm:
-	-rm -f $(build_prefix)/manifest/llvm $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
+	-rm $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
 
 distclean-llvm:
 	-rm -rf $(LLVM_TAR) $(LLVM_CLANG_TAR) \
 		$(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR) \
 		$(LLVM_SRC_DIR) $(LLVM_BUILDDIR_withtype)
+
 
 ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
@@ -544,9 +541,10 @@ endif
 extract-llvm: $(LLVM_SRC_DIR)/source-extracted
 configure-llvm: $(LLVM_BUILDDIR_withtype)/build-configured
 compile-llvm: $(LLVM_BUILDDIR_withtype)/build-compiled
+fastcheck-llvm: #none
 check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
-install-llvm: $(build_prefix)/manifest/llvm
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
+
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:

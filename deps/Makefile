@@ -3,7 +3,7 @@ default: install
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
 ifeq ($(abspath .),$(abspath $(SRCDIR)))
-BUILDDIR := build
+BUILDDIR := scratch
 else
 BUILDDIR := .
 endif
@@ -15,7 +15,7 @@ include $(SRCDIR)/tools/git-external.mk
 # Special comments:
 #
 # all targets in here should follow the same structure,
-# and provide a get-a, extract-a, configure-a, compile-a, check-a, and install-a
+# and provide a get-a, extract-a, configure-a, compile-a, check-a, fastcheck-a, and install-a
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
@@ -30,6 +30,8 @@ include $(SRCDIR)/tools/git-external.mk
 # this is some magic Makefile trick that tells make
 # that all targets with a % in them on that line will
 # be rebuilt in a single invocation
+#
+# to debug 'define' rules, replace eval at the usage site with info or error
 #
 
 ## Overall configuration of which rules exist and should be run by default ##
@@ -142,6 +144,9 @@ DEP_LIBS += lapack
 endif
 endif
 
+DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind virtualenv,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
+
+
 ## Common build target prefixes
 
 default: | $(build_prefix)
@@ -150,7 +155,10 @@ extract: $(addprefix extract-, $(DEP_LIBS))
 configure: $(addprefix configure-, $(DEP_LIBS))
 compile: $(addprefix compile-, $(DEP_LIBS))
 check: $(addprefix check-, $(DEP_LIBS))
+fastcheck: $(addprefix fastcheck-, $(DEP_LIBS))
+stage: $(addprefix stage-, $(DEP_LIBS_STAGED))
 install: $(addprefix install-, $(DEP_LIBS))
+uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
