@@ -15,7 +15,7 @@ it's fairly obvious that a given CPU will have fastest access to the RAM
 within the same computer (node). Perhaps more surprisingly, similar
 issues are relevant on a typical multicore laptop, due to
 differences in the speed of main memory and the
-`cache <http://www.akkadia.org/drepper/cpumemory.pdf>`_. Consequently, a
+`cache <https://www.akkadia.org/drepper/cpumemory.pdf>`_. Consequently, a
 good multiprocessing environment should allow control over the
 "ownership" of a chunk of memory by a particular CPU. Julia provides a
 multiprocessing environment based on message passing to allow programs

@@ -41,7 +41,7 @@ functions in the Julia runtime, or functions in an application linked to
 Julia.
 
 By default, Fortran compilers `generate mangled names
-<https://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
+<https://en.wikipedia.org/wiki/Name_mangling#Fortran>`_
 (for example, converting function names to lowercase or uppercase,
 often appending an underscore), and so to call a Fortran function via
 :func:`ccall` you must pass the mangled identifier corresponding to the rule
@@ -1094,7 +1094,7 @@ More About Callbacks
 --------------------
 
 For more details on how to pass callbacks to C libraries, see this
-`blog post <http://julialang.org/blog/2013/05/callback/>`_.
+`blog post <http://julialang.org/blog/2013/05/callback>`_.
 
 C++
 ---
