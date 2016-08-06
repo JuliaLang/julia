@@ -184,8 +184,8 @@ public:
     void *getPointerToGlobalIfAvailable(const GlobalValue *GV);
     void addModule(std::unique_ptr<Module> M);
     void removeModule(ModuleHandleT H);
-    orc::JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly);
-    orc::JITSymbol findUnmangledSymbol(const std::string Name);
+    JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly);
+    JITSymbol findUnmangledSymbol(const std::string Name);
     uint64_t getGlobalValueAddress(const std::string &Name);
     uint64_t getFunctionAddress(const std::string &Name);
     Function *FindFunctionNamed(const std::string &Name);
