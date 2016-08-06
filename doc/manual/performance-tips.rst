@@ -1115,9 +1115,12 @@ should have the following additional properties:
    speedup with :obj:`@simd`.
 
 While :obj:`@simd` needs to be placed in front of a loop, that is not the case
-for :obj:`@inbounds`. It can be placed in front of any expression as long as it
-is inside a function. The only place where it can be outside of a function
-definition is in front of a loop.
+for :obj:`@inbounds`. It can be placed in front of any expression, however
+the compiler isn't always capable of recognizing where to remove bounds check,
+limiting the scope of what you are declaring to be "in bounds" can help the
+compiler to apply the optimizations. :obj:`@inbounds` works best in front of
+loops or inside function definitions, as you can see below the bounds check
+is not disabled on the `if` statement outside of the function.
 ::
 
     julia> x = [1]
