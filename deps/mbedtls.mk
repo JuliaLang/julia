@@ -71,7 +71,7 @@ endif
 
 clean-mbedtls:
 	-$(MAKE) -C $(BUILDDIR)/mbedtls-$(MBEDTLS_VER) clean
-	-rm -f $(MBEDTLS_OBJ_TARGET)
+	-rm -f $(MBEDTLS_OBJ_TARGET) $(build_shlibdir)/libmbed*
 
 distclean-mbedtls:
 	-rm -rf $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz \
