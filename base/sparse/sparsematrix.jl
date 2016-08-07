@@ -3264,37 +3264,6 @@ function hcat(X::SparseMatrixCSC...)
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-
-# Sparse/dense concatenation
-
-function hcat(Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
-    hcat(X...)
-end
-
-function vcat(Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
-    vcat(X...)
-end
-
-function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCSC}...)
-    nbr = length(rows)  # number of block rows
-
-    tmp_rows = Array{SparseMatrixCSC}(nbr)
-    k = 0
-    @inbounds for i = 1 : nbr
-        tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
-        k += rows[i]
-    end
-    vcat(tmp_rows...)
-end
-
-function cat(catdims, Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
-    T = promote_eltype(Xin...)
-    Base.cat_t(catdims, T, X...)
-end
-
 """
     blkdiag(A...)
 
