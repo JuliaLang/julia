@@ -28,8 +28,8 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Mailing lists:** <http://julialang.org/community/>
-- **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
+- **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 The mailing list for developer discussion is
@@ -43,7 +43,6 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Youtube**](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Google+**](https://plus.google.com/communities/111295162646766639102)
 - [**Meetup**](http://julia.meetup.com/)
 
 <a name="Currently-Supported-Platforms"/>
