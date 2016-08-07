@@ -3,9 +3,7 @@
 CURL_SRC_TARGET := $(BUILDDIR)/curl-$(CURL_VER)/lib/.libs/libcurl.$(SHLIB_EXT)
 CURL_OBJ_TARGET := $(build_shlibdir)/libcurl.$(SHLIB_EXT)
 
-ifneq ($(OS),WINNT)
 CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
-endif
 
 $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://curl.haxx.se/download/curl-$(CURL_VER).tar.bz2
