@@ -70,12 +70,14 @@ before_install:
         ln -s /usr/bin/gcc-5 $HOME/bin/x86_64-linux-gnu-gcc;
         ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
+        BAR="bar -i 30";
         BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
         echo "override ARCH=$ARCH" >> Make.user;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
         brew update;
         brew install -v jq bar;
+        BAR="bar";
         contrib/travis_fastfail.sh || exit 1;
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
@@ -96,7 +98,20 @@ before_install:
 script:
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
-    - moreutils/mispipe "make $BUILDOPTS VERBOSE=0 -C deps" bar > deps.log || cat deps.log
+    # capture the log, but only print it if `make deps` fails
+    # try to show the end of the log first, because this log might be very long (> 4MB)
+    # and thus be truncated by travis
+    - moreutils/mispipe "make $BUILDOPTS VERBOSE=0 -C deps 2> deps-err.log" "$BAR" > deps.log ||
+        { echo "-- deps build log stderr tail 100 --------------------------------------";
+          tail -n 100 deps-err.log;
+          echo "-- deps build log stdout tail 100 --------------------------------------";
+          tail -n 100 deps.log;
+          echo "-- deps build log stderr all -------------------------------------------";
+          cat deps-err.log;
+          echo "-- deps build log stdout all -------------------------------------------";
+          cat deps.log;
+          echo "-- end of deps build log -----------------------------------------------";
+          false; }
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
@@ -113,9 +128,6 @@ script:
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
     - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia &&
-        rm -rf julia/deps/scratch/julia-env &&
-        rm -rf julia/deps/scratch/libssh2-*/CMakeFiles/Makefile2 &&
-        rm -rf julia/deps/scratch/curl-*/config.log &&
-        rm -rf julia/deps/scratch/curl-*/libtool
+        rm -rf julia/deps/scratch/julia-env
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
