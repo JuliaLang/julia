@@ -64,9 +64,7 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
     else
         keydefpath = creds.prvkey # check if credentials were already used
         keydefpath === nothing && (keydefpath = "")
-        if !isempty(keydefpath) && !isusedcreds
-            keydefpath # use cached value
-        else
+        if isempty(keydefpath) || isusedcreds
             defaultkeydefpath = joinpath(homedir(),".ssh","id_rsa")
             if isempty(keydefpath) && isfile(defaultkeydefpath)
                 keydefpath = defaultkeydefpath
@@ -75,6 +73,7 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
                     prompt("Private key location for '$schema$username@$host'", default=keydefpath)
             end
         end
+        keydefpath
     end
 
     # If the private key changed, invalidate the cached public key
@@ -87,18 +86,16 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         ENV["SSH_PUB_KEY_PATH"]
     else
         keydefpath = creds.pubkey # check if credentials were already used
-        if keydefpath !== nothing && !isusedcreds
-            keydefpath # use cached value
-        else
-            if keydefpath === nothing || isempty(keydefpath)
+        keydefpath === nothing && (keydefpath = "")
+        if isempty(keydefpath) || isusedcreds
+            if isempty(keydefpath)
                 keydefpath = privatekey*".pub"
             end
-            if isfile(keydefpath)
-                keydefpath
-            else
+            if !isfile(keydefpath)
                 prompt("Public key location for '$schema$username@$host'", default=keydefpath)
             end
         end
+        keydefpath
     end
     creds.pubkey = publickey # save credentials
 
