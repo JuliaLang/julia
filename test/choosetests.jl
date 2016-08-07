@@ -80,7 +80,7 @@ function choosetests(choices = [])
         prepend!(tests, linalgtests)
     end
 
-    net_required_for = ["socket", "parallel"]
+    net_required_for = ["socket", "parallel", "libgit2"]
     net_on = true
     try
         getipaddr()
