@@ -36,7 +36,7 @@ abstract AbstractREPL
 
 answer_color(::AbstractREPL) = ""
 
-const JULIA_PROMT = "julia> "
+const JULIA_PROMPT = "julia> "
 
 type REPLBackend
     "channel for AST"
@@ -209,7 +209,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     hit_eof = false
     while true
         Base.reseteof(repl.terminal)
-        write(repl.terminal, JULIA_PROMT)
+        write(repl.terminal, JULIA_PROMPT)
         line = ""
         ast = nothing
         interrupted = false
@@ -728,7 +728,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     replc = REPLCompletionProvider(repl)
 
     # Set up the main Julia prompt
-    julia_prompt = Prompt(JULIA_PROMT;
+    julia_prompt = Prompt(JULIA_PROMPT;
         # Copy colors from the prompt object
         prompt_prefix = hascolor ? repl.prompt_color : "",
         prompt_suffix = hascolor ?
@@ -853,7 +853,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                     end
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
                     jl_prompt_len = 7
-                     if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMT)
+                     if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
                     # If we are prompt pasting and current statement does not begin with julia> , skip to next line
