@@ -39,7 +39,11 @@ $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-config.patch-applied: | $(SRCDIR)/srcc
 	cd $(SRCDIR)/srccache/$(MBEDTLS_SRC) && patch -p0 -f < $(SRCDIR)/patches/mbedtls-config.patch
 	echo 1 > $@
 
-$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/Makefile: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-config.patch-applied
+$(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied: | $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt
+	cd $(SRCDIR)/srccache/$(MBEDTLS_SRC)/include/mbedtls && patch -p0 -f < $(SRCDIR)/patches/mbedtls-ssl.h.patch
+	echo 1 > $@
+
+$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/Makefile: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-config.patch-applied $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(MBEDTLS_OPTS)
@@ -71,7 +75,7 @@ endif
 
 clean-mbedtls:
 	-$(MAKE) -C $(BUILDDIR)/mbedtls-$(MBEDTLS_VER) clean
-	-rm -f $(MBEDTLS_OBJ_TARGET)
+	-rm -f $(MBEDTLS_OBJ_TARGET) $(build_shlibdir)/libmbed*
 
 distclean-mbedtls:
 	-rm -rf $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz \

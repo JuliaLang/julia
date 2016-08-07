@@ -19,6 +19,8 @@ else
 LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
+else
+LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="-L$(build_shlibdir) -lcurl"
 endif
 
 ifeq ($(OS),Linux)
@@ -43,6 +45,9 @@ $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: | $(SR
 
 ifeq ($(OS),Linux)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied
+endif
+ifneq ($(OS),WINNT)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(CURL_OBJ_TARGET)
 endif
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied $(LIBSSH2_OBJ_TARGET)
 	mkdir -p $(dir $@)
@@ -73,14 +78,14 @@ ifeq ($(OS),Linux)
 	for LIB in libssl libcrypto; do \
 		LIB_PATH=$$(echo "$$LIBGIT_LIBS" | grep "$$LIB"); \
 		echo "LIB_PATH for $$LIB: $$LIB_PATH"; \
-		[ ! -z "$$LIB_PATH" ] && cp -v "$$LIB_PATH" $(build_shlibdir); \
+		[ ! -z "$$LIB_PATH" ] && cp -v -f "$$LIB_PATH" $(build_shlibdir); \
 	done
 endif
 	touch -c $@
 
 clean-libgit2:
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
-	-rm -f $(LIBGIT2_OBJ_TARGET)
+	-rm -f $(build_shlibdir)/libgit2* $(build_shlibdir)/libssl* $(build_shlibdir)/libcrypto*
 
 get-libgit2: $(LIBGIT2_SRC_FILE)
 configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile
