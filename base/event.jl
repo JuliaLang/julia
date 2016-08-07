@@ -2,6 +2,16 @@
 
 ## condition variables
 
+"""
+    Condition()
+
+Create an edge-triggered event source that tasks can wait for. Tasks that call `wait` on a
+`Condition` are suspended and queued. Tasks are woken up when `notify` is later called on
+the `Condition`. Edge triggering means that only tasks waiting at the time `notify` is
+called can be woken up. For level-triggered notifications, you must keep extra state to keep
+track of whether a notification has happened. The [`Channel`](:class:`Channel`) type does
+this, and so can be used for level-triggered events.
+"""
 type Condition
     waitq::Vector{Any}
 
@@ -21,6 +31,13 @@ function wait(c::Condition)
     end
 end
 
+"""
+    notify(condition, val=nothing; all=true, error=false)
+
+Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
+all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
+is raised as an exception in the woken tasks.
+"""
 notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
     if all
@@ -42,6 +59,11 @@ notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
 
 
 # schedule an expression to run asynchronously, with minimal ceremony
+"""
+    @schedule
+
+Wrap an expression in a `Task` and add it to the local machine's scheduler queue.
+"""
 macro schedule(expr)
     expr = :(()->($expr))
     :(enq_work(Task($(esc(expr)))))
@@ -61,6 +83,16 @@ end
 
 schedule(t::Task) = enq_work(t)
 
+"""
+    schedule(t::Task, [val]; error=false)
+
+Add a task to the scheduler's queue. This causes the task to run constantly when the system
+is otherwise idle, unless the task performs a blocking operation such as `wait`.
+
+If a second argument `val` is provided, it will be passed to the task (via the return value of
+`yieldto`) when it runs again. If `error` is `true`, the value is raised as an exception in
+the woken task.
+"""
 function schedule(t::Task, arg; error=false)
     # schedule a task to be (re)started with the given value or exception
     if error
@@ -84,8 +116,23 @@ function schedule_and_wait(t::Task, v=nothing)
     return wait()
 end
 
+"""
+    yield()
+
+Switch to the scheduler to allow another scheduled task to run. A task that calls this
+function is still runnable, and will be restarted immediately if there are no other runnable
+tasks.
+"""
 yield() = (enq_work(current_task()); wait())
 
+"""
+    yieldto(task, arg = nothing)
+
+Switch to the given task. The first time a task is switched to, the task's function is
+called with no arguments. On subsequent switches, `arg` is returned from the task's last
+call to `yieldto`. This is a low-level call that only switches tasks, not considering states
+or scheduling in any way. Its use is discouraged.
+"""
 yieldto(t::Task, x::ANY = nothing) = ccall(:jl_switchto, Any, (Any, Any), t, x)
 
 # yield to a task, throwing an exception in it
