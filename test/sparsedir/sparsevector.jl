@@ -404,6 +404,41 @@ let m = 80, n = 100
     @test full(V) == Vr
 end
 
+# Test that concatenations of combinations of sparse vectors with various other
+# matrix/vector types yield sparse arrays
+let
+    N = 4
+    spvec = spzeros(N)
+    spmat = spzeros(N, 1)
+    densevec = ones(N)
+    densemat = ones(N, 1)
+    diagmat = Diagonal(ones(4))
+    # Test that concatenations of pairwise combinations of sparse vectors with dense
+    # vectors/matrices, sparse matrices, or special matrices yield sparse arrays
+    for othervecormat in (densevec, densemat, spmat)
+        @test issparse(vcat(spvec, othervecormat))
+        @test issparse(vcat(othervecormat, spvec))
+    end
+    for othervecormat in (densevec, densemat, spmat, diagmat)
+        @test issparse(hcat(spvec, othervecormat))
+        @test issparse(hcat(othervecormat, spvec))
+        @test issparse(hvcat((2,), spvec, othervecormat))
+        @test issparse(hvcat((2,), othervecormat, spvec))
+        @test issparse(cat((1,2), spvec, othervecormat))
+        @test issparse(cat((1,2), othervecormat, spvec))
+    end
+    # The preceding tests should cover multi-way combinations of those types, but for good
+    # measure test a few multi-way combinations involving those types
+    @test issparse(vcat(spvec, densevec, spmat, densemat))
+    @test issparse(vcat(densevec, spvec, densemat, spmat))
+    @test issparse(hcat(spvec, densemat, spmat, densevec, diagmat))
+    @test issparse(hcat(densemat, spmat, spvec, densevec, diagmat))
+    @test issparse(hvcat((5,), diagmat, densevec, spvec, densemat, spmat))
+    @test issparse(hvcat((5,), spvec, densemat, diagmat, densevec, spmat))
+    @test issparse(cat((1,2), densemat, diagmat, spmat, densevec, spvec))
+    @test issparse(cat((1,2), spvec, diagmat, densevec, spmat, densemat))
+end
+
 
 ## sparsemat: combinations with sparse matrix
 
