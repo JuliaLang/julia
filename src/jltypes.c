@@ -1997,10 +1997,8 @@ static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
 {
     JL_TIMING(TYPE_CACHE_LOOKUP);
     int ord = is_typekey_ordered(key, n);
-    JL_LOCK(&typecache_lock); // Might GC
     ssize_t idx = lookup_type_idx(tn, key, n, ord);
     jl_value_t *t = (idx < 0) ? NULL : jl_svecref(ord ? tn->cache : tn->linearcache, idx);
-    JL_UNLOCK(&typecache_lock); // Might GC
     return t;
 }
 
@@ -2071,14 +2069,12 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
     if (is_cacheable(type)) {
         JL_TIMING(TYPE_CACHE_INSERT);
         int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
-        JL_LOCK(&typecache_lock); // Might GC
         ssize_t idx = lookup_type_idx(type->name, jl_svec_data(type->parameters),
                                       jl_svec_len(type->parameters), ord);
         if (idx >= 0)
             type = (jl_datatype_t*)jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
         else
             cache_insert_type((jl_value_t*)type, ~idx, ord);
-        JL_UNLOCK(&typecache_lock); // Might GC
     }
     return (jl_value_t*)type;
 }
@@ -2163,13 +2159,18 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     int istuple = (tn == jl_tuple_typename);
     // check type cache
     if (cacheable) {
+        JL_LOCK(&typecache_lock); // Might GC
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
-        if (lkup != NULL)
+        if (lkup != NULL) {
+            JL_UNLOCK(&typecache_lock); // Might GC
             return lkup;
+        }
     }
     jl_value_t *stack_lkup = lookup_type_stack(stack, dt, ntp, iparams);
-    if (stack_lkup)
+    if (stack_lkup) {
+        if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
         return stack_lkup;
+    }
 
     if (istuple && ntp > 0 && jl_is_vararg_type(iparams[ntp - 1])) {
         // normalize Tuple{..., Vararg{Int, 3}} to Tuple{..., Int, Int, Int}
@@ -2180,6 +2181,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
                 jl_errorf("apply_type: Vararg length N is negative: %zd", nt);
             va = jl_tparam0(va);
             if (nt == 0 || !jl_has_typevars(va)) {
+                if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
                 if (ntp == 1)
                     return jl_tupletype_fill(nt, va);
                 size_t i, l;
@@ -2206,10 +2208,13 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
                 jl_type_error_rt("apply_type", "Vararg count", (jl_value_t*)jl_long_type, iparams[1]);
             }
         }
-        if (tc != (jl_value_t*)dt)
+        if (tc != (jl_value_t*)dt) {
+            if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
             return (jl_value_t*)jl_apply_type_(tc, iparams, ntp);
+        }
     }
     else if (ntp == 0 && jl_emptytuple != NULL) {
+        if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
         return jl_typeof(jl_emptytuple);
     }
 
@@ -2299,8 +2304,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     else
         ndt->ninitialized = dt->ninitialized;
 
-    if (cacheable)
+    if (cacheable) {
         jl_cache_type_(ndt);
+        JL_UNLOCK(&typecache_lock); // Might GC
+    }
 
     JL_GC_POP();
     return (jl_value_t*)ndt;
