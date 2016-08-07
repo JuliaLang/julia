@@ -23,6 +23,7 @@ export GitError
             ECERTIFICATE    = Cint(-17), # server certificate is invalid
             EAPPLIED        = Cint(-18), # patch/merge has already been applied
             EPEEL           = Cint(-19), # the requested peel operation is not possible
+            EEOF            = Cint(-20), # Unexpted EOF
             PASSTHROUGH     = Cint(-30), # internal only
             ITEROVER        = Cint(-31)) # signals end of iteration
 
