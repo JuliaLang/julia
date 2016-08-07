@@ -36,7 +36,7 @@ $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET)
 	touch -c $@
 
 clean-pcre:
-	-$(MAKE) -C pcre2-$(PCRE_VER) clean
+	-$(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean
 	-rm -f $(build_shlibdir)/libpcre*
 distclean-pcre:
 	-rm -rf $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2 $(SRCDIR)/srccache/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
