@@ -376,7 +376,7 @@ void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetH
             auto NameOrError = Symbol.getName();
             assert(NameOrError);
             auto Name = NameOrError.get();
-            orc::JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, Name, true);
+            JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, Name, true);
             assert(Sym);
             // note: calling getAddress here eagerly finalizes H
             // as an alternative, we could store the JITSymbol instead
@@ -508,17 +508,17 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                         // Step 0: ObjectLinkingLayer has checked whether it is in the current module
                         // Step 1: See if it's something known to the ExecutionEngine
                         if (auto Sym = findSymbol(Name, true))
-                          return RuntimeDyld::SymbolInfo(Sym.getAddress(),
+                          return JITEvaluatedSymbol(Sym.getAddress(),
                                                          Sym.getFlags());
                         // Step 2: Search the program symbols
                         if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
-                            return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
+                            return JITEvaluatedSymbol(addr, JITSymbolFlags::Exported);
 #ifdef _OS_LINUX_
                         if (uint64_t addr = resolve_atomic(Name.c_str()))
-                            return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
+                            return JITEvaluatedSymbol(addr, JITSymbolFlags::Exported);
 #endif
                         // Return failure code
-                        return RuntimeDyld::SymbolInfo(nullptr);
+                        return JITEvaluatedSymbol(nullptr);
                       },
                       [](const std::string &S) { return nullptr; }
                     );
@@ -536,7 +536,7 @@ void JuliaOJIT::removeModule(ModuleHandleT H)
     CompileLayer.removeModuleSet(H);
 }
 
-orc::JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
+JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
 {
     void *Addr = nullptr;
     if (ExportedSymbolsOnly) {
@@ -546,10 +546,10 @@ orc::JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbo
     // Step 2: Search all previously emitted symbols
     if (Addr == nullptr)
         Addr = LocalSymbolTable[Name];
-    return orc::JITSymbol((uintptr_t)Addr, JITSymbolFlags::Exported);
+    return JITSymbol((uintptr_t)Addr, JITSymbolFlags::Exported);
 }
 
-orc::JITSymbol JuliaOJIT::findUnmangledSymbol(const std::string Name)
+JITSymbol JuliaOJIT::findUnmangledSymbol(const std::string Name)
 {
     return findSymbol(getMangledName(Name), true);
 }
