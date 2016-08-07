@@ -42,6 +42,8 @@ There are a number useful features unique to interactive work. In addition to sh
     julia> ans
     "12"
 
+In Julian mode, the REPL supports something called *prompt pasting*. This activates when pasting text that starts with ``julia> `` into the REPL. In that case, only expressions starting with ``julia> `` are parsed, others are removed. This makes it is possible to paste a chunk of code that has been copied from a REPL session without having to scrub away prompts and outputs. This feature is enabled by default but can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it out by pasting the code block above this paragraph straight into the REPL. This feature does not work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
+
 Help mode
 ~~~~~~~~~
 

@@ -1,10 +1,13 @@
 Julia v0.6.0 Release Notes
 ==========================
 
+New language features
+---------------------
+
+* The REPL now supports something called *prompt pasting*. This activates when pasting text that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` are parsed, the rest are removed. This makes it is possible to paste a chunk of code that have been copied from a REPL session without having to scrub away prompts and outputs. This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
+
 Language changes
 ----------------
-
-* The REPL now supports something called *prompt pasting*. This activates when pasting a string which starts with `julia >` into the REPL. In that case, only expressions starting with `julia> ` are parsed, the rest are removed. This means that it is possible to paste a chunk of code that have been copied from a REPL session without having to scrub away prompts and outputs.
 
 Breaking changes
 ----------------
