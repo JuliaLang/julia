@@ -664,7 +664,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the inverse cosecant of ``x``\ , where the output is in radians
+   Compute the inverse cosecant of ``x``\ , where the output is in radians.
 
 .. function:: acot(x)
 
