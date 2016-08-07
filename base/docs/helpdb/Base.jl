@@ -10,13 +10,6 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 systemerror
 
 """
-    digamma(x)
-
-Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
-"""
-digamma
-
-"""
     fill!(A, x)
 
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
