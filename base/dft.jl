@@ -403,7 +403,7 @@ if Base.USE_GPL_LIBS
         * This performs a multidimensional FFT by default. FFT libraries in other languages such as
           Python and Octave perform a one-dimensional FFT along the first non-singleton dimension
           of the array. This is worth noting while performing comparisons. For more details,
-          refer to the "Noteworthy Differences from other Languages" section of the manual
+          refer to the "Noteworthy Differences from other Languages" section of the manual.
     """ ->
     fft
 
