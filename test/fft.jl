@@ -3,6 +3,9 @@
 # fft
 a = rand(8) + im*rand(8)
 @test norm(ifft(fft(a)) - a) < 1e-8
+@test norm(ifft(fft(a,1),1) - a) < 1e-8
+@test norm(ifft(fft(a,[1]),[1]) - a) < 1e-8
+@test norm(ifft(fft(a,(1,)),(1,)) - a) < 1e-8
 
 m4 = [16.    2     3    13;
     5    11    10     8;
