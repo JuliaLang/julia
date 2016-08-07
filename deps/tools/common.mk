@@ -154,10 +154,10 @@ $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix
 endef
 
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
-#gnu make
+#gnu tar
 UNTAR = $(TAR) xzf
 else
-#bsd make
+#bsd tar
 UNTAR = $(TAR) xUzf
 endif
 
