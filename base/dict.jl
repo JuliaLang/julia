@@ -309,16 +309,6 @@ get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
 
 abstract AbstractSerializer
 
-# Serializer type needed as soon as ObjectIdDict is available
-type SerializationState{I<:IO} <: AbstractSerializer
-    io::I
-    counter::Int
-    table::ObjectIdDict
-    SerializationState(io::I) = new(io, 0, ObjectIdDict())
-end
-
-SerializationState(io::IO) = SerializationState{typeof(io)}(io)
-
 # dict
 
 # These can be changed, to trade off better performance for space
@@ -331,13 +321,13 @@ type Dict{K,V} <: Associative{K,V}
     vals::Array{V,1}
     ndel::Int
     count::Int
-    dirty::Bool
+    age::UInt
     idxfloor::Int  # an index <= the indexes of all used slots
     maxprobe::Int
 
     function Dict()
         n = 16
-        new(zeros(UInt8,n), Array{K}(n), Array{V}(n), 0, 0, false, 1, 0)
+        new(zeros(UInt8,n), Array{K,1}(n), Array{V,1}(n), 0, 0, 0, 1, 0)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -360,7 +350,7 @@ type Dict{K,V} <: Associative{K,V}
             rehash!(d)
         end
         @assert d.ndel == 0
-        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count, d.dirty, d.idxfloor,
+        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count, d.age, d.idxfloor,
             d.maxprobe)
     end
 end
@@ -427,7 +417,7 @@ function convert{K,V}(::Type{Dict{K,V}},d::Associative)
 end
 convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
-hashindex(key, sz) = ((hash(key)%Int) & (sz-1)) + 1
+hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
 
 isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
@@ -439,7 +429,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
-    h.dirty = true
+    h.age += 1
     h.idxfloor = 1
     if h.count == 0
         resize!(h.slots, newsz)
@@ -451,9 +441,9 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     end
 
     slots = zeros(UInt8,newsz)
-    keys = Array{K}(newsz)
-    vals = Array{V}(newsz)
-    count0 = h.count
+    keys = Array{K,1}(newsz)
+    vals = Array{V,1}(newsz)
+    age0 = h.age
     count = 0
     maxprobe = h.maxprobe
 
@@ -472,8 +462,8 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
             vals[index] = v
             count += 1
 
-            if h.count != count0
-                # if items are removed by finalizers, retry
+            if h.age != age0
+                # if `h` is changed by a finalizer, retry
                 return rehash!(h, newsz)
             end
         end
@@ -485,6 +475,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     h.count = count
     h.ndel = 0
     h.maxprobe = maxprobe
+    @assert h.age == age0
 
     return h
 end
@@ -511,7 +502,7 @@ function empty!{K,V}(h::Dict{K,V})
     resize!(h.vals, sz)
     h.ndel = 0
     h.count = 0
-    h.dirty = true
+    h.age += 1
     h.idxfloor = 1
     return h
 end
@@ -528,7 +519,7 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
         if isslotempty(h,index)
             break
         end
-        if !isslotmissing(h,index) && isequal(key,keys[index])
+        if !isslotmissing(h,index) && (key === keys[index] || isequal(key,keys[index]))
             return index
         end
 
@@ -543,6 +534,7 @@ end
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
 function ht_keyindex2{K,V}(h::Dict{K,V}, key)
+    age0 = h.age
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -552,7 +544,9 @@ function ht_keyindex2{K,V}(h::Dict{K,V}, key)
 
     while true
         if isslotempty(h,index)
-            avail < 0 && return avail
+            if avail < 0
+                return avail
+            end
             return -index
         end
 
@@ -562,7 +556,7 @@ function ht_keyindex2{K,V}(h::Dict{K,V}, key)
                 # in case "key" already exists in a later collided slot.
                 avail = -index
             end
-        elseif isequal(key, keys[index])
+        elseif key === keys[index] || isequal(key, keys[index])
             return index
         end
 
@@ -594,7 +588,7 @@ function _setindex!(h::Dict, v, key, index)
     h.keys[index] = key
     h.vals[index] = v
     h.count += 1
-    h.dirty = true
+    h.age += 1
     if index < h.idxfloor
         h.idxfloor = index
     end
@@ -620,6 +614,7 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key::K)
     index = ht_keyindex2(h, key)
 
     if index > 0
+        h.age += 1
         h.keys[index] = key
         h.vals[index] = v
     else
@@ -629,30 +624,13 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key::K)
     return h
 end
 
-function get!{K,V}(h::Dict{K,V}, key0, default)
-    key = convert(K,key0)
-    if !isequal(key,key0)
-        throw(ArgumentError("$key0 is not a valid key for type $K"))
-    end
-    get!(h, key, default)
-end
-
-function get!{K, V}(h::Dict{K,V}, key::K, default)
-    index = ht_keyindex2(h, key)
-
-    index > 0 && return h.vals[index]
-
-    v = convert(V, default)
-    _setindex!(h, v, key, -index)
-    return v
-end
-
+get!{K,V}(h::Dict{K,V}, key0, default) = get!(()->default, h, key0)
 function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
-    key = convert(K,key0)
-    if !isequal(key,key0)
+    key = convert(K, key0)
+    if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
-    get!(default, h, key)
+    return get!(default, h, key)
 end
 
 function get!{K,V}(default::Callable, h::Dict{K,V}, key::K)
@@ -660,12 +638,13 @@ function get!{K,V}(default::Callable, h::Dict{K,V}, key::K)
 
     index > 0 && return h.vals[index]
 
-    h.dirty = false
-    v = convert(V,  default())
-    if h.dirty
+    age0 = h.age
+    v = convert(V, default())
+    if h.age != age0
         index = ht_keyindex2(h, key)
     end
     if index > 0
+        h.age += 1
         h.keys[index] = key
         h.vals[index] = v
     else
@@ -674,41 +653,28 @@ function get!{K,V}(default::Callable, h::Dict{K,V}, key::K)
     return v
 end
 
-# NOTE: this macro is specific to Dict, not Associative, and should
+# NOTE: this macro is trivial, and should
 #       therefore not be exported as-is: it's for internal use only.
 macro get!(h, key0, default)
-    quote
-        K, V = keytype($(esc(h))), valtype($(esc(h)))
-        key = convert(K, $(esc(key0)))
-        if !isequal(key, $(esc(key0)))
-            throw(ArgumentError(string($(esc(key0)), " is not a valid key for type ", K)))
-        end
-        idx = ht_keyindex2($(esc(h)), key)
-        if idx < 0
-            idx = -idx
-            v = convert(V, $(esc(default)))
-            _setindex!($(esc(h)), v, key, idx)
-        else
-            @inbounds v = $(esc(h)).vals[idx]
-        end
-        v
+    return quote
+        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
     end
 end
 
 
 function getindex{K,V}(h::Dict{K,V}, key)
     index = ht_keyindex(h, key)
-    return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
+    return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
 function get{K,V}(h::Dict{K,V}, key, default)
     index = ht_keyindex(h, key)
-    return (index<0) ? default : h.vals[index]::V
+    return (index < 0) ? default : h.vals[index]::V
 end
 
 function get{K,V}(default::Callable, h::Dict{K,V}, key)
     index = ht_keyindex(h, key)
-    return (index<0) ? default() : h.vals[index]::V
+    return (index < 0) ? default() : h.vals[index]::V
 end
 
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
@@ -727,12 +693,12 @@ end
 
 function pop!(h::Dict, key)
     index = ht_keyindex(h, key)
-    index > 0 ? _pop!(h, index) : throw(KeyError(key))
+    return index > 0 ? _pop!(h, index) : throw(KeyError(key))
 end
 
 function pop!(h::Dict, key, default)
     index = ht_keyindex(h, key)
-    index > 0 ? _pop!(h, index) : default
+    return index > 0 ? _pop!(h, index) : default
 end
 
 function _delete!(h::Dict, index)
@@ -741,14 +707,16 @@ function _delete!(h::Dict, index)
     ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, index-1)
     h.ndel += 1
     h.count -= 1
-    h.dirty = true
-    h
+    h.age += 1
+    return h
 end
 
 function delete!(h::Dict, key)
     index = ht_keyindex(h, key)
-    if index > 0; _delete!(h, index); end
-    h
+    if index > 0
+        _delete!(h, index)
+    end
+    return h
 end
 
 function skip_deleted(h::Dict, i)
@@ -773,70 +741,9 @@ length(t::Dict) = t.count
 next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
 next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
 
-# weak key dictionaries
-
-type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{Any,V}
-    deleter::Function
-
-    WeakKeyDict() = new(Dict{Any,V}(), identity)
-end
-WeakKeyDict() = WeakKeyDict{Any,Any}()
-
-function weak_key_delete!(t::Dict, k)
-    # when a weak key is finalized, remove from dictionary if it is still there
-    wk = getkey(t, k, secret_table_token)
-    if !is(wk,secret_table_token) && is(wk.value, k)
-        delete!(t, k)
-    end
-end
-
-function setindex!{K}(wkh::WeakKeyDict{K}, v, key)
-    t = wkh.ht
-    k = convert(K, key)
-    if is(wkh.deleter, identity)
-        wkh.deleter = x->weak_key_delete!(t, x)
-    end
-    t[WeakRef(k)] = v
-    # TODO: it might be better to avoid the finalizer, allow
-    # wiped WeakRefs to remain in the table, and delete them as
-    # they are discovered by getindex and setindex!.
-    finalizer(k, wkh.deleter)
-    return t
-end
-
-
-function getkey{K}(wkh::WeakKeyDict{K}, kk, default)
-    k = getkey(wkh.ht, kk, secret_table_token)
-    if is(k, secret_table_token)
-        return default
-    end
-    return k.value::K
-end
-
-get{K}(wkh::WeakKeyDict{K}, key, default) = get(wkh.ht, key, default)
-get{K}(default::Callable, wkh::WeakKeyDict{K}, key) = get(default, wkh.ht, key)
-get!{K}(wkh::WeakKeyDict{K}, key, default) = get!(wkh.ht, key, default)
-get!{K}(default::Callable, wkh::WeakKeyDict{K}, key) = get!(default, wkh.ht, key)
-pop!{K}(wkh::WeakKeyDict{K}, key) = pop!(wkh.ht, key)
-pop!{K}(wkh::WeakKeyDict{K}, key, default) = pop!(wkh.ht, key, default)
-delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
-empty!(wkh::WeakKeyDict)  = (empty!(wkh.ht); wkh)
-haskey{K}(wkh::WeakKeyDict{K}, key) = haskey(wkh.ht, key)
-getindex{K}(wkh::WeakKeyDict{K}, key) = getindex(wkh.ht, key)
-isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
-
-start(t::WeakKeyDict) = start(t.ht)
-done(t::WeakKeyDict, i) = done(t.ht, i)
-function next{K,V}(t::WeakKeyDict{K,V}, i)
-    kv, i = next(t.ht, i)
-    (Pair{K,V}(kv[1].value::K,kv[2]), i)
-end
-length(t::WeakKeyDict) = length(t.ht)
-
 # For these Associative types, it is safe to implement filter!
 # by deleting keys during iteration.
-function filter!(f, d::Union{ObjectIdDict,Dict,WeakKeyDict})
+function filter!(f, d::Union{ObjectIdDict,Dict})
     for (k,v) in d
         if !f(k,v)
             delete!(d,k)
