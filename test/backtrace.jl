@@ -96,3 +96,46 @@ let
     @test i1 > 0 && i2 > 0
     @test b1[i1].line != b2[i2].line
 end
+
+module BackTraceTesting
+
+using Base.Test
+
+@inline bt2() = backtrace()
+@inline bt1() = bt2()
+bt() = bt1()
+
+lkup = map(StackTraces.lookup, bt())
+hasbt = hasbt2 = false
+for sfs in lkup
+    for sf in sfs
+        if sf.func == :bt
+            hasbt = true
+        end
+        if sf.func == :bt2
+            hasbt2 = true
+        end
+    end
+end
+@test hasbt
+@test_broken hasbt2
+
+function btmacro()
+    @time backtrace()
+end
+lkup = map(StackTraces.lookup, btmacro())
+hasme = hasbtmacro = false
+for sfs in lkup
+    for sf in sfs
+        if sf.func == Symbol("macro expansion")
+            hasme = true
+        end
+        if sf.func == :btmacro
+            hasbtmacro = true
+        end
+    end
+end
+@test hasme
+@test hasbtmacro
+
+end
