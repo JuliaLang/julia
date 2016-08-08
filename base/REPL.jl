@@ -36,6 +36,8 @@ abstract AbstractREPL
 
 answer_color(::AbstractREPL) = ""
 
+const JULIA_PROMPT = "julia> "
+
 type REPLBackend
     "channel for AST"
     repl_channel::Channel
@@ -207,7 +209,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     hit_eof = false
     while true
         Base.reseteof(repl.terminal)
-        write(repl.terminal, "julia> ")
+        write(repl.terminal, JULIA_PROMPT)
         line = ""
         ast = nothing
         interrupted = false
@@ -692,6 +694,9 @@ end
 repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(length(hp.history)-hp.start_idx)]"
 repl_filename(repl, hp) = "REPL"
 
+const JL_PROMT_PASTE = Ref(true)
+enable_promtpaste(v::Bool) = JL_PROMT_PASTE[] = v
+
 function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_repl_keymap = Dict{Any,Any}[])
     ###
     #
@@ -723,7 +728,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     replc = REPLCompletionProvider(repl)
 
     # Set up the main Julia prompt
-    julia_prompt = Prompt("julia> ";
+    julia_prompt = Prompt(JULIA_PROMPT;
         # Copy colors from the prompt object
         prompt_prefix = hascolor ? repl.prompt_color : "",
         prompt_suffix = hascolor ?
@@ -837,7 +842,29 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             input = takebuf_string(sbuffer)
             oldpos = start(input)
             firstline = true
+            isprompt_paste = false
             while !done(input, oldpos) # loop until all lines have been executed
+                if JL_PROMT_PASTE[]
+                    # Check if the next statement starts with "julia> ", in that case
+                    # skip it. But first skip whitespace
+                    while input[oldpos] in ('\n', ' ', '\t')
+                        oldpos = nextind(input, oldpos)
+                        oldpos >= sizeof(input) && return
+                    end
+                    # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
+                    jl_prompt_len = 7
+                     if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
+                        isprompt_paste = true
+                        oldpos += jl_prompt_len
+                    # If we are prompt pasting and current statement does not begin with julia> , skip to next line
+                    elseif isprompt_paste
+                        while input[oldpos] != '\n'
+                            oldpos = nextind(input, oldpos)
+                            oldpos >= sizeof(input) && return
+                        end
+                        continue
+                    end
+                end
                 ast, pos = Base.syntax_deprecation_warnings(false) do
                     Base.parse(input, oldpos, raise=false)
                 end
