@@ -283,7 +283,7 @@ let
     @test isa(b, LambdaInfo)
 
     function thing(a::Array, b::Real)
-       println("thing")
+        println("thing")
     end
     function thing(a::AbstractArray, b::Int)
         println("blah")
