@@ -48,6 +48,7 @@ one{N}(::CartesianIndex{N}) = one(CartesianIndex{N})
 one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
 
 # arithmetic, min/max
+(-){N}(index::CartesianIndex{N}) = CartesianIndex{N}(map(-, index.I))
 (+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(+, index1.I, index2.I))
 (-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(-, index1.I, index2.I))
 min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(min, index1.I, index2.I))
