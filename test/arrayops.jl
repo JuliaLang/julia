@@ -457,6 +457,15 @@ for i = tensors
     @test isequal(i,permutedims(ipermutedims(i,perm),perm))
 end
 
+## circshift
+
+@test circshift(1:5, -1) == circshift(1:5, 4) == circshift(1:5, -6) == [2,3,4,5,1]
+@test circshift(1:5, 1) == circshift(1:5, -4) == circshift(1:5, 6)  == [5,1,2,3,4]
+a = [1:5;]
+@test_throws ArgumentError Base.circshift!(a, a, 1)
+b = copy(a)
+@test Base.circshift!(b, a, 1) == [5,1,2,3,4]
+
 ## unique across dim ##
 
 # All rows and columns unique
