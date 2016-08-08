@@ -263,6 +263,7 @@ Building Julia requires that the following software be installed:
 - **[patch]**                   — for modifying source code.
 - **[cmake]**                   — needed to build `libgit2`.
 - **[openssl]**                 — needed for HTTPS support in `libgit2` on Linux, install via `apt-get install libssl-dev` or `yum install openssl-devel`.
+- **[pkg-config]**              - needed to build libgit2 correctly, especially for proxy support
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
@@ -283,6 +284,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
 - **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager
+- **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager
 - **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes
 - **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
@@ -325,6 +327,7 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [openssl]:      https://www.openssl.org
 [libssh2]:      https://www.libssh2.org
 [mbedtls]:      https://tls.mbed.org/
+[pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 
 <a name="System-Provided-Libraries">
 ### System Provided Libraries
@@ -418,9 +421,10 @@ The following distributions include julia, but the versions may be out of date d
 
 Currently, Julia editing mode support is available for a number of
 editors. While Julia modes for
-[Emacs](https://github.com/JuliaLang/julia-emacs) and
+[Emacs](https://github.com/JuliaLang/julia-emacs),
+[Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and
 [Vim](https://github.com/JuliaLang/julia-vim) have their own repos,
-others such as Textmate, Sublime Text, Notepad++, and Kate, are in
+others such as Textmate, Notepad++, and Kate, are in
 `contrib/`.
 
 Two major IDEs are supported for Julia: [Juno](http://junolab.org/),

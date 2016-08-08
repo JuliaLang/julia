@@ -10,26 +10,6 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 systemerror
 
 """
-    writedlm(f, A, delim='\\t')
-
-Write `A` (a vector, matrix or an iterable collection of iterable rows) as text to `f`
-(either a filename string or an `IO` stream) using the given delimiter `delim` (which
-defaults to tab, but can be any printable Julia object, typically a `Char` or
-`AbstractString`).
-
-For example, two vectors `x` and `y` of the same length can be written as two columns of
-tab-delimited text to `f` by either `writedlm(f, [x y])` or by `writedlm(f, zip(x, y))`.
-"""
-writedlm
-
-"""
-    digamma(x)
-
-Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
-"""
-digamma
-
-"""
     fill!(A, x)
 
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
@@ -66,18 +46,6 @@ asin
 Subtype operator, equivalent to `issubtype(T1,T2)`.
 """
 Base.:(<:)
-
-"""
-    schedule(t::Task, [val]; error=false)
-
-Add a task to the scheduler's queue. This causes the task to run constantly when the system
-is otherwise idle, unless the task performs a blocking operation such as `wait`.
-
-If a second argument is provided, it will be passed to the task (via the return value of
-`yieldto`) when it runs again. If `error` is `true`, the value is raised as an exception in
-the woken task.
-"""
-schedule
 
 """
     takebuf_array(b::IOBuffer)
@@ -272,29 +240,6 @@ Returns `true` if `path` is a regular file, `false` otherwise.
 isfile
 
 """
-    task_local_storage(symbol)
-
-Look up the value of a symbol in the current task's task-local storage.
-"""
-task_local_storage(symbol)
-
-"""
-    task_local_storage(symbol, value)
-
-Assign a value to a symbol in the current task's task-local storage.
-"""
-task_local_storage(symbol, value)
-
-"""
-    task_local_storage(body, symbol, value)
-
-Call the function `body` with a modified task-local storage, in which `value` is assigned to
-`symbol`; the previous value of `symbol`, or lack thereof, is restored afterwards. Useful
-for emulating dynamic scoping.
-"""
-task_local_storage(body, symbol, value)
-
-"""
     diff(A, [dim])
 
 Finite difference operator of matrix or vector.
@@ -399,20 +344,6 @@ ind2sub(a, index)
 Element-wise multiplication operator.
 """
 Base.:(.*)
-
-"""
-    ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation on `src` and put the result into `dest`.
-"""
-ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer)
-
-"""
-    ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation on `B`.
-"""
-ror!(B::BitArray{1}, i::Integer)
 
 """
     range(start, [step], length)
@@ -524,13 +455,6 @@ A string giving the literal bit representation of a number.
 bits
 
 """
-    invdigamma(x)
-
-Compute the inverse digamma function of `x`.
-"""
-invdigamma
-
-"""
     getindex(type[, elements...])
 
 Construct a 1-d array of the specified type. This is usually called with the syntax
@@ -608,13 +532,6 @@ Print elements of `items` to `io` with `delim` between them. If `last` is specif
 used as the final delimiter instead of `delim`.
 """
 join(io, items, delim, last)
-
-"""
-    lfact(x)
-
-Compute the logarithmic factorial of `x`
-"""
-lfact
 
 """
     deconv(b,a)
@@ -804,13 +721,6 @@ macroexpand
 Returns `true` if `path` has the sticky bit set, `false` otherwise.
 """
 issticky
-
-"""
-    rol(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation.
-"""
-rol
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -1008,15 +918,6 @@ Test whether a matrix is lower triangular.
 istril
 
 """
-    lgamma(x)
-
-Compute the logarithm of the absolute value of [`gamma`](:func:`gamma`) for
-[`Real`](:obj:`Real`) `x`, while for [`Complex`](:obj:`Complex`) `x` it computes the
-logarithm of `gamma(x)`.
-"""
-lgamma
-
-"""
     bin(n, [pad])
 
 Convert an integer to a binary string, optionally specifying a number of digits to pad to.
@@ -1067,13 +968,6 @@ or a filename, in which case the seed is read from a file. `RandomDevice` does n
 seeding.
 """
 srand
-
-"""
-    acot(x)
-
-Compute the inverse cotangent of `x`, where the output is in radians.
-"""
-acot
 
 """
     oftype(x, y)
@@ -1163,13 +1057,6 @@ fldmod
 Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
 """
 promote
-
-"""
-    @schedule
-
-Wrap an expression in a `Task` and add it to the local machine's scheduler queue.
-"""
-:@schedule
 
 """
     gradient(F, [h])
@@ -1446,13 +1333,6 @@ Close an I/O stream. Performs a `flush` first.
 close(stream::IO)
 
 """
-    cospi(x)
-
-Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
-"""
-cospi
-
-"""
     parentindexes(A)
 
 From an array view `A`, returns the corresponding indexes in the parent.
@@ -1528,15 +1408,6 @@ Dict{String,Float64} with 3 entries:
 ```
 """
 merge
-
-"""
-    yield()
-
-Switch to the scheduler to allow another scheduled task to run. A task that calls this
-function is still runnable, and will be restarted immediately if there are no other runnable
-tasks.
-"""
-yield
 
 """
     transpose!(dest,src)
@@ -2280,26 +2151,11 @@ Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
 lu
 
 """
-    @task
-
-Wrap an expression in a `Task` without executing it, and return the `Task`. This only
-creates a task, and does not run it.
-"""
-:@task
-
-"""
     fld(x, y)
 
 Largest integer less than or equal to `x/y`.
 """
 fld
-
-"""
-    writecsv(filename, A)
-
-Equivalent to `writedlm` with `delim` set to comma.
-"""
-writecsv
 
 """
     withenv(f::Function, kv::Pair...)
@@ -2419,13 +2275,6 @@ getfield
 Bessel function of the first kind of order 1, ``J_1(x)``.
 """
 besselj1
-
-"""
-    sinpi(x)
-
-Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
-"""
-sinpi
 
 """
     select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -2778,13 +2627,6 @@ Get the concrete type of `x`.
 typeof
 
 """
-    acsc(x)
-
-Compute the inverse cosecant of `x`, where the output is in radians
-"""
-acsc
-
-"""
     log(x)
 
 Compute the natural logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
@@ -2849,16 +2691,6 @@ Compute the inverse error function of a real `x`, defined by ``\\operatorname{er
 erfinv
 
 """
-    @async
-
-Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
-machine's scheduler queue. Additionally it adds the task to the set of items that the
-nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...`
-block to create a new scope with copies of all variables referenced in the expression.
-"""
-:@async
-
-"""
     readdir([dir]) -> Vector{String}
 
 Returns the files and directories in the directory `dir` (or the current working directory if not given).
@@ -2871,13 +2703,6 @@ readdir
 Seek a stream to the given position.
 """
 seek
-
-"""
-    acosd(x)
-
-Compute the inverse cosine of `x`, where the output is in degrees.
-"""
-acosd
 
 """
     triu(M)
@@ -2933,92 +2758,11 @@ second variant.
 popdisplay
 
 """
-    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')
-
-Read a matrix from the source where each line (separated by `eol`) gives one row, with
-elements separated by the given delimiter. The source can be a text file, stream or byte
-array. Memory mapped files can be used by passing the byte array representation of the
-mapped segment as source.
-
-If `T` is a numeric type, the result is an array of that type, with any non-numeric elements
-as `NaN` for floating-point types, or zero. Other useful values of `T` include
-`String`, `AbstractString`, and `Any`.
-
-If `header` is `true`, the first row of data will be read as header and the tuple
-`(data_cells, header_cells)` is returned instead of only `data_cells`.
-
-Specifying `skipstart` will ignore the corresponding number of initial lines from the input.
-
-If `skipblanks` is `true`, blank lines in the input will be ignored.
-
-If `use_mmap` is `true`, the file specified by `source` is memory mapped for potential
-speedups. Default is `true` except on Windows. On Windows, you may want to specify `true` if
-the file is large, and is only read once and not written to.
-
-If `quotes` is `true`, columns enclosed within double-quote (\") characters are allowed to
-contain new lines and column delimiters. Double-quote characters within a quoted field must
-be escaped with another double-quote.  Specifying `dims` as a tuple of the expected rows and
-columns (including header, if any) may speed up reading of large files.  If `comments` is
-`true`, lines beginning with `comment_char` and text following `comment_char` in any line
-are ignored.
-"""
-readdlm(source, delim, T, eol)
-
-"""
-    readdlm(source, delim::Char, eol::Char; options...)
-
-If all data is numeric, the result will be a numeric array. If some elements cannot be
-parsed as numbers, a heterogeneous array of numbers and strings is returned.
-"""
-readdlm(source, delim::Char, eol::Char)
-
-"""
-    readdlm(source, delim::Char, T::Type; options...)
-
-The end of line delimiter is taken as `\\n`.
-"""
-readdlm(source, delim::Char, T::Type)
-
-"""
-    readdlm(source, delim::Char; options...)
-
-The end of line delimiter is taken as `\\n`. If all data is numeric, the result will be a
-numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of
-numbers and strings is returned.
-"""
-readdlm(source, delim::Char)
-
-"""
-    readdlm(source, T::Type; options...)
-
-The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `\\n`.
-"""
-readdlm(source, T::Type)
-
-"""
-    readdlm(source; options...)
-
-The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `\\n`. If all data is numeric, the result will be a numeric array. If
-some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings
-is returned.
-"""
-readdlm(source)
-
-"""
     filesize(path...)
 
 Equivalent to `stat(file).size`.
 """
 filesize
-
-"""
-    sinc(x)
-
-Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
-"""
-sinc
 
 """
     cglobal((symbol, library) [, type=Void])
@@ -3293,13 +3037,6 @@ binomial
 Element-wise less-than-or-equals comparison operator.
 """
 Base.:(.<=)
-
-"""
-    asec(x)
-
-Compute the inverse secant of `x`, where the output is in radians.
-"""
-asec
 
 """
     rank(M)
@@ -3649,13 +3386,6 @@ info
 Returns the smallest eigenvalue of `A`.
 """
 eigmin
-
-"""
-    acscd(x)
-
-Compute the inverse cosecant of `x`, where the output is in degrees.
-"""
-acscd
 
 """
     ltoh(x)
@@ -4104,13 +3834,6 @@ eye(n::Int)
 eye(m, n)
 
 """
-    eye(A)
-
-Constructs an identity matrix of the same dimensions and type as `A`.
-"""
-eye(A)
-
-"""
     diagind(M[, k])
 
 A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
@@ -4141,13 +3864,6 @@ Change the owner and/or group of `path` to `owner` and/or `group`. If the value 
 is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
 """
 chown
-
-"""
-    gamma(x)
-
-Compute the gamma function of `x`.
-"""
-gamma
 
 """
     sin(x)
@@ -4227,13 +3943,6 @@ Like `selectperm`, but accepts a preallocated index vector `ix`. If `initialized
 (the default), ix is initialized to contain the values `1:length(ix)`.
 """
 selectperm!
-
-"""
-    istaskdone(task) -> Bool
-
-Tell whether a task has exited.
-"""
-istaskdone
 
 """
     .>(x, y)
@@ -4331,13 +4040,6 @@ Returns `string` with the first character converted to lowercase.
 lcfirst
 
 """
-    flipbits!(B::BitArray{N}) -> BitArray{N}
-
-Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
-"""
-flipbits!
-
-"""
     readlink(path) -> AbstractString
 
 Returns the value of a symbolic link `path`.
@@ -4380,15 +4082,6 @@ mktemp(::Function, ?)
 Determine whether a stream is read-only.
 """
 isreadonly
-
-"""
-    notify(condition, val=nothing; all=true, error=false)
-
-Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
-all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
-is raised as an exception in the woken tasks.
-"""
-notify
 
 """
     view(A, inds...)
@@ -4614,7 +4307,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:541
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:575
  ...
 ```
 """
@@ -4856,13 +4549,6 @@ For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 pinv
 
 """
-    asecd(x)
-
-Compute the inverse secant of `x`, where the output is in degrees.
-"""
-asecd
-
-"""
     readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b); all=true)
 
 Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
@@ -4887,13 +4573,6 @@ The parameters to a function call do not match a valid signature. Argument `msg`
 descriptive error string.
 """
 ArgumentError
-
-"""
-    atand(x)
-
-Compute the inverse tangent of `x`, where the output is in degrees.
-"""
-atand
 
 """
     KeyError(key)
@@ -5063,13 +4742,6 @@ Test whether a matrix is Hermitian.
 ishermitian
 
 """
-    sind(x)
-
-Compute sine of `x`, where `x` is in degrees.
-"""
-sind
-
-"""
     min(x, y, ...)
 
 Return the minimum of the arguments. Operates elementwise over arrays.
@@ -5082,15 +4754,6 @@ min
 Type conversion cannot be done exactly.
 """
 InexactError
-
-"""
-    @sync
-
-Wait until all dynamically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@parallel`
-are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
-"""
-:@sync
 
 """
     typemax(T)
@@ -5235,13 +4898,6 @@ recurses infinitely.
 StackOverflowError
 
 """
-    acsch(x)
-
-Compute the inverse hyperbolic cosecant of `x`.
-"""
-acsch
-
-"""
     process_running(p::Process)
 
 Determine whether a process is currently running.
@@ -5379,14 +5035,6 @@ two strings. For example
 `strings` can be any iterable over elements `x` which are convertible to strings via `print(io::IOBuffer, x)`.
 """
 join(strings, delim, last)
-
-"""
-    polygamma(m, x)
-
-Compute the polygamma function of order `m` of argument `x` (the `(m+1)th` derivative of the
-logarithm of `gamma(x)`)
-"""
-polygamma
 
 """
     isless(x, y)
@@ -6007,13 +5655,6 @@ Read a UDP packet from the specified socket, and return the bytes received. This
 recv
 
 """
-    acoth(x)
-
-Compute the inverse hyperbolic cotangent of `x`.
-"""
-acoth
-
-"""
     det(M)
 
 Matrix determinant.
@@ -6054,13 +5695,6 @@ getipaddr
 Returns `string` with all characters converted to uppercase.
 """
 uppercase
-
-"""
-    cosd(x)
-
-Compute cosine of `x`, where `x` is in degrees.
-"""
-cosd
 
 """
     cycle(iter)
@@ -6363,13 +5997,6 @@ the integrity and correctness of data read from `stream`.
 deserialize
 
 """
-    asech(x)
-
-Compute the inverse hyperbolic secant of `x`.
-"""
-asech
-
-"""
     ismarked(s)
 
 Returns `true` if stream `s` is marked.
@@ -6499,13 +6126,6 @@ lengths of dimensions you asked for.
     (4,3)
 """
 size
-
-"""
-    trigamma(x)
-
-Compute the trigamma function of `x` (the logarithmic second derivative of `gamma(x)`).
-"""
-trigamma
 
 """
     findmin(A, dims) -> (minval, index)
@@ -6961,18 +6581,6 @@ base64-encoded string.
 base64encode
 
 """
-    Condition()
-
-Create an edge-triggered event source that tasks can wait for. Tasks that call `wait` on a
-`Condition` are suspended and queued. Tasks are woken up when `notify` is later called on
-the `Condition`. Edge triggering means that only tasks waiting at the time `notify` is
-called can be woken up. For level-triggered notifications, you must keep extra state to keep
-track of whether a notification has happened. The `Channel` type does this, and so can be
-used for level-triggered events.
-"""
-Condition
-
-"""
     filt!(out, b, a, x, [si])
 
 Same as [`filt`](:func:`filt`) but writes the result into the `out` argument, which may
@@ -7187,13 +6795,6 @@ respectively. Uses the total order implemented by `isless`. For floating-point n
 but throws an error for unordered arguments.
 """
 cmp
-
-"""
-    tand(x)
-
-Compute tangent of `x`, where `x` is in degrees.
-"""
-tand
 
 """
     issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -7466,20 +7067,6 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 fill
 
 """
-    rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation on `src` and put the result into `dest`.
-"""
-rol!(::BitArray,::BitArray,::Integer)
-
-"""
-    rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation on `B`.
-"""
-rol!(::BitArray,::Integer)
-
-"""
     issubset(a, b)
     ⊆(a,b) -> Bool
     ⊈(a,b) -> Bool
@@ -7584,14 +7171,6 @@ Test whether any values along the given dimensions of an array are `true`.
 any(::AbstractArray,dims)
 
 """
-    cosc(x)
-
-Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
-``x = 0``. This is the derivative of `sinc(x)`.
-"""
-cosc
-
-"""
     getkey(collection, key, default)
 
 Return the key matching argument `key` if one exists in `collection`, otherwise return `default`.
@@ -7611,13 +7190,6 @@ At_ldiv_Bt
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
 """
 Ac_mul_Bc
-
-"""
-    acotd(x)
-
-Compute the inverse cotangent of `x`, where the output is in degrees.
-"""
-acotd
 
 """
     zeros(type, dims)
@@ -8186,16 +7758,6 @@ Bitwise or.
 Base.:(|)
 
 """
-    yieldto(task, arg = nothing)
-
-Switch to the given task. The first time a task is switched to, the task's function is
-called with no arguments. On subsequent switches, `arg` is returned from the task's last
-call to `yieldto`. This is a low-level call that only switches tasks, not considering states
-or scheduling in any way. Its use is discouraged.
-"""
-yieldto
-
-"""
     readandwrite(command)
 
 Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the
@@ -8281,13 +7843,6 @@ Optional argument `msg` is a descriptive error string.
 AssertionError
 
 """
-    ror(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation.
-"""
-ror
-
-"""
     Ac_ldiv_Bc(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
@@ -8312,13 +7867,6 @@ julia> f(apple)
 ```
 """
 :@enum
-
-"""
-    asind(x)
-
-Compute the inverse sine of `x`, where the output is in degrees.
-"""
-asind
 
 """
     widemul(x, y)
@@ -8358,13 +7906,6 @@ Compute the Dawson function (scaled imaginary error function) of `x`, defined by
 ``\\frac{\\sqrt{\\pi}}{2} e^{-x^2} \\operatorname{erfi}(x)``.
 """
 dawson
-
-"""
-    current_task()
-
-Get the currently running `Task`.
-"""
-current_task
 
 """
     randjump(r::MersenneTwister, jumps, [jumppoly]) -> Vector{MersenneTwister}

@@ -135,6 +135,7 @@ abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) & 0x7fff)
 for op in (:+,:-,:*,:/,:\,:^)
     @eval ($op)(a::Float16, b::Float16) = Float16(($op)(Float32(a), Float32(b)))
 end
+
 function fma(a::Float16, b::Float16, c::Float16)
     Float16(fma(Float32(a), Float32(b), Float32(c)))
 end

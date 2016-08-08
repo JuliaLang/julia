@@ -1,3 +1,28 @@
+Julia v0.6.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+Language changes
+----------------
+
+Breaking changes
+----------------
+
+This section lists changes that do not have deprecation warnings.
+
+  * Operations between `Float16` and `Integers` now return `Float16` instead of `Float32`. ([#17261])
+
+Library improvements
+--------------------
+
+Compiler/Runtime improvements
+-----------------------------
+
+Deprecated or removed
+---------------------
+
 Julia v0.5.0 Release Notes
 ==========================
 

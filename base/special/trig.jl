@@ -98,7 +98,11 @@ mulpi_ext(x::Float32) = DoubleFloat32(pi*Float64(x))
 mulpi_ext(x::Rational) = mulpi_ext(float(x))
 mulpi_ext(x::Real) = pi*x # Fallback
 
+"""
+    sinpi(x)
 
+Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
+"""
 function sinpi{T<:AbstractFloat}(x::T)
     if !isfinite(x)
         isnan(x) && return x
@@ -157,6 +161,11 @@ function sinpi{T<:Real}(x::T)
     end
 end
 
+"""
+    cospi(x)
+
+Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
+"""
 function cospi{T<:AbstractFloat}(x::T)
     if !isfinite(x)
         isnan(x) && return x
@@ -278,13 +287,23 @@ end
 @vectorize_1arg Number sinpi
 @vectorize_1arg Number cospi
 
+"""
+    sinc(x)
 
+Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+"""
 sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
 sinc{T<:Integer}(x::Complex{T}) = sinc(float(x))
 sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
 @vectorize_1arg Number sinc
 
+"""
+    cosc(x)
+
+Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
+``x = 0``. This is the derivative of `sinc(x)`.
+"""
 cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
 cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
@@ -300,11 +319,20 @@ for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
     end
 end
 
-for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
-                    (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
+for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
+                                       (:acsc, :asin, :acsch, :asinh, "cosecant"),
+                                       (:acot, :atan, :acoth, :atahn, "cotangent"))
+    tname = string(tfa)
+    hname = string(hfa)
     @eval begin
-        ($fa){T<:Number}(y::T) = ($fainv)(one(T) / y)
-        ($fa){T<:Number}(y::AbstractArray{T}) = ($fainv)(one(T) ./ y)
+        @doc """
+            $($tname)(x)
+        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa){T<:Number}(y::T) = ($tfainv)(one(T) / y)
+        ($tfa){T<:Number}(y::AbstractArray{T}) = ($tfainv)(one(T) ./ y)
+        @doc """
+            $($hname)(x)
+        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa){T<:Number}(y::T) = ($hfainv)(one(T) / y)
+        ($hfa){T<:Number}(y::AbstractArray{T}) = ($hfainv)(one(T) ./ y)
     end
 end
 
@@ -389,16 +417,23 @@ end
 tand(x::Real) = sind(x) / cosd(x)
 @vectorize_1arg Real tand
 
-for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan))
+for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
+    name = string(fd)
     @eval begin
-        ($fd)(z) = ($f)(deg2rad(z))
+        @doc """
+            $($name)(x)
+        Compute $($fn) of `x`, where `x` is in degrees. """ ($fd)(z) = ($f)(deg2rad(z))
     end
 end
 
-for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
-                (:asecd, :asec), (:acscd, :acsc), (:acotd, :acot))
+for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand, :atan, "tangent"),
+                    (:asecd, :asec, "secant"), (:acscd, :acsc, "cosecant"), (:acotd, :acot, "cotangent"))
+    name = string(fd)
     @eval begin
-        ($fd)(y) = rad2deg(($f)(y))
+        @doc """
+            $($name)(x)
+
+        Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
         @vectorize_1arg Real $fd
     end
 end
