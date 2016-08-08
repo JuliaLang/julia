@@ -682,15 +682,6 @@ function reverse!(v::AbstractVector, s=1, n=length(v))
 end
 
 
-# concatenations of combinations (homogeneous, heterogeneous) of dense matrices/vectors #
-vcat{T}(A::Union{Vector{T},Matrix{T}}...) = typed_vcat(T, A...)
-vcat(A::Union{Vector,Matrix}...) = typed_vcat(promote_eltype(A...), A...)
-hcat{T}(A::Union{Vector{T},Matrix{T}}...) = typed_hcat(T, A...)
-hcat(A::Union{Vector,Matrix}...) = typed_hcat(promote_eltype(A...), A...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Union{Vector{T},Matrix{T}}...) = typed_hvcat(T, rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Vector,Matrix}...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-cat{T}(catdims, xs::Union{Vector{T},Matrix{T}}...) = Base.cat_t(catdims, T, xs...)
-cat(catdims, xs::Union{Vector,Matrix}...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
 # concatenations of homogeneous combinations of vectors, horizontal and vertical
 function hcat{T}(V::Vector{T}...)
     height = length(V[1])
