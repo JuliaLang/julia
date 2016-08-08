@@ -281,4 +281,11 @@ let
     b = @code_lowered 1 + 1
     @test isa(a, LambdaInfo)
     @test isa(b, LambdaInfo)
+
+    Base.view(A::AbstractArray, i::Real) = view(A, :, i)
+    @test_throws MethodError view(rand(10), 1)
+    a = @code_typed view(rand(10), 1)
+    b = @code_lowered view(rand(10), 1)
+    @test length(a) == 0
+    @test length(b) == 0
 end
