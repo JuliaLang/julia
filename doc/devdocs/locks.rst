@@ -118,12 +118,6 @@ The following locks are broken:
 
     fix: create it
 
-* typecache
-
-    this only protects cache lookup and insertion but it doesn't make the lookup-and-construct atomic
-
-    fix: lock for ``apply_type`` / global (level 2?)
-
 
 Shared Global Data Structures
 -----------------------------
