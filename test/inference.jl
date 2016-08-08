@@ -274,3 +274,11 @@ end
 let f(x) = (x===nothing) ? 1 : 1.0
     @test Base.return_types(f, (Void,)) == Any[Int]
 end
+
+# Adds test for PR #17636
+let
+    a = @code_typed 1 + 1
+    b = @code_lowered 1 + 1
+    @test isa(a, LambdaInfo)
+    @test isa(b, LambdaInfo)
+end
