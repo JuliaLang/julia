@@ -104,6 +104,11 @@ echo "override PCRE_INCL_PATH =" >> Make.user
 # Remove libjulia.dll if it was copied from downloaded binary
 rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
+rm -f usr/bin/libgcc_s_s*-1.dll
+rm -f usr/bin/libgfortran-3.dll
+rm -f usr/bin/libquadmath-0.dll
+rm -f usr/bin/libssp-0.dll
+rm -f usr/bin/libstdc++-6.dll
 
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" -o -n "$APPVEYOR" ]; then
