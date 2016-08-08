@@ -138,8 +138,21 @@ end
 # lock / unlock
 let l = ReentrantLock()
     lock(l)
-    @test trylock(l)
-    unlock(l)
+    success = Ref(false)
+    @test trylock(l) do
+        @test lock(l) do
+            success[] = true
+            return :foo
+        end === :foo
+        return :bar
+    end === :bar
+    @test success[]
+    t = @async begin
+        @test trylock(l) do
+            @test false
+        end === false
+    end
+    wait(t)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
