@@ -36,6 +36,11 @@
 // catch invalid accesses.
 // #define MEMDEBUG
 
+// with MEMFENCE, the object pool headers are verified during sweep
+// to help detect corruption due to fence-post write errors
+// #define MEMFENCE
+
+
 // GC_VERIFY force a full verification gc along with every quick gc to ensure no
 // reachable memory is freed
 #ifndef GC_VERIFY

@@ -975,8 +975,14 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         assert(!freedall);
         pg->has_marked = has_marked;
         pg->has_young = has_young;
-        pg->fl_begin_offset = pfl_begin ? (char*)pfl_begin - data : (uint16_t)-1;
-        pg->fl_end_offset = pfl_begin ? (char*)pfl - data : (uint16_t)-1;
+        if (pfl_begin) {
+            pg->fl_begin_offset = (char*)pfl_begin - data;
+            pg->fl_end_offset = (char*)pfl - data;
+        }
+        else {
+            pg->fl_begin_offset = -1;
+            pg->fl_end_offset = -1;
+        }
 
         pg->nfree = pg_nfree;
         if (sweep_full) {
@@ -1054,7 +1060,7 @@ static void gc_sweep_pool(int sweep_full)
 
     // update metadata of pages that were pointed to by freelist or newpages from a pool
     // i.e. pages being the current allocation target
-    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+    for (int t_i = 0; t_i < jl_n_threads; t_i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[t_i];
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
@@ -1087,7 +1093,7 @@ static void gc_sweep_pool(int sweep_full)
 
 
     // null out terminal pointers of free lists
-    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+    for (int t_i = 0; t_i < jl_n_threads; t_i++) {
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             *pfl[t_i * JL_GC_N_POOLS + i] = NULL;
         }
@@ -1787,6 +1793,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full)
     sweep_weak_refs();
     gc_sweep_other(ptls, sweep_full);
     gc_scrub();
+    gc_verify_tags();
     gc_sweep_pool(sweep_full);
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
