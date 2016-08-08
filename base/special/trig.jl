@@ -319,11 +319,20 @@ for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
     end
 end
 
-for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
-                    (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
+for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
+                                       (:acsc, :asin, :acsch, :asinh, "cosecant"),
+                                       (:acot, :atan, :acoth, :atahn, "cotangent"))
+    tname = string(tfa)
+    hname = string(hfa)
     @eval begin
-        ($fa){T<:Number}(y::T) = ($fainv)(one(T) / y)
-        ($fa){T<:Number}(y::AbstractArray{T}) = ($fainv)(one(T) ./ y)
+        @doc """
+            $($tname)(x)
+        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa){T<:Number}(y::T) = ($tfainv)(one(T) / y)
+        ($tfa){T<:Number}(y::AbstractArray{T}) = ($tfainv)(one(T) ./ y)
+        @doc """
+            $($hname)(x)
+        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa){T<:Number}(y::T) = ($hfainv)(one(T) / y)
+        ($hfa){T<:Number}(y::AbstractArray{T}) = ($hfainv)(one(T) ./ y)
     end
 end
 
