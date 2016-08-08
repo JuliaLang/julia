@@ -411,6 +411,7 @@ v = OffsetArray(rand(8), (-2,))
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
 @test flipdim(A, 1) == OffsetArray(flipdim(parent(A), 1), A.offsets)
 @test flipdim(A, 2) == OffsetArray(flipdim(parent(A), 2), A.offsets)
+@test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
 
 @test A+1 == OffsetArray(parent(A)+1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
