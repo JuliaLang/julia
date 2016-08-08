@@ -1252,6 +1252,7 @@ end
 
 I1 = CartesianIndex((2,3,0))
 I2 = CartesianIndex((-1,5,2))
+@test -I1 == CartesianIndex((-2,-3,0))
 @test I1 + I2 == CartesianIndex((1,8,2))
 @test I2 + I1 == CartesianIndex((1,8,2))
 @test I1 - I2 == CartesianIndex((3,-2,-2))
