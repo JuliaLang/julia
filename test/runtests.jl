@@ -1306,8 +1306,6 @@ let
     end
     w = normalize(v)
     @test w ≈ [1/√2, -1/√2]
-    if VERSION > v"0.4.0-"
-        @test norm(w) === 1.0
-    end
+    @test_approx_eq norm(w) 1.0
     @test norm(normalize!(v) - w, Inf) < eps()
 end
