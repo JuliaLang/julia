@@ -4466,6 +4466,6 @@ end
 let
     j(j) = j
     @test j(1) == 1
-    k(x) = (k = x; x)
+    k(x) = (k = x; k)
     @test k(1) == 1
 end
