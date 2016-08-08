@@ -450,7 +450,7 @@ endif
 	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/Makefile install
 	cp $(JULIAHOME)/LICENSE.md $(BUILDROOT)/julia-$(JULIA_COMMIT)
 ifneq ($(OS), WINNT)
-	-$(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
+	-$(CUSTOM_LD_LIBRARY_PATH) PATH=$(PATH):$(build_depsbindir) $(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
 ifeq ($(OS), Linux)
 	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir) $(DESTDIR)$(private_libdir)
