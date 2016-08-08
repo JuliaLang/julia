@@ -269,3 +269,8 @@ function f17572{A}(::Type{Val{A}})
 end
 # test that inference doesn't error
 @test isa(code_typed(f17572, (Type{Val{0}},)), Array)
+
+# === with singleton constants
+let f(x) = (x===nothing) ? 1 : 1.0
+    @test Base.return_types(f, (Void,)) == Any[Int]
+end
