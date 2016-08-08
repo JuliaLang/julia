@@ -269,3 +269,11 @@ function f17572{A}(::Type{Val{A}})
 end
 # test that inference doesn't error
 @test isa(code_typed(f17572, (Type{Val{0}},)), Array)
+
+# Issue #17811
+let I = Integer[]
+    I = abs(I)
+    @test typeof(I) == Array{Any,1}
+    push!(I, 1)
+    @test I == Any[1]
+end
