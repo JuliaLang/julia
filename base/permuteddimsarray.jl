@@ -17,7 +17,7 @@ immutable PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T
 end
 
 function PermutedDimsArray{T,N}(data::AbstractArray{T,N}, perm)
-    length(perm) == N || throw(ArgumentError(string(p, " is not a valid permutation of dimensions 1:", N)))
+    length(perm) == N || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
     iperm = invperm(perm)
     PermutedDimsArray{T,N,(perm...,),(iperm...,),typeof(data)}(data)
 end
