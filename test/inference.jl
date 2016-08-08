@@ -282,10 +282,15 @@ let
     @test isa(a, LambdaInfo)
     @test isa(b, LambdaInfo)
 
-    Base.view(A::AbstractArray, i::Real) = view(A, :, i)
-    @test_throws MethodError view(rand(10), 1)
-    a = @code_typed view(rand(10), 1)
-    b = @code_lowered view(rand(10), 1)
+    function thing(a::Array, b::Real)
+       println("thing")
+    end
+    function thing(a::AbstractArray, b::Int)
+        println("blah")
+    end
+    @test_throws MethodError thing(rand(10), 1)
+    a = @code_typed thing(rand(10), 1)
+    b = @code_lowered thing(rand(10), 1)
     @test length(a) == 0
     @test length(b) == 0
 end
