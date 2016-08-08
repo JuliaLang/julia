@@ -10,13 +10,6 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 systemerror
 
 """
-    digamma(x)
-
-Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
-"""
-digamma
-
-"""
     fill!(A, x)
 
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
@@ -975,13 +968,6 @@ or a filename, in which case the seed is read from a file. `RandomDevice` does n
 seeding.
 """
 srand
-
-"""
-    acot(x)
-
-Compute the inverse cotangent of `x`, where the output is in radians.
-"""
-acot
 
 """
     oftype(x, y)
@@ -2641,13 +2627,6 @@ Get the concrete type of `x`.
 typeof
 
 """
-    acsc(x)
-
-Compute the inverse cosecant of `x`, where the output is in radians
-"""
-acsc
-
-"""
     log(x)
 
 Compute the natural logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
@@ -3058,13 +3037,6 @@ binomial
 Element-wise less-than-or-equals comparison operator.
 """
 Base.:(.<=)
-
-"""
-    asec(x)
-
-Compute the inverse secant of `x`, where the output is in radians.
-"""
-asec
 
 """
     rank(M)
@@ -4926,13 +4898,6 @@ recurses infinitely.
 StackOverflowError
 
 """
-    acsch(x)
-
-Compute the inverse hyperbolic cosecant of `x`.
-"""
-acsch
-
-"""
     process_running(p::Process)
 
 Determine whether a process is currently running.
@@ -5690,13 +5655,6 @@ Read a UDP packet from the specified socket, and return the bytes received. This
 recv
 
 """
-    acoth(x)
-
-Compute the inverse hyperbolic cotangent of `x`.
-"""
-acoth
-
-"""
     det(M)
 
 Matrix determinant.
@@ -6037,13 +5995,6 @@ the data read. Malformed data can result in process termination. The caller has 
 the integrity and correctness of data read from `stream`.
 """
 deserialize
-
-"""
-    asech(x)
-
-Compute the inverse hyperbolic secant of `x`.
-"""
-asech
 
 """
     ismarked(s)

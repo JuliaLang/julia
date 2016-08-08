@@ -317,7 +317,7 @@ only as a storage format. In calculations they'll be converted to ``Float32``:
     2
 
     julia> 2*Float16(4.)
-    8.0f0
+    Float16(8.0)
 
 The underscore ``_`` can be used as digit separator:
 
