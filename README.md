@@ -312,7 +312,7 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [AMOS]:         http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
 [FFTW]:         http://www.fftw.org
-[PCRE2]:     http://www.pcre.org
+[PCRE2]:        http://www.pcre.org
 [LLVM]:         http://www.llvm.org
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [GMP]:          http://gmplib.org
