@@ -274,3 +274,11 @@ end
 let f(x) = (x===nothing) ? 1 : 1.0
     @test Base.return_types(f, (Void,)) == Any[Int]
 end
+
+# Issue #17811
+let I = Integer[]
+    I = abs(I)
+    @test typeof(I) == Array{Any,1}
+    push!(I, 1)
+    @test I == Any[1]
+end
