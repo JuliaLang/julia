@@ -32,12 +32,8 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
     if errcls != Error.None
         # Check if we used ssh-agent
         if creds.usesshagent == "U"
-            println("ERROR: $errmsg ssh-agent")
             creds.usesshagent = "E" # reported ssh-agent error, disables ssh agent use for the future
-        else
-            println("ERROR: $errmsg")
         end
-        flush(STDOUT)
     end
 
     # first try ssh-agent if credentials support its usage
