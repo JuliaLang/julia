@@ -490,6 +490,7 @@ export
     checkbounds,
     checkindex,
     circshift,
+    circshift!,
     clamp!,
     colon,
     conj!,

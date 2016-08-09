@@ -158,8 +158,10 @@ function flipdim(A::AbstractArray, d::Integer)
     return B
 end
 
-circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [Integer(shiftamt)])
-
+function circshift(a::AbstractArray, shiftamt::Real)
+    circshift!(similar(a), a, (Integer(shiftamt),))
+end
+circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, shiftamt)
 """
     circshift(A, shifts)
 
@@ -174,29 +176,25 @@ julia> b = reshape(collect(1:16), (4,4))
  3  7  11  15
  4  8  12  16
 
-julia> circshift(b, [0,2])
+julia> circshift(b, (0,2))
 4×4 Array{Int64,2}:
   9  13  1  5
  10  14  2  6
  11  15  3  7
  12  16  4  8
 
-julia> circshift(b, [-1,0])
+julia> circshift(b, (-1,0))
 4×4 Array{Int64,2}:
  2  6  10  14
  3  7  11  15
  4  8  12  16
  1  5   9  13
 ```
+
+See also `circshift!`.
 """
-function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
-    I = ()
-    for i=1:N
-        s = size(a,i)
-        d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I = tuple(I..., d==0 ? [1:s;] : mod([-d:s-1-d;], s).+1)
-    end
-    a[(I::NTuple{N,Vector{Int}})...]
+function circshift(a::AbstractArray, shiftamt)
+    circshift!(similar(a), a, map(Integer, (shiftamt...,)))
 end
 
 # Uses K-B-N summation

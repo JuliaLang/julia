@@ -610,6 +610,57 @@ function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     dest
 end
 
+function copy!(dest::AbstractArray, Rdest::CartesianRange, src::AbstractArray, Rsrc::CartesianRange)
+    isempty(Rdest) && return dest
+    size(Rdest) == size(Rsrc) || throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+    @boundscheck checkbounds(dest, Rdest.start)
+    @boundscheck checkbounds(dest, Rdest.stop)
+    @boundscheck checkbounds(src, Rsrc.start)
+    @boundscheck checkbounds(src, Rsrc.stop)
+    deltaI = Rdest.start - Rsrc.start
+    for I in Rsrc
+        @inbounds dest[I+deltaI] = src[I]
+    end
+    dest
+end
+
+# circshift!
+circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
+"""
+    circshift!(dest, src, shifts)
+
+Circularly shift the data in `src`, storing the result in
+`dest`. `shifts` specifies the amount to shift in each dimension.
+
+The `dest` array must be distinct from the `src` array (they cannot
+alias each other).
+
+See also `circshift`.
+"""
+@noinline function circshift!{T,N}(dest::AbstractArray{T,N}, src, shiftamt::DimsInteger)
+    dest === src && throw(ArgumentError("dest and src must be separate arrays"))
+    inds = indices(src)
+    indices(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(indices(dest)))"))
+    _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val{N}))
+end
+circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
+
+@inline function _circshift!(dest, rdest, src, rsrc,
+                             inds::Tuple{AbstractUnitRange,Vararg{Any}},
+                             shiftamt::Tuple{Integer,Vararg{Any}})
+    ind1, d = inds[1], shiftamt[1]
+    s = mod(d, length(ind1))
+    sf, sl = first(ind1)+s, last(ind1)-s
+    r1, r2 = first(ind1):sf-1, sf:last(ind1)
+    r3, r4 = first(ind1):sl, sl+1:last(ind1)
+    tinds, tshiftamt = tail(inds), tail(shiftamt)
+    _circshift!(dest, (rdest..., r1), src, (rsrc..., r4), tinds, tshiftamt)
+    _circshift!(dest, (rdest..., r2), src, (rsrc..., r3), tinds, tshiftamt)
+end
+# At least one of inds, shiftamt is empty
+function _circshift!(dest, rdest, src, rsrc, inds, shiftamt)
+    copy!(dest, CartesianRange(rdest), src, CartesianRange(rsrc))
+end
 
 ### BitArrays
 
