@@ -780,4 +780,6 @@ end
 
 const _oldstyle_array_vcat_ = false
 
+@deprecate write(x) write(STDOUT::IO, x)
+
 # End deprecations scheduled for 0.6
