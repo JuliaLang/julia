@@ -1302,11 +1302,13 @@ end
 let
     δ = inv(prevfloat(typemax(Float64)))
     v = [δ, -δ]
-    if VERSION > v"0.4.0-"
+    if VERSION > v"0.4.0-pre+7164"
         @test norm(v) === 7.866824069956793e-309
     end
     w = normalize(v)
-    @test w ≈ [1/√2, -1/√2]
-    @test isapprox(norm(w), 1.0)
+    if VERSION > v"0.4.0-pre+7164"
+        @test w ≈ [1/√2, -1/√2]
+        @test isapprox(norm(w), 1.0)
+    end
     @test norm(normalize!(v) - w, Inf) < eps()
 end
