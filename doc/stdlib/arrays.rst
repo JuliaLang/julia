@@ -590,19 +590,31 @@ Indexing, Assignment, and Concatenation
         3  7  11  15
         4  8  12  16
 
-       julia> circshift(b, [0,2])
+       julia> circshift(b, (0,2))
        4×4 Array{Int64,2}:
          9  13  1  5
         10  14  2  6
         11  15  3  7
         12  16  4  8
 
-       julia> circshift(b, [-1,0])
+       julia> circshift(b, (-1,0))
        4×4 Array{Int64,2}:
         2  6  10  14
         3  7  11  15
         4  8  12  16
         1  5   9  13
+
+   See also ``circshift!``\ .
+
+.. function:: circshift!(dest, src, shifts)
+
+   .. Docstring generated from Julia source
+
+   Circularly shift the data in ``src``\ , storing the result in ``dest``\ . ``shifts`` specifies the amount to shift in each dimension.
+
+   The ``dest`` array must be distinct from the ``src`` array (they cannot alias each other).
+
+   See also ``circshift``\ .
 
 .. function:: find(A)
 
