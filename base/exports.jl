@@ -489,6 +489,7 @@ export
     cat,
     checkbounds,
     checkindex,
+    circcopy!,
     circshift,
     circshift!,
     clamp!,
