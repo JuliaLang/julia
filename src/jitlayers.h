@@ -37,17 +37,6 @@ extern PassManager *jl_globalPM;
 #include <llvm/Target/TargetMachine.h>
 #endif
 
-#ifdef LLVM40
-typedef JITSymbol JL_JITSymbol;
-// The type that is similar to SymbolInfo on LLVM 4.0 is actually
-// `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
-// is expected.
-typedef JITSymbol JL_SymbolInfo;
-#else
-typedef orc::JITSymbol JL_JITSymbol;
-typedef RuntimeDyld::SymbolInfo JL_SymbolInfo;
-#endif
-
 extern "C" {
     extern int globalUnique;
 }
@@ -163,6 +152,17 @@ static inline void add_named_global(GlobalValue *gv, T *addr, bool dllimport = t
 
 void jl_init_jit(Type *T_pjlvalue_);
 #ifdef USE_ORCJIT
+#ifdef LLVM40
+typedef JITSymbol JL_JITSymbol;
+// The type that is similar to SymbolInfo on LLVM 4.0 is actually
+// `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
+// is expected.
+typedef JITSymbol JL_SymbolInfo;
+#else
+typedef orc::JITSymbol JL_JITSymbol;
+typedef RuntimeDyld::SymbolInfo JL_SymbolInfo;
+#endif
+
 class JuliaOJIT {
     // Custom object emission notification handler for the JuliaOJIT
     // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
