@@ -36,6 +36,13 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test D[1,1] == d[1]
     @test D[1,2] == 0
 
+    @test issymmetric(D)
+    @test istriu(D)
+    @test istril(D)
+    if elty <: Real
+        @test ishermitian(D)
+    end
+
     debug && println("Simple unary functions")
     for op in (-,)
       @test op(D)==op(DM)
@@ -115,6 +122,12 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 @test At_mul_B!(copy(D), copy(b)) ≈ full(D).'*full(b)
                 @test Ac_mul_B!(copy(D), copy(b)) ≈ full(D)'*full(b)
             end
+
+            #a few missing mults
+            bd = Bidiagonal(D2)
+            @test A_mul_Bt(D,D2) ≈ full(D)*full(D2).'
+            @test A_mul_Bt(D2,D) ≈ full(D2)*full(D).'
+            @test A_mul_Bc(D2,D) ≈ full(D2)*full(D)'
 
             @test U.'*D ≈ U.'*full(D)
             @test U'*D ≈ U'*full(D)
