@@ -1076,6 +1076,31 @@ The iteration space is split amongst the threads, after which each thread writes
 
 Note that :obj:`Threads.@threads` does not have an optional reduction parameter like :obj:`@parallel`.
 
+@threadcall (Experimental)
+--------------------------
+All I/O tasks, timers, REPL commands, etc are multiplexed onto a single OS thread via an event loop.
+A patched version of libuv (http://docs.libuv.org/en/v1.x/) provides this functionality. Yield points provide
+for co-operatively scheduling multiple tasks onto the same OS thread. I/O tasks and timers yield implicitly while
+waiting for the event to occur. Calling `yield()` explicitly allows for other tasks to be scheduled.
+
+Thus, a task executing a ``ccall`` effectively prevents the Julia scheduler from executing any other
+tasks till the call returns. This is true for all calls into external libraries. Exceptions are calls into
+custom C code that call back into Julia (which may then yield) or C code that calls ``jl_yield()``(C equivalent of ``yield()``).
+
+Note that while Julia code runs on a single thread (by default), libraries used by Julia may launch their own internal
+threads. For example, the BLAS library may start as many threads as there are cores on a machine.
+
+The ``@threadcall`` macro addresses scenarios where we do not want a ``ccall`` to block the main Julia event loop.
+It schedules a C function for execution in a separate thread. A threadpool with a default size of 4 is used for this.
+The size of the threadpool is controlled via environment variable UV_THREADPOOL_SIZE. While waiting for a free thread,
+and during function execution once a thread is available, the requesting task (on the main Julia event loop)
+yields to other tasks. Note that ``@threadcall`` does not return till the execution is complete. From a user point of
+view, it is therefore a blocking call like other Julia API.
+
+It is very important that the called function does not call back into Julia.
+
+``@threadcall`` may be removed/changed in future versions of Julia.
+
 .. rubric:: Footnotes
 
 .. [#mpi2rma] In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://www.mpi-forum.org/docs.

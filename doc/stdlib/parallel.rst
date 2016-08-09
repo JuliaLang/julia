@@ -11,7 +11,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Create a ``Task`` (i.e. thread, or coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.
+   Create a ``Task`` (i.e. coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.
 
 .. function:: yieldto(task, arg = nothing)
 
@@ -813,6 +813,17 @@ will) change in the future.
    This is likely a very expensive operation. Given that all other atomic operations in Julia already have acquire/release semantics, explicit fences should not be necessary in most cases.
 
    For further details, see LLVM's ``fence`` instruction.
+
+ccall using a threadpool (Experimental)
+---------------------------------------
+
+.. function:: @threadcall((cfunc, clib), rettype, (argtypes...), argvals...)
+
+   .. Docstring generated from Julia source
+
+   The ``@threadcall`` macro is called in the same way as ``ccall`` but does the work in a different thread. This is useful when you want to call a blocking C function without causing the main ``julia`` thread to become blocked. Concurrency is limited by size of the libuv thread pool, which defaults to 4 threads but can be increased by setting the ``UV_THREADPOOL_SIZE`` environment variable and restarting the ``julia`` process.
+
+   Note that the called function should never call back into Julia.
 
 Synchronization Primitives
 --------------------------
