@@ -411,10 +411,41 @@ v = OffsetArray(rand(8), (-2,))
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
 @test flipdim(A, 1) == OffsetArray(flipdim(parent(A), 1), A.offsets)
 @test flipdim(A, 2) == OffsetArray(flipdim(parent(A), 2), A.offsets)
-@test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
 
 @test A+1 == OffsetArray(parent(A)+1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
 @test A+A == OffsetArray(parent(A)+parent(A), A.offsets)
 @test A.*A == OffsetArray(parent(A).*parent(A), A.offsets)
+
+@test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
+
+src = reshape(collect(1:16), (4,4))
+dest = OffsetArray(Array{Int}(4,4), (-1,1))
+circcopy!(dest, src)
+@test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
+@test dest[1:3,2:4] == src[1:3,2:4]
+
+e = eye(5)
+a = [e[:,1], e[:,2], e[:,3], e[:,4], e[:,5]]
+a1 = zeros(5)
+c = [ones(Complex{Float64}, 5),
+     exp(-2*pi*im*(0:4)/5),
+     exp(-4*pi*im*(0:4)/5),
+     exp(-6*pi*im*(0:4)/5),
+     exp(-8*pi*im*(0:4)/5)]
+for s = -5:5
+    for i = 1:5
+        thisa = OffsetArray(a[i], (s,))
+        thisc = c[mod1(i+s+5,5)]
+        @test_approx_eq fft(thisa) thisc
+        @test_approx_eq fft(thisa, 1) thisc
+        @test_approx_eq ifft(fft(thisa)) circcopy!(a1, thisa)
+        @test_approx_eq ifft(fft(thisa, 1), 1) circcopy!(a1, thisa)
+        @test_approx_eq rfft(thisa) thisc[1:3]
+        @test_approx_eq rfft(thisa, 1) thisc[1:3]
+        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+    end
 end
+
+end # let

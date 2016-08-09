@@ -645,6 +645,22 @@ See also `circshift`.
 end
 circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
 
+# For each dimension, we copy the first half of src to the second half
+# of dest, and the second half of src to the first half of dest. This
+# uses a recursive bifurcation strategy so that these splits can be
+# encoded by ranges, which means that we need only one call to `mod`
+# per dimension rather than one call per index.
+# `rdest` and `rsrc` are tuples-of-ranges that grow one dimension at a
+# time; when all the dimensions have been filled in, you call `copy!`
+# for that block. In other words, in two dimensions schematically we
+# have the following call sequence (--> means a call):
+#   circshift!(dest, src, shiftamt) -->
+#     _circshift!(dest, src, ("first half of dim1",)) -->
+#       _circshift!(dest, src, ("first half of dim1", "first half of dim2")) --> copy!
+#       _circshift!(dest, src, ("first half of dim1", "second half of dim2")) --> copy!
+#     _circshift!(dest, src, ("second half of dim1",)) -->
+#       _circshift!(dest, src, ("second half of dim1", "first half of dim2")) --> copy!
+#       _circshift!(dest, src, ("second half of dim1", "second half of dim2")) --> copy!
 @inline function _circshift!(dest, rdest, src, rsrc,
                              inds::Tuple{AbstractUnitRange,Vararg{Any}},
                              shiftamt::Tuple{Integer,Vararg{Any}})
@@ -659,6 +675,68 @@ circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt
 end
 # At least one of inds, shiftamt is empty
 function _circshift!(dest, rdest, src, rsrc, inds, shiftamt)
+    copy!(dest, CartesianRange(rdest), src, CartesianRange(rsrc))
+end
+
+# circcopy!
+"""
+    circcopy!(dest, src)
+
+Copy `src` to `dest`, indexing each dimension modulo its length.
+`src` and `dest` must have the same size, but can be offset in
+their indices; any offset results in a (circular) wraparound. If the
+arrays have overlapping indices, then on the domain of the overlap
+`dest` agrees with `src`.
+
+```julia
+julia> src = reshape(collect(1:16), (4,4))
+4×4 Array{Int64,2}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> dest = OffsetArray{Int}((0:3,2:5))
+
+julia> circcopy!(dest, src)
+OffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:
+ 8  12  16  4
+ 5   9  13  1
+ 6  10  14  2
+ 7  11  15  3
+
+julia> dest[1:3,2:4] == src[1:3,2:4]
+true
+```
+"""
+function circcopy!(dest, src)
+    dest === src && throw(ArgumentError("dest and src must be separate arrays"))
+    indssrc, indsdest = indices(src), indices(dest)
+    if (szsrc = map(length, indssrc)) != (szdest = map(length, indsdest))
+        throw(DimensionMismatch("src and dest must have the same sizes (got $szsrc and $szdest)"))
+    end
+    shift = map((isrc, idest)->first(isrc)-first(idest), indssrc, indsdest)
+    all(x->x==0, shift) && return copy!(dest, src)
+    _circcopy!(dest, (), indsdest, src, (), indssrc)
+end
+
+# This uses the same strategy described above for _circshift!
+@inline function _circcopy!(dest, rdest, indsdest::Tuple{AbstractUnitRange,Vararg{Any}},
+                            src,  rsrc,  indssrc::Tuple{AbstractUnitRange,Vararg{Any}})
+    indd1, inds1 = indsdest[1], indssrc[1]
+    l = length(indd1)
+    s = mod(first(inds1)-first(indd1), l)
+    sdf = first(indd1)+s
+    rd1, rd2 = first(indd1):sdf-1, sdf:last(indd1)
+    ssf = last(inds1)-s
+    rs1, rs2 = first(inds1):ssf, ssf+1:last(inds1)
+    tindsd, tindss = tail(indsdest), tail(indssrc)
+    _circcopy!(dest, (rdest..., rd1), tindsd, src, (rsrc..., rs2), tindss)
+    _circcopy!(dest, (rdest..., rd2), tindsd, src, (rsrc..., rs1), tindss)
+end
+
+# At least one of indsdest, indssrc are empty (and both should be, since we've checked)
+function _circcopy!(dest, rdest, indsdest, src, rsrc, indssrc)
     copy!(dest, CartesianRange(rdest), src, CartesianRange(rsrc))
 end
 
