@@ -533,3 +533,23 @@ if is_windows()
 else
     @test isnull(h16850)
 end
+
+# Adds test for PR #17636
+let
+    a = @code_typed 1 + 1
+    b = @code_lowered 1 + 1
+    @test isa(a, LambdaInfo)
+    @test isa(b, LambdaInfo)
+
+    function thing(a::Array, b::Real)
+        println("thing")
+    end
+    function thing(a::AbstractArray, b::Int)
+        println("blah")
+    end
+    @test_throws MethodError thing(rand(10), 1)
+    a = @code_typed thing(rand(10), 1)
+    b = @code_lowered thing(rand(10), 1)
+    @test length(a) == 0
+    @test length(b) == 0
+end
