@@ -46,8 +46,8 @@ promote_array_type{S<:Integer}(::typeof(.\), ::Type{S}, ::Type{Bool}, T::Type) =
 promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
-    @eval ($f)(A::AbstractArray, B::AbstractArray) =
-        _elementwise($f, promote_op($f, eltype(A), eltype(B)), A, B)
+    @eval ($f){R,S}(A::AbstractArray{R}, B::AbstractArray{S}) =
+        _elementwise($f, promote_op($f, R, S), A, B)
 end
 function _elementwise(op, ::Type{Any}, A::AbstractArray, B::AbstractArray)
     promote_shape(A, B) # check size compatibility
@@ -63,21 +63,21 @@ end
 
 for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
-        function ($f)(A::Number, B::AbstractArray)
-            P = promote_op($f, typeof(A), eltype(B))
-            T = promote_array_type($f, typeof(A), eltype(B), P)
-            T === Any && return [($f)(A, b) for b in B]
-            F = similar(B, T)
+        function ($f){T}(A::Number, B::AbstractArray{T})
+            R = promote_op($f, typeof(A), T)
+            S = promote_array_type($f, typeof(A), T, R)
+            S === Any && return [($f)(A, b) for b in B]
+            F = similar(B, S)
             for (iF, iB) in zip(eachindex(F), eachindex(B))
                 @inbounds F[iF] = ($f)(A, B[iB])
             end
             return F
         end
-        function ($f)(A::AbstractArray, B::Number)
-            P = promote_op($f, eltype(A), typeof(B))
-            T = promote_array_type($f, typeof(B), eltype(A), P)
-            T === Any && return [($f)(a, B) for a in A]
-            F = similar(A, T)
+        function ($f){T}(A::AbstractArray{T}, B::Number)
+            R = promote_op($f, T, typeof(B))
+            S = promote_array_type($f, typeof(B), T, R)
+            S === Any && return [($f)(a, B) for a in A]
+            F = similar(A, S)
             for (iF, iA) in zip(eachindex(F), eachindex(A))
                 @inbounds F[iF] = ($f)(A[iA], B)
             end
