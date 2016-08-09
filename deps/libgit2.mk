@@ -2,7 +2,7 @@
 
 LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
-$(eval $(call git-external,libgit2,LIBGIT2,,,$(SRCDIR)/srccache))
+$(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCDIR)/srccache))
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/libssh2

@@ -6,6 +6,7 @@ $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz: | $(SRCDIR)/srccache
 $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) zxf $<
+	touch -c $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/configure # old target
 	echo 1 > $@
 
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCDIR)/srccache/patchelf-$(PATCHELF_VER)/source-extracted | $(LIBCXX_DEPENDENCY)

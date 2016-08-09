@@ -5,9 +5,11 @@ LIBUNWIND_CPPFLAGS :=
 
 $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://s3.amazonaws.com/julialang/src/libunwind-$(UNWIND_VER).tar.gz
+
 $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) xfz $<
+	touch -c $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure # old target
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted

@@ -16,6 +16,7 @@ $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2: | $(SRCDIR)/srccache
 $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted: $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	touch -c $(SRCDIR)/srccache/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted

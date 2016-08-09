@@ -1,7 +1,7 @@
 ## LIBUV ##
 LIBUV_GIT_URL:=git://github.com/JuliaLang/libuv.git
 LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1
-$(eval $(call git-external,libuv,LIBUV,,,$(SRCDIR)/srccache))
+$(eval $(call git-external,libuv,LIBUV,configure,,$(SRCDIR)/srccache))
 
 UV_CFLAGS := -D_GNU_SOURCE
 ifeq ($(USEMSVC), 1)

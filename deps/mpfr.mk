@@ -30,6 +30,7 @@ $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2: | $(SRCDIR)/srccache
 $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/source-extracted: $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $<
+	touch -c $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/configure # old target
 	echo 1 > $@
 
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/source-extracted

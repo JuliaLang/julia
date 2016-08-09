@@ -10,6 +10,7 @@ $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2: | $(SRCDIR)/srccache
 $(SRCDIR)/srccache/pcre2-$(PCRE_VER)/source-extracted: $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	touch -c $(SRCDIR)/srccache/pcre2-$(PCRE_VER)/configure # old target
 	echo $1 > $@
 
 $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCDIR)/srccache/pcre2-$(PCRE_VER)/source-extracted
