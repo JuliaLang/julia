@@ -4839,7 +4839,7 @@ IntSet
 """
     Task(func)
 
-Create a `Task` (i.e. thread, or coroutine) to execute the given function (which must be
+Create a `Task` (i.e. coroutine) to execute the given function (which must be
 callable with no arguments). The task exits when this function returns.
 """
 Task
