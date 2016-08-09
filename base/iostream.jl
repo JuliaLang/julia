@@ -191,8 +191,6 @@ function takebuf_raw(s::IOStream)
     return buf, sz
 end
 
-write(x) = write(STDOUT::IO, x)
-
 function readuntil(s::IOStream, delim::UInt8)
     ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
 end
