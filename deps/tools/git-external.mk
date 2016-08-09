@@ -33,6 +33,9 @@ $5/$1/.git/HEAD: | $$($2_SRC_FILE)/HEAD
 	-cd $$($2_SRC_FILE) && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	git clone -q --depth=10 --branch $$($2_BRANCH) $$($2_SRC_FILE) $5/$1
 	cd $5/$1 && git remote set-url origin $$($2_GIT_URL)
+#ifneq ($3,)
+	touch -c $5/$1/$3 # old target
+#endif
 	echo 1 > $5/$1/source-extracted
 ifneq ($5,$$(BUILDDIR))
 $$(BUILDDIR)/$1:

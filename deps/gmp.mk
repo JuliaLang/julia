@@ -14,6 +14,7 @@ $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2: | $(SRCDIR)/srccache
 $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted: $(SRCDIR)/srccache/gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $<
+	touch -c $(SRCDIR)/srccache/gmp-$(GMP_VER)/configure # old target
 	echo 1 > $@
 
 $(SRCDIR)/srccache/gmp-$(GMP_VER)/build-patched: $(SRCDIR)/srccache/gmp-$(GMP_VER)/source-extracted

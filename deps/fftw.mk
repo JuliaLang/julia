@@ -30,6 +30,7 @@ $(SRCDIR)/srccache/fftw-$(FFTW_VER)/source-extracted: $(SRCDIR)/srccache/fftw-$(
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
+	touch -c $(SRCDIR)/srccache/fftw-$(FFTW_VER)/configure # old target
 	echo 1 > $@
 
 $(BUILDDIR)/fftw-$(FFTW_VER)-%/build-configured: $(SRCDIR)/srccache/fftw-$(FFTW_VER)/source-extracted

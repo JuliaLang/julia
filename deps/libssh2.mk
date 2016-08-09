@@ -2,7 +2,7 @@
 
 LIBSSH2_GIT_URL := git://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
-$(eval $(call git-external,libssh2,LIBSSH2,,,$(SRCDIR)/srccache))
+$(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCDIR)/srccache))
 
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls

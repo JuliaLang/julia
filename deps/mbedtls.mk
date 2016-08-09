@@ -26,6 +26,7 @@ $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted: $(SRCDIR)/srccache/$(MBEDTLS
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
+	touch -c $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt # old target
 	echo 1 > $@
 
 $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
