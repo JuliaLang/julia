@@ -864,6 +864,7 @@ end
 for T in (BigFloat, Float64)
     setrounding(T, RoundDown)
     @test rounding(T) == RoundDown
+    setrounding(T, RoundNearest)
 
     setrounding(T, RoundUp) do
         @test rounding(T) == RoundUp
