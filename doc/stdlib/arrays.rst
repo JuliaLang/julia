@@ -9,21 +9,28 @@
 Basic functions
 ---------------
 
-.. function:: ndims(A) -> Integer
+.. function:: ndims(A::AbstractArray) -> Integer
 
    .. Docstring generated from Julia source
 
    Returns the number of dimensions of ``A``\ .
 
-.. function:: size(A, [dim...])
+   .. doctest::
+
+       julia> A = ones(3,4,5);
+
+       julia> ndims(A)
+       3
+
+.. function:: size(A::AbstractArray, [dim...])
 
    .. Docstring generated from Julia source
 
    Returns a tuple containing the dimensions of ``A``\ . Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.
 
-   .. code-block:: julia
+   .. doctest::
 
-       julia> A = rand(2,3,4);
+       julia> A = ones(2,3,4);
 
        julia> size(A, 2)
        3
@@ -43,11 +50,18 @@ Basic functions
 
    Returns the valid range of indices for array ``A`` along dimension ``d``\ .
 
-.. function:: length(A) -> Integer
+.. function:: length(A::AbstractArray) -> Integer
 
    .. Docstring generated from Julia source
 
    Returns the number of elements in ``A``\ .
+
+   .. doctest::
+
+       julia> A = ones(3,4,5);
+
+       julia> length(A)
+       60
 
 .. function:: eachindex(A...)
 
@@ -116,17 +130,34 @@ Basic functions
 
    Convert an array to its complex conjugate in-place.
 
-.. function:: stride(A, k)
+.. function:: stride(A, k::Integer)
 
    .. Docstring generated from Julia source
 
    Returns the distance in memory (in number of elements) between adjacent elements in dimension ``k``\ .
+
+   .. doctest::
+
+       julia> A = ones(3,4,5);
+
+       julia> stride(A,2)
+       3
+
+       julia> stride(A,3)
+       12
 
 .. function:: strides(A)
 
    .. Docstring generated from Julia source
 
    Returns a tuple of the memory strides in each dimension.
+
+   .. doctest::
+
+       julia> A = ones(3,4,5);
+
+       julia> strides(A)
+       (1,3,12)
 
 .. function:: ind2sub(dims, index) -> subscripts
 
@@ -620,19 +651,62 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). A common use of this is to convert a boolean array to an array of indexes of the ``true`` elements.
+   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). A common use of this is to convert a boolean array to an array of indexes of the ``true`` elements. If there are no non-zero elements of ``A``\ , ``find`` returns an empty array.
 
-.. function:: find(f,A)
+   .. doctest::
+
+       julia> A = [true false; false true]
+       2×2 Array{Bool,2}:
+         true  false
+        false   true
+
+       julia> find(A)
+       2-element Array{Int64,1}:
+        1
+        4
+
+.. function:: find(f::Function, A)
 
    .. Docstring generated from Julia source
 
-   Return a vector of the linear indexes of ``A`` where ``f`` returns ``true``\ .
+   Return a vector ``I`` of the linear indexes of ``A`` where ``f(A[I])`` returns ``true``\ . If there are no such elements of ``A``\ , find returns an empty array.
+
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> find(isodd,A)
+       2-element Array{Int64,1}:
+        1
+        2
 
 .. function:: findn(A)
 
    .. Docstring generated from Julia source
 
-   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ).
+   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). If there are no non-zero elements of ``A``\ , ``findn`` returns a 2-tuple of empty arrays.
+
+   .. doctest::
+
+       julia> A = [1 2 0; 0 0 3; 0 4 0]
+       3×3 Array{Int64,2}:
+        1  2  0
+        0  0  3
+        0  4  0
+
+       julia> findn(A)
+       ([1,1,3,2],[1,2,2,3])
+
+       julia> A = zeros(2,2)
+       2×2 Array{Float64,2}:
+        0.0  0.0
+        0.0  0.0
+
+       julia> findn(A)
+       (Int64[],Int64[])
 
 .. function:: findnz(A)
 
@@ -640,77 +714,249 @@ Indexing, Assignment, and Concatenation
 
    Return a tuple ``(I, J, V)`` where ``I`` and ``J`` are the row and column indexes of the non-zero values in matrix ``A``\ , and ``V`` is a vector of the non-zero values.
 
+   .. doctest::
+
+       julia> A = [1 2 0; 0 0 3; 0 4 0]
+       3×3 Array{Int64,2}:
+        1  2  0
+        0  0  3
+        0  4  0
+
+       julia> findnz(A)
+       ([1,1,3,2],[1,2,2,3],[1,2,4,3])
+
 .. function:: findfirst(A)
 
    .. Docstring generated from Julia source
 
-   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
+   Return the linear index of the first non-zero value in ``A`` (determined by ``A[i]!=0``\ ). Returns ``0`` if no such value is found.
 
-.. function:: findfirst(A,v)
+   .. doctest::
+
+       julia> A = [0 0; 1 0]
+       2×2 Array{Int64,2}:
+        0  0
+        1  0
+
+       julia> findfirst(A)
+       2
+
+.. function:: findfirst(A, v)
 
    .. Docstring generated from Julia source
 
-   Return the index of the first element equal to ``v`` in ``A``\ .
+   Return the linear index of the first element equal to ``v`` in ``A``\ . Returns ``0`` if ``v`` is not found.
 
-.. function:: findfirst(predicate, A)
+   .. doctest::
+
+       julia> A = [4 6; 2 2]
+       2×2 Array{Int64,2}:
+        4  6
+        2  2
+
+       julia> findfirst(A,2)
+       2
+
+       julia> findfirst(A,3)
+       0
+
+.. function:: findfirst(predicate::Function, A)
 
    .. Docstring generated from Julia source
 
-   Return the index of the first element of ``A`` for which ``predicate`` returns ``true``\ .
+   Return the linear index of the first element of ``A`` for which ``predicate`` returns ``true``\ . Returns ``0`` if there is no such element.
+
+   .. doctest::
+
+       julia> A = [1 4; 2 2]
+       2×2 Array{Int64,2}:
+        1  4
+        2  2
+
+       julia> findfirst(iseven, A)
+       2
+
+       julia> findfirst(x -> x>10, A)
+       0
 
 .. function:: findlast(A)
 
    .. Docstring generated from Julia source
 
-   Return the index of the last non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
+   Return the linear index of the last non-zero value in ``A`` (determined by ``A[i]!=0``\ ). Returns ``0`` if there is no non-zero value in ``A``\ .
+
+   .. doctest::
+
+       julia> A = [1 0; 1 0]
+       2×2 Array{Int64,2}:
+        1  0
+        1  0
+
+       julia> findlast(A)
+       2
+
+       julia> A = zeros(2,2)
+       2×2 Array{Float64,2}:
+        0.0  0.0
+        0.0  0.0
+
+       julia> findlast(A)
+       0
 
 .. function:: findlast(A, v)
 
    .. Docstring generated from Julia source
 
-   Return the index of the last element equal to ``v`` in ``A``\ .
+   Return the linear index of the last element equal to ``v`` in ``A``\ . Returns ``0`` if there is no element of ``A`` equal to ``v``\ .
 
-.. function:: findlast(predicate, A)
+   .. doctest::
 
-   .. Docstring generated from Julia source
+       julia> A = [1 2; 2 1]
+       2×2 Array{Int64,2}:
+        1  2
+        2  1
 
-   Return the index of the last element of ``A`` for which ``predicate`` returns ``true``\ .
+       julia> findlast(A,1)
+       4
 
-.. function:: findnext(A, i)
+       julia> findlast(A,2)
+       3
 
-   .. Docstring generated from Julia source
+       julia> findlast(A,3)
+       0
 
-   Find the next index >= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
-
-.. function:: findnext(predicate, A, i)
-
-   .. Docstring generated from Julia source
-
-   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
-
-.. function:: findnext(A, v, i)
+.. function:: findlast(predicate::Function, A)
 
    .. Docstring generated from Julia source
 
-   Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+   Return the linear index of the last element of ``A`` for which ``predicate`` returns ``true``\ . Returns ``0`` if there is no such element.
 
-.. function:: findprev(A, i)
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> findlast(isodd, A)
+       2
+
+       julia> findlast(x -> x > 5, A)
+       0
+
+.. function:: findnext(A, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Find the previous index <= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
+   Find the next linear index >= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
 
-.. function:: findprev(predicate, A, i)
+   .. doctest::
+
+       julia> A = [0 0; 1 0]
+       2×2 Array{Int64,2}:
+        0  0
+        1  0
+
+       julia> findnext(A,1)
+       2
+
+       julia> findnext(A,3)
+       0
+
+.. function:: findnext(predicate::Function, A, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
+   Find the next linear index >= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
 
-.. function:: findprev(A, v, i)
+   .. doctest::
+
+       julia> A = [1 4; 2 2]
+       2×2 Array{Int64,2}:
+        1  4
+        2  2
+
+       julia> findnext(isodd, A, 1)
+       1
+
+       julia> findnext(isodd, A, 2)
+       0
+
+.. function:: findnext(A, v, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+   Find the next linear index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+
+   .. doctest::
+
+       julia> A = [1 4; 2 2]
+       2×2 Array{Int64,2}:
+        1  4
+        2  2
+
+       julia> findnext(A,4,4)
+       0
+
+       julia> findnext(A,4,3)
+       3
+
+.. function:: findprev(A, i::Integer)
+
+   .. Docstring generated from Julia source
+
+   Find the previous linear index <= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
+
+   .. doctest::
+
+       julia> A = [0 0; 1 2]
+       2×2 Array{Int64,2}:
+        0  0
+        1  2
+
+       julia> findprev(A,2)
+       2
+
+       julia> findprev(A,1)
+       0
+
+.. function:: findprev(predicate::Function, A, i::Integer)
+
+   .. Docstring generated from Julia source
+
+   Find the previous linear index <= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
+
+   .. doctest::
+
+       julia> A = [4 6; 1 2]
+       2×2 Array{Int64,2}:
+        4  6
+        1  2
+
+       julia> findprev(isodd, A, 1)
+       0
+
+       julia> findprev(isodd, A, 3)
+       2
+
+.. function:: findprev(A, v, i::Integer)
+
+   .. Docstring generated from Julia source
+
+   Find the previous linear index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+
+   .. doctest::
+
+       julia> A = [0 0; 1 2]
+       2×2 Array{Int64,2}:
+        0  0
+        1  2
+
+       julia> findprev(A, 1, 4)
+       2
+
+       julia> findprev(A, 1, 1)
+       0
 
 .. function:: permutedims(A, perm)
 

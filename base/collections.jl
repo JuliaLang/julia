@@ -109,7 +109,7 @@ end
 
 # Turn an arbitrary array into a binary min-heap in linear time.
 """
-    heapify!(v, [ord])
+    heapify!(v, ord::Ordering=Forward)
 
 In-place [`heapify`](:func:`heapify`).
 """
@@ -121,16 +121,49 @@ function heapify!(xs::AbstractArray, o::Ordering=Forward)
 end
 
 """
-    heapify(v, [ord])
+    heapify(v, ord::Ordering=Forward)
 
 Returns a new vector in binary heap order, optionally using the given ordering.
+```jldoctest
+julia> a = [1,3,4,5,2];
+
+julia> Base.Collections.heapify(a)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 5
+ 3
+
+julia> Base.Collections.heapify(a, Base.Order.Reverse)
+5-element Array{Int64,1}:
+ 5
+ 3
+ 4
+ 1
+ 2
+```
 """
 heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copymutable(xs), o)
 
 """
-    isheap(v, [ord])
+    isheap(v, ord::Ordering=Forward)
 
 Return `true` if an array is heap-ordered according to the given order.
+
+```jldoctest
+julia> a = [1,2,3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> Base.Collections.isheap(a,Base.Order.Forward)
+true
+
+julia> Base.Collections.isheap(a,Base.Order.Reverse)
+false
+```
 """
 function isheap(xs::AbstractArray, o::Ordering=Forward)
     for i in 1:div(length(xs), 2)
@@ -157,6 +190,14 @@ the default comparison for `V`.
 A `PriorityQueue` acts like a `Dict`, mapping values to their
 priorities, with the addition of a `dequeue!` function to remove the
 lowest priority element.
+
+```jldoctest
+julia> a = Base.Collections.PriorityQueue(["a","b","c"],[2,3,1],Base.Order.Forward)
+Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:
+  "c" => 1
+  "b" => 3
+  "a" => 2
+```
 """
 type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
     # Binary heap of (element, priority) pairs.
@@ -304,6 +345,21 @@ end
     enqueue!(pq, k, v)
 
 Insert the a key `k` into a priority queue `pq` with priority `v`.
+
+```jldoctest
+julia> a = Base.Collections.PriorityQueue(["a","b","c"],[2,3,1],Base.Order.Forward)
+Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:
+  "c" => 1
+  "b" => 3
+  "a" => 2
+
+julia> Base.Collections.enqueue!(a, "d", 4)
+Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 4 entries:
+  "c" => 1
+  "b" => 3
+  "a" => 2
+  "d" => 4
+```
 """
 function enqueue!{K,V}(pq::PriorityQueue{K,V}, key, value)
     if haskey(pq, key)
@@ -319,6 +375,22 @@ end
     dequeue!(pq)
 
 Remove and return the lowest priority key from a priority queue.
+
+```jldoctest
+julia> a = Base.Collections.PriorityQueue(["a","b","c"],[2,3,1],Base.Order.Forward)
+Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:
+  "c" => 1
+  "b" => 3
+  "a" => 2
+
+julia> Base.Collections.dequeue!(a)
+"c"
+
+julia> a
+Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 2 entries:
+  "b" => 3
+  "a" => 2
+```
 """
 function dequeue!(pq::PriorityQueue)
     x = pq.xs[1]
