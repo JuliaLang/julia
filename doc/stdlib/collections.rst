@@ -480,7 +480,7 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Returns the index of the maximum element in a collection.
+   Returns the index of the maximum element in a collection. The collection must not be empty.
 
    .. doctest::
 
@@ -491,7 +491,7 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Returns the index of the minimum element in a collection.
+   Returns the index of the minimum element in a collection. The collection must not be empty.
 
    .. doctest::
 
@@ -509,11 +509,11 @@ Iterable Collections
        julia> findmax([8,0.1,-9,pi])
        (8.0,1)
 
-.. function:: findmax(A, dims) -> (maxval, index)
+.. function:: findmax(A, region) -> (maxval, index)
 
    .. Docstring generated from Julia source
 
-   For an array input, returns the value and index of the maximum over the given dimensions.
+   For an array input, returns the value and index of the maximum over the given region.
 
 .. function:: findmin(itr) -> (x, index)
 
@@ -526,11 +526,11 @@ Iterable Collections
        julia> findmin([8,0.1,-9,pi])
        (-9.0,3)
 
-.. function:: findmin(A, dims) -> (minval, index)
+.. function:: findmin(A, region) -> (minval, index)
 
    .. Docstring generated from Julia source
 
-   For an array input, returns the value and index of the minimum over the given dimensions.
+   For an array input, returns the value and index of the minimum over the given region.
 
 .. function:: findmax!(rval, rind, A, [init=true]) -> (maxval, index)
 
@@ -1162,11 +1162,18 @@ Set-Like Collections
 
    Construct the intersection of two or more sets. Maintains order and multiplicity of the first argument for arrays and ranges.
 
-.. function:: setdiff(s1,s2)
+.. function:: setdiff(a, b)
 
    .. Docstring generated from Julia source
 
-   Construct the set of elements in ``s1`` but not ``s2``\ . Maintains order with arrays. Note that both arguments must be collections, and both will be iterated over. In particular, ``setdiff(set,element)`` where ``element`` is a potential member of ``set``\ , will not work in general.
+   Construct the set of elements in ``a`` but not ``b``\ . Maintains order with arrays. Note that both arguments must be collections, and both will be iterated over. In particular, ``setdiff(set,element)`` where ``element`` is a potential member of ``set``\ , will not work in general.
+
+   .. doctest::
+
+       julia> setdiff([1,2,3],[3,4,5])
+       2-element Array{Int64,1}:
+        1
+        2
 
 .. function:: setdiff!(s, iterable)
 
@@ -1174,11 +1181,19 @@ Set-Like Collections
 
    Remove each element of ``iterable`` from set ``s`` in-place.
 
-.. function:: symdiff(s1,s2...)
+.. function:: symdiff(a, b, rest...)
 
    .. Docstring generated from Julia source
 
    Construct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.
+
+   .. doctest::
+
+       julia> symdiff([1,2,3],[3,4,5],[4,5,6])
+       3-element Array{Int64,1}:
+        1
+        2
+        6
 
 .. function:: symdiff!(s, n)
 
@@ -1332,11 +1347,11 @@ Dequeues
         2
         1
 
-.. function:: deleteat!(collection, index)
+.. function:: deleteat!(a::Vector, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Remove the item at the given ``index`` and return the modified ``collection``\ . Subsequent items are shifted to fill the resulting gap.
+   Remove the item at the given ``i`` and return the modified ``a``\ . Subsequent items are shifted to fill the resulting gap.
 
    .. doctest::
 
@@ -1348,11 +1363,11 @@ Dequeues
         2
         1
 
-.. function:: deleteat!(collection, itr)
+.. function:: deleteat!(a::Vector, inds)
 
    .. Docstring generated from Julia source
 
-   Remove the items at the indices given by ``itr``\ , and return the modified ``collection``\ . Subsequent items are shifted to fill the resulting gap. ``itr`` must be sorted and unique.
+   Remove the items at the indices given by ``inds``\ , and return the modified ``a``\ . Subsequent items are shifted to fill the resulting gap. ``inds`` must be sorted and unique.
 
    .. doctest::
 
@@ -1364,7 +1379,7 @@ Dequeues
 
        julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
        ERROR: ArgumentError: indices must be unique and sorted
-        in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:575
+        in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:576
         ...
 
 .. function:: splice!(collection, index, [replacement]) -> item
@@ -1527,17 +1542,56 @@ changed efficiently.
 
    A ``PriorityQueue`` acts like a ``Dict``\ , mapping values to their priorities, with the addition of a ``dequeue!`` function to remove the lowest priority element.
 
+   .. doctest::
+
+       julia> a = Base.Collections.PriorityQueue(["a","b","c"],[2,3,1],Base.Order.Forward)
+       Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:
+         "c" => 1
+         "b" => 3
+         "a" => 2
+
 .. function:: enqueue!(pq, k, v)
 
    .. Docstring generated from Julia source
 
    Insert the a key ``k`` into a priority queue ``pq`` with priority ``v``\ .
 
+   .. doctest::
+
+       julia> a = Base.Collections.PriorityQueue(["a","b","c"],[2,3,1],Base.Order.Forward)
+       Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:
+         "c" => 1
+         "b" => 3
+         "a" => 2
+
+       julia> Base.Collections.enqueue!(a, "d", 4)
+       Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 4 entries:
+         "c" => 1
+         "b" => 3
+         "a" => 2
+         "d" => 4
+
 .. function:: dequeue!(pq)
 
    .. Docstring generated from Julia source
 
    Remove and return the lowest priority key from a priority queue.
+
+   .. doctest::
+
+       julia> a = Base.Collections.PriorityQueue(["a","b","c"],[2,3,1],Base.Order.Forward)
+       Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 entries:
+         "c" => 1
+         "b" => 3
+         "a" => 2
+
+       julia> Base.Collections.dequeue!(a)
+       "c"
+
+       julia> a
+       Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 2 entries:
+         "b" => 3
+         "a" => 2
 
 .. function:: peek(pq)
 
@@ -1575,23 +1629,57 @@ lower level functions for performing binary heap operations on arrays. Each
 function takes an optional ordering argument. If not given, default ordering
 is used, so that elements popped from the heap are given in ascending order.
 
-.. function:: heapify(v, [ord])
+.. function:: heapify(v, ord::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    Returns a new vector in binary heap order, optionally using the given ordering.
 
-.. function:: heapify!(v, [ord])
+   .. doctest::
+
+       julia> a = [1,3,4,5,2];
+
+       julia> Base.Collections.heapify(a)
+       5-element Array{Int64,1}:
+        1
+        2
+        4
+        5
+        3
+
+       julia> Base.Collections.heapify(a, Base.Order.Reverse)
+       5-element Array{Int64,1}:
+        5
+        3
+        4
+        1
+        2
+
+.. function:: heapify!(v, ord::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    In-place :func:`heapify`\ .
 
-.. function:: isheap(v, [ord])
+.. function:: isheap(v, ord::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    Return ``true`` if an array is heap-ordered according to the given order.
+
+   .. doctest::
+
+       julia> a = [1,2,3]
+       3-element Array{Int64,1}:
+        1
+        2
+        3
+
+       julia> Base.Collections.isheap(a,Base.Order.Forward)
+       true
+
+       julia> Base.Collections.isheap(a,Base.Order.Reverse)
+       false
 
 .. function:: heappush!(v, x, [ord])
 

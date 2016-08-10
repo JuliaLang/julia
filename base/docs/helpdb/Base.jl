@@ -264,14 +264,6 @@ The text is assumed to be encoded in UTF-8.
 readlines
 
 """
-    findnz(A)
-
-Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
-values in matrix `A`, and `V` is a vector of the non-zero values.
-"""
-findnz
-
-"""
     foldl(op, v0, itr)
 
 Like [`reduce`](:func:`reduce`), but with guaranteed left associativity. `v0` will be used
@@ -1640,13 +1632,6 @@ Bitwise and.
 &
 
 """
-    eigmax(A)
-
-Returns the largest eigenvalue of `A`.
-"""
-eigmax
-
-"""
     PipeBuffer()
 
 An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are
@@ -2113,21 +2098,6 @@ themselves in another collection. The result is of the preceding example is equi
 """
 append!
 
-"""
-    find(A)
-
-Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[i]!=0`). A
-common use of this is to convert a boolean array to an array of indexes of the `true`
-elements.
-"""
-find(A)
-
-"""
-    find(f,A)
-
-Return a vector of the linear indexes of `A` where `f` returns `true`.
-"""
-find(f, A)
 
 """
     ctranspose(A)
@@ -2308,24 +2278,6 @@ prod(itr)
 Multiply elements of an array over the given dimensions.
 """
 prod(A, dims)
-
-"""
-    Base.linearindexing(A)
-
-`linearindexing` defines how an AbstractArray most efficiently accesses its elements. If
-`Base.linearindexing(A)` returns `Base.LinearFast()`, this means that linear indexing with
-only one index is an efficient operation. If it instead returns `Base.LinearSlow()` (by
-default), this means that the array intrinsically accesses its elements with indices
-specified for every dimension. Since converting a linear index to multiple indexing
-subscripts is typically very expensive, this provides a traits-based mechanism to enable
-efficient generic code for all array types.
-
-An abstract array subtype `MyArray` that wishes to opt into fast linear indexing behaviors
-should define `linearindexing` in the type-domain:
-
-    Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
-"""
-Base.linearindexing
 
 """
     isqrt(n)
@@ -3216,14 +3168,6 @@ results `A[ks...]`, where `ks` goes over the positions in the broadcast.
 broadcast_getindex
 
 """
-    findn(A)
-
-Return a vector of indexes for each dimension giving the locations of the non-zeros in `A`
-(determined by `A[i]!=0`).
-"""
-findn
-
-"""
     invoke(f, (types...), args...)
 
 Invoke a method for the given generic function matching the specified types (as a tuple), on
@@ -3379,13 +3323,6 @@ rem
 Display an informational message. Argument `msg` is a string describing the information to be displayed.
 """
 info
-
-"""
-    eigmin(A)
-
-Returns the smallest eigenvalue of `A`.
-"""
-eigmin
 
 """
     ltoh(x)
@@ -4189,13 +4126,6 @@ last argument optionally specifies a size beyond which the buffer may not be gro
 IOBuffer(data=?)
 
 """
-    findmax(A, dims) -> (maxval, index)
-
-For an array input, returns the value and index of the maximum over the given dimensions.
-"""
-findmax(A,dims)
-
-"""
     tempname()
 
 Generate a unique temporary file path.
@@ -4273,45 +4203,6 @@ send
 Compute the inverse hyperbolic tangent of `x`.
 """
 atanh
-
-"""
-    deleteat!(collection, index)
-
-Remove the item at the given `index` and return the modified `collection`. Subsequent items
-are shifted to fill the resulting gap.
-
-```jldoctest
-julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
-5-element Array{Int64,1}:
- 6
- 4
- 3
- 2
- 1
-```
-"""
-deleteat!(collection, index::Integer)
-
-"""
-    deleteat!(collection, itr)
-
-Remove the items at the indices given by `itr`, and return the modified `collection`.
-Subsequent items are shifted to fill the resulting gap. `itr` must be sorted and unique.
-
-```jldoctest
-julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
-3-element Array{Int64,1}:
- 5
- 3
- 1
-
-julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
-ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:575
- ...
-```
-"""
-deleteat!(collection, itr)
 
 """
     read(stream::IO, T)
@@ -4397,14 +4288,6 @@ Get the next valid string index after `i`. Returns a value greater than `endof(s
 after the end of the string.
 """
 nextind
-
-"""
-    symdiff(s1,s2...)
-
-Construct the symmetric difference of elements in the passed in sets or arrays. Maintains
-order with arrays.
-"""
-symdiff
 
 """
     eta(x)
@@ -4726,13 +4609,6 @@ modf
 Convert a hexadecimal string to the floating point number it represents.
 """
 hex2num
-
-"""
-    ndims(A) -> Integer
-
-Returns the number of dimensions of `A`.
-"""
-ndims
 
 """
     ishermitian(A) -> Bool
@@ -5060,16 +4936,6 @@ expm1
 Show a descriptive representation of an exception object.
 """
 showerror
-
-"""
-    setdiff(s1,s2)
-
-Construct the set of elements in `s1` but not `s2`. Maintains order with arrays. Note that
-both arguments must be collections, and both will be iterated over. In particular,
-`setdiff(set,element)` where `element` is a potential member of `set`, will not work in
-general.
-"""
-setdiff
 
 """
     error(message::AbstractString)
@@ -5884,28 +5750,6 @@ Return ``x^{1/3}``.  The prefix operator `∛` is equivalent to `cbrt`.
 cbrt
 
 """
-    findprev(A, i)
-
-Find the previous index <= `i` of a non-zero element of `A`, or `0` if not found.
-"""
-findprev(A,i)
-
-"""
-    findprev(predicate, A, i)
-
-Find the previous index <= `i` of an element of `A` for which `predicate` returns `true`, or
-`0` if not found.
-"""
-findprev(predicate::Function,A,i)
-
-"""
-    findprev(A, v, i)
-
-Find the previous index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
-"""
-findprev(A,v,i)
-
-"""
     matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
 
 Return a vector of the matching substrings from eachmatch.
@@ -6111,30 +5955,6 @@ all elements of the string.
 ispunct
 
 """
-    size(A, [dim...])
-
-Returns a tuple containing the dimensions of `A`. Optionally you can specify the
-dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
-lengths of dimensions you asked for.
-
-    julia> A = rand(2,3,4);
-
-    julia> size(A, 2)
-    3
-
-    julia> size(A,3,2)
-    (4,3)
-"""
-size
-
-"""
-    findmin(A, dims) -> (minval, index)
-
-For an array input, returns the value and index of the minimum over the given dimensions.
-"""
-findmin(A,dims)
-
-"""
     ismount(path) -> Bool
 
 Returns `true` if `path` is a mount point, `false` otherwise.
@@ -6155,13 +5975,6 @@ endswith
 Boolean not.
 """
 Base.:(!)
-
-"""
-    length(A) -> Integer
-
-Returns the number of elements in `A`.
-"""
-length(::AbstractArray)
 
 """
     length(collection) -> Integer
@@ -6301,27 +6114,6 @@ Creates a closure around an expression and runs it on an automatically-chosen pr
 returning a `Future` to the result.
 """
 :@spawn
-
-"""
-    findfirst(A)
-
-Return the index of the first non-zero value in `A` (determined by `A[i]!=0`).
-"""
-findfirst(A)
-
-"""
-    findfirst(A,v)
-
-Return the index of the first element equal to `v` in `A`.
-"""
-findfirst(A,v)
-
-"""
-    findfirst(predicate, A)
-
-Return the index of the first element of `A` for which `predicate` returns `true`.
-"""
-findfirst
 
 """
     promote_rule(type1, type2)
@@ -6822,48 +6614,6 @@ false
 isbits
 
 """
-    findlast(A)
-
-Return the index of the last non-zero value in `A` (determined by `A[i]!=0`).
-"""
-findlast(A)
-
-"""
-    findlast(A, v)
-
-Return the index of the last element equal to `v` in `A`.
-"""
-findlast(A,v)
-
-"""
-    findlast(predicate, A)
-
-Return the index of the last element of `A` for which `predicate` returns `true`.
-"""
-findlast(::Function, A)
-
-"""
-    findnext(A, i)
-
-Find the next index >= `i` of a non-zero element of `A`, or `0` if not found.
-"""
-findnext
-
-"""
-    findnext(predicate, A, i)
-
-Find the next index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
-"""
-findnext(::Function,A,i)
-
-"""
-    findnext(A, v, i)
-
-Find the next index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
-"""
-findnext(A,v,i)
-
-"""
     angle(z)
 
 Compute the phase angle in radians of a complex number `z`.
@@ -6908,18 +6658,6 @@ Broadcasts the arrays `As` to a common size by expanding singleton dimensions, a
 an array of the results `f(as...)` for each position.
 """
 broadcast
-
-"""
-    eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
-
-Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
-be obtained from the slice `M[:, k]`.) The `permute` and `scale` keywords are the same as
-for [`eigfact`](:func:`eigfact`).
-
-For [`SymTridiagonal`](:class:`SymTridiagonal`) matrices, if the optional vector of
-eigenvalues `eigvals` is specified, returns the specific corresponding eigenvectors.
-"""
-eigvecs
 
 """
     ntoh(x)
@@ -7365,45 +7103,12 @@ unsigned without checking for negative values.
 unsigned
 
 """
-    eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
-
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
-which contains the eigenvalues in `F[:values]` and the eigenvectors in the columns of the
-matrix `F[:vectors]`. (The `k`th eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
-
-The following functions are available for `Eigen` objects: `inv`, `det`.
-
-If `A` is [`Symmetric`](:class:`Symmetric`), [`Hermitian`](:class:`Hermitian`) or
-[`SymTridiagonal`](:class:`SymTridiagonal`), it is possible to calculate only a subset of
-the eigenvalues by specifying either a [`UnitRange`](:class:`UnitRange`) `irange` covering
-indices of the sorted eigenvalues or a pair `vl` and `vu` for the lower and upper boundaries
-of the eigenvalues.
-
-For general nonsymmetric matrices it is possible to specify how the matrix is balanced
-before the eigenvector calculation. The option `permute=true` permutes the matrix to become
-closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
-make rows and columns more equal in norm. The default is `true` for both options.
-"""
-eigfact(A,?,?,?,?)
-
-"""
-    eigfact(A, B) -> GeneralizedEigen
-
-Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
-`GeneralizedEigen` factorization object `F` which contains the generalized eigenvalues in
-`F[:values]` and the generalized eigenvectors in the columns of the matrix `F[:vectors]`.
-(The `k`th generalized eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
-"""
-eigfact(A,B)
-
-"""
     mkdir(path, [mode])
 
 Make a new directory with name `path` and permissions `mode`. `mode` defaults to `0o777`,
 modified by the current file creation mask.
 """
 mkdir
-
 
 """
     midpoints(e)
@@ -7464,33 +7169,6 @@ a string. A character is classified as lowercase if it belongs to Unicode catego
 Letter: Lowercase.
 """
 islower
-
-"""
-    eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
-
-Computes eigenvalues and eigenvectors of `A`. See [`eigfact`](:func:`eigfact`) for details
-on the `permute` and `scale` keyword arguments. The eigenvectors are returned columnwise.
-
-```jldoctest
-julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-([1.0,3.0,18.0],
-[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
-```
-
-`eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the
-factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is recommended.
-"""
-eig(A,?,?,?)
-
-"""
-    eig(A, B) -> D, V
-
-Computes generalized eigenvalues and vectors of `A` with respect to `B`.
-
-`eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the
-factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is recommended.
-"""
-eig(A,B)
 
 """
     exp2(x)

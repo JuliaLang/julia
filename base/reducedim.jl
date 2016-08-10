@@ -380,6 +380,11 @@ function findmin!{R}(rval::AbstractArray{R},
     findminmax!(<, initarray!(rval, scalarmin, init), rind, A)
 end
 
+"""
+    findmin(A, region) -> (minval, index)
+
+For an array input, returns the value and index of the minimum over the given region.
+"""
 function findmin{T}(A::AbstractArray{T}, region)
     if isempty(A)
         return (similar(A, reduced_dims0(A, region)),
@@ -402,6 +407,11 @@ function findmax!{R}(rval::AbstractArray{R},
     findminmax!(>, initarray!(rval, scalarmax, init), rind, A)
 end
 
+"""
+    findmax(A, region) -> (maxval, index)
+
+For an array input, returns the value and index of the maximum over the given region.
+"""
 function findmax{T}(A::AbstractArray{T}, region)
     if isempty(A)
         return (similar(A, reduced_dims0(A,region)),
