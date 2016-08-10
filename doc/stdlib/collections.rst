@@ -163,6 +163,12 @@ type.
 
    An iterator that cycles through ``iter`` forever.
 
+.. function:: ncycle(iter, n)
+
+   .. Docstring generated from Julia source
+
+   An iterator that cycles through ``iter`` ``n`` times.
+
 .. function:: repeated(x[, n::Int])
 
    .. Docstring generated from Julia source

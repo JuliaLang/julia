@@ -448,6 +448,36 @@ end
 
 done(it::Cycle, state) = state[2]
 
+#NCycle - cycle through an object N times
+
+immutable NCycle{I}
+    iter::I
+    n::Int
+end
+
+"""
+    ncycle(iter, n)
+
+An iterator that cycles through `iter` `n` times.
+"""
+ncycle(iter, n::Int) = NCycle(iter, n)
+
+eltype(nc::NCycle) = eltype(nc.iter)
+length(nc::NCycle) = nc.n*length(nc.iter)
+size(nc::NCycle) = (size(nc.iter)..., nc.n)
+iteratorsize{I}(::Type{NCycle{I}}) = iteratorsize(I)
+iteratoreltype{I}(::Type{NCycle{I}}) = iteratoreltype(I)
+
+start(nc::NCycle) = (start(nc.iter), 0)
+function next(nc::NCycle, state)
+    nv, ns = next(nc.iter,state[1])
+    if done(nc.iter, ns)
+        return (nv, (start(nc.iter), state[2]+1))
+    else
+        return (nv, (ns, state[2]))
+    end
+end
+done(nc::NCycle, state) = state[2] == nc.n
 
 # Repeated - repeat an object infinitely many times
 
