@@ -282,18 +282,12 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[PCRE2]** (>= 10.00)     — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
-<<<<<<< HEAD
-<<<<<<< HEAD
 - **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
 - **[utf8proc]** (>= 1.3)    — a library for processing UTF-8 encoded Unicode strings
-=======
 - **[libgit2]** (>= 0.21)    — a permissively linkable Git library, used by Julia's package manager
 - **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
->>>>>>> b154b88... Git text confusing; is PCRE up to 10.0?
-=======
 - **[libgit2]** (>= 0.21)    — a permissively linkable Git library, used by Julia's package manager
 - **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
->>>>>>> 6f5c59359961af83dd720738dc3d9a1474240f7a
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
 
 For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
