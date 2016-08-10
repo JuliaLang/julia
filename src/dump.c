@@ -1815,7 +1815,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
             case 1: { // rehash ObjectIdDict
                 jl_array_t **a = (jl_array_t**)v;
                 // Assume *a don't need a write barrier
-                jl_idtable_rehash(a, jl_array_len(*a));
+                *a = jl_idtable_rehash(*a, jl_array_len(*a));
                 jl_gc_wb(v, *a);
                 break;
             }
