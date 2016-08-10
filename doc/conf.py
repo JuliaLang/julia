@@ -96,6 +96,9 @@ pygments_style = 'sphinx'
 primary_domain = 'jl'
 highlight_language = 'julia'
 
+# Flaky links to ignore in linkcheck - permissions or empty returns
+linkcheck_ignore = ['https://www.appveyor.com',
+    'https://bugs.kde.org/show_bug.cgi\?id=136779']
 
 # -- Options for HTML output ---------------------------------------------------
 
