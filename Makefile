@@ -471,7 +471,7 @@ endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
-		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
+		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
 ifeq ($(USE_GPL_LIBS), 1)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
 		cp busybox.exe $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
@@ -600,14 +600,7 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.2 \
-		"mingw32-libexpat1 mingw32-zlib1" && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libgfortran3-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libquadmath0-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libstdc%2B%2B6-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libgcc_s_sjlj1-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libssp0-5.3.0-1.1.noarch.rpm && \
-	for i in *.rpm; do 7z x -y $$i; done && \
-	for i in *.cpio; do 7z x -y $$i; done && \
+		"mingw32-libgfortran3 mingw32-libquadmath0 mingw32-libstdc++6 mingw32-libgcc_s_sjlj1 mingw32-libssp0 mingw32-libexpat1 mingw32-zlib1" && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
@@ -616,14 +609,7 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.2 \
-		"mingw64-libexpat1 mingw64-zlib1" && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libgfortran3-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libquadmath0-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libstdc%2B%2B6-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libgcc_s_seh1-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libssp0-5.3.0-1.1.noarch.rpm && \
-	for i in *.rpm; do 7z x -y $$i; done && \
-	for i in *.cpio; do 7z x -y $$i; done && \
+		"mingw64-libgfortran3 mingw64-libquadmath0 mingw64-libstdc++6 mingw64-libgcc_s_seh1 mingw64-libssp0 mingw64-libexpat1 mingw64-zlib1" && \
 	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
 else
 	$(error no win-extras target for ARCH=$(ARCH))
