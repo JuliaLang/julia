@@ -83,7 +83,7 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_value_t **p, s
             jl_has_typevars__(((jl_tvar_t*)v)->lb, incl_wildcard, p, np))
             return 1;
         if (p != NULL) {
-            for(i=0; i < np; i++) {
+            for (i = 0; i < np; i++) {
                 if (v == p[i])
                     return 1;
             }
@@ -102,7 +102,7 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_value_t **p, s
     }
     else if (jl_is_datatype(v)) {
         if (is_unspec((jl_datatype_t*)v))
-            return 0;
+            return 0; // TODO: fix expect in this case
         if (p == NULL) {
             if (incl_wildcard)
                 expect = ((jl_datatype_t*)v)->haswildcard;
@@ -118,7 +118,7 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_value_t **p, s
         return 0;
     }
     size_t l = jl_svec_len(t);
-    for(i=0; i < l; i++) {
+    for (i = 0; i < l; i++) {
         jl_value_t *elt = jl_svecref(t, i);
         if (elt != v) {
             if (jl_has_typevars__(elt, incl_wildcard, p, np)) {
