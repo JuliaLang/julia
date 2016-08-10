@@ -33,6 +33,10 @@ function testall(srcdir::AbstractString)
             tot_time += @elapsed tokens = collect(Tokenize.tokenize(buf))
             tot_tokens += length(tokens)
 
+            seek(buf, 0)
+            str = takebuf_string(buf)
+            collect(Tokenize.tokenize(str))
+
             for token in tokens
                 if Tokenize.Tokens.kind(token) == Tokenize.Tokens.ERROR
                     tot_errors += 1
