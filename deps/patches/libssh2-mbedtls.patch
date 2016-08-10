@@ -159,10 +159,10 @@ index e85aecd..366d007 100644
  
 diff --git a/src/mbedtls.c b/src/mbedtls.c
 new file mode 100644
-index 0000000..98bc549
+index 0000000..1d181e1
 --- /dev/null
 +++ b/src/mbedtls.c
-@@ -0,0 +1,570 @@
+@@ -0,0 +1,606 @@
 +#include "libssh2_priv.h"
 +
 +#ifdef LIBSSH2_MBEDTLS /* compile only if we build with mbedtls */
@@ -277,10 +277,10 @@ index 0000000..98bc549
 +        if(!ret)
 +            ret = mbedtls_cipher_finish(ctx, output + olen, &finish_olen);
 +
-+        olen += finish_olen;
-+
-+        if (!ret)
++        if (!ret) {
++            olen += finish_olen;
 +            memcpy(block, output, olen);
++        }
 +
 +        _libssh2_mbedtls_safe_free(output, osize);
 +    }
@@ -306,6 +306,9 @@ index 0000000..98bc549
 +    int ret, hmac;
 +
 +    md_info = mbedtls_md_info_from_type(mdtype);
++    if(!md_info)
++        return 0;
++
 +    hmac = key == NULL ? 0 : 1;
 +
 +    mbedtls_md_init(ctx);
@@ -339,6 +342,9 @@ index 0000000..98bc549
 +    int ret;
 +
 +    md_info = mbedtls_md_info_from_type(mdtype);
++    if(!md_info)
++        return 0;
++
 +    ret = mbedtls_md(md_info, data, datalen, hash);
 +
 +    return ret == 0 ? 0 : -1;
@@ -362,17 +368,47 @@ index 0000000..98bc549
 +    return bignum;
 +}
 +
-+void
-+_libssh2_mbedtls_bignum_free(_libssh2_bn *bn)
++int
++_libssh2_mbedtls_bignum_random(_libssh2_bn *bn, int bits, int top, int bottom)
 +{
-+    if (bn)
-+    {
-+        mbedtls_mpi_free(bn);
-+#ifdef LIBSSH2_CLEAR_MEMORY
-+        memset(bn, 0, sizeof(_libssh2_bn));
-+#endif
++    size_t len;
++    int err;
++    int i;
++
++    if (!bn || bits <= 0)
++        return -1;
++
++    len = (bits + 7) >> 3;
++    err = mbedtls_mpi_fill_random(bn, len, mbedtls_ctr_drbg_random, &_libssh2_mbedtls_ctr_drbg);
++    if (err)
++        return -1;
++
++    /* Zero unsued bits above the most significant bit*/
++    for(i=len*8-1;bits<=i;--i) {
++        err = mbedtls_mpi_set_bit(bn, i, 0);
++        if (err)
++            return -1;
 +    }
-+    mbedtls_free(bn);
++
++    /* If `top` is -1, the most significant bit of the random number can be zero.
++       If top is 0, the most significant bit of the random number is set to 1,
++       and if top is 1, the two most significant bits of the number will be set
++       to 1, so that the product of two such random numbers will always have 2*bits length.
++    */
++    for(i=0;i<=top;++i) {
++        err = mbedtls_mpi_set_bit(bn, bits-i-1, 1);
++        if (err)
++            return -1;
++    }
++
++    /* make odd by setting first bit in least significant byte */
++    if (bottom) {
++        err = mbedtls_mpi_set_bit(bn, 0, 1);
++        if (err)
++            return -1;
++    }
++
++    return 0;
 +}
 +
 +
@@ -464,7 +500,7 @@ index 0000000..98bc549
 +    mbedtls_pk_init(&pkey);
 +
 +    ret = mbedtls_pk_parse_keyfile(&pkey, filename, (char *)passphrase);
-+    if( ret != 0 )
++    if( ret != 0 || mbedtls_pk_get_type(&pkey) != MBEDTLS_PK_RSA)
 +    {
 +        mbedtls_pk_free(&pkey);
 +        mbedtls_rsa_free(*rsa);
@@ -498,7 +534,7 @@ index 0000000..98bc549
 +
 +    ret = mbedtls_pk_parse_key(&pkey, (unsigned char *)filedata,
 +                              filedata_len, NULL, 0);
-+    if( ret != 0 )
++    if( ret != 0 || mbedtls_pk_get_type(&pkey) != MBEDTLS_PK_RSA)
 +    {
 +        mbedtls_pk_free(&pkey);
 +        mbedtls_rsa_free(*rsa);
@@ -529,7 +565,7 @@ index 0000000..98bc549
 +        return -1; /* failure */
 +
 +    ret = mbedtls_rsa_pkcs1_verify(rsa, NULL, NULL, MBEDTLS_RSA_PUBLIC,
-+                                   MBEDTLS_MD_SHA1, sig_len, hash, sig);
++                                   MBEDTLS_MD_SHA1, SHA_DIGEST_LENGTH, hash, sig);
 +
 +    return (ret == 0) ? 0 : -1;
 +}
@@ -735,10 +771,10 @@ index 0000000..98bc549
 +#endif /* LIBSSH2_MBEDTLS */
 diff --git a/src/mbedtls.h b/src/mbedtls.h
 new file mode 100644
-index 0000000..f594575
+index 0000000..248583e
 --- /dev/null
 +++ b/src/mbedtls.h
-@@ -0,0 +1,368 @@
+@@ -0,0 +1,371 @@
 +#include <stdlib.h>
 +#include <string.h>
 +
@@ -980,8 +1016,8 @@ index 0000000..f594575
 +  _libssh2_mbedtls_bignum_init()
 +#define _libssh2_bn_init_from_bin() \
 +  _libssh2_mbedtls_bignum_init()
-+#define _libssh2_bn_rand(bn, bytes, top, bottom) \
-+  mbedtls_mpi_fill_random(bn, bytes, mbedtls_ctr_drbg_random, &_libssh2_mbedtls_ctr_drbg)
++#define _libssh2_bn_rand(bn, bits, top, bottom) \
++  _libssh2_mbedtls_bignum_random(bn, bits, top, bottom)
 +#define _libssh2_bn_mod_exp(r, a, p, m, ctx) \
 +  mbedtls_mpi_exp_mod(r, a, p, m, NULL)
 +#define _libssh2_bn_set_word(bn, word) \
@@ -995,7 +1031,7 @@ index 0000000..f594575
 +#define _libssh2_bn_bits(bn) \
 +  mbedtls_mpi_bitlen(bn)
 +#define _libssh2_bn_free(bn) \
-+  _libssh2_mbedtls_bignum_free(bn)
++  mbedtls_mpi_free(bn)
 +
 +
 +/*******************************************************************/
@@ -1042,6 +1078,9 @@ index 0000000..f594575
 +
 +void
 +_libssh2_mbedtls_bignum_free(_libssh2_bn *bn);
++
++int
++_libssh2_mbedtls_bignum_random(_libssh2_bn *bn, int bits, int top, int bottom);
 +
 +int
 +_libssh2_mbedtls_rsa_new(libssh2_rsa_ctx **rsa,
