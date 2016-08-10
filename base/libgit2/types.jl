@@ -50,11 +50,9 @@ function Base.finalize(buf::Buffer)
     return buf_ptr[]
 end
 
-"Abstract payload type for callback functions"
-abstract AbstractPayload
-
 "Abstract credentials payload"
-abstract AbstractCredentials <: AbstractPayload
+abstract AbstractCredentials
+
 "Checks if credentials were used"
 checkused!(p::AbstractCredentials) = true
 checkused!(p::Void) = false
@@ -172,13 +170,8 @@ RemoteCallbacks(; sideband_progress::Ptr{Void} = C_NULL,
                     transport,
                     payload)
 
-function RemoteCallbacks{P<:AbstractPayload}(credentials::Ptr{Void}, payload::Nullable{P})
-    if isnull(payload)
-        RemoteCallbacks(credentials=credentials_cb())
-    else
-        payload_ptr = pointer_from_objref(Base.get(payload))
-        RemoteCallbacks(credentials=credentials_cb(), payload=payload_ptr)
-    end
+function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractCredentials}})
+    RemoteCallbacks(credentials=credentials_cb(), payload=pointer_from_objref(payload))
 end
 
 if LibGit2.version() >= v"0.24.0"
@@ -698,13 +691,14 @@ import Base.securezero!
 type UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
+    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
     count::Int                   # authentication failure protection count
-    function UserPasswordCredentials(u::AbstractString,p::AbstractString)
-        c = new(u,p,3)
+    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
+        c = new(u,p,prompt_if_incorrect,3)
         finalizer(c, securezero!)
         return c
     end
-    UserPasswordCredentials() = UserPasswordCredentials("","")
+    UserPasswordCredentials(prompt_if_incorrect::Bool=false) = UserPasswordCredentials("","",prompt_if_incorrect)
 end
 
 function securezero!(cred::UserPasswordCredentials)
@@ -721,14 +715,15 @@ type SSHCredentials <: AbstractCredentials
     pubkey::String
     prvkey::String
     usesshagent::String  # used for ssh-agent authentication
+    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
     count::Int
 
-    function SSHCredentials(u::AbstractString,p::AbstractString)
-        c = new(u,p,"","","Y",3)
+    function SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
+        c = new(u,p,"","","Y",prompt_if_incorrect,3)
         finalizer(c, securezero!)
         return c
     end
-    SSHCredentials() = SSHCredentials("","")
+    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","",prompt_if_incorrect)
 end
 function securezero!(cred::SSHCredentials)
     securezero!(cred.user)
@@ -752,13 +747,21 @@ function checkused!(p::Union{UserPasswordCredentials, SSHCredentials})
     p.count -= 1
     return false
 end
-reset!(p::Union{UserPasswordCredentials, SSHCredentials}, cnt::Int=3) = (p.count = cnt)
-reset!(p::CachedCredentials) = foreach(reset!, values(p.cred))
+reset!(p::Union{UserPasswordCredentials, SSHCredentials}, cnt::Int=3) = (p.count = cnt; p)
+reset!(p::CachedCredentials) = (foreach(reset!, values(p.cred)); p)
 
 "Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
 get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
 get_creds!(creds::AbstractCredentials, credid, default) = creds
 get_creds!(creds::Void, credid, default) = default
+function get_creds!(creds::Ref{Nullable{AbstractCredentials}}, credid, default)
+    if isnull(creds[])
+        creds[] = Nullable{AbstractCredentials}(default)
+        return default
+    else
+        get_creds!(Base.get(creds[]), credid, default)
+    end
+end
 
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
