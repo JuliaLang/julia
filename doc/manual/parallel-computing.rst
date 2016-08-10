@@ -15,7 +15,7 @@ it's fairly obvious that a given CPU will have fastest access to the RAM
 within the same computer (node). Perhaps more surprisingly, similar
 issues are relevant on a typical multicore laptop, due to
 differences in the speed of main memory and the
-`cache <http://www.akkadia.org/drepper/cpumemory.pdf>`_. Consequently, a
+`cache <https://www.akkadia.org/drepper/cpumemory.pdf>`_. Consequently, a
 good multiprocessing environment should allow control over the
 "ownership" of a chunk of memory by a particular CPU. Julia provides a
 multiprocessing environment based on message passing to allow programs
@@ -1081,21 +1081,21 @@ Note that :obj:`Threads.@threads` does not have an optional reduction parameter 
 All I/O tasks, timers, REPL commands, etc are multiplexed onto a single OS thread via an event loop.
 A patched version of libuv (http://docs.libuv.org/en/v1.x/) provides this functionality. Yield points provide
 for co-operatively scheduling multiple tasks onto the same OS thread. I/O tasks and timers yield implicitly while
-waiting for the event to occur. Calling `yield()` explicitly allows for other tasks to be scheduled.
+waiting for the event to occur. Calling ``yield()`` explicitly allows for other tasks to be scheduled.
 
 Thus, a task executing a ``ccall`` effectively prevents the Julia scheduler from executing any other
 tasks till the call returns. This is true for all calls into external libraries. Exceptions are calls into
-custom C code that call back into Julia (which may then yield) or C code that calls ``jl_yield()``(C equivalent of ``yield()``).
+custom C code that call back into Julia (which may then yield) or C code that calls ``jl_yield()`` (C equivalent of ``yield()``).
 
 Note that while Julia code runs on a single thread (by default), libraries used by Julia may launch their own internal
 threads. For example, the BLAS library may start as many threads as there are cores on a machine.
 
 The ``@threadcall`` macro addresses scenarios where we do not want a ``ccall`` to block the main Julia event loop.
 It schedules a C function for execution in a separate thread. A threadpool with a default size of 4 is used for this.
-The size of the threadpool is controlled via environment variable UV_THREADPOOL_SIZE. While waiting for a free thread,
+The size of the threadpool is controlled via environment variable ``UV_THREADPOOL_SIZE``. While waiting for a free thread,
 and during function execution once a thread is available, the requesting task (on the main Julia event loop)
 yields to other tasks. Note that ``@threadcall`` does not return till the execution is complete. From a user point of
-view, it is therefore a blocking call like other Julia API.
+view, it is therefore a blocking call like other Julia APIs.
 
 It is very important that the called function does not call back into Julia.
 
