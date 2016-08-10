@@ -156,9 +156,11 @@ if [ -z "`which make 2>/dev/null`" ]; then
   export PATH=$PWD/bin:$PATH
 fi
 
-f=busybox-w32-FRP-483-g31277ab.exe
-echo "Downloading $f"
-$curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
+if ! [ -e usr/bin/busybox.exe ]; then
+  f=busybox-w32-FRP-483-g31277ab.exe
+  echo "Downloading $f"
+  $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
+fi
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
