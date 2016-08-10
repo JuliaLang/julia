@@ -35,6 +35,7 @@ cache:
   - x86_64-4.9.2-release-win32-seh-rt_v4-rev3.7z
   - llvm-3.7.1-i686-w64-mingw32-juliadeps-r09.7z
   - llvm-3.7.1-x86_64-w64-mingw32-juliadeps-r09.7z
+  - usr/bin/busybox.exe
 
 build_script:
 # If there's a newer build queued for the same PR, cancel this one

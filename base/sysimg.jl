@@ -325,7 +325,6 @@ include("libgit2/libgit2.jl")
 
 # package manager
 include("pkg/pkg.jl")
-const Git = Pkg.Git
 
 # Stack frames and traces
 include("stacktraces.jl")

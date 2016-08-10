@@ -2,7 +2,7 @@
 
 module Pkg
 
-export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry, Git
+export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
        update, resolve, test, build, free, pin, PkgError, setprotocol!
 
@@ -30,7 +30,7 @@ function Base.showerror(io::IO, pkgerr::PkgError)
     end
 end
 
-for file in split("dir types reqs cache read query resolve write entry git")
+for file in split("dir types reqs cache read query resolve write entry")
     include("$file.jl")
 end
 const cd = Dir.cd

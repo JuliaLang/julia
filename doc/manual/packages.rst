@@ -130,7 +130,7 @@ Once again, this is equivalent to editing the ``REQUIRE`` file to remove the lin
 While :func:`Pkg.add` and :func:`Pkg.rm` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, you can call :func:`Pkg.edit` to manually change the contents of ``REQUIRE`` and then update your packages accordingly.
 :func:`Pkg.edit` does not roll back the contents of ``REQUIRE`` if :func:`Pkg.resolve` fails – rather, you have to run :func:`Pkg.edit` again to fix the files contents yourself.
 
-Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running :func:`Pkg.add`. By default, all GitHub-hosted packages wil be accessed via 'https'; this default can be modified by calling :func:`Pkg.setprotocol!`.  The following command can be run from the command line in order to tell git to use 'https' instead of the 'git' protocol when cloning all repositories, wherever they are hosted::
+Because the package manager uses libgit2 internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running :func:`Pkg.add`. By default, all GitHub-hosted packages wil be accessed via 'https'; this default can be modified by calling :func:`Pkg.setprotocol!`.  The following command can be run from the command line in order to tell git to use 'https' instead of the 'git' protocol when cloning all repositories, wherever they are hosted::
 
     git config --global url."https://".insteadOf git://
 
