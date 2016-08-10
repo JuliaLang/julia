@@ -1649,7 +1649,7 @@ Statistics
 
    Quantiles are computed via linear interpolation between the points ``((k-1)/(n-1), v[k])``\ , for ``k = 1:n`` where ``n = length(v)``\ . This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.
 
-   * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
+   * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages", *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 
 .. function:: quantile!([q, ] v, p; sorted=false)
 
@@ -1661,7 +1661,7 @@ Statistics
 
    Quantiles are computed via linear interpolation between the points ``((k-1)/(n-1), v[k])``\ , for ``k = 1:n`` where ``n = length(v)``\ . This corresponds to Definition 7 of Hyndman and Fan (1996), and is the same as the R default.
 
-   * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
+   * Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages", *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 
 .. function:: cov(x[, corrected=true])
 

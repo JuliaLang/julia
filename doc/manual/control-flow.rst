@@ -126,7 +126,7 @@ This means that new variables defined inside the ``ìf`` clauses can
 be used after the ``if`` block, even if they weren't defined before.
 So, we could have defined the ``test`` function above as
 
-.. doctest::
+.. doctest:: leaky
 
     julia> function test(x,y)
              if x < y
@@ -145,7 +145,7 @@ outside. However, when depending on this behavior, make sure all possible
 code paths define a value for the variable. The following change to
 the above function results in a runtime error
 
-.. doctest::
+.. doctest:: bad-leaky
 
     julia> function test(x,y)
              if x < y
@@ -162,7 +162,8 @@ the above function results in a runtime error
 
     julia> test(2,1)
     ERROR: UndefVarError: relation not defined
-     in test at none:7
+     in test(::Int64, ::Int64) at ./none:7
+     ...
 
 ``if`` blocks also return a value, which may seem unintuitive to users
 coming from many other languages. This value is simply the return value
@@ -193,6 +194,7 @@ conditional expression is anything but ``true`` or ``false``:
              println("true")
            end
     ERROR: TypeError: non-boolean (Int64) used in boolean context
+     ...
 
 This error indicates that the conditional was of the wrong type:
 :obj:`Int64` rather than the required :obj:`Bool`.
@@ -234,7 +236,7 @@ evaluates to the string ``"not less than"``. The original three-way
 example requires chaining multiple uses of the ternary operator
 together:
 
-.. doctest::
+.. doctest:: ternary-operator
 
     julia> test(x, y) = println(x < y ? "x is less than y"    :
                                 x > y ? "x is greater than y" : "x is equal to y")
@@ -365,7 +367,8 @@ For example, a recursive factorial routine could be defined like this:
 
     julia> fact(-1)
     ERROR: n must be non-negative
-     in fact at none:2
+     in fact(::Int64) at ./none:2
+     ...
 
 
 Boolean operations *without* short-circuit evaluation can be done with the
@@ -394,6 +397,7 @@ except for the last entry in a conditional chain is an error:
 
     julia> 1 && true
     ERROR: TypeError: non-boolean (Int64) used in boolean context
+     ...
 
 On the other hand, any type of expression can be used at the end of a conditional chain.
 It will be evaluated and returned depending on the preceding conditionals:
@@ -478,6 +482,7 @@ different variable name to test this:
 
     julia> j
     ERROR: UndefVarError: j not defined
+     ...
 
 See :ref:`man-variables-and-scoping` for a detailed
 explanation of variable scope and how it works in Julia.
@@ -661,7 +666,8 @@ negative real value:
     julia> sqrt(-1)
     ERROR: DomainError:
     sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
-     in sqrt at math.jl:146
+     in sqrt(::Int64) at ./math.jl:149
+     ...
 
 You may define your own exceptions in the following way:
 
@@ -676,7 +682,7 @@ Exceptions can be created explicitly with :func:`throw`. For example, a function
 defined only for nonnegative numbers could be written to :func:`throw` a :exc:`DomainError`
 if the argument is negative:
 
-.. doctest::
+.. doctest:: domain-error
 
     julia> f(x) = x>=0 ? exp(-x) : throw(DomainError())
     f (generic function with 1 method)
@@ -686,12 +692,13 @@ if the argument is negative:
 
     julia> f(-1)
     ERROR: DomainError:
-     in f at none:1
+     in f(::Int64) at ./none:1
+     ...
 
 Note that :exc:`DomainError` without parentheses is not an exception, but a type of
 exception. It needs to be called to obtain an :exc:`Exception` object:
 
-.. doctest::
+.. doctest:: throw-function
 
     julia> typeof(DomainError()) <: Exception
     true
@@ -706,6 +713,7 @@ error reporting:
 
     julia> throw(UndefVarError(:x))
     ERROR: UndefVarError: x not defined
+     ...
 
 This mechanism can be implemented easily by custom exception types following
 the way :exc:`UndefVarError` is written:
@@ -737,7 +745,8 @@ the :func:`sqrt` function that raises an error if its argument is negative:
 
     julia> fussy_sqrt(-1)
     ERROR: negative x not allowed
-     in fussy_sqrt at none:1
+     in fussy_sqrt(::Int64) at ./none:1
+     ...
 
 If ``fussy_sqrt`` is called with a negative value from another function,
 instead of trying to continue execution of the calling function, it
@@ -762,7 +771,9 @@ session:
     julia> verbose_fussy_sqrt(-1)
     before fussy_sqrt
     ERROR: negative x not allowed
-     in verbose_fussy_sqrt at none:3
+     in fussy_sqrt at ./none:1 [inlined]
+     in verbose_fussy_sqrt(::Int64) at ./none:3
+     ...
 
 Warnings and informational messages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -783,7 +794,8 @@ execution:
 
     julia> error("Hi"); 1+1
     ERROR: Hi
-     in error at ./error.jl:21
+     in error(::String) at ./error.jl:21
+     ...
 
 
 The ``try/catch`` statement
@@ -794,7 +806,7 @@ example, a customized square root function can be written to automatically
 call either the real or complex square root method on demand using
 :exc:`Exception`\ s :
 
-.. doctest::
+.. doctest:: try-catch
 
     julia> f(x) = try
              sqrt(x)
@@ -842,7 +854,8 @@ assumes ``x`` is a real number and returns its square root:
 
     julia> sqrt_second(-9)
     ERROR: DomainError:
-     in sqrt_second at none:7
+     in sqrt_second(::Int64) at ./none:7
+     ...
 
 Note that the symbol following ``catch`` will always be interpreted as a
 name for the exception, so care is needed when writing ``try/catch`` expressions

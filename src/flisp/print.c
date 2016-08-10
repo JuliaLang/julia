@@ -8,12 +8,12 @@ static void outc(fl_context_t *fl_ctx, char c, ios_t *f)
     else
         fl_ctx->HPOS++;
 }
-static void outs(fl_context_t *fl_ctx, char *s, ios_t *f)
+static void outs(fl_context_t *fl_ctx, const char *s, ios_t *f)
 {
     ios_puts(s, f);
     fl_ctx->HPOS += u8_strwidth(s);
 }
-static void outsn(fl_context_t *fl_ctx, char *s, ios_t *f, size_t n)
+static void outsn(fl_context_t *fl_ctx, const char *s, ios_t *f, size_t n)
 {
     ios_write(f, s, n);
     fl_ctx->HPOS += u8_strwidth(s);
@@ -43,7 +43,7 @@ void fl_print_chr(fl_context_t *fl_ctx, char c, ios_t *f)
     outc(fl_ctx, c, f);
 }
 
-void fl_print_str(fl_context_t *fl_ctx, char *s, ios_t *f)
+void fl_print_str(fl_context_t *fl_ctx, const char *s, ios_t *f)
 {
     outs(fl_ctx, s, f);
 }

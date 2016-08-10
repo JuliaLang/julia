@@ -326,12 +326,17 @@ step(r::AbstractUnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
 step{T}(r::LinSpace{T}) = ifelse(r.len <= 0, convert(T,NaN), (r.stop-r.start)/r.divisor)
 
-function length(r::StepRange)
+unsafe_length(r::Range) = length(r)  # generic fallback
+
+function unsafe_length(r::StepRange)
     n = Integer(div(r.stop+r.step - r.start, r.step))
     isempty(r) ? zero(n) : n
 end
-length(r::AbstractUnitRange) = Integer(last(r) - first(r) + 1)
-length(r::OneTo) = r.stop
+length(r::StepRange) = unsafe_length(r)
+unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + 1)
+unsafe_length(r::OneTo) = r.stop
+length(r::AbstractUnitRange) = unsafe_length(r)
+length(r::OneTo) = unsafe_length(r)
 length(r::FloatRange) = Integer(r.len)
 length(r::LinSpace) = Integer(r.len + signbit(r.len - 1))
 
@@ -382,7 +387,7 @@ maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be 
 minimum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
 maximum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
-ctranspose(r::Range) = [x for _=1, x=r]
+ctranspose(r::Range) = [x for _=1:1, x=r]
 transpose(r::Range) = r'
 
 # Ranges are immutable
@@ -661,7 +666,7 @@ end
 -(r::FloatRange)   = FloatRange(-r.start, -r.step, r.len, r.divisor)
 -(r::LinSpace)     = LinSpace(-r.start, -r.stop, r.len, r.divisor)
 
-.+(x::Real, r::AbstractUnitRange)  = range(x + first(r), length(r))
+.+(x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
 .+(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
 #.+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
 .+(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
@@ -678,7 +683,7 @@ function .-(x::Real, r::LinSpace)
     x2 = x * r.divisor / (r.len - 1)
     LinSpace(x2 - r.start, x2 - r.stop, r.len, r.divisor)
 end
-.-(r::AbstractUnitRange, x::Real)  = range(first(r)-x, length(r))
+.-(r::AbstractUnitRange, x::Real) = range(first(r)-x, length(r))
 .-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
 .-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
 function .-(r::LinSpace, x::Real)

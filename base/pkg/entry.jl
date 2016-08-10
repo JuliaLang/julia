@@ -349,7 +349,7 @@ function pin(pkg::AbstractString, ver::VersionNumber)
     pin(pkg, avail[ver].sha1)
 end
 
-function update(branch::AbstractString)
+function update(branch::AbstractString, upkgs::Set{String})
     info("Updating METADATA...")
     with(GitRepo, "METADATA") do repo
         try
@@ -390,7 +390,14 @@ function update(branch::AbstractString)
         end
     end
     instd = Read.installed(avail)
-    free  = Read.free(instd)
+    reqs = Reqs.parse("REQUIRE")
+    if !isempty(upkgs)
+        for (pkg, (v,f)) in instd
+            satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current package status does not satisfy the requirements, cannot do a partial update; use `Pkg.update()`"))
+        end
+    end
+    dont_update = Query.partial_update_mask(instd, avail, upkgs)
+    free  = Read.free(instd,dont_update)
     for (pkg,ver) in free
         try
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
@@ -400,10 +407,11 @@ function update(branch::AbstractString)
         end
     end
     creds = LibGit2.CachedCredentials()
-    fixed = Read.fixed(avail,instd)
+    fixed = Read.fixed(avail,instd,dont_update)
     stopupdate = false
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
+        pkg in dont_update && continue
         with(GitRepo, pkg) do repo
             if LibGit2.isattached(repo)
                 if LibGit2.isdirty(repo)
@@ -443,7 +451,7 @@ function update(branch::AbstractString)
         end
     end
     info("Computing changes...")
-    resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
+    resolve(reqs, avail, instd, fixed, free, upkgs)
     # Don't use instd here since it may have changed
     updatehook(sort!(collect(keys(installed()))))
 
@@ -459,7 +467,9 @@ function resolve(
     instd :: Dict = Read.installed(avail),
     fixed :: Dict = Read.fixed(avail,instd),
     have  :: Dict = Read.free(instd),
+    upkgs :: Set{String} = Set{String}()
 )
+    orig_reqs = reqs
     reqs = Query.requirements(reqs,fixed,avail)
     deps, conflicts = Query.dependencies(avail,fixed)
 
@@ -479,6 +489,11 @@ function resolve(
 
     deps = Query.prune_dependencies(reqs,deps)
     want = Resolve.resolve(reqs,deps)
+
+    if !isempty(upkgs)
+        orig_deps, _ = Query.dependencies(avail)
+        Query.check_partial_updates(orig_reqs,orig_deps,want,fixed,upkgs)
+    end
 
     # compare what is installed with what should be
     changes = Query.diff(have, want, avail, fixed)
@@ -591,7 +606,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
             end
         end
     """
-    io, pobj = open(pipeline(detach(`$(Base.julia_cmd())
+    io, pobj = open(pipeline(detach(`$(Base.julia_cmd()) -O0
                                     --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
                                     --history-file=no
                                     --color=$(Base.have_color ? "yes" : "no")

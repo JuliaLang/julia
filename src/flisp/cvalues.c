@@ -307,7 +307,7 @@ value_t size_wrap(fl_context_t *fl_ctx, size_t sz)
     return mk_size(fl_ctx, sz);
 }
 
-size_t tosize(fl_context_t *fl_ctx, value_t n, char *fname)
+size_t tosize(fl_context_t *fl_ctx, value_t n, const char *fname)
 {
     if (isfixnum(n))
         return numval(n);
@@ -476,7 +476,7 @@ size_t ctype_sizeof(fl_context_t *fl_ctx, value_t type, int *palign)
 }
 
 // get pointer and size for any plain-old-data value
-void to_sized_ptr(fl_context_t *fl_ctx, value_t v, char *fname, char **pdata, size_t *psz)
+void to_sized_ptr(fl_context_t *fl_ctx, value_t v, const char *fname, char **pdata, size_t *psz)
 {
     if (iscvalue(v)) {
         cvalue_t *pcv = (cvalue_t*)ptr(v);
@@ -708,7 +708,7 @@ value_t cvalue_compare(value_t a, value_t b)
     return fixnum(diff);
 }
 
-static void check_addr_args(fl_context_t *fl_ctx, char *fname, value_t arr,
+static void check_addr_args(fl_context_t *fl_ctx, const char *fname, value_t arr,
                             value_t ind, char **data, size_t *index)
 {
     size_t numel;
@@ -774,7 +774,7 @@ value_t fl_builtin(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return tagptr(cv, TAG_CVALUE);
 }
 
-value_t cbuiltin(fl_context_t *fl_ctx, char *name, builtin_t f)
+value_t cbuiltin(fl_context_t *fl_ctx, const char *name, builtin_t f)
 {
     cvalue_t *cv = (cvalue_t*)malloc(CVALUE_NWORDS * sizeof(value_t));
     cv->type = fl_ctx->builtintype;

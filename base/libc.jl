@@ -277,7 +277,7 @@ if is_windows()
         buf = Array{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
-        return String(transcode(UInt8, buf))
+        return transcode(String, buf)
     end
 end
 

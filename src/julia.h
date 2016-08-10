@@ -574,11 +574,11 @@ extern jl_sym_t *body_sym;
 extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
-extern jl_sym_t *static_typeof_sym; extern jl_sym_t *compiler_temp_sym;
+extern jl_sym_t *compiler_temp_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
-extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
+extern jl_sym_t *compositetype_sym;
 extern jl_sym_t *global_sym; extern jl_sym_t *unused_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
 extern jl_sym_t *copyast_sym; extern jl_sym_t *fastmath_sym;
@@ -1413,6 +1413,7 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 
 // tasks and exceptions -------------------------------------------------------
 
+typedef struct _jl_timing_block_t jl_timing_block_t;
 // info describing an exception handler
 typedef struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
@@ -1424,6 +1425,7 @@ typedef struct _jl_handler_t {
 #endif
     sig_atomic_t defer_signal;
     int finalizers_inhibited;
+    jl_timing_block_t *timing_stack;
 } jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -1458,6 +1460,7 @@ typedef struct _jl_task_t {
     // This is statically initialized when the task is not holding any locks
     arraylist_t locks;
 #endif
+    jl_timing_block_t *timing_stack;
 } jl_task_t;
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);

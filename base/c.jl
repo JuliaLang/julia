@@ -128,20 +128,39 @@ function cwstring(s::AbstractString)
 end
 end
 
-# transcoding between data in UTF-8 and UTF-16 for Windows APIs
+# transcoding between data in UTF-8 and UTF-16 for Windows APIs,
+# and also UTF-32 for APIs using Cwchar_t on other platforms.
+
 """
-    Base.transcode(T,src::Vector{U})
+    transcode(T, src)
 
-Transcodes unicode data `src` to a different encoding, where `U` and `T` are the integers
-denoting the input and output code units. Currently supported are UTF-8 and UTF-16, which
-are denoted by integers `UInt8` and `UInt16`, respectively.
+Convert string data between Unicode encodings. `src` is either a
+`String` or a `Vector{UIntXX}` of UTF-XX code units, where
+`XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
+`String` to return a (UTF-8 encoded) `String` or `UIntXX`
+to return a `Vector{UIntXX}` of UTF-`XX` data.   (The alias `Cwchar_t`
+can also be used as the integer type, for converting `wchar_t*` strings
+used by external C libraries.)
 
-NULs are handled like any other character (i.e. the output will be NUL-terminated if and
-only if the `src` is).
+The `transcode` function succeeds as long as the input data can be
+reasonably represented in the target encoding; it always succeeds for
+conversions between UTF-XX encodings, even for invalid Unicode data.
+
+Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
-transcode{T<:Union{UInt8,UInt16}}(::Type{T}, src::Vector{T}) = src
-transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
+
+transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
+transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
+transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
+function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
+    buf = IOBuffer()
+    for c in src; print(buf, Char(c)); end
+    takebuf_array(buf)
+end
+transcode(::Type{String}, src::String) = src
+transcode(T, src::String) = transcode(T, src.data)
+transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
     dst = UInt16[]

@@ -25,7 +25,9 @@ Create a new entry in the IO Dictionary for the key => value pair
  - use `(key => value) in dict` to see if this particular combination is in the properties set
  - use `get(dict, key, default)` to retrieve the most recent value for a particular key
 
-    IOContext(io::IO, context::IOContext)
+```
+IOContext(io::IO, context::IOContext)
+```
 
 Create a IOContext that wraps an alternate IO but inherits the keyword arguments from the context
 """
@@ -626,6 +628,27 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
     end
 end
 
+function show_generator(io, ex, indent)
+    if ex.head === :flatten
+        fg = ex
+        ranges = Any[]
+        while isa(fg, Expr) && fg.head === :flatten
+            push!(ranges, fg.args[1].args[2])
+            fg = fg.args[1].args[1]
+        end
+        push!(ranges, fg.args[2])
+        show_unquoted(io, fg.args[1], indent)
+        for r in ranges
+            print(io, " for ")
+            show_unquoted(io, r, indent)
+        end
+    else
+        show_unquoted(io, ex.args[1], indent)
+        print(io, " for ")
+        show_unquoted(io, ex.args[2], indent)
+    end
+end
+
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
@@ -747,23 +770,32 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_call(io, head, ex.args[1], ex.args[2:end], indent)
 
     # comprehensions
-    elseif (head === :typed_comprehension || head === :typed_dict_comprehension) && length(args) == 3
+    elseif (head === :typed_comprehension || head === :typed_dict_comprehension) && length(args) == 2
         isdict = (head === :typed_dict_comprehension)
         isdict && print(io, '(')
         show_unquoted(io, args[1], indent)
         isdict && print(io, ')')
         print(io, '[')
-        show_unquoted(io, args[2], indent)
-        print(io, " for ")
-        show_unquoted(io, args[3], indent)
+        show_generator(io, args[2], indent)
         print(io, ']')
 
-    elseif (head === :comprehension || head === :dict_comprehension) && length(args) == 2
+    elseif (head === :comprehension || head === :dict_comprehension) && length(args) == 1
         print(io, '[')
-        show_unquoted(io, args[1], indent)
-        print(io, " for ")
-        show_unquoted(io, args[2], indent)
+        show_generator(io, args[1], indent)
         print(io, ']')
+
+    elseif head === :generator && length(args) == 2
+        print(io, '(')
+        show_generator(io, ex, indent)
+        print(io, ')')
+
+    elseif head === :filter && length(args) == 2
+        show_unquoted(io, args[2], indent)
+        print(io, " if ")
+        show_unquoted(io, args[1], indent)
+
+    elseif head === :flatten && length(args) == 1
+        show_generator(io, ex, indent)
 
     elseif is(head, :ccall)
         show_unquoted(io, :ccall, indent)

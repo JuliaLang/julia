@@ -556,10 +556,10 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     }
 
     write_int32(s, dt->size);
-    int has_instance = !!(dt->instance != NULL);
-    int has_layout = !!(dt->layout != NULL);
+    int has_instance = (dt->instance != NULL);
+    int has_layout = (dt->layout != NULL);
     write_uint8(s, dt->abstract | (dt->mutabl<<1) | (has_layout<<2) | (has_instance<<3) |
-            (dt->hastypevars<<4) | (dt->haswildcard<<5) | (dt->isleaftype<<6));
+        (dt->hastypevars<<4) | (dt->haswildcard<<5) | (dt->isleaftype<<6));
     write_int32(s, dt->depth);
     if (!dt->abstract) {
         write_uint16(s, dt->ninitialized);
@@ -876,7 +876,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int32(s, li->nargs);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, li->constval);
-        jl_serialize_fptr(s, li->fptr);
+        jl_serialize_fptr(s, (void*)(uintptr_t)li->fptr);
         // save functionObject pointers
         write_int32(s, jl_assign_functionID(li->functionObjectsDecls.functionObject));
         write_int32(s, jl_assign_functionID(li->functionObjectsDecls.specFunctionObject));
@@ -1871,6 +1871,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
 {
     jl_gc_collect(1); // full
     jl_gc_collect(0); // incremental (sweep finalizers)
+    JL_TIMING(SYSIMG_DUMP);
     JL_LOCK(&dump_lock); // Might GC
     int en = jl_gc_enable(0);
     htable_reset(&backref_table, 250000);
@@ -1973,6 +1974,7 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
+    JL_TIMING(SYSIMG_LOAD);
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_LOCK(&dump_lock); // Might GC
     int en = jl_gc_enable(0);
@@ -2071,6 +2073,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
 
 JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
 {
+    JL_TIMING(AST_COMPRESS);
     JL_LOCK(&li->def->writelock); // protect the roots array (Might GC)
     JL_LOCK(&dump_lock); // protect global structures in this file (Might GC)
     assert(jl_is_lambda_info(li));
@@ -2110,6 +2113,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
 
 JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *data)
 {
+    JL_TIMING(AST_UNCOMPRESS);
     JL_LOCK(&li->def->writelock); // protect the roots array (Might GC)
     JL_LOCK(&dump_lock); // Might GC
     assert(jl_is_lambda_info(li));

@@ -1763,7 +1763,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         return tc;
     }
     size_t i;
-    char *tname;
+    const char *tname;
     jl_svec_t *tp;
     jl_datatype_t *stprimary = NULL;
     if (jl_is_typector(tc)) {
@@ -1973,6 +1973,7 @@ static ssize_t lookup_type_idx(jl_typename_t *tn, jl_value_t **key, size_t n, in
 
 static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
 {
+    JL_TIMING(TYPE_CACHE_LOOKUP);
     int ord = is_typekey_ordered(key, n);
     JL_LOCK(&typecache_lock); // Might GC
     ssize_t idx = lookup_type_idx(tn, key, n, ord);
@@ -2046,6 +2047,7 @@ static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
 jl_value_t *jl_cache_type_(jl_datatype_t *type)
 {
     if (is_cacheable(type)) {
+        JL_TIMING(TYPE_CACHE_INSERT);
         int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
         JL_LOCK(&typecache_lock); // Might GC
         ssize_t idx = lookup_type_idx(type->name, jl_svec_data(type->parameters),
@@ -2155,28 +2157,22 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             if (nt < 0)
                 jl_errorf("apply_type: Vararg length N is negative: %zd", nt);
             va = jl_tparam0(va);
-            if (nt == 0 || jl_is_leaf_type(va)) {
+            if (nt == 0 || !jl_has_typevars(va)) {
                 if (ntp == 1)
                     return jl_tupletype_fill(nt, va);
                 size_t i, l;
+                p = jl_alloc_svec(ntp - 1 + nt);
                 for (i = 0, l = ntp - 1; i < l; i++) {
-                    if (!jl_is_leaf_type(iparams[i]))
-                        break;
+                    jl_svecset(p, i, iparams[i]);
                 }
-                if (i == l) {
-                    p = jl_alloc_svec(ntp - 1 + nt);
-                    for (i = 0, l = ntp - 1; i < l; i++) {
-                        jl_svecset(p, i, iparams[i]);
-                    }
-                    l = ntp - 1 + nt;
-                    for (; i < l; i++) {
-                        jl_svecset(p, i, va);
-                    }
-                    JL_GC_PUSH1(&p);
-                    jl_value_t *ndt = (jl_value_t*)jl_apply_tuple_type(p);
-                    JL_GC_POP();
-                    return ndt;
+                l = ntp - 1 + nt;
+                for (; i < l; i++) {
+                    jl_svecset(p, i, va);
                 }
+                JL_GC_PUSH1(&p);
+                jl_value_t *ndt = (jl_value_t*)jl_apply_tuple_type(p);
+                JL_GC_POP();
+                return ndt;
             }
         }
     }
@@ -2395,8 +2391,6 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
     for(i=0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
         jl_value_t *pi = (jl_value_t*)inst_type_w_(elt, env, n, stack, 0);
-        if (jl_is_typevar(pi) && !((jl_tvar_t*)pi)->bound)
-            pi = ((jl_tvar_t*)pi)->ub;
         iparams[i] = pi;
         if (ip_heap)
             jl_gc_wb(ip_heap, pi);
@@ -4007,7 +4001,6 @@ void jl_init_types(void)
     exc_sym = jl_symbol("the_exception");
     enter_sym = jl_symbol("enter");
     leave_sym = jl_symbol("leave");
-    static_typeof_sym = jl_symbol("static_typeof");
     new_sym = jl_symbol("new");
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
@@ -4018,7 +4011,6 @@ void jl_init_types(void)
     abstracttype_sym = jl_symbol("abstract_type");
     bitstype_sym = jl_symbol("bits_type");
     compositetype_sym = jl_symbol("composite_type");
-    type_goto_sym = jl_symbol("type_goto");
     toplevel_sym = jl_symbol("toplevel");
     dot_sym = jl_symbol(".");
     boundscheck_sym = jl_symbol("boundscheck");

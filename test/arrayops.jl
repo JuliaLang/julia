@@ -983,7 +983,7 @@ X = [ i+2j for i=1:5, j=1:5 ]
 @test X[2,3] == 8
 @test X[4,5] == 14
 @test isequal(ones(2,3) * ones(2,3)', [3. 3.; 3. 3.])
-@test isequal([ [1,2] for i=1:2, : ], [1 2; 1 2])
+# @test isequal([ [1,2] for i=1:2, : ], [1 2; 1 2])
 # where element type is a Union. try to confuse type inference.
 foo32_64(x) = (x<2) ? Int32(x) : Int64(x)
 boo32_64() = [ foo32_64(i) for i=1:2 ]
@@ -1667,4 +1667,23 @@ let A = zeros(3,3)
     @test size(A[:,0x1:0x2]) == (3, 2)
     @test size(A[:,UInt(1):UInt(2)]) == (3,2)
     @test size(similar(A, UInt(3), 0x3)) == size(similar(A, (UInt(3), 0x3))) == (3,3)
+end
+
+# issue 17254
+module AutoRetType
+
+using Base.Test
+
+immutable Foo end
+for op in (:+, :*, :÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
+    @eval import Base.$(op)
+    @eval $(op)(::Foo, ::Foo) = Foo()
+end
+A = fill(Foo(), 10, 10)
+@test typeof(A+A) == Matrix{Foo}
+@test typeof(A-A) == Matrix{Foo}
+for op in (:.+, :.*, :.÷, :.%, :.<<, :.>>, :.-, :./, :.\, :.//, :.^)
+    @eval @test typeof($(op)(A,A)) == Matrix{Foo}
+end
+
 end

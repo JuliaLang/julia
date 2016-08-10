@@ -450,7 +450,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 }
 
 static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
-                             char *fname)
+                             const char *fname)
 {
     size_t i=0;
     size_t k, stride=1;
@@ -965,8 +965,9 @@ JL_DLLEXPORT void jl_array_ptr_copy(jl_array_t *dest, void **dest_p,
     // Destination is old and doesn't refer to any young object
     if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
         jl_value_t *src_owner = jl_array_owner(src);
-        // Source is young or might refer to young objects
-        if (!(jl_astaggedvalue(src_owner)->bits.gc & GC_OLD)) {
+        // Source is young or being promoted or might refer to young objects
+        // (i.e. source is not an old object that doesn't have wb triggered)
+        if (jl_astaggedvalue(src_owner)->bits.gc != GC_OLD_MARKED) {
             ssize_t done;
             if (dest_p < src_p || dest_p > src_p + n) {
                 done = jl_array_ptr_copy_forward(owner, src_p, dest_p, n);

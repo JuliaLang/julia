@@ -1455,9 +1455,9 @@ current `include` path but does not use it to search for files (see help for `in
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
-When searching for files, `require` first looks for package code under `Pkg.dir()`, then tries
-paths in the global array `LOAD_PATH`. `require` is case-sensitive  on all
-platforms including those with case-insensitive filesystems like macOS and
+When searching for files, `require` first looks for package code under `Pkg.dir()`,
+then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
+all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 require
@@ -3006,7 +3006,9 @@ Keyword arguments:
 
 * `sshflags`: specifies additional ssh options, e.g.
 
-    sshflags=`-i /home/foo/bar.pem`
+  ```
+  sshflags=`-i /home/foo/bar.pem`
+  ```
 
 * `max_parallel`: specifies the maximum number of workers connected to in parallel at a host.
                   Defaults to 10.
@@ -3520,9 +3522,6 @@ If `skipblanks` is `true`, blank lines in the input will be ignored.
 If `use_mmap` is `true`, the file specified by `source` is memory mapped for potential
 speedups. Default is `true` except on Windows. On Windows, you may want to specify `true` if
 the file is large, and is only read once and not written to.
-
-If `ignore_invalid_chars` is `true`, bytes in `source` with invalid character encoding will
-be ignored. Otherwise an error is thrown indicating the offending character position.
 
 If `quotes` is `true`, columns enclosed within double-quote (\") characters are allowed to
 contain new lines and column delimiters. Double-quote characters within a quoted field must
@@ -4081,7 +4080,7 @@ rand
 
 Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 """
-base(base, n, pad)
+base
 
 """
     BoundsError([a],[i])
@@ -5450,7 +5449,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat! at array.jl:543
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:511
+ ...
 ```
 """
 deleteat!(collection, itr)
@@ -8109,7 +8109,8 @@ julia> convert(Int, 3.0)
 
 julia> convert(Int, 3.5)
 ERROR: InexactError()
- in convert at int.jl:209
+ in convert(::Type{Int64}, ::Float64) at ./int.jl:239
+ ...
 ```
 
 If `T` is a [`AbstractFloat`](:obj:`AbstractFloat`) or [`Rational`](:obj:`Rational`) type,
@@ -8219,7 +8220,7 @@ escape_string(str)
     significand(x)
 
 Extract the `significand(s)` (a.k.a. mantissa), in binary representation, of a
-floating-point number or array. If `x` is a non-zero finite number, than the result will be
+floating-point number or array. If `x` is a non-zero finite number, then the result will be
 a number of the same type on the interval ``[1,2)``. Otherwise `x` is returned.
 
 ```jldoctest
@@ -9125,10 +9126,7 @@ on the `permute` and `scale` keyword arguments. The eigenvectors are returned co
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 ([1.0,3.0,18.0],
-3×3 Array{Float64,2}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
- 0.0  0.0  1.0)
+[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
 ```
 
 `eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the

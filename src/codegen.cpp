@@ -815,6 +815,7 @@ void jl_add_linfo_in_flight(StringRef name, jl_lambda_info_t *linfo, const DataL
 // objective: assign li->functionObject
 extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
 {
+    JL_TIMING(CODEGEN);
     if (li->jlcall_api == 2) {
         // delete code for functions reduced to a constant
         jl_set_lambda_code_null(li);
@@ -987,6 +988,7 @@ static void jl_finalize_module(std::unique_ptr<Module> uniquem, bool shadow)
 extern void jl_callback_triggered_linfos(void);
 static uint64_t getAddressForFunction(llvm::Function *llvmf)
 {
+    JL_TIMING(LLVM_EMIT);
 #ifdef JL_DEBUG_BUILD
     llvm::raw_fd_ostream out(1,false);
 #endif
@@ -3110,7 +3112,7 @@ static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
     if (jl_is_expr(expr)) {
         jl_sym_t *head = ((jl_expr_t*)expr)->head;
         // some expression types are metadata and can be ignored in statement position
-        if (head == line_sym || head == type_goto_sym || head == meta_sym)
+        if (head == line_sym || head == meta_sym)
             return;
         // fall-through
     }
@@ -3283,18 +3285,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             builder.CreateCall(prepare_call(jldeclareconst_func),
                                literal_pointer_val(bnd));
         }
-    }
-    else if (head == static_typeof_sym) {
-        jl_value_t *extype = expr_type((jl_value_t*)ex, ctx);
-        if (jl_is_type_type(extype)) {
-            extype = jl_tparam0(extype);
-            if (jl_is_typevar(extype))
-                extype = ((jl_tvar_t*)extype)->ub;
-        }
-        else {
-            extype = (jl_value_t*)jl_any_type;
-        }
-        return mark_julia_const(extype);
     }
     else if (head == new_sym) {
         jl_value_t *ty = expr_type(args[0], ctx);

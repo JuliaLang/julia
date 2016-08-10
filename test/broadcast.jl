@@ -196,6 +196,10 @@ let a = broadcast(Float32, [3, 4, 5])
     @test eltype(a) == Float32
 end
 
+# broadcasting scalars:
+@test sin.(1) === broadcast(sin, 1) === sin(1)
+@test (()->1234).() === broadcast(()->1234) === 1234
+
 # issue #4883
 @test isa(broadcast(tuple, [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Int,String}})
 @test isa(broadcast((x,y)->(x==1?1.0:x,y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
@@ -208,9 +212,44 @@ let a = sin.([1, 2])
     @test a ≈ [0.8414709848078965, 0.9092974268256817]
 end
 
+# PR #17300: loop fusion
+@test (x->x+1).((x->x+2).((x->x+3).(1:10))) == collect(7:16)
+let A = [sqrt(i)+j for i = 1:3, j=1:4]
+    @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
+end
+let x = sin.(1:10)
+    @test atan2.((x->x+1).(x), (x->x+2).(x)) == atan2(x+1, x+2) == atan2(x.+1, x.+2)
+    @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2))
+    @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
+    @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
+end
+# Use side effects to check for loop fusion.  Note that, due to #17314,
+# a broadcasted function is currently called an extra time with an argument 1.
+let g = Int[]
+    f17300(x) = begin; push!(g, x); x+1; end
+    f17300.(f17300.(f17300.(1:3)))
+    @test g == [1,2,3, 1,2,3, 2,3,4, 3,4,5]
+end
+# fusion with splatted args:
+let x = sin.(1:10), a = [x]
+    @test cos.(x) == cos.(a...)
+    @test atan2.(x,x) == atan2.(a..., a...) == atan2.([x, x]...)
+    @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == atan2(x, cos.(a...)) == atan2(a..., cos.(a...))
+    @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
+end
+@test atan2.(3,4) == atan2(3,4) == (() -> atan2(3,4)).()
+# fusion with keyword args:
+let x = [1:4;]
+    f17300kw(x; y=0) = x + y
+    @test f17300kw.(x) == x
+    @test f17300kw.(x, y=1) == f17300kw.(x; y=1) == f17300kw.(x; [(:y,1)]...) == x .+ 1
+    @test f17300kw.(sin.(x), y=1) == f17300kw.(sin.(x); y=1) == sin.(x) .+ 1
+    @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
+end
+
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
-@test isa(broadcast(+, true), Array{Int,0})
+@test isa(broadcast(+, [true]), Array{Int,1})
 @test Base.promote_op(Float64, Bool) === Float64
 
 # issue #17304

@@ -59,7 +59,7 @@ JL_DLLEXPORT char * dirname(char *);
 #include <libgen.h>
 #endif
 
-static char *const builtin_names[] =
+static const char *const builtin_names[] =
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
       NULL, NULL, NULL, NULL,
       // predicates
@@ -159,14 +159,14 @@ void fl_raise(fl_context_t *fl_ctx, value_t e)
     longjmp(thisctx->buf, 1);
 }
 
-static value_t make_error_msg(fl_context_t *fl_ctx, char *format, va_list args)
+static value_t make_error_msg(fl_context_t *fl_ctx, const char *format, va_list args)
 {
     char msgbuf[512];
     size_t len = vsnprintf(msgbuf, sizeof(msgbuf), format, args);
     return string_from_cstrn(fl_ctx, msgbuf, len);
 }
 
-void lerrorf(fl_context_t *fl_ctx, value_t e, char *format, ...)
+void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...)
 {
     va_list args;
     PUSH(fl_ctx, e);
@@ -186,12 +186,12 @@ void lerror(fl_context_t *fl_ctx, value_t e, const char *msg)
     fl_raise(fl_ctx, fl_list2(fl_ctx, e, m));
 }
 
-void type_error(fl_context_t *fl_ctx, char *fname, char *expected, value_t got)
+void type_error(fl_context_t *fl_ctx, const char *fname, const char *expected, value_t got)
 {
     fl_raise(fl_ctx, fl_listn(fl_ctx, 4, fl_ctx->TypeError, symbol(fl_ctx, fname), symbol(fl_ctx, expected), got));
 }
 
-void bounds_error(fl_context_t *fl_ctx, char *fname, value_t arr, value_t ind)
+void bounds_error(fl_context_t *fl_ctx, const char *fname, value_t arr, value_t ind)
 {
     fl_raise(fl_ctx, fl_listn(fl_ctx, 4, fl_ctx->BoundsError, symbol(fl_ctx, fname), arr, ind));
 }
@@ -200,7 +200,7 @@ void bounds_error(fl_context_t *fl_ctx, char *fname, value_t arr, value_t ind)
 
 #define isstring(v) fl_isstring(fl_ctx, v)
 #define SAFECAST_OP(type,ctype,cnvt)                                    \
-    ctype to##type(fl_context_t *fl_ctx, value_t v, char *fname)        \
+    ctype to##type(fl_context_t *fl_ctx, value_t v, const char *fname)  \
     {                                                                   \
         if (is##type(v))                                                \
             return (ctype)cnvt(v);                                      \
@@ -261,7 +261,7 @@ static symbol_t **symtab_lookup(symbol_t **ptree, const char *str)
     return ptree;
 }
 
-value_t symbol(fl_context_t *fl_ctx, char *str)
+value_t symbol(fl_context_t *fl_ctx, const char *str)
 {
     symbol_t **pnode = symtab_lookup(&fl_ctx->symtab, str);
     if (*pnode == NULL)

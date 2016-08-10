@@ -69,12 +69,25 @@ function latex(io::IO, md::Admonition)
 end
 
 function latex(io::IO, md::List)
-    env = md.ordered ? "enumerate" : "itemize"
-    wrapblock(io, env) do
-        for item in md.items
-            print(io, "\\item ")
-            latexinline(io, item)
-            println(io)
+    # `\begin{itemize}` is used here for both ordered and unordered lists since providing
+    # custom starting numbers for enumerated lists is simpler to do by manually assigning
+    # each number to `\item` ourselves rather than using `\setcounter{enumi}{<start>}`.
+    #
+    # For an ordered list starting at 5 the following will be generated:
+    #
+    # \begin{itemize}
+    #   \item[5. ] ...
+    #   \item[6. ] ...
+    #   ...
+    # \end{itemize}
+    #
+    pad = ndigits(md.ordered + length(md.items)) + 2
+    fmt = n -> (isordered(md) ? "[$(rpad("$(n + md.ordered - 1).", pad))]" : "")
+    wrapblock(io, "itemize") do
+        for (n, item) in enumerate(md.items)
+            print(io, "\\item$(fmt(n)) ")
+            latex(io, item)
+            n < length(md.items) && println(io)
         end
     end
 end

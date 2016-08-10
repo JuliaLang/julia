@@ -509,3 +509,9 @@ end
 
 # issue #17338
 @test repr(Core.svec(1,2)) == "svec(1,2)"
+
+# showing generator and comprehension expressions
+@test repr(:(x for x in y for z in w)) == ":(x for x = y for z = w)"
+@test repr(:(x for x in y if aa for z in w if bb)) == ":(x for x = y if aa for z = w if bb)"
+@test repr(:([x for x = y])) == ":([x for x = y])"
+@test repr(:([x for x = y if z])) == ":([x for x = y if z])"

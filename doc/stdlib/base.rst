@@ -126,7 +126,7 @@ Getting Around
 
    Loads a source files, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``\ ). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
 
-   When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ . ``require`` is case-sensitive  on all platforms including those with case-insensitive filesystems like macOS and Windows.
+   When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ . ``require`` is case-sensitive on all platforms, including those with case-insensitive filesystems like macOS and Windows.
 
 .. function:: Base.compilecache(module::String)
 
@@ -367,7 +367,8 @@ All Objects
 
        julia> convert(Int, 3.5)
        ERROR: InexactError()
-        in convert at int.jl:209
+        in convert(::Type{Int64}, ::Float64) at ./int.jl:239
+        ...
 
    If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return the closest value to ``x`` representable by ``T``\ .
 
@@ -533,7 +534,7 @@ Types
        julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
 
        julia> structinfo(Base.Filesystem.StatStruct)
-       12-element Array{Tuple{UInt64,Symbol,Type{_}},1}:
+       12-element Array{Tuple{UInt64,Union{Int64,Symbol},Type{_}},1}:
         (0x0000000000000000,:device,UInt64)
         (0x0000000000000008,:inode,UInt64)
         (0x0000000000000010,:mode,UInt64)
@@ -821,12 +822,12 @@ System
 
    Construct a new ``Cmd`` object, representing an external program and arguments, from ``cmd``\ , while changing the settings of the optional keyword arguments:
 
-   * ``ignorestatus::Bool``\ : If ``true`` (defaults to ``false``\ ), then the ``Cmd``   will not throw an error if the return code is nonzero.
-   * ``detach::Bool``\ : If ``true`` (defaults to ``false``\ ), then the ``Cmd`` will be   run in a new process group, allowing it to outlive the ``julia`` process   and not have Ctrl-C passed to it.
-   * ``windows_verbatim::Bool``\ : If ``true`` (defaults to ``false``\ ), then on Windows   the ``Cmd`` will send a command-line string to the process with no quoting   or escaping of arguments, even arguments containing spaces.  (On Windows,   arguments are sent to a program as a single "command-line" string, and   programs are responsible for parsing it into arguments.  By default,   empty arguments and arguments with spaces or tabs are quoted with double   quotes ``"`` in the command line, and ``\`` or ``"`` are preceded by backslashes.   ``windows_verbatim=true`` is useful for launching programs that parse their   command line in nonstandard ways.)  Has no effect on non-Windows systems.
-   * ``windows_hide::Bool``\ : If ``true`` (defaults to ``false``\ ), then on Windows no   new console window is displayed when the ``Cmd`` is executed.  This has   no effect if a console is already open or on non-Windows systems.
-   * ``env``\ : Set environment variables to use when running the ``Cmd``\ .  ``env``   is either a dictionary mapping strings to strings, an array   of strings of the form ``"var=val"``\ , an array or tuple of ``"var"=>val``   pairs, or ``nothing``\ .  In order to modify (rather than replace)   the existing environment, create ``env`` by ``copy(ENV)`` and then   set ``env["var"]=val`` as desired.
-   * ``dir::AbstractString``\ : Specify a working directory for the command (instead   of the current directory).
+   * ``ignorestatus::Bool``\ : If ``true`` (defaults to ``false``\ ), then the ``Cmd`` will not throw an error if the return code is nonzero.
+   * ``detach::Bool``\ : If ``true`` (defaults to ``false``\ ), then the ``Cmd`` will be run in a new process group, allowing it to outlive the ``julia`` process and not have Ctrl-C passed to it.
+   * ``windows_verbatim::Bool``\ : If ``true`` (defaults to ``false``\ ), then on Windows the ``Cmd`` will send a command-line string to the process with no quoting or escaping of arguments, even arguments containing spaces.  (On Windows, arguments are sent to a program as a single "command-line" string, and programs are responsible for parsing it into arguments.  By default, empty arguments and arguments with spaces or tabs are quoted with double quotes ``"`` in the command line, and ``\`` or ``"`` are preceded by backslashes. ``windows_verbatim=true`` is useful for launching programs that parse their command line in nonstandard ways.)  Has no effect on non-Windows systems.
+   * ``windows_hide::Bool``\ : If ``true`` (defaults to ``false``\ ), then on Windows no new console window is displayed when the ``Cmd`` is executed.  This has no effect if a console is already open or on non-Windows systems.
+   * ``env``\ : Set environment variables to use when running the ``Cmd``\ .  ``env`` is either a dictionary mapping strings to strings, an array of strings of the form ``"var=val"``\ , an array or tuple of ``"var"=>val`` pairs, or ``nothing``\ .  In order to modify (rather than replace) the existing environment, create ``env`` by ``copy(ENV)`` and then set ``env["var"]=val`` as desired.
+   * ``dir::AbstractString``\ : Specify a working directory for the command (instead of the current directory).
 
    For any keywords that are not specified, the current settings from ``cmd`` are used.   Normally, to create a ``Cmd`` object in the first place, one uses backticks, e.g.
 

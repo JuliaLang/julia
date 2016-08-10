@@ -88,13 +88,12 @@ jl_sym_t *body_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
-jl_sym_t *static_typeof_sym;
 jl_sym_t *globalref_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
-jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
+jl_sym_t *compositetype_sym;
 jl_sym_t *global_sym; jl_sym_t *list_sym;
 jl_sym_t *dot_sym;    jl_sym_t *newvar_sym;
 jl_sym_t *boundscheck_sym; jl_sym_t *inbounds_sym;
@@ -444,6 +443,7 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_lambda_info_
 
 static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tupletype_t *tt, jl_svec_t *env)
 {
+    JL_TIMING(STAGED_FUNCTION);
     size_t i, l;
     jl_expr_t *ex = NULL;
     jl_value_t *linenum = NULL;

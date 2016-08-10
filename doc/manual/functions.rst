@@ -204,12 +204,12 @@ without being given a name, using either of these syntaxes:
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
-    #1 (generic function with 1 method)
+    (::#1) (generic function with 1 method)
 
     julia> function (x)
                x^2 + 2x - 1
            end
-    #2 (generic function with 1 method)
+    (::#3) (generic function with 1 method)
 
 This creates a function taking one argument *x* and returning the
 value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value.
@@ -639,6 +639,22 @@ then ``f.(pi,A)`` will return a new array consisting of ``f(pi,a)`` for each
 ``a`` in ``A``, and ``f.(vector1,vector2)`` will return a new vector
 consisting of ``f(vector1[i],vector2[i])`` for each index ``i``
 (throwing an exception if the vectors have different length).
+
+Moreover, *nested* ``f.(args...)`` calls are *fused* into a single ``broadcast``
+loop.  For example, ``sin.(cos.(X))`` is equivalent to ``broadcast(x -> sin(cos(x)), X)``,
+similar to ``[sin(cos(x)) for x in X]``: there is only a single loop over ``X``,
+and a single array is allocated for the result.   [In contrast, ``sin(cos(X))``
+in a typical "vectorized" language would first allocate one temporary array for ``tmp=cos(X)``,
+and then compute ``sin(tmp)`` in a separate loop, allocating a second array.]
+This loop fusion is not a compiler optimization that may or may not occur, it
+is a *syntactic guarantee* whenever nested ``f.(args...)`` calls are encountered.  Technically,
+the fusion stops as soon as a "non-dot" function is encountered; for example,
+in ``sin.(sort(cos.(X)))`` the ``sin`` and ``cos`` loops cannot be merged
+because of the intervening ``sort`` function.
+
+(In future versions of Julia, operators like ``.*`` will also be handled with
+the same mechanism: they will be equivalent to ``broadcast`` calls and
+will be fused with other nested "dot" calls.)
 
 Further Reading
 ---------------

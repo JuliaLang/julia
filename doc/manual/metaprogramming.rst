@@ -257,6 +257,7 @@ cause a compile-time error:
 
     julia> $a + b
     ERROR: unsupported or misplaced expression $
+     ...
 
 In this example, the tuple ``(1,2,3)`` is interpolated as an
 expression into a conditional test:
@@ -264,7 +265,7 @@ expression into a conditional test:
 .. doctest::
 
     julia> ex = :(a in $:((1,2,3)) )
-    :($(Expr(:in, :a, :((1,2,3)))))
+    :(a in (1,2,3))
 
 Interpolating symbols into a nested expression requires enclosing each
 symbol in an enclosing quote block::
@@ -297,6 +298,7 @@ at global scope using :func:`eval`:
 
     julia> eval(ex)
     ERROR: UndefVarError: b not defined
+     ...
 
     julia> a = 1; b = 2;
 
@@ -316,6 +318,7 @@ module's environment:
 
     julia> x
     ERROR: UndefVarError: x not defined
+     ...
 
     julia> eval(ex)
     1
@@ -415,11 +418,16 @@ Basics
 
 Here is an extraordinarily simple macro:
 
-.. doctest::
+.. testcode::
 
-    julia> macro sayhello()
-               return :( println("Hello, world!") )
-           end
+    macro sayhello()
+        return :( println("Hello, world!") )
+    end
+
+.. testoutput::
+    :hide:
+
+    @sayhello (macro with 1 method)
 
 Macros have a dedicated character in Julia's syntax: the ``@`` (at-sign),
 followed by the unique name declared in a ``macro NAME ... end`` block.
@@ -545,6 +553,7 @@ This macro can be used like this:
 
     julia> @assert 1==0
     ERROR: AssertionError: 1 == 0
+     ...
 
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::
@@ -589,14 +598,14 @@ function:
     :(if a == b
             nothing
         else
-            Base.throw(Base.Main.Base.AssertionError("a == b"))
+            (Base.throw)(Base.Main.Base.AssertionError("a == b"))
         end)
 
     julia> macroexpand(:(@assert a==b "a should equal b!"))
     :(if a == b
             nothing
         else
-            Base.throw(Base.Main.Base.AssertionError("a should equal b!"))
+            (Base.throw)(Base.Main.Base.AssertionError("a should equal b!"))
         end)
 
 There is yet another case that the actual :obj:`@assert` macro handles: what
@@ -620,11 +629,14 @@ Compare:
     Expr
       head: Symbol string
       args: Array{Any}((5,))
-        1: String "a ("
+        1: String
+          data: Array{UInt8}((3,)) UInt8[0x61,0x20,0x28]
         2: Symbol a
-        3: String ") should equal b ("
+        3: String
+          data: Array{UInt8}((18,)) UInt8[0x29,0x20,0x73,0x68,0x6f,0x75,0x6c,0x64,0x20,0x65,0x71,0x75,0x61,0x6c,0x20,0x62,0x20,0x28]
         4: Symbol b
-        5: String ")!"
+        5: String
+          data: Array{UInt8}((2,)) UInt8[0x29,0x21]
       typ: Any
 
 So now instead of getting a plain string in ``msg_body``, the macro is

@@ -56,6 +56,16 @@
 
    Convert a string to a contiguous byte array representation encoded as UTF-8 bytes. This representation is often appropriate for passing strings to C.
 
+.. function:: transcode(T, src)
+
+   .. Docstring generated from Julia source
+
+   Convert string data between Unicode encodings. ``src`` is either a ``String`` or a ``Vector{UIntXX}`` of UTF-XX code units, where ``XX`` is 8, 16, or 32. ``T`` indicates the encoding of the return value: ``String`` to return a (UTF-8 encoded) ``String`` or ``UIntXX`` to return a ``Vector{UIntXX}`` of UTF-``XX`` data.   (The alias ``Cwchar_t`` can also be used as the integer type, for converting ``wchar_t*`` strings used by external C libraries.)
+
+   The ``transcode`` function succeeds as long as the input data can be reasonably represented in the target encoding; it always succeeds for conversions between UTF-XX encodings, even for invalid Unicode data.
+
+   Only conversion to/from UTF-8 is currently supported.
+
 .. function:: unsafe_string(p::Ptr{UInt8}, [length::Integer])
 
    .. Docstring generated from Julia source
@@ -89,9 +99,9 @@
    Construct a regex, such as ``r"^[a-z]*$"``\ . The regex also accepts one or more flags, listed after the ending quote, to change its behaviour:
 
    * ``i`` enables case-insensitive matching
-   * ``m`` treats the ``^`` and ``$`` tokens as matching the start and end of individual lines, as   opposed to the whole string.
+   * ``m`` treats the ``^`` and ``$`` tokens as matching the start and end of individual lines, as opposed to the whole string.
    * ``s`` allows the ``.`` modifier to match newlines.
-   * ``x`` enables "comment mode": whitespace is enabled except when escaped with ``\``\ , and ``#``   is treated as starting a comment.
+   * ``x`` enables "comment mode": whitespace is enabled except when escaped with ``\``\ , and ``#`` is treated as starting a comment.
 
    For example, this regex has all three flags enabled:
 
@@ -121,13 +131,13 @@
    Alternatively, finer control and additional transformations may be be obtained by calling ``normalize_string(s; keywords...)``\ , where any number of the following boolean keywords options (which all default to ``false`` except for ``compose``\ ) are specified:
 
    * ``compose=false``\ : do not perform canonical composition
-   * ``decompose=true``\ : do canonical decomposition instead of canonical composition (``compose=true``   is ignored if present)
+   * ``decompose=true``\ : do canonical decomposition instead of canonical composition (``compose=true`` is ignored if present)
    * ``compat=true``\ : compatibility equivalents are canonicalized
    * ``casefold=true``\ : perform Unicode case folding, e.g. for case-insensitive string comparison
-   * ``newline2lf=true``\ , ``newline2ls=true``\ , or ``newline2ps=true``\ : convert various newline sequences   (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS)   character, respectively
+   * ``newline2lf=true``\ , ``newline2ls=true``\ , or ``newline2ps=true``\ : convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively
    * ``stripmark=true``\ : strip diacritical marks (e.g. accents)
-   * ``stripignore=true``\ : strip Unicode's "default ignorable" characters (e.g. the soft hyphen   or the left-to-right marker)
-   * ``stripcc=true``\ : strip control characters; horizontal tabs and form feeds are converted to   spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
+   * ``stripignore=true``\ : strip Unicode's "default ignorable" characters (e.g. the soft hyphen or the left-to-right marker)
+   * ``stripcc=true``\ : strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
    * ``rejectna=true``\ : throw an error if unassigned code points are found
    * ``stable=true``\ : enforce Unicode Versioning Stability
 

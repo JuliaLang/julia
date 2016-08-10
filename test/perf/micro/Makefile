@@ -50,7 +50,6 @@ export OPENBLAS_NUM_THREADS=1
 perf.h: $(JULIAHOME)/deps/Versions.make
 	echo '#include "$(BLASDIR)cblas.h"' > $@
 	echo '#include "$(DSFMTDIR)/dSFMT.c"' >> $@
-	echo '#include "$(RMATHDIR)/src/randmtzig.c"' >> $@
 
 bin/perf%: perf.c perf.h
 	$(CC) -std=c99 -O$* $< -o $@  -I$(DSFMTDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) $(CFLAGS) -lpthread

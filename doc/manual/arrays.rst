@@ -185,7 +185,7 @@ and its left and right neighbor along a 1-d grid. :
 
 .. doctest:: array-rand
 
-    julia> const x = rand(8)
+    julia> x = rand(8)
     8-element Array{Float64,1}:
      0.843025
      0.869052
@@ -205,16 +205,11 @@ and its left and right neighbor along a 1-d grid. :
      0.8446
      0.656511
 
-.. note:: In the above example, ``x`` is declared as constant because type
-  inference in Julia does not work as well on non-constant global
-  variables.
+The resulting array type depends on the types of the computed elements.
+In order to control the type explicitly, a type can be prepended to the comprehension.
+For example, we could have requested the result in single precision by writing::
 
-The resulting array type is inferred from the expression; in order to control
-the type explicitly, the type can be prepended to the comprehension. For example,
-in the above example we could have avoided declaring ``x`` as constant, and ensured
-that the result is of type ``Float64`` by writing::
-
-    Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
+    Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
 .. _man-generator-expressions:
 
@@ -247,6 +242,31 @@ parentheses lets us add a third argument to ``map``:
     2×2 Array{Tuple{Float64,Int64},2}:
      (0.5,1)       (0.333333,3)
      (0.333333,2)  (0.25,4)
+
+Ranges in generators and comprehensions can depend on previous ranges by writing
+multiple ``for`` keywords:
+
+.. doctest::
+
+    julia> [(i,j) for i=1:3 for j=1:i]
+    6-element Array{Tuple{Int64,Int64},1}:
+     (1,1)
+     (2,1)
+     (2,2)
+     (3,1)
+     (3,2)
+     (3,3)
+
+In such cases, the result is always 1-d.
+
+Generated values can be filtered using the ``if`` keyword:
+
+.. doctest::
+
+    julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
+    2-element Array{Tuple{Int64,Int64},1}:
+     (2,2)
+     (3,1)
 
 .. _man-array-indexing:
 
@@ -307,7 +327,7 @@ Example:
 .. doctest::
 
     julia> x = reshape(1:16, 4, 4)
-    4×4 Array{Int64,2}:
+    4×4 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
      1  5   9  13
      2  6  10  14
      3  7  11  15
@@ -327,7 +347,7 @@ Example:
      16
 
     julia> x[1, [2 3; 4 1]]
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
       5  9
      13  1
 
@@ -376,7 +396,7 @@ Example:
 
 .. doctest::
 
-    julia> x = reshape(1:9, 3, 3)
+    julia> x = collect(reshape(1:9, 3, 3))
     3×3 Array{Int64,2}:
      1  4  7
      2  5  8
@@ -411,7 +431,7 @@ The first construct is used when you need the value, but not index, of each elem
 type with fast linear indexing; otherwise, it will be a ``CartesianIndex``::
 
     A = rand(4,3)
-    B = sub(A, 1:3, 2:3)
+    B = view(A, 1:3, 2:3)
     julia> for i in eachindex(B)
                @show i
            end
@@ -497,9 +517,9 @@ the name of the function to vectorize. Here is a simple example:
 
     julia> methods(square)
     # 4 methods for generic function "square":
-    square{T<:Number}(::AbstractArray{T<:Number,1}) at operators.jl:374
-    square{T<:Number}(::AbstractArray{T<:Number,2}) at operators.jl:375
-    square{T<:Number}(::AbstractArray{T<:Number,N}) at operators.jl:377
+    square{T<:Number}(x::AbstractArray{T,1}) at operators.jl:...
+    square{T<:Number}(x::AbstractArray{T,2}) at operators.jl:...
+    square{T<:Number}(x::AbstractArray{T,N<:Any}) at operators.jl:...
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])
@@ -599,10 +619,10 @@ library can be implemented in a generic manner.
 
 :obj:`SubArray` is a specialization of :obj:`AbstractArray` that performs
 indexing by reference rather than by copying. A :obj:`SubArray` is created
-with the :func:`sub` function, which is called the same way as :func:`getindex` (with
-an array and a series of index arguments). The result of :func:`sub` looks
+with the :func:`view` function, which is called the same way as :func:`getindex`
+(with an array and a series of index arguments). The result of :func:`view` looks
 the same as the result of :func:`getindex`, except the data is left in place.
-:func:`sub` stores the input index vectors in a :obj:`SubArray` object, which
+:func:`view` stores the input index vectors in a :obj:`SubArray` object, which
 can later be used to index the original array indirectly.
 
 :obj:`StridedVector` and :obj:`StridedMatrix` are convenient aliases defined
@@ -630,8 +650,8 @@ stride parameters.
      0.890947   0.168877   0.32002   0.486136      0.096078  0.172048   0.77672
      0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
 
-    julia> b = sub(a, 2:2:8,2:2:4)
-    4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},1}:
+    julia> b = view(a, 2:2:8,2:2:4)
+    4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},false}:
      0.537192  0.996234
      0.736979  0.228787
      0.991511  0.74485
@@ -716,7 +736,7 @@ you can use the same names with an ``sp`` prefix:
 .. doctest::
 
     julia> spzeros(3,5)
-    3×5 sparse matrix with 0 Float64 nonzero entries:
+    3×5 sparse matrix with 0 Float64 nonzero entries
 
     julia> speye(3,5)
     3×5 sparse matrix with 3 Float64 nonzero entries:

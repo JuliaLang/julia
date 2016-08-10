@@ -150,7 +150,7 @@ elseif is_windows()
         len = 0
         while unsafe_load(plock, len+1) != 0; len += 1; end
         # get Vector{UInt16}, transcode data to UTF-8, make a String of it
-        s = String(transcode(UInt8, unsafe_wrap(Array, plock, len)))
+        s = transcode(String, unsafe_wrap(Array, plock, len))
         systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), plock))
         return s
     end

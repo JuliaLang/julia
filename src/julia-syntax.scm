@@ -1526,6 +1526,141 @@
 (define (syntactic-op-to-call e)
   `(call ,(car e) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
+;; wrap `expr` in a function appropriate for consuming values from given ranges
+(define (func-for-generator-ranges expr range-exprs)
+  (let* ((vars    (map cadr range-exprs))
+         (argname (if (and (length= vars 1) (symbol? (car vars)))
+                      (car vars)
+                      (gensy)))
+         (splat (cond ((eq? argname (car vars))  '())
+                      ((length= vars 1)
+                       `(,@(map (lambda (v) `(local ,v)) (lhs-vars (car vars)))
+                         (= ,(car vars) ,argname)))
+                      (else
+                       `(,@(map (lambda (v) `(local ,v)) (lhs-vars `(tuple ,@vars)))
+                         (= (tuple ,@vars) ,argname))))))
+    (if (and (null? splat)
+             (length= expr 3) (eq? (car expr) 'call)
+             (eq? (caddr expr) argname)
+             (not (expr-contains-eq argname (cadr expr))))
+        (cadr expr)  ;; eta reduce `x->f(x)` => `f`
+        `(-> ,argname (block ,@splat ,expr)))))
+
+(define (getfield-field? x) ; whether x from (|.| f x) is a getfield call
+  (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$)))
+
+;; fuse nested calls to f.(args...) into a single broadcast call
+(define (expand-fuse-broadcast f args)
+  (define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
+  (define (anyfuse? exprs)
+    (if (null? exprs) #f (if (fuse? (car exprs)) #t (anyfuse? (cdr exprs)))))
+  (define (to-lambda f args kwargs) ; convert f to anonymous function with hygienic tuple args
+    (define (genarg arg) (if (vararg? arg) (list '... (gensy)) (gensy)))
+    ; (To do: optimize the case where f is already an anonymous function, in which
+    ;  case we only need to hygienicize the arguments?   But it is quite tricky
+    ;  to fully handle splatted args, typed args, keywords, etcetera.  And probably
+    ;  the extra function call is harmless because it will get inlined anyway.)
+    (let ((genargs (map genarg args))) ; hygienic formal parameters
+      (if (null? kwargs)
+          `(-> ,(cons 'tuple genargs) (call ,f ,@genargs)) ; no keyword args
+          `(-> ,(cons 'tuple genargs) (call ,f (parameters ,@kwargs) ,@genargs)))))
+  (define (from-lambda f) ; convert (-> (tuple args...) (call func args...)) back to func
+    (if (and (pair? f) (eq? (car f) '->) (pair? (cadr f)) (eq? (caadr f) 'tuple)
+             (pair? (caddr f)) (eq? (caaddr f) 'call) (equal? (cdadr f) (cdr (cdaddr f))))
+        (car (cdaddr f))
+        f))
+  (define (fuse-args oldargs) ; replace (fuse f args) with args in oldargs list
+    (define (fargs newargs oldargs)
+      (if (null? oldargs)
+          newargs
+          (fargs (if (fuse? (car oldargs))
+                     (append (reverse (caddar oldargs)) newargs)
+                     (cons (car oldargs) newargs))
+                 (cdr oldargs))))
+    (reverse (fargs '() oldargs)))
+  (define (fuse-funcs f args) ; for (fuse g a) in args, merge/inline g into f
+    ; any argument A of f that is (fuse g a) gets replaced by let A=(body of g):
+    (define (fuse-lets fargs args lets)
+      (if (null? args)
+          lets
+          (if (fuse? (car args))
+              (fuse-lets (cdr fargs) (cdr args) (cons (list '= (car fargs) (caddr (cadar args))) lets))
+              (fuse-lets (cdr fargs) (cdr args) lets))))
+    (let ((fargs (cdadr f))
+          (fbody (caddr f)))
+      `(->
+        (tuple ,@(fuse-args (map (lambda (oldarg arg) (if (fuse? arg)
+                                                 `(fuse _ ,(cdadr (cadr arg)))
+                                                 oldarg))
+                                 fargs args)))
+        (let ,fbody ,@(reverse (fuse-lets fargs args '()))))))
+  (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
+    (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
+      (define (sk args kwargs pargs)
+        (if (null? args)
+            (cons kwargs pargs)
+            (if (kwarg? (car args))
+                (sk (cdr args) (cons (car args) kwargs) pargs)
+                (sk (cdr args) kwargs (cons (car args) pargs)))))
+      (if (has-parameters? args)
+          (sk (reverse (cdr args)) (cdar args) '())
+          (sk (reverse args) '() '())))
+    (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
+      (if (and (pair? e) (eq? (car e) '|.|) (not (getfield-field? (caddr e))))
+          (make-fuse (cadr e) (cdaddr e))
+          e))
+    (let* ((kws.args (split-kwargs args))
+           (kws (car kws.args))
+           (args (cdr kws.args)) ; fusing occurs on positional args only
+           (args_ (map dot-to-fuse args)))
+      (if (anyfuse? args_)
+          `(fuse ,(fuse-funcs (to-lambda f args kws) args_) ,(fuse-args args_))
+          `(fuse ,(to-lambda f args kws) ,args_))))
+  ; given e == (fuse lambda args), compress the argument list by removing (pure)
+  ; duplicates in args, inlining literals, and moving any varargs to the end:
+  (define (compress-fuse e)
+    (define (findfarg arg args fargs) ; for arg in args, return corresponding farg
+      (if (eq? arg (car args))
+          (car fargs)
+          (findfarg arg (cdr args) (cdr fargs))))
+    (let ((f (cadr e))
+          (args (caddr e)))
+      (define (cf old-fargs old-args new-fargs new-args renames varfarg vararg)
+        (if (null? old-args)
+            (let ((nfargs (if (null? varfarg) new-fargs (cons varfarg new-fargs)))
+                  (nargs (if (null? vararg) new-args (cons vararg new-args))))
+              `(fuse (-> (tuple ,@(reverse nfargs)) ,(replace-vars (caddr f) renames))
+                     ,(reverse nargs)))
+            (let ((farg (car old-fargs)) (arg (car old-args)))
+              (cond
+               ((and (vararg? farg) (vararg? arg)) ; arg... must be the last argument
+                (if (null? varfarg)
+                    (cf (cdr old-fargs) (cdr old-args)
+                        new-fargs new-args renames farg arg)
+                    (if (eq? (cadr vararg) (cadr arg))
+                        (cf (cdr old-fargs) (cdr old-args)
+                            new-fargs new-args (cons (cons (cadr farg) (cadr varfarg)) renames)
+                            varfarg vararg)
+                        (error "multiple splatted args cannot be fused into a single broadcast"))))
+               ((number? arg) ; inline numeric literals
+                (cf (cdr old-fargs) (cdr old-args)
+                    new-fargs new-args
+                    (cons (cons farg arg) renames)
+                    varfarg vararg))
+               ((and (symbol? arg) (memq arg new-args)) ; combine duplicate args
+                ; (note: calling memq for every arg is O(length(args)^2) ...
+                ;  ... would be better to replace with a hash table if args is long)
+                (cf (cdr old-fargs) (cdr old-args)
+                    new-fargs new-args
+                    (cons (cons farg (findfarg arg new-args new-fargs)) renames)
+                    varfarg vararg))
+               (else
+                (cf (cdr old-fargs) (cdr old-args)
+                    (cons farg new-fargs) (cons arg new-args) renames varfarg vararg))))))
+      (cf (cdadr f) args '() '() '() '() '())))
+  (let ((e (compress-fuse (make-fuse f args)))) ; an expression '(fuse func args)
+    (expand-forms `(call broadcast ,(from-lambda (cadr e)) ,@(caddr e)))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1564,11 +1699,11 @@
    (lambda (e) ; e = (|.| f x)
      (let ((f (cadr e))
            (x (caddr e)))
-       (if (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
-         `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
-         ; otherwise, came from f.(args...) --> broadcast(f, args...),
-         ; where x = (tuple args...) at this point:
-         (expand-forms `(call broadcast ,f ,@(cdr x))))))
+       (if (getfield-field? x)
+           `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
+          ; otherwise, came from f.(args...) --> broadcast(f, args...),
+          ; where we want to fuse with any nested broadcast calls.
+          (expand-fuse-broadcast f (cdr x)))))
 
    '|<:| syntactic-op-to-call
    '|>:| syntactic-op-to-call
@@ -1960,99 +2095,64 @@
 
    'generator
    (lambda (e)
-     (let ((expr   (cadr e))
-           (vars   (map cadr  (cddr e)))
-           (ranges (map caddr (cddr e))))
-       (let* ((argname (if (and (length= vars 1) (symbol? (car vars)))
-                           (car vars)
-                           (gensy)))
-              (splat (cond ((eq? argname (car vars))  '())
-                           ((length= vars 1)
-                            `(,@(map (lambda (v) `(local ,v)) (lhs-vars (car vars)))
-                              (= ,(car vars) ,argname)))
-                           (else
-                            `(,@(map (lambda (v) `(local ,v)) (lhs-vars `(tuple ,@vars)))
-                              (= (tuple ,@vars) ,argname))))))
-         (expand-forms
-          `(call (top Generator) (-> ,argname (block ,@splat ,expr))
-                 ,(if (length= ranges 1)
+     (let* ((expr  (cadr e))
+            (filt? (eq? (car (caddr e)) 'filter))
+            (range-exprs (if filt? (cddr (caddr e)) (cddr e)))
+            (ranges (map caddr range-exprs))
+            (iter (if (length= ranges 1)
                       (car ranges)
-                      `(call (top IteratorND) (call (top product) ,@ranges))))))))
+                      `(call (top product) ,@ranges)))
+            (iter (if filt?
+                      `(call (top Filter)
+                             ,(func-for-generator-ranges (cadr (caddr e)) range-exprs)
+                             ,iter)
+                      iter)))
+       (expand-forms
+        `(call (top Generator)
+               ,(func-for-generator-ranges expr range-exprs)
+               ,iter))))
+
+   'flatten
+   (lambda (e) `(call (top Flatten) ,(expand-forms (cadr e))))
 
    'comprehension
    (lambda (e)
-     (expand-forms (lower-comprehension #f       (cadr e) (cddr e))))
+     (if (length> e 2)
+         ;; backwards compat for macros that generate :comprehension exprs
+         (expand-forms `(comprehension (generator ,@(cdr e))))
+         (begin (if (and (eq? (caadr e) 'generator)
+                         (any (lambda (x) (eq? x ':)) (cddr (cadr e))))
+                    (error "comprehension syntax with `:` ranges has been removed"))
+                (expand-forms `(call (top collect) ,(cadr e))))))
 
    'typed_comprehension
    (lambda (e)
-     (expand-forms (lower-comprehension (cadr e) (caddr e) (cdddr e))))
+     (expand-forms
+      (or (and (eq? (caaddr e) 'generator)
+               (let ((ranges (cddr (caddr e))))
+                 (if (any (lambda (x) (eq? x ':)) ranges)
+                     (error "comprehension syntax with `:` ranges has been removed"))
+                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
+                                              (pair? (caddr x)) (eq? (car (caddr x)) ':)))
+                             ranges)
+                      ;; TODO: this is a hack to lower simple comprehensions to loops very
+                      ;; early, to greatly reduce the # of functions and load on the compiler
+                      (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
+          `(call (top collect) ,(cadr e) ,(caddr e)))))
 
    'dict_comprehension
    (lambda (e)
      (syntax-deprecation #f "[a=>b for (a,b) in c]" "Dict(a=>b for (a,b) in c)")
-     (expand-forms (lower-dict-comprehension (cadr e) (cddr e))))
+     (expand-forms `(call (top Dict) ,(cadr e))))
 
    'typed_dict_comprehension
-   (lambda (e)
-     (expand-forms (lower-typed-dict-comprehension (cadr e) (caddr e) (cdddr e))))))
-
-(define (lower-nd-comprehension atype expr ranges)
-  (let ((result      (make-ssavalue))
-        (ri          (gensy))
-        (oneresult   (gensy)))
-    ;; evaluate one expression to figure out type and size
-    ;; compute just one value by inserting a break inside loops
-    (define (evaluate-one ranges)
-      (if (null? ranges)
-          `(= ,oneresult ,expr)
-          (if (eq? (car ranges) `:)
-              (evaluate-one (cdr ranges))
-              `(for ,(car ranges)
-                    (block ,(evaluate-one (cdr ranges))
-                           (break)) ))))
-
-    ;; compute the dimensions of the result
-    (define (compute-dims ranges oneresult-dim)
-      (if (null? ranges)
-          (list)
-          (if (eq? (car ranges) `:)
-              (cons `(call (top size) ,oneresult ,oneresult-dim)
-                    (compute-dims (cdr ranges) (+ oneresult-dim 1)))
-              (cons `(call (top length) ,(caddr (car ranges)))
-                    (compute-dims (cdr ranges) oneresult-dim)) )))
-
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges iters oneresult-dim)
-      (if (null? ranges)
-          (if (null? iters)
-              `(block (call (top setindex!) ,result ,expr ,ri)
-                      (= ,ri (call (top +) ,ri) 1))
-              `(block (call (top setindex!) ,result (ref ,expr ,@(reverse iters)) ,ri)
-                      (= ,ri (call (top +) ,ri 1))) )
-          (if (eq? (car ranges) `:)
-              (let ((i (make-ssavalue)))
-                `(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
-                      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
-              `(for ,(car ranges)
-                    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
-
-    ;; Evaluate the comprehension
-    `(scope-block
-      (block
-       (local ,oneresult)
-       ,(evaluate-one ranges)
-       (= ,result (call (core Array) ,(if atype atype `(call (top eltype) ,oneresult))
-                        ,@(compute-dims ranges 1)))
-       (= ,ri 1)
-       ,(construct-loops (reverse ranges) (list) 1)
-       ,result ))))
+   (lambda (e) (expand-forms
+                `(call (call (core apply_type) (top Dict) ,@(cdr (cadr e)))
+                       ,(caddr e))))))
 
 (define (lower-comprehension atype expr ranges)
-  (if (any (lambda (x) (eq? x ':)) ranges)
-      (lower-nd-comprehension atype expr ranges)
   (let ((result    (make-ssavalue))
         (ri        (gensy))
-        (initlabl  (if atype #f (make-ssavalue)))
         (oneresult (make-ssavalue))
         (lengths   (map (lambda (x) (make-ssavalue)) ranges))
         (states    (map (lambda (x) (gensy)) ranges))
@@ -2063,7 +2163,6 @@
     (define (construct-loops ranges rv is states lengths)
       (if (null? ranges)
           `(block (= ,oneresult ,expr)
-                  ,@(if atype '() `((type_goto ,initlabl ,oneresult)))
                   (inbounds true)
                   (call (top setindex!) ,result ,oneresult ,ri)
                   (inbounds pop)
@@ -2089,79 +2188,10 @@
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
-        ,@(if atype '() `((label ,initlabl)))
-        (= ,result (call (core Array)
-                         ,(if atype atype `(static_typeof ,oneresult))
-                         ,@lengths))
+        (= ,result (call (core Array) ,atype ,@lengths))
         (= ,ri 1)
         ,(construct-loops (reverse ranges) (reverse rv) is states (reverse lengths))
-        ,result))))))
-
-(define (lower-dict-comprehension expr ranges)
-  (let ((result   (make-ssavalue))
-        (initlabl (make-ssavalue))
-        (onekey   (make-ssavalue))
-        (oneval   (make-ssavalue))
-        (rv         (map (lambda (x) (make-ssavalue)) ranges)))
-
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges)
-      (if (null? ranges)
-          `(block (= ,onekey ,(cadr expr))
-                  (= ,oneval ,(caddr expr))
-                  (type_goto ,initlabl ,onekey ,oneval)
-                  (call (top setindex!) ,result ,oneval ,onekey))
-          `(for ,(car ranges)
-                (block
-                 ;; *** either this or force all for loop vars local
-                 ,.(map (lambda (r) `(local ,r))
-                        (lhs-vars (cadr (car ranges))))
-                 ,(construct-loops (cdr ranges))))))
-
-    ;; Evaluate the comprehension
-    (let ((loopranges
-           (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
-      `(block
-        ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-        (scope-block
-         (block
-          #;,@(map (lambda (r) `(local ,r))
-          (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-          (label ,initlabl)
-          (= ,result (call (curly (top Dict)
-                                  (static_typeof ,onekey)
-                                  (static_typeof ,oneval))))
-          ,(construct-loops (reverse loopranges))
-          ,result))))))
-
-(define (lower-typed-dict-comprehension atypes expr ranges)
-  (if (not (and (length= atypes 3)
-                (eq? (car atypes) '=>)))
-      (error "invalid \"typed_dict_comprehension\" syntax")
-      (let ( (result (make-ssavalue))
-             (rs (map (lambda (x) (make-ssavalue)) ranges)) )
-
-        ;; construct loops to cycle over all dimensions of an n-d comprehension
-        (define (construct-loops ranges rs)
-          (if (null? ranges)
-              `(call (top setindex!) ,result ,(caddr expr) ,(cadr expr))
-              `(for (= ,(cadr (car ranges)) ,(car rs))
-                    (block
-                     ;; *** either this or force all for loop vars local
-                     ,.(map (lambda (r) `(local ,r))
-                            (lhs-vars (cadr (car ranges))))
-                     ,(construct-loops (cdr ranges) (cdr rs))))))
-
-        ;; Evaluate the comprehension
-        `(block
-          ,.(map make-assignment rs (map caddr ranges))
-          (= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
-          (scope-block
-           (block
-            #;,@(map (lambda (r) `(local ,r))
-            (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-            ,(construct-loops (reverse ranges) (reverse rs))
-            ,result))))))
+        ,result)))))
 
 (define (lhs-vars e)
   (cond ((symbol? e) (list e))
@@ -3140,17 +3170,6 @@ f(x) = yt(x)
                (set! handler-goto-fixups
                      (cons (list code handler-level (cadr e)) handler-goto-fixups))
                '(null)))
-
-            ((type_goto)
-             (let ((m (get label-map (cadr e) #f)))
-               (if m
-                   (emit `(type_goto ,m ,@(cddr e)))
-                   (let ((l (make-label)))
-                     (put! label-map (cadr e) l)
-                     (emit `(type_goto ,l ,@(cddr e)))))))
-            ((static_typeof)
-             (assert (and value (not tail)))
-             e)
 
             ;; exception handlers are lowered using
             ;; (enter L) - push handler with catch block at label L

@@ -103,7 +103,7 @@ static void jl_module_load_time_initialize(jl_module_t *m)
             jl_module_init_order = jl_alloc_vec_any(0);
         jl_array_ptr_1d_push(jl_module_init_order, (jl_value_t*)m);
         jl_function_t *f = jl_module_get_initializer(m);
-        if (f !=  NULL) {
+        if (f != NULL) {
             jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
             JL_GC_PUSH1(&tt);
             tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
@@ -269,8 +269,6 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
     jl_expr_t *e = (jl_expr_t*)v;
     if (jl_array_len(e->args) == 0)
         return 0;
-    if (e->head == static_typeof_sym)
-        return 1;
     if (e->head == toplevel_sym || e->head == copyast_sym)
         return 0;
     jl_value_t *e0 = jl_exprarg(e, 0);

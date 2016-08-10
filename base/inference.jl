@@ -43,10 +43,8 @@ end
 type InferenceState
     sp::SimpleVector     # static parameters
     label_counter::Int   # index of the current highest label for this function
-    fedbackvars::Dict{SSAValue, Bool}
     mod::Module
     currpc::LineNum
-    static_typeof::Bool
 
     # info on the state of inference and the linfo
     linfo::LambdaInfo
@@ -71,7 +69,6 @@ type InferenceState
     backedges::Vector{Tuple{InferenceState, Vector{LineNum}}}
     # iteration fixed-point detection
     fixedpoint::Bool
-    typegotoredo::Bool
     inworkq::Bool
     # optimization
     optimize::Bool
@@ -158,13 +155,13 @@ type InferenceState
 
         inmodule = isdefined(linfo, :def) ? linfo.def.module : current_module() # toplevel thunks are inferred in the current module
         frame = new(
-            sp, nl, Dict{SSAValue, Bool}(), inmodule, 0, false,
+            sp, nl, inmodule, 0,
             linfo, la, s, Union{}, W, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, ssavalue_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
             Vector{Tuple{InferenceState, Vector{LineNum}}}(),
-            false, false, false, optimize, inlining, needtree, false)
+            false, false, optimize, inlining, needtree, false)
         push!(active, frame)
         nactive[] += 1
         return frame
@@ -926,10 +923,29 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable
     return abstract_call(af, (), Any[type_typeof(af), Vararg{Any}], vtypes, sv)
 end
 
-function pure_eval_call(f::ANY, argtypes::ANY, atype, sv)
+function pure_eval_call(f::ANY, argtypes::ANY, atype, vtypes, sv)
     for a in drop(argtypes,1)
         if !(isa(a,Const) || (isType(a) && !has_typevars(a.parameters[1])))
             return false
+        end
+    end
+
+    if f === return_type && length(argtypes) == 3
+        tt = argtypes[3]
+        if isType(tt)
+            af_argtype = tt.parameters[1]
+            if af_argtype <: Tuple && isa(af_argtype, DataType)
+                af = argtypes[2]
+                rt = abstract_call(isa(af,Const) ? af.val : af.parameters[1],
+                                   (), Any[argtypes[2], af_argtype.parameters...], vtypes, sv)
+                if isa(rt,Const)
+                    return Type{widenconst(rt)}
+                elseif isleaftype(rt) || isleaftype(af_argtype) || rt === Bottom
+                    return Type{rt}
+                else
+                    return Type{TypeVar(:R, rt)}
+                end
+            end
         end
     end
 
@@ -1011,7 +1027,7 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
     end
 
     atype = argtypes_to_type(argtypes)
-    t = pure_eval_call(f, argtypes, atype, sv)
+    t = pure_eval_call(f, argtypes, atype, vtypes, sv)
     t !== false && return t
 
     if istopfunction(tm, f, :promote_type) || istopfunction(tm, f, :typejoin)
@@ -1068,8 +1084,6 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         return abstract_eval_constant(e)
     end
     e = e::Expr
-    # handle:
-    # call  null  new  &  static_typeof
     if is(e.head,:call)
         t = abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:null)
@@ -1101,42 +1115,6 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
                 end
             else
                 t = abstract_eval_constant(val)
-            end
-        end
-    elseif is(e.head,:static_typeof)
-        var = e.args[1]
-        t = widenconst(abstract_eval(var, vtypes, sv))
-        if isa(t,DataType) && typeseq(t,t.name.primary)
-            # remove unnecessary typevars
-            t = t.name.primary
-        end
-        if is(t,Bottom)
-            # if we haven't gotten fed-back type info yet, return Bottom. otherwise
-            # Bottom is the actual type of the variable, so return Type{Bottom}.
-            if get!(sv.fedbackvars, var, false)
-                t = Type{Bottom}
-            else
-                sv.static_typeof = true
-            end
-        elseif isleaftype(t)
-            t = Type{t}
-        elseif isleaftype(sv.linfo.specTypes)
-            if isa(t,TypeVar)
-                t = Type{t.ub}
-            else
-                t = Type{t}
-            end
-        else
-            # if there is any type uncertainty in the arguments, we are
-            # effectively predicting what static_typeof will say when
-            # the function is compiled with actual arguments. in that case
-            # abstract types yield Type{<:T} instead of Type{T}.
-            # this doesn't really model the situation perfectly, but
-            # "isleaftype(inference_stack.types)" should be good enough.
-            if isa(t,TypeVar) || isvarargtype(t)
-                t = Type{t}
-            else
-                t = Type{TypeVar(:_,t)}
             end
         end
     elseif is(e.head,:method)
@@ -1666,7 +1644,6 @@ function typeinf_frame(frame)
     W = frame.ip
     s = frame.stmt_types
     n = frame.nstmts
-    @label restart_typeinf
     while !isempty(W)
         # make progress on the active ip set
         local pc::Int = first(W), pc´::Int
@@ -1674,15 +1651,12 @@ function typeinf_frame(frame)
             #print(pc,": ",s[pc],"\n")
             delete!(W, pc)
             frame.currpc = pc
-            frame.static_typeof = false
             frame.cur_hand = frame.handler_at[pc]
             stmt = frame.linfo.code[pc]
             changes = abstract_interpret(stmt, s[pc]::Array{Any,1}, frame)
             if changes === ()
-                # if there was a Expr(:static_typeof) on this line,
-                # need to continue to the next pc even though the return type was Bottom
-                # otherwise, this line threw an error and there is no need to continue
-                frame.static_typeof || break
+                # this line threw an error and there is no need to continue
+                break
                 changes = s[pc]
             end
             if frame.cur_hand !== ()
@@ -1731,26 +1705,6 @@ function typeinf_frame(frame)
                             push!(W, l)
                             s[l] = newstate
                         end
-                    end
-                elseif is(hd, :type_goto)
-                    for i = 2:length(stmt.args)
-                        var = stmt.args[i]::SSAValue
-                        # Store types that need to be fed back via type_goto
-                        # in ssavalue_init. After finishing inference, if any
-                        # of these types changed, start over with the fed-back
-                        # types known from the beginning.
-                        # See issue #3821 (using !typeseq instead of !subtype),
-                        # and issue #7810.
-                        id = var.id+1
-                        vt = frame.linfo.ssavaluetypes[id]
-                        ot = frame.ssavalue_init[id]
-                        if ot===NF || !(vt⊑ot && ot⊑vt)
-                            frame.ssavalue_init[id] = vt
-                            if get(frame.fedbackvars, var, false)
-                                frame.typegotoredo = true
-                            end
-                        end
-                        frame.fedbackvars[var] = true
                     end
                 elseif is(hd, :return)
                     pc´ = n + 1
@@ -1821,39 +1775,6 @@ function typeinf_frame(frame)
     end
 
     if finished || frame.fixedpoint
-        if frame.typegotoredo
-            # if any type_gotos changed, clear state and restart.
-            frame.typegotoredo = false
-            for ll = 2:length(s)
-                s[ll] = ()
-            end
-            empty!(W)
-            push!(W, 1)
-            frame.cur_hand = ()
-            frame.handler_at = Any[ () for i=1:n ]
-            frame.n_handlers = 0
-            frame.linfo.ssavaluetypes[:] = frame.ssavalue_init
-            @goto restart_typeinf
-        else
-            # if a static_typeof was never reached,
-            # use Union{} as its real type and continue
-            # running type inference from its uses
-            # (one of which is the static_typeof)
-            # TODO: this restart should happen just before calling finish()
-            for (fbvar, seen) in frame.fedbackvars
-                if !seen
-                    frame.fedbackvars[fbvar] = true
-                    id = (fbvar::SSAValue).id + 1
-                    for r in frame.ssavalue_uses[id]
-                        if !is(s[r], ()) # s[r] === () => unreached statement
-                            push!(W, r)
-                        end
-                    end
-                    @goto restart_typeinf
-                end
-            end
-        end
-
         if finished
             finish(frame)
         else # fixedpoint propagation
@@ -2056,7 +1977,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, undefs, pass)
 
     e = e::Expr
     head = e.head
-    if is(head,:static_typeof) || is(head,:line) || is(head,:const)
+    if is(head,:line) || is(head,:const)
         return e
     elseif is(head,:(=))
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, undefs, pass)
@@ -2282,9 +2203,6 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
     elseif isa(e,Expr)
         e = e::Expr
         head = e.head
-        if head === :static_typeof
-            return true
-        end
         if head === :static_parameter || head === :meta || head === :line ||
             head === :inbounds || head === :boundscheck
             return true
@@ -2550,7 +2468,8 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     methsp = meth[2]
     method = meth[3]::Method
     # check whether call can be inlined to just a quoted constant value
-    if isa(f, widenconst(ft)) && !method.isstaged && method.lambda_template.pure && (isType(e.typ) || isa(e.typ,Const))
+    if isa(f, widenconst(ft)) && !method.isstaged && (method.lambda_template.pure || f === return_type) &&
+        (isType(e.typ) || isa(e.typ,Const))
         if isType(e.typ)
             if !has_typevars(e.typ.parameters[1])
                 return inline_as_constant(e.typ.parameters[1], argexprs, sv)
@@ -3668,6 +3587,16 @@ function reindex_labels!(linfo::LambdaInfo, sv::InferenceState)
     end
 end
 
+function return_type(f::ANY, t::ANY)
+    rt = Union{}
+    for m in _methods(f, t, -1)
+        _, ty, inferred = typeinf(m[3], m[1], m[2], false)
+        !inferred && return Any
+        rt = tmerge(rt, ty)
+        rt === Any && break
+    end
+    return rt
+end
 
 #### bootstrapping ####
 

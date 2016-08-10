@@ -28,11 +28,13 @@ for exceptions.
 > WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Julia includes code from the following projects, which have their own licenses:
+
 - [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE) (for ccall/cfunction ABI definitions) [BSD-3]. The portion of code that Julia uses from LDC is [BSD-3] licensed.
 - [LLVM](http://llvm.org/releases/3.7.0/LICENSE.TXT) (for parts of src/jitlayers.cpp and src/disasm.cpp) [BSD-3, effectively]
 - [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementation on Windows) [MIT]
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
+- [randmtzig.c](https://github.com/JuliaLang/julia/blob/master/test/perf/micro/randmtzig.c) for Gaussian random number generation (for C benchmarks only) [BSD-3]
 
 The Julia language links to the following external libraries, which have their
 own licenses:
@@ -70,11 +72,6 @@ The following components of Julia's standard library have separate licenses:
 - base/linalg/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 
 
-Julia builds the following libraries by default, but does not use them itself:
-
-- [RMATH](http://www.r-project.org/Licenses/)
-
-
 Julia's build process uses the following external tools:
 
 - [PATCHELF](http://hydra.nixos.org/build/1524660/download/1/README)
@@ -84,7 +81,7 @@ Julia's build process uses the following external tools:
 Julia bundles the following external programs and libraries on some platforms:
 
 - [7-Zip](http://www.7-zip.org/license.txt)
-- [GIT](http://git-scm.com/about/free-and-open-source)
+- [BUSYBOX](https://github.com/rmyorston/busybox-w32/blob/master/LICENSE)
 - [ZLIB](http://zlib.net/zlib_license.html)
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
 - [OPENSSL](https://github.com/openssl/openssl/blob/master/LICENSE)

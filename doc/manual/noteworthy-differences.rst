@@ -103,7 +103,7 @@ some noteworthy differences that may trip up Julia users accustomed to MATLAB:
 - In MATLAB, an idiomatic way to remove unwanted values is to use logical
   indexing, like in the expression ``x(x>3)`` or in the statement
   ``x(x>3) = []`` to modify ``x`` in-place. In contrast, Julia provides the
-  higher order functions :func:`filter` and a :func:`filter!`, allowing users
+  higher order functions :func:`filter` and :func:`filter!`, allowing users
   to write ``filter(z->z>3, x)`` and ``filter!(z->z>3, x)`` as alternatives to
   the corresponding transliterations ``x[x.>3]`` and ``x = x[x.>3]``. Using
   :func:`filter!` reduces the use of temporary arrays.
@@ -235,7 +235,7 @@ noteworthy differences:
 - In R, an idiomatic way to remove unwanted values is to use logical indexing,
   like in the expression ``x[x>3]`` or in the statement ``x = x[x>3]`` to
   modify ``x`` in-place. In contrast, Julia provides the higher order functions
-  :func:`filter` and a :func:`filter!`, allowing users to write
+  :func:`filter` and :func:`filter!`, allowing users to write
   ``filter(z->z>3, x)`` and ``filter!(z->z>3, x)`` as alternatives to the
   corresponding transliterations ``x[x.>3]`` and ``x = x[x.>3]``. Using
   :func:`filter!` reduces the use of temporary arrays.

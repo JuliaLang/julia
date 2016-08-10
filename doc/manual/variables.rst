@@ -128,9 +128,11 @@ statements:
 
     julia> else = false
     ERROR: syntax: unexpected "else"
+     ...
 
     julia> try = "No"
     ERROR: syntax: unexpected "="
+     ...
 
 
 Stylistic Conventions

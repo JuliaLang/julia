@@ -50,37 +50,21 @@ end
 @pure promote_array_type{S<:Integer, P}(F, ::Type{S}, ::Type{Bool}, ::Type{P}) = P
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
-    @eval begin
-        function ($f){S,T}(A::Range{S}, B::Range{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(size(A),size(B)))
-            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-                @inbounds F[iF] = ($f)(A[iA], B[iB])
-            end
-            return F
-        end
-        function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(A,B))
-            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-                @inbounds F[iF] = ($f)(A[iA], B[iB])
-            end
-            return F
-        end
-        function ($f){S,T}(A::Range{S}, B::AbstractArray{T})
-            F = similar(B, promote_op($f,S,T), promote_shape(A,B))
-            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-                @inbounds F[iF] = ($f)(A[iA], B[iB])
-            end
-            return F
-        end
-        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(A,B))
-            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-                @inbounds F[iF] = ($f)(A[iA], B[iB])
-            end
-            return F
-        end
-    end
+    @eval ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T}) =
+        _elementwise($f, A, B, promote_eltype_op($f, A, B))
 end
+function _elementwise{S,T}(op, A::AbstractArray{S}, B::AbstractArray{T}, ::Type{Any})
+    promote_shape(A,B) # check size compatibility
+    return broadcast(op, A, B)
+end
+function _elementwise{S,T,R}(op, A::AbstractArray{S}, B::AbstractArray{T}, ::Type{R})
+    F = similar(A, R, promote_shape(A,B))
+    for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
+        @inbounds F[iF] = op(A[iA], B[iB])
+    end
+    return F
+end
+
 for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::AbstractArray{T})
@@ -322,8 +306,8 @@ function ctranspose(A::AbstractMatrix)
 end
 ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
 
-transpose(x::AbstractVector) = [ transpose(v) for i=1, v in x ]
-ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(v) for i=1, v in x ] #Fixme comprehension
+transpose(x::AbstractVector) = [ transpose(v) for i=1:1, v in x ]
+ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(v) for i=1:1, v in x ]
 
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
 _cumsum_type(v) = typeof(v[1]+v[1])

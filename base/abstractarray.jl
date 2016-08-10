@@ -45,8 +45,14 @@ function indices{T,N}(A::AbstractArray{T,N})
     map(s->OneTo(s), size(A))
 end
 
+# Performance optimization: get rid of a branch on `d` in `indices(A,
+# d)` for d=1. 1d arrays are heavily used, and the first dimension
+# comes up in other applications.
 indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
-indices1{T}(A::AbstractArray{T})   = indices(A)[1]
+indices1{T}(A::AbstractArray{T})   = (@_inline_meta; indices(A)[1])
+
+unsafe_indices(A) = indices(A)
+unsafe_indices(r::Range) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
 
 """
     linearindices(A)
@@ -60,8 +66,8 @@ is `indices(A, 1)`.
 Calling this function is the "safe" way to write algorithms that
 exploit linear indexing.
 """
-linearindices(A) = 1:length(A)
-linearindices(A::AbstractVector) = indices1(A)
+linearindices(A)                 = (@_inline_meta; 1:length(A))
+linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,N}(::Type{AbstractArray{T,N}}) = T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
@@ -144,6 +150,120 @@ linearindexing(::LinearFast, ::LinearFast) = LinearFast()
 linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
 
 ## Bounds checking ##
+
+# The overall hierarchy is
+#     `checkbounds(A, I...)` ->
+#         `checkbounds(Bool, A, I...)` -> either of:
+#             - `checkbounds_logical(Bool, A, I)` when `I` is a single logical array
+#             - `checkbounds_indices(Bool, IA, I)` otherwise (uses `checkindex`)
+#
+# See the "boundscheck" devdocs for more information.
+#
+# Note this hierarchy has been designed to reduce the likelihood of
+# method ambiguities.  We try to make `checkbounds` the place to
+# specialize on array type, and try to avoid specializations on index
+# types; conversely, `checkindex` is intended to be specialized only
+# on index type (especially, its last argument).
+
+"""
+    checkbounds(Bool, A, I...)
+
+Return `true` if the specified indices `I` are in bounds for the given
+array `A`. Subtypes of `AbstractArray` should specialize this method
+if they need to provide custom bounds checking behaviors; however, in
+many cases one can rely on `A`'s indices and `checkindex`.
+
+See also `checkindex`.
+"""
+function checkbounds(::Type{Bool}, A::AbstractArray, I...)
+    @_inline_meta
+    checkbounds_indices(Bool, indices(A), I)
+end
+function checkbounds(::Type{Bool}, A::AbstractArray, I::AbstractArray{Bool})
+    @_inline_meta
+    checkbounds_logical(Bool, A, I)
+end
+
+"""
+    checkbounds(A, I...)
+
+Throw an error if the specified indices `I` are not in bounds for the given array `A`.
+"""
+function checkbounds(A::AbstractArray, I...)
+    @_inline_meta
+    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
+    nothing
+end
+checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
+
+"""
+    checkbounds_indices(Bool, IA, I)
+
+Return `true` if the "requested" indices in the tuple `I` fall within
+the bounds of the "permitted" indices specified by the tuple
+`IA`. This function recursively consumes elements of these tuples,
+usually in a 1-for-1 fashion,
+
+    checkbounds_indices(Bool, (IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) &
+                                                          checkbounds_indices(Bool, IA, I)
+
+Note that `checkindex` is being used to perform the actual
+bounds-check for a single dimension of the array.
+
+There are two important exceptions to the 1-1 rule: linear indexing and
+CartesianIndex{N}, both of which may "consume" more than one element
+of `IA`.
+"""
+function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple)
+    @_inline_meta
+    checkindex(Bool, IA[1], I[1]) & checkbounds_indices(Bool, tail(IA), tail(I))
+end
+checkbounds_indices(::Type{Bool}, ::Tuple{},  ::Tuple{})    = true
+checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, 1:1, I[1]))
+function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
+    @_inline_meta
+    checkindex(Bool, 1:1, I[1]) & checkbounds_indices(Bool, (), tail(I))
+end
+function checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{Any})
+    @_inline_meta
+    checkindex(Bool, IA[1], I[1])
+end
+function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
+    @_inline_meta
+    checkindex(Bool, 1:prod(map(dimlength, IA)), I[1])  # linear indexing
+end
+
+"""
+    checkbounds_logical(Bool, A, I::AbstractArray{Bool})
+
+Return `true` if the logical array `I` is consistent with the indices
+of `A`. `I` and `A` should have the same size and compatible indices.
+"""
+function checkbounds_logical(::Type{Bool}, A::AbstractArray, I::AbstractArray{Bool})
+    indices(A) == indices(I)
+end
+function checkbounds_logical(::Type{Bool}, A::AbstractArray, I::AbstractVector{Bool})
+    length(A) == length(I)
+end
+function checkbounds_logical(::Type{Bool}, A::AbstractVector, I::AbstractArray{Bool})
+    length(A) == length(I)
+end
+function checkbounds_logical(::Type{Bool}, A::AbstractVector, I::AbstractVector{Bool})
+    indices(A) == indices(I)
+end
+
+"""
+    checkbounds_logical(A, I::AbstractArray{Bool})
+
+Throw an error if the logical array `I` is inconsistent with the indices of `A`.
+"""
+function checkbounds_logical(A, I::AbstractVector{Bool})
+    checkbounds_logical(Bool, A, I) || throw_boundserror(A, I)
+    nothing
+end
+
+throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
+
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
     (isa(n, Int) && isa(N, Int)) || error("Must have concrete type")
     n > N && return 1
@@ -156,7 +276,7 @@ end
 
 # check along a single dimension
 """
-    checkindex(Bool, inds::UnitRange, index)
+    checkindex(Bool, inds::AbstractUnitRange, index)
 
 Return `true` if the given `index` is within the bounds of
 `inds`. Custom types that would like to behave as indices for all
@@ -179,59 +299,6 @@ function checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray)
     end
     b
 end
-
-# check all indices/dimensions
-# To make extension easier, avoid specializations of checkbounds on index types
-# (That said, typically one does not need to specialize this function.)
-"""
-    checkbounds(Bool, array, indexes...)
-
-Return `true` if the specified `indexes` are in bounds for the given `array`. Subtypes of
-`AbstractArray` should specialize this method if they need to provide custom bounds checking
-behaviors.
-"""
-function checkbounds(::Type{Bool}, A::AbstractArray, i::Integer)
-    @_inline_meta
-    checkindex(Bool, linearindices(A), i)
-end
-function checkbounds{T}(::Type{Bool}, A::Union{Array{T,1},Range{T}}, i::Integer)
-    @_inline_meta
-    (1 <= i) & (i <= length(A))
-end
-function checkbounds(::Type{Bool}, A::AbstractArray, I::AbstractArray{Bool})
-    @_inline_meta
-    checkbounds_logical(A, I)
-end
-function checkbounds(::Type{Bool}, A::AbstractArray, I...)
-    @_inline_meta
-    checkbounds_indices(indices(A), I)
-end
-
-checkbounds_indices(::Tuple{},  ::Tuple{})    = true
-checkbounds_indices(::Tuple{}, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, 1:1, I[1]))
-checkbounds_indices(::Tuple{}, I::Tuple)      = (@_inline_meta; checkindex(Bool, 1:1, I[1]) & checkbounds_indices((), tail(I)))
-checkbounds_indices(inds::Tuple{Any}, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, inds[1], I[1]))
-checkbounds_indices(inds::Tuple, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, 1:prod(map(dimlength, inds)), I[1]))
-checkbounds_indices(inds::Tuple, I::Tuple) = (@_inline_meta; checkindex(Bool, inds[1], I[1]) & checkbounds_indices(tail(inds), tail(I)))
-
-# Single logical array indexing:
-checkbounds_logical(A::AbstractArray, I::AbstractArray{Bool})   = indices(A) == indices(I)
-checkbounds_logical(A::AbstractArray, I::AbstractVector{Bool})  = length(A) == length(I)
-checkbounds_logical(A::AbstractVector, I::AbstractArray{Bool})  = length(A) == length(I)
-checkbounds_logical(A::AbstractVector, I::AbstractVector{Bool}) = indices(A) == indices(I)
-
-throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
-
-"""
-    checkbounds(array, indexes...)
-
-Throw an error if the specified `indexes` are not in bounds for the given `array`.
-"""
-function checkbounds(A::AbstractArray, I...)
-    @_inline_meta
-    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
-end
-checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 
 # See also specializations in multidimensional
 
@@ -813,8 +880,8 @@ typed_hcat{T}(::Type{T}) = Array{T}(0)
 ## cat: special cases
 vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
 vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
-hcat{T}(X::T...)         = T[ X[j] for i=1, j=1:length(X) ]
-hcat{T<:Number}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
+hcat{T}(X::T...)         = T[ X[j] for i=1:1, j=1:length(X) ]
+hcat{T<:Number}(X::T...) = T[ X[j] for i=1:1, j=1:length(X) ]
 
 vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
 hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
@@ -1193,8 +1260,6 @@ nextL(L, l::Integer) = L*l
 nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
-unsafe_length(r::UnitRange) = r.stop-r.start+1
-unsafe_length(r::OneTo) = length(r)
 
 ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsError()))
 ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub(dims, ind-1))
@@ -1391,6 +1456,7 @@ end
 
 map!{F}(f::F, dest::AbstractArray, As::AbstractArray...) = map_n!(f, dest, As)
 
+map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
 
 # multi-item push!, unshift! (built on top of type-specific 1-item version)

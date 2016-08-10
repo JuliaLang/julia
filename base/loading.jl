@@ -455,7 +455,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
             eval(Main, deserialize(STDIN))
         end
         """
-    io, pobj = open(pipeline(detach(`$(julia_cmd())
+    io, pobj = open(pipeline(detach(`$(julia_cmd()) -O0
                                     --output-ji $output --output-incremental=yes
                                     --startup-file=no --history-file=no
                                     --color=$(have_color ? "yes" : "no")

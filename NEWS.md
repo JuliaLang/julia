@@ -7,7 +7,11 @@ New language features
   * Generator expressions, e.g. `f(i) for i in 1:n` ([#4470]). This returns an iterator
     that computes the specified values on demand.
 
-  * Broadcasting syntax: ``f.(args...)`` is equivalent to ``broadcast(f, args...)`` ([#15032]).
+  * Generators and comprehensions support filtering using `if` ([#550]) and nested
+    iteration using multiple `for` keywords ([#4867]).
+
+  * Broadcasting syntax: ``f.(args...)`` is equivalent to ``broadcast(f, args...)`` ([#15032]),
+    and nested `f.(g.(args...))` calls are fused into a single `broadcast` loop ([#17300]).
 
   * Macro expander functions are now generic, so macros can have multiple definitions
     (e.g. for different numbers of arguments, or optional arguments) ([#8846], [#9627]).
@@ -51,23 +55,31 @@ Language changes
     Instead of adding methods to `call`, methods are added by type using the syntax
     `(::ftype)(...) = ...`. `call` is deprecated ([#13412]).
 
-  * `using` and `import` are now case-sensitive even on case-insensitive filesystems (common on Mac and Windows) ([#13542]).
+  * `using` and `import` are now case-sensitive even on case-insensitive filesystems
+    (common on Mac and Windows) ([#13542]).
 
   * Relational symbols are now allowed as infix operators ([#8036]).
 
-  * A warning is always given when a method is overwritten (previously, this was done only when the new
-    and old definitions were in separate modules) ([#14759]).
+  * A warning is always given when a method is overwritten (previously, this was done
+    only when the new and old definitions were in separate modules) ([#14759]).
 
-  * `A <: B` is parsed as `Expr(:(<:), :A, :B)` in all cases ([#9503]). This also applies to the
-    `>:` operator.
+  * `A <: B` is parsed as `Expr(:(<:), :A, :B)` in all cases ([#9503]).
+    This also applies to the `>:` operator.
 
   * Simple 2-argument comparisons like `A < B` are parsed as calls instead of using the
-    `:comparison` expression type.
+    `:comparison` expression type ([#15524]).
 
   * The `if` keyword cannot be followed immediately by a line break ([#15763]).
 
   * The built-in `NTuple` type has been removed; `NTuple{N,T}` is now
     implemented internally as `Tuple{Vararg{T,N}}` ([#11242]).
+
+  * Array comprehensions preserve the dimensions of the input ranges. For example,
+    `[2x for x in A]` will have the same dimensions as `A` ([#16622]).
+
+  * The result type of an array comprehension depends only on the types of elements
+    computed, instead of using type inference ([#7258]). If the result is empty, then
+    type inference is still used to determine the element type.
 
 Command-line option changes
 ---------------------------
@@ -87,7 +99,7 @@ Breaking changes
 
   * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
     Action to be taken on errors can be specified via the `on_error` keyword argument.
-    Retry is specified via `retry_n`, `retry_on` and `retry_max_delay`.
+    Retry is specified via `retry_n`, `retry_on` and `retry_max_delay` ([#15409], [#15975], [#16663]).
 
   * `reshape` is now defined to always share data with the original array.
     If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
@@ -120,6 +132,11 @@ Library improvements
       `String(s)`, `unsafe_string(ptr)` (formerly `bytestring(ptr)`), and
       `unsafe_wrap(String, ptr)` (formerly `pointer_to_string`) ([#16731]).
 
+    * A `transcode(T, src)` function is now exported for converting data
+      between UTF-xx Unicode encodings ([#17323]).
+
+    * Support for Unicode 9 ([#17402]).
+
   * Most of the combinatorics functions have been moved from `Base`
     to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
 
@@ -131,6 +148,9 @@ Library improvements
 
     * Package-development functions like `Pkg.tag` and `Pkg.publish`
       have been moved to an external [PkgDev] package ([#13387]).
+
+    * Updating only a subset of the packages is now supported,
+      e.g. `Pkg.update("Example")` ([#17132])
 
   * The `Base.Test` module now has a `@testset` feature to bundle
     tests together and delay throwing an error until the end ([#13062]).
@@ -153,7 +173,8 @@ Library improvements
     * All dimensions indexed by scalars are now dropped, whereas previously only
       trailing scalar dimensions would be omitted from the result ([#13612]).
 
-    * Dimensions indexed by multidimensional arrays add dimensions. More generally, the dimensionality of the result is the sum of the dimensionalities of the indices ([#15431]).
+    * Dimensions indexed by multidimensional arrays add dimensions. More generally, the
+      dimensionality of the result is the sum of the dimensionalities of the indices ([#15431]).
 
     * New `normalize` and `normalize!` convenience functions for normalizing
       vectors ([#13681]).
@@ -170,13 +191,13 @@ Library improvements
       vector instead of a one-column sparse matrix. ([#13440])
 
     * Rank one update and downdate functions, `lowrankupdate`, `lowrankupdate!`, `lowrankdowndate`,
-    and `lowrankdowndate!`, for dense Cholesky factorizations ([#14243], [#14424])
+      and `lowrankdowndate!`, for dense Cholesky factorizations ([#14243], [#14424])
 
     * All `sparse` methods now retain provided numerical zeros as structural nonzeros; to
       drop numerical zeros, use `dropzeros!` ([#14798], [#15242]).
 
   * New `foreach` function for calling a function on every element of a collection when
-    the results are not needed.
+    the results are not needed ([#13774]).
 
   * `Cmd(cmd; ...)` now accepts new Windows-specific options `windows_verbatim`
     (to alter Windows command-line generation) and `windows_hide` (to
@@ -198,10 +219,11 @@ Library improvements
     directory, instead of the private `<prefix>/lib/julia` directory ([#16362]).
 
   * System reflection is now more consistently exposed from Sys and not Base.
-    `OS_NAME` has been replaced by `Sys.KERNEL` and always reports the name of the kernel (as reported by `uname`).
-    The `@windows_only` and `@osx` family of macros have been replaced with functions such as `is_windows()` and
-    or `is_apple()`. There's now also an `@static` macro that will evaluate the condition of an if-statement at
-    compile time, for when a static branch is required ([#16219]).
+    `OS_NAME` has been replaced by `Sys.KERNEL` and always reports the name of the
+    kernel (as reported by `uname`). The `@windows_only` and `@osx` family of macros
+    have been replaced with functions such as `is_windows()` and `is_apple()`.
+    There's now also an `@static` macro that will evaluate the condition of an
+    if-statement at compile time, for when a static branch is required ([#16219]).
 
   * Prime number related functions have been moved from `Base` to the
     [Primes.jl package](https://github.com/JuliaMath/Primes.jl) ([#16481]).
@@ -228,7 +250,8 @@ Deprecated or removed
 
   * Deprecate `chol(A,Val{:U/:L})` in favor of `chol(A)` ([#13680]).
 
-  * `issym` is deprecated in favor of `issymmetric` to match similar functions (`ishermitian`, ...) ([#15192])
+  * `issym` is deprecated in favor of `issymmetric` to match similar functions
+    (`ishermitian`, ...) ([#15192])
 
   * `scale` is deprecated in favor of either `α*A`, `Diagonal(x)*A`, or `A*Diagonal(x)`. ([#15258])
 
@@ -237,13 +260,19 @@ Deprecated or removed
 
   * `sub` and `slice` have been deprecated in favor of `view` ([#16972])
 
+  * The no-op `transpose` fallback has been deprecated. Consider introducing suitable
+    `transpose` methods or calling `permutedims(x, [2,1])` ([#13171], [#17075], [#17374]).
+
 [PkgDev]: https://github.com/JuliaLang/PkgDev.jl
 <!--- generated by NEWS-update.jl: -->
+[#550]: https://github.com/JuliaLang/julia/issues/550
 [#1090]: https://github.com/JuliaLang/julia/issues/1090
 [#4163]: https://github.com/JuliaLang/julia/issues/4163
 [#4211]: https://github.com/JuliaLang/julia/issues/4211
 [#4470]: https://github.com/JuliaLang/julia/issues/4470
+[#4867]: https://github.com/JuliaLang/julia/issues/4867
 [#6190]: https://github.com/JuliaLang/julia/issues/6190
+[#7258]: https://github.com/JuliaLang/julia/issues/7258
 [#8036]: https://github.com/JuliaLang/julia/issues/8036
 [#8846]: https://github.com/JuliaLang/julia/issues/8846
 [#9503]: https://github.com/JuliaLang/julia/issues/9503
@@ -251,6 +280,7 @@ Deprecated or removed
 [#11196]: https://github.com/JuliaLang/julia/issues/11196
 [#11242]: https://github.com/JuliaLang/julia/issues/11242
 [#13062]: https://github.com/JuliaLang/julia/issues/13062
+[#13171]: https://github.com/JuliaLang/julia/issues/13171
 [#13232]: https://github.com/JuliaLang/julia/issues/13232
 [#13338]: https://github.com/JuliaLang/julia/issues/13338
 [#13387]: https://github.com/JuliaLang/julia/issues/13387
@@ -263,6 +293,7 @@ Deprecated or removed
 [#13612]: https://github.com/JuliaLang/julia/issues/13612
 [#13680]: https://github.com/JuliaLang/julia/issues/13680
 [#13681]: https://github.com/JuliaLang/julia/issues/13681
+[#13774]: https://github.com/JuliaLang/julia/issues/13774
 [#13780]: https://github.com/JuliaLang/julia/issues/13780
 [#13824]: https://github.com/JuliaLang/julia/issues/13824
 [#13897]: https://github.com/JuliaLang/julia/issues/13897
@@ -281,11 +312,14 @@ Deprecated or removed
 [#15242]: https://github.com/JuliaLang/julia/issues/15242
 [#15244]: https://github.com/JuliaLang/julia/issues/15244
 [#15258]: https://github.com/JuliaLang/julia/issues/15258
+[#15409]: https://github.com/JuliaLang/julia/issues/15409
 [#15431]: https://github.com/JuliaLang/julia/issues/15431
+[#15524]: https://github.com/JuliaLang/julia/issues/15524
 [#15550]: https://github.com/JuliaLang/julia/issues/15550
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
 [#15731]: https://github.com/JuliaLang/julia/issues/15731
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
+[#15975]: https://github.com/JuliaLang/julia/issues/15975
 [#16058]: https://github.com/JuliaLang/julia/issues/16058
 [#16107]: https://github.com/JuliaLang/julia/issues/16107
 [#16219]: https://github.com/JuliaLang/julia/issues/16219
@@ -296,8 +330,16 @@ Deprecated or removed
 [#16455]: https://github.com/JuliaLang/julia/issues/16455
 [#16481]: https://github.com/JuliaLang/julia/issues/16481
 [#16621]: https://github.com/JuliaLang/julia/issues/16621
+[#16622]: https://github.com/JuliaLang/julia/issues/16622
 [#16645]: https://github.com/JuliaLang/julia/issues/16645
+[#16663]: https://github.com/JuliaLang/julia/issues/16663
 [#16731]: https://github.com/JuliaLang/julia/issues/16731
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
-[#17266]: https://github.com/JuliaLang/julia/issues/17266
 [#17037]: https://github.com/JuliaLang/julia/issues/17037
+[#17075]: https://github.com/JuliaLang/julia/issues/17075
+[#17132]: https://github.com/JuliaLang/julia/issues/17132
+[#17266]: https://github.com/JuliaLang/julia/issues/17266
+[#17300]: https://github.com/JuliaLang/julia/issues/17300
+[#17323]: https://github.com/JuliaLang/julia/issues/17323
+[#17374]: https://github.com/JuliaLang/julia/issues/17374
+[#17402]: https://github.com/JuliaLang/julia/issues/17402
