@@ -35,15 +35,11 @@ $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt: $(SRCDIR)/srccache/$(MBEDTLS_S
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
 	touch -c $@
 
-$(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-config.patch-applied: | $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt
-	cd $(SRCDIR)/srccache/$(MBEDTLS_SRC) && patch -p0 -f < $(SRCDIR)/patches/mbedtls-config.patch
-	echo 1 > $@
-
 $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied: | $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt
 	cd $(SRCDIR)/srccache/$(MBEDTLS_SRC)/include/mbedtls && patch -p0 -f < $(SRCDIR)/patches/mbedtls-ssl.h.patch
 	echo 1 > $@
 
-$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/Makefile: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-config.patch-applied $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied
+$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/Makefile: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(MBEDTLS_OPTS)
