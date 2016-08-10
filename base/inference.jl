@@ -1052,6 +1052,23 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
         return Type
     end
 
+    if sv.inlining
+        # need to model the special inliner for ^
+        # to ensure we have added the same edge
+        if isdefined(Main, :Base) &&
+            ((isdefined(Main.Base, :^) && is(f, Main.Base.:^)) ||
+             (isdefined(Main.Base, :.^) && is(f, Main.Base.:.^))) &&
+            length(argtypes) == 3 && (argtypes[3] ⊑ Int32 || argtypes[3] ⊑ Int64)
+
+            a1 = argtypes[2]
+            basenumtype = Union{corenumtype, Main.Base.Complex64, Main.Base.Complex128, Main.Base.Rational}
+            if a1 ⊑ basenumtype
+                ftimes = Main.Base.:*
+                ta1 = widenconst(a1)
+                abstract_call_gf_by_type(ftimes, Tuple{typeof(ftimes), ta1, ta1}, sv)
+            end
+        end
+    end
     return abstract_call_gf_by_type(f, atype, sv)
 end
 
