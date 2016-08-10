@@ -93,3 +93,12 @@ if [ "$UNAME" = "Darwin" ]; then
         done
     done
 fi
+
+if [ "$UNAME" = "Linux" ]; then
+    cd $private_libdir
+    for file in openlibm quadmath gfortran openblas arpack lapack openspecfun; do
+        for dylib in $(ls lib$file*.so* 2>/dev/null); do
+            patchelf --set-rpath \$ORIGIN $dylib
+        done
+    done
+fi
