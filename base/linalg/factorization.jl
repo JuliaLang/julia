@@ -51,7 +51,7 @@ end
 """
     A_ldiv_B!([Y,] A, B) -> Y
 
-Compute `A \ B` in-place and store the result in `Y`, returning the result.
+Compute `A \\ B` in-place and store the result in `Y`, returning the result.
 If only two arguments are passed, then `A_ldiv_B!(A, B)` overwrites `B` with
 the result.
 

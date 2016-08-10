@@ -1,26 +1,102 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Bounds checking
-A = rand(3,3,3)
+A = rand(5,4,3)
 @test checkbounds(Bool, A, 1, 1, 1) == true
-@test checkbounds(Bool, A, 1, 3, 3) == true
-@test checkbounds(Bool, A, 1, 4, 3) == false
-@test checkbounds(Bool, A, 1, -1, 3) == false
-@test checkbounds(Bool, A, 1, 9) == true     # partial linear indexing
-@test checkbounds(Bool, A, 1, 10) == false     # partial linear indexing
-@test checkbounds(Bool, A, 1) == true
-@test checkbounds(Bool, A, 27) == true
-@test checkbounds(Bool, A, 28) == false
-@test checkbounds(Bool, A, 2, 2, 2, 1) == true
+@test checkbounds(Bool, A, 5, 4, 3) == true
+@test checkbounds(Bool, A, 0, 1, 1) == false
+@test checkbounds(Bool, A, 1, 0, 1) == false
+@test checkbounds(Bool, A, 1, 1, 0) == false
+@test checkbounds(Bool, A, 6, 4, 3) == false
+@test checkbounds(Bool, A, 5, 5, 3) == false
+@test checkbounds(Bool, A, 5, 4, 4) == false
+@test checkbounds(Bool, A, 1) == true           # linear indexing
+@test checkbounds(Bool, A, 60) == true
+@test checkbounds(Bool, A, 61) == false
+@test checkbounds(Bool, A, 2, 2, 2, 1) == true  # extra indices
 @test checkbounds(Bool, A, 2, 2, 2, 2) == false
+@test checkbounds(Bool, A, 1, 1)  == true       # partial linear indexing (PLI)
+@test checkbounds(Bool, A, 1, 12) == true       # PLI
+@test checkbounds(Bool, A, 5, 12) == true       # PLI
+@test checkbounds(Bool, A, 1, 13) == false      # PLI
+@test checkbounds(Bool, A, 6, 12) == false      # PLI
 
-@test  Base.checkbounds_indices((1:5, 1:5), (2,2))
-@test !Base.checkbounds_indices((1:5, 1:5), (7,2))
-@test !Base.checkbounds_indices((1:5, 1:5), (2,0))
-@test  Base.checkbounds_indices((1:5, 1:5), (13,))
-@test !Base.checkbounds_indices((1:5, 1:5), (26,))
-@test  Base.checkbounds_indices((1:5, 1:5), (2,2,1))
-@test !Base.checkbounds_indices((1:5, 1:5), (2,2,2))
+# single CartesianIndex
+@test checkbounds(Bool, A, CartesianIndex((1, 1, 1))) == true
+@test checkbounds(Bool, A, CartesianIndex((5, 4, 3))) == true
+@test checkbounds(Bool, A, CartesianIndex((0, 1, 1))) == false
+@test checkbounds(Bool, A, CartesianIndex((1, 0, 1))) == false
+@test checkbounds(Bool, A, CartesianIndex((1, 1, 0))) == false
+@test checkbounds(Bool, A, CartesianIndex((6, 4, 3))) == false
+@test checkbounds(Bool, A, CartesianIndex((5, 5, 3))) == false
+@test checkbounds(Bool, A, CartesianIndex((5, 4, 4))) == false
+@test checkbounds(Bool, A, CartesianIndex((1,))) == true
+@test checkbounds(Bool, A, CartesianIndex((60,))) == true
+@test checkbounds(Bool, A, CartesianIndex((61,))) == false
+@test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 1,))) == true
+@test checkbounds(Bool, A, CartesianIndex((2, 2, 2, 2,))) == false
+@test checkbounds(Bool, A, CartesianIndex((1, 1,)))  == true
+@test checkbounds(Bool, A, CartesianIndex((1, 12,))) == true
+@test checkbounds(Bool, A, CartesianIndex((5, 12,))) == true
+@test checkbounds(Bool, A, CartesianIndex((1, 13,))) == false
+@test checkbounds(Bool, A, CartesianIndex((6, 12,))) == false
+
+# mix of CartesianIndex and Int
+@test checkbounds(Bool, A, CartesianIndex((1,)), 1, CartesianIndex((1,))) == true
+@test checkbounds(Bool, A, CartesianIndex((5, 4)), 3)  == true
+@test checkbounds(Bool, A, CartesianIndex((0, 1)), 1)  == false
+@test checkbounds(Bool, A, 1, CartesianIndex((0, 1)))  == false
+@test checkbounds(Bool, A, 1, 1, CartesianIndex((0,))) == false
+@test checkbounds(Bool, A, 6, CartesianIndex((4, 3)))  == false
+@test checkbounds(Bool, A, 5, CartesianIndex((5,)), 3) == false
+@test checkbounds(Bool, A, CartesianIndex((5,)), CartesianIndex((4,)), CartesianIndex((4,)))  == false
+
+# vector indices
+@test checkbounds(Bool, A, 1:5, 1:4, 1:3) == true
+@test checkbounds(Bool, A, 0:5, 1:4, 1:3) == false
+@test checkbounds(Bool, A, 1:5, 0:4, 1:3) == false
+@test checkbounds(Bool, A, 1:5, 1:4, 0:3) == false
+@test checkbounds(Bool, A, 1:6, 1:4, 1:3) == false
+@test checkbounds(Bool, A, 1:5, 1:5, 1:3) == false
+@test checkbounds(Bool, A, 1:5, 1:4, 1:4) == false
+@test checkbounds(Bool, A, 1:60) == true
+@test checkbounds(Bool, A, 1:61) == false
+@test checkbounds(Bool, A, 2, 2, 2, 1:1) == true  # extra indices
+@test checkbounds(Bool, A, 2, 2, 2, 1:2) == false
+@test checkbounds(Bool, A, 1:5, 1:12) == true
+@test checkbounds(Bool, A, 1:5, 1:13) == false
+@test checkbounds(Bool, A, 1:6, 1:12) == false
+
+# logical
+@test checkbounds(Bool, A, trues(5), trues(4), trues(3)) == true
+@test checkbounds(Bool, A, trues(6), trues(4), trues(3)) == false
+@test checkbounds(Bool, A, trues(5), trues(5), trues(3)) == false
+@test checkbounds(Bool, A, trues(5), trues(4), trues(4)) == false
+@test checkbounds(Bool, A, trues(60)) == true
+@test checkbounds(Bool, A, trues(61)) == false
+@test checkbounds(Bool, A, 2, 2, 2, trues(1)) == true  # extra indices
+@test checkbounds(Bool, A, 2, 2, 2, trues(2)) == false
+@test checkbounds(Bool, A, trues(5), trues(12)) == true
+@test checkbounds(Bool, A, trues(5), trues(13)) == false
+@test checkbounds(Bool, A, trues(6), trues(12)) == false
+
+# array of CartesianIndex
+@test checkbounds(Bool, A, [CartesianIndex((1, 1, 1))]) == true
+@test checkbounds(Bool, A, [CartesianIndex((5, 4, 3))]) == true
+@test checkbounds(Bool, A, [CartesianIndex((0, 1, 1))]) == false
+@test checkbounds(Bool, A, [CartesianIndex((1, 0, 1))]) == false
+@test checkbounds(Bool, A, [CartesianIndex((1, 1, 0))]) == false
+@test checkbounds(Bool, A, [CartesianIndex((6, 4, 3))]) == false
+@test checkbounds(Bool, A, [CartesianIndex((5, 5, 3))]) == false
+@test checkbounds(Bool, A, [CartesianIndex((5, 4, 4))]) == false
+@test checkbounds(Bool, A, [CartesianIndex((1, 1))], 1) == true
+@test checkbounds(Bool, A, [CartesianIndex((5, 4))], 3) == true
+@test checkbounds(Bool, A, [CartesianIndex((0, 1))], 1) == false
+@test checkbounds(Bool, A, [CartesianIndex((1, 0))], 1) == false
+@test checkbounds(Bool, A, [CartesianIndex((1, 1))], 0) == false
+@test checkbounds(Bool, A, [CartesianIndex((6, 4))], 3) == false
+@test checkbounds(Bool, A, [CartesianIndex((5, 5))], 3) == false
+@test checkbounds(Bool, A, [CartesianIndex((5, 4))], 4) == false
 
 # sub2ind & ind2sub
 # 0-dimensional

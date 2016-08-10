@@ -1546,6 +1546,121 @@
         (cadr expr)  ;; eta reduce `x->f(x)` => `f`
         `(-> ,argname (block ,@splat ,expr)))))
 
+(define (getfield-field? x) ; whether x from (|.| f x) is a getfield call
+  (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$)))
+
+;; fuse nested calls to f.(args...) into a single broadcast call
+(define (expand-fuse-broadcast f args)
+  (define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
+  (define (anyfuse? exprs)
+    (if (null? exprs) #f (if (fuse? (car exprs)) #t (anyfuse? (cdr exprs)))))
+  (define (to-lambda f args kwargs) ; convert f to anonymous function with hygienic tuple args
+    (define (genarg arg) (if (vararg? arg) (list '... (gensy)) (gensy)))
+    ; (To do: optimize the case where f is already an anonymous function, in which
+    ;  case we only need to hygienicize the arguments?   But it is quite tricky
+    ;  to fully handle splatted args, typed args, keywords, etcetera.  And probably
+    ;  the extra function call is harmless because it will get inlined anyway.)
+    (let ((genargs (map genarg args))) ; hygienic formal parameters
+      (if (null? kwargs)
+          `(-> ,(cons 'tuple genargs) (call ,f ,@genargs)) ; no keyword args
+          `(-> ,(cons 'tuple genargs) (call ,f (parameters ,@kwargs) ,@genargs)))))
+  (define (from-lambda f) ; convert (-> (tuple args...) (call func args...)) back to func
+    (if (and (pair? f) (eq? (car f) '->) (pair? (cadr f)) (eq? (caadr f) 'tuple)
+             (pair? (caddr f)) (eq? (caaddr f) 'call) (equal? (cdadr f) (cdr (cdaddr f))))
+        (car (cdaddr f))
+        f))
+  (define (fuse-args oldargs) ; replace (fuse f args) with args in oldargs list
+    (define (fargs newargs oldargs)
+      (if (null? oldargs)
+          newargs
+          (fargs (if (fuse? (car oldargs))
+                     (append (reverse (caddar oldargs)) newargs)
+                     (cons (car oldargs) newargs))
+                 (cdr oldargs))))
+    (reverse (fargs '() oldargs)))
+  (define (fuse-funcs f args) ; for (fuse g a) in args, merge/inline g into f
+    ; any argument A of f that is (fuse g a) gets replaced by let A=(body of g):
+    (define (fuse-lets fargs args lets)
+      (if (null? args)
+          lets
+          (if (fuse? (car args))
+              (fuse-lets (cdr fargs) (cdr args) (cons (list '= (car fargs) (caddr (cadar args))) lets))
+              (fuse-lets (cdr fargs) (cdr args) lets))))
+    (let ((fargs (cdadr f))
+          (fbody (caddr f)))
+      `(->
+        (tuple ,@(fuse-args (map (lambda (oldarg arg) (if (fuse? arg)
+                                                 `(fuse _ ,(cdadr (cadr arg)))
+                                                 oldarg))
+                                 fargs args)))
+        (let ,fbody ,@(reverse (fuse-lets fargs args '()))))))
+  (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
+    (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
+      (define (sk args kwargs pargs)
+        (if (null? args)
+            (cons kwargs pargs)
+            (if (kwarg? (car args))
+                (sk (cdr args) (cons (car args) kwargs) pargs)
+                (sk (cdr args) kwargs (cons (car args) pargs)))))
+      (if (has-parameters? args)
+          (sk (reverse (cdr args)) (cdar args) '())
+          (sk (reverse args) '() '())))
+    (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
+      (if (and (pair? e) (eq? (car e) '|.|) (not (getfield-field? (caddr e))))
+          (make-fuse (cadr e) (cdaddr e))
+          e))
+    (let* ((kws.args (split-kwargs args))
+           (kws (car kws.args))
+           (args (cdr kws.args)) ; fusing occurs on positional args only
+           (args_ (map dot-to-fuse args)))
+      (if (anyfuse? args_)
+          `(fuse ,(fuse-funcs (to-lambda f args kws) args_) ,(fuse-args args_))
+          `(fuse ,(to-lambda f args kws) ,args_))))
+  ; given e == (fuse lambda args), compress the argument list by removing (pure)
+  ; duplicates in args, inlining literals, and moving any varargs to the end:
+  (define (compress-fuse e)
+    (define (findfarg arg args fargs) ; for arg in args, return corresponding farg
+      (if (eq? arg (car args))
+          (car fargs)
+          (findfarg arg (cdr args) (cdr fargs))))
+    (let ((f (cadr e))
+          (args (caddr e)))
+      (define (cf old-fargs old-args new-fargs new-args renames varfarg vararg)
+        (if (null? old-args)
+            (let ((nfargs (if (null? varfarg) new-fargs (cons varfarg new-fargs)))
+                  (nargs (if (null? vararg) new-args (cons vararg new-args))))
+              `(fuse (-> (tuple ,@(reverse nfargs)) ,(replace-vars (caddr f) renames))
+                     ,(reverse nargs)))
+            (let ((farg (car old-fargs)) (arg (car old-args)))
+              (cond
+               ((and (vararg? farg) (vararg? arg)) ; arg... must be the last argument
+                (if (null? varfarg)
+                    (cf (cdr old-fargs) (cdr old-args)
+                        new-fargs new-args renames farg arg)
+                    (if (eq? (cadr vararg) (cadr arg))
+                        (cf (cdr old-fargs) (cdr old-args)
+                            new-fargs new-args (cons (cons (cadr farg) (cadr varfarg)) renames)
+                            varfarg vararg)
+                        (error "multiple splatted args cannot be fused into a single broadcast"))))
+               ((number? arg) ; inline numeric literals
+                (cf (cdr old-fargs) (cdr old-args)
+                    new-fargs new-args
+                    (cons (cons farg arg) renames)
+                    varfarg vararg))
+               ((and (symbol? arg) (memq arg new-args)) ; combine duplicate args
+                ; (note: calling memq for every arg is O(length(args)^2) ...
+                ;  ... would be better to replace with a hash table if args is long)
+                (cf (cdr old-fargs) (cdr old-args)
+                    new-fargs new-args
+                    (cons (cons farg (findfarg arg new-args new-fargs)) renames)
+                    varfarg vararg))
+               (else
+                (cf (cdr old-fargs) (cdr old-args)
+                    (cons farg new-fargs) (cons arg new-args) renames varfarg vararg))))))
+      (cf (cdadr f) args '() '() '() '() '())))
+  (let ((e (compress-fuse (make-fuse f args)))) ; an expression '(fuse func args)
+    (expand-forms `(call broadcast ,(from-lambda (cadr e)) ,@(caddr e)))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1584,11 +1699,11 @@
    (lambda (e) ; e = (|.| f x)
      (let ((f (cadr e))
            (x (caddr e)))
-       (if (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
-         `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
-         ; otherwise, came from f.(args...) --> broadcast(f, args...),
-         ; where x = (tuple args...) at this point:
-         (expand-forms `(call broadcast ,f ,@(cdr x))))))
+       (if (getfield-field? x)
+           `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
+          ; otherwise, came from f.(args...) --> broadcast(f, args...),
+          ; where we want to fuse with any nested broadcast calls.
+          (expand-fuse-broadcast f (cdr x)))))
 
    '|<:| syntactic-op-to-call
    '|>:| syntactic-op-to-call

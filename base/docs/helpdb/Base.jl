@@ -1455,9 +1455,9 @@ current `include` path but does not use it to search for files (see help for `in
 This function is typically used to load library code, and is implicitly called by `using` to
 load packages.
 
-When searching for files, `require` first looks for package code under `Pkg.dir()`, then tries
-paths in the global array `LOAD_PATH`. `require` is case-sensitive  on all
-platforms including those with case-insensitive filesystems like macOS and
+When searching for files, `require` first looks for package code under `Pkg.dir()`,
+then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
+all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 require
@@ -3523,9 +3523,6 @@ If `use_mmap` is `true`, the file specified by `source` is memory mapped for pot
 speedups. Default is `true` except on Windows. On Windows, you may want to specify `true` if
 the file is large, and is only read once and not written to.
 
-If `ignore_invalid_chars` is `true`, bytes in `source` with invalid character encoding will
-be ignored. Otherwise an error is thrown indicating the offending character position.
-
 If `quotes` is `true`, columns enclosed within double-quote (\") characters are allowed to
 contain new lines and column delimiters. Double-quote characters within a quoted field must
 be escaped with another double-quote.  Specifying `dims` as a tuple of the expected rows and
@@ -4083,7 +4080,7 @@ rand
 
 Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 """
-base(base, n, pad)
+base
 
 """
     BoundsError([a],[i])
@@ -8223,7 +8220,7 @@ escape_string(str)
     significand(x)
 
 Extract the `significand(s)` (a.k.a. mantissa), in binary representation, of a
-floating-point number or array. If `x` is a non-zero finite number, than the result will be
+floating-point number or array. If `x` is a non-zero finite number, then the result will be
 a number of the same type on the interval ``[1,2)``. Otherwise `x` is returned.
 
 ```jldoctest

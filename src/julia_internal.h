@@ -16,6 +16,8 @@
 extern "C" {
 #endif
 
+#include "timing.h"
+
 #define GC_CLEAN  0 // freshly allocated
 #define GC_MARKED 1 // reachable and young
 #define GC_OLD    2 // if it is reachable it will be marked as old
@@ -294,7 +296,7 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_lambda_info_t *li, int sparams, int allow_alloc);
 int jl_is_toplevel_only_expr(jl_value_t *e);
-jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr);
+jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr);
 
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                            int cache, int inexact);

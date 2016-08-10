@@ -105,11 +105,13 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    Prints out a summary of what version and state ``pkg``\ , specifically, is in.
 
-.. function:: update()
+.. function:: update(pkgs...)
 
    .. Docstring generated from Julia source
 
    Update the metadata repo – kept in ``Pkg.dir("METADATA")`` – then update any fixed packages that can safely be pulled from their origin; then call ``Pkg.resolve()`` to determine a new optimal set of packages versions.
+
+   Without arguments, updates all installed packages. When one or more package names are provided as arguments, only those packages and their dependencies are updated.
 
 .. function:: checkout(pkg, [branch="master"]; merge=true, pull=true)
 

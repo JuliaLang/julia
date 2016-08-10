@@ -352,14 +352,16 @@ exception handling required:
     <BLANKLINE>
     y
 
-Julia uses UTF-8 encoding by default, and support for new encodings can
+Julia uses the UTF-8 encoding by default, and support for new encodings can
 be added by packages. For example, the `LegacyStrings.jl
 <https://github.com/JuliaArchive/LegacyStrings.jl>`_ package implements
 ``UTF16String`` and ``UTF32String`` types. Additional discussion of other
 encodings and how to implement support for them is beyond the scope of this
 document for the time being. For further discussion of UTF-8 encoding issues,
-see the section below on `byte array literals <#Byte+Array+Literals>`_,
-which goes into some greater detail.
+see the section below on `byte array literals <#Byte+Array+Literals>`_.
+The :func:`transcode` function is provided to convert data between
+the various UTF-xx encodings, primarily for working with external
+data and libraries.
 
 .. _man-string-interpolation:
 

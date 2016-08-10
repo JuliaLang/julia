@@ -271,44 +271,14 @@ end
 
 ## elementwise operators ##
 
-.÷(A::AbstractArray, B::AbstractArray) = broadcast(÷, A, B)
-.%(A::AbstractArray, B::AbstractArray) = broadcast(%, A, B)
-.<<(A::AbstractArray, B::AbstractArray) = broadcast(<<, A, B)
-.>>(A::AbstractArray, B::AbstractArray) = broadcast(>>, A, B)
-
+# should this be deprecated? Only use in Base is in sparsematrix.jl
 eltype_plus(As::AbstractArray...) = promote_eltype_op(+, As...)
 
-.+(As::AbstractArray...) = broadcast!(+, Array{eltype_plus(As...)}(to_shape(broadcast_shape(As...))), As...)
-
-function .-(A::AbstractArray, B::AbstractArray)
-    broadcast!(-, Array{promote_op(-, eltype(A), eltype(B))}(to_shape(broadcast_shape(A,B))), A, B)
+for op in (:÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
+    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast($(op), A, B)
 end
-
-eltype_mul(As::AbstractArray...) = promote_eltype_op(*, As...)
-
-.*(As::AbstractArray...) = broadcast!(*, Array{eltype_mul(As...)}(to_shape(broadcast_shape(As...))), As...)
-
-function ./(A::AbstractArray, B::AbstractArray)
-    broadcast!(/, Array{promote_op(/, eltype(A), eltype(B))}(to_shape(broadcast_shape(A, B))), A, B)
-end
-
-function .\(A::AbstractArray, B::AbstractArray)
-    broadcast!(\, Array{promote_op(\, eltype(A), eltype(B))}(to_shape(broadcast_shape(A, B))), A, B)
-end
-
-typealias RatIntT{T<:Integer} Union{Type{Rational{T}},Type{T}}
-typealias CRatIntT{T<:Integer} Union{Type{Complex{Rational{T}}},Type{Complex{T}},Type{Rational{T}},Type{T}}
-type_rdiv{T<:Integer,S<:Integer}(::RatIntT{T}, ::RatIntT{S}) =
-    Rational{promote_type(T,S)}
-type_rdiv{T<:Integer,S<:Integer}(::CRatIntT{T}, ::CRatIntT{S}) =
-    Complex{Rational{promote_type(T,S)}}
-function .//(A::AbstractArray, B::AbstractArray)
-    broadcast!(//, Array{type_rdiv(eltype(A), eltype(B))}(to_shape(broadcast_shape(A, B))), A, B)
-end
-
-function .^(A::AbstractArray, B::AbstractArray)
-    broadcast!(^, Array{promote_op(^, eltype(A), eltype(B))}(to_shape(broadcast_shape(A, B))), A, B)
-end
+.+(As::AbstractArray...) = broadcast(+, As...)
+.*(As::AbstractArray...) = broadcast(*, As...)
 
 # ## element-wise comparison operators returning BitArray ##
 
