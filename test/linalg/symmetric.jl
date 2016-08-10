@@ -236,3 +236,17 @@ let A = Symmetric(randn(5,5))
     B = -A
     @test A + B ≈ zeros(5,5)
 end
+
+# 17780
+let a = randn(2,2)
+    a = a'a
+    b = complex(a,a)
+    c = Symmetric(b)
+    @test conj(c) == conj(Array(c))
+    cc = copy(c)
+    @test conj!(c) == conj(Array(cc))
+    c = Hermitian(b + b')
+    @test conj(c) == conj(Array(c))
+    cc = copy(c)
+    @test conj!(c) == conj(Array(c))
+end

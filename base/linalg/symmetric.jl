@@ -114,6 +114,9 @@ end
 ctranspose(A::Hermitian) = A
 trace(A::Hermitian) = real(trace(A.data))
 
+Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
+Base.conj!(A::HermOrSym) = typeof(A)(conj!(A.data), A.uplo)
+
 #tril/triu
 function tril(A::Hermitian, k::Integer=0)
     if A.uplo == 'U' && k <= 0
