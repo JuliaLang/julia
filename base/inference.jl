@@ -2812,8 +2812,6 @@ function mk_tuplecall(args, sv::InferenceState)
     e
 end
 
-const corenumtype = Union{Int32,Int64,Float32,Float64}
-
 function inlining_pass!(linfo::LambdaInfo, sv::InferenceState)
     eargs = linfo.code
     i = 1
@@ -2833,6 +2831,8 @@ function inlining_pass!(linfo::LambdaInfo, sv::InferenceState)
         i += 1
     end
 end
+
+const corenumtype = Union{Int32, Int64, Float32, Float64}
 
 function inlining_pass(e::Expr, sv, linfo)
     if e.head === :method
@@ -2923,20 +2923,41 @@ function inlining_pass(e::Expr, sv, linfo)
         end
     end
 
-    if sv.inlining && isdefined(Main, :Base) &&
-        ((isdefined(Main.Base, :^) && is(f, Main.Base.:^)) ||
-         (isdefined(Main.Base, :.^) && is(f, Main.Base.:.^)))
-        if length(e.args) == 3 && isa(e.args[3],Union{Int32,Int64})
-            a1 = e.args[2]
-            basenumtype = Union{corenumtype, Main.Base.Complex64, Main.Base.Complex128, Main.Base.Rational}
-            if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,Slot) || isa(a1,SSAValue)) &&
-                                       exprtype(a1,sv) ⊑ basenumtype)
-                if e.args[3]==2
-                    e.args = Any[GlobalRef(Main.Base,:*), a1, a1]
-                    f = Main.Base.:*; ft = abstract_eval_constant(f)
-                elseif e.args[3]==3
-                    e.args = Any[GlobalRef(Main.Base,:*), a1, a1, a1]
-                    f = Main.Base.:*; ft = abstract_eval_constant(f)
+    if sv.inlining
+        if isdefined(Main, :Base) &&
+            ((isdefined(Main.Base, :^) && is(f, Main.Base.:^)) ||
+             (isdefined(Main.Base, :.^) && is(f, Main.Base.:.^))) &&
+            length(e.args) == 3
+
+            a2 = e.args[3]
+            if isa(a2, Symbol) || isa(a2, Slot) || isa(a2, SSAValue)
+                ta2 = exprtype(a2, sv)
+                if isa(ta2, Const)
+                    a2 = ta2.val
+                end
+            end
+
+            square = (a2 === Int32(2) || a2 === Int64(2))
+            triple = (a2 === Int32(3) || a2 === Int64(3))
+            if square || triple
+                a1 = e.args[2]
+                basenumtype = Union{corenumtype, Main.Base.Complex64, Main.Base.Complex128, Main.Base.Rational}
+                if isa(a1, basenumtype) || ((isa(a1, Symbol) || isa(a1, Slot) || isa(a1, SSAValue)) &&
+                                           exprtype(a1, sv) ⊑ basenumtype)
+                    if square
+                        e.args = Any[GlobalRef(Main.Base,:*), a1, a1]
+                        res = inlining_pass(e, sv, linfo)
+                    else
+                        e.args = Any[GlobalRef(Main.Base,:*), Expr(:call, GlobalRef(Main.Base,:*), a1, a1), a1]
+                        res = inlining_pass(e, sv, linfo)
+                    end
+                    if isa(res, Tuple)
+                        if isa(res[2], Array) && !isempty(res[2])
+                            append!(stmts, res[2])
+                        end
+                        res = res[1]
+                    end
+                    return (res, stmts)
                 end
             end
         end
