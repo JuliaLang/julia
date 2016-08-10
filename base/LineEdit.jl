@@ -447,10 +447,19 @@ function edit_replace(s, from, to, str)
 end
 
 function edit_insert(s::PromptState, c)
+    buf = s.input_buffer
+    function line_size()
+        p = position(buf)
+        seek(buf, rsearch(buf.data, '\n', p))
+        ls = p - position(buf)
+        seek(buf, p)
+        return ls
+    end
     str = string(c)
-    edit_insert(s.input_buffer, str)
-    if !('\n' in str) && eof(s.input_buffer) &&
-        ((position(s.input_buffer) + sizeof(s.p.prompt) + sizeof(str) - 1) < width(terminal(s)))
+    edit_insert(buf, str)
+    offset = s.ias.curs_row == 1 ? sizeof(s.p.prompt) : s.indent
+    if !('\n' in str) && eof(buf) &&
+        ((line_size() + offset + sizeof(str) - 1) < width(terminal(s)))
         # Avoid full update when appending characters to the end
         # and an update of curs_row isn't necessary (conservatively estimated)
         write(terminal(s), str)
