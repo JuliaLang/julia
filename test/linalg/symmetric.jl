@@ -199,3 +199,17 @@ let A = [1.0+im 2.0; 2.0 0.0]
     @test !ishermitian(A)
     @test_throws ArgumentError Hermitian(A)
 end
+
+# 17780
+let a = randn(2,2)
+    a = a'a
+    b = complex(a,a)
+    c = Symmetric(b)
+    @test conj(c) == conj(Array(c))
+    cc = copy(c)
+    @test conj!(c) == conj(Array(cc))
+    c = Hermitian(b + b')
+    @test conj(c) == conj(Array(c))
+    cc = copy(c)
+    @test conj!(c) == conj(Array(c))
+end
