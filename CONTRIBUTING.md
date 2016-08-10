@@ -73,7 +73,7 @@ However, porting a package to the latest release may cause the package to break 
 earlier Julia releases. To maintain compatibility across releases, use
 [`Compat.jl`](https://github.com/JuliaLang/Compat.jl/). Find the fix for your package
 from the README, and specify the minimum version of Compat that provides the fix
-in your REQUIRE file. To tag the correct minimum version, refer to
+in your REQUIRE file. To find the correct minimum version, refer to
 [this guide](https://github.com/JuliaLang/Compat.jl/#tagging-the-correct-minimum-version-of-compat).
 
 ### Writing tests
