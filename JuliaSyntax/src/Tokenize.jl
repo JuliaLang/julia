@@ -10,7 +10,7 @@ import .Tokens: untokenize
 
 export tokenize
 
-include("precompile.jl")
+# include("precompile.jl")
 # _precompile_()
 
 end # module
