@@ -408,7 +408,7 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
     else
         return t
     end
-    if inexact && !isvarargtype(R)
+    if inexact && (!cov || !isvarargtype(R))
         R = TypeVar(:_,R)
         push!(vars, R)
     end
@@ -467,12 +467,15 @@ function getfield_tfunc(s0::ANY, name)
             end
         end
         snames = s.name.names
-        for i=1:length(snames)
+        for i = 1:length(snames)
             if is(snames[i],fld)
                 R = s.types[i]
                 if isempty(s.parameters)
                     return R, true
                 else
+                    # conservatively limit the type depth here,
+                    # since the UnionAll type bound is otherwise incorrect
+                    # in the current type system
                     typ = limit_type_depth(R, 0, true,
                                            filter!(x->isa(x,TypeVar), Any[s.parameters...]))
                     return typ, isleaftype(s) && typeseq(typ, R)
@@ -493,8 +496,20 @@ function getfield_tfunc(s0::ANY, name)
             return Bottom, true
         end
         return s.types[i], false
+    elseif isempty(s.types)
+        return Bottom, true
+    elseif length(s.types) == 1 && isempty(s.parameters)
+        return s.types[1], true
     else
-        return reduce(tmerge, Bottom, map(unwrapva,s.types)) #=Union{s.types...}=#, false
+        R = reduce(tmerge, Bottom, map(unwrapva,s.types)) #=Union{s.types...}=#
+        # do the same limiting as the known-symbol case to preserve type-monotonicity
+        if isempty(s.parameters)
+            return R, typeseq(R, s.types[1])
+        else
+            typ = limit_type_depth(R, 0, true,
+                                   filter!(x->isa(x,TypeVar), Any[s.parameters...]))
+            return typ, isleaftype(s) && typeseq(typ, R)
+        end
     end
 end
 add_tfunc(getfield, 2, 2, (s,name)->getfield_tfunc(s,name)[1])
