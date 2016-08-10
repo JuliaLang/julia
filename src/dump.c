@@ -1634,7 +1634,7 @@ int jl_deserialize_verify_mod_list(ios_t *s)
         if (m->uuid != uuid) {
             jl_printf(JL_STDERR,
                       "WARNING: Module %s uuid did not match cache file\n"
-                      "  This is likely because module %s does not support"
+                      "  This is likely because module %s does not support\n"
                       "  precompilation but is imported by a module that does.\n",
                       name, name);
             return 0;
