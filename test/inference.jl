@@ -282,3 +282,27 @@ let I = Integer[]
     push!(I, 1)
     @test I == Any[1]
 end
+
+# issue #16530
+type Foo16530a{dim}
+    c::Vector{NTuple{dim, Float64}}
+    d::Vector
+end
+type Foo16530b{dim}
+    c::Vector{NTuple{dim, Float64}}
+end
+f16530a() = fieldtype(Foo16530a, :c)
+f16530a(c) = fieldtype(Foo16530a, c)
+f16530b() = fieldtype(Foo16530b, :c)
+f16530b(c) = fieldtype(Foo16530b, c)
+
+let T = Array{Tuple{Vararg{Float64,TypeVar(:dim)}},1},
+    TTlim = Type{TypeVar(:_,Array{TypeVar(:_,Tuple),1})}
+
+    @test f16530a() == T
+    @test f16530a(:c) == T
+    @test Base.return_types(f16530a, ()) == Any[TTlim]
+    @test Base.return_types(f16530b, ()) == Any[TTlim]
+    @test Base.return_types(f16530b, (Symbol,)) == Any[TTlim]
+end
+@test f16530a(:d) == Vector
