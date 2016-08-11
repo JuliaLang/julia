@@ -875,9 +875,7 @@ end
 @test isnan(sqrt(BigFloat(NaN)))
 
 # PR 17217 -- BigFloat constructors with given precision and rounding mode
-
 # test constructors and `big` with additional precision and rounding mode:
-
 for prec in (10, 100, 1000)
     for val in ("3.1", pi, "-1.3", 3.1)
         let

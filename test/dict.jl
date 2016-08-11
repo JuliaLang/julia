@@ -244,9 +244,7 @@ d4[1001] = randstring(3)
 @test isequal(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
 
 # get! (get with default values assigned to the given location)
-
 let f(x) = x^2, d = Dict(8=>19)
-
     @test get!(d, 8, 5) == 19
     @test get!(d, 19, 2) == 2
 
@@ -518,7 +516,6 @@ let d = Dict(zip(1:1000,1:1000)), f = (k,v) -> iseven(k)
 end
 
 # issue #15077
-
 immutable MyString <: AbstractString
     str::String
 end
@@ -585,7 +582,6 @@ let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9
                      0xd02c,0x862d,0x8f34,0xe529,0xf938,0x4f39,0xd03a,0x473b,0x1e3b,0x1d3a,
                      0xcc39,0x7339,0xcf40,0x8740,0x813d,0xe640,0xc443,0x6344,0x3744,0x2c3d,
                      0x8c48,0xdf49,0x5743]
-
     # Walk through all possible hash values (mod size of hash table)
     for offset = 0:1023
         d2 = Dict{MyInt, Int}()
@@ -651,7 +647,6 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 end
 
 # issue 19995
-
 @test hash(Dict(Dict(1=>2) => 3, Dict(4=>5) => 6)) != hash(Dict(Dict(4=>5) => 3, Dict(1=>2) => 6))
 let a = Dict(Dict(3 => 4, 2 => 3) => 2, Dict(1 => 2, 5 => 6) => 1)
     b = Dict(Dict(1 => 2, 2 => 3, 5 => 6) => 1, Dict(3 => 4) => 2)

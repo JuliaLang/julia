@@ -7,7 +7,6 @@ debug = false
 
 # Test givens rotations
 for elty in (Float32, Float64, Complex64, Complex128)
-
     debug && println("elty is $elty")
 
     if elty <: Real
