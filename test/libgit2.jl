@@ -621,7 +621,7 @@ mktempdir() do dir
         @test creds.pass == creds_pass
     #end
 
-    #@testset "SSH" begin
+    #= temporarily disabled until working on the buildbots, ref https://github.com/JuliaLang/julia/pull/17651#issuecomment-238211150
         sshd_command = ""
         ssh_repo = joinpath(dir, "Example.SSH")
         if !is_windows()
@@ -793,7 +793,7 @@ mktempdir() do dir
                 end
             end
         end
-    #end
+    =#
 end
 
 #end
