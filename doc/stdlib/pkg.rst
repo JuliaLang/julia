@@ -13,7 +13,7 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    .. Docstring generated from Julia source
 
-   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.6`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
+   Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.5`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
 .. function:: dir(names...) -> AbstractString
 
