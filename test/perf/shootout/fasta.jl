@@ -22,7 +22,7 @@ const IA  =   3877.0
 const IC  =  29573.0
 
 function gen_random()
-    global rng_state::Float64 = ((rng_state::Float64 * IA + IC) % IM) / IM
+    global rng_state = ((rng_state::Float64 * IA + IC) % IM) / IM
 end
 function repeat_fasta(src, n)
     k = length(src)
