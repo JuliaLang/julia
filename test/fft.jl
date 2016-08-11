@@ -326,3 +326,11 @@ for x in (randn(10),randn(10,12))
     # note: inference doesn't work for plan_fft_ since the
     #       algorithm steps are included in the CTPlan type
 end
+
+# issue #17896
+a = rand(5)
+@test  fft(a) ==  fft(view(a,:)) ==  fft(view(a, 1:5)) ==  fft(view(a, [1:5;]))
+@test rfft(a) == rfft(view(a,:)) == rfft(view(a, 1:5)) == rfft(view(a, [1:5;]))
+a16 = convert(Vector{Float16}, a)
+@test  fft(a16) ==  fft(view(a16,:)) ==  fft(view(a16, 1:5)) ==  fft(view(a16, [1:5;]))
+@test rfft(a16) == rfft(view(a16,:)) == rfft(view(a16, 1:5)) == rfft(view(a16, [1:5;]))
