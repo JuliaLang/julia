@@ -651,8 +651,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
        julia> eigmax(A)
        ERROR: DomainError:
-        in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:108
-        in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:106
+        in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:186
+        in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:184
+        ...
 
 .. function:: eigmin(A; permute::Bool=true, scale::Bool=true)
 
@@ -677,8 +678,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
        julia> eigmin(A)
        ERROR: DomainError:
-        in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:115
-        in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:113
+        in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:226
+        in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:224
+        ...
 
 .. function:: eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
 
