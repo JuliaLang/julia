@@ -2913,21 +2913,6 @@ Squared absolute value of `x`.
 abs2
 
 """
-    write(stream::IO, x)
-    write(filename::AbstractString, x)
-
-Write the canonical binary representation of a value to the given I/O stream or file.
-Returns the number of bytes written into the stream.
-
-You can write multiple values with the same :func:`write` call. i.e. the following are
-equivalent:
-
-    write(stream, x, y...)
-    write(stream, x) + write(stream, y...)
-"""
-write
-
-"""
     sizehint!(s, n)
 
 Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
