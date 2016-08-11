@@ -127,19 +127,19 @@ showerror(buf, m_error)
 error_out3 = takebuf_string(buf)
 
 if Base.have_color
-    @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
+    @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1)\e[1m\e[31m got unsupported keyword argument \"y\"\e[0m")
     @test contains(error_out, "method_c6(\e[1m\e[31m::Any\e[0m; y)$cfile$(c6line + 2)")
-    @test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
-    @test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
+    @test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2)\e[1m\e[31m got unsupported keyword argument \"x\"\e[0m")
+    @test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2)\e[1m\e[31m got unsupported keyword argument \"y\"\e[0m")
     @test contains(error_out2, "method_c6_in_module(\e[1m\e[31m::Any\e[0m; y)$cfile$(c6mline + 3)")
-    @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
+    @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3)\e[1m\e[31m got unsupported keyword argument \"x\"\e[0m")
 else
-    @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1) got an unsupported keyword argument \"y\"")
+    @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1) got unsupported keyword argument \"y\"")
     @test contains(error_out, "method_c6(!Matched::Any; y)$cfile$(c6line + 2)")
-    @test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2) got an unsupported keyword argument \"x\"")
-    @test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2) got an unsupported keyword argument \"y\"")
+    @test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2) got unsupported keyword argument \"x\"")
+    @test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2) got unsupported keyword argument \"y\"")
     @test contains(error_out2, "method_c6_in_module(!Matched::Any; y)$cfile$(c6mline + 3)")
-    @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3) got an unsupported keyword argument \"x\"")
+    @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3) got unsupported keyword argument \"x\"")
 end
 
 c7line = @__LINE__ + 1
@@ -150,16 +150,16 @@ test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; 
 c8line = @__LINE__ + 1
 method_c8(a, b; y=1, w=1) = a
 Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), [(:x, 1), (:y, 2), (:z, 1), (:w, 1)])
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line\e[1m\e[31m got an unsupported keyword argument \"x\", \"z\"\e[0m\e[0m",
-                     "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got an unsupported keyword argument \"x\", \"z\"")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line\e[1m\e[31m got unsupported keyword arguments \"x\", \"z\"\e[0m\e[0m",
+                     "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got unsupported keyword arguments \"x\", \"z\"")
 
 ac15639line = @__LINE__
 addConstraint_15639(c::Int32) = c
 addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), uncset=uncset)
 
 Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), [(:uncset, nothing)])
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1)\e[1m\e[31m got an unsupported keyword argument \"uncset\"\e[0m\n  addConstraint_15639(\e[1m\e[31m::Int64\e[0m; uncset)$cfile$(ac15639line + 2)\e[0m",
-                     "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got an unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1)\e[1m\e[31m got unsupported keyword argument \"uncset\"\e[0m\n  addConstraint_15639(\e[1m\e[31m::Int64\e[0m; uncset)$cfile$(ac15639line + 2)\e[0m",
+                     "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)")
 
 macro except_str(expr, err_type)
     return quote
