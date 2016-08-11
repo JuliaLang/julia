@@ -81,7 +81,6 @@ i = 1
 i = 2
 i = 3
 i = 4
-
 ```
 
 An example of referencing the created task:
@@ -99,7 +98,6 @@ take!(c) = "Hello"
 
 julia> istaskdone(taskref[])
 true
-
 ```
 """
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
@@ -175,7 +173,6 @@ i = 4
 
 julia> isopen(c)
 false
-
 ```
 
 ```jldoctest
@@ -193,7 +190,6 @@ ERROR: foo
 Stacktrace:
  [1] check_channel_state(::Channel{Any}) at ./channels.jl:129
  [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:247
-
 ```
 """
 function bind(c::Channel, task::Task)

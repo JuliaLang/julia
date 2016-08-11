@@ -208,8 +208,7 @@ end
 end
 
 @testset "log" begin
-    #  log(conj(z)) = conj(log(z))
-
+    # log(conj(z)) = conj(log(z))
     @test isequal(log(complex( 0.0, 0.0)), complex(-Inf, 0.0))
     @test isequal(log(complex( 0.0,-0.0)), complex(-Inf,-0.0))
     @test isequal(log(complex( 0.0, 1.0)), complex( 0.0, pi/2))
@@ -242,8 +241,7 @@ end
 end
 
 @testset "exp" begin
-    #  exp(conj(z)) = conj(exp(z))
-
+    # exp(conj(z)) = conj(exp(z))
     @test isequal(exp(complex( 0.0, 0.0)), complex(1.0, 0.0))
     @test isequal(exp(complex( 0.0,-0.0)), complex(1.0,-0.0))
     @test isequal(exp(complex( 0.0, Inf)), complex(NaN, NaN))
@@ -278,8 +276,7 @@ end
 end
 
 @testset "expm1" begin
-    #  expm1(conj(z)) = conj(expm1(z))
-
+    # expm1(conj(z)) = conj(expm1(z))
     @test isequal(expm1(complex( 0.0, 0.0)), complex(0.0, 0.0))
     @test isequal(expm1(complex( 0.0,-0.0)), complex(0.0,-0.0))
     @test isequal(expm1(complex( 0.0, Inf)), complex(NaN, NaN))
@@ -351,9 +348,9 @@ end
 
 
 @testset "^ (cpow)" begin
-    #  equivalent to exp(y*log(x))
-    #    except for 0^0?
-    #  conj(x)^conj(y) = conj(x^y)
+    # equivalent to exp(y*log(x))
+    #   except for 0^0?
+    # conj(x)^conj(y) = conj(x^y)
     @test isequal(complex( 0.0, 0.0)^complex( 0.0, 0.0), complex(1.0, 0.0))
     @test isequal(complex( 0.0, 0.0)^complex( 0.0,-0.0), complex(1.0, 0.0))
     @test isequal(complex( 0.0, 0.0)^complex(-0.0, 0.0), complex(1.0,-0.0))
@@ -489,8 +486,8 @@ end
 end
 
 @testset "tanh" begin
-    #  tanh(conj(z)) = conj(tanh(z))
-    #  tanh(-z) = -tanh(z)
+    # tanh(conj(z)) = conj(tanh(z))
+    # tanh(-z) = -tanh(z)
     @test isequal(tanh(complex( 0, 0)),complex(0.0,0.0)) #integer fallback
     @test isequal(tanh(complex( 0.0, 0.0)),complex(0.0,0.0))
     @test isequal(tanh(complex( 0.0,-0.0)),complex(0.0,-0.0))
@@ -528,8 +525,7 @@ end
 end
 
 @testset "tan" begin
-    #  tan(z) = -i tanh(iz)
-
+    # tan(z) = -i tanh(iz)
     @test isequal(tan(complex( 0.0, Inf)),complex( 0.0, 1.0))
     @test isequal(tan(complex( 0.0,-Inf)),complex( 0.0,-1.0))
     @test isequal(tan(complex( 0.0, NaN)),complex( 0.0, NaN))
@@ -557,8 +553,7 @@ end
 end
 
 @testset "acosh" begin
-    #  acosh(conj(z)) = conj(acosh(z))
-
+    # acosh(conj(z)) = conj(acosh(z))
     @test isequal(acosh(complex( 0.0, 0.0)), complex( 0.0, pi/2))
     @test isequal(acosh(complex( 0.0,-0.0)), complex( 0.0,-pi/2))
     @test isequal(acosh(complex( 0.0, Inf)), complex( Inf, pi/2))
@@ -591,8 +586,7 @@ end
 end
 
 @testset "acos" begin
-    ##  acos(conj(z)) = conj(acos(z))
-
+    # acos(conj(z)) = conj(acos(z))
     @test isequal(acos(complex( 0, 0)),complex(pi/2,-0.0)) #integer fallback
     @test isequal(acos(complex( 0.0, 0.0)),complex(pi/2,-0.0))
     @test isequal(acos(complex( 0.0,-0.0)),complex(pi/2, 0.0))
@@ -632,8 +626,8 @@ end
 end
 
 @testset "asinh" begin
-    ##  asinh(conj(z)) = conj(asinh(z))
-    ##  asinh(-z) = -asinh(z)
+    # asinh(conj(z)) = conj(asinh(z))
+    # asinh(-z) = -asinh(z)
     @test isequal(asinh(complex( 0.0, 0.0)),complex( 0.0, 0.0))
     @test isequal(asinh(complex( 0.0,-0.0)),complex( 0.0,-0.0))
     @test isequal(asinh(complex( 0.0, Inf)),complex( Inf, pi/2))
@@ -667,8 +661,7 @@ end
 end
 
 @testset "asin" begin
-    #  asin(z) = -i*asinh(iz)
-
+    # asin(z) = -i*asinh(iz)
     @test isequal(asin(complex( 0.0, 0.0)),complex( 0.0, 0.0))
     @test isequal(asin(complex( 0.0,-0.0)),complex( 0.0,-0.0))
     @test isequal(asin(complex(-0.0, 0.0)),complex(-0.0, 0.0))
@@ -701,9 +694,8 @@ end
 end
 
 @testset "atanh" begin
-    #  atanh(conj(z)) = conj(atanh(z))
-    #  atanh(-z) = -atanh(z)
-
+    # atanh(conj(z)) = conj(atanh(z))
+    # atanh(-z) = -atanh(z)
     @test isequal(atanh(complex( 0, 0)),complex( 0.0, 0.0)) #integer fallback
     @test isequal(atanh(complex( 0.0, 0.0)),complex( 0.0, 0.0))
     @test isequal(atanh(complex( 0.0,-0.0)),complex( 0.0,-0.0))
@@ -752,8 +744,7 @@ end
 end
 
 @testset "atan" begin
-    #  atan(z) = -i*atanh(iz)
-
+    # atan(z) = -i*atanh(iz)
     @test isequal(atan(complex( 0.0, 0.0)),complex( 0.0, 0.0))
     @test isequal(atan(complex( 0.0,-0.0)),complex( 0.0,-0.0))
     @test isequal(atan(complex( 0.0, 1.0)),complex( 0.0, Inf))

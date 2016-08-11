@@ -59,7 +59,6 @@ end
 
 # countfrom
 # ---------
-
 let i = 0
     for j = countfrom(0, 2)
         @test j == i*2
@@ -70,7 +69,6 @@ end
 
 # take
 # ----
-
 let t = take(0:2:8, 10), i = 0
     @test length(collect(t)) == 5
 
@@ -95,7 +93,6 @@ end
 
 # drop
 # ----
-
 let i = 0
     for j = drop(0:2:10, 2)
         @test j == (i+2)*2
@@ -111,7 +108,6 @@ end
 # double take
 # and take/drop canonicalization
 # -----------
-
 for xs in Any["abc", [1, 2, 3]]
     @test take(take(xs, 2), 3) === take(xs, 2)
     @test take(take(xs, 4), 2) === take(xs, 2)
@@ -125,7 +121,6 @@ end
 
 # cycle
 # -----
-
 let i = 0
     for j = cycle(0:3)
         @test j == i % 4
@@ -136,7 +131,6 @@ end
 
 # repeated
 # --------
-
 let i = 0
     for j = repeated(1, 10)
         @test j == 1
@@ -341,7 +335,6 @@ end
 
 # flatten
 # -------
-
 @test collect(flatten(Any[1:2, 4:5])) == Any[1,2,4,5]
 @test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[10:7, 10:9])])) == Any[1,2]
 @test collect(flatten(Any[flatten(Any[1:2, 4:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,4,5,6,7,8,9]

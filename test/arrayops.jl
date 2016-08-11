@@ -405,7 +405,6 @@ end
     @test find(isascii, g) == Int[]
 end
 @testset "findn" begin
-
     b = findn(ones(2,2,2,2))
     @test (length(b[1]) == 16)
     @test (length(b[2]) == 16)
@@ -443,7 +442,6 @@ end
 end
 
 @testset "permutedims" begin
-
     # keeps the num of dim
     p = randperm(5)
     q = randperm(5)
@@ -1902,7 +1900,6 @@ end
 end
 
 @testset "accumulate, accumulate!" begin
-
     @test accumulate(+, [1,2,3]) == [1, 3, 6]
     @test accumulate(min, [1 2; 3 4], 1) == [1 2; 1 2]
     @test accumulate(max, [1 2; 3 0], 2) == [1 2; 3 3]
