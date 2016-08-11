@@ -59,7 +59,7 @@ Returns the tuple of valid indices for array `A`.
 """
 function indices(A)
     @_inline_meta
-    map(s->OneTo(s), size(A))
+    map(OneTo, size(A))
 end
 
 # Performance optimization: get rid of a branch on `d` in `indices(A,
