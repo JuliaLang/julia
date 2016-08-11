@@ -9,11 +9,7 @@ all: micro kernel cat shootout blas lapack simd sort spell sparse
 
 micro kernel cat shootout blas lapack simd sort spell sparse:
 	@$(MAKE) $(QUIET_MAKE) -C $(SRCDIR)/shootout
-ifneq ($(OS),WINNT)
-	@$(call spawn,$(JULIA_EXECUTABLE)) $(SRCDIR)/$@/perf.jl | perl -nle '@_=split/,/; printf "%-18s %8.3f %8.3f %8.3f %8.3f\n", $$_[1], $$_[2], $$_[3], $$_[4], $$_[5]'
-else
-	@$(call spawn,$(JULIA_EXECUTABLE)) $(SRCDIR)/$@/perf.jl 2> /dev/null
-endif
+	@$(call spawn,$(JULIA_EXECUTABLE)) $(call cygpath_w,$(SRCDIR)/$@/perf.jl) | perl -nle '@_=split/,/; printf "%-18s %8.3f %8.3f %8.3f %8.3f\n", $$_[1], $$_[2], $$_[3], $$_[4], $$_[5]'
 
 codespeed:
 	@$(MAKE) $(QUIET_MAKE) -C $(SRCDIR)/shootout
