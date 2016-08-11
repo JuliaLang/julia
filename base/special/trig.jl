@@ -321,7 +321,7 @@ end
 
 for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
                                        (:acsc, :asin, :acsch, :asinh, "cosecant"),
-                                       (:acot, :atan, :acoth, :atahn, "cotangent"))
+                                       (:acot, :atan, :acoth, :atanh, "cotangent"))
     tname = string(tfa)
     hname = string(hfa)
     @eval begin
