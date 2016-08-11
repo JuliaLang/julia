@@ -61,6 +61,7 @@ zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inher
 zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
 zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
 zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
+zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
 
 
 immutable Zip1{I} <: AbstractZipIterator
