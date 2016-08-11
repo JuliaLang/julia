@@ -522,8 +522,9 @@
                                    ,else)))
                           (if (null? restkw)
                               ;; if no rest kw, give error for unrecognized
-                              `(call (top kwerr) ,kw ,@(map arg-name pargl),@(if (null? vararg) '()
-                                (list `(... ,(arg-name (car vararg))))))
+                              `(call (top kwerr) ,kw ,@(map arg-name pargl)
+                                     ,@(if (null? vararg) '()
+                                           (list `(... ,(arg-name (car vararg))))))
                               ;; otherwise add to rest keywords
                               `(ccall 'jl_array_ptr_1d_push Void (tuple Any Any)
                                       ,rkw (tuple ,elt
