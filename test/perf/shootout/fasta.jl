@@ -55,7 +55,7 @@ end
 
 rng_state = 42.0
 function fasta(n=25000000)
-  repeat_fasta(alu, 2n)
-  random_fasta(iub1, iub2, 3n)
-  random_fasta(homosapiens1, homosapiens2, 5n)
+    repeat_fasta(alu, 2n)
+    random_fasta(iub1, iub2, 3n)
+    random_fasta(homosapiens1, homosapiens2, 5n)
 end
