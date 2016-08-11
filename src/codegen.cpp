@@ -4315,9 +4315,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // step 7. set up GC frame
     allocate_gc_frame(b0, &ctx);
 
-    // step 8. allocate space for exception handler contexts
-
-    // step 9. allocate local variables slots
+    // step 8. allocate local variables slots
     // must be in the first basic block for the llvm mem2reg pass to work
 
     // get pointers for locals stored in the gc frame array (argTemp)
@@ -4381,7 +4379,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         maybe_alloc_arrayvar(i, &ctx);
     }
 
-    // step 10. move args into local variables
+    // step 9. move args into local variables
     Function::arg_iterator AI = f->arg_begin();
     if (ctx.sret)
         AI++; // skip sret slot
@@ -4484,7 +4482,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
     }
 
-    // step 11. allocate rest argument if necessary
+    // step 10. allocate rest argument if necessary
     if (va && ctx.vaSlot != -1) {
         jl_varinfo_t &vi = ctx.slots[ctx.vaSlot];
         if (!vi.escapes) {
@@ -4522,7 +4520,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
     }
 
-    // step 12. associate labels with basic blocks to resolve forward jumps
+    // step 11. associate labels with basic blocks to resolve forward jumps
     BasicBlock *prev=NULL;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *ex = jl_array_ptr_ref(stmts,i);
@@ -4542,7 +4540,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
     }
 
-    // step 13. compile body statements
+    // step 12. compile body statements
     if (ctx.debug_enabled)
         // set initial line number
         builder.SetCurrentDebugLocation(topdebugloc);
@@ -4720,7 +4718,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
     }
 
-    // step 14, Apply LLVM level inlining
+    // step 13, Apply LLVM level inlining
     for(std::vector<CallInst*>::iterator it = ctx.to_inline.begin(); it != ctx.to_inline.end(); ++it) {
         Function *inlinef = (*it)->getCalledFunction();
         assert(inlinef->getParent());
@@ -4735,7 +4733,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
     }
 
-    // step 15. Perform any delayed instantiations
+    // step 14. Perform any delayed instantiations
     if (ctx.debug_enabled) {
         ctx.dbuilder->finalize();
     }
