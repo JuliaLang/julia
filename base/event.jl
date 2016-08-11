@@ -42,20 +42,17 @@ notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, a
 function notify(c::Condition, arg, all, error)
     if all
         for t in c.waitq
-            schedule(t, arg, error=error)
+            error ? schedule(t, arg, error=error) : schedule(t, arg)
         end
         empty!(c.waitq)
     elseif !isempty(c.waitq)
         t = shift!(c.waitq)
-        schedule(t, arg, error=error)
+        error ? schedule(t, arg, error=error) : schedule(t, arg)
     end
     nothing
 end
 
-notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)
-
-notify_error(c::Condition, err) = notify(c, err, error=true)
-notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
+notify_error(c::Condition, err) = notify(c, err, true, true)
 
 
 # schedule an expression to run asynchronously, with minimal ceremony
@@ -217,7 +214,7 @@ type AsyncCondition
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), Condition())
         associate_julia_struct(this.handle, this)
-        preserve_handle(this)
+        preserve_handle_new(this)
         err = ccall(:uv_async_init, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
             eventloop(), this, uv_jl_asynccb::Ptr{Void})
         this
@@ -302,7 +299,7 @@ type Timer
         end
 
         associate_julia_struct(this.handle, this)
-        preserve_handle(this)
+        preserve_handle_new(this)
 
         ccall(:uv_update_time, Void, (Ptr{Void},), eventloop())
         ccall(:uv_timer_start,  Cint,  (Ptr{Void}, Ptr{Void}, UInt64, UInt64),
