@@ -20,22 +20,41 @@ export fft, ifft, bfft, fft!, ifft!, bfft!,
        plan_fft, plan_ifft, plan_bfft, plan_fft!, plan_ifft!, plan_bfft!,
        rfft, irfft, brfft, plan_rfft, plan_irfft, plan_brfft
 
-complexfloat{T<:AbstractFloat}(x::AbstractArray{Complex{T}}) = x
+typealias FFTWFloat Union{Float32,Float64}
+fftwfloat(x) = _fftwfloat(float(x))
+_fftwfloat{T<:FFTWFloat}(::Type{T}) = T
+_fftwfloat(::Type{Float16}) = Float32
+_fftwfloat{T}(::Type{T}) = error("type $T not supported")
+_fftwfloat{T}(x::T) = _fftwfloat(T)(x)
+
+complexfloat{T<:FFTWFloat}(x::StridedArray{Complex{T}}) = x
+realfloat{T<:FFTWFloat}(x::StridedArray{T}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
-complexfloat{T<:Complex}(x::AbstractArray{T}) = copy!(Array{typeof(float(one(T)))}(size(x)), x)
-complexfloat{T<:AbstractFloat}(x::AbstractArray{T}) = copy!(Array{typeof(complex(one(T)))}(size(x)), x)
-complexfloat{T<:Real}(x::AbstractArray{T}) = copy!(Array{typeof(complex(float(one(T))))}(size(x)), x)
+complexfloat{T<:Complex}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(one(T))), x)
+complexfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(complex(fftwfloat(one(T)))), x)
+
+realfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(one(T))), x)
+
+# copy to a 1-based array, using circular permutation
+function copy1{T}(::Type{T}, x)
+    y = Array{T}(map(length, indices(x)))
+    Base.circcopy!(y, x)
+end
+
+to1(x::AbstractArray) = _to1(indices(x), x)
+_to1(::Tuple{Base.OneTo,Vararg{Base.OneTo}}, x) = x
+_to1(::Tuple, x) = copy1(eltype(x), x)
 
 # implementations only need to provide plan_X(x, region)
 # for X in (:fft, :bfft, ...):
 for f in (:fft, :bfft, :ifft, :fft!, :bfft!, :ifft!, :rfft)
     pf = Symbol("plan_", f)
     @eval begin
-        $f(x::AbstractArray) = $pf(x) * x
-        $f(x::AbstractArray, region) = $pf(x, region) * x
-        $pf(x::AbstractArray; kws...) = $pf(x, 1:ndims(x); kws...)
+        $f(x::AbstractArray) = (y = to1(x); $pf(y) * y)
+        $f(x::AbstractArray, region) = (y = to1(x); $pf(y, region) * y)
+        $pf(x::AbstractArray; kws...) = (y = to1(x); $pf(y, 1:ndims(y); kws...))
     end
 end
 
@@ -187,11 +206,11 @@ for f in (:fft, :bfft, :ifft)
         $pf{T<:Union{Integer,Rational}}(x::AbstractArray{Complex{T}}, region; kws...) = $pf(complexfloat(x), region; kws...)
     end
 end
-rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region=1:ndims(x)) = rfft(float(x), region)
-plan_rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region; kws...) = plan_rfft(float(x), region; kws...)
+rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region=1:ndims(x)) = rfft(realfloat(x), region)
+plan_rfft(x::AbstractArray, region; kws...) = plan_rfft(realfloat(x), region; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
-*{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array{T}(size(x)), x)
+*{T}(p::Plan{T}, x::AbstractArray) = p * copy1(T, x)
 
 # Implementations should also implement A_mul_B!(Y, plan, X) so as to support
 # pre-allocated output arrays.  We don't define * in terms of A_mul_B!
