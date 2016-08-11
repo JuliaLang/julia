@@ -604,18 +604,6 @@ Indexing, Assignment, and Concatenation
         4  8  12  16
         1  5   9  13
 
-   See also ``circshift!``\ .
-
-.. function:: circshift!(dest, src, shifts)
-
-   .. Docstring generated from Julia source
-
-   Circularly shift the data in ``src``\ , storing the result in ``dest``\ . ``shifts`` specifies the amount to shift in each dimension.
-
-   The ``dest`` array must be distinct from the ``src`` array (they cannot alias each other).
-
-   See also ``circshift``\ .
-
 .. function:: find(A)
 
    .. Docstring generated from Julia source
