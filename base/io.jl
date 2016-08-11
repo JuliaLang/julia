@@ -23,6 +23,20 @@ function iswritable end
 function copy end
 function eof end
 
+"""
+    write(stream::IO, x)
+    write(filename::AbstractString, x)
+
+Write the canonical binary representation of a value to the given I/O stream or file.
+Returns the number of bytes written into the stream.
+
+You can write multiple values with the same `write` call. i.e. the following are equivalent:
+
+    write(stream, x, y...)
+    write(stream, x) + write(stream, y...)
+"""
+function write end
+
 read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
