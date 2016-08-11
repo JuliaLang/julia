@@ -1651,6 +1651,11 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     return R
 end
 
+# Add specialized methods for mapslices to improve performance
+for f in  [:sum, :prod, :mean, :var, :std]
+    @eval mapslices(f::typeof($f), A, dims) = $f(A, dims)
+end
+
 # These are needed because map(eltype, As) is not inferrable
 promote_eltype_op(::Any) = (@_pure_meta; Bottom)
 promote_eltype_op(op, A) = (@_pure_meta; promote_op(op, eltype(A)))
