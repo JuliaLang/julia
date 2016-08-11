@@ -21,10 +21,12 @@ end
 """
     enumerate(iter)
 
-An iterator that yields `(i, x)` where `i` is an index starting at 1, and
-`x` is the `i`th value from the given iterator. It's useful when you need
-not only the values `x` over which you are iterating, but also the index `i`
-of the iterations.
+An iterator that yields `(i, x)` where `i` is a counter starting at 1,
+and `x` is the `i`th value from the given iterator. It's useful when
+you need not only the values `x` over which you are iterating, but
+also the number of iterations so far. Note that `i` may not be valid
+for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
+has indices that do not start at 1.
 
 ```jldoctest
 julia> a = ["a", "b", "c"];
