@@ -875,6 +875,7 @@ end
 for T in (BigFloat, Float64)
     setrounding(T, RoundDown)
     @test rounding(T) == RoundDown
+    setrounding(T, RoundNearest)
 
     setrounding(T, RoundUp) do
         @test rounding(T) == RoundUp
@@ -1291,3 +1292,34 @@ end
 
 @test Compat.promote_eltype_op(@functorize(+), ones(2,2), 1) === Float64
 @test Compat.promote_eltype_op(@functorize(*), ones(Int, 2), zeros(Int16,2)) === Int
+
+#Add test for Base.normalize and Base.normalize!
+let
+    vr = [3.0, 4.0]
+    for Tr in (Float32, Float64)
+        for T in (Tr, Complex{Tr})
+            v = convert(Vector{T}, vr)
+            @test norm(v) == 5.0
+            w = normalize(v)
+            @test norm(w - [0.6, 0.8], Inf) < eps(Tr)
+            @test isapprox(norm(w), 1.0)
+            @test norm(normalize!(copy(v)) - w, Inf) < eps(Tr)
+            @test isempty(normalize!(T[]))
+        end
+    end
+end
+
+#Test potential overflow in normalize!
+let
+    δ = inv(prevfloat(typemax(Float64)))
+    v = [δ, -δ]
+    if VERSION > v"0.4.0-pre+7164"
+        @test norm(v) === 7.866824069956793e-309
+    end
+    w = normalize(v)
+    if VERSION > v"0.4.0-pre+7164"
+        @test w ≈ [1/√2, -1/√2]
+        @test isapprox(norm(w), 1.0)
+    end
+    @test norm(normalize!(v) - w, Inf) < eps()
+end

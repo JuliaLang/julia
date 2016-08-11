@@ -1100,6 +1100,44 @@ if !isdefined(Base, :Threads)
     export Threads
 end
 
+if !isdefined(Base, :normalize)
+    function normalize!(v::AbstractVector, p::Real=2)
+        nrm = norm(v, p)
+        __normalize!(v, nrm)
+    end
+
+    @inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
+        #The largest positive floating point number whose inverse is less than
+        #infinity
+        δ = inv(prevfloat(typemax(nrm)))
+        if nrm ≥ δ #Safe to multiply with inverse
+            invnrm = inv(nrm)
+            scale!(v, invnrm)
+        else # scale elements to avoid overflow
+            εδ = eps(one(nrm))/δ
+            scale!(v, εδ)
+            scale!(v, inv(nrm*εδ))
+        end
+        v
+    end
+
+    copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
+    copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
+
+    function normalize(v::AbstractVector, p::Real = 2)
+        nrm = norm(v, p)
+        if !isempty(v)
+            vv = copy_oftype(v, typeof(v[1]/nrm))
+            return __normalize!(vv, nrm)
+        else
+            T = typeof(zero(eltype(v))/nrm)
+            return T[]
+        end
+    end
+
+    export normalize, normalize! 
+end
+
 if !isdefined(Base, :AsyncCondition)
     const AsyncCondition = Base.SingleAsyncWork
 else
