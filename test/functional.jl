@@ -185,6 +185,7 @@ end
 @test Base.iteratorsize(repeated(0, 5))   == Base.HasLength()
 @test Base.iteratoreltype(repeated(0))    == Base.HasEltype()
 @test Base.iteratoreltype(repeated(0, 5)) == Base.HasEltype()
+@test Base.iteratorsize(zip(repeated(0), repeated(0))) == Base.IsInfinite()
 
 
 # product
