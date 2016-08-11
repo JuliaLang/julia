@@ -114,15 +114,15 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
     select = Array{BlasInt}(ncv)
     info   = zeros(BlasInt, 1)
 
-    dmap = x->abs(x)
+    dmap = abs
     if iparam[7] == 3 # shift-and-invert
         dmap = x->abs(1./(x-sigma))
     elseif which == "LR" || which == "LA" || which == "BE"
-        dmap = x->real(x)
+        dmap = real
     elseif which == "SR" || which == "SA"
         dmap = x->-real(x)
     elseif which == "LI"
-        dmap = x->imag(x)
+        dmap = imag
     elseif which == "SI"
         dmap = x->-imag(x)
     end
