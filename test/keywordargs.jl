@@ -9,7 +9,7 @@ kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
 @test kwf1(3, tens=7, hundreds=2) == 273
 
 @test_throws MethodError kwf1()             # no method, too few args
-@test_throws MethodError kwf1(1, z=0)    # unsupported keyword
+@test_throws MethodError kwf1(1, z=0)       # unsupported keyword
 @test_throws MethodError kwf1(1, 2)         # no method, too many positional args
 
 # keyword args plus varargs

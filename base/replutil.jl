@@ -533,7 +533,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     end
                     if !isempty(unexpected)
                         Base.with_output_color(:red, buf) do buf
-                            print(buf, " got an unsupported keyword argument \"", join(unexpected, "\", \""), "\"")
+                            plur = length(unexpected) > 1 ? "s" : ""
+                            print(buf, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
                         end
                     end
                 end
