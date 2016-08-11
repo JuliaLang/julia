@@ -220,19 +220,17 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # "Promotion" that takes a function into account. These are meant to be
 # used mainly by broadcast methods, so it is advised against overriding them
 if isdefined(Core, :Inference)
-    function _promote_op(op, T::Type)
+    function _promote_op(op, T::ANY)
         G = Tuple{Generator{Tuple{T},typeof(op)}}
-        R = Core.Inference.return_type(first, G)
-        return isleaftype(R) ? R : Any
+        return Core.Inference.return_type(first, G)
     end
-    function _promote_op(op, R::Type, S::Type)
+    function _promote_op(op, R::ANY, S::ANY)
         F = typeof(a -> op(a...))
         G = Tuple{Generator{Zip2{Tuple{R},Tuple{S}},F}}
-        T = Core.Inference.return_type(first, G)
-        return isleaftype(T) ? T : Any
+        return Core.Inference.return_type(first, G)
     end
 else
-    _promote_op(::Any...) = (@_pure_meta; Any)
+    _promote_op(::ANY...) = (@_pure_meta; Any)
 end
 _default_type(T::Type) = (@_pure_meta; T)
 
@@ -240,14 +238,15 @@ promote_op(::Any...) = (@_pure_meta; Any)
 promote_op(T::Type, ::Any) = (@_pure_meta; T)
 promote_op(T::Type, ::Type) = (@_pure_meta; T) # To handle ambiguities
 # Promotion that tries to preserve non-concrete types
-function promote_op(f, S::Type)
+function promote_op{S}(f, ::Type{S})
     T = _promote_op(f, _default_type(S))
-    return isleaftype(S) ? T : typejoin(S, T)
+    isleaftype(S) && return isleaftype(T) ? T : Any
+    return typejoin(S, T)
 end
-function promote_op(f, R::Type, S::Type)
+function promote_op{R,S}(f, ::Type{R}, ::Type{S})
     T = _promote_op(f, _default_type(R), _default_type(S))
-    isleaftype(R) && return isleaftype(S) ? T : typejoin(S, T)
-    return isleaftype(S) ? typejoin(R, T) : typejoin(R, S, T)
+    isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
+    return typejoin(R, S, T)
 end
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
