@@ -281,7 +281,7 @@ function TCPSocket()
         throw(UVError("failed to create tcp socket",err))
     end
     this.status = StatusInit
-    this
+    return this
 end
 
 type TCPServer <: LibuvServer
@@ -312,7 +312,7 @@ function TCPServer()
         throw(UVError("failed to create tcp server",err))
     end
     this.status = StatusInit
-    this
+    return this
 end
 
 isreadable(io::TCPSocket) = isopen(io) || nb_available(io) > 0
@@ -365,18 +365,10 @@ function UDPSocket()
         throw(UVError("failed to create udp socket",err))
     end
     this.status = StatusInit
-    this
+    return this
 end
 
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
-
-function uvfinalize(uv::Union{TTY,PipeEndpoint,PipeServer,TCPServer,TCPSocket,UDPSocket})
-    if (uv.status != StatusUninit && uv.status != StatusInit)
-        close(uv)
-    end
-    disassociate_julia_struct(uv)
-    uv.handle = C_NULL
-end
 
 function _uv_hook_close(sock::UDPSocket)
     sock.handle = C_NULL
