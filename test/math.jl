@@ -192,6 +192,16 @@ end
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
+#test abstractarray trig fxns
+TAA = rand(2,2)
+TAA = (TAA + TAA.')/2.
+STAA = Symmetric(TAA)
+@test full(atanh(STAA)) == atanh(TAA)
+@test full(asinh(STAA)) == asinh(TAA)
+@test full(acosh(STAA+Symmetric(ones(TAA)))) == acosh(TAA+ones(TAA))
+@test full(acsch(STAA+Symmetric(ones(TAA)))) == acsch(TAA+ones(TAA))
+@test full(acoth(STAA+Symmetric(ones(TAA)))) == acoth(TAA+ones(TAA))
+
 # check exp2(::Integer) matches exp2(::Float)
 for ii in -2048:2048
     expected = exp2(float(ii))
