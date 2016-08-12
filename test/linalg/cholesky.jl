@@ -74,15 +74,15 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test full(lapd) ≈ apd
     l = lapd[:L]
     @test l*l' ≈ apd
-    @test capd[:U] ≈ lapd[:U]
-    @test lapd[:L] ≈ capd[:L]
+    @test triu(capd.factors) ≈ lapd[:U]
+    @test tril(lapd.factors) ≈ capd[:L]
     if eltya <: Real
         capds = cholfact(apds)
-        lapds = cholfact(full(apds), :L)
+        lapds = cholfact(Symmetric(apds.data, :L))
         ls = lapds[:L]
         @test ls*ls' ≈ apd
-        @test capds[:U] ≈ lapds[:U]
-        @test lapds[:L] ≈ capds[:L]
+        @test triu(capds.factors) ≈ lapds[:U]
+        @test tril(lapds.factors) ≈ capds[:L]
     end
 
     #pivoted upper Cholesky
