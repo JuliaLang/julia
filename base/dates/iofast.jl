@@ -48,13 +48,13 @@ end
 end
 
 @inline function tryparsenext(::Type{Date},str,i)
-    R = Nullable{DateTime}
+    R = Nullable{Date}
     dy, i = @chk1 tryparsenext_base10(str,i,10)
     c,  i = @chk1 tryparsenext_char(str,i,'-')
     dm, i = @chk1 tryparsenext_base10(str,i,2)
     c,  i = @chk1 tryparsenext_char(str,i,'-')
     dd, i = @chk1 tryparsenext_base10(str,i,2)
-    d = DateTime(dy,dm,dd)
+    d = Date(dy,dm,dd)
     return R(d), i
 
     @label error
