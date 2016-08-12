@@ -775,9 +775,6 @@ function transpose(x)
     return x
 end
 
-@deprecate cholfact!(A::Base.LinAlg.HermOrSym, uplo::Symbol, ::Type{Val{false}}) cholfact!(A, Val{false})
-@deprecate cholfact!(A::Base.LinAlg.HermOrSym, uplo::Symbol = :U) cholfact!(A)
-
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
 

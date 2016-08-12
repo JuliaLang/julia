@@ -308,17 +308,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the square root of a non-negative number ``x``\ .
 
-.. function:: cholfact(A, [uplo::Symbol,] Val{false}) -> Cholesky
+.. function:: cholfact(A, uplo::Symbol, Val{false}) -> Cholesky
 
    .. Docstring generated from Julia source
 
-   Compute the Cholesky factorization of a dense symmetric positive definite matrix ``A`` and return a ``Cholesky`` factorization. The matrix ``A`` can either be a ``Symmetric`` or ``Hermitian`` ``StridedMatrix`` or a *perfectly* symmetric or Hermitian ``StridedMatrix``\ . In the latter case, the optional argument ``uplo`` may be ``:L`` for using the lower part or ``:U`` for the upper part of ``A``\ . The default is to use ``:U``\ . The triangular Cholesky factor can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``Cholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ . A ``PosDefException`` exception is thrown in case the matrix is not positive definite.
+   Compute the Cholesky factorization of a dense symmetric positive definite matrix ``A`` and return a ``Cholesky`` factorization. The ``uplo`` argument may be ``:L`` for using the lower part or ``:U`` for the upper part of ``A``\ . The default is to use ``:U``\ . The triangular Cholesky factor can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``Cholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ . A ``PosDefException`` exception is thrown in case the matrix is not positive definite.
 
-.. function:: cholfact(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted
+.. function:: cholfact(A, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
 
    .. Docstring generated from Julia source
 
-   Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix ``A`` and return a ``CholeskyPivoted`` factorization. The matrix ``A`` can either be a ``Symmetric`` or ``Hermitian`` ``StridedMatrix`` or a *perfectly* symmetric or Hermitian ``StridedMatrix``\ . In the latter case, the optional argument ``uplo`` may be ``:L`` for using the lower part or ``:U`` for the upper part of ``A``\ . The default is to use ``:U``\ . The triangular Cholesky factor can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``PivotedCholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ , and ``rank``\ . The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
+   Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix ``A`` and return a ``CholeskyPivoted`` factorization. The ``uplo`` argument may be ``:L`` for using the lower part or ``:U`` for the upper part of ``A``\ . The default is to use ``:U``\ . The triangular Cholesky factor can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``PivotedCholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ , and ``rank``\ . The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
 .. function:: cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
 
@@ -344,13 +344,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
 
-.. function:: cholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky
+.. function:: cholfact!(A, uplo::Symbol, Val{false}) -> Cholesky
 
    .. Docstring generated from Julia source
 
    The same as ``cholfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
 
-.. function:: cholfact!(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted
+.. function:: cholfact!(A, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
 
    .. Docstring generated from Julia source
 
