@@ -10,7 +10,7 @@ Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
 function Set(g::Generator)
     T = _default_eltype(typeof(g))
-    T === Union{} && return grow_to!(Set{T}(), g)
+    (isleaftype(T) || T === Union{}) || return grow_to!(Set{T}(), g)
     return Set{T}(g)
 end
 

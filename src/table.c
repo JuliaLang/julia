@@ -10,13 +10,13 @@
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
 
-void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
+JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
 {
     // Assume *pa don't need a write barrier
     // pa doesn't have to be a GC slot but *pa needs to be rooted
-    size_t sz = jl_array_len(*pa);
+    size_t sz = jl_array_len(a);
     size_t i;
-    void **ol = (void**)(*pa)->data;
+    void **ol = (void**)a->data;
     jl_array_t *newa = jl_alloc_vec_any(newsz);
     // keep the original array in the original slot since we need `ol`
     // to be valid in the loop below.
@@ -25,16 +25,16 @@ void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
         if (ol[i+1] != NULL) {
             (*jl_table_lookup_bp(&newa, ol[i])) = ol[i+1];
             jl_gc_wb(newa, ol[i+1]);
-             // it is however necessary here because allocation
+            // it is however necessary here because allocation
             // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
-    *pa = newa;
     // we do not check the write barrier here
     // because pa always points to a C stack location
     // (see jl_eqtable_put and jl_finalize_deserializer)
     // it should be changed if this assumption no longer holds
     JL_GC_POP();
+    return newa;
 }
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
@@ -44,6 +44,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     jl_array_t *a = *pa;
     size_t orig, index, iter;
     size_t newsz, sz = hash_size(a);
+    assert(sz >= 1);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
 
@@ -81,7 +82,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
         newsz = HT_N_INLINE;
     else
         newsz = sz<<2;
-    jl_idtable_rehash(pa, newsz);
+    *pa = jl_idtable_rehash(*pa, newsz);
 
     a = *pa;
     tab = (void**)a->data;
@@ -98,6 +99,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
 static void **jl_table_peek_bp(jl_array_t *a, void *key)
 {
     size_t sz = hash_size(a);
+    assert(sz >= 1);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
     uint_t hv = keyhash((jl_value_t*)key);

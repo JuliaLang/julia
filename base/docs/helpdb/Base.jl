@@ -10,26 +10,6 @@ Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `ift
 systemerror
 
 """
-    writedlm(f, A, delim='\\t')
-
-Write `A` (a vector, matrix or an iterable collection of iterable rows) as text to `f`
-(either a filename string or an `IO` stream) using the given delimiter `delim` (which
-defaults to tab, but can be any printable Julia object, typically a `Char` or
-`AbstractString`).
-
-For example, two vectors `x` and `y` of the same length can be written as two columns of
-tab-delimited text to `f` by either `writedlm(f, [x y])` or by `writedlm(f, zip(x, y))`.
-"""
-writedlm
-
-"""
-    digamma(x)
-
-Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
-"""
-digamma
-
-"""
     fill!(A, x)
 
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
@@ -68,25 +48,6 @@ Subtype operator, equivalent to `issubtype(T1,T2)`.
 Base.:(<:)
 
 """
-    schedule(t::Task, [val]; error=false)
-
-Add a task to the scheduler's queue. This causes the task to run constantly when the system
-is otherwise idle, unless the task performs a blocking operation such as `wait`.
-
-If a second argument is provided, it will be passed to the task (via the return value of
-`yieldto`) when it runs again. If `error` is `true`, the value is raised as an exception in
-the woken task.
-"""
-schedule
-
-"""
-    step(r)
-
-Get the step size of a [`Range`](:obj:`Range`) object.
-"""
-step
-
-"""
     takebuf_array(b::IOBuffer)
 
 Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
@@ -112,13 +73,6 @@ Return `string` with any leading whitespace removed. If `chars` (a character, or
 set of characters) is provided, instead remove characters contained in it.
 """
 lstrip
-
-"""
-    indmin(itr) -> Integer
-
-Returns the index of the minimum element in a collection.
-"""
-indmin
 
 """
     powermod(x, p, m)
@@ -159,13 +113,6 @@ isnan
 Print (using [`print`](:func:`print`)) `x` followed by a newline.
 """
 println
-
-"""
-    besselj(nu, x)
-
-Bessel function of the first kind of order `nu`, ``J_\\nu(x)``.
-"""
-besselj
 
 """
     //(num, den)
@@ -224,13 +171,6 @@ IPv6
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 """
 prod!
-
-"""
-    airybi(x)
-
-Airy function ``\\operatorname{Bi}(x)``.
-"""
-airybi
 
 """
     gensym([tag])
@@ -300,29 +240,6 @@ Returns `true` if `path` is a regular file, `false` otherwise.
 isfile
 
 """
-    task_local_storage(symbol)
-
-Look up the value of a symbol in the current task's task-local storage.
-"""
-task_local_storage(symbol)
-
-"""
-    task_local_storage(symbol, value)
-
-Assign a value to a symbol in the current task's task-local storage.
-"""
-task_local_storage(symbol, value)
-
-"""
-    task_local_storage(body, symbol, value)
-
-Call the function `body` with a modified task-local storage, in which `value` is assigned to
-`symbol`; the previous value of `symbol`, or lack thereof, is restored afterwards. Useful
-for emulating dynamic scoping.
-"""
-task_local_storage(body, symbol, value)
-
-"""
     diff(A, [dim])
 
 Finite difference operator of matrix or vector.
@@ -347,14 +264,6 @@ The text is assumed to be encoded in UTF-8.
 readlines
 
 """
-    findnz(A)
-
-Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
-values in matrix `A`, and `V` is a vector of the non-zero values.
-"""
-findnz
-
-"""
     foldl(op, v0, itr)
 
 Like [`reduce`](:func:`reduce`), but with guaranteed left associativity. `v0` will be used
@@ -369,13 +278,6 @@ Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In gene
 cannot be used with empty collections (see `reduce(op, itr)`).
 """
 foldl(op, itr)
-
-"""
-    airybiprime(x)
-
-Airy function derivative ``\\operatorname{Bi}'(x)``.
-"""
-airybiprime
 
 """
     Ac_rdiv_B(A, B)
@@ -436,20 +338,6 @@ Element-wise multiplication operator.
 Base.:(.*)
 
 """
-    ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation on `src` and put the result into `dest`.
-"""
-ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer)
-
-"""
-    ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation on `B`.
-"""
-ror!(B::BitArray{1}, i::Integer)
-
-"""
     range(start, [step], length)
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
@@ -505,19 +393,6 @@ Get a backtrace object for the current program point.
 backtrace
 
 """
-    reducedim(f, A, dims[, initial])
-
-Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the
-dimensions to reduce, and `initial` is the initial value to use in the reductions. For `+`, `*`,
-`max` and `min` the `initial` argument is optional.
-
-The associativity of the reduction is implementation-dependent; if you need a particular
-associativity, e.g. left-to-right, you should write your own loop. See documentation for
-`reduce`.
-"""
-reducedim
-
-"""
     -(x)
 
 Unary minus operator.
@@ -570,13 +445,6 @@ Nullable
 A string giving the literal bit representation of a number.
 """
 bits
-
-"""
-    invdigamma(x)
-
-Compute the inverse digamma function of `x`.
-"""
-invdigamma
 
 """
     getindex(type[, elements...])
@@ -656,13 +524,6 @@ Print elements of `items` to `io` with `delim` between them. If `last` is specif
 used as the final delimiter instead of `delim`.
 """
 join(io, items, delim, last)
-
-"""
-    lfact(x)
-
-Compute the logarithmic factorial of `x`
-"""
-lfact
 
 """
     deconv(b,a)
@@ -785,13 +646,6 @@ Get the local machine's host name.
 gethostname
 
 """
-    hankelh1x(nu, x)
-
-Scaled Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x) e^{-x i}``.
-"""
-hankelh1x
-
-"""
     replace(string, pat, r[, n])
 
 Search for the given pattern `pat`, and replace each occurrence with `r`. If `n` is
@@ -859,13 +713,6 @@ macroexpand
 Returns `true` if `path` has the sticky bit set, `false` otherwise.
 """
 issticky
-
-"""
-    rol(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation.
-"""
-rol
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -941,13 +788,6 @@ This would create a 25-by-30000 `BitArray`, linked to the file associated with s
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 """
-    airyprime(x)
-
-Airy function derivative ``\\operatorname{Ai}'(x)``.
-"""
-airyprime
-
-"""
     bessely0(x)
 
 Bessel function of the second kind of order 0, ``Y_0(x)``.
@@ -976,13 +816,6 @@ filter!
 Decodes the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded bytes.
 """
 base64decode
-
-"""
-    besselkx(nu, x)
-
-Scaled modified Bessel function of the second kind of order `nu`, ``K_\\nu(x) e^x``.
-"""
-besselkx
 
 """
     oct(n, [pad])
@@ -1077,15 +910,6 @@ Test whether a matrix is lower triangular.
 istril
 
 """
-    lgamma(x)
-
-Compute the logarithm of the absolute value of [`gamma`](:func:`gamma`) for
-[`Real`](:obj:`Real`) `x`, while for [`Complex`](:obj:`Complex`) `x` it computes the
-logarithm of `gamma(x)`.
-"""
-lgamma
-
-"""
     bin(n, [pad])
 
 Convert an integer to a binary string, optionally specifying a number of digits to pad to.
@@ -1120,17 +944,6 @@ representable.
 ceil
 
 """
-    mapslices(f, A, dims)
-
-Transform the given dimensions of array `A` using function `f`. `f` is called on each slice
-of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the
-colons go in this expression. The results are concatenated along the remaining dimensions.
-For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
-for all `i` and `j`.
-"""
-mapslices
-
-"""
     issocket(path) -> Bool
 
 Returns `true` if `path` is a socket, `false` otherwise.
@@ -1147,13 +960,6 @@ or a filename, in which case the seed is read from a file. `RandomDevice` does n
 seeding.
 """
 srand
-
-"""
-    acot(x)
-
-Compute the inverse cotangent of `x`, where the output is in radians.
-"""
-acot
 
 """
     oftype(x, y)
@@ -1214,14 +1020,6 @@ greater than 1, and `x` must not be less than 1.
 prevpow
 
 """
-    indexin(a, b)
-
-Returns a vector containing the highest index in `b` for each value in `a` that is a member
-of `b` . The output vector contains 0 wherever `a` is not a member of `b`.
-"""
-indexin
-
-"""
     permutedims(A, perm)
 
 Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
@@ -1251,20 +1049,6 @@ fldmod
 Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
 """
 promote
-
-"""
-    @schedule
-
-Wrap an expression in a `Task` and add it to the local machine's scheduler queue.
-"""
-:@schedule
-
-"""
-    bessely(nu, x)
-
-Bessel function of the second kind of order `nu`, ``Y_\\nu(x)``.
-"""
-bessely
 
 """
     gradient(F, [h])
@@ -1377,13 +1161,6 @@ Like `randsubseq`, but the results are stored in `S` (which is resized as needed
 randsubseq!
 
 """
-    maximum(itr)
-
-Returns the largest element in a collection.
-"""
-maximum(itr)
-
-"""
     maximum(A, dims)
 
 Compute the maximum value of an array over the given dimensions.
@@ -1443,15 +1220,6 @@ Connect to the named pipe / UNIX domain socket at `path`.
 connect(path)
 
 """
-    mean(v[, region])
-
-Compute the mean of whole array `v`, or optionally along the dimensions in `region`. Note:
-Julia does not ignore `NaN` values in the computation. For applications requiring the
-handling of missing data, the `DataArray` package is recommended.
-"""
-mean
-
-"""
     split(string, [chars]; limit=0, keep=true)
 
 Return an array of substrings by splitting the given string on occurrences of the given
@@ -1492,13 +1260,6 @@ Receive the next value passed to `produce` by the specified task. Additional arg
 be passed, to be returned from the last `produce` call in the producer.
 """
 consume
-
-"""
-    hankelh2x(nu, x)
-
-Scaled Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x) e^{x i}``.
-"""
-hankelh2x
 
 """
     ndigits(n, b = 10)
@@ -1562,13 +1323,6 @@ sum!
 Close an I/O stream. Performs a `flush` first.
 """
 close(stream::IO)
-
-"""
-    cospi(x)
-
-Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
-"""
-cospi
 
 """
     parentindexes(A)
@@ -1646,23 +1400,6 @@ Dict{String,Float64} with 3 entries:
 ```
 """
 merge
-
-"""
-    circshift(A,shifts)
-
-Circularly shift the data in an array. The second argument is a vector giving the amount to
-shift in each dimension.
-"""
-circshift
-
-"""
-    yield()
-
-Switch to the scheduler to allow another scheduled task to run. A task that calls this
-function is still runnable, and will be restarted immediately if there are no other runnable
-tasks.
-"""
-yield
 
 """
     transpose!(dest,src)
@@ -1772,13 +1509,6 @@ process_exited
 Construct a tuple of the given objects.
 """
 tuple
-
-"""
-    besseli(nu, x)
-
-Modified Bessel function of the first kind of order `nu`, ``I_\\nu(x)``.
-"""
-besseli
 
 """
     eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
@@ -1902,21 +1632,6 @@ Bitwise and.
 &
 
 """
-    besselyx(nu, x)
-
-Scaled Bessel function of the second kind of order `nu`,
-``Y_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
-"""
-besselyx
-
-"""
-    eigmax(A)
-
-Returns the largest eigenvalue of `A`.
-"""
-eigmax
-
-"""
     PipeBuffer()
 
 An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are
@@ -1962,13 +1677,6 @@ Log of matrix determinant. Equivalent to `log(det(M))`, but may provide increase
 and/or speed.
 """
 logdet
-
-"""
-    hcat(A...)
-
-Concatenate along dimension 2.
-"""
-hcat
 
 """
     select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -2184,14 +1892,6 @@ Element-wise greater-than-or-equals comparison operator.
 Base.:(.>=)
 
 """
-    stdm(v, m)
-
-Compute the sample standard deviation of a vector `v` with known mean `m`. Note: Julia does
-not ignore `NaN` values in the computation.
-"""
-stdm
-
-"""
     mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
 Move the file, link, or directory from `src` to `dst`. `remove_destination=true` will first
@@ -2271,13 +1971,6 @@ In-place version of [`reverse`](:func:`reverse`).
 reverse!
 
 """
-    flipdim(A, d)
-
-Reverse `A` in dimension `d`.
-"""
-flipdim
-
-"""
     num(x)
 
 Numerator of the rational representation of `x`.
@@ -2351,22 +2044,6 @@ Bessel function of the second kind of order 1, ``Y_1(x)``.
 bessely1
 
 """
-    cumprod(A, [dim])
-
-Cumulative product along a dimension `dim` (defaults to 1). See also
-[`cumprod!`](:func:`cumprod!`) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow).
-"""
-cumprod
-
-"""
-    besseljx(nu, x)
-
-Scaled Bessel function of the first kind of order `nu`, ``J_\\nu(x) e^{- | \\operatorname{Im}(x) |}``.
-"""
-besseljx
-
-"""
     print(x)
 
 Write (to the default output stream) a canonical (un-decorated) text representation of a
@@ -2421,21 +2098,6 @@ themselves in another collection. The result is of the preceding example is equi
 """
 append!
 
-"""
-    find(A)
-
-Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[i]!=0`). A
-common use of this is to convert a boolean array to an array of indexes of the `true`
-elements.
-"""
-find(A)
-
-"""
-    find(f,A)
-
-Return a vector of the linear indexes of `A` where `f` returns `true`.
-"""
-find(f, A)
 
 """
     ctranspose(A)
@@ -2459,33 +2121,11 @@ Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
 lu
 
 """
-    @task
-
-Wrap an expression in a `Task` without executing it, and return the `Task`. This only
-creates a task, and does not run it.
-"""
-:@task
-
-"""
     fld(x, y)
 
 Largest integer less than or equal to `x/y`.
 """
 fld
-
-"""
-    indmax(itr) -> Integer
-
-Returns the index of the maximum element in a collection.
-"""
-indmax
-
-"""
-    writecsv(filename, A)
-
-Equivalent to `writedlm` with `delim` set to comma.
-"""
-writecsv
 
 """
     withenv(f::Function, kv::Pair...)
@@ -2600,57 +2240,11 @@ Extract a named field from a `value` of composite type. The syntax `a.b` calls
 getfield
 
 """
-    hvcat(rows::Tuple{Vararg{Int}}, values...)
-
-Horizontal and vertical concatenation in one call. This function is called for block matrix
-syntax. The first argument specifies the number of arguments to concatenate in each block
-row.
-
-```jldoctest
-julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
-(1,2,3,4,5,6)
-
-julia> [a b c; d e f]
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> hvcat((3,3), a,b,c,d,e,f)
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
-
-julia> [a b;c d; e f]
-3×2 Array{Int64,2}:
- 1  2
- 3  4
- 5  6
-
-julia> hvcat((2,2,2), a,b,c,d,e,f)
-3×2 Array{Int64,2}:
- 1  2
- 3  4
- 5  6
-```
-
-If the first argument is a single integer `n`, then all block rows are assumed to have `n`
-block columns.
-"""
-hvcat
-
-"""
     besselj1(x)
 
 Bessel function of the first kind of order 1, ``J_1(x)``.
 """
 besselj1
-
-"""
-    sinpi(x)
-
-Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
-"""
-sinpi
 
 """
     select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -2684,24 +2278,6 @@ prod(itr)
 Multiply elements of an array over the given dimensions.
 """
 prod(A, dims)
-
-"""
-    Base.linearindexing(A)
-
-`linearindexing` defines how an AbstractArray most efficiently accesses its elements. If
-`Base.linearindexing(A)` returns `Base.LinearFast()`, this means that linear indexing with
-only one index is an efficient operation. If it instead returns `Base.LinearSlow()` (by
-default), this means that the array intrinsically accesses its elements with indices
-specified for every dimension. Since converting a linear index to multiple indexing
-subscripts is typically very expensive, this provides a traits-based mechanism to enable
-efficient generic code for all array types.
-
-An abstract array subtype `MyArray` that wishes to opt into fast linear indexing behaviors
-should define `linearindexing` in the type-domain:
-
-    Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
-"""
-Base.linearindexing
 
 """
     isqrt(n)
@@ -2768,13 +2344,6 @@ Create all directories in the given `path`, with permissions `mode`. `mode` defa
 `0o777`, modified by the current file creation mask.
 """
 mkpath
-
-"""
-    besselix(nu, x)
-
-Scaled modified Bessel function of the first kind of order `nu`, ``I_\\nu(x) e^{- | \\operatorname{Re}(x) |}``.
-"""
-besselix
 
 """
     union(s1,s2...)
@@ -3010,20 +2579,6 @@ Get the concrete type of `x`.
 typeof
 
 """
-    drop(iter, n)
-
-An iterator that generates all but the first `n` elements of `iter`.
-"""
-drop
-
-"""
-    acsc(x)
-
-Compute the inverse cosecant of `x`, where the output is in radians
-"""
-acsc
-
-"""
     log(x)
 
 Compute the natural logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
@@ -3088,31 +2643,6 @@ Compute the inverse error function of a real `x`, defined by ``\\operatorname{er
 erfinv
 
 """
-    @async
-
-Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
-machine's scheduler queue. Additionally it adds the task to the set of items that the
-nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...`
-block to create a new scope with copies of all variables referenced in the expression.
-"""
-:@async
-
-"""
-    rotr90(A)
-
-Rotate matrix `A` right 90 degrees.
-"""
-rotr90(A)
-
-"""
-    rotr90(A, k)
-
-Rotate matrix `A` right 90 degrees an integer `k` number of times. If `k` is zero or a
-multiple of four, this is equivalent to a `copy`.
-"""
-rotr90(A, k)
-
-"""
     readdir([dir]) -> Vector{String}
 
 Returns the files and directories in the directory `dir` (or the current working directory if not given).
@@ -3125,13 +2655,6 @@ readdir
 Seek a stream to the given position.
 """
 seek
-
-"""
-    acosd(x)
-
-Compute the inverse cosine of `x`, where the output is in degrees.
-"""
-acosd
 
 """
     triu(M)
@@ -3171,13 +2694,6 @@ Compute the inverse error complementary function of a real `x`, defined by
 erfcinv
 
 """
-    minabs(itr)
-
-Compute the minimum absolute value of a collection of values.
-"""
-minabs(itr)
-
-"""
     minabs(A, dims)
 
 Compute the minimum absolute values over given dimensions.
@@ -3194,103 +2710,11 @@ second variant.
 popdisplay
 
 """
-    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')
-
-Read a matrix from the source where each line (separated by `eol`) gives one row, with
-elements separated by the given delimiter. The source can be a text file, stream or byte
-array. Memory mapped files can be used by passing the byte array representation of the
-mapped segment as source.
-
-If `T` is a numeric type, the result is an array of that type, with any non-numeric elements
-as `NaN` for floating-point types, or zero. Other useful values of `T` include
-`String`, `AbstractString`, and `Any`.
-
-If `header` is `true`, the first row of data will be read as header and the tuple
-`(data_cells, header_cells)` is returned instead of only `data_cells`.
-
-Specifying `skipstart` will ignore the corresponding number of initial lines from the input.
-
-If `skipblanks` is `true`, blank lines in the input will be ignored.
-
-If `use_mmap` is `true`, the file specified by `source` is memory mapped for potential
-speedups. Default is `true` except on Windows. On Windows, you may want to specify `true` if
-the file is large, and is only read once and not written to.
-
-If `quotes` is `true`, columns enclosed within double-quote (\") characters are allowed to
-contain new lines and column delimiters. Double-quote characters within a quoted field must
-be escaped with another double-quote.  Specifying `dims` as a tuple of the expected rows and
-columns (including header, if any) may speed up reading of large files.  If `comments` is
-`true`, lines beginning with `comment_char` and text following `comment_char` in any line
-are ignored.
-"""
-readdlm(source, delim, T, eol)
-
-"""
-    readdlm(source, delim::Char, eol::Char; options...)
-
-If all data is numeric, the result will be a numeric array. If some elements cannot be
-parsed as numbers, a heterogeneous array of numbers and strings is returned.
-"""
-readdlm(source, delim::Char, eol::Char)
-
-"""
-    readdlm(source, delim::Char, T::Type; options...)
-
-The end of line delimiter is taken as `\\n`.
-"""
-readdlm(source, delim::Char, T::Type)
-
-"""
-    readdlm(source, delim::Char; options...)
-
-The end of line delimiter is taken as `\\n`. If all data is numeric, the result will be a
-numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of
-numbers and strings is returned.
-"""
-readdlm(source, delim::Char)
-
-"""
-    readdlm(source, T::Type; options...)
-
-The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `\\n`.
-"""
-readdlm(source, T::Type)
-
-"""
-    readdlm(source; options...)
-
-The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `\\n`. If all data is numeric, the result will be a numeric array. If
-some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings
-is returned.
-"""
-readdlm(source)
-
-"""
     filesize(path...)
 
 Equivalent to `stat(file).size`.
 """
 filesize
-
-"""
-    sinc(x)
-
-Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
-"""
-sinc
-
-"""
-    median(v[, region])
-
-Compute the median of whole array `v`, or optionally along the dimensions in `region`. For
-even number of elements no exact median element exists, so the result is equivalent to
-calculating mean of two median elements. `NaN` is returned if the data contains any `NaN`
-values. For applications requiring the handling of missing data, the `DataArrays` package is
-recommended.
-"""
-median
 
 """
     cglobal((symbol, library) [, type=Void])
@@ -3309,14 +2733,6 @@ Get the multiplicative identity element for the type of `x` (`x` can also specif
 itself). For matrices, returns an identity matrix of the appropriate size and type.
 """
 one
-
-"""
-    rationalize([Type=Int,] x; tol=eps(x))
-
-Approximate floating point number `x` as a Rational number with components of the given
-integer type. The result will differ from `x` by no more than `tol`.
-"""
-rationalize
 
 """
     splice!(collection, index, [replacement]) -> item
@@ -3536,13 +2952,6 @@ Test whether `n` is a power of two.
 ispow2
 
 """
-    vcat(A...)
-
-Concatenate along dimension 1.
-"""
-vcat
-
-"""
     isgraph(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character is printable, and not a space, or whether this is true for all
@@ -3560,16 +2969,6 @@ handle properly.
 OutOfMemoryError
 
 """
-    zip(iters...)
-
-For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
-the `i`th component of each input iterable.
-
-Note that [`zip`](:func:`zip`) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
-"""
-zip
-
-"""
     SystemError(prefix::AbstractString, [errno::Int32])
 
 A system call failed with an error code (in the `errno` global variable).
@@ -3584,34 +2983,12 @@ Number of ways to choose `k` out of `n` items.
 binomial
 
 """
-    rot180(A)
-
-Rotate matrix `A` 180 degrees.
-"""
-rot180(A)
-
-"""
-    rot180(A, k)
-
-Rotate matrix `A` 180 degrees an integer `k` number of times. If `k` is even, this is
-equivalent to a `copy`.
-"""
-rot180(A, k)
-
-"""
     .<=(x, y)
     .≤(x,y)
 
 Element-wise less-than-or-equals comparison operator.
 """
 Base.:(.<=)
-
-"""
-    asec(x)
-
-Compute the inverse secant of `x`, where the output is in radians.
-"""
-asec
 
 """
     rank(M)
@@ -3791,14 +3168,6 @@ results `A[ks...]`, where `ks` goes over the positions in the broadcast.
 broadcast_getindex
 
 """
-    findn(A)
-
-Return a vector of indexes for each dimension giving the locations of the non-zeros in `A`
-(determined by `A[i]!=0`).
-"""
-findn
-
-"""
     invoke(f, (types...), args...)
 
 Invoke a method for the given generic function matching the specified types (as a tuple), on
@@ -3929,26 +3298,11 @@ array, but with the specified element type.
 reinterpret
 
 """
-    squeeze(A, dims)
-
-Remove the dimensions specified by `dims` from array `A`. Elements of `dims` must be unique
-and within the range `1:ndims(A)`.
-"""
-squeeze
-
-"""
     ~(x)
 
 Bitwise not.
 """
 ~
-
-"""
-    hankelh1(nu, x)
-
-Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x)``.
-"""
-hankelh1
 
 """
     rem(x, y)
@@ -3964,40 +3318,11 @@ x == div(x,y)*y + rem(x,y)
 rem
 
 """
-    rotl90(A)
-
-Rotate matrix `A` left 90 degrees.
-"""
-rotl90(A)
-
-"""
-    rotl90(A, k)
-
-Rotate matrix `A` left 90 degrees an integer `k` number of times. If `k` is zero or a
-multiple of four, this is equivalent to a `copy`.
-"""
-rotl90(A, k)
-
-"""
     info(msg)
 
 Display an informational message. Argument `msg` is a string describing the information to be displayed.
 """
 info
-
-"""
-    eigmin(A)
-
-Returns the smallest eigenvalue of `A`.
-"""
-eigmin
-
-"""
-    acscd(x)
-
-Compute the inverse cosecant of `x`, where the output is in degrees.
-"""
-acscd
 
 """
     ltoh(x)
@@ -4280,18 +3605,6 @@ Delete the mapping for the given key in a collection, and return the collection.
 delete!
 
 """
-    std(v[, region])
-
-Compute the sample standard deviation of a vector or array `v`, optionally along dimensions
-in `region`. The algorithm returns an estimator of the generative distribution's standard
-deviation under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sqrt(sum((v - mean(v)).^2) /
-(length(v) - 1))`. Note: Julia does not ignore `NaN` values in the computation. For
-applications requiring the handling of missing data, the `DataArray` package is recommended.
-"""
-std
-
-"""
     chr2ind(string, i)
 
 Convert a character index to a byte index.
@@ -4414,13 +3727,6 @@ Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` af
 module_parent
 
 """
-    airyaiprime(x)
-
-Airy function derivative ``\\operatorname{Ai}'(x)``.
-"""
-airyaiprime
-
-"""
     prepend!(collection, items) -> collection
 
 Insert the elements of `items` to the beginning of `collection`.
@@ -4465,13 +3771,6 @@ eye(n::Int)
 eye(m, n)
 
 """
-    eye(A)
-
-Constructs an identity matrix of the same dimensions and type as `A`.
-"""
-eye(A)
-
-"""
     diagind(M[, k])
 
 A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
@@ -4502,13 +3801,6 @@ Change the owner and/or group of `path` to `owner` and/or `group`. If the value 
 is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
 """
 chown
-
-"""
-    gamma(x)
-
-Compute the gamma function of `x`.
-"""
-gamma
 
 """
     sin(x)
@@ -4590,13 +3882,6 @@ Like `selectperm`, but accepts a preallocated index vector `ix`. If `initialized
 selectperm!
 
 """
-    istaskdone(task) -> Bool
-
-Tell whether a task has exited.
-"""
-istaskdone
-
-"""
     .>(x, y)
 
 Element-wise greater-than comparison operator.
@@ -4648,13 +3933,6 @@ Compute the inverse hyperbolic sine of `x`.
 asinh
 
 """
-    count(p, itr) -> Integer
-
-Count the number of elements in `itr` for which predicate `p` returns `true`.
-"""
-count
-
-"""
     atreplinit(f)
 
 Register a one-argument function to be called before the REPL interface is initialized in
@@ -4671,20 +3949,6 @@ Return `string` with any leading and trailing whitespace removed. If `chars` (a 
 or vector or set of characters) is provided, instead remove characters contained in it.
 """
 strip
-
-"""
-    findin(a, b)
-
-Returns the indices of elements in collection `a` that appear in collection `b`.
-"""
-findin
-
-"""
-    minimum(itr)
-
-Returns the smallest element in a collection.
-"""
-minimum(itr)
 
 """
     minimum(A, dims)
@@ -4713,13 +3977,6 @@ Returns `string` with the first character converted to lowercase.
 lcfirst
 
 """
-    flipbits!(B::BitArray{N}) -> BitArray{N}
-
-Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
-"""
-flipbits!
-
-"""
     readlink(path) -> AbstractString
 
 Returns the value of a symbolic link `path`.
@@ -4742,13 +3999,6 @@ Like redirect_stdout, but for STDIN. Note that the order of the return tuple is 
 redirect_stdin
 
 """
-    minmax(x, y)
-
-Return `(min(x,y), max(x,y))`. See also: [`extrema`](:func:`extrema`) that returns `(minimum(x), maximum(x))`.
-"""
-minmax
-
-"""
     mktemp([parent=tempdir()])
 
 Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
@@ -4769,15 +4019,6 @@ mktemp(::Function, ?)
 Determine whether a stream is read-only.
 """
 isreadonly
-
-"""
-    notify(condition, val=nothing; all=true, error=false)
-
-Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
-all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
-is raised as an exception in the woken tasks.
-"""
-notify
 
 """
     view(A, inds...)
@@ -4885,20 +4126,6 @@ last argument optionally specifies a size beyond which the buffer may not be gro
 IOBuffer(data=?)
 
 """
-    findmax(itr) -> (x, index)
-
-Returns the maximum element and its index.
-"""
-findmax(itr)
-
-"""
-    findmax(A, dims) -> (maxval, index)
-
-For an array input, returns the value and index of the maximum over the given dimensions.
-"""
-findmax(A,dims)
-
-"""
     tempname()
 
 Generate a unique temporary file path.
@@ -4976,45 +4203,6 @@ send
 Compute the inverse hyperbolic tangent of `x`.
 """
 atanh
-
-"""
-    deleteat!(collection, index)
-
-Remove the item at the given `index` and return the modified `collection`. Subsequent items
-are shifted to fill the resulting gap.
-
-```jldoctest
-julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
-5-element Array{Int64,1}:
- 6
- 4
- 3
- 2
- 1
-```
-"""
-deleteat!(collection, index::Integer)
-
-"""
-    deleteat!(collection, itr)
-
-Remove the items at the indices given by `itr`, and return the modified `collection`.
-Subsequent items are shifted to fill the resulting gap. `itr` must be sorted and unique.
-
-```jldoctest
-julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
-3-element Array{Int64,1}:
- 5
- 3
- 1
-
-julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
-ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:541
- ...
-```
-"""
-deleteat!(collection, itr)
 
 """
     read(stream::IO, T)
@@ -5100,14 +4288,6 @@ Get the next valid string index after `i`. Returns a value greater than `endof(s
 after the end of the string.
 """
 nextind
-
-"""
-    symdiff(s1,s2...)
-
-Construct the symmetric difference of elements in the passed in sets or arrays. Maintains
-order with arrays.
-"""
-symdiff
 
 """
     eta(x)
@@ -5217,13 +4397,6 @@ called in last in first out (LIFO) order and run before object finalizers.
 atexit
 
 """
-    besselk(nu, x)
-
-Modified Bessel function of the second kind of order `nu`, ``K_\\nu(x)``.
-"""
-besselk
-
-"""
     readchomp(x)
 
 Read the entirety of `x` as a string and remove a single trailing newline. Equivalent to `chomp(readstring(x))`.
@@ -5259,13 +4432,6 @@ For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 pinv
 
 """
-    asecd(x)
-
-Compute the inverse secant of `x`, where the output is in degrees.
-"""
-asecd
-
-"""
     readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b); all=true)
 
 Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
@@ -5290,13 +4456,6 @@ The parameters to a function call do not match a valid signature. Argument `msg`
 descriptive error string.
 """
 ArgumentError
-
-"""
-    atand(x)
-
-Compute the inverse tangent of `x`, where the output is in degrees.
-"""
-atand
 
 """
     KeyError(key)
@@ -5452,25 +4611,11 @@ Convert a hexadecimal string to the floating point number it represents.
 hex2num
 
 """
-    ndims(A) -> Integer
-
-Returns the number of dimensions of `A`.
-"""
-ndims
-
-"""
     ishermitian(A) -> Bool
 
 Test whether a matrix is Hermitian.
 """
 ishermitian
-
-"""
-    sind(x)
-
-Compute sine of `x`, where `x` is in degrees.
-"""
-sind
 
 """
     min(x, y, ...)
@@ -5487,15 +4632,6 @@ Type conversion cannot be done exactly.
 InexactError
 
 """
-    @sync
-
-Wait until all dynamically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@parallel`
-are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
-"""
-:@sync
-
-"""
     typemax(T)
 
 The highest value representable by the given (real) numeric `DataType`.
@@ -5503,30 +4639,11 @@ The highest value representable by the given (real) numeric `DataType`.
 typemax
 
 """
-    all(itr) -> Bool
-
-Test whether all elements of a boolean collection are `true`.
-"""
-all(itr)
-
-"""
     all(A, dims)
 
 Test whether all values along the given dimensions of an array are `true`.
 """
 all(A::AbstractArray, dims)
-
-"""
-    all(p, itr) -> Bool
-
-Determine whether predicate `p` returns `true` for all elements of `itr`.
-
-```jldoctest
-julia> all(i->(4<=i<=6), [4,5,6])
-true
-```
-"""
-all(p, itr)
 
 """
     bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false)
@@ -5598,7 +4715,7 @@ IntSet
 """
     Task(func)
 
-Create a `Task` (i.e. thread, or coroutine) to execute the given function (which must be
+Create a `Task` (i.e. coroutine) to execute the given function (which must be
 callable with no arguments). The task exits when this function returns.
 """
 Task
@@ -5655,13 +4772,6 @@ The function call grew beyond the size of the call stack. This usually happens w
 recurses infinitely.
 """
 StackOverflowError
-
-"""
-    acsch(x)
-
-Compute the inverse hyperbolic cosecant of `x`.
-"""
-acsch
 
 """
     process_running(p::Process)
@@ -5738,14 +4848,6 @@ handle comparison to other types via promotion rules where possible.
 Base.:(==)
 
 """
-    mapreducedim(f, op, A, dims[, initial])
-
-Evaluates to the same as `reducedim(op, map(f, A), dims, f(initial))`, but is generally
-faster because the intermediate array is avoided.
-"""
-mapreducedim
-
-"""
     seekstart(s)
 
 Seek a stream to its beginning.
@@ -5811,14 +4913,6 @@ two strings. For example
 join(strings, delim, last)
 
 """
-    polygamma(m, x)
-
-Compute the polygamma function of order `m` of argument `x` (the `(m+1)th` derivative of the
-logarithm of `gamma(x)`)
-"""
-polygamma
-
-"""
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a canonical total order. Values that are
@@ -5842,23 +4936,6 @@ expm1
 Show a descriptive representation of an exception object.
 """
 showerror
-
-"""
-    setdiff(s1,s2)
-
-Construct the set of elements in `s1` but not `s2`. Maintains order with arrays. Note that
-both arguments must be collections, and both will be iterated over. In particular,
-`setdiff(set,element)` where `element` is a potential member of `set`, will not work in
-general.
-"""
-setdiff
-
-"""
-    airyai(x)
-
-Airy function ``\\operatorname{Ai}(x)``.
-"""
-airyai
 
 """
     error(message::AbstractString)
@@ -6183,14 +5260,6 @@ Compute the secant of `x`, where `x` is in degrees.
 secd
 
 """
-    varm(v, m)
-
-Compute the sample variance of a vector `v` with known mean `m`. Note: Julia does not ignore
-`NaN` values in the computation.
-"""
-varm
-
-"""
     OverflowError()
 
 The result of an expression is too large for the specified type and will cause a wraparound.
@@ -6312,13 +5381,6 @@ julia> leading_zeros(Int32(1))
 ```
 """
 leading_zeros
-
-"""
-    hankelh2(nu, x)
-
-Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x)``.
-"""
-hankelh2
 
 """
     lexcmp(x, y)
@@ -6459,13 +5521,6 @@ Read a UDP packet from the specified socket, and return the bytes received. This
 recv
 
 """
-    acoth(x)
-
-Compute the inverse hyperbolic cotangent of `x`.
-"""
-acoth
-
-"""
     det(M)
 
 Matrix determinant.
@@ -6508,13 +5563,6 @@ Returns `string` with all characters converted to uppercase.
 uppercase
 
 """
-    cosd(x)
-
-Compute cosine of `x`, where `x` is in degrees.
-"""
-cosd
-
-"""
     cycle(iter)
 
 An iterator that cycles through `iter` forever.
@@ -6528,15 +5576,6 @@ Like uperm but gets the permissions for people who neither own the file nor are 
 the group owning the file
 """
 operm
-
-"""
-    cumsum(A, [dim])
-
-Cumulative sum along a dimension `dim` (defaults to 1). See also [`cumsum!`](:func:`cumsum!`)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
-"""
-cumsum
 
 """
     rpad(string, n, p)
@@ -6711,28 +5750,6 @@ Return ``x^{1/3}``.  The prefix operator `∛` is equivalent to `cbrt`.
 cbrt
 
 """
-    findprev(A, i)
-
-Find the previous index <= `i` of a non-zero element of `A`, or `0` if not found.
-"""
-findprev(A,i)
-
-"""
-    findprev(predicate, A, i)
-
-Find the previous index <= `i` of an element of `A` for which `predicate` returns `true`, or
-`0` if not found.
-"""
-findprev(predicate::Function,A,i)
-
-"""
-    findprev(A, v, i)
-
-Find the previous index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
-"""
-findprev(A,v,i)
-
-"""
     matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
 
 Return a vector of the matching substrings from eachmatch.
@@ -6822,13 +5839,6 @@ the data read. Malformed data can result in process termination. The caller has 
 the integrity and correctness of data read from `stream`.
 """
 deserialize
-
-"""
-    asech(x)
-
-Compute the inverse hyperbolic secant of `x`.
-"""
-asech
 
 """
     ismarked(s)
@@ -6945,44 +5955,6 @@ all elements of the string.
 ispunct
 
 """
-    size(A, [dim...])
-
-Returns a tuple containing the dimensions of `A`. Optionally you can specify the
-dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
-lengths of dimensions you asked for.
-
-    julia> A = rand(2,3,4);
-
-    julia> size(A, 2)
-    3
-
-    julia> size(A,3,2)
-    (4,3)
-"""
-size
-
-"""
-    trigamma(x)
-
-Compute the trigamma function of `x` (the logarithmic second derivative of `gamma(x)`).
-"""
-trigamma
-
-"""
-    findmin(itr) -> (x, index)
-
-Returns the minimum element and its index.
-"""
-findmin(itr)
-
-"""
-    findmin(A, dims) -> (minval, index)
-
-For an array input, returns the value and index of the minimum over the given dimensions.
-"""
-findmin(A,dims)
-
-"""
     ismount(path) -> Bool
 
 Returns `true` if `path` is a mount point, `false` otherwise.
@@ -6998,25 +5970,11 @@ characters, tests whether the last character of `string` belongs to that set.
 endswith
 
 """
-    airy(k,x)
-
-The `k`th derivative of the Airy function ``\\operatorname{Ai}(x)``.
-"""
-airy
-
-"""
     !(x)
 
 Boolean not.
 """
 Base.:(!)
-
-"""
-    length(A) -> Integer
-
-Returns the number of elements in `A`.
-"""
-length(::AbstractArray)
 
 """
     length(collection) -> Integer
@@ -7156,27 +6114,6 @@ Creates a closure around an expression and runs it on an automatically-chosen pr
 returning a `Future` to the result.
 """
 :@spawn
-
-"""
-    findfirst(A)
-
-Return the index of the first non-zero value in `A` (determined by `A[i]!=0`).
-"""
-findfirst(A)
-
-"""
-    findfirst(A,v)
-
-Return the index of the first element equal to `v` in `A`.
-"""
-findfirst(A,v)
-
-"""
-    findfirst(predicate, A)
-
-Return the index of the first element of `A` for which `predicate` returns `true`.
-"""
-findfirst
 
 """
     promote_rule(type1, type2)
@@ -7409,15 +6346,6 @@ Get the backtrace of the current exception, for use within `catch` blocks.
 catch_backtrace
 
 """
-    airyx(k,x)
-
-scaled `k`th derivative of the Airy function, return ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}}``
-for `k == 0 || k == 1`, and ``\\operatorname{Ai}(x) e^{- \\left| \\operatorname{Re} \\left( \\frac{2}{3} x \\sqrt{x} \\right) \\right|}``
-for `k == 2 || k == 3`.
-"""
-airyx
-
-"""
     get_zero_subnormals() -> Bool
 
 Returns `false` if operations on subnormal floating-point values ("denormals") obey rules
@@ -7445,18 +6373,6 @@ base64-encoded string.
 base64encode
 
 """
-    Condition()
-
-Create an edge-triggered event source that tasks can wait for. Tasks that call `wait` on a
-`Condition` are suspended and queued. Tasks are woken up when `notify` is later called on
-the `Condition`. Edge triggering means that only tasks waiting at the time `notify` is
-called can be woken up. For level-triggered notifications, you must keep extra state to keep
-track of whether a notification has happened. The `Channel` type does this, and so can be
-used for level-triggered events.
-"""
-Condition
-
-"""
     filt!(out, b, a, x, [si])
 
 Same as [`filt`](:func:`filt`) but writes the result into the `out` argument, which may
@@ -7471,13 +6387,6 @@ Convert a string to `String` type and check that it contains only ASCII data, ot
 throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 """
 ascii(s)
-
-"""
-    maxabs(itr)
-
-Compute the maximum absolute value of a collection of values.
-"""
-maxabs(itr)
 
 """
     maxabs(A, dims)
@@ -7680,13 +6589,6 @@ but throws an error for unordered arguments.
 cmp
 
 """
-    tand(x)
-
-Compute tangent of `x`, where `x` is in degrees.
-"""
-tand
-
-"""
     issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
@@ -7712,48 +6614,6 @@ false
 isbits
 
 """
-    findlast(A)
-
-Return the index of the last non-zero value in `A` (determined by `A[i]!=0`).
-"""
-findlast(A)
-
-"""
-    findlast(A, v)
-
-Return the index of the last element equal to `v` in `A`.
-"""
-findlast(A,v)
-
-"""
-    findlast(predicate, A)
-
-Return the index of the last element of `A` for which `predicate` returns `true`.
-"""
-findlast(::Function, A)
-
-"""
-    findnext(A, i)
-
-Find the next index >= `i` of a non-zero element of `A`, or `0` if not found.
-"""
-findnext
-
-"""
-    findnext(predicate, A, i)
-
-Find the next index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
-"""
-findnext(::Function,A,i)
-
-"""
-    findnext(A, v, i)
-
-Find the next index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
-"""
-findnext(A,v,i)
-
-"""
     angle(z)
 
 Compute the phase angle in radians of a complex number `z`.
@@ -7777,13 +6637,6 @@ available in the `.error` field.
 InitError
 
 """
-    vec(Array) -> Vector
-
-Vectorize an array using column-major convention.
-"""
-vec
-
-"""
     copy!(dest, src)
 
 Copy all elements from collection `src` to array `dest`. Returns `dest`.
@@ -7805,18 +6658,6 @@ Broadcasts the arrays `As` to a common size by expanding singleton dimensions, a
 an array of the results `f(as...)` for each position.
 """
 broadcast
-
-"""
-    eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
-
-Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
-be obtained from the slice `M[:, k]`.) The `permute` and `scale` keywords are the same as
-for [`eigfact`](:func:`eigfact`).
-
-For [`SymTridiagonal`](:class:`SymTridiagonal`) matrices, if the optional vector of
-eigenvalues `eigvals` is specified, returns the specific corresponding eigenvectors.
-"""
-eigvecs
 
 """
     ntoh(x)
@@ -7964,20 +6805,6 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 fill
 
 """
-    rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation on `src` and put the result into `dest`.
-"""
-rol!(::BitArray,::BitArray,::Integer)
-
-"""
-    rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a left rotation operation on `B`.
-"""
-rol!(::BitArray,::Integer)
-
-"""
     issubset(a, b)
     ⊆(a,b) -> Bool
     ⊈(a,b) -> Bool
@@ -8075,33 +6902,11 @@ Get the additive identity element for the type of `x` (`x` can also specify the 
 zero
 
 """
-    any(itr) -> Bool
-
-Test whether any elements of a boolean collection are `true`.
-"""
-any(itr)
-
-"""
     any(A, dims)
 
 Test whether any values along the given dimensions of an array are `true`.
 """
 any(::AbstractArray,dims)
-
-"""
-    any(p, itr) -> Bool
-
-Determine whether predicate `p` returns `true` for any elements of `itr`.
-"""
-any(p,itr)
-
-"""
-    cosc(x)
-
-Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
-``x = 0``. This is the derivative of `sinc(x)`.
-"""
-cosc
 
 """
     getkey(collection, key, default)
@@ -8123,13 +6928,6 @@ At_ldiv_Bt
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
 """
 Ac_mul_Bc
-
-"""
-    acotd(x)
-
-Compute the inverse cotangent of `x`, where the output is in degrees.
-"""
-acotd
 
 """
     zeros(type, dims)
@@ -8231,13 +7029,6 @@ break identities such as `(x-y==0) == (x==y)`.
 set_zero_subnormals
 
 """
-    take(iter, n)
-
-An iterator that generates at most the first `n` elements of `iter`.
-"""
-take
-
-"""
     frexp(val)
 
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0, and val =
@@ -8312,45 +7103,12 @@ unsigned without checking for negative values.
 unsigned
 
 """
-    eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
-
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
-which contains the eigenvalues in `F[:values]` and the eigenvectors in the columns of the
-matrix `F[:vectors]`. (The `k`th eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
-
-The following functions are available for `Eigen` objects: `inv`, `det`.
-
-If `A` is [`Symmetric`](:class:`Symmetric`), [`Hermitian`](:class:`Hermitian`) or
-[`SymTridiagonal`](:class:`SymTridiagonal`), it is possible to calculate only a subset of
-the eigenvalues by specifying either a [`UnitRange`](:class:`UnitRange`) `irange` covering
-indices of the sorted eigenvalues or a pair `vl` and `vu` for the lower and upper boundaries
-of the eigenvalues.
-
-For general nonsymmetric matrices it is possible to specify how the matrix is balanced
-before the eigenvector calculation. The option `permute=true` permutes the matrix to become
-closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
-make rows and columns more equal in norm. The default is `true` for both options.
-"""
-eigfact(A,?,?,?,?)
-
-"""
-    eigfact(A, B) -> GeneralizedEigen
-
-Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
-`GeneralizedEigen` factorization object `F` which contains the generalized eigenvalues in
-`F[:values]` and the generalized eigenvectors in the columns of the matrix `F[:vectors]`.
-(The `k`th generalized eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
-"""
-eigfact(A,B)
-
-"""
     mkdir(path, [mode])
 
 Make a new directory with name `path` and permissions `mode`. `mode` defaults to `0o777`,
 modified by the current file creation mask.
 """
 mkdir
-
 
 """
     midpoints(e)
@@ -8404,58 +7162,6 @@ Compute ``x \\times 2^n``.
 ldexp
 
 """
-    quadgk(f, a,b,c...; reltol=sqrt(eps), abstol=0, maxevals=10^7, order=7, norm=vecnorm)
-
-Numerically integrate the function `f(x)` from `a` to `b`, and optionally over additional
-intervals `b` to `c` and so on. Keyword options include a relative error tolerance `reltol`
-(defaults to `sqrt(eps)` in the precision of the endpoints), an absolute error tolerance
-`abstol` (defaults to 0), a maximum number of function evaluations `maxevals` (defaults to
-`10^7`), and the `order` of the integration rule (defaults to 7).
-
-Returns a pair `(I,E)` of the estimated integral `I` and an estimated upper bound on the
-absolute error `E`. If `maxevals` is not exceeded then `E <= max(abstol, reltol*norm(I))`
-will hold. (Note that it is useful to specify a positive `abstol` in cases where `norm(I)`
-may be zero.)
-
-The endpoints `a` etcetera can also be complex (in which case the integral is performed over
-straight-line segments in the complex plane). If the endpoints are `BigFloat`, then the
-integration will be performed in `BigFloat` precision as well (note: it is advisable to
-increase the integration `order` in rough proportion to the precision, for smooth
-integrands). More generally, the precision is set by the precision of the integration
-endpoints (promoted to floating-point types).
-
-The integrand `f(x)` can return any numeric scalar, vector, or matrix type, or in fact any
-type supporting `+`, `-`, multiplication by real values, and a `norm` (i.e., any normed
-vector space). Alternatively, a different norm can be specified by passing a `norm`-like
-function as the `norm` keyword argument (which defaults to `vecnorm`).
-
-\[Only one-dimensional integrals are provided by this function. For multi-dimensional
-integration (cubature), there are many different algorithms (often much better than simple
-nested 1d integrals) and the optimal choice tends to be very problem-dependent. See the
-Julia external-package listing for available algorithms for multidimensional integration or
-other specialized tasks (such as integrals of highly oscillatory or singular functions).\]
-
-The algorithm is an adaptive Gauss-Kronrod integration technique: the integral in each
-interval is estimated using a Kronrod rule (`2*order+1` points) and the error is estimated
-using an embedded Gauss rule (`order` points). The interval with the largest error is then
-subdivided into two intervals and the process is repeated until the desired error tolerance
-is achieved.
-
-These quadrature rules work best for smooth functions within each interval, so if your
-function has a known discontinuity or other singularity, it is best to subdivide your
-interval to put the singularity at an endpoint. For example, if `f` has a discontinuity at
-`x=0.7` and you want to integrate from 0 to 1, you should use `quadgk(f, 0,0.7,1)` to
-subdivide the interval at the point of discontinuity. The integrand is never evaluated
-exactly at the endpoints of the intervals, so it is possible to integrate functions that
-diverge at the endpoints as long as the singularity is integrable (for example, a `log(x)`
-or `1/sqrt(x)` singularity).
-
-For real-valued endpoints, the starting and/or ending points may be infinite. (A coordinate
-transformation is performed internally to map the infinite interval to a finite one.)
-"""
-quadgk
-
-"""
     islower(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character is a lowercase letter, or whether this is true for all elements of
@@ -8463,33 +7169,6 @@ a string. A character is classified as lowercase if it belongs to Unicode catego
 Letter: Lowercase.
 """
 islower
-
-"""
-    eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
-
-Computes eigenvalues and eigenvectors of `A`. See [`eigfact`](:func:`eigfact`) for details
-on the `permute` and `scale` keyword arguments. The eigenvectors are returned columnwise.
-
-```jldoctest
-julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-([1.0,3.0,18.0],
-[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
-```
-
-`eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the
-factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is recommended.
-"""
-eig(A,?,?,?)
-
-"""
-    eig(A, B) -> D, V
-
-Computes generalized eigenvalues and vectors of `A` with respect to `B`.
-
-`eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the
-factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is recommended.
-"""
-eig(A,B)
 
 """
     exp2(x)
@@ -8511,14 +7190,6 @@ gcd
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 """
 signbit
-
-"""
-    clamp(x, lo, hi)
-
-Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments
-are promoted to a common type. Operates elementwise over `x` if it is an array.
-"""
-clamp
 
 """
     cscd(x)
@@ -8765,16 +7436,6 @@ Bitwise or.
 Base.:(|)
 
 """
-    yieldto(task, arg = nothing)
-
-Switch to the given task. The first time a task is switched to, the task's function is
-called with no arguments. On subsequent switches, `arg` is returned from the task's last
-call to `yieldto`. This is a low-level call that only switches tasks, not considering states
-or scheduling in any way. Its use is discouraged.
-"""
-yieldto
-
-"""
     readandwrite(command)
 
 Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the
@@ -8828,14 +7489,6 @@ julia> A
 pop!(collection)
 
 """
-    filter(function, collection)
-
-Return a copy of `collection`, removing elements for which `function` is `false`. For
-associative collections, the function is passed two arguments (key and value).
-"""
-filter
-
-"""
     randperm([rng,] n)
 
 Construct a random permutation of length `n`. The optional `rng` argument specifies a random
@@ -8868,13 +7521,6 @@ Optional argument `msg` is a descriptive error string.
 AssertionError
 
 """
-    ror(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-Performs a right rotation operation.
-"""
-ror
-
-"""
     Ac_ldiv_Bc(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
@@ -8901,13 +7547,6 @@ julia> f(apple)
 :@enum
 
 """
-    asind(x)
-
-Compute the inverse sine of `x`, where the output is in degrees.
-"""
-asind
-
-"""
     widemul(x, y)
 
 Multiply `x` and `y`, giving the result as a larger type.
@@ -8931,27 +7570,6 @@ Remove a single trailing newline from a string.
 chomp
 
 """
-    enumerate(iter)
-
-An iterator that yields `(i, x)` where `i` is an index starting at 1, and
-`x` is the `i`th value from the given iterator. It's useful when you need
-not only the values `x` over which you are iterating, but also the index `i`
-of the iterations.
-
-```jldoctest
-julia> a = ["a", "b", "c"];
-
-julia> for (index, value) in enumerate(a)
-           println("\$index \$value")
-       end
-1 a
-2 b
-3 c
-```
-"""
-enumerate
-
-"""
     >=(x, y)
     ≥(x,y)
 
@@ -8966,13 +7584,6 @@ Compute the Dawson function (scaled imaginary error function) of `x`, defined by
 ``\\frac{\\sqrt{\\pi}}{2} e^{-x^2} \\operatorname{erfi}(x)``.
 """
 dawson
-
-"""
-    current_task()
-
-Get the currently running `Task`.
-"""
-current_task
 
 """
     randjump(r::MersenneTwister, jumps, [jumppoly]) -> Vector{MersenneTwister}

@@ -28,6 +28,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Mailing lists:** <http://julialang.org/community/>
+- **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
@@ -42,7 +43,6 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Youtube**](https://www.youtube.com/channel/UC9IuUwwE2xdjQUT_LMLONoA)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Google+**](https://plus.google.com/communities/111295162646766639102)
 - [**Meetup**](http://julia.meetup.com/)
 
 <a name="Currently-Supported-Platforms"/>
@@ -68,9 +68,9 @@ First, acquire the source code by cloning the git repository:
 
 Be sure to also configure your system to use the appropriate proxy settings, e.g. by setting the `https_proxy` and `http_proxy` variables.)
 
-By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.4` series of releases. You can get this version by changing to the Julia directory and running
+By default you will be building the latest unstable version of Julia. However, most users should use the most recent stable version of Julia, which is currently the `0.5` series of releases. You can get this version by changing to the Julia directory and running
 
-    git checkout release-0.4
+    git checkout release-0.5
 
 Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
@@ -418,9 +418,10 @@ The following distributions include julia, but the versions may be out of date d
 
 Currently, Julia editing mode support is available for a number of
 editors. While Julia modes for
-[Emacs](https://github.com/JuliaLang/julia-emacs) and
+[Emacs](https://github.com/JuliaLang/julia-emacs),
+[Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and
 [Vim](https://github.com/JuliaLang/julia-vim) have their own repos,
-others such as Textmate, Sublime Text, Notepad++, and Kate, are in
+others such as Textmate, Notepad++, and Kate, are in
 `contrib/`.
 
 Two major IDEs are supported for Julia: [Juno](http://junolab.org/),

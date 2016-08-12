@@ -7,6 +7,7 @@
 
 #include "llvm-version.h"
 #include "support/dtypes.h"
+#include <sstream>
 
 #include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
@@ -99,23 +100,41 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::NoUnwind);
     }
-    else if (jl_tls_offset != -1) {
 #ifdef LLVM37
+    else if (jl_tls_offset != -1) {
         auto T_int8 = Type::getInt8Ty(ctx);
         auto T_pint8 = PointerType::get(T_int8, 0);
-        auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) :
-                       Type::getInt32Ty(ctx));
         // Replace the function call with inline assembly if we know
         // how to generate it.
-        const char *asm_str = nullptr;
+#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+        // Workaround LLVM bug by hiding the offset computation
+        // (and therefore the optimization opportunity) from LLVM.
+        static const std::string asm_str = [&] () {
+            std::stringstream stm;
 #  if defined(_CPU_X86_64_)
-        asm_str = "movq %fs:0, $0";
-#  elif defined(_CPU_X86_)
-        asm_str = "movl %gs:0, $0";
-#  elif defined(_CPU_AARCH64_)
-        asm_str = "mrs $0, tpidr_el0";
+            stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
+#  else
+            stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
 #  endif
-        assert(asm_str && "Cannot emit thread pointer for this architecture.");
+            return stm.str();
+        }();
+        // The add instruction clobbers flags
+        auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
+                                 asm_str.c_str(),
+                                 "=r,~{dirflag},~{fpsr},~{flags}", false);
+        Value *tls = CallInst::Create(tp, "ptls_i8", ptlsStates);
+        tls = new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0),
+                              "ptls", ptlsStates);
+#  elif defined(_CPU_AARCH64_)
+        // AArch64 doesn't seem to have this issue.
+        // (Possibly because there are many more registers and the offset is
+        // positive and small)
+        // It's also harder to emit the offset in a generic way on AArch64
+        // (need to generate one or two `add` with shift) so let llvm emit
+        // the add for now.
+        auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) :
+                       Type::getInt32Ty(ctx));
+        const char *asm_str = "mrs $0, tpidr_el0";
         auto offset = ConstantInt::getSigned(T_size, jl_tls_offset);
         auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
                                  asm_str, "=r", false);
@@ -124,10 +143,14 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
                                         "ptls_i8", ptlsStates);
         tls = new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0),
                               "ptls", ptlsStates);
+#  else
+        Value *tls = nullptr;
+        assert(0 && "Cannot emit thread pointer for this architecture.");
+#  endif
         ptlsStates->replaceAllUsesWith(tls);
         ptlsStates->eraseFromParent();
-#endif
     }
+#endif
     else {
         ptlsStates->addAttribute(AttributeSet::FunctionIndex,
                                  Attribute::ReadNone);

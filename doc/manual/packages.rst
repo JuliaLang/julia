@@ -22,7 +22,7 @@ The :func:`Pkg.status` function prints out a summary of the state of packages yo
 Initially, you'll have no packages installed::
 
     julia> Pkg.status()
-    INFO: Initializing package repository /Users/stefan/.julia/v0.4
+    INFO: Initializing package repository /Users/stefan/.julia/v0.5
     INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
     No packages installed.
 
@@ -56,7 +56,7 @@ This means that you tell it what you want and it figures out what versions to in
 So rather than installing a package, you just add it to the list of requirements and then "resolve" what needs to be installed.
 In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, and a newer version doesn't have that requirement anymore, updating will actually remove that package.
 
-Your package requirements are in the file ``~/.julia/v0.4/REQUIRE``.
+Your package requirements are in the file ``~/.julia/v0.5/REQUIRE``.
 You can edit this file by hand and then call :func:`Pkg.resolve` to install, upgrade or remove packages to optimally satisfy the requirements, or you can do :func:`Pkg.edit`, which will open ``REQUIRE`` in your editor (configured via the ``EDITOR`` or ``VISUAL`` environment variables), and then automatically call :func:`Pkg.resolve` afterwards if necessary.
 If you only want to add or remove the requirement for a single package, you can also use the non-interactive :func:`Pkg.add` and :func:`Pkg.rm` commands, which add or remove a single requirement to ``REQUIRE`` and then call :func:`Pkg.resolve`.
 
@@ -81,15 +81,15 @@ You can add a package to the list of requirements with the :func:`Pkg.add` funct
      - NumericExtensions             0.2.17
      - Stats                         0.2.6
 
-What this is doing is first adding ``Distributions`` to your ``~/.julia/v0.4/REQUIRE`` file::
+What this is doing is first adding ``Distributions`` to your ``~/.julia/v0.5/REQUIRE`` file::
 
-    $ cat ~/.julia/v0.4/REQUIRE
+    $ cat ~/.julia/v0.5/REQUIRE
     Distributions
 
 It then runs :func:`Pkg.resolve` using these new requirements, which leads to the conclusion that the ``Distributions`` package should be installed since it is required but not installed.
-As stated before, you can accomplish the same thing by editing your ``~/.julia/v0.4/REQUIRE`` file by hand and then running :func:`Pkg.resolve` yourself::
+As stated before, you can accomplish the same thing by editing your ``~/.julia/v0.5/REQUIRE`` file by hand and then running :func:`Pkg.resolve` yourself::
 
-    $ echo UTF16 >> ~/.julia/v0.4/REQUIRE
+    $ echo UTF16 >> ~/.julia/v0.5/REQUIRE
 
     julia> Pkg.resolve()
     INFO: Cloning cache of UTF16 from git://github.com/nolta/UTF16.jl.git
@@ -175,7 +175,7 @@ To install an unregistered package, use :func:`Pkg.clone(url) <Pkg.clone>`, wher
     Resolving deltas: 100% (8/8), done.
 
 By convention, Julia repository names end with ``.jl`` (the additional ``.git`` indicates a "bare" git repository), which keeps them from colliding with repositories for other languages, and also makes Julia packages easy to find in search engines.
-When packages are installed in your ``.julia/v0.4`` directory, however, the extension is redundant so we leave it off.
+When packages are installed in your ``.julia/v0.5`` directory, however, the extension is redundant so we leave it off.
 
 If unregistered packages contain a ``REQUIRE`` file at the top of their source tree, that file will be used to determine which registered packages the unregistered package depends on, and they will automatically be installed.
 Unregistered packages participate in the same version resolution logic as registered packages, so installed package versions will be adjusted as necessary to satisfy the requirements of both registered and unregistered packages.
@@ -194,9 +194,9 @@ To get the latest and greatest versions of all your packages, just do :func:`Pkg
     INFO: Upgrading Distributions: v0.2.8 => v0.2.10
     INFO: Upgrading Stats: v0.2.7 => v0.2.8
 
-The first step of updating packages is to pull new changes to ``~/.julia/v0.4/METADATA`` and see if any new registered package versions have been published.
+The first step of updating packages is to pull new changes to ``~/.julia/v0.5/METADATA`` and see if any new registered package versions have been published.
 After this, :func:`Pkg.update` attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have been made to files tracked by git) by pulling changes from the package's upstream repository.
-Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be `"fast-forwarded" <http://git-scm.com/book/en/Git-Branching-Basic-Branching-and-Merging>`_.
+Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be `"fast-forwarded" <https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging>`_.
 If the branch cannot be fast-forwarded, it is assumed that you're working on it and will update the repository yourself.
 
 Finally, the update process recomputes an optimal set of package versions to have installed to satisfy your top-level requirements and the requirements of "fixed" packages.
@@ -207,7 +207,7 @@ A package is considered fixed if it is one of the following:
 3. **Dirty:** changes have been made to files in the repo.
 
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
-The combination of top-level requirements in ``~/.julia/v0.4/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
+The combination of top-level requirements in ``~/.julia/v0.5/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
 
 You can also update only a subset of the installed packages, by providing arguments to the `Pkg.update` function. In that case, only the packages provided as arguments and their dependencies will be updated::
 
@@ -360,7 +360,7 @@ We recommend that you create a `free account <https://github.com/join>`_ on GitH
 
 where ``USERNAME`` is your actual GitHub user name.
 Once you do this, the package manager knows your GitHub user name and can configure things accordingly.
-You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
+You should also `upload <https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Fssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 Since the package development functions has been moved to the `PkgDev <https://github.com/JuliaLang/PkgDev.jl>`_ package, you need to run ``Pkg.add("PkgDev"); import PkgDev`` to access the functions starting with ``PkgDev.`` in the document below.
 
@@ -455,7 +455,7 @@ are several possible approaches, here is one that is widely used:
   ``fixbar``). By creating a branch, you ensure that you can easily go
   back and forth between your new work and the current ``master``
   branch (see
-  `<http://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell>`_).
+  `<https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell>`_).
 
   If you forget to do this step until after you've already made some
   changes, don't worry: see :ref:`more detail about branching
@@ -486,7 +486,7 @@ are several possible approaches, here is one that is widely used:
     ``src/`` folder.
 
 
-- Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
+- Commit your changes: see `<https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
 
 - Submit your changes: From the Julia prompt, type
   :func:`PkgDev.submit("Foo") <PkgDev.submit>`. This will push your changes to your
@@ -555,7 +555,7 @@ following procedure:
   until you have resolved the problems, or you may lose your changes.
 - *Reset* ``master`` (your current branch) back to an earlier state
   with ``git reset --hard origin/master`` (see
-  `<http://git-scm.com/blog/2011/07/11/reset.html>`_).
+  `<https://git-scm.com/blog/2011/07/11/reset.html>`_).
 
 This requires a bit more familiarity with git, so it's much better to
 get in the habit of creating a branch at the outset.
@@ -583,7 +583,7 @@ quite simple but your commit history looks like this::
 
 This gets into the territory of more advanced git usage, and you're
 encouraged to do some reading
-(`<http://git-scm.com/book/en/v2/Git-Branching-Rebasing>`_).  However,
+(`<https://git-scm.com/book/en/v2/Git-Branching-Rebasing>`_).  However,
 a brief summary of the procedure is as follows:
 
 - To protect yourself from error, start from your ``fixbar`` branch
@@ -720,7 +720,7 @@ Suppose you want to create a new Julia package called ``FooBar``.  To get starte
 name of a license that the package generator knows about::
 
     julia> PkgDev.generate("FooBar","MIT")
-    INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.4/FooBar
+    INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.5/FooBar
     INFO: Origin: git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Generating LICENSE.md
     INFO: Generating README.md
@@ -732,10 +732,10 @@ name of a license that the package generator knows about::
     INFO: Generating .gitignore
     INFO: Committing FooBar generated files
 
-This creates the directory ``~/.julia/v0.4/FooBar``, initializes it as a git repository, generates a bunch of files
+This creates the directory ``~/.julia/v0.5/FooBar``, initializes it as a git repository, generates a bunch of files
 that all packages should have, and commits them to the repository::
 
-    $ cd ~/.julia/v0.4/FooBar && git show --stat
+    $ cd ~/.julia/v0.5/FooBar && git show --stat
 
     commit 84b8e266dae6de30ab9703150b3bf771ec7b6285
     Author: Stefan Karpinski <stefan@karpinski.org>
@@ -763,11 +763,11 @@ that all packages should have, and commits them to the repository::
 At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License,
 indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.  If you want to use a
 different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the
-``~/.julia/v0.4/PACKAGE/LICENSE.md`` file after it has been generated.
+``~/.julia/v0.5/PACKAGE/LICENSE.md`` file after it has been generated.
 
 If you created a GitHub account and configured git to know about it, :func:`PkgDev.generate` will set an appropriate origin URL
 for you.  It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated
-testing service, and an ``appveyor.yml`` file for using `AppVeyor <http://appveyor.com>`_.  You will have to enable testing on
+testing service, and an ``appveyor.yml`` file for using `AppVeyor <https://www.appveyor.com>`_.  You will have to enable testing on
 the Travis and AppVeyor websites for your package repository, but once you've done that, it will already have working tests.
 Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
 
@@ -799,9 +799,9 @@ of ``METADATA`` using :func:`PkgDev.register`::
     INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Committing METADATA for FooBar
 
-This creates a commit in the ``~/.julia/v0.4/METADATA`` repo::
+This creates a commit in the ``~/.julia/v0.5/METADATA`` repo::
 
-    $ cd ~/.julia/v0.4/METADATA && git show
+    $ cd ~/.julia/v0.5/METADATA && git show
 
     commit 9f71f4becb05cadacb983c54a72eed744e5c019d
     Author: Stefan Karpinski <stefan@karpinski.org>
@@ -840,7 +840,7 @@ on GitHub, push your changes to your fork, and open a pull request::
     then you may have encountered an issue from using the GitHub API on
     multiple systems. The solution is to delete the "Julia Package Manager"
     personal access token `from your Github account
-    <https://github.com/settings/tokens>`_ and try again.
+    <https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Ftokens>`_ and try again.
 
     Other failures may require you to circumvent :func:`PkgDev.publish` by
     `creating a pull request on GitHub
@@ -857,12 +857,12 @@ register it with the :func:`PkgDev.tag` command::
 
 This tags ``v0.0.1`` in the ``FooBar`` repo::
 
-    $ cd ~/.julia/v0.4/FooBar && git tag
+    $ cd ~/.julia/v0.5/FooBar && git tag
     v0.0.1
 
 It also creates a new version entry in your local ``METADATA`` repo for ``FooBar``::
 
-    $ cd ~/.julia/v0.4/FooBar && git show
+    $ cd ~/.julia/v0.5/FooBar && git show
     commit de77ee4dc0689b12c5e8b574aef7f70e8b311b0e
     Author: Stefan Karpinski <stefan@karpinski.org>
     Date:   Wed Oct 16 23:06:18 2013 -0400
@@ -915,14 +915,14 @@ that copy exists, you can push your local changes to your copy
 (just like any other GitHub project).
 
 
-1. go to `<https://github.com/JuliaLang/METADATA.jl/fork>`_ and create your own
+1. go to `<https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2FJuliaLang%2FMETADATA.jl%2Ffork>`_ and create your own
 fork.
 
 2. add your fork as a remote repository for the METADATA
 repository on your local computer (in the terminal where USERNAME is
 your github username)::
 
-    cd ~/.julia/v0.4/METADATA
+    cd ~/.julia/v0.5/METADATA
     git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
 
 3. push your changes to your fork::
@@ -938,7 +938,7 @@ Fixing Package Requirements
 
 If you need to fix the registered requirements of an already-published package version, you can do so just by editing the metadata for that version, which will still have the same commit hash – the hash associated with a version is permanent::
 
-    $ cd ~/.julia/v0.4/METADATA/FooBar/versions/0.0.1 && cat requires
+    $ cd ~/.julia/v0.5/METADATA/FooBar/versions/0.0.1 && cat requires
     julia 0.3-
     $ vi requires
 
@@ -951,7 +951,7 @@ When you fix the requirements in ``METADATA`` for a previous version of a packag
 Requirements Specification
 --------------------------
 
-The ``~/.julia/v0.4/REQUIRE`` file, the ``REQUIRE`` file inside packages, and the ``METADATA`` package ``requires`` files use a simple line-based format to express the ranges of package versions which need to be installed.  Package ``REQUIRE`` and ``METADATA requires`` files should also include the range of versions of ``julia`` the package is expected to work with.
+The ``~/.julia/v0.5/REQUIRE`` file, the ``REQUIRE`` file inside packages, and the ``METADATA`` package ``requires`` files use a simple line-based format to express the ranges of package versions which need to be installed.  Package ``REQUIRE`` and ``METADATA requires`` files should also include the range of versions of ``julia`` the package is expected to work with.
 
 Here's how these files are parsed and interpreted.
 

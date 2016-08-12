@@ -260,5 +260,5 @@ allows you to do things like::
 At the base of this functionality is :func:`getaddrinfo`, which will do the appropriate address resolution::
 
     julia> getaddrinfo("google.com")
-    IPv4(74.125.226.225)
+    ip"74.125.226.225"
 

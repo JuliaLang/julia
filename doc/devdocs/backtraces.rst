@@ -104,4 +104,4 @@ A few terms have been used as shorthand in this guide:
 * ``<julia_root>`` refers to the root directory of the Julia source tree; e.g. it should contain folders such as ``base``, ``deps``, ``src``, ``test``, etc.....
 
 .. _gist: https://gist.github.com
-.. _issue: https://github.com/JuliaLang/julia/issues?state=open
+.. _issue: https://github.com/JuliaLang/julia/issues?q=is%3Aopen

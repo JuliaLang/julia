@@ -11,6 +11,27 @@ transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)).
 
 ## Constructors ##
 
+"""
+    vec(a::AbstractArray) -> Vector
+
+Reshape array `a` as a one-dimensional column vector.
+
+```jldoctest
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> vec(a)
+6-element Array{Int64,1}:
+ 1
+ 4
+ 2
+ 5
+ 3
+ 6
+```
+"""
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
 
@@ -18,6 +39,27 @@ _sub(::Tuple{}, ::Tuple{}) = ()
 _sub(t::Tuple, ::Tuple{}) = t
 _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
+"""
+    squeeze(A, dims)
+
+Remove the dimensions specified by `dims` from array `A`.
+Elements of `dims` must be unique and within the range `1:ndims(A)`.
+`size(A,i)` must equal 1 for all `i` in `dims`.
+
+```jldoctest
+julia> a = reshape(collect(1:4),(2,2,1,1))
+2×2×1×1 Array{Int64,4}:
+[:, :, 1, 1] =
+ 1  3
+ 2  4
+
+julia> squeeze(a,3)
+2×2×1 Array{Int64,3}:
+[:, :, 1] =
+ 1  3
+ 2  4
+```
+"""
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
@@ -71,6 +113,23 @@ function flipdim(A::AbstractVector, d::Integer)
     reverse(A)
 end
 
+"""
+    flipdim(A, d)
+
+Reverse `A` in dimension `d`.
+
+```jldoctest
+julia> b = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> flipdim(b,2)
+2×2 Array{Int64,2}:
+ 2  1
+ 4  3
+```
+"""
 function flipdim(A::AbstractArray, d::Integer)
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
@@ -99,15 +158,41 @@ function flipdim(A::AbstractArray, d::Integer)
     return B
 end
 
-circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [Integer(shiftamt)])
-function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
-    I = ()
-    for i=1:N
-        s = size(a,i)
-        d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I = tuple(I..., d==0 ? [1:s;] : mod([-d:s-1-d;], s).+1)
-    end
-    a[(I::NTuple{N,Vector{Int}})...]
+function circshift(a::AbstractArray, shiftamt::Real)
+    circshift!(similar(a), a, (Integer(shiftamt),))
+end
+circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, shiftamt)
+"""
+    circshift(A, shifts)
+
+Circularly shift the data in an array. The second argument is a vector giving the amount to
+shift in each dimension.
+
+```jldoctest
+julia> b = reshape(collect(1:16), (4,4))
+4×4 Array{Int64,2}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> circshift(b, (0,2))
+4×4 Array{Int64,2}:
+  9  13  1  5
+ 10  14  2  6
+ 11  15  3  7
+ 12  16  4  8
+
+julia> circshift(b, (-1,0))
+4×4 Array{Int64,2}:
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+ 1  5   9  13
+```
+"""
+function circshift(a::AbstractArray, shiftamt)
+    circshift!(similar(a), a, map(Integer, (shiftamt...,)))
 end
 
 # Uses K-B-N summation

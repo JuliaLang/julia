@@ -444,40 +444,25 @@ let exename = Base.julia_cmd()
 
 # Test REPL in dumb mode
 if !is_windows()
-    const O_RDWR = Base.Filesystem.JL_O_RDWR
-    const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
+    TestHelpers.with_fake_pty() do slave, master
 
-    fdm = ccall(:posix_openpt, Cint, (Cint,), O_RDWR|O_NOCTTY)
-    fdm == -1 && error("Failed to open PTY master")
-    rc = ccall(:grantpt, Cint, (Cint,), fdm)
-    rc != 0 && error("grantpt failed")
-    rc = ccall(:unlockpt, Cint, (Cint,), fdm)
-    rc != 0 && error("unlockpt")
+        nENV = copy(ENV)
+        nENV["TERM"] = "dumb"
+        p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
+        output = readuntil(master,"julia> ")
+        if ccall(:jl_running_on_valgrind,Cint,()) == 0
+            # If --trace-children=yes is passed to valgrind, we will get a
+            # valgrind banner here, not just the prompt.
+            @test output == "julia> "
+        end
+        write(master,"1\nquit()\n")
 
-    fds = ccall(:open, Cint, (Ptr{UInt8}, Cint),
-        ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), O_RDWR|O_NOCTTY)
+        wait(p)
+        output = readuntil(master,' ')
+        @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
+        @test nb_available(master) == 0
 
-    # slave
-    slave   = RawFD(fds)
-    master = Base.TTY(RawFD(fdm); readable = true)
-
-    nENV = copy(ENV)
-    nENV["TERM"] = "dumb"
-    p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
-    output = readuntil(master,"julia> ")
-    if ccall(:jl_running_on_valgrind,Cint,()) == 0
-        # If --trace-children=yes is passed to valgrind, we will get a
-        # valgrind banner here, not just the prompt.
-        @test output == "julia> "
     end
-    write(master,"1\nquit()\n")
-
-    wait(p)
-    output = readuntil(master,' ')
-    @test output == "1\r\nquit()\r\n1\r\n\r\njulia> "
-    @test nb_available(master) == 0
-    ccall(:close,Cint,(Cint,),fds) # XXX: this causes the kernel to throw away all unread data on the pty
-    close(master)
 end
 
 # Test stream mode

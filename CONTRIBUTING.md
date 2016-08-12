@@ -60,6 +60,22 @@ Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl)
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
+### Package Compatibility Across Releases
+
+Sometimes, you might find that while your package works
+on the current release, it might not work on the upcoming release or nightly.
+This is due to the fact that some Julia functions (after some discussion)
+could be deprecated or removed altogether. This may cause your package to break or
+throw a number of deprecation warnings on usage. Therefore it is highly recommended
+to port your package to latest Julia release.
+
+However, porting a package to the latest release may cause the package to break on
+earlier Julia releases. To maintain compatibility across releases, use
+[`Compat.jl`](https://github.com/JuliaLang/Compat.jl/). Find the fix for your package
+from the README, and specify the minimum version of Compat that provides the fix
+in your REQUIRE file. To find the correct minimum version, refer to
+[this guide](https://github.com/JuliaLang/Compat.jl/#tagging-the-correct-minimum-version-of-compat).
+
 ### Writing tests
 
 There are never enough tests. Track [code coverage at Coveralls](https://coveralls.io/r/JuliaLang/julia), and help improve it.

@@ -1752,7 +1752,7 @@ static int read_verify_mod_list(ios_t *s)
         if (m->uuid != uuid) {
             jl_printf(JL_STDERR,
                       "WARNING: Module %s uuid did not match cache file\n"
-                      "  This is likely because module %s does not support"
+                      "  This is likely because module %s does not support\n"
                       "  precompilation but is imported by a module that does.\n",
                       name, name);
             return 0;
@@ -1815,7 +1815,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
             case 1: { // rehash ObjectIdDict
                 jl_array_t **a = (jl_array_t**)v;
                 // Assume *a don't need a write barrier
-                jl_idtable_rehash(a, jl_array_len(*a));
+                *a = jl_idtable_rehash(*a, jl_array_len(*a));
                 jl_gc_wb(v, *a);
                 break;
             }

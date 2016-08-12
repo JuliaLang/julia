@@ -48,6 +48,7 @@ one{N}(::CartesianIndex{N}) = one(CartesianIndex{N})
 one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
 
 # arithmetic, min/max
+(-){N}(index::CartesianIndex{N}) = CartesianIndex{N}(map(-, index.I))
 (+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(+, index1.I, index2.I))
 (-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(-, index1.I, index2.I))
 min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(min, index1.I, index2.I))
@@ -496,8 +497,56 @@ for (f, fmod, op) = ((:cummin, :_cummin!, :min), (:cummax, :_cummax!, :max))
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
- cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
+"""
+    cumsum(A, dim=1)
+
+Cumulative sum along a dimension `dim` (defaults to 1). See also [`cumsum!`](:func:`cumsum!`)
+to use a preallocated output array, both for performance and to control the precision of the
+output (e.g. to avoid overflow).
+
+```jldoctest
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> cumsum(a,1)
+2×3 Array{Int64,2}:
+ 1  2  3
+ 5  7  9
+
+julia> cumsum(a,2)
+2×3 Array{Int64,2}:
+ 1  3   6
+ 4  9  15
+```
+"""
+cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
 cumsum!(B, A::AbstractArray) = cumsum!(B, A, 1)
+"""
+    cumprod(A, dim=1)
+
+Cumulative product along a dimension `dim` (defaults to 1). See also
+[`cumprod!`](:func:`cumprod!`) to use a preallocated output array, both for performance and
+to control the precision of the output (e.g. to avoid overflow).
+
+```jldoctest
+julia> a = [1 2 3; 4 5 6]
+2×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+
+julia> cumprod(a,1)
+2×3 Array{Int64,2}:
+ 1   2   3
+ 4  10  18
+
+julia> cumprod(a,2)
+2×3 Array{Int64,2}:
+ 1   2    6
+ 4  20  120
+```
+"""
 cumprod(A::AbstractArray, axis::Integer=1) = cumprod!(similar(A), A, axis)
 cumprod!(B, A) = cumprod!(B, A, 1)
 
@@ -561,6 +610,57 @@ function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     dest
 end
 
+function copy!(dest::AbstractArray, Rdest::CartesianRange, src::AbstractArray, Rsrc::CartesianRange)
+    isempty(Rdest) && return dest
+    size(Rdest) == size(Rsrc) || throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+    @boundscheck checkbounds(dest, Rdest.start)
+    @boundscheck checkbounds(dest, Rdest.stop)
+    @boundscheck checkbounds(src, Rsrc.start)
+    @boundscheck checkbounds(src, Rsrc.stop)
+    deltaI = Rdest.start - Rsrc.start
+    for I in Rsrc
+        @inbounds dest[I+deltaI] = src[I]
+    end
+    dest
+end
+
+# circshift!
+circshift!(dest::AbstractArray, src, ::Tuple{}) = copy!(dest, src)
+"""
+    circshift!(dest, src, shifts)
+
+Circularly shift the data in `src`, storing the result in
+`dest`. `shifts` specifies the amount to shift in each dimension.
+
+The `dest` array must be distinct from the `src` array (they cannot
+alias each other).
+
+See also `circshift`.
+"""
+@noinline function circshift!{T,N}(dest::AbstractArray{T,N}, src, shiftamt::DimsInteger)
+    dest === src && throw(ArgumentError("dest and src must be separate arrays"))
+    inds = indices(src)
+    indices(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(indices(dest)))"))
+    _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val{N}))
+end
+circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
+
+@inline function _circshift!(dest, rdest, src, rsrc,
+                             inds::Tuple{AbstractUnitRange,Vararg{Any}},
+                             shiftamt::Tuple{Integer,Vararg{Any}})
+    ind1, d = inds[1], shiftamt[1]
+    s = mod(d, length(ind1))
+    sf, sl = first(ind1)+s, last(ind1)-s
+    r1, r2 = first(ind1):sf-1, sf:last(ind1)
+    r3, r4 = first(ind1):sl, sl+1:last(ind1)
+    tinds, tshiftamt = tail(inds), tail(shiftamt)
+    _circshift!(dest, (rdest..., r1), src, (rsrc..., r4), tinds, tshiftamt)
+    _circshift!(dest, (rdest..., r2), src, (rsrc..., r3), tinds, tshiftamt)
+end
+# At least one of inds, shiftamt is empty
+function _circshift!(dest, rdest, src, rsrc, inds, shiftamt)
+    copy!(dest, CartesianRange(rdest), src, CartesianRange(rsrc))
+end
 
 ### BitArrays
 

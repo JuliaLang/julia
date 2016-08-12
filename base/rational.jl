@@ -90,8 +90,28 @@ promote_rule{T<:Integer,S<:AbstractFloat}(::Type{Rational{T}}, ::Type{S}) = prom
 
 widen{T}(::Type{Rational{T}}) = Rational{widen(T)}
 
+"""
+    rationalize([T<:Integer=Int,] x; tol::Real=eps(x))
+
+Approximate floating point number `x` as a `Rational` number with components
+of the given integer type. The result will differ from `x` by no more than `tol`.
+If `T` is not provided, it defaults to `Int`.
+
+```jldoctest
+julia> rationalize(5.6)
+28//5
+
+julia> a = rationalize(BigInt, 10.3)
+103//10
+
+julia> typeof(num(a))
+BigInt
+```
+"""
 function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x))
-    tol < 0 && throw(ArgumentError("negative tolerance"))
+    if tol < 0
+        throw(ArgumentError("negative tolerance $tol"))
+    end
     isnan(x) && return zero(T)//zero(T)
     isinf(x) && return (x < 0 ? -one(T) : one(T))//zero(T)
 

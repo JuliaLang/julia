@@ -9,21 +9,28 @@
 Basic functions
 ---------------
 
-.. function:: ndims(A) -> Integer
+.. function:: ndims(A::AbstractArray) -> Integer
 
    .. Docstring generated from Julia source
 
    Returns the number of dimensions of ``A``\ .
 
-.. function:: size(A, [dim...])
+   .. doctest::
+
+       julia> A = ones(3,4,5);
+
+       julia> ndims(A)
+       3
+
+.. function:: size(A::AbstractArray, [dim...])
 
    .. Docstring generated from Julia source
 
    Returns a tuple containing the dimensions of ``A``\ . Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.
 
-   .. code-block:: julia
+   .. doctest::
 
-       julia> A = rand(2,3,4);
+       julia> A = ones(2,3,4);
 
        julia> size(A, 2)
        3
@@ -43,11 +50,18 @@ Basic functions
 
    Returns the valid range of indices for array ``A`` along dimension ``d``\ .
 
-.. function:: length(A) -> Integer
+.. function:: length(A::AbstractArray) -> Integer
 
    .. Docstring generated from Julia source
 
    Returns the number of elements in ``A``\ .
+
+   .. doctest::
+
+       julia> A = ones(3,4,5);
+
+       julia> length(A)
+       60
 
 .. function:: eachindex(A...)
 
@@ -116,17 +130,34 @@ Basic functions
 
    Convert an array to its complex conjugate in-place.
 
-.. function:: stride(A, k)
+.. function:: stride(A, k::Integer)
 
    .. Docstring generated from Julia source
 
    Returns the distance in memory (in number of elements) between adjacent elements in dimension ``k``\ .
+
+   .. doctest::
+
+       julia> A = ones(3,4,5);
+
+       julia> stride(A,2)
+       3
+
+       julia> stride(A,3)
+       12
 
 .. function:: strides(A)
 
    .. Docstring generated from Julia source
 
    Returns a tuple of the memory strides in each dimension.
+
+   .. doctest::
+
+       julia> A = ones(3,4,5);
+
+       julia> strides(A)
+       (1,3,12)
 
 .. function:: ind2sub(dims, index) -> subscripts
 
@@ -309,23 +340,39 @@ Constructors
 
    Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, UInt32(7))`` interprets the 4 bytes corresponding to ``UInt32(7)`` as a ``Float32``\ . For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
 
-.. function:: eye(n)
+.. function:: eye([T::Type=Float64,] n::Integer)
 
    .. Docstring generated from Julia source
 
-   ``n``\ -by-``n`` identity matrix.
+   ``n``\ -by-``n`` identity matrix. The default element type is ``Float64``\ .
 
-.. function:: eye(m, n)
+.. function:: eye([T::Type=Float64,] m::Integer, n::Integer)
 
    .. Docstring generated from Julia source
 
-   ``m``\ -by-``n`` identity matrix.
+   ``m``\ -by-``n`` identity matrix. The default element type is ``Float64``\ .
 
 .. function:: eye(A)
 
    .. Docstring generated from Julia source
 
    Constructs an identity matrix of the same dimensions and type as ``A``\ .
+
+   .. doctest::
+
+       julia> A = [1 2 3; 4 5 6; 7 8 9]
+       3×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+        7  8  9
+
+       julia> eye(A)
+       3×3 Array{Int64,2}:
+        1  0  0
+        0  1  0
+        0  0  1
+
+   Note the difference from :func:`ones`\ .
 
 .. function:: linspace(start, stop, n=50)
 
@@ -437,11 +484,74 @@ Indexing, Assignment, and Concatenation
 
    Concatenate along dimension 1.
 
+   .. doctest::
+
+       julia> a = [1 2 3 4 5]
+       1×5 Array{Int64,2}:
+        1  2  3  4  5
+
+       julia> b = [6 7 8 9 10; 11 12 13 14 15]
+       2×5 Array{Int64,2}:
+         6   7   8   9  10
+        11  12  13  14  15
+
+       julia> vcat(a,b)
+       3×5 Array{Int64,2}:
+         1   2   3   4   5
+         6   7   8   9  10
+        11  12  13  14  15
+
+       julia> c = ([1 2 3], [4 5 6])
+       (
+       [1 2 3],
+       <BLANKLINE>
+       [4 5 6])
+
+       julia> vcat(c...)
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
 .. function:: hcat(A...)
 
    .. Docstring generated from Julia source
 
    Concatenate along dimension 2.
+
+   .. doctest::
+
+       julia> a = [1; 2; 3; 4; 5]
+       5-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
+
+       julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
+       5×2 Array{Int64,2}:
+         6   7
+         8   9
+        10  11
+        12  13
+        14  15
+
+       julia> hcat(a,b)
+       5×3 Array{Int64,2}:
+        1   6   7
+        2   8   9
+        3  10  11
+        4  12  13
+        5  14  15
+
+       julia> c = ([1; 2; 3], [4; 5; 6])
+       ([1,2,3],[4,5,6])
+
+       julia> hcat(c...)
+       3×2 Array{Int64,2}:
+        1  4
+        2  5
+        3  6
 
 .. function:: hvcat(rows::Tuple{Vararg{Int}}, values...)
 
@@ -484,29 +594,107 @@ Indexing, Assignment, and Concatenation
 
    Reverse ``A`` in dimension ``d``\ .
 
-.. function:: circshift(A,shifts)
+   .. doctest::
+
+       julia> b = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> flipdim(b,2)
+       2×2 Array{Int64,2}:
+        2  1
+        4  3
+
+.. function:: circshift(A, shifts)
 
    .. Docstring generated from Julia source
 
    Circularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.
 
+   .. doctest::
+
+       julia> b = reshape(collect(1:16), (4,4))
+       4×4 Array{Int64,2}:
+        1  5   9  13
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
+
+       julia> circshift(b, (0,2))
+       4×4 Array{Int64,2}:
+         9  13  1  5
+        10  14  2  6
+        11  15  3  7
+        12  16  4  8
+
+       julia> circshift(b, (-1,0))
+       4×4 Array{Int64,2}:
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
+        1  5   9  13
+
 .. function:: find(A)
 
    .. Docstring generated from Julia source
 
-   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). A common use of this is to convert a boolean array to an array of indexes of the ``true`` elements.
+   Return a vector of the linear indexes of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). A common use of this is to convert a boolean array to an array of indexes of the ``true`` elements. If there are no non-zero elements of ``A``\ , ``find`` returns an empty array.
 
-.. function:: find(f,A)
+   .. doctest::
+
+       julia> A = [true false; false true]
+       2×2 Array{Bool,2}:
+         true  false
+        false   true
+
+       julia> find(A)
+       2-element Array{Int64,1}:
+        1
+        4
+
+.. function:: find(f::Function, A)
 
    .. Docstring generated from Julia source
 
-   Return a vector of the linear indexes of ``A`` where ``f`` returns ``true``\ .
+   Return a vector ``I`` of the linear indexes of ``A`` where ``f(A[I])`` returns ``true``\ . If there are no such elements of ``A``\ , find returns an empty array.
+
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> find(isodd,A)
+       2-element Array{Int64,1}:
+        1
+        2
 
 .. function:: findn(A)
 
    .. Docstring generated from Julia source
 
-   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ).
+   Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A`` (determined by ``A[i]!=0``\ ). If there are no non-zero elements of ``A``\ , ``findn`` returns a 2-tuple of empty arrays.
+
+   .. doctest::
+
+       julia> A = [1 2 0; 0 0 3; 0 4 0]
+       3×3 Array{Int64,2}:
+        1  2  0
+        0  0  3
+        0  4  0
+
+       julia> findn(A)
+       ([1,1,3,2],[1,2,2,3])
+
+       julia> A = zeros(2,2)
+       2×2 Array{Float64,2}:
+        0.0  0.0
+        0.0  0.0
+
+       julia> findn(A)
+       (Int64[],Int64[])
 
 .. function:: findnz(A)
 
@@ -514,77 +702,249 @@ Indexing, Assignment, and Concatenation
 
    Return a tuple ``(I, J, V)`` where ``I`` and ``J`` are the row and column indexes of the non-zero values in matrix ``A``\ , and ``V`` is a vector of the non-zero values.
 
+   .. doctest::
+
+       julia> A = [1 2 0; 0 0 3; 0 4 0]
+       3×3 Array{Int64,2}:
+        1  2  0
+        0  0  3
+        0  4  0
+
+       julia> findnz(A)
+       ([1,1,3,2],[1,2,2,3],[1,2,4,3])
+
 .. function:: findfirst(A)
 
    .. Docstring generated from Julia source
 
-   Return the index of the first non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
+   Return the linear index of the first non-zero value in ``A`` (determined by ``A[i]!=0``\ ). Returns ``0`` if no such value is found.
 
-.. function:: findfirst(A,v)
+   .. doctest::
+
+       julia> A = [0 0; 1 0]
+       2×2 Array{Int64,2}:
+        0  0
+        1  0
+
+       julia> findfirst(A)
+       2
+
+.. function:: findfirst(A, v)
 
    .. Docstring generated from Julia source
 
-   Return the index of the first element equal to ``v`` in ``A``\ .
+   Return the linear index of the first element equal to ``v`` in ``A``\ . Returns ``0`` if ``v`` is not found.
 
-.. function:: findfirst(predicate, A)
+   .. doctest::
+
+       julia> A = [4 6; 2 2]
+       2×2 Array{Int64,2}:
+        4  6
+        2  2
+
+       julia> findfirst(A,2)
+       2
+
+       julia> findfirst(A,3)
+       0
+
+.. function:: findfirst(predicate::Function, A)
 
    .. Docstring generated from Julia source
 
-   Return the index of the first element of ``A`` for which ``predicate`` returns ``true``\ .
+   Return the linear index of the first element of ``A`` for which ``predicate`` returns ``true``\ . Returns ``0`` if there is no such element.
+
+   .. doctest::
+
+       julia> A = [1 4; 2 2]
+       2×2 Array{Int64,2}:
+        1  4
+        2  2
+
+       julia> findfirst(iseven, A)
+       2
+
+       julia> findfirst(x -> x>10, A)
+       0
 
 .. function:: findlast(A)
 
    .. Docstring generated from Julia source
 
-   Return the index of the last non-zero value in ``A`` (determined by ``A[i]!=0``\ ).
+   Return the linear index of the last non-zero value in ``A`` (determined by ``A[i]!=0``\ ). Returns ``0`` if there is no non-zero value in ``A``\ .
+
+   .. doctest::
+
+       julia> A = [1 0; 1 0]
+       2×2 Array{Int64,2}:
+        1  0
+        1  0
+
+       julia> findlast(A)
+       2
+
+       julia> A = zeros(2,2)
+       2×2 Array{Float64,2}:
+        0.0  0.0
+        0.0  0.0
+
+       julia> findlast(A)
+       0
 
 .. function:: findlast(A, v)
 
    .. Docstring generated from Julia source
 
-   Return the index of the last element equal to ``v`` in ``A``\ .
+   Return the linear index of the last element equal to ``v`` in ``A``\ . Returns ``0`` if there is no element of ``A`` equal to ``v``\ .
 
-.. function:: findlast(predicate, A)
+   .. doctest::
 
-   .. Docstring generated from Julia source
+       julia> A = [1 2; 2 1]
+       2×2 Array{Int64,2}:
+        1  2
+        2  1
 
-   Return the index of the last element of ``A`` for which ``predicate`` returns ``true``\ .
+       julia> findlast(A,1)
+       4
 
-.. function:: findnext(A, i)
+       julia> findlast(A,2)
+       3
 
-   .. Docstring generated from Julia source
+       julia> findlast(A,3)
+       0
 
-   Find the next index >= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
-
-.. function:: findnext(predicate, A, i)
-
-   .. Docstring generated from Julia source
-
-   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
-
-.. function:: findnext(A, v, i)
+.. function:: findlast(predicate::Function, A)
 
    .. Docstring generated from Julia source
 
-   Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+   Return the linear index of the last element of ``A`` for which ``predicate`` returns ``true``\ . Returns ``0`` if there is no such element.
 
-.. function:: findprev(A, i)
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> findlast(isodd, A)
+       2
+
+       julia> findlast(x -> x > 5, A)
+       0
+
+.. function:: findnext(A, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Find the previous index <= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
+   Find the next linear index >= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
 
-.. function:: findprev(predicate, A, i)
+   .. doctest::
+
+       julia> A = [0 0; 1 0]
+       2×2 Array{Int64,2}:
+        0  0
+        1  0
+
+       julia> findnext(A,1)
+       2
+
+       julia> findnext(A,3)
+       0
+
+.. function:: findnext(predicate::Function, A, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Find the previous index <= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
+   Find the next linear index >= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
 
-.. function:: findprev(A, v, i)
+   .. doctest::
+
+       julia> A = [1 4; 2 2]
+       2×2 Array{Int64,2}:
+        1  4
+        2  2
+
+       julia> findnext(isodd, A, 1)
+       1
+
+       julia> findnext(isodd, A, 2)
+       0
+
+.. function:: findnext(A, v, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Find the previous index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+   Find the next linear index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+
+   .. doctest::
+
+       julia> A = [1 4; 2 2]
+       2×2 Array{Int64,2}:
+        1  4
+        2  2
+
+       julia> findnext(A,4,4)
+       0
+
+       julia> findnext(A,4,3)
+       3
+
+.. function:: findprev(A, i::Integer)
+
+   .. Docstring generated from Julia source
+
+   Find the previous linear index <= ``i`` of a non-zero element of ``A``\ , or ``0`` if not found.
+
+   .. doctest::
+
+       julia> A = [0 0; 1 2]
+       2×2 Array{Int64,2}:
+        0  0
+        1  2
+
+       julia> findprev(A,2)
+       2
+
+       julia> findprev(A,1)
+       0
+
+.. function:: findprev(predicate::Function, A, i::Integer)
+
+   .. Docstring generated from Julia source
+
+   Find the previous linear index <= ``i`` of an element of ``A`` for which ``predicate`` returns ``true``\ , or ``0`` if not found.
+
+   .. doctest::
+
+       julia> A = [4 6; 1 2]
+       2×2 Array{Int64,2}:
+        4  6
+        1  2
+
+       julia> findprev(isodd, A, 1)
+       0
+
+       julia> findprev(isodd, A, 3)
+       2
+
+.. function:: findprev(A, v, i::Integer)
+
+   .. Docstring generated from Julia source
+
+   Find the previous linear index <= ``i`` of an element of ``A`` equal to ``v`` (using ``==``\ ), or ``0`` if not found.
+
+   .. doctest::
+
+       julia> A = [0 0; 1 2]
+       2×2 Array{Int64,2}:
+        0  0
+        1  2
+
+       julia> findprev(A, 1, 4)
+       2
+
+       julia> findprev(A, 1, 1)
+       0
 
 .. function:: permutedims(A, perm)
 
@@ -608,13 +968,43 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ .
+   Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ . ``size(A,i)`` must equal 1 for all ``i`` in ``dims``\ .
 
-.. function:: vec(Array) -> Vector
+   .. doctest::
+
+       julia> a = reshape(collect(1:4),(2,2,1,1))
+       2×2×1×1 Array{Int64,4}:
+       [:, :, 1, 1] =
+        1  3
+        2  4
+
+       julia> squeeze(a,3)
+       2×2×1 Array{Int64,3}:
+       [:, :, 1] =
+        1  3
+        2  4
+
+.. function:: vec(a::AbstractArray) -> Vector
 
    .. Docstring generated from Julia source
 
-   Vectorize an array using column-major convention.
+   Reshape array ``a`` as a one-dimensional column vector.
+
+   .. doctest::
+
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> vec(a)
+       6-element Array{Int64,1}:
+        1
+        4
+        2
+        5
+        3
+        6
 
 .. function:: promote_shape(s1, s2)
 
@@ -657,11 +1047,28 @@ Indexing, Assignment, and Concatenation
 Array functions
 ---------------
 
-.. function:: cumprod(A, [dim])
+.. function:: cumprod(A, dim=1)
 
    .. Docstring generated from Julia source
 
    Cumulative product along a dimension ``dim`` (defaults to 1). See also :func:`cumprod!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow).
+
+   .. doctest::
+
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> cumprod(a,1)
+       2×3 Array{Int64,2}:
+        1   2   3
+        4  10  18
+
+       julia> cumprod(a,2)
+       2×3 Array{Int64,2}:
+        1   2    6
+        4  20  120
 
 .. function:: cumprod!(B, A, [dim])
 
@@ -669,11 +1076,28 @@ Array functions
 
    Cumulative product of ``A`` along a dimension, storing the result in ``B``\ . The dimension defaults to 1.
 
-.. function:: cumsum(A, [dim])
+.. function:: cumsum(A, dim=1)
 
    .. Docstring generated from Julia source
 
    Cumulative sum along a dimension ``dim`` (defaults to 1). See also :func:`cumsum!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow).
+
+   .. doctest::
+
+       julia> a = [1 2 3; 4 5 6]
+       2×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+
+       julia> cumsum(a,1)
+       2×3 Array{Int64,2}:
+        1  2  3
+        5  7  9
+
+       julia> cumsum(a,2)
+       2×3 Array{Int64,2}:
+        1  3   6
+        4  9  15
 
 .. function:: cumsum!(B, A, [dim])
 
@@ -717,11 +1141,40 @@ Array functions
 
    Rotate matrix ``A`` 180 degrees.
 
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rot180(a)
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
+
 .. function:: rot180(A, k)
 
    .. Docstring generated from Julia source
 
    Rotate matrix ``A`` 180 degrees an integer ``k`` number of times. If ``k`` is even, this is equivalent to a ``copy``\ .
+
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rot180(a,1)
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
+
+       julia> rot180(a,2)
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
 .. function:: rotl90(A)
 
@@ -729,11 +1182,50 @@ Array functions
 
    Rotate matrix ``A`` left 90 degrees.
 
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rotl90(a)
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
+
 .. function:: rotl90(A, k)
 
    .. Docstring generated from Julia source
 
    Rotate matrix ``A`` left 90 degrees an integer ``k`` number of times. If ``k`` is zero or a multiple of four, this is equivalent to a ``copy``\ .
+
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rotl90(a,1)
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
+
+       julia> rotl90(a,2)
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
+
+       julia> rotl90(a,3)
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
+
+       julia> rotl90(a,4)
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
 
 .. function:: rotr90(A)
 
@@ -741,31 +1233,141 @@ Array functions
 
    Rotate matrix ``A`` right 90 degrees.
 
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rotr90(a)
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
+
 .. function:: rotr90(A, k)
 
    .. Docstring generated from Julia source
 
    Rotate matrix ``A`` right 90 degrees an integer ``k`` number of times. If ``k`` is zero or a multiple of four, this is equivalent to a ``copy``\ .
 
-.. function:: reducedim(f, A, dims[, initial])
+   .. doctest::
+
+       julia> a = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> rotr90(a,1)
+       2×2 Array{Int64,2}:
+        3  1
+        4  2
+
+       julia> rotr90(a,2)
+       2×2 Array{Int64,2}:
+        4  3
+        2  1
+
+       julia> rotr90(a,3)
+       2×2 Array{Int64,2}:
+        2  4
+        1  3
+
+       julia> rotr90(a,4)
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+.. function:: reducedim(f, A, region[, v0])
 
    .. Docstring generated from Julia source
 
-   Reduce 2-argument function ``f`` along dimensions of ``A``\ . ``dims`` is a vector specifying the dimensions to reduce, and ``initial`` is the initial value to use in the reductions. For ``+``\ , ``*``\ , ``max`` and ``min`` the ``initial`` argument is optional.
+   Reduce 2-argument function ``f`` along dimensions of ``A``\ . ``region`` is a vector specifying the dimensions to reduce, and ``v0`` is the initial value to use in the reductions. For ``+``\ , ``*``\ , ``max`` and ``min`` the ``v0`` argument is optional.
 
-   The associativity of the reduction is implementation-dependent; if you need a particular associativity, e.g. left-to-right, you should write your own loop. See documentation for ``reduce``\ .
+   The associativity of the reduction is implementation-dependent; if you need a particular associativity, e.g. left-to-right, you should write your own loop. See documentation for :func:`reduce`\ .
 
-.. function:: mapreducedim(f, op, A, dims[, initial])
+   .. doctest::
+
+       julia> a = reshape(collect(1:16), (4,4))
+       4×4 Array{Int64,2}:
+        1  5   9  13
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
+
+       julia> reducedim(max, a, 2)
+       4×1 Array{Int64,2}:
+        13
+        14
+        15
+        16
+
+       julia> reducedim(max, a, 1)
+       1×4 Array{Int64,2}:
+        4  8  12  16
+
+.. function:: mapreducedim(f, op, A, region[, v0])
 
    .. Docstring generated from Julia source
 
-   Evaluates to the same as ``reducedim(op, map(f, A), dims, f(initial))``\ , but is generally faster because the intermediate array is avoided.
+   Evaluates to the same as ``reducedim(op, map(f, A), region, f(v0))``\ , but is generally faster because the intermediate array is avoided.
+
+   .. doctest::
+
+       julia> a = reshape(collect(1:16), (4,4))
+       4×4 Array{Int64,2}:
+        1  5   9  13
+        2  6  10  14
+        3  7  11  15
+        4  8  12  16
+
+       julia> mapreducedim(isodd, *, a, 1)
+       1×4 Array{Bool,2}:
+        false  false  false  false
+
+       julia> mapreducedim(isodd, |, a, 1, true)
+       1×4 Array{Bool,2}:
+        true  true  true  true
 
 .. function:: mapslices(f, A, dims)
 
    .. Docstring generated from Julia source
 
    Transform the given dimensions of array ``A`` using function ``f``\ . ``f`` is called on each slice of ``A`` of the form ``A[...,:,...,:,...]``\ . ``dims`` is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if ``dims`` is ``[1,2]`` and ``A`` is 4-dimensional, ``f`` is called on ``A[:,:,i,j]`` for all ``i`` and ``j``\ .
+
+   .. doctest::
+
+       julia> a = reshape(collect(1:16),(2,2,2,2))
+       2×2×2×2 Array{Int64,4}:
+       [:, :, 1, 1] =
+        1  3
+        2  4
+       <BLANKLINE>
+       [:, :, 2, 1] =
+        5  7
+        6  8
+       <BLANKLINE>
+       [:, :, 1, 2] =
+         9  11
+        10  12
+       <BLANKLINE>
+       [:, :, 2, 2] =
+        13  15
+        14  16
+
+       julia> mapslices(sum, a, [1,2])
+       1×1×2×2 Array{Int64,4}:
+       [:, :, 1, 1] =
+        10
+       <BLANKLINE>
+       [:, :, 2, 1] =
+        26
+       <BLANKLINE>
+       [:, :, 1, 2] =
+        42
+       <BLANKLINE>
+       [:, :, 2, 2] =
+        58
 
 .. function:: sum_kbn(A)
 
@@ -858,41 +1460,121 @@ to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively
 
    Performs a bitwise not operation on ``B``\ . See :ref:`~ operator <~>`\ .
 
-.. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+   .. doctest::
+
+       julia> A = trues(2,2)
+       2×2 BitArray{2}:
+        true  true
+        true  true
+
+       julia> flipbits!(A)
+       2×2 BitArray{2}:
+        false  false
+        false  false
+
+.. function:: rol!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation on ``src`` and put the result into ``dest``\ .
+   Performs a left rotation operation on ``src`` and puts the result into ``dest``\ . ``i`` controls how far to rotate the bits.
 
-.. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-   .. Docstring generated from Julia source
-
-   Performs a left rotation operation on ``B``\ .
-
-.. function:: rol(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: rol!(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a left rotation operation.
+   Performs a left rotation operation in-place on ``B``\ . ``i`` controls how far to rotate the bits.
 
-.. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
-
-   .. Docstring generated from Julia source
-
-   Performs a right rotation operation on ``src`` and put the result into ``dest``\ .
-
-.. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: rol(B::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation on ``B``\ .
+   Performs a left rotation operation, returning a new ``BitVector``\ . ``i`` controls how far to rotate the bits. See also :func:`rol!`\ .
 
-.. function:: ror(B::BitArray{1}, i::Integer) -> BitArray{1}
+   .. doctest::
+
+       julia> A = BitArray([true, true, false, false, true])
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
+
+       julia> rol(A,1)
+       5-element BitArray{1}:
+         true
+        false
+        false
+         true
+         true
+
+       julia> rol(A,2)
+       5-element BitArray{1}:
+        false
+        false
+         true
+         true
+         true
+
+       julia> rol(A,5)
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
+
+.. function:: ror!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
 
    .. Docstring generated from Julia source
 
-   Performs a right rotation operation.
+   Performs a right rotation operation on ``src`` and puts the result into ``dest``\ . ``i`` controls how far to rotate the bits.
+
+.. function:: ror!(B::BitVector, i::Integer) -> BitVector
+
+   .. Docstring generated from Julia source
+
+   Performs a right rotation operation in-place on ``B``\ . ``i`` controls how far to rotate the bits.
+
+.. function:: ror(B::BitVector, i::Integer) -> BitVector
+
+   .. Docstring generated from Julia source
+
+   Performs a right rotation operation on ``B``\ , returning a new ``BitVector``\ . ``i`` controls how far to rotate the bits. See also :func:`ror!`\ .
+
+   .. doctest::
+
+       julia> A = BitArray([true, true, false, false, true])
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
+
+       julia> ror(A,1)
+       5-element BitArray{1}:
+         true
+         true
+         true
+        false
+        false
+
+       julia> ror(A,2)
+       5-element BitArray{1}:
+        false
+         true
+         true
+         true
+        false
+
+       julia> ror(A,5)
+       5-element BitArray{1}:
+         true
+         true
+        false
+        false
+         true
 
 .. _stdlib-sparse:
 
@@ -906,7 +1588,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``maximum(I)`` and ``maximum(J)`` respectively. If the ``combine`` function is not supplied, ``combine`` defaults to ``+`` unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ . All elements of ``I`` must satisfy ``1 <= I[k] <= m``\ , and all elements of ``J`` must satisfy ``1 <= J[k] <= n``\ . Numerical zeros in (``I``\ , ``J``\ , ``V``\ ) are retained as structural nonzeros; to drop numerical zeros, use ``dropzeros!``\ .
+   Create a sparse matrix ``S`` of dimensions ``m x n`` such that ``S[I[k], J[k]] = V[k]``\ . The ``combine`` function is used to combine duplicates. If ``m`` and ``n`` are not specified, they are set to ``maximum(I)`` and ``maximum(J)`` respectively. If the ``combine`` function is not supplied, ``combine`` defaults to ``+`` unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ . All elements of ``I`` must satisfy ``1 <= I[k] <= m``\ , and all elements of ``J`` must satisfy ``1 <= J[k] <= n``\ . Numerical zeros in (``I``\ , ``J``\ , ``V``\ ) are retained as structural nonzeros; to drop numerical zeros, use :func:`dropzeros!`\ .
 
    For additional documentation and an expert driver, see ``Base.SparseArrays.sparse!``\ .
 
@@ -964,6 +1646,24 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Create a sparse array with the same structure as that of ``S``\ , but with every nonzero element having the value ``1.0``\ .
 
+   .. doctest::
+
+       julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
+       4×4 sparse matrix with 4 Float64 nonzero entries:
+               [4, 1]  =  2.0
+               [1, 2]  =  5.0
+               [3, 3]  =  3.0
+               [2, 4]  =  4.0
+
+       julia> spones(A)
+       4×4 sparse matrix with 4 Float64 nonzero entries:
+               [4, 1]  =  1.0
+               [1, 2]  =  1.0
+               [3, 3]  =  1.0
+               [2, 4]  =  1.0
+
+   Note the difference from :func:`speye`\ .
+
 .. function:: speye([type,]m[,n])
 
    .. Docstring generated from Julia source
@@ -974,13 +1674,44 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a sparse identity matrix with the same structure as that of  ``S``\ .
+   Create a sparse identity matrix with the same size as ``S``\ .
+
+   .. doctest::
+
+       julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
+       4×4 sparse matrix with 4 Float64 nonzero entries:
+               [4, 1]  =  2.0
+               [1, 2]  =  5.0
+               [3, 3]  =  3.0
+               [2, 4]  =  4.0
+
+       julia> speye(A)
+       4×4 sparse matrix with 4 Float64 nonzero entries:
+               [1, 1]  =  1.0
+               [2, 2]  =  1.0
+               [3, 3]  =  1.0
+               [4, 4]  =  1.0
+
+   Note the difference from :func:`spones`\ .
 
 .. function:: spdiagm(B, d[, m, n])
 
    .. Docstring generated from Julia source
 
    Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
+
+   .. doctest::
+
+       julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
+       5×5 sparse matrix with 8 Int64 nonzero entries:
+               [2, 1]  =  1
+               [1, 2]  =  4
+               [3, 2]  =  2
+               [2, 3]  =  3
+               [4, 3]  =  3
+               [3, 4]  =  2
+               [5, 4]  =  4
+               [4, 5]  =  1
 
 .. function:: sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
 
@@ -998,19 +1729,19 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Return a vector of the structural nonzero values in sparse array ``A``\ . This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. See ``rowvals(A)`` and ``nzrange(A, col)``\ .
+   Return a vector of the structural nonzero values in sparse array ``A``\ . This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. See :func:`rowvals` and :func:`nzrange`\ .
 
 .. function:: rowvals(A::SparseMatrixCSC)
 
    .. Docstring generated from Julia source
 
-   Return a vector of the row indices of ``A``\ . Any modifications to the returned vector will mutate ``A`` as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also ``nonzeros(A)`` and ``nzrange(A, col)``\ .
+   Return a vector of the row indices of ``A``\ . Any modifications to the returned vector will mutate ``A`` as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also :func:`nonzeros` and :func:`nzrange`\ .
 
 .. function:: nzrange(A::SparseMatrixCSC, col)
 
    .. Docstring generated from Julia source
 
-   Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with ``nonzeros(A)`` and ``rowvals(A)``\ , this allows for convenient iterating over a sparse matrix :
+   Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with :func:`nonzeros` and :func:`rowvals`\ , this allows for convenient iterating over a sparse matrix :
 
    .. code-block:: julia
 
@@ -1032,7 +1763,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Removes stored numerical zeros from ``A``\ , optionally trimming resulting excess space from ``A.rowval`` and ``A.nzval`` when ``trim`` is ``true``\ .
 
-   For an out-of-place version, see :func:`Base.SparseArrays.dropzeros`\ . For algorithmic information, see :func:`Base.SparseArrays.fkeep!`\ .
+   For an out-of-place version, see :func:`dropzeros`\ . For algorithmic information, see :func:`Base.SparseArrays.fkeep!`\ .
 
 .. function:: dropzeros(A::SparseMatrixCSC, trim::Bool = true)
 
@@ -1040,7 +1771,7 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Generates a copy of ``A`` and removes stored numerical zeros from that copy, optionally trimming excess space from the result's ``rowval`` and ``nzval`` arrays when ``trim`` is ``true``\ .
 
-   For an in-place version and algorithmic information, see :func:`Base.SparseArrays.dropzeros!`\ .
+   For an in-place version and algorithmic information, see :func:`dropzeros!`\ .
 
 .. function:: dropzeros!(x::SparseVector, trim::Bool = true)
 

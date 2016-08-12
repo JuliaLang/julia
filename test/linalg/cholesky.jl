@@ -78,7 +78,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test tril(lapd.factors) ≈ capd[:L]
     if eltya <: Real
         capds = cholfact(apds)
-        lapds = cholfact(apds, :L)
+        lapds = cholfact(Symmetric(apds.data, :L))
         ls = lapds[:L]
         @test ls*ls' ≈ apd
         @test triu(capds.factors) ≈ lapds[:U]

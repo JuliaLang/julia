@@ -225,11 +225,65 @@ mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
 reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
     mapreducedim!(identity, op, R, A, zero(RT))
 
+"""
+    mapreducedim(f, op, A, region[, v0])
+
+Evaluates to the same as `reducedim(op, map(f, A), region, f(v0))`, but is generally
+faster because the intermediate array is avoided.
+
+```jldoctest
+julia> a = reshape(collect(1:16), (4,4))
+4×4 Array{Int64,2}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> mapreducedim(isodd, *, a, 1)
+1×4 Array{Bool,2}:
+ false  false  false  false
+
+julia> mapreducedim(isodd, |, a, 1, true)
+1×4 Array{Bool,2}:
+ true  true  true  true
+```
+"""
 mapreducedim(f, op, A::AbstractArray, region, v0) =
     mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
 mapreducedim{T}(f, op, A::AbstractArray{T}, region) =
     mapreducedim!(f, op, reducedim_init(f, op, A, region), A)
 
+"""
+    reducedim(f, A, region[, v0])
+
+Reduce 2-argument function `f` along dimensions of `A`. `region` is a vector specifying the
+dimensions to reduce, and `v0` is the initial value to use in the reductions. For `+`, `*`,
+`max` and `min` the `v0` argument is optional.
+
+The associativity of the reduction is implementation-dependent; if you need a particular
+associativity, e.g. left-to-right, you should write your own loop. See documentation for
+[`reduce`](:func:`reduce`).
+
+```jldoctest
+julia> a = reshape(collect(1:16), (4,4))
+4×4 Array{Int64,2}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> reducedim(max, a, 2)
+4×1 Array{Int64,2}:
+ 13
+ 14
+ 15
+ 16
+
+julia> reducedim(max, a, 1)
+1×4 Array{Int64,2}:
+ 4  8  12  16
+```
+"""
 reducedim(op, A::AbstractArray, region, v0) = mapreducedim(identity, op, A, region, v0)
 reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
 
@@ -326,6 +380,11 @@ function findmin!{R}(rval::AbstractArray{R},
     findminmax!(<, initarray!(rval, scalarmin, init), rind, A)
 end
 
+"""
+    findmin(A, region) -> (minval, index)
+
+For an array input, returns the value and index of the minimum over the given region.
+"""
 function findmin{T}(A::AbstractArray{T}, region)
     if isempty(A)
         return (similar(A, reduced_dims0(A, region)),
@@ -348,6 +407,11 @@ function findmax!{R}(rval::AbstractArray{R},
     findminmax!(>, initarray!(rval, scalarmax, init), rind, A)
 end
 
+"""
+    findmax(A, region) -> (maxval, index)
+
+For an array input, returns the value and index of the maximum over the given region.
+"""
 function findmax{T}(A::AbstractArray{T}, region)
     if isempty(A)
         return (similar(A, reduced_dims0(A,region)),

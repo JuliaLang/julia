@@ -172,6 +172,12 @@ for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     end
 end
 
+"""
+    eye([T::Type=Float64,] m::Integer, n::Integer)
+
+`m`-by-`n` identity matrix.
+The default element type is `Float64`.
+"""
 function eye(T::Type, m::Integer, n::Integer)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
@@ -181,7 +187,35 @@ function eye(T::Type, m::Integer, n::Integer)
 end
 eye(m::Integer, n::Integer) = eye(Float64, m, n)
 eye(T::Type, n::Integer) = eye(T, n, n)
+"""
+    eye([T::Type=Float64,] n::Integer)
+
+`n`-by-`n` identity matrix.
+The default element type is `Float64`.
+"""
 eye(n::Integer) = eye(Float64, n)
+
+"""
+    eye(A)
+
+Constructs an identity matrix of the same dimensions and type as `A`.
+
+```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
+julia> eye(A)
+3×3 Array{Int64,2}:
+ 1  0  0
+ 0  1  0
+ 0  0  1
+```
+
+Note the difference from [`ones`](:func:`ones`).
+"""
 eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
 
 function one{T}(x::AbstractMatrix{T})
@@ -211,7 +245,7 @@ The result has the same shape and number of dimensions as `collection`.
 collect{T}(::Type{T}, itr) = _collect(T, itr, iteratorsize(itr))
 
 _collect{T}(::Type{T}, itr, isz::HasLength) = copy!(Array{T,1}(Int(length(itr)::Integer)), itr)
-_collect{T}(::Type{T}, itr, isz::HasShape)  = copy!(Array{T}(convert(Dims,size(itr))), itr)
+_collect{T}(::Type{T}, itr, isz::HasShape)  = copy!(similar(Array{T}, indices(itr)), itr)
 function _collect{T}(::Type{T}, itr, isz::SizeUnknown)
     a = Array{T,1}(0)
     for x in itr
@@ -249,17 +283,13 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
 end
 
 if isdefined(Core, :Inference)
-    function _default_eltype(itrt::ANY)
-        rt = Core.Inference.return_type(first, Tuple{itrt})
-        return isleaftype(rt) ? rt : Union{}
-    end
+    _default_eltype(itrt::ANY) = Core.Inference.return_type(first, Tuple{itrt})
 else
-    _default_eltype(itr::ANY) = Union{}
+    _default_eltype(itr::ANY) = Any
 end
-_default_eltype{I,T}(::Type{Generator{I,Type{T}}}) = T
 
 _array_for(T, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
-_array_for(T, itr, ::HasShape) = Array{T}(convert(Dims,size(itr)))
+_array_for(T, itr, ::HasShape) = similar(Array{T}, indices(itr))
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
@@ -320,7 +350,12 @@ function collect_to!{T}(dest::AbstractArray{T}, itr, offs, st)
     return dest
 end
 
-function grow_to!(dest, itr, st = start(itr))
+function grow_to!(dest, itr)
+    out = grow_to!(similar(dest,Union{}), itr, start(itr))
+    return isempty(out) ? dest : out
+end
+
+function grow_to!(dest, itr, st)
     T = eltype(dest)
     while !done(itr, st)
         el, st = next(itr, st)
@@ -520,6 +555,22 @@ function insert!{T}(a::Array{T,1}, i::Integer, item)
     return a
 end
 
+"""
+    deleteat!(a::Vector, i::Integer)
+
+Remove the item at the given `i` and return the modified `a`. Subsequent items
+are shifted to fill the resulting gap.
+
+```jldoctest
+julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
+5-element Array{Int64,1}:
+ 6
+ 4
+ 3
+ 2
+ 1
+```
+"""
 deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
 
 function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
@@ -528,6 +579,25 @@ function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
     return a
 end
 
+"""
+    deleteat!(a::Vector, inds)
+
+Remove the items at the indices given by `inds`, and return the modified `a`.
+Subsequent items are shifted to fill the resulting gap. `inds` must be sorted and unique.
+
+```jldoctest
+julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
+3-element Array{Int64,1}:
+ 5
+ 3
+ 1
+
+julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
+ERROR: ArgumentError: indices must be unique and sorted
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:611
+ ...
+```
+"""
 function deleteat!(a::Vector, inds)
     n = length(a)
     s = start(inds)
@@ -667,6 +737,7 @@ function hcat{T}(V::Vector{T}...)
     end
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
+
 function vcat{T}(arrays::Vector{T}...)
     n = 0
     for a in arrays
@@ -697,7 +768,24 @@ end
 
 ## find ##
 
-# returns the index of the next non-zero element, or 0 if all zeros
+"""
+    findnext(A, i::Integer)
+
+Find the next linear index >= `i` of a non-zero element of `A`, or `0` if not found.
+
+```jldoctest
+julia> A = [0 0; 1 0]
+2×2 Array{Int64,2}:
+ 0  0
+ 1  0
+
+julia> findnext(A,1)
+2
+
+julia> findnext(A,3)
+0
+```
+"""
 function findnext(A, start::Integer)
     for i = start:length(A)
         if A[i] != 0
@@ -706,9 +794,43 @@ function findnext(A, start::Integer)
     end
     return 0
 end
+
+"""
+    findfirst(A)
+
+Return the linear index of the first non-zero value in `A` (determined by `A[i]!=0`).
+Returns `0` if no such value is found.
+
+```jldoctest
+julia> A = [0 0; 1 0]
+2×2 Array{Int64,2}:
+ 0  0
+ 1  0
+
+julia> findfirst(A)
+2
+```
+"""
 findfirst(A) = findnext(A, 1)
 
-# returns the index of the next matching element
+"""
+    findnext(A, v, i::Integer)
+
+Find the next linear index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
+
+```jldoctest
+julia> A = [1 4; 2 2]
+2×2 Array{Int64,2}:
+ 1  4
+ 2  2
+
+julia> findnext(A,4,4)
+0
+
+julia> findnext(A,4,3)
+3
+```
+"""
 function findnext(A, v, start::Integer)
     for i = start:length(A)
         if A[i] == v
@@ -717,9 +839,45 @@ function findnext(A, v, start::Integer)
     end
     return 0
 end
+"""
+    findfirst(A, v)
+
+Return the linear index of the first element equal to `v` in `A`.
+Returns `0` if `v` is not found.
+
+```jldoctest
+julia> A = [4 6; 2 2]
+2×2 Array{Int64,2}:
+ 4  6
+ 2  2
+
+julia> findfirst(A,2)
+2
+
+julia> findfirst(A,3)
+0
+```
+"""
 findfirst(A, v) = findnext(A, v, 1)
 
-# returns the index of the next element for which the function returns true
+"""
+    findnext(predicate::Function, A, i::Integer)
+
+Find the next linear index >= `i` of an element of `A` for which `predicate` returns `true`, or `0` if not found.
+
+```jldoctest
+julia> A = [1 4; 2 2]
+2×2 Array{Int64,2}:
+ 1  4
+ 2  2
+
+julia> findnext(isodd, A, 1)
+1
+
+julia> findnext(isodd, A, 2)
+0
+```
+"""
 function findnext(testf::Function, A, start::Integer)
     for i = start:length(A)
         if testf(A[i])
@@ -728,35 +886,193 @@ function findnext(testf::Function, A, start::Integer)
     end
     return 0
 end
+
+"""
+    findfirst(predicate::Function, A)
+
+Return the linear index of the first element of `A` for which `predicate` returns `true`.
+Returns `0` if there is no such element.
+
+```jldoctest
+julia> A = [1 4; 2 2]
+2×2 Array{Int64,2}:
+ 1  4
+ 2  2
+
+julia> findfirst(iseven, A)
+2
+
+julia> findfirst(x -> x>10, A)
+0
+```
+"""
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
-# returns the index of the previous non-zero element, or 0 if all zeros
+"""
+    findprev(A, i::Integer)
+
+Find the previous linear index <= `i` of a non-zero element of `A`, or `0` if not found.
+
+```jldoctest
+julia> A = [0 0; 1 2]
+2×2 Array{Int64,2}:
+ 0  0
+ 1  2
+
+julia> findprev(A,2)
+2
+
+julia> findprev(A,1)
+0
+```
+"""
 function findprev(A, start::Integer)
     for i = start:-1:1
         A[i] != 0 && return i
     end
     return 0
 end
+
+"""
+    findlast(A)
+
+Return the linear index of the last non-zero value in `A` (determined by `A[i]!=0`).
+Returns `0` if there is no non-zero value in `A`.
+
+```jldoctest
+julia> A = [1 0; 1 0]
+2×2 Array{Int64,2}:
+ 1  0
+ 1  0
+
+julia> findlast(A)
+2
+
+julia> A = zeros(2,2)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+julia> findlast(A)
+0
+```
+"""
 findlast(A) = findprev(A, length(A))
 
-# returns the index of the matching element, or 0 if no matching
+"""
+    findprev(A, v, i::Integer)
+
+Find the previous linear index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
+
+```jldoctest
+julia> A = [0 0; 1 2]
+2×2 Array{Int64,2}:
+ 0  0
+ 1  2
+
+julia> findprev(A, 1, 4)
+2
+
+julia> findprev(A, 1, 1)
+0
+```
+"""
 function findprev(A, v, start::Integer)
     for i = start:-1:1
         A[i] == v && return i
     end
     return 0
 end
+
+"""
+    findlast(A, v)
+
+Return the linear index of the last element equal to `v` in `A`.
+Returns `0` if there is no element of `A` equal to `v`.
+
+```jldoctest
+julia> A = [1 2; 2 1]
+2×2 Array{Int64,2}:
+ 1  2
+ 2  1
+
+julia> findlast(A,1)
+4
+
+julia> findlast(A,2)
+3
+
+julia> findlast(A,3)
+0
+```
+"""
 findlast(A, v) = findprev(A, v, length(A))
 
-# returns the index of the previous element for which the function returns true, or zero if it never does
+"""
+    findprev(predicate::Function, A, i::Integer)
+
+Find the previous linear index <= `i` of an element of `A` for which `predicate` returns `true`, or
+`0` if not found.
+
+```jldoctest
+julia> A = [4 6; 1 2]
+2×2 Array{Int64,2}:
+ 4  6
+ 1  2
+
+julia> findprev(isodd, A, 1)
+0
+
+julia> findprev(isodd, A, 3)
+2
+```
+"""
 function findprev(testf::Function, A, start::Integer)
     for i = start:-1:1
         testf(A[i]) && return i
     end
     return 0
 end
+
+"""
+    findlast(predicate::Function, A)
+
+Return the linear index of the last element of `A` for which `predicate` returns `true`.
+Returns `0` if there is no such element.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> findlast(isodd, A)
+2
+
+julia> findlast(x -> x > 5, A)
+0
+```
+"""
 findlast(testf::Function, A) = findprev(testf, A, length(A))
 
+"""
+    find(f::Function, A)
+
+Return a vector `I` of the linear indexes of `A` where `f(A[I])` returns `true`.
+If there are no such elements of `A`, find returns an empty array.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> find(isodd,A)
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
 function find(testf::Function, A)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
@@ -771,6 +1087,25 @@ function find(testf::Function, A)
     return I
 end
 
+"""
+    find(A)
+
+Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[i]!=0`). A
+common use of this is to convert a boolean array to an array of indexes of the `true`
+elements. If there are no non-zero elements of `A`, `find` returns an empty array.
+
+```jldoctest
+julia> A = [true false; false true]
+2×2 Array{Bool,2}:
+  true  false
+ false   true
+
+julia> find(A)
+2-element Array{Int64,1}:
+ 1
+ 4
+```
+"""
 function find(A)
     nnzA = countnz(A)
     I = Vector{Int}(nnzA)
@@ -789,12 +1124,38 @@ find(testf::Function, x::Number) = !testf(x) ? Array{Int,1}(0) : [1]
 
 findn(A::AbstractVector) = find(A)
 
+"""
+    findn(A)
+
+Return a vector of indexes for each dimension giving the locations of the non-zeros in `A`
+(determined by `A[i]!=0`).
+If there are no non-zero elements of `A`, `findn` returns a 2-tuple of empty arrays.
+
+```jldoctest
+julia> A = [1 2 0; 0 0 3; 0 4 0]
+3×3 Array{Int64,2}:
+ 1  2  0
+ 0  0  3
+ 0  4  0
+
+julia> findn(A)
+([1,1,3,2],[1,2,2,3])
+
+julia> A = zeros(2,2)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+julia> findn(A)
+(Int64[],Int64[])
+```
+"""
 function findn(A::AbstractMatrix)
     nnzA = countnz(A)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
     count = 1
-    for j=1:size(A,2), i=1:size(A,1)
+    for j=indices(A,2), i=indices(A,1)
         if A[i,j] != 0
             I[count] = i
             J[count] = j
@@ -804,6 +1165,23 @@ function findn(A::AbstractMatrix)
     return (I, J)
 end
 
+"""
+    findnz(A)
+
+Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
+values in matrix `A`, and `V` is a vector of the non-zero values.
+
+```jldoctest
+julia> A = [1 2 0; 0 0 3; 0 4 0]
+3×3 Array{Int64,2}:
+ 1  2  0
+ 0  0  3
+ 0  4  0
+
+julia> findnz(A)
+([1,1,3,2],[1,2,2,3],[1,2,4,3])
+```
+"""
 function findnz{T}(A::AbstractMatrix{T})
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
@@ -811,7 +1189,7 @@ function findnz{T}(A::AbstractMatrix{T})
     NZs = Array{T,1}(nnzA)
     count = 1
     if nnzA > 0
-        for j=1:size(A,2), i=1:size(A,1)
+        for j=indices(A,2), i=indices(A,1)
             Aij = A[i,j]
             if Aij != 0
                 I[count] = i
@@ -824,6 +1202,17 @@ function findnz{T}(A::AbstractMatrix{T})
     return (I, J, NZs)
 end
 
+"""
+    findmax(itr) -> (x, index)
+
+Returns the maximum element and its index.
+The collection must not be empty.
+
+```jldoctest
+julia> findmax([8,0.1,-9,pi])
+(8.0,1)
+```
+"""
 function findmax(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
@@ -842,6 +1231,17 @@ function findmax(a)
     return (m, mi)
 end
 
+"""
+    findmin(itr) -> (x, index)
+
+Returns the minimum element and its index.
+The collection must not be empty.
+
+```jldoctest
+julia> findmin([8,0.1,-9,pi])
+(-9.0,3)
+```
+"""
 function findmin(a)
     if isempty(a)
         throw(ArgumentError("collection must be non-empty"))
@@ -860,16 +1260,91 @@ function findmin(a)
     return (m, mi)
 end
 
+"""
+    indmax(itr) -> Integer
+
+Returns the index of the maximum element in a collection.
+The collection must not be empty.
+
+```jldoctest
+julia> indmax([8,0.1,-9,pi])
+1
+```
+"""
 indmax(a) = findmax(a)[2]
+
+"""
+    indmin(itr) -> Integer
+
+Returns the index of the minimum element in a collection.
+The collection must not be empty.
+
+```jldoctest
+julia> indmin([8,0.1,-9,pi])
+3
+```
+"""
 indmin(a) = findmin(a)[2]
 
 # similar to Matlab's ismember
-# returns a vector containing the highest index in b for each value in a that is a member of b
+"""
+    indexin(a, b)
+
+Returns a vector containing the highest index in `b` for
+each value in `a` that is a member of `b` . The output
+vector contains 0 wherever `a` is not a member of `b`.
+
+```jldoctest
+julia> a = ['a', 'b', 'c', 'b', 'd', 'a'];
+
+julia> b = ['a','b','c'];
+
+julia> indexin(a,b)
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 2
+ 0
+ 1
+
+julia> indexin(b,a)
+3-element Array{Int64,1}:
+ 6
+ 4
+ 3
+```
+"""
 function indexin(a::AbstractArray, b::AbstractArray)
     bdict = Dict(zip(b, 1:length(b)))
     [get(bdict, i, 0) for i in a]
 end
 
+"""
+    findin(a, b)
+
+Returns the indices of elements in collection `a` that appear in collection `b`.
+
+```jldoctest
+julia> a = collect(1:3:15)
+5-element Array{Int64,1}:
+  1
+  4
+  7
+ 10
+ 13
+
+julia> b = collect(2:4:10)
+3-element Array{Int64,1}:
+  2
+  6
+ 10
+
+julia> findin(a,b) # 10 is the only common element
+1-element Array{Int64,1}:
+ 4
+```
+"""
 function findin(a, b)
     ind = Array{Int,1}(0)
     bset = Set(b)
@@ -963,6 +1438,22 @@ function union(vs...)
     ret
 end
 # setdiff only accepts two args
+
+"""
+    setdiff(a, b)
+
+Construct the set of elements in `a` but not `b`. Maintains order with arrays. Note that
+both arguments must be collections, and both will be iterated over. In particular,
+`setdiff(set,element)` where `element` is a potential member of `set`, will not work in
+general.
+
+```jldoctest
+julia> setdiff([1,2,3],[3,4,5])
+2-element Array{Int64,1}:
+ 1
+ 2
+```
+"""
 function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
     bset = Set(b)
@@ -983,4 +1474,18 @@ end
 # store counts with a Dict.
 symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
+"""
+    symdiff(a, b, rest...)
+
+Construct the symmetric difference of elements in the passed in sets or arrays.
+Maintains order with arrays.
+
+```jldoctest
+julia> symdiff([1,2,3],[3,4,5],[4,5,6])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 6
+```
+"""
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))

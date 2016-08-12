@@ -255,33 +255,30 @@ type TCPSocket <: LibuvStream
     lock::ReentrantLock
     throttle::Int
 
-    TCPSocket(handle) = new(
-        handle,
-        StatusUninit,
-        true,
-        PipeBuffer(),
-        false, Condition(),
-        false, Condition(),
-        false, Condition(),
-        nothing,
-        ReentrantLock(),
-        DEFAULT_READ_BUFFER_SZ
-    )
+    function TCPSocket(handle::Ptr{Void}, status)
+        tcp = new(
+                handle,
+                status,
+                true,
+                PipeBuffer(),
+                false, Condition(),
+                false, Condition(),
+                false, Condition(),
+                nothing,
+                ReentrantLock(),
+                DEFAULT_READ_BUFFER_SZ)
+        associate_julia_struct(tcp.handle, tcp)
+        finalizer(tcp, uvfinalize)
+        return tcp
+    end
 end
 function TCPSocket()
-    this = TCPSocket(Libc.malloc(_sizeof_uv_tcp))
-    associate_julia_struct(this.handle,this)
-    finalizer(this,uvfinalize)
-    err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
-                  eventloop(),this.handle)
-    if err != 0
-        #TODO: this codepath is not currently tested
-        Libc.free(this.handle)
-        this.handle = C_NULL
-        throw(UVError("failed to create tcp socket",err))
-    end
-    this.status = StatusInit
-    this
+    tcp = TCPSocket(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
+    err = ccall(:uv_tcp_init, Cint, (Ptr{Void}, Ptr{Void}),
+                eventloop(), tcp.handle)
+    uv_error("failed to create tcp socket", err)
+    tcp.status = StatusInit
+    return tcp
 end
 
 type TCPServer <: LibuvServer
@@ -292,27 +289,24 @@ type TCPServer <: LibuvServer
     closecb::Callback
     closenotify::Condition
 
-    TCPServer(handle) = new(
-        handle,
-        StatusUninit,
-        false, Condition(),
-        false, Condition()
-    )
+    function TCPServer(handle::Ptr{Void}, status)
+        tcp = new(
+            handle,
+            status,
+            false, Condition(),
+            false, Condition())
+        associate_julia_struct(tcp.handle, tcp)
+        finalizer(tcp, uvfinalize)
+        return tcp
+    end
 end
 function TCPServer()
-    this = TCPServer(Libc.malloc(_sizeof_uv_tcp))
-    associate_julia_struct(this.handle, this)
-    finalizer(this,uvfinalize)
-    err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
-                eventloop(),this.handle)
-    if err != 0
-        #TODO: this codepath is not currently tested
-        Libc.free(this.handle)
-        this.handle = C_NULL
-        throw(UVError("failed to create tcp server",err))
-    end
-    this.status = StatusInit
-    this
+    tcp = TCPServer(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
+    err = ccall(:uv_tcp_init, Cint, (Ptr{Void}, Ptr{Void}),
+                eventloop(), tcp.handle)
+    uv_error("failed to create tcp server", err)
+    tcp.status = StatusInit
+    return tcp
 end
 
 isreadable(io::TCPSocket) = isopen(io) || nb_available(io) > 0
@@ -344,39 +338,28 @@ type UDPSocket <: LibuvStream
     sendnotify::Condition
     closenotify::Condition
 
-    UDPSocket(handle::Ptr) = new(
-        handle,
-        StatusUninit,
-        Condition(),
-        Condition(),
-        Condition()
-    )
+    function UDPSocket(handle::Ptr{Void}, status)
+        udp = new(
+            handle,
+            status,
+            Condition(),
+            Condition(),
+            Condition())
+        associate_julia_struct(udp.handle, udp)
+        finalizer(udp, uvfinalize)
+        return udp
+    end
 end
 function UDPSocket()
-    this = UDPSocket(Libc.malloc(_sizeof_uv_udp))
-    associate_julia_struct(this.handle, this)
-    err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
-                eventloop(),this.handle)
-    finalizer(this, uvfinalize)
-    if err != 0
-        #TODO: this codepath is not currently tested
-        Libc.free(this.handle)
-        this.handle = C_NULL
-        throw(UVError("failed to create udp socket",err))
-    end
+    this = UDPSocket(Libc.malloc(_sizeof_uv_udp), StatusUninit)
+    err = ccall(:uv_udp_init, Cint, (Ptr{Void}, Ptr{Void}),
+                eventloop(), this.handle)
+    uv_error("failed to create udp socket", err)
     this.status = StatusInit
-    this
+    return this
 end
 
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
-
-function uvfinalize(uv::Union{TTY,PipeEndpoint,PipeServer,TCPServer,TCPSocket,UDPSocket})
-    if (uv.status != StatusUninit && uv.status != StatusInit)
-        close(uv)
-    end
-    disassociate_julia_struct(uv)
-    uv.handle = C_NULL
-end
 
 function _uv_hook_close(sock::UDPSocket)
     sock.handle = C_NULL

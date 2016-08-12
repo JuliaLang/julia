@@ -96,6 +96,9 @@ pygments_style = 'sphinx'
 primary_domain = 'jl'
 highlight_language = 'julia'
 
+# Flaky links to ignore in linkcheck - permissions or empty returns
+linkcheck_ignore = ['https://www.appveyor.com',
+    'https://bugs.kde.org/show_bug.cgi\?id=136779']
 
 # -- Options for HTML output ---------------------------------------------------
 
@@ -201,6 +204,7 @@ latex_elements = {
         \DeclareUnicodeCharacter{025B}{\ensuremath{\varepsilon}}
         \DeclareUnicodeCharacter{03B3}{\ensuremath{\gamma}}
         \DeclareUnicodeCharacter{03B8}{\ensuremath{\theta}}
+        \DeclareUnicodeCharacter{03BD}{\ensuremath{\nu}}
         \DeclareUnicodeCharacter{03C0}{\ensuremath{\pi}}
         \DeclareUnicodeCharacter{03C6}{\ensuremath{\varphi}}
         \DeclareUnicodeCharacter{1D34}{\ensuremath{^{\mathrm{H}}}}
@@ -213,6 +217,7 @@ latex_elements = {
         \DeclareUnicodeCharacter{2209}{\ensuremath{\notin}}
         \DeclareUnicodeCharacter{220C}{\ensuremath{\not\ni}}
         \DeclareUnicodeCharacter{2211}{\ensuremath{\sum}}
+        \DeclareUnicodeCharacter{2213}{\ensuremath{\mp}}
         \DeclareUnicodeCharacter{221A}{\ensuremath{\sqrt{}}}
         \DeclareUnicodeCharacter{221B}{\ensuremath{\sqrt[3]{}}}
         \DeclareUnicodeCharacter{222A}{\ensuremath{\cup}}

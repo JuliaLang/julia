@@ -446,7 +446,12 @@ s = view(a,:,[1,2,4],[1,5])
 c = convert(Array, s)
 for p in ([1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1])
     @test permutedims(s, p) == permutedims(c, p)
+    @test Base.PermutedDimsArrays.PermutedDimsArray(s, p) == permutedims(c, p)
 end
+@test_throws ArgumentError permutedims(a, (1,1,1))
+@test_throws ArgumentError permutedims(s, (1,1,1))
+@test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(a, (1,1,1))
+@test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(s, (1,1,1))
 
 ## ipermutedims ##
 
@@ -456,6 +461,15 @@ for i = tensors
     @test isequal(i,ipermutedims(permutedims(i,perm),perm))
     @test isequal(i,permutedims(ipermutedims(i,perm),perm))
 end
+
+## circshift
+
+@test circshift(1:5, -1) == circshift(1:5, 4) == circshift(1:5, -6) == [2,3,4,5,1]
+@test circshift(1:5, 1) == circshift(1:5, -4) == circshift(1:5, 6)  == [5,1,2,3,4]
+a = [1:5;]
+@test_throws ArgumentError Base.circshift!(a, a, 1)
+b = copy(a)
+@test Base.circshift!(b, a, 1) == [5,1,2,3,4]
 
 ## unique across dim ##
 
@@ -1252,6 +1266,7 @@ end
 
 I1 = CartesianIndex((2,3,0))
 I2 = CartesianIndex((-1,5,2))
+@test -I1 == CartesianIndex((-2,-3,0))
 @test I1 + I2 == CartesianIndex((1,8,2))
 @test I2 + I1 == CartesianIndex((1,8,2))
 @test I1 - I2 == CartesianIndex((3,-2,-2))

@@ -286,6 +286,9 @@ add_tfunc(is, 2, 2,
             return Const(x.parameters[1]===y.parameters[1])
         elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
             return Const(false)
+        elseif (isa(x,Const) && y === typeof(x.val) && isdefined(y,:instance)) ||
+               (isa(y,Const) && x === typeof(y.val) && isdefined(x,:instance))
+            return Const(true)
         else
             return Bool
         end
@@ -1484,6 +1487,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         linfo = specialize_method(method, atypes, sparams, cached)
     end
 
+    ccall(:jl_typeinf_begin, Void, ())
     # XXX: the following logic is likely subtly broken if code.code was nothing,
     #      although it seems unlikely something bad (infinite recursion) will happen as a result
     if linfo.inInference
@@ -1526,6 +1530,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         end
     end
     typeinf_loop(frame)
+    ccall(:jl_typeinf_end, Void, ())
     return (frame.linfo, widenconst(frame.bestguess), frame.inferred)
 end
 
@@ -1573,8 +1578,10 @@ function typeinf_ext(linfo::LambdaInfo)
     else
         # toplevel lambda - infer directly
         linfo.inInference = true
+        ccall(:jl_typeinf_begin, Void, ())
         frame = InferenceState(linfo, true, inlining_enabled(), true)
         typeinf_loop(frame)
+        ccall(:jl_typeinf_end, Void, ())
         @assert frame.inferred # TODO: deal with this better
         return linfo
     end
@@ -1588,7 +1595,6 @@ function typeinf_loop(frame)
         frame.inworkq || typeinf_frame(frame)
         return
     end
-    ccall(:jl_typeinf_begin, Void, ())
     try
         in_typeinf_loop = true
         # the core type-inference algorithm
@@ -1635,7 +1641,6 @@ function typeinf_loop(frame)
         println(ex)
         ccall(:jlbacktrace, Void, ())
     end
-    ccall(:jl_typeinf_end, Void, ())
     nothing
 end
 

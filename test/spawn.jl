@@ -83,27 +83,32 @@ end
 @test_broken  success(ignorestatus(falsecmd & falsecmd))
 
 # STDIN Redirection
-file = tempname()
-run(pipeline(`$echo hello world`, file))
-@test readstring(pipeline(file, catcmd)) == "hello world\n"
-@test open(readstring, pipeline(file, catcmd), "r") == "hello world\n"
-rm(file)
+let file = tempname()
+    run(pipeline(`$echo hello world`, file))
+    @test readstring(pipeline(file, catcmd)) == "hello world\n"
+    @test open(readstring, pipeline(file, catcmd), "r") == "hello world\n"
+    rm(file)
+end
 
 # Stream Redirection
 if !is_windows() # WINNT reports operation not supported on socket (ENOTSUP) for this test
-    local r = Channel(1), port, server, sock, client
-    @async begin
+    local r = Channel(1), port, server, sock, client, t1, t2
+    t1 = @async begin
         port, server = listenany(2326)
         put!(r, port)
         client = accept(server)
         @test readstring(pipeline(client, catcmd)) == "hello world\n"
         close(server)
+        return true
     end
-    @async begin
+    t2 = @async begin
         sock = connect(fetch(r))
         run(pipeline(`$echo hello world`, sock))
         close(sock)
+        return true
     end
+    @test wait(t1)
+    @test wait(t2)
 end
 
 @test readstring(setenv(`$shcmd -c "echo \$TEST"`,["TEST=Hello World"])) == "Hello World\n"
@@ -111,77 +116,87 @@ end
 @test readstring(setenv(`$shcmd -c "echo \$TEST"`,"TEST"=>"Hello World")) == "Hello World\n"
 @test (withenv("TEST"=>"Hello World") do
        readstring(`$shcmd -c "echo \$TEST"`); end) == "Hello World\n"
-pathA = readchomp(setenv(`$shcmd -c "pwd -P"`;dir=".."))
-pathB = readchomp(setenv(`$shcmd -c "cd .. && pwd -P"`))
-if is_windows()
-    # on windows, sh returns posix-style paths that are not valid according to ispath
-    @test pathA == pathB
-else
-    @test Base.samefile(pathA, pathB)
+let pathA = readchomp(setenv(`$shcmd -c "pwd -P"`;dir="..")),
+    pathB = readchomp(setenv(`$shcmd -c "cd .. && pwd -P"`))
+    if is_windows()
+        # on windows, sh returns posix-style paths that are not valid according to ispath
+        @test pathA == pathB
+    else
+        @test Base.samefile(pathA, pathB)
+    end
 end
 
-# Here we test that if we close a stream with pending writes, we don't lose the writes.
-str = ""
-for i=1:1000
-  str = "$str\n $(randstring(10))"
-end
-stdout, stdin, proc = readandwrite(`$catcmd -`)
-write(stdin, str)
-close(stdin)
-str2 = readstring(stdout)
-@test str2 == str
+let str = "", stdin, stdout, proc, str2, file
+    for i = 1:1000
+      str = "$str\n $(randstring(10))"
+    end
 
-# This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
-file = tempname()
-open(pipeline(`$catcmd -`, file), "w") do io
-    write(io, str)
+    # Here we test that if we close a stream with pending writes, we don't lose the writes.
+    stdout, stdin, proc = readandwrite(`$catcmd -`)
+    write(stdin, str)
+    close(stdin)
+    str2 = readstring(stdout)
+    @test str2 == str
+
+    # This test hangs if the end-of-run-walk-across-uv-streams calls shutdown on a stream that is shutting down.
+    file = tempname()
+    open(pipeline(`$catcmd -`, file), "w") do io
+        write(io, str)
+    end
+    rm(file)
 end
-rm(file)
 
 # issue #3373
 # fixing up Conditions after interruptions
-r = Channel(1)
-t = @async begin
-    try
-        wait(r)
+let r, t
+    r = Channel(1)
+    t = @async begin
+        try
+            wait(r)
+        end
+        p = spawn(`$sleepcmd 1`); wait(p)
+        @test p.exitcode == 0
+        return true
     end
-    p = spawn(`$sleepcmd 1`); wait(p)
-    @test p.exitcode == 0
+    yield()
+    schedule(t, InterruptException(), error=true)
+    yield()
+    put!(r,11)
+    yield()
+    @test wait(t)
 end
-yield()
-schedule(t, InterruptException(), error=true)
-yield()
-put!(r,11)
-yield()
 
 # Test marking of IO
-r = Channel(1)
-@async begin
-    port, server = listenany(2327)
-    put!(r, port)
-    client = accept(server)
-    write(client, "Hello, world!\n")
-    write(client, "Goodbye, world...\n")
-    close(server)
+let r, t, sock
+    r = Channel(1)
+    t = @async begin
+        port, server = listenany(2327)
+        put!(r, port)
+        client = accept(server)
+        write(client, "Hello, world!\n")
+        write(client, "Goodbye, world...\n")
+        close(server)
+        return true
+    end
+    sock = connect(fetch(r))
+    mark(sock)
+    @test ismarked(sock)
+    @test readline(sock) == "Hello, world!\n"
+    @test readline(sock) == "Goodbye, world...\n"
+    @test reset(sock) == 0
+    @test !ismarked(sock)
+    mark(sock)
+    @test ismarked(sock)
+    @test readline(sock) == "Hello, world!\n"
+    unmark(sock)
+    @test !ismarked(sock)
+    @test_throws ArgumentError reset(sock)
+    @test !unmark(sock)
+    @test readline(sock) == "Goodbye, world...\n"
+    #@test eof(sock) ## doesn't work
+    close(sock)
+    @test wait(t)
 end
-sock = connect(fetch(r))
-mark(sock)
-@test ismarked(sock)
-@test readline(sock) == "Hello, world!\n"
-@test readline(sock) == "Goodbye, world...\n"
-@test reset(sock) == 0
-@test !ismarked(sock)
-mark(sock)
-@test ismarked(sock)
-@test readline(sock) == "Hello, world!\n"
-unmark(sock)
-@test !ismarked(sock)
-@test_throws ArgumentError reset(sock)
-@test !unmark(sock)
-@test readline(sock) == "Goodbye, world...\n"
-#@test eof(sock) ## doesn't work
-close(sock)
-
 # issue #4535
 exename = Base.julia_cmd()
 if valgrind_off
@@ -210,16 +225,18 @@ yield()
 @test consume(ducer) == 2
 
 # redirect_*
-OLD_STDOUT = STDOUT
-fname = tempname()
-f = open(fname,"w")
-redirect_stdout(f)
-println("Hello World")
-redirect_stdout(OLD_STDOUT)
-close(f)
-@test "Hello World\n" == readstring(fname)
-@test is(OLD_STDOUT,STDOUT)
-rm(fname)
+let OLD_STDOUT = STDOUT,
+    fname = tempname(),
+    f = open(fname,"w")
+
+    redirect_stdout(f)
+    println("Hello World")
+    redirect_stdout(OLD_STDOUT)
+    close(f)
+    @test "Hello World\n" == readstring(fname)
+    @test is(OLD_STDOUT,STDOUT)
+    rm(fname)
+end
 
 # Test that redirecting an IOStream does not crash the process
 let fname = tempname()
@@ -265,9 +282,9 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition()
+let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition(), t
     @test_throws ArgumentError write(out, "not open error")
-    @async begin # spawn writer task
+    t = @async begin # spawn writer task
         open(echo, "w", out) do in1
             open(echo, "w", out) do in2
                 notify(ready)
@@ -282,10 +299,18 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
         @test isreadable(out)
         @test iswritable(out)
         close(out.in)
+        @test !isopen(out.in)
+        is_windows() || @test !isopen(out.out) # it takes longer to propagate EOF through the Windows event system
         @test_throws ArgumentError write(out, "now closed error")
         @test isreadable(out)
         @test !iswritable(out)
-        @test isopen(out)
+        if is_windows()
+            # WINNT kernel does not provide a fast mechanism for async propagation
+            # of EOF for a blocking stream, so just wait for it to catch up.
+            # This shouldn't take much more than 32ms.
+            Base.wait_close(out)
+        end
+        @test !isopen(out)
     end
     wait(ready) # wait for writer task to be ready before using `out`
     @test nb_available(out) == 0
@@ -308,6 +333,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe(open => active, 0 bytes waiting)"
+    wait(t)
 end
 
 # issue #8529
@@ -383,3 +409,22 @@ end
 @test_throws ArgumentError reduce(&, Base.AbstractCmd[])
 @test_throws ArgumentError reduce(&, Base.Cmd[])
 @test reduce(&, [`$echo abc`, `$echo def`, `$echo hij`]) == `$echo abc` & `$echo def` & `$echo hij`
+
+# test for proper handling of FD exhaustion
+if is_unix()
+    let ps = Pipe[]
+        try
+            for i = 1:100_000
+                p = Pipe()
+                Base.link_pipe(p)
+                push!(ps, p)
+            end
+            @test false
+        catch ex
+            for p in ps
+                close(p)
+            end
+            @test (ex::Base.UVError).code == Base.UV_EMFILE
+        end
+    end
+end
