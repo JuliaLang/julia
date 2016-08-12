@@ -346,6 +346,15 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits)
                             estimate_freed, sweep_full)
 #endif
 
+#ifdef MEMFENCE
+void gc_verify_tags(void);
+#else
+static inline void gc_verify_tags(void)
+{
+}
+#endif
+
+
 #ifdef GC_VERIFY
 extern jl_value_t *lostval;
 void gc_verify(jl_ptls_t ptls);
