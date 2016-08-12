@@ -19,6 +19,37 @@ using Base.Test
 @test string(Dates.DateTime(2000,1,1,0,0,0,998)) == "2000-01-01T00:00:00.998"
 @test string(Dates.DateTime(2000,1,1,0,0,0,999)) == "2000-01-01T00:00:00.999"
 
+
+# 0.4/0.5 parsing behaviour
+@test_throws ArgumentError Date("2010")
+@test Date("2010-")      == Date(2010)
+@test Date("2010-2")     == Date(2010,2)
+@test Date("2010-02-")   == Date(2010,2)
+@test Date("2010-02-5")  == Date(2010,2,5)
+@test Date("2010-02-05") == Date(2010,2,5)
+
+@test_throws ArgumentError DateTime("2010")
+@test DateTime("2010-")                     == DateTime(2010)
+@test DateTime("2010-2")                    == DateTime(2010,2)
+@test DateTime("2010-02-")                  == DateTime(2010,2)
+@test DateTime("2010-02-5")                 == DateTime(2010,2,5)
+@test DateTime("2010-02-05")                == DateTime(2010,2,5)
+@test DateTime("2010-02-05T")               == DateTime(2010,2,5)
+@test DateTime("2010-02-05T7")              == DateTime(2010,2,5,7)
+@test DateTime("2010-02-05T07")             == DateTime(2010,2,5,7)
+@test DateTime("2010-02-05T07:")            == DateTime(2010,2,5,7)
+@test DateTime("2010-02-05T07:8")           == DateTime(2010,2,5,7,8)
+@test DateTime("2010-02-05T07:08")          == DateTime(2010,2,5,7,8)
+@test DateTime("2010-02-05T07:08:")         == DateTime(2010,2,5,7,8)
+@test DateTime("2010-02-05T07:08:3")        == DateTime(2010,2,5,7,8,3)
+@test DateTime("2010-02-05T07:08:03")       == DateTime(2010,2,5,7,8,3)
+@test DateTime("2010-02-05T07:08:03.")      == DateTime(2010,2,5,7,8,3)
+@test DateTime("2010-02-05T07:08:03.1")     == DateTime(2010,2,5,7,8,3,100)
+@test DateTime("2010-02-05T07:08:03.12")    == DateTime(2010,2,5,7,8,3,120)
+@test DateTime("2010-02-05T07:08:03.123")   == DateTime(2010,2,5,7,8,3,123)
+@test_throws ArgumentError DateTime("2010-02-05T07:08:03.1234") # was InexactError
+
+
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
