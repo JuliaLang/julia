@@ -265,7 +265,7 @@ the [`DateFormat`](@ref) object. Similar to
 `DateTime(::AbstractString, ::AbstractString)` but more efficient when repeatedly parsing
 similarly formatted date strings with a pre-created `DateFormat` object.
 """
-DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = DateTime(parse(dt,df)...)
+DateTime(dt::AbstractString,df::DateFormat) = DateTime(parse(dt,df)...)
 
 """
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
@@ -281,7 +281,7 @@ Date(dt::AbstractString,format::AbstractString;locale::AbstractString="english")
 
 Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
-Date(dt::AbstractString,df::DateFormat=ISODateFormat) = Date(parse(dt,df)...)
+Date(dt::AbstractString,df::DateFormat) = Date(parse(dt,df)...)
 
 
 """
