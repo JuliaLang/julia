@@ -1,26 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# TODO: optimize this
-function Base.string(dt::DateTime)
-    y,m,d = yearmonthday(days(dt))
-    h,mi,s = hour(dt),minute(dt),second(dt)
-    yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
-    mm = lpad(m,2,"0")
-    dd = lpad(d,2,"0")
-    hh = lpad(h,2,"0")
-    mii = lpad(mi,2,"0")
-    ss = lpad(s,2,"0")
-    ms = millisecond(dt) == 0 ? "" : string(millisecond(dt)/1000.0)[2:end]
-    return "$yy-$mm-$(dd)T$hh:$mii:$ss$(ms)"
-end
+Base.string(dt::DateTime) = format(dt)
 Base.show(io::IO,x::DateTime) = print(io,string(x))
-function Base.string(dt::Date)
-    y,m,d = yearmonthday(value(dt))
-    yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
-    mm = lpad(m,2,"0")
-    dd = lpad(d,2,"0")
-    return "$yy-$mm-$dd"
-end
+Base.string(dt::Date) = format(dt)
 Base.show(io::IO,x::Date) = print(io,string(x))
 
 ### Parsing
@@ -49,11 +31,17 @@ immutable FixedWidthSlot{T<:Any} <: Slot{T}
     width::Int
 end
 
-immutable DateFormat
+abstract AbstractDateFormat
+
+immutable DateFormat <: AbstractDateFormat
     slots::Array{Slot,1}
     prefix::AbstractString # optional transition from the start of a string to the 1st slot
     locale::AbstractString
 end
+
+immutable FastDateFormat{S} <: AbstractDateFormat
+end
+
 
 abstract DayOfWeekSlot
 
@@ -230,9 +218,13 @@ function format(dt::TimeType,df::DateFormat)
 end
 
 # UI
-const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
-const ISODateFormat = DateFormat("yyyy-mm-dd")
+const ISODateTimeFormat = FastDateFormat{:ISODateTime}()
+const ISODateFormat = FastDateFormat{:ISODate}()
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
+
+format(dt::DateTime) = format(dt, ISODateTimeFormat)
+format(dt::Date) = format(dt, ISODateFormat)
+
 
 """
     DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
@@ -265,14 +257,15 @@ backslash. The date "1995y01m" would have the format "y\\ym\\m".
 DateTime(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = DateTime(dt,DateFormat(format,locale))
 
 """
-    DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+    DateTime(dt::AbstractString, df::AbstractDateFormat) -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date string following the pattern given in
 the [`DateFormat`](@ref) object. Similar to
 `DateTime(::AbstractString, ::AbstractString)` but more efficient when repeatedly parsing
 similarly formatted date strings with a pre-created `DateFormat` object.
 """
-DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = DateTime(parse(dt,df)...)
+DateTime(dt::AbstractString,df::DateFormat) = DateTime(parse(dt,df)...)
+DateTime(dt::AbstractString) = DateTime(dt,ISODateTimeFormat)
 
 """
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
@@ -284,11 +277,12 @@ Construct a `Date` object by parsing a `dt` date string following the pattern gi
 Date(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = Date(dt,DateFormat(format,locale))
 
 """
-    Date(dt::AbstractString, df::DateFormat) -> Date
+    Date(dt::AbstractString, df::AbstractDateFormat) -> Date
 
-Parse a date from a date string `dt` using a `DateFormat` object `df`.
+Parse a date from a date string `dt` using format `df`.
 """
-Date(dt::AbstractString,df::DateFormat=ISODateFormat) = Date(parse(dt,df)...)
+Date(dt::AbstractString,df::DateFormat) = Date(parse(dt,df)...)
+Date(str::AbstractString) = Date(str,ISODateFormat)
 
 
 """
@@ -328,18 +322,19 @@ format(dt::TimeType,f::AbstractString;locale::AbstractString="english") = format
 
 # vectorized
 DateTime{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = DateTime(Y,DateFormat(format,locale))
-function DateTime{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
-    return reshape(DateTime[DateTime(parse(y,df)...) for y in Y], size(Y))
+
+function DateTime{T<:AbstractString}(Y::AbstractArray{T},df::AbstractDateFormat=ISODateTimeFormat)
+    return reshape(DateTime[DateTime(y,df) for y in Y], size(Y))
 end
 Date{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Date(Y,DateFormat(format,locale))
-function Date{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateFormat)
-    return reshape(Date[Date(parse(y,df)...) for y in Y], size(Y))
+function Date{T<:AbstractString}(Y::AbstractArray{T},df::AbstractDateFormat=ISODateFormat)
+    return reshape(Date[Date(y,df) for y in Y], size(Y))
 end
 
 format{T<:TimeType}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Dates.format(Y,DateFormat(format,locale))
-function format(Y::AbstractArray{Date},df::DateFormat=ISODateFormat)
+function format(Y::AbstractArray{Date},df::AbstractDateFormat=ISODateFormat)
     return reshape([Dates.format(y,df) for y in Y], size(Y))
 end
-function format(Y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
+function format(Y::AbstractArray{DateTime},df::AbstractDateFormat=ISODateTimeFormat)
     return reshape([Dates.format(y,df) for y in Y], size(Y))
 end
