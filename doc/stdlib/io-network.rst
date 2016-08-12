@@ -134,7 +134,7 @@ General I/O
 
    Write the canonical binary representation of a value to the given I/O stream or file. Returns the number of bytes written into the stream.
 
-   You can write multiple values with the same :func:``write`` call. i.e. the following are equivalent:
+   You can write multiple values with the same ``write`` call. i.e. the following are equivalent:
 
    .. code-block:: julia
 
