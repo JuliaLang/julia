@@ -2146,13 +2146,6 @@ Remove each element of `iterable` from set `s` in-place.
 setdiff!
 
 """
-    EOFError()
-
-No more data was available to read from a file or stream.
-"""
-EOFError
-
-"""
     isascii(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character belongs to the ASCII character set, or whether this is true for
@@ -2953,12 +2946,6 @@ handle properly.
 """
 OutOfMemoryError
 
-"""
-    SystemError(prefix::AbstractString, [errno::Int32])
-
-A system call failed with an error code (in the `errno` global variable).
-"""
-SystemError
 
 """
     binomial(n,k)
@@ -2996,14 +2983,6 @@ Print information about the version of Julia in use. If the `verbose` argument i
 detailed system information is shown as well.
 """
 versioninfo
-
-"""
-    DimensionMismatch([msg])
-
-The objects called do not have matching dimensionality. Optional argument `msg` is a
-descriptive error string.
-"""
-DimensionMismatch
 
 """
     sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -3574,13 +3553,6 @@ Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In gener
 cannot be used with empty collections (see `reduce(op, itr)`).
 """
 foldr(op, itr)
-
-"""
-    ParseError(msg)
-
-The expression passed to the `parse` function could not be interpreted as a valid Julia expression.
-"""
-ParseError
 
 """
     delete!(collection, key)
@@ -4433,22 +4405,6 @@ readbytes!
 Get the file name part of a path.
 """
 basename
-
-"""
-    ArgumentError(msg)
-
-The parameters to a function call do not match a valid signature. Argument `msg` is a
-descriptive error string.
-"""
-ArgumentError
-
-"""
-    KeyError(key)
-
-An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
-delete a non-existent element.
-"""
-KeyError
 
 """
     isdiag(A) -> Bool
@@ -5305,13 +5261,6 @@ indexes. If the array length is insufficient, the least significant digits are f
 the array length. If the array length is excessive, the excess portion is filled with zeros.
 """
 digits!
-
-"""
-    MethodError(f, args)
-
-A method with the required type signature does not exist in the given generic function. Alternatively, there is no unique most-specific method.
-"""
-MethodError
 
 """
     cat(dims, A...)
@@ -6606,22 +6555,6 @@ Compute the phase angle in radians of a complex number `z`.
 angle
 
 """
-    LoadError(file::AbstractString, line::Int, error)
-
-An error occurred while `include`ing, `require`ing, or `using` a file. The error specifics
-should be available in the `.error` field.
-"""
-LoadError
-
-"""
-    InitError(mod::Symbol, error)
-
-An error occurred when running a module's `__init__` function. The actual error thrown is
-available in the `.error` field.
-"""
-InitError
-
-"""
     copy!(dest, src)
 
 Copy all elements from collection `src` to array `dest`. Returns `dest`.
@@ -7496,14 +7429,6 @@ seekend
 Integer division was attempted with a denominator value of 0.
 """
 DivideError
-
-"""
-    AssertionError([msg])
-
-The asserted condition did not evaluate to `true`.
-Optional argument `msg` is a descriptive error string.
-"""
-AssertionError
 
 """
     Ac_ldiv_Bc(A, B)
