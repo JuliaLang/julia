@@ -21,6 +21,8 @@
 #include <vector>
 #include <queue>
 #include <set>
+#include <functional>
+#include <utility>
 
 #include "julia.h"
 
@@ -191,6 +193,28 @@ struct HandlerData {
     std::unique_ptr<std::vector<CallInst*>> parent_vec;
     CallInst *parent{nullptr};
     bool processed{false};
+#ifdef _COMPILER_MICROSOFT_
+    // MSVC 2013 seems to call the copy version instead of the move verion
+    // without this, which triggers compilation error since `std::unique_ptr`
+    // is not copyable.
+    HandlerData() = default;
+    HandlerData(HandlerData &&other)
+        : HandlerData()
+    {
+        operator=(std::move(other));
+    }
+    HandlerData(const HandlerData&) = delete;
+    HandlerData &operator=(HandlerData &&other)
+    {
+        std::swap(leaves, other.leaves);
+        std::swap(nested, other.nested);
+        std::swap(parent_vec, other.parent_vec);
+        std::swap(parent, other.parent);
+        std::swap(processed, other.processed);
+        return *this;
+    }
+    HandlerData &operator=(const HandlerData&) = delete;
+#endif
 };
 
 void JuliaGCAllocator::lowerHandlers()
