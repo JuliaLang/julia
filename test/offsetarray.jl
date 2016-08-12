@@ -308,8 +308,8 @@ v = OffsetArray(rand(8), (-2,))
 @test sort(A, 1) == OffsetArray(sort(parent(A), 1), A.offsets)
 @test sort(A, 2) == OffsetArray(sort(parent(A), 2), A.offsets)
 
-@test mapslices(v->sort(v), A, 1) == OffsetArray(mapslices(v->sort(v), parent(A), 1), A.offsets)
-@test mapslices(v->sort(v), A, 2) == OffsetArray(mapslices(v->sort(v), parent(A), 2), A.offsets)
+@test mapslices(sort, A, 1) == OffsetArray(mapslices(sort, parent(A), 1), A.offsets)
+@test mapslices(sort, A, 2) == OffsetArray(mapslices(sort, parent(A), 2), A.offsets)
 
 @test rotl90(A) == OffsetArray(rotl90(parent(A)), A.offsets[[2,1]])
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])

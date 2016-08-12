@@ -991,7 +991,7 @@ end
 # issue #15406
 v15406 = remotecall_wait(() -> 1, id_other)
 fetch(v15406)
-remotecall_wait(t -> fetch(t), id_other, v15406)
+remotecall_wait(fetch, id_other, v15406)
 
 # Test various forms of remotecall* invocations
 
