@@ -181,14 +181,14 @@ chol(x::Number, args...) = _chol!(x, nothing)
 # or Hermitian matrix
 ## No pivoting
 function cholfact!(A::Hermitian, ::Type{Val{false}})
-    if A.uplo == :U
+    if A.uplo == 'U'
         Cholesky(_chol!(A.data, UpperTriangular).data, 'U')
     else
         Cholesky(_chol!(A.data, LowerTriangular).data, 'L')
     end
 end
 function cholfact!{T<:Real,S}(A::Symmetric{T,S}, ::Type{Val{false}})
-    if A.uplo == :U
+    if A.uplo == 'U'
         Cholesky(_chol!(A.data, UpperTriangular).data, 'U')
     else
         Cholesky(_chol!(A.data, LowerTriangular).data, 'L')
