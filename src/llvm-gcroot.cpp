@@ -76,7 +76,7 @@ static void tbaa_decorate_gcframe(Instruction *inst,
                                   std::set<Instruction*> &visited,
                                   MDNode *tbaa_gcframe)
 {
-    if (visited.insert(inst).second)
+    if (!visited.insert(inst).second)
         return;
 #ifdef LLVM35
     Value::user_iterator I = inst->user_begin(), E = inst->user_end();
