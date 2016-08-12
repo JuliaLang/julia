@@ -553,3 +553,11 @@ let
     @test length(a) == 0
     @test length(b) == 0
 end
+
+# Adds test for Issue #15924
+let
+    a = @code_lowered sin(1.0)
+    @test isa(LambdaInfo, a)
+    b = Base.uncompressed_ast(a)
+    @test length(b) == 4
+end
