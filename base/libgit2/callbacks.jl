@@ -121,8 +121,8 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
             end
             passdef
         end
-        (creds.user != username) || (creds.pass != userpass) ||
-            (creds.prvkey != privatekey) || (creds.pubkey != publickey) && reset!(creds)
+        ((creds.user != username) || (creds.pass != passphrase) ||
+            (creds.prvkey != privatekey) || (creds.pubkey != publickey)) && reset!(creds)
 
         creds.user = username # save credentials
         creds.prvkey = privatekey # save credentials
