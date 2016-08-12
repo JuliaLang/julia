@@ -1556,8 +1556,8 @@ copy!(S, A)
 @test cumsum(A, 1) == cumsum(B, 1) == cumsum(S, 1)
 @test cumsum(A, 2) == cumsum(B, 2) == cumsum(S, 2)
 
-@test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), B, 1) == mapslices(v->sort(v), S, 1)
-@test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), B, 2) == mapslices(v->sort(v), S, 2)
+@test mapslices(sort, A, 1) == mapslices(sort, B, 1) == mapslices(sort, S, 1)
+@test mapslices(sort, A, 2) == mapslices(sort, B, 2) == mapslices(sort, S, 2)
 
 @test flipdim(A, 1) == flipdim(B, 1) == flipdim(S, 2)
 @test flipdim(A, 2) == flipdim(B, 2) == flipdim(S, 2)

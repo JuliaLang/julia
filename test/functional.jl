@@ -10,8 +10,8 @@ let a = [1.0, 2.0]
     @test isequal(a, sin([1.0, 2.0]))
 end
 # map -- ranges.jl
-@test isequal(map(i->sqrt(i), 1:5), [sqrt(i) for i in 1:5])
-@test isequal(map(i->sqrt(i), 2:6), [sqrt(i) for i in 2:6])
+@test isequal(map(sqrt, 1:5), [sqrt(i) for i in 1:5])
+@test isequal(map(sqrt, 2:6), [sqrt(i) for i in 2:6])
 
 # map on ranges should evaluate first value only once (#4453)
 let io=IOBuffer(3)
