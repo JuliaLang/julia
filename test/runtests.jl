@@ -41,7 +41,7 @@ cd(dirname(@__FILE__)) do
                     test = shift!(tests)
                     local resp
                     try
-                        resp = remotecall_fetch(t -> runtests(t), p, test)
+                        resp = remotecall_fetch(runtests, p, test)
                     catch e
                         resp = e
                     end

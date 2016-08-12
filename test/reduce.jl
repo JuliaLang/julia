@@ -160,8 +160,8 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maxabs([1, -2, 3, -4]) == 4
 @test minabs([-1, 2, -3, 4]) == 1
 
-@test maximum(x->abs2(x), 3:7) == 49
-@test minimum(x->abs2(x), 3:7) == 9
+@test maximum(abs2, 3:7) == 49
+@test minimum(abs2, 3:7) == 9
 
 @test maximum(Int16[1]) === Int16(1)
 @test maximum(collect(Int16(1):Int16(100))) === Int16(100)
