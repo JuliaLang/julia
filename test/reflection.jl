@@ -557,7 +557,7 @@ end
 # Adds test for Issue #15924
 let
     a = @code_lowered sin(1.0)
-    @test isa(LambdaInfo, a)
+    @test isa(a, LambdaInfo)
     b = Base.uncompressed_ast(a)
     @test length(b) == 4
 end
