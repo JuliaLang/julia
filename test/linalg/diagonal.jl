@@ -125,9 +125,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
             #a few missing mults
             bd = Bidiagonal(D2)
-            @test A_mul_Bt(D,D2) ≈ full(D)*full(D2).'
-            @test A_mul_Bt(D2,D) ≈ full(D2)*full(D).'
-            @test A_mul_Bc(D2,D) ≈ full(D2)*full(D)'
+            @test D*D2.' ≈ full(D)*full(D2).'
+            @test D2*D.' ≈ full(D2)*full(D).'
+            @test D2*D' ≈ full(D2)*full(D)'
 
             @test U.'*D ≈ U.'*full(D)
             @test U'*D ≈ U'*full(D)
