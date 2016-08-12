@@ -553,3 +553,11 @@ let
     @test length(a) == 0
     @test length(b) == 0
 end
+
+# Adds test for PR #17949
+let
+    f(x) = x ^ 3
+    a = @code_typed f(1.0)
+    b = Base.uncompressed_ast(a)
+    @test string(b) == "Any[:(return (Base.box)(Base.Float64,(Base.mul_float)((Base.box)(Base.Float64,(Base.mul_float)(_2,_2)),_2)))]"
+end
