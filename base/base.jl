@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    SystemError(prefix::AbstractString, [errno::Int32])
+
+A system call failed with an error code (in the `errno` global variable).
+"""
 type SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
@@ -9,10 +14,22 @@ type SystemError <: Exception
     SystemError(p::AbstractString) = new(p, Libc.errno())
 end
 
+"""
+    ParseError(msg)
+
+The expression passed to the `parse` function could not be interpreted as a valid Julia
+expression.
+"""
 type ParseError <: Exception
     msg::AbstractString
 end
 
+"""
+    ArgumentError(msg)
+
+The parameters to a function call do not match a valid signature. Argument `msg` is a
+descriptive error string.
+"""
 type ArgumentError <: Exception
     msg::AbstractString
 end
@@ -21,25 +38,53 @@ end
 #    var::Symbol
 #end
 
+"""
+    KeyError(key)
+
+An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
+delete a non-existent element.
+"""
 type KeyError <: Exception
     key
 end
 
+"""
+    MethodError(f, args)
+
+A method with the required type signature does not exist in the given generic function.
+Alternatively, there is no unique most-specific method.
+"""
 type MethodError <: Exception
     f
     args
 end
 
+"""
+    EOFError()
+
+No more data was available to read from a file or stream.
+"""
 type EOFError <: Exception end
 
+"""
+    DimensionMismatch([msg])
+
+The objects called do not have matching dimensionality. Optional argument `msg` is a
+descriptive error string.
+"""
 type DimensionMismatch <: Exception
     msg::AbstractString
 end
 DimensionMismatch() = DimensionMismatch("")
 
+"""
+    AssertionError([msg])
+
+The asserted condition did not evaluate to `true`.
+Optional argument `msg` is a descriptive error string.
+"""
 type AssertionError <: Exception
     msg::AbstractString
-
     AssertionError() = new("")
     AssertionError(msg) = new(msg)
 end
@@ -48,12 +93,24 @@ end
 #Subtypes should put the exception in an 'error' field
 abstract WrappedException <: Exception
 
+"""
+    LoadError(file::AbstractString, line::Int, error)
+
+An error occurred while `include`ing, `require`ing, or `using` a file. The error specifics
+should be available in the `.error` field.
+"""
 type LoadError <: WrappedException
     file::AbstractString
     line::Int
     error
 end
 
+"""
+    InitError(mod::Symbol, error)
+
+An error occurred when running a module's `__init__` function. The actual error thrown is
+available in the `.error` field.
+"""
 type InitError <: WrappedException
     mod::Symbol
     error
