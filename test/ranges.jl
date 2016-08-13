@@ -755,6 +755,7 @@ r = Base.OneTo(3)
 @test minimum(r) == 1
 @test maximum(r) == 3
 @test r[2] == 2
+@test r[2:3] === 2:3
 @test_throws BoundsError r[4]
 @test_throws BoundsError r[0]
 @test r+1 === 2:4

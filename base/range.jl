@@ -499,10 +499,11 @@ end
 
 getindex(r::Range, ::Colon) = copy(r)
 
-function getindex{T<:Integer}(r::UnitRange, s::AbstractUnitRange{T})
+function getindex{T<:Integer}(r::AbstractUnitRange, s::AbstractUnitRange{T})
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    st = oftype(r.start, r.start + first(s)-1)
+    f = first(r)
+    st = oftype(f, f + first(s)-1)
     range(st, length(s))
 end
 
