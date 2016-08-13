@@ -218,14 +218,16 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
 """
     max(x, y, ...)
 
-Return the maximum of the arguments. Operates elementwise over arrays.
+Return the maximum of the arguments. See also the [`maximum`](:func:`maximum`) function
+to take the maximum element from a collection.
 """
 max(x,y) = ifelse(y < x, x, y)
 
 """
     min(x, y, ...)
 
-Return the minimum of the arguments. Operates elementwise over arrays.
+Return the minimum of the arguments. See also the [`minimum`](:func:`minimum`) function
+to take the minimum element from a collection.
 """
 min(x,y) = ifelse(y < x, y, x)
 

@@ -560,7 +560,9 @@ randsubseq!
 """
     maximum(A, dims)
 
-Compute the maximum value of an array over the given dimensions.
+Compute the maximum value of an array over the given dimensions. See also the
+[`max(a,b)`](:func:`max`) function to take the maximum of two or more arguments,
+which can be applied elementwise to arrays via `max.(a,b)`.
 """
 maximum(A,dims)
 
@@ -1531,7 +1533,9 @@ asinh
 """
     minimum(A, dims)
 
-Compute the minimum value of an array over the given dimensions.
+Compute the minimum value of an array over the given dimensions. See also the
+[`min(a,b)`](:func:`min`) function to take the minimum of two or more arguments,
+which can be applied elementwise to arrays via `min.(a,b)`.
 """
 minimum(A,dims)
 
