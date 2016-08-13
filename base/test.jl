@@ -720,6 +720,13 @@ function testset_forloop(args, testloop)
     # wrapped in the outer loop provided by the user
     tests = testloop.args[2]
     blk = quote
+        # Trick to handle `break` and `continue` in the test code before
+        # they can be handled properly by `finally` lowering.
+        if !first_iteration
+            pop_testset()
+            push!(arr, finish(ts))
+        end
+        first_iteration = false
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
         try
@@ -729,13 +736,20 @@ function testset_forloop(args, testloop)
             # error in this test set
             record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
         end
-        pop_testset()
-        finish(ts)
     end
     quote
         arr = Array{Any,1}(0)
-        $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...),
-               :(push!(arr, $blk))))
+        first_iteration = true
+        local ts
+        try
+            $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+        finally
+            # Handle `return` in test body
+            if !first_iteration
+                pop_testset()
+                push!(arr, finish(ts))
+            end
+        end
         arr
     end
 end
