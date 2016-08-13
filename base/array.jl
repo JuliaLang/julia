@@ -288,8 +288,8 @@ else
     _default_eltype(itr::ANY) = Any
 end
 
-_array_for(T, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
-_array_for(T, itr, ::HasShape) = similar(Array{T}, indices(itr))
+_array_for{T}(::Type{T}, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
+_array_for{T}(::Type{T}, itr, ::HasShape) = similar(Array{T}, indices(itr))
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
