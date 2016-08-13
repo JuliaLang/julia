@@ -677,6 +677,7 @@ will be fused with other nested "dot" calls.  ``X .+= Y`` is equivalent
 to ``X .= X .+ Y`` and will eventually result in a fused in-place assignment.
 Similarly for ``.*=`` etcetera.)
 
+
 Further Reading
 ---------------
 
