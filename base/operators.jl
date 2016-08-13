@@ -915,25 +915,6 @@ for f in (:+, :-)
     end
 end
 
-# vectorization
-
-macro vectorize_1arg(S,f)
-    S = esc(S); f = esc(f); T = esc(:T)
-    quote
-        ($f){$T<:$S}(x::AbstractArray{$T}) = [ ($f)(elem) for elem in x ]
-    end
-end
-
-macro vectorize_2arg(S,f)
-    S = esc(S); f = esc(f); T1 = esc(:T1); T2 = esc(:T2)
-    quote
-        ($f){$T1<:$S, $T2<:$S}(x::($T1), y::AbstractArray{$T2}) = [ ($f)(x, z) for z in y ]
-        ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::($T2)) = [ ($f)(z, y) for z in x ]
-        ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::AbstractArray{$T2}) =
-            [ ($f)(xx, yy) for (xx, yy) in zip(x, y) ]
-    end
-end
-
 # vectorized ifelse
 
 function ifelse(c::AbstractArray{Bool}, x, y)
