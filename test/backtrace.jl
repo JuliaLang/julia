@@ -121,7 +121,8 @@ end
 @test_broken hasbt2
 
 function btmacro()
-    @time backtrace()
+    ret = @timed backtrace()
+    ret[1]
 end
 lkup = map(StackTraces.lookup, btmacro())
 hasme = hasbtmacro = false
