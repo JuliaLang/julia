@@ -94,7 +94,7 @@ end
 function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     pos = block[1]
     blk = block[2]
-    len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
+    len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos) + 1
     buf = Array{UInt16}(len)
     unsafe_copy!(pointer(buf), pos, len)
     env = transcode(String, buf)
