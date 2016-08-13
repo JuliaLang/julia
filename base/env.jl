@@ -78,7 +78,6 @@ in(k::AbstractString, ::KeyIterator{EnvHash}) = _hasenv(k)
 pop!(::EnvHash, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 delete!(::EnvHash, k::AbstractString) = (_unsetenv(k); ENV)
-delete!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? delete!(ENV,k) : def
 setindex!(::EnvHash, v, k::AbstractString) = _setenv(k,string(v))
 push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
 
