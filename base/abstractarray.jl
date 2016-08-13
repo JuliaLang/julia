@@ -52,7 +52,11 @@ size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) = (size(x, d1), siz
 
 Returns the valid range of indices for array `A` along dimension `d`.
 """
-indices{T,N}(A::AbstractArray{T,N}, d) = d <= N ? indices(A)[d] : OneTo(1)
+function indices{T,N}(A::AbstractArray{T,N}, d)
+    @_inline_meta
+    d <= N ? indices(A)[d] : OneTo(1)
+end
+
 """
     indices(A)
 
