@@ -116,7 +116,7 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Extract the ``significand(s)`` (a.k.a. mantissa), in binary representation, of a floating-point number or array. If ``x`` is a non-zero finite number, then the result will be a number of the same type on the interval :math:`[1,2)`\ . Otherwise ``x`` is returned.
+   Extract the ``significand(s)`` (a.k.a. mantissa), in binary representation, of a floating-point number. If ``x`` is a non-zero finite number, then the result will be a number of the same type on the interval :math:`[1,2)`\ . Otherwise ``x`` is returned.
 
    .. doctest::
 
