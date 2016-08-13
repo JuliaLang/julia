@@ -36,7 +36,7 @@ not meant to be run, but is shown for illustrative purposes::
     bar(x) = 2x
     foo(a::MyType) = bar(a.x) + 1
 
-    show(io, a::MyType) = print(io, "MyType $(a.x)")
+    show(io::IO, a::MyType) = print(io, "MyType $(a.x)")
     end
 
 Note that the style is not to indent the body of the module, since
