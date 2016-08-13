@@ -388,6 +388,11 @@ d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 @test [d[k] for k in keys(d)] == [d[k] for k in eachindex(d)] ==
       [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
 
+# generators, similar
+d = Dict(:a=>"a")
+@test @inferred(map(identity, d)) == d
+@test @inferred(map(p->p.first=>p.second[1], d)) == Dict(:a=>'a')
+@test_throws ArgumentError map(p->p.second, d)
 
 # Issue 12451
 @test_throws ArgumentError Dict(0)
