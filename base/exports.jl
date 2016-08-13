@@ -1396,8 +1396,6 @@ export
     @generated,
     @gensym,
     @eval,
-    @vectorize_1arg,
-    @vectorize_2arg,
     @deprecate,
 
     # performance annotations

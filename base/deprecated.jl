@@ -867,15 +867,25 @@ end
 
 # For deprecating vectorized functions in favor of compact broadcast syntax
 macro dep_vectorize_1arg(S, f)
-    :( @deprecate $(esc(f)){T<:$(esc(S))}(x::AbstractArray{T}) $(esc(f)).(x) )
+    S = esc(S)
+    f = esc(f)
+    T = esc(:T)
+    x = esc(:x)
+    AbsArr = esc(:AbstractArray)
+    :( @deprecate $f{$T<:$S}($x::$AbsArr{$T}) $f.($x) )
 end
 macro dep_vectorize_2arg(S, f)
     S = esc(S)
     f = esc(f)
+    T1 = esc(:T1)
+    T2 = esc(:T2)
+    x = esc(:x)
+    y = esc(:y)
+    AbsArr = esc(:AbstractArray)
     quote
-        @deprecate $f{T<:$S}(x::$S, y::AbstractArray{T}) $f.(x,y)
-        @deprecate $f{T<:$S}(x::AbstractArray{T}, y::$S) $f.(x,y)
-        @deprecate $f{T1<:$S,T2<:$S}(x::AbstractArray{T1}, y::AbstractArray{T2}) $f.(x,y)
+        @deprecate $f{$T1<:$S}($x::$S, $y::$AbsArr{$T1}) $f.($x,$y)
+        @deprecate $f{$T1<:$S}($x::$AbsArr{$T1}, $y::$S) $f.($x,$y)
+        @deprecate $f{$T1<:$S,$T2<:$S}($x::$AbsArr{$T1}, $y::$AbsArr{$T2}) $f.($x,$y)
     end
 end
 
@@ -965,5 +975,24 @@ for f in (
     )
     @eval @dep_vectorize_2arg Real $f
 end
+
+# Deprecate @vectorize_1arg and @vectorize_2arg themselves
+macro vectorize_1arg(S,f)
+    depwarn(string("`@vectorize_1arg` is deprecated in favor of compact broadcast syntax. ",
+        "Instead of `@vectorize_1arg`'ing function `f` and calling `f(arg)`, call `f.(arg)`."),
+        :vectorize_1arg)
+    quote
+        @dep_vectorize_1arg($(esc(S)),$(esc(f)))
+    end
+end
+macro vectorize_2arg(S,f)
+    depwarn(string("`@vectorize_2arg` is deprecated in favor of compact broadcast syntax. ",
+        "Instead of `@vectorize_2arg`'ing function `f` and calling `f(arg1, arg2)`, call ",
+        "`f.(arg1,arg2)`. "), :vectorize_2arg)
+    quote
+        @dep_vectorize_2arg($(esc(S)),$(esc(f)))
+    end
+end
+export @vectorize_1arg, @vectorize_2arg
 
 # End deprecations scheduled for 0.6
