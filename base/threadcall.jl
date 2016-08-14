@@ -75,6 +75,7 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
         y = cconvert(T, x)
         push!(roots, y)
         unsafe_store!(convert(Ptr{T}, ptr), unsafe_convert(T, y))
+        ptr += sizeof(T)
     end
 
     # create return buffer
