@@ -142,10 +142,21 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
     //       *llvmgv = jl_load_and_lookup(f_lib, f_name, libptrgv);
     //   }
     //   return (*llvmgv)
+    BasicBlock *enter_bb = builder.GetInsertBlock();
     BasicBlock *dlsym_lookup = BasicBlock::Create(jl_LLVMContext, "dlsym");
     BasicBlock *ccall_bb = BasicBlock::Create(jl_LLVMContext, "ccall");
     Constant *initnul = ConstantPointerNull::get((PointerType*)T_pvoidfunc);
-    builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), initnul), ccall_bb, dlsym_lookup);
+    LoadInst *llvmf_orig = builder.CreateAlignedLoad(llvmgv, sizeof(void*));
+    // This in principle needs a consume ordering so that load from
+    // this pointer sees valid value. However, this is not supported by
+    // LLVM (or agreed on in the C/C++ standard FWIW) and should be
+    // almost impossible to happen on every platform we support since this
+    // ordering is enforced by the hardware and LLVM has to speculate a
+    // invalid load from the `cglobal` but doesn't depend on the `cglobal`
+    // value for this to happen.
+    // llvmf_orig->setAtomic(AtomicOrdering::Consume);
+    builder.CreateCondBr(builder.CreateICmpNE(llvmf_orig, initnul),
+                         ccall_bb, dlsym_lookup);
 
     assert(f->getParent() != NULL);
     f->getBasicBlockList().push_back(dlsym_lookup);
@@ -162,13 +173,20 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
 #else
     Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, stringConstPtr(f_name), libptrgv);
 #endif
-    builder.CreateStore(llvmf, llvmgv);
+    auto store = builder.CreateAlignedStore(llvmf, llvmgv, sizeof(void*));
+#  ifdef LLVM39
+    store->setAtomic(AtomicOrdering::Release);
+#  else
+    store->setAtomic(Release);
+#  endif
     builder.CreateBr(ccall_bb);
 
     f->getBasicBlockList().push_back(ccall_bb);
     builder.SetInsertPoint(ccall_bb);
-    llvmf = builder.CreateLoad(llvmgv);
-    return builder.CreatePointerCast(llvmf,funcptype);
+    PHINode *p = builder.CreatePHI(T_pvoidfunc, 2);
+    p->addIncoming(llvmf_orig, enter_bb);
+    p->addIncoming(llvmf, dlsym_lookup);
+    return builder.CreatePointerCast(p, funcptype);
 }
 
 static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
@@ -247,7 +265,12 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
         builder.SetInsertPoint(b0);
         Value *ptr = runtime_sym_lookup(funcptype, f_lib, f_name, plt, libptrgv,
                                         llvmgv, runtime_lib);
-        builder.CreateStore(builder.CreateBitCast(ptr, T_pvoidfunc), got);
+        auto store = builder.CreateAlignedStore(builder.CreateBitCast(ptr, T_pvoidfunc), got, sizeof(void*));
+#  ifdef LLVM39
+        store->setAtomic(AtomicOrdering::Release);
+#  else
+        store->setAtomic(Release);
+#  endif
         SmallVector<Value*, 16> args;
         for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
             args.push_back(&*arg);
@@ -292,7 +315,13 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
         assert(!LM.m);
         got = prepare_global(slot);
     }
-    return builder.CreateBitCast(builder.CreateLoad(got), funcptype);
+    LoadInst *got_val = builder.CreateAlignedLoad(got, sizeof(void*));
+    // See comment in `runtime_sym_lookup` above. This in principle needs a
+    // consume ordering too. This is even less likely to cause issue though
+    // since the only thing we do to this loaded pointer is to call it
+    // immediately.
+    // got_val->setAtomic(AtomicOrdering::Consume);
+    return builder.CreateBitCast(got_val, funcptype);
 }
 
 // --- ABI Implementations ---
