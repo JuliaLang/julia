@@ -1095,39 +1095,82 @@ let
 end
 
 # Test addprocs enable_threaded_blas parameter
+
+function define_get_num_threads()
+    @everywhere get_num_threads = function()
+        blas = BLAS.vendor()
+        # Wrap in a try to catch unsupported blas versions
+        try
+            if blas == :openblas
+                return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
+            elseif blas == :openblas64
+                return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
+            elseif blas == :mkl
+                return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
+            end
+
+            # OSX BLAS looks at an environment variable
+            if is_apple()
+                return ENV["VECLIB_MAXIMUM_THREADS"]
+            end
+        end
+
+        return nothing
+    end
+end
+
 function get_remote_num_threads(processes_added)
-    return [remotecall_fetch(BLAS.get_num_threads, proc_id) for proc_id in processes_added]
+    define_get_num_threads()
+    return [remotecall_fetch(get_num_threads, proc_id) for proc_id in processes_added]
 end
 
-BLAS.set_num_threads(4)
-@test BLAS.get_num_threads() == 4
-
-# Test with default enable_threaded_blas false
-processes_added = addprocs(2)
-
-# Master thread was set to 4, should not have changed
-@test BLAS.get_num_threads() == 4
-
-# Threading disabled in children by default
-thread_counts_by_process = get_remote_num_threads(processes_added)
-for thread_count in thread_counts_by_process
-    @test thread_count == 1
+function test_blas_config(pid, expected)
+    for worker in Base.PGRP.workers
+        if worker.id == pid
+            @test get(worker.config.enable_threaded_blas) == expected
+            return
+        end
+    end
 end
-rmprocs(processes_added)
 
-processes_added = addprocs(2, enable_threaded_blas=true)
-# Master thread was set to 4, should not have changed
-@test BLAS.get_num_threads() == 4
+function test_add_procs_threaded_blas()
+    define_get_num_threads()
+    if get_num_threads() == nothing
+        print("Skipping blas num threads tests due to unsupported blas version")
+        return
+    end
+    master_blas_thread_count = get_num_threads()
 
-# OpenBLAS default number of threads is based on the number of cores.
-# We just want to make sure it's using the default, so check that we're
-# using at least min_blas_threads.
-min_blas_threads = 2
-if Sys.CPU_CORES <= 2
-    min_blas_threads = 1
+    # Test with default enable_threaded_blas false
+    processes_added = addprocs(2)
+    for proc_id in processes_added
+        test_blas_config(proc_id, false)
+    end
+
+    # Master thread should not have changed
+    @test get_num_threads() == master_blas_thread_count
+
+    # Threading disabled in children by default
+    thread_counts_by_process = get_remote_num_threads(processes_added)
+    for thread_count in thread_counts_by_process
+        @test thread_count == 1
+    end
+    rmprocs(processes_added)
+
+    processes_added = addprocs(2, enable_threaded_blas=true)
+    for proc_id in processes_added
+        test_blas_config(proc_id, true)
+    end
+
+    @test get_num_threads() == master_blas_thread_count
+
+    # BLAS.set_num_threads(`num`) doesn't  cause get_num_threads to return `num`
+    # depending on the machine, the BLAS version, and BLAS configuration, so
+    # we need a very lenient test.
+    thread_counts_by_process = get_remote_num_threads(processes_added)
+    for thread_count in thread_counts_by_process
+        @test thread_count >= 1
+    end
+    rmprocs(processes_added)
 end
-thread_counts_by_process = get_remote_num_threads(processes_added)
-for thread_count in thread_counts_by_process
-    @test thread_count >= min_blas_threads
-end
-rmprocs(processes_added)
+test_add_procs_threaded_blas()
