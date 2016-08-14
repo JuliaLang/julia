@@ -785,4 +785,9 @@ const _oldstyle_array_vcat_ = false
 
 @deprecate write(x) write(STDOUT::IO, x)
 
+function delete!(::EnvHash, k::AbstractString, def)
+    depwarn("`delete!(ENV, k, def)` should be replaced with `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, while `delete!` returns `ENV` or `def`.", :delete!)
+    haskey(ENV,k) ? delete!(ENV,k) : def
+end
+
 # End deprecations scheduled for 0.6
