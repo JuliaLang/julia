@@ -5,8 +5,8 @@
 
 Search for the first occurrence of the given characters within the given string. The second
 argument may be a single character, a vector or a set of characters, a string, or a regular
-expression (though regular expressions are only allowed on contiguous strings, such as ASCII
-or UTF-8 strings). The third argument optionally specifies a starting index. The return
+expression (though regular expressions are only allowed on contiguous strings, such as `String`
+or `SubString`). The third argument optionally specifies a starting index. The return
 value is a range of indexes where the matching sequence is found, such that `s[search(s,x)] == x`:
 
 `search(string, "substring")` = `start:end` such that `string[start:end] == "substring"`, or
