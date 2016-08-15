@@ -202,7 +202,7 @@ function isassigned(v::SimpleVector, i::Int)
 end
 
 # index colon
-type Colon
+immutable Colon
 end
 const (:) = Colon()
 

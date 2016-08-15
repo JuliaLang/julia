@@ -484,3 +484,15 @@ u = (1,2:3)
 let size=(x,y)-> error("should not happen")
     @test X[1:end,2,2] == @view X[1:end,2,2]
 end
+
+# issue #18034
+# ensure that it is possible to create an isbits, LinearFast view of an immutable Array
+let
+    immutable ImmutableTestArray{T, N} <: Base.DenseArray{T, N}
+    end
+    Base.size(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = (0, 0)
+    Base.linearindexing(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = Base.LinearFast()
+    a = ImmutableTestArray{Float64, 2}()
+    @test Base.linearindexing(view(a, :, :)) == Base.LinearFast()
+    @test isbits(view(a, :, :))
+end
