@@ -183,6 +183,50 @@ end
 @test typeof(tss[1]) == Base.Test.DefaultTestSet
 @test typeof(tss[1].results[1]) == Base.Test.Pass
 
+# Issue #17908 (return)
+testset_depth17908 = Test.get_testset_depth()
+@testset for i in 1:3
+    i > 1 && return
+    @test i == 1
+end
+# The return aborts the control flow so the expression above doesn't return a
+# value. The only thing we can test is whether the testset is properly popped.
+# Do not use `@test` since the issue this is testing will swallow the error.
+@assert testset_depth17908 == Test.get_testset_depth()
+
+# Issue #17462 and Issue #17908 (break, continue)
+testset_depth17462 = Test.get_testset_depth()
+counter_17462_pre = 0
+counter_17462_post = 0
+tss17462 = @testset for x in [1,2,3,4]
+    counter_17462_pre += 1
+    if x == 1
+        @test counter_17462_pre == x
+        continue
+        @test false
+    elseif x == 3
+        @test counter_17462_pre == x
+        break
+        @test false
+    elseif x == 4
+        @test false
+    else
+        @test counter_17462_pre == x
+        @test x == 2
+        @test counter_17462_post == 0
+    end
+    counter_17462_post += 1
+end
+# Do not use `@test` since the issue this is testing will swallow the error.
+# Same for the `@assert` in the for loop below
+@assert testset_depth17462 == Test.get_testset_depth()
+@assert length(tss17462) == 3
+for ts17462 in tss17462
+    @assert isa(ts17462, Base.Test.DefaultTestSet)
+end
+@test counter_17462_pre == 3
+@test counter_17462_post == 1
+
 # now we're done running tests with DefaultTestSet so we can go back to STDOUT
 redirect_stdout(OLD_STDOUT)
 
@@ -320,28 +364,3 @@ end
 @test @inferred(inferrable_kwtest(1; y=1)) == 2
 @test @inferred(uninferrable_kwtest(1)) == 3
 @test_throws ErrorException @inferred(uninferrable_kwtest(1; y=2)) == 2
-
-# Issue #17462
-counter_17462_pre = 0
-counter_17462_post = 0
-@testset for x in [1,2,3,4]
-    counter_17462_pre += 1
-    if x == 1
-        @test counter_17462_pre == x
-        continue
-        @test false
-    elseif x == 3
-        @test counter_17462_pre == x
-        break
-        @test false
-    elseif x == 4
-        @test false
-    else
-        @test counter_17462_pre == x
-        @test x == 2
-        @test counter_17462_post == 0
-    end
-    counter_17462_post += 1
-end
-@test counter_17462_pre == 3
-@test counter_17462_post == 1
