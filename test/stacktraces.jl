@@ -109,3 +109,13 @@ let li = typeof(getfield).name.mt.cache.func::LambdaInfo,
     repr = string(sf)
     @test repr == " in getfield(...) at b:3"
 end
+
+let ctestptr = cglobal((:ctest, "libccalltest")),
+    ctest = StackTraces.lookup(ctestptr + 1)
+
+    @test length(ctest) == 1
+    @test ctest[1].func === :ctest
+    @test isnull(ctest[1].linfo)
+    @test ctest[1].from_c
+    @test ctest[1].pointer === UInt64(ctestptr)
+end
