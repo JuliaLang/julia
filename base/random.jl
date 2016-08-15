@@ -15,7 +15,7 @@ export srand,
        randsubseq,randsubseq!,
        shuffle,shuffle!,
        randperm, randcycle,
-       AbstractRNG, RNG, MersenneTwister, RandomDevice,
+       AbstractRNG, MersenneTwister, RandomDevice,
        GLOBAL_RNG, randjump
 
 
