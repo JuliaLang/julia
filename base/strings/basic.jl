@@ -77,15 +77,43 @@ getindex(s::AbstractString, v::AbstractVector) =
 
 Symbol(s::AbstractString) = Symbol(String(s))
 
+"""
+    sizeof(s::AbstractString)
+
+The number of bytes in string `s`.
+
+```jldoctest
+julia> sizeof("❤")
+3
+```
+"""
 sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary representation")
 
 eltype{T<:AbstractString}(::Type{T}) = Char
 
+"""
+```
+*(s::AbstractString, t::AbstractString)
+```
+
+Concatenate strings. The `*` operator is an alias to this function.
+
+```jldoctest
+julia> "Hello " * "world"
+"Hello world"
+```
+"""
 (*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
 (.*){T<:AbstractString}(v::Vector{T},s::AbstractString) = [i*s for i in v]
 (.*){T<:AbstractString}(s::AbstractString,v::Vector{T}) = [s*i for i in v]
 
 length(s::DirectIndexString) = endof(s)
+
+"""
+    length(s::AbstractString)
+
+The number of characters in string `s`.
+"""
 function length(s::AbstractString)
     i = start(s)
     if done(s,i)
@@ -139,6 +167,12 @@ isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 ## Generic validation functions ##
 
 isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
+
+"""
+    isvalid(str::AbstractString, i::Integer)
+
+Tells whether index `i` is valid for the given string.
+"""
 function isvalid(s::AbstractString, i::Integer)
     i < 1 && return false
     done(s,i) && return false
@@ -183,6 +217,12 @@ function nextind(s::String, i::Integer)
     j
 end
 
+"""
+    prevind(str::AbstractString, i::Integer)
+
+Get the previous valid string index before `i`.
+Returns a value less than `1` at the beginning of the string.
+"""
 function prevind(s::AbstractString, i::Integer)
     e = endof(s)
     if i > e
@@ -198,6 +238,12 @@ function prevind(s::AbstractString, i::Integer)
     return 0 # out of range
 end
 
+"""
+    nextind(str::AbstractString, i::Integer)
+
+Get the next valid string index after `i`.
+Returns a value greater than `endof(str)` at or after the end of the string.
+"""
 function nextind(s::AbstractString, i::Integer)
     e = endof(s)
     if i < 1
@@ -223,6 +269,12 @@ checkbounds{T<:Integer}(s::AbstractString, I::AbstractArray{T}) = all(i -> check
 ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 
+
+"""
+    ind2chr(s::AbstractString, i::Integer)
+
+Convert a byte index `i` to a character index.
+"""
 function ind2chr(s::AbstractString, i::Integer)
     s[i] # throws error if invalid
     j = 1
@@ -237,6 +289,11 @@ function ind2chr(s::AbstractString, i::Integer)
     end
 end
 
+"""
+    chr2ind(s::AbstractString, i::Integer)
+
+Convert a character index `i` to a byte index.
+"""
 function chr2ind(s::AbstractString, i::Integer)
     i < start(s) && throw(BoundsError(s, i))
     j = 1
@@ -268,8 +325,24 @@ typealias ByteArray Union{Vector{UInt8},Vector{Int8}}
 
 ## character column width function ##
 
+"""
+    strwidth(s::AbstractString)
+
+Gives the number of columns needed to print a string.
+
+```jldoctest
+julia> strwidth("March")
+5
+```
+"""
 strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
 
+"""
+    isascii(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character belongs to the ASCII character set, or whether this is true for
+all elements of a string.
+"""
 isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
 
@@ -277,6 +350,19 @@ isascii(s::AbstractString) = all(isascii, s)
 
 promote_rule{S<:AbstractString,T<:AbstractString}(::Type{S}, ::Type{T}) = String
 
+"""
+    isxdigit(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is a valid hexadecimal digit, or whether this is true for all elements of a string.
+
+```jldoctest
+julia> isxdigit("abc")
+true
+
+julia> isxdigit("0x9")
+false
+```
+"""
 isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 isxdigit(s::AbstractString) = all(isxdigit, s)
 
@@ -293,12 +379,55 @@ isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s
 isvalid(s::String) = isvalid(String, s)
 
 ## uppercase and lowercase transformations ##
+
+"""
+    uppercase(s::AbstractString)
+
+Returns `s` with all characters converted to uppercase.
+
+```jldoctest
+julia> uppercase("Julia")
+"JULIA"
+```
+"""
 uppercase(s::AbstractString) = map(uppercase, s)
+
+"""
+    lowercase(s::AbstractString)
+
+Returns `s` with all characters converted to lowercase.
+
+```jldoctest
+julia> lowercase("STRINGS AND THINGS")
+"strings and things"
+```
+"""
 lowercase(s::AbstractString) = map(lowercase, s)
 
+"""
+    ucfirst(s::AbstractString)
+
+Returns `string` with the first character converted to uppercase.
+
+```jldoctest
+julia> ucfirst("python")
+"Python"
+```
+"""
 function ucfirst(s::AbstractString)
     isempty(s) || isupper(s[1]) ? s : string(uppercase(s[1]),s[nextind(s,1):end])
 end
+
+"""
+    lcfirst(s::AbstractString)
+
+Returns `string` with the first character converted to lowercase.
+
+```jldoctest
+julia> lcfirst("Julia")
+"julia"
+```
+"""
 function lcfirst(s::AbstractString)
     isempty(s) || islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):end])
 end

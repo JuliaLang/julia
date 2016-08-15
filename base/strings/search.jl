@@ -1,5 +1,27 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    search(string::AbstractString, chars::Chars, [start::Integer])
+
+Search for the first occurrence of the given characters within the given string. The second
+argument may be a single character, a vector or a set of characters, a string, or a regular
+expression (though regular expressions are only allowed on contiguous strings, such as ASCII
+or UTF-8 strings). The third argument optionally specifies a starting index. The return
+value is a range of indexes where the matching sequence is found, such that `s[search(s,x)] == x`:
+
+`search(string, "substring")` = `start:end` such that `string[start:end] == "substring"`, or
+`0:-1` if unmatched.
+
+`search(string, 'c')` = `index` such that `string[index] == 'c'`, or `0` if unmatched.
+
+```jldoctest
+julia> search("Hello to the world", "z")
+0:-1
+
+julia> search("JuliaLang","Julia")
+1:5
+```
+"""
 function search(s::AbstractString, c::Chars, i::Integer)
     if isempty(c)
         return 1 <= i <= nextind(s,endof(s)) ? i :
@@ -118,6 +140,13 @@ function _searchindex(s::Array, t::Array, i)
 end
 
 searchindex(s::ByteArray, t::ByteArray, i) = _searchindex(s,t,i)
+
+"""
+    searchindex(s::AbstractString, substring, [start::Integer])
+
+Similar to [`search`](:func:`search`), but return only the start index at which
+the substring is found, or `0` if it is not.
+"""
 searchindex(s::AbstractString, t::AbstractString, i::Integer) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString) = searchindex(s,t,start(s))
 searchindex(s::AbstractString, c::Char, i::Integer) = _searchindex(s,c,i)
@@ -157,6 +186,17 @@ function rsearch(s::AbstractString, c::Chars)
     endof(s)-j+1
 end
 
+"""
+    rsearch(s::AbstractString, chars::Chars, [start::Integer])
+
+Similar to [`search`](:func:`search`), but returning the last occurrence of the given characters within the
+given string, searching in reverse from `start`.
+
+```jldoctest
+julia> rsearch("aaabbb","b")
+6:6
+```
+"""
 function rsearch(s::AbstractString, c::Chars, i::Integer)
     e = endof(s)
     j = search(RevString(s), c, e-i+1)
@@ -260,6 +300,12 @@ function _rsearchindex(s::Array, t::Array, k)
 end
 
 rsearchindex(s::ByteArray,t::ByteArray,i) = _rsearchindex(s,t,i)
+
+"""
+    rsearchindex(s::AbstractString, substring, [start::Integer])
+
+Similar to [`rsearch`](:func:`rsearch`), but return only the start index at which the substring is found, or `0` if it is not.
+"""
 rsearchindex(s::AbstractString, t::AbstractString, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
 
@@ -307,6 +353,16 @@ function rsearch(s::AbstractString, t::AbstractString, i::Integer=endof(s))
     end
 end
 
+"""
+    contains(haystack::AbstractString, needle::AbstractString)
+
+Determine whether the second argument is a substring of the first.
+
+```jldoctest
+julia> contains("JuliaLang is pretty cool!", "Julia")
+true
+```
+"""
 contains(haystack::AbstractString, needle::AbstractString) = searchindex(haystack,needle)!=0
 
 in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")
@@ -356,5 +412,3 @@ function rsearch(a::ByteArray, b::Char, i::Integer)
     end
 end
 rsearch(a::ByteArray, b::Union{Int8,UInt8,Char}) = rsearch(a,b,length(a))
-
-

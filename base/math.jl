@@ -87,6 +87,15 @@ end
 # Horner's method if z is real, but for complex z it uses a more
 # efficient algorithm described in Knuth, TAOCP vol. 2, section 4.6.4,
 # equation (3).
+
+"""
+    @evalpoly(z, c...)
+
+Evaluate the polynomial ``\\sum_k c[k] z^{k-1}`` for the coefficients `c[1]`, `c[2]`, ...;
+that is, the coefficients are given in ascending order by power of `z`.  This macro expands
+to efficient inline code that uses either Horner's method or, for complex `z`, a more
+efficient Goertzel-like algorithm.
+"""
 macro evalpoly(z, p...)
     a = :($(esc(p[end])))
     b = :($(esc(p[end-1])))
@@ -112,7 +121,28 @@ macro evalpoly(z, p...)
       end)
 end
 
+"""
+    rad2deg(x)
+
+Convert `x` from radians to degrees.
+
+```jldoctest
+julia> rad2deg(pi)
+180.0
+```
+"""
 rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
+
+"""
+    deg2rad(x)
+
+Convert `x` from degrees to radians.
+
+```jldoctest
+julia> deg2rad(90)
+1.5707963267948966
+```
+"""
 deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
 rad2deg(z::Real) = rad2deg(float(z))
 deg2rad(z::Real) = deg2rad(float(z))
@@ -120,6 +150,20 @@ deg2rad(z::Real) = deg2rad(float(z))
 @vectorize_1arg Real deg2rad
 
 log{T<:Number}(b::T, x::T) = log(x)/log(b)
+
+"""
+    log(b,x)
+
+Compute the base `b` logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
+
+```jldoctest
+julia> log(4,8)
+1.5
+
+julia> log(4,2)
+0.5
+```
+"""
 log(b::Number, x::Number) = log(promote(b,x)...)
 @vectorize_2arg Number log
 
@@ -139,7 +183,29 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
 end
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
+
+"""
+    cbrt(x)
+
+Return ``x^{1/3}``.  The prefix operator `∛` is equivalent to `cbrt`.
+
+```jldoctest
+julia> cbrt(big(27))
+3.000000000000000000000000000000000000000000000000000000000000000000000000000000
+```
+"""
 cbrt(x::AbstractFloat) = x^(1//3)
+
+"""
+    exp2(x)
+
+Compute ``2^x``.
+
+```jldoctest
+julia> exp2(5)
+32.0
+```
+"""
 exp2(x::AbstractFloat) = 2^x
 for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
     @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
@@ -182,6 +248,13 @@ end
 
 sqrt(x::Float64) = box(Float64,sqrt_llvm(unbox(Float64,x)))
 sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
+
+"""
+    sqrt(x)
+
+Return ``\\sqrt{x}``. Throws `DomainError` for negative `Real` arguments. Use complex
+negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
+"""
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
@@ -224,6 +297,12 @@ Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
 """
 hypot(x::Number...) = vecnorm(x)
 
+"""
+    atan2(y, x)
+
+Compute the inverse tangent of `y/x`, using the signs of both `x` and `y` to determine the
+quadrant of the return value.
+"""
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
 atan2{T<:AbstractFloat}(y::T, x::T) = Base.no_op_err("atan2", T)
 
@@ -245,10 +324,21 @@ minmax{T<:AbstractFloat}(x::T, y::T) = ifelse(isnan(x-y), ifelse(isnan(x), (y, y
                                        ifelse((y > x) | (signbit(y) < signbit(x)), (x, y),
                                        ifelse(x == x, (x, x), (y, y)))))
 
+
+"""
+    ldexp(x, n)
+
+Compute ``x \\times 2^n``.
+"""
 ldexp(x::Float64,e::Integer) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, Int32(e))
 ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, Int32(e))
 # TODO: vectorize ldexp
 
+"""
+    exponent(x) -> Int
+
+Get the exponent of a normalized floating-point number.
+"""
 function exponent{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
@@ -265,6 +355,21 @@ function exponent{T<:AbstractFloat}(x::T)
 end
 @vectorize_1arg Real exponent
 
+"""
+    significand(x)
+
+Extract the `significand(s)` (a.k.a. mantissa), in binary representation, of a
+floating-point number or array. If `x` is a non-zero finite number, then the result will be
+a number of the same type on the interval ``[1,2)``. Otherwise `x` is returned.
+
+```jldoctest
+julia> significand(15.2)/15.2
+0.125
+
+julia> significand(15.2)*8
+15.2
+```
+"""
 function significand{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
@@ -283,6 +388,12 @@ function significand{T<:AbstractFloat}(x::T)
 end
 @vectorize_1arg Real significand
 
+"""
+    frexp(val)
+
+Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
+and `val` is equal to ``x \\times 2^{exp}``.
+"""
 function frexp{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
@@ -312,6 +423,17 @@ function frexp{T<:AbstractFloat}(A::Array{T})
     return (F, E)
 end
 
+"""
+    modf(x)
+
+Return a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts
+have the same sign as the argument.
+
+```jldoctest
+julia> modf(3.5)
+(0.5,3.0)
+```
+"""
 modf(x) = rem(x,one(x)), trunc(x)
 
 const _modff_temp = Ref{Float32}()
@@ -397,6 +519,11 @@ Modulus after division by `2π`, returning in the range ``[0,2π)``.
 This function computes a floating point representation of the modulus after division by
 numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, which would
 compute the modulus of `x` relative to division by the floating-point number `2π`.
+
+```jldoctest
+julia> mod2pi(9*pi/4)
+0.7853981633974481
+```
 """
 function mod2pi(x::Float64) # or modtau(x)
 # with r = mod2pi(x)
@@ -443,6 +570,14 @@ function mod2pi(x::Int64)
 end
 
 # generic fallback; for number types, promotion.jl does promotion
+
+"""
+    muladd(x, y, z)
+
+Combined multiply-add, computes `x*y+z` in an efficient manner. This may on some systems be
+equivalent to `x*y+z`, or to `fma(x,y,z)`. `muladd` is used to improve performance.
+See [`fma`](:func:`fma`).
+"""
 muladd(x,y,z) = x*y+z
 
 # Float16 definitions

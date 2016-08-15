@@ -80,35 +80,179 @@ stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
 stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
 lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
 
+"""
+    stat(file)
+
+Returns a structure whose fields contain information about the file.
+The fields of the structure are:
+
+| Name    | Description                                                        |
+|:--------|:-------------------------------------------------------------------|
+| size    | The size (in bytes) of the file                                    |
+| device  | ID of the device that contains the file                            |
+| inode   | The inode number of the file                                       |
+| mode    | The protection mode of the file                                    |
+| nlink   | The number of hard links to the file                               |
+| uid     | The user id of the owner of the file                               |
+| gid     | The group id of the file owner                                     |
+| rdev    | If this file refers to a device, the ID of the device it refers to |
+| blksize | The file-system preferred block size for the file                  |
+| blocks  | The number of such blocks allocated                                |
+| mtime   | Unix timestamp of when the file was last modified                  |
+| ctime   | Unix timestamp of when the file was created                        |
+
+"""
 stat(path...) = stat(joinpath(path...))
+
+"""
+    lstat(file)
+
+Like [`stat`](:func:`stat`), but for symbolic links gets the info for the link
+itself rather than the file it refers to.
+This function must be called on a file path rather than a file object or a file
+descriptor.
+"""
 lstat(path...) = lstat(joinpath(path...))
 
 # some convenience functions
 
+"""
+    filemode(file)
+
+Equivalent to `stat(file).mode`
+"""
 filemode(st::StatStruct) = st.mode
+
+"""
+    filesize(path...)
+
+Equivalent to `stat(file).size`.
+"""
 filesize(st::StatStruct) = st.size
+
+"""
+    mtime(file)
+
+Equivalent to `stat(file).mtime`.
+"""
    mtime(st::StatStruct) = st.mtime
+
+"""
+    ctime(file)
+
+Equivalent to `stat(file).ctime`
+"""
    ctime(st::StatStruct) = st.ctime
 
 # mode type predicates
 
+"""
+    ispath(path) -> Bool
+
+Returns `true` if `path` is a valid filesystem path, `false` otherwise.
+"""
     ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
+
+"""
+    isfifo(path) -> Bool
+
+Returns `true` if `path` is a FIFO, `false` otherwise.
+"""
     isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
+
+"""
+    ischardev(path) -> Bool
+
+Returns `true` if `path` is a character device, `false` otherwise.
+"""
  ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
+
+ """
+     isdir(path) -> Bool
+
+ Returns `true` if `path` is a directory, `false` otherwise.
+ """
      isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
+
+ """
+     isblockdev(path) -> Bool
+
+ Returns `true` if `path` is a block device, `false` otherwise.
+ """
 isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
+
+"""
+    isfile(path) -> Bool
+
+Returns `true` if `path` is a regular file, `false` otherwise.
+"""
     isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
+
+"""
+    islink(path) -> Bool
+
+Returns `true` if `path` is a symbolic link, `false` otherwise.
+"""
     islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
+
+"""
+    issocket(path) -> Bool
+
+Returns `true` if `path` is a socket, `false` otherwise.
+"""
   issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 
 # mode permission predicates
 
+"""
+    issetuid(path) -> Bool
+
+Returns `true` if `path` has the setuid flag set, `false` otherwise.
+"""
 issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
+
+"""
+    issetgid(path) -> Bool
+
+Returns `true` if `path` has the setgid flag set, `false` otherwise.
+"""
 issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
+
+"""
+    issticky(path) -> Bool
+
+Returns `true` if `path` has the sticky bit set, `false` otherwise.
+"""
 issticky(st::StatStruct) = (filemode(st) & 0o1000) > 0
 
+"""
+    uperm(file)
+
+Gets the permissions of the owner of the file as a bitfield of
+
+| Value | Description        |
+|:------|:-------------------|
+| 01    | Execute Permission |
+| 02    | Write Permission   |
+| 04    | Read Permission    |
+
+For allowed arguments, see [`stat`](:func:`stat`).
+"""
 uperm(st::StatStruct) = UInt8((filemode(st) >> 6) & 0x7)
+
+"""
+    gperm(file)
+
+Like [`uperm`](:func:`uperm`) but gets the permissions of the group owning the file.
+"""
 gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
+
+"""
+    operm(file)
+
+Like [`uperm`](:func:`uperm`) but gets the permissions for people who neither own the file nor are a member of
+the group owning the file
+"""
 operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
 
 # mode predicate methods for file names
@@ -149,6 +293,11 @@ function samefile(a::AbstractString, b::AbstractString)
     end
 end
 
+"""
+    ismount(path) -> Bool
+
+Returns `true` if `path` is a mount point, `false` otherwise.
+"""
 function ismount(path...)
     path = joinpath(path...)
     isdir(path) || return false

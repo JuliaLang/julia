@@ -4,7 +4,7 @@
  Strings
 *********
 
-.. function:: length(s)
+.. function:: length(s::AbstractString)
 
    .. Docstring generated from Julia source
 
@@ -16,7 +16,12 @@
 
    The number of bytes in string ``s``\ .
 
-.. function:: *(s, t)
+   .. doctest::
+
+       julia> sizeof("❤")
+       3
+
+.. function:: *(s::AbstractString, t::AbstractString)
 
    .. Docstring generated from Julia source
 
@@ -27,11 +32,11 @@
        julia> "Hello " * "world"
        "Hello world"
 
-.. function:: ^(s, n)
+.. function:: ^(s::AbstractString, n::Integer)
 
    .. Docstring generated from Julia source
 
-   Repeat ``n`` times the string ``s``\ . The ``repeat`` function is an alias to this operator.
+   Repeat ``n`` times the string ``s``\ . The :func:`repeat` function is an alias to this operator.
 
    .. doctest::
 
@@ -42,13 +47,13 @@
 
    .. Docstring generated from Julia source
 
-   Create a string from any values using the ``print`` function.
+   Create a string from any values using the :func:`print` function.
 
 .. function:: repr(x)
 
    .. Docstring generated from Julia source
 
-   Create a string from any value using the ``showall`` function.
+   Create a string from any value using the :func:`showall` function.
 
 .. function:: String(s::AbstractString)
 
@@ -122,7 +127,7 @@
 
    Create a ``Text`` object from a literal string.
 
-.. function:: normalize_string(s, normalform::Symbol)
+.. function:: normalize_string(s::AbstractString, normalform::Symbol)
 
    .. Docstring generated from Julia source
 
@@ -143,7 +148,7 @@
 
    For example, NFKC corresponds to the options ``compose=true, compat=true, stable=true``\ .
 
-.. function:: graphemes(s) -> iterator over substrings of s
+.. function:: graphemes(s::AbstractString) -> GraphemeIterator
 
    .. Docstring generated from Julia source
 
@@ -161,7 +166,7 @@
 
    Returns ``true`` if the given value is valid for that type. Types currently can be either ``Char`` or ``String``\ . Values for ``Char`` can be of type ``Char`` or ``UInt32``\ . Values for ``String`` can be of that type, or ``Vector{UInt8}``\ .
 
-.. function:: isvalid(str, i)
+.. function:: isvalid(str::AbstractString, i::Integer)
 
    .. Docstring generated from Julia source
 
@@ -195,21 +200,31 @@
 
    .. Docstring generated from Julia source
 
-   Return a vector of the matching substrings from eachmatch.
+   Return a vector of the matching substrings from :func:`eachmatch`\ .
 
-.. function:: lpad(string, n, p)
-
-   .. Docstring generated from Julia source
-
-   Make a string at least ``n`` columns wide when printed, by padding on the left with copies of ``p``\ .
-
-.. function:: rpad(string, n, p)
+.. function:: lpad(s, n::Integer, p::AbstractString=" ")
 
    .. Docstring generated from Julia source
 
-   Make a string at least ``n`` columns wide when printed, by padding on the right with copies of ``p``\ .
+   Make a string at least ``n`` columns wide when printed by padding ``s`` on the left with copies of ``p``\ .
 
-.. function:: search(string, chars, [start])
+   .. doctest::
+
+       julia> lpad("March",10)
+       "     March"
+
+.. function:: rpad(s, n::Integer, p::AbstractString=" ")
+
+   .. Docstring generated from Julia source
+
+   Make a string at least ``n`` columns wide when printed by padding ``s`` on the right with copies of ``p``\ .
+
+   .. doctest::
+
+       julia> rpad("March",20)
+       "March               "
+
+.. function:: search(string::AbstractString, chars::Chars, [start::Integer])
 
    .. Docstring generated from Julia source
 
@@ -219,29 +234,47 @@
 
    ``search(string, 'c')`` = ``index`` such that ``string[index] == 'c'``\ , or ``0`` if unmatched.
 
-.. function:: rsearch(string, chars, [start])
+   .. doctest::
+
+       julia> search("Hello to the world", "z")
+       0:-1
+
+       julia> search("JuliaLang","Julia")
+       1:5
+
+.. function:: rsearch(s::AbstractString, chars::Chars, [start::Integer])
 
    .. Docstring generated from Julia source
 
-   Similar to ``search``\ , but returning the last occurrence of the given characters within the given string, searching in reverse from ``start``\ .
+   Similar to :func:`search`\ , but returning the last occurrence of the given characters within the given string, searching in reverse from ``start``\ .
 
-.. function:: searchindex(string, substring, [start])
+   .. doctest::
+
+       julia> rsearch("aaabbb","b")
+       6:6
+
+.. function:: searchindex(s::AbstractString, substring, [start::Integer])
 
    .. Docstring generated from Julia source
 
-   Similar to ``search``\ , but return only the start index at which the substring is found, or ``0`` if it is not.
+   Similar to :func:`search`\ , but return only the start index at which the substring is found, or ``0`` if it is not.
 
-.. function:: rsearchindex(string, substring, [start])
+.. function:: rsearchindex(s::AbstractString, substring, [start::Integer])
 
    .. Docstring generated from Julia source
 
-   Similar to ``rsearch``\ , but return only the start index at which the substring is found, or ``0`` if it is not.
+   Similar to :func:`rsearch`\ , but return only the start index at which the substring is found, or ``0`` if it is not.
 
-.. function:: contains(haystack, needle)
+.. function:: contains(haystack::AbstractString, needle::AbstractString)
 
    .. Docstring generated from Julia source
 
    Determine whether the second argument is a substring of the first.
+
+   .. doctest::
+
+       julia> contains("JuliaLang is pretty cool!", "Julia")
+       true
 
 .. function:: reverse(s::AbstractString) -> AbstractString
 
@@ -249,121 +282,205 @@
 
    Reverses a string.
 
-.. function:: replace(string, pat, r[, n])
+   .. doctest::
+
+       julia> reverse("JuliaLang")
+       "gnaLailuJ"
+
+.. function:: replace(string::AbstractString, pat, r[, n::Integer=0])
 
    .. Docstring generated from Julia source
 
    Search for the given pattern ``pat``\ , and replace each occurrence with ``r``\ . If ``n`` is provided, replace at most ``n`` occurrences. As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring. If ``pat`` is a regular expression and ``r`` is a ``SubstitutionString``\ , then capture group references in ``r`` are replaced with the corresponding matched text.
 
-.. function:: split(string, [chars]; limit=0, keep=true)
+.. function:: split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
    .. Docstring generated from Julia source
 
    Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``\ 's second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``keep`` is taken to be ``false``\ . The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.
 
-.. function:: rsplit(string, [chars]; limit=0, keep=true)
+   .. doctest::
+
+       julia> a = "Ma.rch"
+       "Ma.rch"
+
+       julia> split(a,".")
+       2-element Array{SubString{String},1}:
+        "Ma"
+        "rch"
+
+.. function:: rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
    .. Docstring generated from Julia source
 
-   Similar to ``split``\ , but starting from the end of the string.
+   Similar to :func:`split`\ , but starting from the end of the string.
 
-.. function:: strip(string, [chars])
+   .. doctest::
 
-   .. Docstring generated from Julia source
+       julia> a = "M.a.r.c.h"
+       "M.a.r.c.h"
 
-   Return ``string`` with any leading and trailing whitespace removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
+       julia> rsplit(a,".")
+       5-element Array{SubString{String},1}:
+        "M"
+        "a"
+        "r"
+        "c"
+        "h"
 
-.. function:: lstrip(string, [chars])
+       julia> rsplit(a,".";limit=1)
+       1-element Array{SubString{String},1}:
+        "M.a.r.c.h"
 
-   .. Docstring generated from Julia source
+       julia> rsplit(a,".";limit=2)
+       2-element Array{SubString{String},1}:
+        "M.a.r.c"
+        "h"
 
-   Return ``string`` with any leading whitespace removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
-
-.. function:: rstrip(string, [chars])
-
-   .. Docstring generated from Julia source
-
-   Return ``string`` with any trailing whitespace removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
-
-.. function:: startswith(string, prefix)
-
-   .. Docstring generated from Julia source
-
-   Returns ``true`` if ``string`` starts with ``prefix``\ . If ``prefix`` is a vector or set of characters, tests whether the first character of ``string`` belongs to that set.
-
-.. function:: endswith(string, suffix)
+.. function:: strip(s::AbstractString, [chars::Chars])
 
    .. Docstring generated from Julia source
 
-   Returns ``true`` if ``string`` ends with ``suffix``\ . If ``suffix`` is a vector or set of characters, tests whether the last character of ``string`` belongs to that set.
+   Return ``s`` with any leading and trailing whitespace removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
 
-.. function:: uppercase(string)
-
-   .. Docstring generated from Julia source
-
-   Returns ``string`` with all characters converted to uppercase.
-
-.. function:: lowercase(string)
+.. function:: lstrip(s::AbstractString[, chars::Chars])
 
    .. Docstring generated from Julia source
 
-   Returns ``string`` with all characters converted to lowercase.
+   Return ``s`` with any leading whitespace and delimiters removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
 
-.. function:: ucfirst(string)
+.. function:: rstrip(s::AbstractString[, chars::Chars])
+
+   .. Docstring generated from Julia source
+
+   Return ``s`` with any trailing whitespace and delimiters removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
+
+   .. doctest::
+
+       julia> a = rpad("March",20)
+       "March               "
+
+       julia> rstrip(a)
+       "March"
+
+.. function:: startswith(s::AbstractString, prefix::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Returns ``true`` if ``s`` starts with ``prefix``\ . If ``prefix`` is a vector or set of characters, tests whether the first character of ``s`` belongs to that set.
+
+   .. doctest::
+
+       julia> startswith("JuliaLang", "Julia")
+       true
+
+.. function:: endswith(s::AbstractString, suffix::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Returns ``true`` if ``s`` ends with ``suffix``\ . If ``suffix`` is a vector or set of characters, tests whether the last character of ``s`` belongs to that set.
+
+   .. doctest::
+
+       julia> endswith("Sunday", "day")
+       true
+
+.. function:: uppercase(s::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Returns ``s`` with all characters converted to uppercase.
+
+   .. doctest::
+
+       julia> uppercase("Julia")
+       "JULIA"
+
+.. function:: lowercase(s::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Returns ``s`` with all characters converted to lowercase.
+
+   .. doctest::
+
+       julia> lowercase("STRINGS AND THINGS")
+       "strings and things"
+
+.. function:: ucfirst(s::AbstractString)
 
    .. Docstring generated from Julia source
 
    Returns ``string`` with the first character converted to uppercase.
 
-.. function:: lcfirst(string)
+   .. doctest::
+
+       julia> ucfirst("python")
+       "Python"
+
+.. function:: lcfirst(s::AbstractString)
 
    .. Docstring generated from Julia source
 
    Returns ``string`` with the first character converted to lowercase.
 
-.. function:: join(strings, delim, [last])
+   .. doctest::
+
+       julia> lcfirst("Julia")
+       "julia"
+
+.. function:: join(io::IO, strings, delim, [last])
 
    .. Docstring generated from Julia source
 
-   Join an array of ``strings`` into a single string, inserting the given delimiter between adjacent strings. If ``last`` is given, it will be used instead of ``delim`` between the last two strings. For example
+   Join an array of ``strings`` into a single string, inserting the given delimiter between adjacent strings. If ``last`` is given, it will be used instead of ``delim`` between the last two strings. For example,
 
-   .. code-block:: julia
+   .. doctest::
 
-       join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
+       julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
+       "apples, bananas and pineapples"
 
    ``strings`` can be any iterable over elements ``x`` which are convertible to strings via ``print(io::IOBuffer, x)``\ .
 
-.. function:: chop(string)
+.. function:: chop(s::AbstractString)
 
    .. Docstring generated from Julia source
 
    Remove the last character from a string.
 
-.. function:: chomp(string)
+   .. doctest::
+
+       julia> a = string("March")
+       "March"
+
+       julia> chop(a)
+       "Marc"
+
+.. function:: chomp(s::AbstractString)
 
    .. Docstring generated from Julia source
 
    Remove a single trailing newline from a string.
 
-.. function:: ind2chr(string, i)
+.. function:: ind2chr(s::AbstractString, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Convert a byte index to a character index.
+   Convert a byte index ``i`` to a character index.
 
-.. function:: chr2ind(string, i)
+.. function:: chr2ind(s::AbstractString, i::Integer)
 
    .. Docstring generated from Julia source
 
-   Convert a character index to a byte index.
+   Convert a character index ``i`` to a byte index.
 
-.. function:: nextind(str, i)
+.. function:: nextind(str::AbstractString, i::Integer)
 
    .. Docstring generated from Julia source
 
    Get the next valid string index after ``i``\ . Returns a value greater than ``endof(str)`` at or after the end of the string.
 
-.. function:: prevind(str, i)
+.. function:: prevind(str::AbstractString, i::Integer)
 
    .. Docstring generated from Julia source
 
@@ -381,11 +498,16 @@
 
    Gives the number of columns needed to print a character.
 
-.. function:: strwidth(s)
+.. function:: strwidth(s::AbstractString)
 
    .. Docstring generated from Julia source
 
    Gives the number of columns needed to print a string.
+
+   .. doctest::
+
+       julia> strwidth("March")
+       5
 
 .. function:: isalnum(c::Union{Char,AbstractString}) -> Bool
 
@@ -465,21 +587,29 @@
 
    Tests whether a character is a valid hexadecimal digit, or whether this is true for all elements of a string.
 
+   .. doctest::
+
+       julia> isxdigit("abc")
+       true
+
+       julia> isxdigit("0x9")
+       false
+
 .. function:: Symbol(x...) -> Symbol
 
    .. Docstring generated from Julia source
 
    Create a ``Symbol`` by concatenating the string representations of the arguments together.
 
-.. function:: escape_string(str::AbstractString) -> AbstractString
+.. function:: escape_string([io,] str::AbstractString[, esc::AbstractString]) -> AbstractString
 
    .. Docstring generated from Julia source
 
-   General escaping of traditional C and Unicode escape sequences.
+   General escaping of traditional C and Unicode escape sequences. Any characters in ``esc`` are also escaped (with a backslash). See also :func:`unescape_string`\ .
 
-.. function:: unescape_string(s::AbstractString) -> AbstractString
+.. function:: unescape_string([io,] s::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
 
-   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ . See also :func:`unescape_string`\ .
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ .
 

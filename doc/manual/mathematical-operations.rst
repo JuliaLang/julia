@@ -427,7 +427,7 @@ The following examples show the different forms.
 
     julia> round(Int8,127.6)
     ERROR: InexactError()
-     in trunc(::Type{Int8}, ::Float64) at ./float.jl:458
+     in trunc(::Type{Int8}, ::Float64) at ./float.jl:463
      in round(::Type{Int8}, ::Float64) at ./float.jl:211
      ...
 

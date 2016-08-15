@@ -2,6 +2,11 @@
 
 ## symbols ##
 
+"""
+    gensym([tag])
+
+Generates a symbol which will not conflict with other variable names.
+"""
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
 gensym(s::String) = gensym(s.data)
@@ -11,6 +16,12 @@ gensym(ss::String...) = map(gensym, ss)
 gensym(s::Symbol) =
     ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
 
+"""
+    @gensym
+
+Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into
+`x = gensym("x"); y = gensym("y")`.
+"""
 macro gensym(names...)
     blk = Expr(:block)
     for name in names
@@ -35,11 +46,36 @@ copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
 
+"""
+    expand(x)
+
+Takes the expression `x` and returns an equivalent expression in lowered form.
+"""
 expand(x::ANY) = ccall(:jl_expand, Any, (Any,), x)
+
+"""
+    macroexpand(x)
+
+Takes the expression `x` and returns an equivalent expression with all macros removed (expanded).
+"""
 macroexpand(x::ANY) = ccall(:jl_macroexpand, Any, (Any,), x)
 
 ## misc syntax ##
 
+"""
+    eval([m::Module], expr::Expr)
+
+Evaluate an expression in the given module and return the result. Every `Module` (except
+those defined with `baremodule`) has its own 1-argument definition of `eval`, which
+evaluates expressions in that module.
+"""
+eval
+
+"""
+    @eval
+
+Evaluate an expression and return the value.
+"""
 macro eval(x)
     :($(esc(:eval))($(Expr(:quote,x))))
 end
@@ -57,7 +93,7 @@ macro pure(ex)
 end
 
 """
-    @propagate_inbounds(ex)
+    @propagate_inbounds
 
 Tells the compiler to inline a function while retaining the caller's inbounds context.
 """
@@ -72,6 +108,8 @@ macro propagate_inbounds(ex)
 end
 
 """
+    @polly
+
 Tells the compiler to apply the polyhedral optimizer Polly to a function.
 """
 macro polly(ex)

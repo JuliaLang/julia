@@ -21,6 +21,11 @@ immutable IPv4 <: IPAddr
     end
 end
 
+"""
+    IPv4(host::Integer) -> IPv4
+
+Returns an IPv4 object from ip address `host` formatted as an `Integer`.
+"""
 function IPv4(host::Integer)
     if host < 0
         throw(ArgumentError("IPv4 address must be positive"))
@@ -63,6 +68,11 @@ immutable IPv6 <: IPAddr
     end
 end
 
+"""
+    IPv6(host::Integer) -> IPv6
+
+Returns an IPv6 object from ip address `host` formatted as an `Integer`.
+"""
 function IPv6(host::Integer)
     if host < 0
         throw(ArgumentError("IPv6 address must be positive"))
@@ -393,6 +403,15 @@ _bind(sock::UDPSocket, host::IPv4, port::UInt16, flags::UInt32 = UInt32(0)) = cc
 _bind(sock::UDPSocket, host::IPv6, port::UInt16, flags::UInt32 = UInt32(0)) = ccall(:jl_udp_bind6, Int32, (Ptr{Void}, UInt16, Ptr{UInt128}, UInt32),
             sock.handle, hton(port), Ref(hton(host.host)), flags)
 
+"""
+    bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)
+
+Bind `socket` to the given `host:port`. Note that `0.0.0.0` will listen on all devices.
+
+* The `ipv6only` parameter disables dual stack mode. If `ipv6only=true`, only an IPv6 stack is created.
+* If `reuseaddr=true`, multiple threads or processes can bind to the same address without error
+  if they all set `reuseaddr=true`, but only the last to bind will receive any traffic.
+"""
 function bind(sock::Union{TCPServer, UDPSocket}, host::IPAddr, port::Integer; ipv6only = false, reuseaddr = false, kws...)
     if sock.status != StatusInit
         error("$(typeof(sock)) is not in initialization state")
@@ -420,6 +439,17 @@ end
 
 bind(sock::TCPServer, addr::InetAddr) = bind(sock, addr.host, addr.port)
 
+"""
+    setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
+
+Set UDP socket options.
+
+* `multicast_loop`: loopback for multicast packets (default: `true`).
+* `multicast_ttl`: TTL for multicast packets (default: `nothing`).
+* `enable_broadcast`: flag must be set to `true` if socket will be used for broadcast messages,
+  or else the UDP system will return an access error (default: `false`).
+* `ttl`: Time-to-live of packets sent on the socket (default: `nothing`).
+"""
 function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
     if sock.status == StatusUninit
         error("Cannot set options on uninitialized socket")
@@ -449,11 +479,22 @@ end
 
 _recv_stop(sock::UDPSocket) = uv_error("recv_stop", ccall(:uv_udp_recv_stop, Cint, (Ptr{Void}, ), sock.handle))
 
+"""
+    recv(socket::UDPSocket)
+
+Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
+"""
 function recv(sock::UDPSocket)
     addr, data = recvfrom(sock)
     data
 end
 
+"""
+    recvfrom(socket::UDPSocket) -> (address, data)
+
+Read a UDP packet from the specified socket, returning a tuple of (address, data), where
+address will be either IPv4 or IPv6 as appropriate.
+"""
 function recvfrom(sock::UDPSocket)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen
@@ -499,6 +540,11 @@ function _send(sock::UDPSocket, ipaddr::IPv6, port::UInt16, buf)
           sock.handle, hton(port), &hton(ipaddr.host), buf, sizeof(buf), uv_jl_sendcb::Ptr{Void})
 end
 
+"""
+    send(socket::UDPSocket, host, port::Integer, msg)
+
+Send `msg` over `socket` to `host:port`.
+"""
 function send(sock::UDPSocket,ipaddr,port,msg)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen
@@ -577,6 +623,11 @@ function getaddrinfo(cb::Function, host::String)
 end
 getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb, String(host))
 
+"""
+    getaddrinfo(host::AbstractString) -> IPAddr
+
+Gets the IP address of the `host` (may have to do a DNS lookup)
+"""
 function getaddrinfo(host::String)
     c = Condition()
     getaddrinfo(host) do IP
@@ -600,6 +651,11 @@ getaddrinfo(host::AbstractString) = getaddrinfo(String(host))
 
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
+"""
+    getipaddr() -> IPAddr
+
+Get the IP address of the local machine.
+"""
 function getipaddr()
     addr = Array{Ptr{UInt8}}(1)
     addr[1] = C_NULL
@@ -664,6 +720,12 @@ end
 connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
 # Default Host to localhost
+
+"""
+    connect([host], port::Integer) -> TCPSocket
+
+Connect to the host `host` on port `port`.
+"""
 connect(sock::TCPSocket, port::Integer) = connect(sock,IPv4(127,0,0,1), port)
 connect(port::Integer) = connect(IPv4(127,0,0,1), port)
 
@@ -687,6 +749,12 @@ end
 
 ##
 
+"""
+    listen([addr, ]port::Integer; backlog::Integer=BACKLOG_DEFAULT) -> TCPServer
+
+Listen on port on the address specified by `addr`. By default this listens on localhost
+only. To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
+"""
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TCPServer()
     !bind(sock, addr) && error("cannot bind to port; may already be in use or access denied")
@@ -735,6 +803,12 @@ end
 
 ## Utility functions
 
+"""
+    listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
+
+Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
+actual port that the server was created on and the server itself.
+"""
 function listenany(host::IPAddr, default_port)
     addr = InetAddr(host, default_port)
     while true
@@ -752,6 +826,12 @@ end
 
 listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
 
+"""
+    getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
+
+Get the IP address and the port that the given `TCPSocket` is connected to
+(or bound to, in the case of `TCPServer`).
+"""
 function getsockname(sock::Union{TCPServer,TCPSocket})
     rport = Ref{Cushort}(0)
     raddress = zeros(UInt8, 16)

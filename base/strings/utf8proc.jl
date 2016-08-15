@@ -104,6 +104,40 @@ function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=fa
     utf8proc_map(s, flags)
 end
 
+"""
+    normalize_string(s::AbstractString, normalform::Symbol)
+
+Normalize the string `s` according to one of the four "normal forms" of the Unicode
+standard: `normalform` can be `:NFC`, `:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C
+(canonical composition) and D (canonical decomposition) convert different visually identical
+representations of the same abstract string into a single canonical form, with form C being
+more compact.  Normal forms KC and KD additionally canonicalize "compatibility equivalents":
+they convert characters that are abstractly similar but visually distinct into a single
+canonical choice (e.g. they expand ligatures into the individual characters), with form KC
+being more compact.
+
+Alternatively, finer control and additional transformations may be be obtained by calling
+`normalize_string(s; keywords...)`, where any number of the following boolean keywords
+options (which all default to `false` except for `compose`) are specified:
+
+* `compose=false`: do not perform canonical composition
+* `decompose=true`: do canonical decomposition instead of canonical composition (`compose=true`
+  is ignored if present)
+* `compat=true`: compatibility equivalents are canonicalized
+* `casefold=true`: perform Unicode case folding, e.g. for case-insensitive string comparison
+* `newline2lf=true`, `newline2ls=true`, or `newline2ps=true`: convert various newline sequences
+  (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS)
+  character, respectively
+* `stripmark=true`: strip diacritical marks (e.g. accents)
+* `stripignore=true`: strip Unicode's "default ignorable" characters (e.g. the soft hyphen
+  or the left-to-right marker)
+* `stripcc=true`: strip control characters; horizontal tabs and form feeds are converted to
+  spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
+* `rejectna=true`: throw an error if unassigned code points are found
+* `stable=true`: enforce Unicode Versioning Stability
+
+For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
+"""
 function normalize_string(s::AbstractString, nf::Symbol)
     utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
                     nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
@@ -116,6 +150,11 @@ end
 
 ############################################################################
 
+"""
+    charwidth(c)
+
+Gives the number of columns needed to print a character.
+"""
 charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 
 lowercase(c::Char) = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) : Char(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
@@ -128,22 +167,71 @@ function category_code(c)
     return ccall(:utf8proc_category, Cint, (UInt32,), c)
 end
 
+"""
+    is_assigned_char(c) -> Bool
+
+Returns `true` if the given char or integer is an assigned Unicode code point.
+"""
 is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 
 ## libc character class predicates ##
 
+"""
+    islower(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is a lowercase letter, or whether this is true for all elements of
+a string. A character is classified as lowercase if it belongs to Unicode category Ll,
+Letter: Lowercase.
+"""
 islower(c::Char) = (category_code(c) == UTF8PROC_CATEGORY_LL)
 
 # true for Unicode upper and mixed case
+
+"""
+    isupper(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is an uppercase letter, or whether this is true for all elements
+of a string. A character is classified as uppercase if it belongs to Unicode category Lu,
+Letter: Uppercase, or Lt, Letter: Titlecase.
+"""
 function isupper(c::Char)
     ccode = category_code(c)
     return ccode == UTF8PROC_CATEGORY_LU || ccode == UTF8PROC_CATEGORY_LT
 end
 
+"""
+    isdigit(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is a numeric digit (0-9), or whether this is true for all elements
+of a string.
+"""
 isdigit(c::Char)  = ('0' <= c <= '9')
+
+"""
+    isalpha(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is alphabetic, or whether this is true for all elements of a
+string. A character is classified as alphabetic if it belongs to the Unicode general
+category Letter, i.e. a character whose category code begins with 'L'.
+"""
 isalpha(c::Char)  = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_LO)
+
+"""
+    isnumber(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is numeric, or whether this is true for all elements of a string.
+A character is classified as numeric if it belongs to the Unicode general category Number,
+i.e. a character whose category code begins with 'N'.
+"""
 isnumber(c::Char) = (UTF8PROC_CATEGORY_ND <= category_code(c) <= UTF8PROC_CATEGORY_NO)
 
+"""
+    isalnum(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is alphanumeric, or whether this is true for all elements of a
+string. A character is classified as alphabetic if it belongs to the Unicode general
+category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.
+"""
 function isalnum(c::Char)
     ccode = category_code(c)
     return (UTF8PROC_CATEGORY_LU <= ccode <= UTF8PROC_CATEGORY_LO) ||
@@ -151,16 +239,52 @@ function isalnum(c::Char)
 end
 
 # following C++ only control characters from the Latin-1 subset return true
+
+"""
+    iscntrl(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is a control character, or whether this is true for all elements
+of a string. Control characters are the non-printing characters of the Latin-1 subset of Unicode.
+"""
 iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
+"""
+    ispunct(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character belongs to the Unicode general category Punctuation, i.e. a
+character whose category code begins with 'P'. For strings, tests whether this is true for
+all elements of the string.
+"""
 ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO)
 
 # \u85 is the Unicode Next Line (NEL) character
+
+"""
+    isspace(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
+'\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
+category Zs. For strings, tests whether this is true for all elements of the string.
+"""
 @inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
+"""
+    isprint(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is printable, including spaces, but not a control character. For
+strings, tests whether this is true for all elements of the string.
+"""
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
 
 # true in principal if a printer would use ink
+
+"""
+    isgraph(c::Union{Char,AbstractString}) -> Bool
+
+Tests whether a character is printable, and not a space, or whether this is true for all
+elements of a string. Any character that would cause a printer to use ink should be
+classified with `isgraph(c)==true`.
+"""
 isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_SO)
 
 for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
@@ -193,6 +317,15 @@ isgraphemebreak(c1::Char, c2::Char, state::Ref{Int32}) =
 immutable GraphemeIterator{S<:AbstractString}
     s::S # original string (for generation of SubStrings)
 end
+
+"""
+    graphemes(s::AbstractString) -> GraphemeIterator
+
+Returns an iterator over substrings of `s` that correspond to the extended graphemes in the
+string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as
+single characters, even though they may contain more than one codepoint; for example a
+letter combined with an accent mark is a single grapheme.)
+"""
 graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
 
 eltype{S}(::Type{GraphemeIterator{S}}) = SubString{S}

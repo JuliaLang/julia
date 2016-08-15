@@ -23,13 +23,44 @@ AbstractIOBuffer{T<:AbstractVector{UInt8}}(data::T, readable::Bool, writable::Bo
     AbstractIOBuffer{T}(data, readable, writable, seekable, append, maxsize)
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
+
+"""
+    IOBuffer([data,],[readable::Bool=true, writable::Bool=true, [maxsize::Int=typemax(Int)]])
+
+Create an `IOBuffer`, which may optionally operate on a pre-existing array. If the
+readable/writable arguments are given, they restrict whether or not the buffer may be read
+from or written to respectively. By default the buffer is readable but not writable. The
+last argument optionally specifies a size beyond which the buffer may not be grown.
+"""
 IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Int=typemax(Int)) =
     AbstractIOBuffer(data, readable, writable, true, false, maxsize)
 IOBuffer(readable::Bool, writable::Bool) = IOBuffer(UInt8[], readable, writable)
+
+"""
+    IOBuffer() -> IOBuffer
+
+Create an in-memory I/O stream.
+"""
 IOBuffer() = IOBuffer(true, true)
+
+"""
+    IOBuffer(size::Int)
+
+Create a fixed size IOBuffer. The buffer will not grow dynamically.
+"""
 IOBuffer(maxsize::Int) = (x=IOBuffer(Array{UInt8}(maxsize), true, true, maxsize); x.size=0; x)
 
 # PipeBuffers behave like Unix Pipes. They are typically readable and writable, they act appendable, and are not seekable.
+
+"""
+    PipeBuffer(data::Vector{UInt8}=UInt8[],[maxsize::Int=typemax(Int)])
+
+An [`IOBuffer`](:obj:`IOBuffer`) that allows reading and performs writes by appending.
+Seeking and truncating are not supported.
+See [`IOBuffer`](:obj:`IOBuffer`) for the available constructors.
+If `data` is given, creates a `PipeBuffer` to operate on a data vector,
+optionally specifying a size beyond which the underlying `Array` may not be grown.
+"""
 PipeBuffer(data::Vector{UInt8}=UInt8[], maxsize::Int=typemax(Int)) =
     AbstractIOBuffer(data,true,true,false,true,maxsize)
 PipeBuffer(maxsize::Int) = (x = PipeBuffer(Array{UInt8}(maxsize),maxsize); x.size=0; x)
@@ -259,6 +290,13 @@ function takebuf_array(io::IOBuffer)
     end
     return data
 end
+
+"""
+    takebuf_string(b::IOBuffer)
+
+Obtain the contents of an `IOBuffer` as a string, without copying.
+Afterwards, the `IOBuffer` is reset to its initial state.
+"""
 takebuf_string(io::AbstractIOBuffer) = String(takebuf_array(io))
 
 function write(to::AbstractIOBuffer, from::AbstractIOBuffer)

@@ -315,13 +315,13 @@ General Parallel Computing Support
 
    Block the current task until some event occurs, depending on the type of the argument:
 
-   * ``RemoteChannel`` : Wait for a value to become available on the specified remote channel.
-   * ``Future`` : Wait for a value to become available for the specified future.
-   * ``Channel``\ : Wait for a value to be appended to the channel.
-   * ``Condition``\ : Wait for ``notify`` on a condition.
-   * ``Process``\ : Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
-   * ``Task``\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
-   * ``RawFD``\ : Wait for changes on a file descriptor (see ``poll_fd`` for keyword arguments and return code)
+   * :obj:`RemoteChannel` : Wait for a value to become available on the specified remote channel.
+   * :obj:`Future` : Wait for a value to become available for the specified future.
+   * :obj:`Channel`\ : Wait for a value to be appended to the channel.
+   * :obj:`Condition`\ : Wait for :func:`notify` on a condition.
+   * :obj:`Process`\ : Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
+   * :obj:`Task`\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
+   * :obj:`RawFD`\ : Wait for changes on a file descriptor (see :func:`poll_fd` for keyword arguments and return code)
 
    If no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to ``schedule`` or ``yieldto``\ .
 
@@ -482,13 +482,13 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Creates a closure around an expression and runs it on an automatically-chosen process, returning a ``Future`` to the result.
+   Creates a closure around an expression and runs it on an automatically-chosen process, returning a :obj:`Future` to the result.
 
 .. function:: @spawnat
 
    .. Docstring generated from Julia source
 
-   Accepts two arguments, ``p`` and an expression. A closure is created around the expression and run asynchronously on process ``p``\ . Returns a ``Future`` to the result.
+   Accepts two arguments, ``p`` and an expression. A closure is created around the expression and run asynchronously on process ``p``\ . Returns a :obj:`Future` to the result.
 
 .. function:: @fetch
 

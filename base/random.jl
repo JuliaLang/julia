@@ -29,6 +29,7 @@ type Close1Open2 <: FloatInterval end
 ## RandomDevice
 
 if is_windows()
+
     immutable RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
@@ -52,6 +53,15 @@ else # !windows
     rand{ T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
     rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
 end # os-test
+
+
+"""
+    RandomDevice()
+
+Create a `RandomDevice` RNG object. Two such objects will always generate different streams of random numbers.
+"""
+RandomDevice
+
 
 rand(rng::RandomDevice, ::Type{Close1Open2}) =
     reinterpret(Float64, 0x3ff0000000000000 | rand(rng, UInt64) & 0x000fffffffffffff)
@@ -78,6 +88,12 @@ end
 MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
     MersenneTwister(seed, state, zeros(Float64, MTCacheLength), MTCacheLength)
 
+"""
+    MersenneTwister(seed=0)
+
+Create a `MersenneTwister` RNG object. Different RNG objects can have their own seeds, which
+may be useful for generating different streams of random numbers.
+"""
 MersenneTwister(seed=0) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
@@ -133,6 +149,18 @@ function srand(r::MersenneTwister, seed::Vector{UInt32})
 end
 
 # MersenneTwister jump
+
+"""
+    randjump(r::MersenneTwister, jumps::Integer, [jumppoly::AbstractString=dSFMT.JPOLY1e21]) -> Vector{MersenneTwister}
+
+Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects where the
+first RNG object given as a parameter and following `MersenneTwister` RNGs in the array
+initialized such that a state of the RNG object in the array would be moved forward (without
+generating numbers) from a previous RNG object array element on a particular number of steps
+encoded by the jump polynomial `jumppoly`.
+
+Default jump polynomial moves forward `MersenneTwister` RNG state by 10^20 steps.
+"""
 function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     mts = MersenneTwister[]
     push!(mts, mt)
@@ -191,6 +219,15 @@ end
 
 ## srand()
 
+"""
+    srand([rng=GLOBAL_RNG], [seed])
+
+Reseed the random number generator. If a `seed` is provided, the RNG will give a
+reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
+`MersenneTwister`, the `seed` may be a non-negative integer, a vector of `UInt32` integers
+or a filename, in which case the seed is read from a file. `RandomDevice` does not support
+seeding.
+"""
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
 srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) = srand(r, make_seed(filename, n))
@@ -224,6 +261,17 @@ globalRNG() = GLOBAL_RNG
 
 # rand: a non-specified RNG defaults to GLOBAL_RNG
 
+"""
+    rand([rng=GLOBAL_RNG], [S], [dims...])
+
+Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
+
+* an indexable collection (for example `1:n` or `['x','y','z']`), or
+* a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
+  integers (this is not applicable to `BigInt`), and to ``[0, 1)`` for floating point numbers;
+
+`S` defaults to `Float64`.
+"""
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
 rand(dims::Dims) = rand(GLOBAL_RNG, dims)
@@ -233,6 +281,14 @@ rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(Int(d1), convert(Tu
 rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
+
+"""
+    rand!([rng=GLOBAL_RNG], A, [coll])
+
+Populate the array `A` with random values. If the indexable collection `coll` is specified,
+the values are picked randomly from `coll`. This is equivalent to `copy!(A, rand(rng, coll, size(A)))`
+or `copy!(A, rand(rng, eltype(A), size(A)))` but without allocating a new array.
+"""
 rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
 
 rand(r::AbstractArray, dims::Dims) = rand(GLOBAL_RNG, r, dims)
@@ -630,6 +686,11 @@ function rand!(rng::AbstractRNG, B::BitArray)
     return B
 end
 
+"""
+    bitrand([rng=GLOBAL_RNG], [dims...])
+
+Generate a `BitArray` of random boolean values.
+"""
 bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
 bitrand(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
 
@@ -1131,7 +1192,7 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 """
-    randn([rng], [T=Float64], [dims...])
+    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
 
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
@@ -1165,7 +1226,7 @@ function randn_unlikely(rng, idx, rabs, x)
 end
 
 """
-    randexp([rng], [T=Float64], [dims...])
+    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
 
 Generate a random number of type `T` according to the exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
@@ -1193,15 +1254,15 @@ function randexp_unlikely(rng, idx, x)
 end
 
 """
-    randn!([rng], A::AbstractArray) -> A
+    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
-Also see the `rand` function.
+Also see the [`rand`](:func:`rand`) function.
 """
 function randn! end
 
 """
-    randexp!([rng], A::AbstractArray) -> A
+    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution (with scale 1).
 """
@@ -1248,7 +1309,7 @@ immutable UUID
 end
 
 """
-    uuid1([rng::AbstractRNG]) -> UUID
+    uuid1([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
@@ -1278,7 +1339,7 @@ function uuid1(rng::AbstractRNG=GLOBAL_RNG)
 end
 
 """
-    uuid4([rng::AbstractRNG]) -> UUID
+    uuid4([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
@@ -1383,6 +1444,15 @@ end
 randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
 
 randsubseq{T}(r::AbstractRNG, A::AbstractArray{T}, p::Real) = randsubseq!(r, T[], A, p)
+
+"""
+    randsubseq(A, p) -> Vector
+
+Return a vector consisting of a random subsequence of the given array `A`, where each
+element of `A` is included (in order) with independent probability `p`. (Complexity is
+linear in `p*length(A)`, so this function is efficient even if `p` is small and `A` is
+large.) Technically, this process is known as "Bernoulli sampling" of `A`.
+"""
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
 "Return a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
@@ -1395,6 +1465,12 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
     end
 end
 
+"""
+    shuffle!([rng=GLOBAL_RNG,] v)
+
+In-place version of [`shuffle`](:func:`shuffle`): randomly permute the array `v` in-place,
+optionally supplying the random-number generator `rng`.
+"""
 function shuffle!(r::AbstractRNG, a::AbstractVector)
     n = length(a)
     @assert n <= Int64(2)^52
@@ -1409,9 +1485,25 @@ end
 
 shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
 
+"""
+    shuffle([rng=GLOBAL_RNG,] v)
+
+Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
+number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
+To permute `v` in-place, see [`shuffle!`](:func:`shuffle!`).  To obtain randomly permuted
+indices, see [`randperm`](:func:`randperm`).
+"""
 shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
 
+"""
+    randperm([rng=GLOBAL_RNG,] n::Integer)
+
+Construct a random permutation of length `n`. The optional `rng` argument specifies a random
+number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
+To randomly permute a arbitrary vector, see [`shuffle`](:func:`shuffle`)
+or [`shuffle!`](:func:`shuffle!`).
+"""
 function randperm(r::AbstractRNG, n::Integer)
     a = Array{typeof(n)}(n)
     @assert n <= Int64(2)^52
@@ -1432,6 +1524,12 @@ function randperm(r::AbstractRNG, n::Integer)
 end
 randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
+"""
+    randcycle([rng=GLOBAL_RNG,] n::Integer)
+
+Construct a random cyclic permutation of length `n`. The optional `rng`
+argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
+"""
 function randcycle(r::AbstractRNG, n::Integer)
     a = Array{typeof(n)}(n)
     n == 0 && return a
