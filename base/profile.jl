@@ -71,6 +71,7 @@ typealias LineInfoFlatDict Dict{UInt64, StackFrame}
 
 immutable ProfileFormat
     maxdepth::Int
+    mincount::Int
     sortedby::Symbol
     combine::Bool
     C::Bool
@@ -78,33 +79,38 @@ immutable ProfileFormat
         C = false,
         combine = true,
         maxdepth::Int = typemax(Int),
+        mincount::Int = 0,
         sortedby::Symbol = :filefuncline)
-        return new(maxdepth, sortedby, combine, C)
+        return new(maxdepth, mincount, sortedby, combine, C)
     end
 end
 
 """
-    print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, maxdepth = typemax(Int), sortedby = :filefuncline)
+    print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, maxdepth = typemax(Int), sortedby = :filefuncline, mincount = 0)
 
 Prints profiling results to `io` (by default, `STDOUT`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
-will be used. `format` can be `:tree` or `:flat`. If `C==true`,
-backtraces from C and Fortran code are shown. `combine==true` merges
-instruction pointers that correspond to the same line of
-code. `maxdepth` can be used to limit the depth of printing in `:tree`
-format, while `sortedby` can be used to control the order in `:flat`
-format (`:filefuncline` sorts by the source line, whereas `:count`
+will be used. `format` can be `:tree` or `:flat`.
+If `C==true`, backtraces from C and Fortran code are shown.
+`combine==true` merges instruction pointers that correspond to the same line of code.
+`maxdepth` can be used to limit the depth of printing in `:tree` format,
+while `sortedby` can be used to control the order in `:flat` format
+(`:filefuncline` sorts by the source line, whereas `:count`
 sorts in order of number of collected samples).
+`mincount` can also be used to limit the printout to only those
+lines with at least mincount occurances.
 """
 function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,
         C = false,
         combine = true,
         maxdepth::Int = typemax(Int),
+        mincount::Int = 0,
         sortedby::Symbol = :filefuncline)
     print(io, data, lidict, ProfileFormat(C = C,
             combine = combine,
             maxdepth = maxdepth,
+            mincount = mincount,
             sortedby = sortedby),
         format)
 end
@@ -384,6 +390,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, cols::In
     end
     println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
     for i = 1:length(n)
+        n[i] < fmt.mincount && continue
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
         Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
@@ -538,6 +545,7 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int}, lidict::L
     # Recurse to the next level
     len = Int[length(x) for x in bt]
     for i = 1:length(lilist)
+        n[i] < fmt.mincount && continue
         if !isempty(strs[i])
             println(io, strs[i])
         end
