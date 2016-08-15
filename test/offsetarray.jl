@@ -281,6 +281,11 @@ I,J,N = findnz(z)
 @test I == [-1]
 @test J == [0]
 @test N == [2]
+h = OffsetArray([-1,1,-2,2,0], (-3,))
+@test find(h) == [-2:1;]
+@test find(x->x>0, h) == [-1,1]
+@test find(x->x<0, h) == [-2,0]
+@test find(x->x==0, h) == [2]
 
 v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
 v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
