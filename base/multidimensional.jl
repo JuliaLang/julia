@@ -318,7 +318,7 @@ function _unsafe_getindex(::LinearFast, src::AbstractArray, I::AbstractArray{Boo
 
     D = eachindex(dest)
     Ds = start(D)
-    s = 0
+    s = first(linearindices(src))-1
     for i in eachindex(I)
         s += 1
         @inbounds if I[i]
