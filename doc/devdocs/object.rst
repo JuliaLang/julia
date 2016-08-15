@@ -43,7 +43,7 @@ the values can also be extracted directly as an array access::
 As an example, a "boxed" :c:type:`uint16_t` is stored as follows::
 
     struct {
-        oqaque metadata;
+        opaque metadata;
         struct {
           uint16_t data;            -- 2 bytes
         } jl_value_t;
