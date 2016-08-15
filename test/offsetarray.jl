@@ -7,6 +7,7 @@ let
 # Basics
 v0 = rand(4)
 v = OffsetArray(v0, (-3,))
+h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test indices(v) == (-2:1,)
 @test_throws ErrorException size(v)
 @test_throws ErrorException size(v, 1)
@@ -47,6 +48,16 @@ S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # LinearSlow
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
 @test eachindex(S) == CartesianRange((0:1,3:4))
+
+# logical indexing
+@test A[A .> 2] == [3,4]
+@test_throws BoundsError h[trues(2)]
+@test_throws BoundsError h[trues(5)]
+@test h[OffsetArray(trues(5), (-3,))] == parent(h)
+@test h[OffsetArray([true,false,false,true,true], (-3,))] == parent(h)[[1,4,5]]
+@test A[OffsetArray([true false; false true], A.offsets)] == [1,4]
+@test A[OffsetArray([true true;  false true], A.offsets)] == [1,3,4]
+@test_throws BoundsError A[[true true;  false true]]
 
 # view
 S = view(A, :, 3)
@@ -172,9 +183,6 @@ v = view(A0, i1, 1)
 v = view(A0, 1:1, i1)
 @test indices(v) === (Base.OneTo(1), -4:-3)
 
-# logical indexing
-@test A[A .> 2] == [3,4]
-
 # copy! and fill!
 a = OffsetArray{Int}((-3:-1,))
 fill!(a, -1)
@@ -281,7 +289,6 @@ I,J,N = findnz(z)
 @test I == [-1]
 @test J == [0]
 @test N == [2]
-h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test find(h) == [-2:1;]
 @test find(x->x>0, h) == [-1,1]
 @test find(x->x<0, h) == [-2,0]
