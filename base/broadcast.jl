@@ -165,6 +165,15 @@ end
     end
 end
 
+"""
+    broadcast!(f, dest, As...)
+
+Like [`broadcast`](:func:`broadcast`), but store the result of
+`broadcast(f, As...)` in the `dest` array.
+Note that `dest` is only used to store the result, and does not supply
+arguments to `f` unless it is also listed in the `As`,
+as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
+"""
 @inline function broadcast!{nargs}(f, B::AbstractArray, As::Vararg{Any,nargs})
     shape = indices(B)
     check_broadcast_shape(shape, As...)
@@ -227,6 +236,38 @@ end
 
 @inline broadcast_t(f, T, As...) = broadcast!(f, similar(Array{T}, broadcast_shape(As...)), As...)
 
+"""
+    broadcast(f, As...)
+
+Broadcasts the arrays `As` to a common size by expanding singleton dimensions, and returns
+an array of the results `f(as...)` for each position.
+
+```jldoctest
+julia> A = [1, 2, 3, 4, 5]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
+5×2 Array{Int64,2}:
+ 1   2
+ 3   4
+ 5   6
+ 7   8
+ 9  10
+
+julia> broadcast(+, A, B)
+5×2 Array{Int64,2}:
+  2   3
+  5   6
+  8   9
+ 11  12
+ 14  15
+```
+"""
 @inline broadcast(f, As...) = broadcast_t(f, promote_eltype_op(f, As...), As...)
 
 # alternate, more compact implementation; unfortunately slower.
@@ -247,8 +288,63 @@ function broadcast(f, As...)
 end
 =#
 
+"""
+    bitbroadcast(f, As...)
+
+Like [`broadcast`](:func:`broadcast`), but allocates a `BitArray` to store the
+result, rather then an `Array`.
+
+```jldoctest
+julia> bitbroadcast(isodd,[1,2,3,4,5])
+5-element BitArray{1}:
+  true
+ false
+  true
+ false
+  true
+```
+"""
 @inline bitbroadcast(f, As...) = broadcast!(f, similar(BitArray, broadcast_shape(As...)), As...)
 
+"""
+    broadcast_getindex(A, inds...)
+
+Broadcasts the `inds` arrays to a common size like [`broadcast`](:func:`broadcast`)
+and returns an array of the results `A[ks...]`,
+where `ks` goes over the positions in the broadcast result `A`.
+
+```jldoctest
+julia> A = [1, 2, 3, 4, 5]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
+5×2 Array{Int64,2}:
+ 1   2
+ 3   4
+ 5   6
+ 7   8
+ 9  10
+
+julia> C = broadcast(+,A,B)
+5×2 Array{Int64,2}:
+  2   3
+  5   6
+  8   9
+ 11  12
+ 14  15
+
+julia> broadcast_getindex(C,[1,2,10])
+3-element Array{Int64,1}:
+  2
+  5
+ 15
+```
+"""
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(similar(Array{eltype(src)}, broadcast_shape(I...)), src, I...)
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
     N = length(I)
@@ -266,6 +362,12 @@ broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex
     end
 end
 
+"""
+    broadcast_setindex!(A, X, inds...)
+
+Broadcasts the `X` and `inds` arrays to a common size and stores the value from each
+position in `X` at the indices in `A` given by the same positions in `inds`.
+"""
 @generated function broadcast_setindex!(A::AbstractArray, x, I::AbstractArray...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]

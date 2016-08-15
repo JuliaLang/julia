@@ -2,6 +2,15 @@
 
 ## core text I/O ##
 
+
+"""
+    print(io::IO, x)
+
+Write (to the default output stream) a canonical (un-decorated) text
+representation of a value if there is one, otherwise call [`show`](:func:`show`).
+The representation used by `print` includes minimal formatting and tries to
+avoid Julia-specific details.
+"""
 function print(io::IO, x)
     lock(io)
     try
@@ -24,6 +33,12 @@ function print(io::IO, xs...)
     return nothing
 end
 
+"""
+    println(io::IO, xs...)
+
+Print (using [`print`](:func:`print`)) `xs` followed by a newline.
+If `io` is not supplied, prints to [`STDOUT`](:obj:`STDOUT`).
+"""
 println(io::IO, xs...) = print(io, xs..., '\n')
 
 ## conversion of general objects to strings ##
@@ -38,6 +53,18 @@ function sprint(size::Integer, f::Function, args...; env=nothing)
     end
     String(resize!(s.data, s.size))
 end
+
+"""
+    sprint(f::Function, args...)
+
+Call the given function with an I/O stream and the supplied extra arguments.
+Everything written to this I/O stream is returned as a string.
+
+```jldoctest
+julia> sprint(showcompact, 66.66666)
+"66.6667"
+```
+"""
 sprint(f::Function, args...) = sprint(0, f, args...)
 
 tostr_sizehint(x) = 0
@@ -65,6 +92,12 @@ function print_to_string(xs...; env=nothing)
 end
 
 string_with_env(env, xs...) = print_to_string(xs...; env=env)
+
+"""
+    string(xs...)
+
+Create a string from any values using the [`print`](:func:`print`) function.
+"""
 string(xs...) = print_to_string(xs...)
 
 print(io::IO, s::AbstractString) = (write(io, s); nothing)
@@ -84,6 +117,11 @@ function print_quoted_literal(io, s::AbstractString)
     print(io, '"')
 end
 
+"""
+    repr(x)
+
+Create a string from any value using the [`showall`](:func:`showall`) function.
+"""
 function repr(x)
     s = IOBuffer()
     showall(s, x)
@@ -91,10 +129,32 @@ function repr(x)
 end
 
 # IOBuffer views of a (byte)string:
+
+"""
+    IOBuffer(string::String)
+
+Create a read-only `IOBuffer` on the data underlying the given string.
+"""
 IOBuffer(str::String) = IOBuffer(str.data)
 IOBuffer(s::SubString{String}) = IOBuffer(view(s.string.data, s.offset + 1 : s.offset + sizeof(s)))
 
 # join is implemented using IO
+
+"""
+    join(io::IO, strings, delim, [last])
+
+Join an array of `strings` into a single string, inserting the given delimiter between
+adjacent strings. If `last` is given, it will be used instead of `delim` between the last
+two strings. For example,
+
+```jldoctest
+julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
+"apples, bananas and pineapples"
+```
+
+`strings` can be any iterable over elements `x` which are convertible to strings
+via `print(io::IOBuffer, x)`.
+"""
 function join(io::IO, strings, delim, last)
     i = start(strings)
     if done(strings,i)
@@ -124,7 +184,6 @@ function join(io::IO, strings, delim)
     end
 end
 join(io::IO, strings) = join(io, strings, "")
-
 join(args...) = sprint(join, args...)
 
 ## string escaping & unescaping ##
@@ -134,6 +193,13 @@ need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
 escape_nul(s::AbstractString, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
+"""
+    escape_string([io,] str::AbstractString[, esc::AbstractString]) -> AbstractString
+
+General escaping of traditional C and Unicode escape sequences.
+Any characters in `esc` are also escaped (with a backslash).
+See also [`unescape_string`](:func:`unescape_string`).
+"""
 function escape_string(io, s::AbstractString, esc::AbstractString)
     i = start(s)
     while !done(s,i)
@@ -180,6 +246,12 @@ unescape_chars(s::AbstractString, esc::AbstractString) =
 
 # general unescaping of traditional C and Unicode escape sequences
 
+"""
+    unescape_string([io,] s::AbstractString) -> AbstractString
+
+General unescaping of traditional C and Unicode escape sequences. Reverse of
+[`escape_string`](:func:`escape_string`).
+"""
 function unescape_string(io, s::AbstractString)
     i = start(s)
     while !done(s,i)

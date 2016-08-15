@@ -6,13 +6,48 @@ typealias Dims{N} NTuple{N,Int}
 typealias DimsInteger{N} NTuple{N,Integer}
 typealias Indices{N} NTuple{N,AbstractUnitRange}
 
+"""
+    <:(T1, T2)
+
+Subtype operator, equivalent to `issubtype(T1,T2)`.
+"""
 const (<:) = issubtype
 
+"""
+    supertype(T::DataType)
+
+Return the supertype of DataType `T`.
+
+```jldoctest
+julia> supertype(Int32)
+Signed
+```
+"""
 supertype(T::DataType) = T.super
 
 ## generic comparison ##
 
 ==(x, y) = x === y
+
+"""
+    isequal(x, y)
+
+Similar to `==`, except treats all floating-point `NaN` values as equal to each other, and
+treats `-0.0` as unequal to `0.0`. The default implementation of `isequal` calls `==`, so if
+you have a type that doesn't have these floating-point subtleties then you probably only
+need to define `==`.
+
+`isequal` is the comparison function used by hash tables (`Dict`). `isequal(x,y)` must imply
+that `hash(x) == hash(y)`.
+
+This typically means that if you define your own `==` function then you must define a
+corresponding `hash` (and vice versa). Collections typically implement `isequal` by calling
+`isequal` recursively on all contents.
+
+Scalar types generally do not need to implement `isequal` separate from `==`, unless they
+represent floating-point numbers amenable to a more efficient implementation than that
+provided as a generic fallback (based on `isnan`, `signbit`, and `==`).
+"""
 isequal(x, y) = x == y
 
 # TODO: these can be deleted once the deprecations of ==(x::Char, y::Integer) and
@@ -54,19 +89,85 @@ end
 
 ## comparison fallbacks ##
 
+"""
+    !=(x, y)
+    ≠(x,y)
+
+Not-equals comparison operator. Always gives the opposite answer as `==`. New types should
+generally not implement this, and rely on the fallback definition `!=(x,y) = !(x==y)` instead.
+"""
 !=(x,y) = !(x==y)
 const ≠ = !=
+
+"""
+    is(x, y) -> Bool
+    ===(x,y) -> Bool
+    ≡(x,y) -> Bool
+
+Determine whether `x` and `y` are identical, in the sense that no program could distinguish
+them. Compares mutable objects by address in memory, and compares immutable objects (such as
+numbers) by contents at the bit level. This function is sometimes called `egal`.
+"""
 const ≡ = is
+
+"""
+    !==(x, y)
+    ≢(x,y)
+
+Equivalent to `!is(x, y)`.
+"""
 !==(x,y) = !is(x,y)
 const ≢ = !==
 
+"""
+    <(x, y)
+
+Less-than comparison operator. New numeric types should implement this function for two
+arguments of the new type. Because of the behavior of floating-point NaN values, `<`
+implements a partial order. Types with a canonical partial order should implement `<`, and
+types with a canonical total order should implement `isless`.
+"""
 <(x,y) = isless(x,y)
+
+"""
+    >(x, y)
+
+Greater-than comparison operator. Generally, new types should implement `<` instead of this
+function, and rely on the fallback definition `>(x,y) = y<x`.
+"""
 >(x,y) = y < x
+
+"""
+    <=(x, y)
+    ≤(x,y)
+
+Less-than-or-equals comparison operator.
+"""
 <=(x,y) = !(y < x)
 const ≤ = <=
+
+"""
+    >=(x, y)
+    ≥(x,y)
+
+Greater-than-or-equals comparison operator.
+"""
 >=(x,y) = (y <= x)
 const ≥ = >=
+
+"""
+    .>(x, y)
+
+Element-wise greater-than comparison operator.
+"""
 .>(x,y) = y .< x
+
+"""
+    .>=(x, y)
+    .≥(x,y)
+
+Element-wise greater-than-or-equals comparison operator.
+"""
 .>=(x,y) = y .<= x
 const .≥ = .>=
 
@@ -75,17 +176,58 @@ const .≥ = .>=
 isless(x::Real, y::Real) = x<y
 lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
+"""
+    ifelse(condition::Bool, x, y)
+
+Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in
+that it is an ordinary function, so all the arguments are evaluated first. In some cases,
+using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
+provide higher performance in tight loops.
+"""
 ifelse(c::Bool, x, y) = select_value(c, x, y)
 
+"""
+    cmp(x,y)
+
+Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
+respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
+but throws an error for unordered arguments.
+"""
 cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
+
+"""
+    lexcmp(x, y)
+
+Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whether `x` is
+less than, equal to, or greater than `y`, respectively. This function should be defined for
+lexicographically comparable types, and `lexless` will call `lexcmp` by default.
+"""
 lexcmp(x,y) = cmp(x,y)
+
+"""
+    lexless(x, y)
+
+Determine whether `x` is lexicographically less than `y`.
+"""
 lexless(x,y) = lexcmp(x,y)<0
 
 # cmp returns -1, 0, +1 indicating ordering
 cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
 
+"""
+    max(x, y, ...)
+
+Return the maximum of the arguments. Operates elementwise over arrays.
+"""
 max(x,y) = ifelse(y < x, x, y)
+
+"""
+    min(x, y, ...)
+
+Return the minimum of the arguments. Operates elementwise over arrays.
+"""
 min(x,y) = ifelse(y < x, y, x)
+
 """
     minmax(x, y)
 
@@ -110,6 +252,11 @@ scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is
 
 ## definitions providing basic traits of arithmetic operators ##
 
+"""
+    identity(x)
+
+The identity function. Returns its argument.
+"""
 identity(x) = x
 
 +(x::Number) = x
@@ -142,6 +289,12 @@ for op in (:+, :*, :&, :|, :$, :min, :max, :kron)
     end
 end
 
+"""
+    \\(x, y)
+
+Left division operator: multiplication of `y` by the inverse of `x` on the left. Gives
+floating-point results for integer arguments.
+"""
 \(x,y) = (y'/x')'
 
 # .<op> defaults to <op>
@@ -158,7 +311,21 @@ end
 .!=(x::Number,y::Number) = x != y
 .<( x::Real,y::Real) = x < y
 .<=(x::Real,y::Real) = x <= y
+
+"""
+    .<=(x, y)
+    .≤(x,y)
+
+Element-wise less-than-or-equals comparison operator.
+"""
 const .≤ = .<=
+
+"""
+    .!=(x, y)
+    .≠(x,y)
+
+Element-wise not-equals comparison operator.
+"""
 const .≠ = .!=
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
@@ -264,15 +431,55 @@ See also [`>>`](:func:`>>`), [`<<`](:func:`<<`).
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
 # so it is used here as the basis of float div().
 div{T<:Real}(x::T, y::T) = convert(T,round((x-rem(x,y))/y))
+
+"""
+    fld(x, y)
+
+Largest integer less than or equal to `x/y`.
+
+```jldoctest
+julia> fld(7.3,5.5)
+1.0
+```
+"""
 fld{T<:Real}(x::T, y::T) = convert(T,round((x-mod(x,y))/y))
+
+"""
+    cld(x, y)
+
+Smallest integer larger than or equal to `x/y`.
+```jldoctest
+julia> cld(5.5,2.2)
+3.0
+```
+"""
 cld{T<:Real}(x::T, y::T) = convert(T,round((x-modCeil(x,y))/y))
 #rem{T<:Real}(x::T, y::T) = convert(T,x-y*trunc(x/y))
 #mod{T<:Real}(x::T, y::T) = convert(T,x-y*floor(x/y))
 modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 
 # operator alias
+
+"""
+    rem(x, y)
+    %(x, y)
+
+Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
+magnitude than `y`. This value is always exact.
+
+```julia
+x == div(x,y)*y + rem(x,y)
+```
+"""
 const % = rem
 .%(x::Real, y::Real) = x%y
+
+"""
+    div(x, y)
+    ÷(x, y)
+
+The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+"""
 const ÷ = div
 .÷(x::Real, y::Real) = x÷y
 
@@ -312,41 +519,180 @@ fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 
 # transpose
+
+"""
+    ctranspose(A)
+
+The conjugate transposition operator (`'`).
+"""
 ctranspose(x) = conj(transpose(x))
 conj(x) = x
 
 # transposed multiply
+
+"""
+    Ac_mul_B(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
+"""
 Ac_mul_B(a,b)  = ctranspose(a)*b
+
+"""
+    A_mul_Bc(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
+"""
 A_mul_Bc(a,b)  = a*ctranspose(b)
+
+"""
+    Ac_mul_Bc(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
+"""
 Ac_mul_Bc(a,b) = ctranspose(a)*ctranspose(b)
+
+"""
+    At_mul_B(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅B``.
+"""
 At_mul_B(a,b)  = transpose(a)*b
+
+"""
+    A_mul_Bt(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᵀ``.
+"""
 A_mul_Bt(a,b)  = a*transpose(b)
+
+"""
+    At_mul_Bt(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅Bᵀ``.
+"""
 At_mul_Bt(a,b) = transpose(a)*transpose(b)
 
 # transposed divide
+
+"""
+    Ac_rdiv_B(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
+"""
 Ac_rdiv_B(a,b)  = ctranspose(a)/b
+
+"""
+    A_rdiv_Bc(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
+"""
 A_rdiv_Bc(a,b)  = a/ctranspose(b)
+
+"""
+    Ac_rdiv_Bc(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
+"""
 Ac_rdiv_Bc(a,b) = ctranspose(a)/ctranspose(b)
+
+"""
+    At_rdiv_B(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / B``.
+"""
 At_rdiv_B(a,b)  = transpose(a)/b
+
+"""
+    A_rdiv_Bt(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``A / Bᵀ``.
+"""
 A_rdiv_Bt(a,b)  = a/transpose(b)
+
+"""
+    At_rdiv_Bt(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
+"""
 At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
 
+"""
+    Ac_ldiv_B(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
+"""
 Ac_ldiv_B(a,b)  = ctranspose(a)\b
+
+"""
+    A_ldiv_Bc(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
+"""
 A_ldiv_Bc(a,b)  = a\ctranspose(b)
+
+"""
+    Ac_ldiv_Bc(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
+"""
 Ac_ldiv_Bc(a,b) = ctranspose(a)\ctranspose(b)
+
+"""
+    At_ldiv_B(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``B``.
+"""
 At_ldiv_B(a,b)  = transpose(a)\b
+
+"""
+    A_ldiv_Bt(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᵀ``.
+"""
 A_ldiv_Bt(a,b)  = a\transpose(b)
+
+"""
+    At_ldiv_Bt(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``Bᵀ``.
+"""
 At_ldiv_Bt(a,b) = At_ldiv_B(a,transpose(b))
+
+"""
+    Ac_ldiv_Bt(A, B)
+
+For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
+"""
 Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
+"""
+    eltype(type)
+
+Determine the type of the elements generated by iterating a collection of the given `type`.
+For associative collection types, this will be a `Pair{KeyType,ValType}`. The definition
+`eltype(x) = eltype(typeof(x))` is provided for convenience so that instances can be passed
+instead of types. However the form that accepts a type argument should be defined for new
+types.
+"""
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
 eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
 # function pipelining
+
+"""
+    |>(x, f)
+
+Applies a function to the preceding argument. This allows for easy function chaining.
+
+```jldoctest
+julia> [1:5;] |> x->x.^2 |> sum |> inv
+0.01818181818181818
+```
+"""
 |>(x, f) = f(x)
 
 # array shape rules
@@ -376,6 +722,24 @@ function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
     return a
 end
 
+"""
+    promote_shape(s1, s2)
+
+Check two array shapes for compatibility, allowing trailing singleton dimensions, and return
+whichever shape has more dimensions.
+
+```jldoctest
+julia> a = ones(3,4,1,1,1);
+
+julia> b = ones(3,4);
+
+julia> promote_shape(a,b)
+(Base.OneTo(3),Base.OneTo(4),Base.OneTo(1),Base.OneTo(1),Base.OneTo(1))
+
+julia> promote_shape((2,3,1,4), (2,3,1,4,1))
+(2,3,1,4,1)
+```
+"""
 function promote_shape(a::Dims, b::Dims)
     if length(a) < length(b)
         return promote_shape(b, a)

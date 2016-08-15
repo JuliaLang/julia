@@ -101,6 +101,25 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 \(A::Number, B::AbstractArray) = B ./ A
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
+
+"""
+    slicedim(A, d::Integer, i)
+
+Return all the data of `A` where the index for dimension `d` equals `i`. Equivalent to
+`A[:,:,...,i,:,:,...]` where `i` is in position `d`.
+
+```jldoctest
+julia> A = [1 2 3 4; 5 6 7 8]
+2×4 Array{Int64,2}:
+ 1  2  3  4
+ 5  6  7  8
+
+julia> slicedim(A,2,3)
+2-element Array{Int64,1}:
+ 3
+ 7
+```
+"""
 function slicedim(A::AbstractArray, d::Integer, i)
     d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
     nd = ndims(A)
@@ -114,7 +133,7 @@ function flipdim(A::AbstractVector, d::Integer)
 end
 
 """
-    flipdim(A, d)
+    flipdim(A, d::Integer)
 
 Reverse `A` in dimension `d`.
 
@@ -191,7 +210,7 @@ julia> circshift(b, (-1,0))
  1  5   9  13
 ```
 
-See also `circshift!`.
+See also [`circshift!`](:func:`circshift!`).
 """
 function circshift(a::AbstractArray, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))
@@ -222,6 +241,13 @@ end
 
 # Uses K-B-N summation
 # TODO: Needs a separate LinearSlow method, this is only fast for LinearIndexing
+
+"""
+    cumsum_kbn(A, [dim::Integer=1])
+
+Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation
+algorithm for additional accuracy. The dimension defaults to 1.
+"""
 function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
     dimsA = size(A)
     ndimsA = ndims(A)
@@ -259,6 +285,11 @@ end
 
 ## ipermutedims in terms of permutedims ##
 
+"""
+    ipermutedims(A, perm)
+
+Like [`permutedims`](:func:`permutedims`), except the inverse of the given permutation is applied.
+"""
 function ipermutedims(A::AbstractArray,perm)
     iperm = Array{Int}(length(perm))
     for (i,p) = enumerate(perm)
@@ -269,6 +300,32 @@ end
 
 ## Other array functions ##
 
+"""
+    repmat(A, m::Int, n::Int=1)
+
+Construct a matrix by repeating the given matrix `m` times in dimension 1 and `n` times in
+dimension 2.
+
+```jldoctest
+julia> repmat([1, 2, 3], 2)
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 1
+ 2
+ 3
+
+julia> repmat([1, 2, 3], 2, 3)
+6×3 Array{Int64,2}:
+ 1  1  1
+ 2  2  2
+ 3  3  3
+ 1  1  1
+ 2  2  2
+ 3  3  3
+```
+"""
 function repmat(a::AbstractVecOrMat, m::Int, n::Int=1)
     o, p = size(a,1), size(a,2)
     b = similar(a, o*m, p*n)

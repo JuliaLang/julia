@@ -226,6 +226,12 @@ immutable Rest{I,S}
     itr::I
     st::S
 end
+
+"""
+    rest(iter, state)
+
+An iterator that yields the same elements as `iter`, but starting at the given `state`.
+"""
 rest(itr,state) = Rest(itr,state)
 
 start(i::Rest) = i.st
@@ -244,6 +250,24 @@ iteratorsize{I,S}(::Type{Rest{I,S}}) = rest_iteratorsize(iteratorsize(I))
 
 Returns `head`: the first `n` elements of `c`;
 and `tail`: an iterator over the remaining elements.
+
+```jldoctest
+julia> a = 1:10
+1:10
+
+julia> b, c = Base.head_and_tail(a, 3)
+([1,2,3],Base.Rest{UnitRange{Int64},Int64}(1:10,4))
+
+julia> collect(c)
+7-element Array{Any,1}:
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+```
 """
 function head_and_tail(c, n)
     head = Vector{eltype(c)}(n)
@@ -263,6 +287,12 @@ immutable Count{S<:Number}
     start::S
     step::S
 end
+
+"""
+    countfrom(start=1, step=1)
+
+An iterator that counts forever, starting at `start` and incrementing by `step`.
+"""
 countfrom(start::Number, step::Number) = Count(promote(start, step)...)
 countfrom(start::Number)               = Count(start, one(start))
 countfrom()                            = Count(1, 1)
@@ -390,6 +420,12 @@ done(it::Drop, state) = done(it.xs, state)
 immutable Cycle{I}
     xs::I
 end
+
+"""
+    cycle(iter)
+
+An iterator that cycles through `iter` forever.
+"""
 cycle(xs) = Cycle(xs)
 
 eltype{I}(::Type{Cycle{I}}) = eltype(I)
@@ -419,6 +455,24 @@ immutable Repeated{O}
     x::O
 end
 repeated(x) = Repeated(x)
+
+"""
+    repeated(x[, n::Int])
+
+An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
+many times (equivalent to `take(repeated(x), n)`).
+
+```jldoctest
+julia> a = repeated([1 2], 4);
+
+julia> collect(a)
+4-element Array{Array{Int64,2},1}:
+ [1 2]
+ [1 2]
+ [1 2]
+ [1 2]
+```
+"""
 repeated(x, n::Int) = take(repeated(x), n)
 
 eltype{O}(::Type{Repeated{O}}) = O
@@ -497,14 +551,16 @@ Returns an iterator over the product of several iterators. Each generated elemen
 a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
 changes the fastest. Example:
 
-    julia> collect(product(1:2,3:5))
-    6-element Array{Tuple{Int64,Int64},1}:
-     (1,3)
-     (2,3)
-     (1,4)
-     (2,4)
-     (1,5)
-     (2,5)
+```jldoctest
+julia> collect(product(1:2,3:5))
+6-element Array{Tuple{Int64,Int64},1}:
+ (1,3)
+ (2,3)
+ (1,4)
+ (2,4)
+ (1,5)
+ (2,5)
+```
 """
 product(a, b) = Prod2(a, b)
 
@@ -576,12 +632,14 @@ Given an iterator that yields iterators, return an iterator that yields the
 elements of those iterators.
 Put differently, the elements of the argument iterator are concatenated. Example:
 
-    julia> collect(flatten((1:2, 8:9)))
-    4-element Array{Int64,1}:
-     1
-     2
-     8
-     9
+```jldoctest
+julia> collect(flatten((1:2, 8:9)))
+4-element Array{Int64,1}:
+ 1
+ 2
+ 8
+ 9
+```
 """
 flatten(itr) = Flatten(itr)
 

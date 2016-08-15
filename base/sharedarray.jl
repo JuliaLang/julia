@@ -251,9 +251,26 @@ function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     A
 end
 
+"""
+    procs(S::SharedArray)
+
+Get the vector of processes that have mapped the shared array.
+"""
 procs(S::SharedArray) = S.pids
+
+"""
+    indexpids(S::SharedArray)
+
+Returns the index of the current worker into the `pids` vector, i.e., the list of workers
+mapping the SharedArray
+"""
 indexpids(S::SharedArray) = S.pidx
 
+"""
+    sdata(S::SharedArray)
+
+Returns the actual `Array` object backing `S`.
+"""
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
 

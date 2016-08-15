@@ -25,13 +25,13 @@ General I/O
 
    Global variable referring to the standard input stream.
 
-.. function:: open(filename, [read, write, create, truncate, append]) -> IOStream
+.. function:: open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream
 
    .. Docstring generated from Julia source
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-.. function:: open(filename, [mode]) -> IOStream
+.. function:: open(filename::AbstractString, [mode::AbstractString]) -> IOStream
 
    .. Docstring generated from Julia source
 
@@ -85,17 +85,17 @@ General I/O
 
    Create a fixed size IOBuffer. The buffer will not grow dynamically.
 
-.. function:: IOBuffer(string)
+.. function:: IOBuffer(string::String)
 
    .. Docstring generated from Julia source
 
-   Create a read-only IOBuffer on the data underlying the given string.
+   Create a read-only ``IOBuffer`` on the data underlying the given string.
 
-.. function:: IOBuffer([data,],[readable,writable,[maxsize]])
+.. function:: IOBuffer([data,],[readable::Bool=true, writable::Bool=true, [maxsize::Int=typemax(Int)]])
 
    .. Docstring generated from Julia source
 
-   Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
+   Create an ``IOBuffer``\ , which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
 .. function:: takebuf_array(b::IOBuffer)
 
@@ -107,9 +107,9 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Obtain the contents of an ``IOBuffer`` as a string, without copying. Afterwards, the IOBuffer is reset to its initial state.
+   Obtain the contents of an ``IOBuffer`` as a string, without copying. Afterwards, the ``IOBuffer`` is reset to its initial state.
 
-.. function:: fdio([name::AbstractString, ]fd::Integer[, own::Bool]) -> IOStream
+.. function:: fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
 
    .. Docstring generated from Julia source
 
@@ -125,7 +125,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Close an I/O stream. Performs a ``flush`` first.
+   Close an I/O stream. Performs a :func:`flush` first.
 
 .. function:: write(stream::IO, x)
               write(filename::AbstractString, x)
@@ -160,13 +160,11 @@ General I/O
 
    Read binary data from an I/O stream or file, filling in ``array``\ .
 
-.. function:: readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b); all=true)
+.. function:: readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b))
 
    .. Docstring generated from Julia source
 
    Read at most ``nb`` bytes from ``stream`` into ``b``\ , returning the number of bytes read. The size of ``b`` will be increased if needed (i.e. if ``nb`` is greater than ``length(b)`` and enough bytes could be read), but it will never be decreased.
-
-   See ``read`` for a description of the ``all`` option.
 
 .. function:: read(s::IO, nb=typemax(Int))
 
@@ -188,15 +186,15 @@ General I/O
 
    Open a file and read its contents. ``args`` is passed to ``read``\ : this is equivalent to ``open(io->read(io, args...), filename)``\ .
 
-.. function:: unsafe_read(io, ref, nbytes)
+.. function:: unsafe_read(io::IO, ref, nbytes::UInt)
 
    .. Docstring generated from Julia source
 
-   Copy nbytes from the IO stream object into ref (converted to a pointer).
+   Copy nbytes from the ``IO`` stream object into ``ref`` (converted to a pointer).
 
    It is recommended that subtypes ``T<:IO`` override the following method signature to provide more efficient implementations: ``unsafe_read(s::T, p::Ptr{UInt8}, n::UInt)``
 
-.. function:: unsafe_write(io, ref, nbytes)
+.. function:: unsafe_write(io::IO, ref, nbytes::UInt)
 
    .. Docstring generated from Julia source
 
@@ -294,37 +292,19 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Determine whether an object - such as a stream, timer, or mmap – is not yet closed. Once an object is closed, it will never produce a new event. However, a closed stream may still have data to read in its buffer, use ``eof`` to check for the ability to read data. Use ``poll_fd`` to be notified when a stream might be writable or readable.
+   Determine whether an object - such as a stream, timer, or mmap – is not yet closed. Once an object is closed, it will never produce a new event. However, a closed stream may still have data to read in its buffer, use :func:`eof` to check for the ability to read data. Use :func:`poll_fd` to be notified when a stream might be writable or readable.
 
 .. function:: serialize(stream, value)
 
    .. Docstring generated from Julia source
 
-   Write an arbitrary value to a stream in an opaque format, such that it can be read back by ``deserialize``\ . The read-back value will be as identical as possible to the original. In general, this process will not work if the reading and writing are done by different versions of Julia, or an instance of Julia with a different system image. ``Ptr`` values are serialized as all-zero bit patterns (``NULL``\ ).
+   Write an arbitrary value to a stream in an opaque format, such that it can be read back by :func:`deserialize`\ . The read-back value will be as identical as possible to the original. In general, this process will not work if the reading and writing are done by different versions of Julia, or an instance of Julia with a different system image. ``Ptr`` values are serialized as all-zero bit patterns (``NULL``\ ).
 
 .. function:: deserialize(stream)
 
    .. Docstring generated from Julia source
 
-   Read a value written by ``serialize``\ . ``deserialize`` assumes the binary data read from ``stream`` is correct and has been serialized by a compatible implementation of ``serialize``\ . It has been designed with simplicity and performance as a goal and does not validate the data read. Malformed data can result in process termination. The caller has to ensure the integrity and correctness of data read from ``stream``\ .
-
-.. function:: escape_string(io, str::AbstractString, esc::AbstractString)
-
-   .. Docstring generated from Julia source
-
-   General escaping of traditional C and Unicode escape sequences, plus any characters in esc are also escaped (with a backslash).
-
-.. function:: unescape_string(io, s::AbstractString)
-
-   .. Docstring generated from Julia source
-
-   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ .
-
-.. function:: join(io, items, delim, [last])
-
-   .. Docstring generated from Julia source
-
-   Print elements of ``items`` to ``io`` with ``delim`` between them. If ``last`` is specified, it is used as the final delimiter instead of ``delim``\ .
+   Read a value written by :func:`serialize`\ . ``deserialize`` assumes the binary data read from ``stream`` is correct and has been serialized by a compatible implementation of :func:`serialize`\ . It has been designed with simplicity and performance as a goal and does not validate the data read. Malformed data can result in process termination. The caller has to ensure the integrity and correctness of data read from ``stream``\ .
 
 .. function:: print_shortest(io, x)
 
@@ -338,17 +318,11 @@ General I/O
 
    Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous ``File``\ 's and ``IOStream``\ 's not to any of the asynchronous streams.
 
-.. function:: redirect_stdout()
+.. function:: redirect_stdout([stream]) -> (rd, wr)
 
    .. Docstring generated from Julia source
 
-   Create a pipe to which all C and Julia level ``STDOUT`` output will be redirected. Returns a tuple ``(rd,wr)`` representing the pipe ends. Data written to ``STDOUT`` may now be read from the rd end of the pipe. The wr end is given for convenience in case the old ``STDOUT`` object was cached by the user and needs to be replaced elsewhere.
-
-.. function:: redirect_stdout(stream)
-
-   .. Docstring generated from Julia source
-
-   Replace ``STDOUT`` by stream for all C and Julia level output to ``STDOUT``\ . Note that ``stream`` must be a TTY, a ``Pipe`` or a ``TCPSocket``\ .
+   Create a pipe to which all C and Julia level :obj:`STDOUT` output will be redirected. Returns a tuple ``(rd, wr)`` representing the pipe ends. Data written to :obj:`STDOUT` may now be read from the ``rd`` end of the pipe. The ``wr`` end is given for convenience in case the old :obj:`STDOUT` object was cached by the user and needs to be replaced elsewhere.
 
 .. function:: redirect_stdout(f::Function, stream)
 
@@ -356,11 +330,11 @@ General I/O
 
    Run the function ``f`` while redirecting ``STDOUT`` to ``stream``\ . Upon completion, ``STDOUT`` is restored to its prior setting.
 
-.. function:: redirect_stderr([stream])
+.. function:: redirect_stderr([stream]) -> (rd, wr)
 
    .. Docstring generated from Julia source
 
-   Like ``redirect_stdout``\ , but for ``STDERR``\ .
+   Like :func:`redirect_stdout`\ , but for :obj:`STDERR`\ .
 
 .. function:: redirect_stderr(f::Function, stream)
 
@@ -368,11 +342,11 @@ General I/O
 
    Run the function ``f`` while redirecting ``STDERR`` to ``stream``\ . Upon completion, ``STDERR`` is restored to its prior setting.
 
-.. function:: redirect_stdin([stream])
+.. function:: redirect_stdin([stream]) -> (rd, wr)
 
    .. Docstring generated from Julia source
 
-   Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read from STDIN, may be written to wr.
+   Like :func:`redirect_stdout`\ , but for :obj:`STDIN`\ . Note that the order of the return tuple is still ``(rd, wr)``\ , i.e. data to be read from :obj:`STDIN` may be written to ``wr``\ .
 
 .. function:: redirect_stdin(f::Function, stream)
 
@@ -384,7 +358,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Read the entirety of ``x`` as a string and remove a single trailing newline. Equivalent to ``chomp(readstring(x))``\ .
+   Read the entirety of ``x`` as a string and remove a single trailing newline. Equivalent to ``chomp!(readstring(x))``\ .
 
 .. function:: truncate(file,n)
 
@@ -404,17 +378,11 @@ General I/O
 
    Read ``io`` until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than '\\n' are supported by passing them as the second argument.
 
-.. function:: PipeBuffer()
+.. function:: PipeBuffer(data::Vector{UInt8}=UInt8[],[maxsize::Int=typemax(Int)])
 
    .. Docstring generated from Julia source
 
-   An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
-
-.. function:: PipeBuffer(data::Vector{UInt8},[maxsize])
-
-   .. Docstring generated from Julia source
-
-   Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
+   An :obj:`IOBuffer` that allows reading and performs writes by appending. Seeking and truncating are not supported. See :obj:`IOBuffer` for the available constructors. If ``data`` is given, creates a ``PipeBuffer`` to operate on a data vector, optionally specifying a size beyond which the underlying ``Array`` may not be grown.
 
 .. function:: readavailable(stream)
 
@@ -480,7 +448,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Similar to ``show``\ , except shows all elements of arrays.
+   Similar to :func:`show`\ , except shows all elements of arrays.
 
 .. function:: summary(x)
 
@@ -490,17 +458,17 @@ Text I/O
 
    For arrays, returns a string of size and type info, e.g. ``10-element Array{Int64,1}``\ .
 
-.. function:: print(x)
+.. function:: print(io::IO, x)
 
    .. Docstring generated from Julia source
 
-   Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call ``show``\ . The representation used by ``print`` includes minimal formatting and tries to avoid Julia-specific details.
+   Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call :func:`show`\ . The representation used by ``print`` includes minimal formatting and tries to avoid Julia-specific details.
 
-.. function:: println(x)
+.. function:: println(io::IO, xs...)
 
    .. Docstring generated from Julia source
 
-   Print (using :func:`print`\ ) ``x`` followed by a newline.
+   Print (using :func:`print`\ ) ``xs`` followed by a newline. If ``io`` is not supplied, prints to :obj:`STDOUT`\ .
 
 .. function:: print_with_color(color::Symbol, [io], strings...)
 
@@ -510,7 +478,7 @@ Text I/O
 
    ``color`` may take any of the values ``:normal``\ , ``:bold``\ , ``:black``\ , ``:blue``\ , ``:cyan``\ , ``:green``\ , ``:magenta``\ , ``:red``\ , ``:white``\ , or  ``:yellow``\ .
 
-.. function:: info(msg)
+.. function:: info(msg...; prefix="INFO: ")
 
    .. Docstring generated from Julia source
 
@@ -526,7 +494,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Print ``args`` using C ``printf()`` style format specification string. Optionally, an ``IOStream`` may be passed as the first argument to redirect output.
+   Print ``args`` using C ``printf()`` style format specification string. Optionally, an :obj:`IOStream` may be passed as the first argument to redirect output.
 
 .. function:: @sprintf("%Fmt", args...)
 
@@ -546,6 +514,11 @@ Text I/O
    .. Docstring generated from Julia source
 
    Call the given function with an I/O stream and the supplied extra arguments. Everything written to this I/O stream is returned as a string.
+
+   .. doctest::
+
+       julia> sprint(showcompact, 66.66666)
+       "66.6667"
 
 .. function:: showerror(io, e)
 
@@ -721,7 +694,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
 
-   Display ``x`` using the topmost applicable display in the display stack, typically using the richest supported multimedia output for ``x``\ , with plain-text ``STDOUT`` output as a fallback. The ``display(d, x)`` variant attempts to display ``x`` on the given display ``d`` only, throwing a ``MethodError`` if ``d`` cannot display objects of this type.
+   Display ``x`` using the topmost applicable display in the display stack, typically using the richest supported multimedia output for ``x``\ , with plain-text :obj:`STDOUT` output as a fallback. The ``display(d, x)`` variant attempts to display ``x`` on the given display ``d`` only, throwing a ``MethodError`` if ``d`` cannot display objects of this type.
 
    There are also two variants with a ``mime`` argument (a MIME type string, such as ``"image/png"``\ ), which attempt to display ``x`` using the requested MIME type *only*, throwing a ``MethodError`` if this type is not supported by either the display(s) or by ``x``\ . With these variants, one can also supply the "raw" data in the requested MIME type by passing ``x::AbstractString`` (for MIME types with text-based storage, such as text/html or application/postscript) or ``x::Vector{UInt8}`` (for binary MIME types).
 
@@ -732,7 +705,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
 
-   By default, the ``redisplay`` functions simply call ``display``\ . However, some display backends may override ``redisplay`` to modify an existing display of ``x`` (if any). Using ``redisplay`` is also a hint to the backend that ``x`` may be redisplayed several times, and the backend may choose to defer the display until (for example) the next interactive prompt.
+   By default, the ``redisplay`` functions simply call :func:`display`\ . However, some display backends may override ``redisplay`` to modify an existing display of ``x`` (if any). Using ``redisplay`` is also a hint to the backend that ``x`` may be redisplayed several times, and the backend may choose to defer the display until (for example) the next interactive prompt.
 
 .. function:: displayable(mime) -> Bool
               displayable(d::Display, mime) -> Bool
@@ -753,13 +726,13 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    Technically, the ``MIME"mime"`` macro defines a singleton type for the given ``mime`` string, which allows us to exploit Julia's dispatch mechanisms in determining how to display objects of any given type.
 
-   The first argument to ``show`` can be an ``IOContext`` specifying output format properties. See ``IOContext`` for details.
+   The first argument to ``show`` can be an :obj:`IOContext` specifying output format properties. See :obj:`IOContext` for details.
 
 .. function:: mimewritable(mime, x)
 
    .. Docstring generated from Julia source
 
-   Returns a boolean value indicating whether or not the object ``x`` can be written as the given ``mime`` type. (By default, this is determined automatically by the existence of the corresponding ``show`` function for ``typeof(x)``\ .)
+   Returns a boolean value indicating whether or not the object ``x`` can be written as the given ``mime`` type. (By default, this is determined automatically by the existence of the corresponding :func:`show` function for ``typeof(x)``\ .)
 
 .. function:: reprmime(mime, x)
 
@@ -773,7 +746,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
 
-   Returns an ``AbstractString`` containing the representation of ``x`` in the requested ``mime`` type. This is similar to ``reprmime`` except that binary data is base64-encoded as an ASCII string.
+   Returns an ``AbstractString`` containing the representation of ``x`` in the requested ``mime`` type. This is similar to :func:`reprmime` except that binary data is base64-encoded as an ASCII string.
 
 As mentioned above, one can also define new display backends. For
 example, a module that can display PNG images in a window can register
@@ -900,53 +873,53 @@ Memory-mapped I/O
 Network I/O
 -----------
 
-.. function:: connect([host],port) -> TCPSocket
+.. function:: connect([host], port::Integer) -> TCPSocket
 
    .. Docstring generated from Julia source
 
    Connect to the host ``host`` on port ``port``\ .
 
-.. function:: connect(path) -> PipeEndpoint
+.. function:: connect(path::AbstractString) -> PipeEndpoint
 
    .. Docstring generated from Julia source
 
    Connect to the named pipe / UNIX domain socket at ``path``\ .
 
-.. function:: listen([addr,]port) -> TCPServer
+.. function:: listen([addr, ]port::Integer; backlog::Integer=BACKLOG_DEFAULT) -> TCPServer
 
    .. Docstring generated from Julia source
 
    Listen on port on the address specified by ``addr``\ . By default this listens on localhost only. To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
-.. function:: listen(path) -> PipeServer
+.. function:: listen(path::AbstractString) -> PipeServer
 
    .. Docstring generated from Julia source
 
    Create and listen on a named pipe / UNIX domain socket.
 
-.. function:: getaddrinfo(host)
+.. function:: getaddrinfo(host::AbstractString) -> IPAddr
 
    .. Docstring generated from Julia source
 
    Gets the IP address of the ``host`` (may have to do a DNS lookup)
 
-.. function:: getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
+.. function:: getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
 
    .. Docstring generated from Julia source
 
-   Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
+   Get the IP address and the port that the given ``TCPSocket`` is connected to (or bound to, in the case of ``TCPServer``\ ).
 
 .. function:: IPv4(host::Integer) -> IPv4
 
    .. Docstring generated from Julia source
 
-   Returns IPv4 object from ip address formatted as Integer.
+   Returns an IPv4 object from ip address ``host`` formatted as an ``Integer``\ .
 
 .. function:: IPv6(host::Integer) -> IPv6
 
    .. Docstring generated from Julia source
 
-   Returns IPv6 object from ip address formatted as Integer
+   Returns an IPv6 object from ip address ``host`` formatted as an ``Integer``\ .
 
 .. function:: nb_available(stream)
 
@@ -960,13 +933,13 @@ Network I/O
 
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.
 
-.. function:: listenany(port_hint) -> (UInt16,TCPServer)
+.. function:: listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
 
    .. Docstring generated from Julia source
 
    Create a ``TCPServer`` on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.
 
-.. function:: poll_fd(fd, timeout_s::Real; readable=false, writable=false)
+.. function:: poll_fd(fd, timeout_s::Real=-1; readable=false, writable=false)
 
    .. Docstring generated from Julia source
 
@@ -976,7 +949,7 @@ Network I/O
 
    The returned value is an object with boolean fields ``readable``\ , ``writable``\ , and ``timedout``\ , giving the result of the polling.
 
-.. function:: poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
+.. function:: poll_file(path::AbstractString, interval_s::Real=5.007, timeout_s::Real=-1) -> (previous::StatStruct, current::StatStruct)
 
    .. Docstring generated from Julia source
 
@@ -984,9 +957,9 @@ Network I/O
 
    Returns a pair of ``StatStruct`` objects ``(previous, current)`` when a change is detected.
 
-   To determine when a file was modified, compare ``mtime(prev) != mtime(current)`` to detect notification of changes. However, using ``watch_file`` for this operation is preferred, since it is more reliable and efficient, although in some situations it may not be available.
+   To determine when a file was modified, compare ``mtime(prev) != mtime(current)`` to detect notification of changes. However, using :func:`watch_file` for this operation is preferred, since it is more reliable and efficient, although in some situations it may not be available.
 
-.. function:: watch_file(path, timeout_s::Real)
+.. function:: watch_file(path::AbstractString, timeout_s::Real=-1)
 
    .. Docstring generated from Julia source
 
@@ -996,13 +969,16 @@ Network I/O
 
    This behavior of this function varies slightly across platforms. See <https://nodejs.org/api/fs.html#fs_caveats> for more detailed information.
 
-.. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false)
+.. function:: bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)
 
    .. Docstring generated from Julia source
 
-   Bind ``socket`` to the given ``host:port``\ . Note that ``0.0.0.0`` will listen on all devices. ``ipv6only`` parameter disables dual stack mode. If it's ``true``\ , only IPv6 stack is created.
+   Bind ``socket`` to the given ``host:port``\ . Note that ``0.0.0.0`` will listen on all devices.
 
-.. function:: send(socket::UDPSocket, host::IPv4, port::Integer, msg)
+   * The ``ipv6only`` parameter disables dual stack mode. If ``ipv6only=true``\ , only an IPv6 stack is created.
+   * If ``reuseaddr=true``\ , multiple threads or processes can bind to the same address without error if they all set ``reuseaddr=true``\ , but only the last to bind will receive any traffic.
+
+.. function:: send(socket::UDPSocket, host, port::Integer, msg)
 
    .. Docstring generated from Julia source
 
@@ -1024,7 +1000,12 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Set UDP socket options. ``multicast_loop``\ : loopback for multicast packets (default: ``true``\ ). ``multicast_ttl``\ : TTL for multicast packets. ``enable_broadcast``\ : flag must be set to ``true`` if socket will be used for broadcast messages, or else the UDP system will return an access error (default: ``false``\ ). ``ttl``\ : Time-to-live of packets sent on the socket.
+   Set UDP socket options.
+
+   * ``multicast_loop``\ : loopback for multicast packets (default: ``true``\ ).
+   * ``multicast_ttl``\ : TTL for multicast packets (default: ``nothing``\ ).
+   * ``enable_broadcast``\ : flag must be set to ``true`` if socket will be used for broadcast messages, or else the UDP system will return an access error (default: ``false``\ ).
+   * ``ttl``\ : Time-to-live of packets sent on the socket (default: ``nothing``\ ).
 
 .. function:: ntoh(x)
 

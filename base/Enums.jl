@@ -26,6 +26,23 @@ end
 
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
+"""
+    @enum EnumName EnumValue1[=x] EnumValue2[=y]
+
+Create an [`Enum`](:obj:`Enum`) type with name `EnumName` and enum member values of
+`EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
+`EnumName` can be used just like other types and enum member values as regular values, such as
+
+```jldoctest
+julia> @enum FRUIT apple=1 orange=2 kiwi=3
+
+julia> f(x::FRUIT) = "I'm a FRUIT with value: \$(Int(x))"
+f (generic function with 1 method)
+
+julia> f(apple)
+"I'm a FRUIT with value: 1"
+```
+"""
 macro enum(T,syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
