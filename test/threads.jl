@@ -385,3 +385,15 @@ if ccall(:jl_threading_enabled, Cint, ()) == 0
 else
     @test_throws ErrorException cglobal(:jl_tls_states)
 end
+
+# Thread safety of `jl_load_and_lookup`.
+function test_load_and_lookup_18020(n)
+    @threads for i in 1:n
+        try
+            ccall(:jl_load_and_lookup,
+                  Ptr{Void}, (Cstring, Cstring, Ref{Ptr{Void}}),
+                  "$i", :f, C_NULL)
+        end
+    end
+end
+test_load_and_lookup_18020(10000)
