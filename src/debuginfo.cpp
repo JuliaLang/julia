@@ -666,10 +666,19 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
     // This function is not allowed to reference any TLS variables
     // since it can be called from an unmanaged thread on OSX.
     if (!context) {
-        if (demangle && (*frames)[0].func_name != NULL) {
-            char *oldname = (*frames)[0].func_name;
-            (*frames)[0].func_name = jl_demangle(oldname);
-            free(oldname);
+        if (demangle) {
+            if ((*frames)[0].func_name != NULL) {
+                char *oldname = (*frames)[0].func_name;
+                (*frames)[0].func_name = jl_demangle(oldname);
+                free(oldname);
+            }
+            else {
+                // We do this to hide the jlcall wrappers when getting julia backtraces,
+                // but it is still good to have them for regular lookup of C frames.
+                // Technically not true, but we don't want them
+                // in julia backtraces, so close enough
+                (*frames)[0].fromC = 1;
+            }
         }
         return 1;
     }
@@ -686,6 +695,9 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
+    if (n_frames == 0)
+        // no line number info available in the context, return without the context
+        return lookup_pointer(NULL, frames, pointer, demangle, noInline);
     if (noInline)
         n_frames = 1;
     if (n_frames > 1) {
@@ -921,6 +933,7 @@ extern "C" void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambd
     sysimg_fvars_n = n;
 }
 
+extern "C" void jl_refresh_dbg_module_list(void);
 bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
     bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename)
 {
@@ -934,6 +947,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #ifdef _OS_WINDOWS_
     IMAGEHLP_MODULE64 ModuleInfo;
     ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+    jl_refresh_dbg_module_list();
     jl_in_stackwalk = 1;
     bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
     jl_in_stackwalk = 0;
