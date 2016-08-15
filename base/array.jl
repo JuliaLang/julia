@@ -1077,15 +1077,18 @@ function find(testf::Function, A)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array{Int,1}(0)
+    inds = _index_remapper(A)
     for (i,a) = enumerate(A)
         if testf(a)
-            push!(tmpI, i)
+            push!(tmpI, inds[i])
         end
     end
     I = Array{Int,1}(length(tmpI))
     copy!(I, tmpI)
     return I
 end
+_index_remapper(A::AbstractArray) = linearindices(A)
+_index_remapper(iter) = Colon()  # safe for objects that don't implement length
 
 """
     find(A)
@@ -1110,9 +1113,10 @@ function find(A)
     nnzA = countnz(A)
     I = Vector{Int}(nnzA)
     count = 1
+    inds = _index_remapper(A)
     for (i,a) in enumerate(A)
         if a != 0
-            I[count] = i
+            I[count] = inds[i]
             count += 1
         end
     end
