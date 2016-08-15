@@ -35,7 +35,34 @@ typealias BitUnsigned64T Union{Type{UInt8},Type{UInt16},Type{UInt32},Type{UInt64
 /(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
 
+"""
+    isodd(x::Integer) -> Bool
+
+Returns `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
+
+```jldoctest
+julia> isodd(9)
+true
+
+julia> isodd(10)
+false
+```
+"""
 isodd(n::Integer) = rem(n,2) != 0
+
+"""
+    iseven(x::Integer) -> Bool
+
+Returns `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
+
+```jldoctest
+julia> iseven(9)
+false
+
+julia> iseven(10)
+true
+```
+"""
 iseven(n::Integer) = !isodd(n)
 
 signbit(x::Integer) = x < 0
@@ -146,12 +173,76 @@ bswap{T<:Union{Int8,UInt8}}(x::T) = x
 bswap{T<:Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}}(x::T) =
     box(T,bswap_int(unbox(T,x)))
 
+"""
+    count_ones(x::Integer) -> Integer
+
+Number of ones in the binary representation of `x`.
+
+```jldoctest
+julia> count_ones(7)
+3
+```
+"""
 count_ones{T<:BitInteger}(x::T) = Int(box(T,ctpop_int(unbox(T,x))))
+
+"""
+    leading_zeros(x::Integer) -> Integer
+
+Number of zeros leading the binary representation of `x`.
+
+```jldoctest
+julia> leading_zeros(Int32(1))
+31
+```
+"""
 leading_zeros{T<:BitInteger}(x::T) = Int(box(T,ctlz_int(unbox(T,x))))
+
+"""
+    trailing_zeros(x::Integer) -> Integer
+
+Number of zeros trailing the binary representation of `x`.
+
+```jldoctest
+julia> trailing_zeros(2)
+1
+```
+"""
 trailing_zeros{T<:BitInteger}(x::T) = Int(box(T,cttz_int(unbox(T,x))))
 
+"""
+    count_zeros(x::Integer) -> Integer
+
+Number of zeros in the binary representation of `x`.
+
+```jldoctest
+julia> count_zeros(Int32(2 ^ 16 - 1))
+16
+```
+"""
 count_zeros(  x::Integer) = count_ones(~x)
+
+"""
+    leading_ones(x::Integer) -> Integer
+
+Number of ones leading the binary representation of `x`.
+
+```jldoctest
+julia> leading_ones(UInt32(2 ^ 32 - 2))
+31
+```
+"""
 leading_ones( x::Integer) = leading_zeros(~x)
+
+"""
+    trailing_ones(x::Integer) -> Integer
+
+Number of ones trailing the binary representation of `x`.
+
+```jldoctest
+julia> trailing_ones(3)
+2
+```
+"""
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##

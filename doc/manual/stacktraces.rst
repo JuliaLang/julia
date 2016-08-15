@@ -36,7 +36,7 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
       in eval_user_input(::Any, ::Bool) at client.jl:117
       in eval(::Module, ::Any) at boot.jl:234
       in eval_user_input(::Any, ::Bool) at client.jl:117
-      in _start() at client.jl:355
+      in _start() at client.jl:363
 
     julia> @noinline child() = stacktrace()
     child (generic function with 1 method)

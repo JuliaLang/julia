@@ -243,6 +243,12 @@ union(s1::IntSet) = copy(s1)
 union(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? union!(copy(s1), s2) : union!(copy(s2), s1))
 union(s1::IntSet, ss::IntSet...) = union(s1, union(ss...))
 
+"""
+    intersect!(s1::IntSet, s2::IntSet)
+
+Intersects sets `s1` and `s2` and overwrites the set `s1` with the result. If needed, `s1`
+will be expanded to the size of `s2`.
+"""
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         sizehint!(s, s2.limit)

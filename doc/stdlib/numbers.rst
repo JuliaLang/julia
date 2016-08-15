@@ -12,43 +12,59 @@ Standard Numeric Types
 Data Formats
 ------------
 
-.. function:: bin(n, [pad])
+.. function:: bin(n, pad::Int=1)
 
    .. Docstring generated from Julia source
 
    Convert an integer to a binary string, optionally specifying a number of digits to pad to.
 
-.. function:: hex(n, [pad])
+   .. doctest::
+
+       julia> bin(10,2)
+       "1010"
+
+       julia> bin(10,8)
+       "00001010"
+
+.. function:: hex(n, pad::Int=1)
 
    .. Docstring generated from Julia source
 
    Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
 
-.. function:: dec(n, [pad])
+.. function:: dec(n, pad::Int=1)
 
    .. Docstring generated from Julia source
 
    Convert an integer to a decimal string, optionally specifying a number of digits to pad to.
 
-.. function:: oct(n, [pad])
+.. function:: oct(n, pad::Int=1)
 
    .. Docstring generated from Julia source
 
    Convert an integer to an octal string, optionally specifying a number of digits to pad to.
 
-.. function:: base(base, n, [pad])
+.. function:: base(base::Integer, n::Integer, pad::Integer=1)
 
    .. Docstring generated from Julia source
 
-   Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
+   Convert an integer ``n`` to a string in the given ``base``\ , optionally specifying a number of digits to pad to.
 
-.. function:: digits([T], n, [base], [pad])
+   .. doctest::
+
+       julia> base(13,5,4)
+       "0005"
+
+       julia> base(5,13,4)
+       "0023"
+
+.. function:: digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)
 
    .. Docstring generated from Julia source
 
    Returns an array with element type ``T`` (default ``Int``\ ) of the digits of ``n`` in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that ``n == sum([digits[k]*base^(k-1) for k=1:length(digits)])``\ .
 
-.. function:: digits!(array, n, [base])
+.. function:: digits!(array, n::Integer, base::Integer=10)
 
    .. Docstring generated from Julia source
 
@@ -70,13 +86,13 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Like ``parse``\ , but returns a ``Nullable`` of the requested type. The result will be null if the string does not contain a valid number.
+   Like :func:`parse`\ , but returns a :obj:`Nullable` of the requested type. The result will be null if the string does not contain a valid number.
 
 .. function:: big(x)
 
    .. Docstring generated from Julia source
 
-   Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``\ ). See ``BigFloat`` for information about some pitfalls with floating-point numbers.
+   Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``\ ). See :obj:`BigFloat` for information about some pitfalls with floating-point numbers.
 
 .. function:: signed(x)
 
@@ -134,6 +150,11 @@ Data Formats
 
    Get a hexadecimal string of the binary representation of a floating point number.
 
+   .. doctest::
+
+       julia> num2hex(2.2)
+       "400199999999999a"
+
 .. function:: hex2num(str)
 
    .. Docstring generated from Julia source
@@ -146,11 +167,34 @@ Data Formats
 
    Convert an arbitrarily long hexadecimal string to its binary representation. Returns an ``Array{UInt8,1}``\ , i.e. an array of bytes.
 
-.. function:: bytes2hex(bin_arr::Array{UInt8, 1})
+   .. doctest::
+
+       julia> a = hex(12345)
+       "3039"
+
+       julia> hex2bytes(a)
+       2-element Array{UInt8,1}:
+        0x30
+        0x39
+
+.. function:: bytes2hex(bin_arr::Array{UInt8, 1}) -> String
 
    .. Docstring generated from Julia source
 
-   Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns a ``String``\ .
+   Convert an array of bytes to its hexadecimal representation. All characters are in lower-case.
+
+   .. doctest::
+
+       julia> a = hex(12345)
+       "3039"
+
+       julia> b = hex2bytes(a)
+       2-element Array{UInt8,1}:
+        0x30
+        0x39
+
+       julia> bytes2hex(b)
+       "3039"
 
 General Number Functions and Constants
 --------------------------------------
@@ -253,7 +297,15 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Test whether a number is finite
+   Test whether a number is finite.
+
+   .. doctest::
+
+       julia> isfinite(5)
+       true
+
+       julia> isfinite(NaN32)
+       false
 
 .. function:: isinf(f) -> Bool
 
@@ -583,13 +635,13 @@ A ``MersenneTwister`` or ``RandomDevice`` RNG can generate random numbers of the
 (or complex numbers of those types). Random floating point numbers are generated uniformly in :math:`[0, 1)`.
 As ``BigInt`` represents unbounded integers, the interval must be specified (e.g. ``rand(big(1:6))``).
 
-.. function:: srand([rng], [seed])
+.. function:: srand([rng=GLOBAL_RNG], [seed])
 
    .. Docstring generated from Julia source
 
    Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. For ``MersenneTwister``\ , the ``seed`` may be a non-negative integer, a vector of ``UInt32`` integers or a filename, in which case the seed is read from a file. ``RandomDevice`` does not support seeding.
 
-.. function:: MersenneTwister([seed])
+.. function:: MersenneTwister(seed=0)
 
    .. Docstring generated from Julia source
 
@@ -601,7 +653,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    Create a ``RandomDevice`` RNG object. Two such objects will always generate different streams of random numbers.
 
-.. function:: rand([rng], [S], [dims...])
+.. function:: rand([rng=GLOBAL_RNG], [S], [dims...])
 
    .. Docstring generated from Julia source
 
@@ -612,43 +664,43 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    ``S`` defaults to ``Float64``\ .
 
-.. function:: rand!([rng], A, [coll])
+.. function:: rand!([rng=GLOBAL_RNG], A, [coll])
 
    .. Docstring generated from Julia source
 
    Populate the array ``A`` with random values. If the indexable collection ``coll`` is specified, the values are picked randomly from ``coll``\ . This is equivalent to ``copy!(A, rand(rng, coll, size(A)))`` or ``copy!(A, rand(rng, eltype(A), size(A)))`` but without allocating a new array.
 
-.. function:: bitrand([rng], [dims...])
+.. function:: bitrand([rng=GLOBAL_RNG], [dims...])
 
    .. Docstring generated from Julia source
 
    Generate a ``BitArray`` of random boolean values.
 
-.. function:: randn([rng], [T=Float64], [dims...])
+.. function:: randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
 
    .. Docstring generated from Julia source
 
    Generate a normally-distributed random number of type ``T`` with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers. The ``Base`` module currently provides an implementation for the types ``Float16``\ , ``Float32``\ , and ``Float64`` (the default).
 
-.. function:: randn!([rng], A::AbstractArray) -> A
+.. function:: randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
    .. Docstring generated from Julia source
 
-   Fill the array ``A`` with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the ``rand`` function.
+   Fill the array ``A`` with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the :func:`rand` function.
 
-.. function:: randexp([rng], [T=Float64], [dims...])
+.. function:: randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
 
    .. Docstring generated from Julia source
 
    Generate a random number of type ``T`` according to the exponential distribution with scale 1. Optionally generate an array of such random numbers. The ``Base`` module currently provides an implementation for the types ``Float16``\ , ``Float32``\ , and ``Float64`` (the default).
 
-.. function:: randexp!([rng], A::AbstractArray) -> A
+.. function:: randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
    .. Docstring generated from Julia source
 
    Fill the array ``A`` with random numbers following the exponential distribution (with scale 1).
 
-.. function:: randjump(r::MersenneTwister, jumps, [jumppoly]) -> Vector{MersenneTwister}
+.. function:: randjump(r::MersenneTwister, jumps::Integer, [jumppoly::AbstractString=dSFMT.JPOLY1e21]) -> Vector{MersenneTwister}
 
    .. Docstring generated from Julia source
 

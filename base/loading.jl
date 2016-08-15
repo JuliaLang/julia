@@ -224,6 +224,17 @@ function _include_dependency(_path::AbstractString)
     end
     return path, prev
 end
+
+"""
+    include_dependency(path::AbstractString)
+
+In a module, declare that the file specified by `path` (relative or absolute) is a
+dependency for precompilation; that is, the module will need to be recompiled if this file
+changes.
+
+This is only needed if your module depends on a file that is not used via `include`. It has
+no effect outside of compilation.
+"""
 function include_dependency(path::AbstractString)
     _include_dependency(path)
     return nothing
@@ -311,6 +322,26 @@ end
 
 # require always works in Main scope and loads files from node 1
 toplevel_load = true
+
+"""
+    require(module::Symbol)
+
+This function is part of the implementation of `using` / `import`, if a module is not
+already defined in `Main`. It can also be called directly to force reloading a module,
+regardless of whether it has been loaded before (for example, when interactively developing
+libraries).
+
+Loads a source files, in the context of the `Main` module, on every active node, searching
+standard locations for files. `require` is considered a top-level operation, so it sets the
+current `include` path but does not use it to search for files (see help for `include`).
+This function is typically used to load library code, and is implicitly called by `using` to
+load packages.
+
+When searching for files, `require` first looks for package code under `Pkg.dir()`,
+then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
+all platforms, including those with case-insensitive filesystems like macOS and
+Windows.
+"""
 function require(mod::Symbol)
     # dependency-tracking is only used for one top-level include(path),
     # and is not applied recursively to imported modules:
@@ -377,6 +408,12 @@ end
 
 # remote/parallel load
 
+"""
+    include_string(code::AbstractString, filename::AbstractString="string")
+
+Like `include`, except reads code from the given string rather than from a file. Since there
+is no file path involved, no path processing or fetching from node 1 is done.
+"""
 include_string(txt::String, fname::String) =
     ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Cstring),
           txt, sizeof(txt), fname)
@@ -438,6 +475,12 @@ function include_from_node1(_path::AbstractString)
     result
 end
 
+"""
+    evalfile(path::AbstractString, args::Vector{String}=String[])
+
+Load the file using [`include`](:func:`include`), evaluate all expressions,
+and return the value of the last one.
+"""
 function evalfile(path::AbstractString, args::Vector{String}=String[])
     return eval(Module(:__anon__),
                 Expr(:toplevel,
@@ -492,6 +535,16 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
 end
 
 compilecache(mod::Symbol) = compilecache(string(mod))
+
+"""
+    Base.compilecache(module::String)
+
+Creates a precompiled cache file for module (see help for [`require`](:func:`require`)) and all of its
+dependencies. This can be used to reduce package load times. Cache files are stored in
+`LOAD_CACHE_PATH[1]`, which defaults to `~/.julia/lib/VERSION`. See
+[Module initialization and precompilation](:ref:`Module initialization and precompilation <man-modules-initialization-precompilation>`)
+for important notes.
+"""
 function compilecache(name::String)
     myid() == 1 || error("can only precompile from node 1")
     path = find_in_path(name, nothing)

@@ -2,6 +2,19 @@
 
 ## number-theoretic functions ##
 
+"""
+    gcd(x,y)
+
+Greatest common (positive) divisor (or zero if `x` and `y` are both zero).
+
+```jldoctest
+julia> gcd(6,9)
+3
+
+julia> gcd(6,-9)
+3
+```
+"""
 function gcd{T<:Integer}(a::T, b::T)
     while b != 0
         t = b
@@ -35,6 +48,19 @@ function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
 end
 
 # explicit a==0 test is to handle case of lcm(0,0) correctly
+
+"""
+    lcm(x,y)
+
+Least common (non-negative) multiple.
+```jldoctest
+julia> lcm(2,3)
+6
+
+julia> lcm(-2,3)
+6
+```
+"""
 lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : checked_abs(a * div(b, gcd(b,a)))
 
 gcd(a::Integer) = a
@@ -92,6 +118,25 @@ end
 gcdx(a::Integer, b::Integer) = gcdx(promote(a,b)...)
 
 # multiplicative inverse of n mod m, error if none
+
+"""
+    invmod(x,m)
+
+Take the inverse of `x` modulo `m`: `y` such that ``x y = 1 \\pmod m``,
+with ``div(x,y) = 0``. This is undefined for ``m = 0``, or if
+``gcd(x,m) \\neq 1``.
+
+```jldoctest
+julia> invmod(2,5)
+3
+
+julia> invmod(2,3)
+2
+
+julia> invmod(5,6)
+5
+```
+"""
 function invmod{T<:Integer}(n::T, m::T)
     g, x, y = gcdx(n, m)
     (g != 1 || m == 0) && throw(DomainError())
@@ -144,6 +189,12 @@ end
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
 # b^p mod m
+
+"""
+    powermod(x::Integer, p::Integer, m)
+
+Compute ``x^p \\pmod m``.
+"""
 function powermod{T<:Integer}(x::Integer, p::Integer, m::T)
     p < 0 && return powermod(invmod(x, m), -p, m)
     p == 0 && return mod(one(m),m)
@@ -169,12 +220,51 @@ end
 powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
 
 # smallest power of 2 >= x
+
+"""
+    nextpow2(n::Integer)
+
+The smallest power of two not less than `n`. Returns 0 for `n==0`, and returns
+`-nextpow2(-n)` for negative arguments.
+
+```jldoctest
+julia> nextpow2(16)
+16
+
+julia> nextpow2(17)
+32
+```
+"""
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
 nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
+"""
+    prevpow2(n::Integer)
+
+The largest power of two not greater than `n`. Returns 0 for `n==0`, and returns
+`-prevpow2(-n)` for negative arguments.
+
+```jldoctest
+julia> prevpow2(5)
+4
+```
+"""
 prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
 prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
 
+"""
+    ispow2(n::Integer) -> Bool
+
+Test whether `n` is a power of two.
+
+```jldoctest
+julia> ispow2(4)
+true
+
+julia> ispow2(5)
+false
+```
+"""
 ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
 # smallest a^n >= x, with integer n
@@ -256,6 +346,11 @@ ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
 ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,Int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
+"""
+    ndigits(n::Integer, b::Integer=10)
+
+Compute the number of digits in integer `n` written in base `b`.
+"""
 ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),Int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
@@ -330,6 +425,21 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     if neg; a[1]='-'; end
     String(a)
 end
+
+"""
+    base(base::Integer, n::Integer, pad::Integer=1)
+
+Convert an integer `n` to a string in the given `base`,
+optionally specifying a number of digits to pad to.
+
+```jldoctest
+julia> base(13,5,4)
+"0005"
+
+julia> base(5,13,4)
+"0023"
+```
+"""
 base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
 
 for sym in (:bin, :oct, :dec, :hex)
@@ -343,12 +453,55 @@ for sym in (:bin, :oct, :dec, :hex)
     end
 end
 
+"""
+    bin(n, pad::Int=1)
+
+Convert an integer to a binary string, optionally specifying a number of digits to pad to.
+
+```jldoctest
+julia> bin(10,2)
+"1010"
+
+julia> bin(10,8)
+"00001010"
+```
+"""
+bin
+
+"""
+    hex(n, pad::Int=1)
+
+Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
+"""
+hex
+
+"""
+    oct(n, pad::Int=1)
+
+Convert an integer to an octal string, optionally specifying a number of digits to pad to.
+"""
+oct
+
+"""
+    dec(n, pad::Int=1)
+
+Convert an integer to a decimal string, optionally specifying a number of digits to pad to.
+"""
+dec
+
 bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
 bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
 bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
 bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
 bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 
+"""
+    digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)
+
+Returns an array with element type `T` (default `Int`) of the digits of `n` in the given
+base, optionally padded with zeros to a specified size. More significant digits are at
+higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+"""
 digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1) = digits(T, n, base, pad)
 
 function digits{T<:Integer}(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1)
@@ -356,6 +509,13 @@ function digits{T<:Integer}(::Type{T}, n::Integer, base::Integer=10, pad::Intege
     digits!(zeros(T, max(pad, ndigits0z(n,base))), n, base)
 end
 
+"""
+    digits!(array, n::Integer, base::Integer=10)
+
+Fills an array of the digits of `n` in the given base. More significant digits are at higher
+indexes. If the array length is insufficient, the least significant digits are filled up to
+the array length. If the array length is excessive, the excess portion is filled with zeros.
+"""
 function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::Integer=10)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     base - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
@@ -366,6 +526,16 @@ function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::Integer=10
     return a
 end
 
+"""
+    isqrt(n::Integer)
+
+Integer square root: the largest integer `m` such that `m*m <= n`.
+
+```jldoctest
+julia> isqrt(5)
+2
+```
+"""
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
 function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
@@ -387,6 +557,11 @@ function factorial(n::Integer)
     return f
 end
 
+"""
+    binomial(n,k)
+
+Number of ways to choose `k` out of `n` items.
+"""
 function binomial{T<:Integer}(n::T, k::T)
     k < 0 && return zero(T)
     sgn = one(T)

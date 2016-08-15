@@ -54,6 +54,13 @@ function issorted(itr, order::Ordering)
     end
     return true
 end
+
+"""
+    issorted(v, by=identity, rev:Bool=false, order::Ordering=Forward)
+
+Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
+order is considered to be sorted just as they do for [`sort`](:func:`sort`).
+"""
 issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
@@ -405,6 +412,18 @@ function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     sort!(v,first(inds),last(inds),alg,order)
 end
 
+"""
+    sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Sort the vector `v` in place. `QuickSort` is used by default for numeric arrays while
+`MergeSort` is used for other arrays. You can specify an algorithm to use via the `alg`
+keyword (see Sorting Algorithms for available algorithms). The `by` keyword lets you provide
+a function that will be applied to each element before comparison; the `lt` keyword allows
+providing a custom "less than" function; use `rev=true` to reverse the sorting order. These
+options are independent and can be used together in all possible combinations: if both `by`
+and `lt` are specified, the `lt` function is applied to the result of the `by` function;
+`rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
+"""
 function sort!(v::AbstractVector;
                alg::Algorithm=defalg(v),
                lt=isless,
@@ -414,6 +433,11 @@ function sort!(v::AbstractVector;
     sort!(v, alg, ord(lt,by,rev,order))
 end
 
+"""
+    sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Variant of [`sort!`](:func:`sort!`) that returns a sorted copy of `v` leaving `v` itself unmodified.
+"""
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
 
@@ -442,6 +466,19 @@ end
 
 ## sortperm: the permutation to sort an array ##
 
+"""
+    sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Return a permutation vector of indices of `v` that puts it in sorted order. Specify `alg` to
+choose a particular sorting algorithm (see Sorting Algorithms). `MergeSort` is used by
+default, and since it is stable, the resulting permutation will be the lexicographically
+first one that puts the input array into sorted order – i.e. indices of equal elements
+appear in ascending order. If you choose a non-stable sorting algorithm such as `QuickSort`,
+a different permutation that puts the array into order may be returned. The order is
+specified using the same keywords as `sort!`.
+
+See also [`sortperm!`](:func:`sortperm!`).
+"""
 function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
                   lt=isless,
@@ -455,6 +492,13 @@ function sortperm(v::AbstractVector;
     sort!(p, alg, Perm(ord(lt,by,rev,order),v))
 end
 
+
+"""
+    sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
+
+Like [`sortperm`](:func:`sortperm`), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
+(the default), ix is initialized to contain the values `1:length(v)`.
+"""
 function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
                                alg::Algorithm=DEFAULT_UNSTABLE,
                                lt=isless,
@@ -475,6 +519,11 @@ end
 
 ## sorting multi-dimensional arrays ##
 
+"""
+    sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
+
+Sort a multidimensional array `A` along the given dimension. `lt` defines the comparison to use.
+"""
 function sort(A::AbstractArray, dim::Integer;
               alg::Algorithm=DEFAULT_UNSTABLE,
               lt=isless,
@@ -505,6 +554,14 @@ end
     Av
 end
 
+
+"""
+    sortrows(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Sort the rows of matrix `A` lexicographically.
+See [`sort`](:func:`sort`) for a description of possible
+keyword arguments.
+"""
 function sortrows(A::AbstractMatrix; kws...)
     inds = indices(A,1)
     T = slicetypeof(A, inds, :)
@@ -516,6 +573,13 @@ function sortrows(A::AbstractMatrix; kws...)
     A[p,:]
 end
 
+"""
+    sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Sort the columns of matrix `A` lexicographically.
+See [`sort`](:func:`sort`) for a description of possible
+keyword arguments.
+"""
 function sortcols(A::AbstractMatrix; kws...)
     inds = indices(A,2)
     T = slicetypeof(A, :, inds)

@@ -5,6 +5,12 @@
 # time() in libc.jl
 
 # high-resolution relative time, in nanoseconds
+
+"""
+    time_ns()
+
+Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+"""
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.h
@@ -314,6 +320,11 @@ println_with_color(color::Symbol, msg::AbstractString...) =
 
 ## warnings and messages ##
 
+"""
+    info(msg...; prefix="INFO: ")
+
+Display an informational message. Argument `msg` is a string describing the information to be displayed.
+"""
 function info(io::IO, msg...; prefix="INFO: ")
     println_with_color(info_color(), io, prefix, chomp(string(msg...)))
 end
@@ -347,6 +358,12 @@ function warn(io::IO, msg...;
     println(io)
     return
 end
+
+"""
+    warn(msg)
+
+Display a warning. Argument `msg` is a string describing the warning to be displayed.
+"""
 warn(msg...; kw...) = warn(STDERR, msg...; kw...)
 
 warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =

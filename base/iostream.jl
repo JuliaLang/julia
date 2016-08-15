@@ -76,6 +76,14 @@ eof(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Void},), s.ios)!=0
 ## constructing and opening streams ##
 
 # "own" means the descriptor will be closed with the IOStream
+
+"""
+    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
+
+Create an `IOStream` object from an integer file descriptor. If `own` is `true`, closing
+this object will close the underlying descriptor. By default, an `IOStream` is closed when
+it is garbage collected. `name` allows you to associate the descriptor with a named file.
+"""
 function fdio(name::AbstractString, fd::Integer, own::Bool=false)
     s = IOStream(name)
     ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Cint, Cint),
@@ -84,6 +92,13 @@ function fdio(name::AbstractString, fd::Integer, own::Bool=false)
 end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
+
+"""
+    open(filename::AbstractString, [read::Bool, write::Bool, create::Bool, truncate::Bool, append::Bool]) -> IOStream
+
+Open a file in a mode specified by five boolean arguments. The default is to open files for
+reading only. Returns a stream for accessing the file.
+"""
 function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
@@ -97,6 +112,22 @@ function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff:
 end
 open(fname::AbstractString) = open(fname, true, false, false, false, false)
 
+"""
+    open(filename::AbstractString, [mode::AbstractString]) -> IOStream
+
+Alternate syntax for open, where a string-based mode specifier is used instead of the five
+booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
+equivalent to setting the following boolean groups:
+
+| Mode | Description                   |
+|:-----|:------------------------------|
+| r    | read                          |
+| r+   | read, write                   |
+| w    | write, create, truncate       |
+| w+   | read, write, create, truncate |
+| a    | write, create, append         |
+| a+   | read, write, create, append   |
+"""
 function open(fname::AbstractString, mode::AbstractString)
     mode == "r"  ? open(fname, true , false, false, false, false) :
     mode == "r+" ? open(fname, true , true , false, false, false) :
@@ -107,6 +138,14 @@ function open(fname::AbstractString, mode::AbstractString)
     throw(ArgumentError("invalid open mode: $mode"))
 end
 
+"""
+    open(f::Function, args...)
+
+Apply the function `f` to the result of `open(args...)` and close the resulting file
+descriptor upon completion.
+
+**Example**: `open(readstring, "file.txt")`
+"""
 function open(f::Function, args...)
     io = open(args...)
     try
@@ -226,6 +265,15 @@ function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
     return nr
 end
 
+"""
+    readbytes!(stream::IOStream, b::AbstractVector{UInt8}, nb=length(b); all::Bool=true)
+
+Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
+The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
+and enough bytes could be read), but it will never be decreased.
+
+See [`read`](:func:`read`) for a description of the `all` option.
+"""
 function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end

@@ -10,19 +10,19 @@
 
    Get the current working directory.
 
-.. function:: cd([dir::AbstractString=homedir()])
+.. function:: cd(dir::AbstractString=homedir())
 
    .. Docstring generated from Julia source
 
    Set the current working directory.
 
-.. function:: cd(f, [dir=homedir()])
+.. function:: cd(f::Function, dir::AbstractString=homedir())
 
    .. Docstring generated from Julia source
 
    Temporarily changes the current working directory and applies function ``f`` before returning.
 
-.. function:: readdir([dir]) -> Vector{String}
+.. function:: readdir(dir::AbstractString=".") -> Vector{String}
 
    .. Docstring generated from Julia source
 
@@ -32,7 +32,7 @@
 
    .. Docstring generated from Julia source
 
-   The walkdir method return an iterator that walks the directory tree of a directory. The iterator returns a tuple containing ``(rootpath, dirs, files)``\ . The directory tree can be traversed top-down or bottom-up. If walkdir encounters a SystemError it will raise the error. A custom error handling function can be provided through ``onerror`` keyword argument, the function is called with a SystemError as argument.
+   The ``walkdir`` method returns an iterator that walks the directory tree of a directory. The iterator returns a tuple containing ``(rootpath, dirs, files)``\ . The directory tree can be traversed top-down or bottom-up. If ``walkdir`` encounters a :obj:`SystemError` it will raise the error by default. A custom error handling function can be provided through ``onerror`` keyword argument. ``onerror`` is called with a ``SystemError`` as argument.
 
    .. code-block:: julia
 
@@ -47,19 +47,19 @@
            end
        end
 
-.. function:: mkdir(path, [mode])
+.. function:: mkdir(path::AbstractString, mode::Unsigned=0o777)
 
    .. Docstring generated from Julia source
 
    Make a new directory with name ``path`` and permissions ``mode``\ . ``mode`` defaults to ``0o777``\ , modified by the current file creation mask.
 
-.. function:: mkpath(path, [mode])
+.. function:: mkpath(path::AbstractString, mode::Unsigned=0o777)
 
    .. Docstring generated from Julia source
 
    Create all directories in the given ``path``\ , with permissions ``mode``\ . ``mode`` defaults to ``0o777``\ , modified by the current file creation mask.
 
-.. function:: symlink(target, link)
+.. function:: symlink(target::AbstractString, link::AbstractString)
 
    .. Docstring generated from Julia source
 
@@ -69,19 +69,19 @@
       This function raises an error under operating systems that do not support soft symbolic links, such as Windows XP.
 
 
-.. function:: readlink(path) -> AbstractString
+.. function:: readlink(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
 
    Returns the value of a symbolic link ``path``\ .
 
-.. function:: chmod(path, mode; recursive=false)
+.. function:: chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
 
    .. Docstring generated from Julia source
 
    Change the permissions mode of ``path`` to ``mode``\ . Only integer ``mode``\ s (e.g. ``0o777``\ ) are currently supported. If ``recursive=true`` and the path is a directory all permissions in that directory will be recursively changed.
 
-.. function:: chown(path, owner, group=-1)
+.. function:: chown(path::AbstractString, owner::Integer, group::Integer=-1)
 
    .. Docstring generated from Julia source
 
@@ -125,7 +125,7 @@
 
    .. Docstring generated from Julia source
 
-   Like stat, but for symbolic links gets the info for the link itself rather than the file it refers to. This function must be called on a file path rather than a file object or a file descriptor.
+   Like :func:`stat`\ , but for symbolic links gets the info for the link itself rather than the file it refers to. This function must be called on a file path rather than a file object or a file descriptor.
 
 .. function:: ctime(file)
 
@@ -167,19 +167,19 @@
    | 04    | Read Permission    |
    +-------+--------------------+
 
-   For allowed arguments, see ``stat``\ .
+   For allowed arguments, see :func:`stat`\ .
 
 .. function:: gperm(file)
 
    .. Docstring generated from Julia source
 
-   Like uperm but gets the permissions of the group owning the file.
+   Like :func:`uperm` but gets the permissions of the group owning the file.
 
 .. function:: operm(file)
 
    .. Docstring generated from Julia source
 
-   Like uperm but gets the permissions for people who neither own the file nor are a member of the group owning the file
+   Like :func:`uperm` but gets the permissions for people who neither own the file nor are a member of the group owning the file
 
 .. function:: cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
 
@@ -189,19 +189,19 @@
 
    If ``follow_symlinks=false``\ , and ``src`` is a symbolic link, ``dst`` will be created as a symbolic link. If ``follow_symlinks=true`` and ``src`` is a symbolic link, ``dst`` will be a copy of the file or directory ``src`` refers to.
 
-.. function:: download(url,[localfile])
+.. function:: download(url::AbstractString, [localfile::AbstractString])
 
    .. Docstring generated from Julia source
 
    Download a file from the given url, optionally renaming it to the given local file name. Note that this function relies on the availability of external tools such as ``curl``\ , ``wget`` or ``fetch`` to download the file and is provided for convenience. For production use or situations in which more options are needed, please use a package that provides the desired functionality instead.
 
-.. function:: mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
+.. function:: mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
 
    .. Docstring generated from Julia source
 
    Move the file, link, or directory from ``src`` to ``dst``\ . ``remove_destination=true`` will first remove an existing ``dst``\ .
 
-.. function:: rm(path::AbstractString; force=false, recursive=false)
+.. function:: rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
 
    .. Docstring generated from Julia source
 
@@ -225,25 +225,25 @@
 
    Obtain the path of a temporary directory (possibly shared with other processes).
 
-.. function:: mktemp([parent=tempdir()])
+.. function:: mktemp(parent=tempdir())
 
    .. Docstring generated from Julia source
 
    Returns ``(path, io)``\ , where ``path`` is the path of a new temporary file in ``parent`` and ``io`` is an open file object for this path.
 
-.. function:: mktemp(f::Function, [parent=tempdir()])
+.. function:: mktemp(f::Function, parent=tempdir())
 
    .. Docstring generated from Julia source
 
    Apply the function ``f`` to the result of ``mktemp(parent)`` and remove the temporary file upon completion.
 
-.. function:: mktempdir([parent=tempdir()])
+.. function:: mktempdir(parent=tempdir())
 
    .. Docstring generated from Julia source
 
    Create a temporary directory in the ``parent`` directory and return its path.
 
-.. function:: mktempdir(f::Function, [parent=tempdir()])
+.. function:: mktempdir(f::Function, parent=tempdir())
 
    .. Docstring generated from Julia source
 
@@ -333,11 +333,21 @@
 
    Get the directory part of a path.
 
+   .. doctest::
+
+       julia> dirname("/home/myuser")
+       "/home"
+
 .. function:: basename(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
 
    Get the file name part of a path.
+
+   .. doctest::
+
+       julia> basename("/home/myuser/example.jl")
+       "example.jl"
 
 .. function:: @__FILE__ -> AbstractString
 
@@ -357,17 +367,38 @@
 
    Determines whether a path is absolute (begins at the root directory).
 
+   .. doctest::
+
+       julia> isabspath("/home")
+       true
+
+       julia> isabspath("home")
+       false
+
 .. function:: isdirpath(path::AbstractString) -> Bool
 
    .. Docstring generated from Julia source
 
    Determines whether a path refers to a directory (for example, ends with a path separator).
 
+   .. doctest::
+
+       julia> isdirpath("/home")
+       false
+
+       julia> isdirpath("/home/")
+       true
+
 .. function:: joinpath(parts...) -> AbstractString
 
    .. Docstring generated from Julia source
 
    Join path components into a full path. If some argument is an absolute path, then prior components are dropped.
+
+   .. doctest::
+
+       julia> joinpath("/home/myuser","example.jl")
+       "/home/myuser/example.jl"
 
 .. function:: abspath(path::AbstractString) -> AbstractString
 
@@ -381,6 +412,11 @@
 
    Normalize a path, removing "." and ".." entries.
 
+   .. doctest::
+
+       julia> normpath("/home/myuser/../example.jl")
+       "/home/example.jl"
+
 .. function:: realpath(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
@@ -391,7 +427,7 @@
 
    .. Docstring generated from Julia source
 
-   Return a relative filepath to path either from the current directory or from an optional start directory. This is a path computation: the filesystem is not accessed to confirm the existence or nature of path or startpath.
+   Return a relative filepath to ``path`` either from the current directory or from an optional start directory. This is a path computation: the filesystem is not accessed to confirm the existence or nature of ``path`` or ``startpath``\ .
 
 .. function:: expanduser(path::AbstractString) -> AbstractString
 
@@ -399,21 +435,34 @@
 
    On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
 
-.. function:: splitdir(path::AbstractString) -> (AbstractString,AbstractString)
+.. function:: splitdir(path::AbstractString) -> (AbstractString, AbstractString)
 
    .. Docstring generated from Julia source
 
    Split a path into a tuple of the directory name and file name.
 
-.. function:: splitdrive(path::AbstractString) -> (AbstractString,AbstractString)
+   .. doctest::
+
+       julia> splitdir("/home/myuser")
+       ("/home","myuser")
+
+.. function:: splitdrive(path::AbstractString) -> (AbstractString, AbstractString)
 
    .. Docstring generated from Julia source
 
    On Windows, split a path into the drive letter part and the path part. On Unix systems, the first component is always the empty string.
 
-.. function:: splitext(path::AbstractString) -> (AbstractString,AbstractString)
+.. function:: splitext(path::AbstractString) -> (AbstractString, AbstractString)
 
    .. Docstring generated from Julia source
 
    If the last component of a path contains a dot, split the path into everything before the dot and everything including and after the dot. Otherwise, return a tuple of the argument unmodified and the empty string.
+
+   .. doctest::
+
+       julia> splitext("/home/myuser/example.jl")
+       ("/home/myuser/example",".jl")
+
+       julia> splitext("/home/myuser/example")
+       ("/home/myuser/example","")
 

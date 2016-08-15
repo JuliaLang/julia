@@ -18,7 +18,7 @@
 
    .. Docstring generated from Julia source
 
-   Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``\ . Returns a ``Ptr{Type}``\ , defaulting to ``Ptr{Void}`` if no Type argument is supplied. The values can be read or written by ``unsafe_load`` or ``unsafe_store!``\ , respectively.
+   Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in :func:`ccall`\ . Returns a ``Ptr{Type}``\ , defaulting to ``Ptr{Void}`` if no ``Type`` argument is supplied. The values can be read or written by :func:`unsafe_load` or :func:`unsafe_store!`\ , respectively.
 
 .. function:: cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
 
@@ -44,7 +44,7 @@
 
    Convert ``x`` to a value of type ``T``
 
-   In cases where ``convert`` would need to take a Julia object and turn it into a ``Ptr``\ , this function should be used to define and perform that conversion.
+   In cases where :func:`convert` would need to take a Julia object and turn it into a ``Ptr``\ , this function should be used to define and perform that conversion.
 
    Be careful to ensure that a Julia reference to ``x`` exists as long as the result of this function will be used. Accordingly, the argument ``x`` to this function should never be an expression, only a variable name or field reference. For example, ``x=a.b.c`` is acceptable, but ``x=[a,b,c]`` is not.
 
@@ -56,7 +56,7 @@
 
    Convert ``x`` to a value of type ``T``\ , typically by calling ``convert(T,x)``
 
-   In cases where ``x`` cannot be safely converted to ``T``\ , unlike ``convert``\ , ``cconvert`` may return an object of a type different from ``T``\ , which however is suitable for ``unsafe_convert`` to handle.
+   In cases where ``x`` cannot be safely converted to ``T``\ , unlike :func:`convert`\ , ``cconvert`` may return an object of a type different from ``T``\ , which however is suitable for :func:`unsafe_convert` to handle.
 
    Neither ``convert`` nor ``cconvert`` should take a Julia object and turn it into a ``Ptr``\ .
 

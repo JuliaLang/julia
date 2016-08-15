@@ -31,9 +31,21 @@ end
 
 #Test whether a matrix is positive-definite
 isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
+
+"""
+    isposdef!(A) -> Bool
+
+Test whether a matrix is positive definite, overwriting `A` in the processes.
+"""
 isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
 isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
+
+"""
+    isposdef(A) -> Bool
+
+Test whether a matrix is positive definite.
+"""
 isposdef{T}(A::AbstractMatrix{T}) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
@@ -53,6 +65,12 @@ vecnorm1{T<:BlasReal}(x::Union{Array{T},StridedVector{T}}) =
 vecnorm2{T<:BlasFloat}(x::Union{Array{T},StridedVector{T}}) =
     length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
 
+"""
+    triu!(M, k::Integer)
+
+Returns the upper triangle of `M` starting from the `k`th superdiagonal,
+overwriting `M` in the process.
+"""
 function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     if (k > 0 && k > n) || (k < 0 && -k > m)
@@ -71,6 +89,12 @@ end
 
 triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 
+"""
+    tril!(M, k::Integer)
+
+Returns the lower triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in
+the process.
+"""
 function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     if (k > 0 && k > n) || (k < 0 && -k > m)
@@ -86,7 +110,6 @@ function tril!(M::AbstractMatrix, k::Integer)
     end
     M
 end
-
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 function gradient(F::Vector, h::Vector)
@@ -113,10 +136,53 @@ function diagind(m::Integer, n::Integer, k::Integer=0)
     k <= 0 ? range(1-k, m+1, min(m+k, n)) : range(k*m+1, m+1, min(m, n-k))
 end
 
+"""
+    diagind(M, k::Integer=0)
+
+A [`Range`](:class:`Range`) giving the indices of the `k`th diagonal of the matrix `M`.
+
+```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
+julia> diagind(A,-1)
+2:4:6
+```
+"""
 diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 
+"""
+    diag(M, k::Integer=0)
+
+The `k`th diagonal of a matrix, as a vector.
+Use [`diagm`](:func:`diagm`) to construct a diagonal matrix.
+
+```jldoctest
+julia> diag(A,1)
+2-element Array{Int64,1}:
+ 2
+ 6
+```
+"""
 diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
+"""
+    diagm(v, k::Integer=0)
+
+Construct a diagonal matrix and place `v` on the `k`th diagonal.
+
+```jldoctest
+julia> diagm([1,2,3],1)
+4×4 Array{Int64,2}:
+ 0  1  0  0
+ 0  0  2  0
+ 0  0  0  3
+ 0  0  0  0
+```
+"""
 function diagm{T}(v::AbstractVector{T}, k::Integer=0)
     n = length(v) + abs(k)
     A = zeros(T,n,n)
@@ -135,6 +201,11 @@ function trace{T}(A::Matrix{T})
     t
 end
 
+"""
+    kron(A, B)
+
+Kronecker tensor product of two vectors or two matrices.
+"""
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
     R = Array{promote_type(T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
@@ -168,6 +239,22 @@ function ^(A::Matrix, p::Number)
 end
 
 # Matrix exponential
+
+"""
+    expm(A)
+
+Compute the matrix exponential of `A`, defined by
+
+```math
+e^A = \\sum_{n=0}^{\\infty} \\frac{A^n}{n!}.
+```
+
+For symmetric or Hermitian `A`, an eigendecomposition ([`eigfact`](:func:`eigfact`)) is
+used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
+
+[^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](http://dx.doi.org/10.1137/090768539)
+
+"""
 expm{T<:BlasFloat}(A::StridedMatrix{T}) = expm!(copy(A))
 expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
 expm(x::Number) = exp(x)
@@ -475,6 +562,33 @@ function factorize{T}(A::StridedMatrix{T})
 end
 
 ## Moore-Penrose pseudoinverse
+
+"""
+    pinv(M[, tol::Real])
+
+Computes the Moore-Penrose pseudoinverse.
+
+For matrices `M` with floating point elements, it is convenient to compute
+the pseudoinverse by inverting only singular values above a given threshold,
+`tol`.
+
+The optimal choice of `tol` varies both with the value of `M` and the intended application
+of the pseudoinverse. The default value of `tol` is
+`eps(real(float(one(eltype(M)))))*maximum(size(A))`, which is essentially machine epsilon
+for the real part of a matrix element multiplied by the larger matrix dimension. For
+inverting dense ill-conditioned matrices in a least-squares sense,
+`tol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+
+For more information, see [^issue8859], [^B96], [^S84], [^KY88].
+
+[^issue8859]: Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
+
+[^B96]: Åke Björck, "Numerical Methods for Least Squares Problems",  SIAM Press, Philadelphia, 1996, "Other Titles in Applied Mathematics", Vol. 51. [doi:10.1137/1.9781611971484](http://epubs.siam.org/doi/book/10.1137/1.9781611971484)
+
+[^S84]: G. W. Stewart, "Rank Degeneracy", SIAM Journal on Scientific and Statistical Computing, 5(2), 1984, 403-413. [doi:10.1137/0905030](http://epubs.siam.org/doi/abs/10.1137/0905030)
+
+[^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](http://dx.doi.org/10.1109/29.1585)
+"""
 function pinv{T}(A::StridedMatrix{T}, tol::Real)
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
@@ -515,6 +629,12 @@ function pinv(x::Number)
 end
 
 ## Basis for null space
+
+"""
+    nullspace(M)
+
+Basis for nullspace of `M`.
+"""
 function nullspace{T}(A::StridedMatrix{T})
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
@@ -524,6 +644,12 @@ function nullspace{T}(A::StridedMatrix{T})
 end
 nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 
+"""
+    cond(M, p::Real=2)
+
+Condition number of the matrix `M`, computed using the operator `p`-norm. Valid values for
+`p` are `1`, `2` (default), or `Inf`.
+"""
 function cond(A::AbstractMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
@@ -539,6 +665,13 @@ end
 ## Lyapunov and Sylvester equation
 
 # AX + XB + C = 0
+
+"""
+    sylvester(A, B, C)
+
+Computes the solution `X` to the Sylvester equation `AX + XB + C = 0`, where `A`, `B` and
+`C` have compatible dimensions and `A` and `-B` have no eigenvalues with equal real part.
+"""
 function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T})
     RA, QA = schur(A)
     RB, QB = schur(B)
@@ -550,6 +683,14 @@ end
 sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
 
 # AX + XA' + C = 0
+
+"""
+    lyap(A, C)
+
+Computes the solution `X` to the continuous Lyapunov equation `AX + XA' + C = 0`, where no
+eigenvalue of `A` has a zero real part and no two eigenvalues are negative complex
+conjugates of each other.
+"""
 function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
     R, Q = schur(A)
 

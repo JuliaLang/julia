@@ -207,10 +207,20 @@ time() = ccall(:jl_clock_now, Float64, ())
 
 ## process-related functions ##
 
+"""
+    getpid() -> Int32
+
+Get Julia's process ID.
+"""
 getpid() = ccall(:jl_getpid, Int32, ())
 
 ## network functions ##
 
+"""
+    gethostname() -> AbstractString
+
+Get the local machine's host name.
+"""
 function gethostname()
     hn = Array{UInt8}(256)
     err = @static if is_windows()

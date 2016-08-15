@@ -116,25 +116,25 @@ specified via the ``lt`` keyword.
 Sorting Functions
 -----------------
 
-.. function:: sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    Sort the vector ``v`` in place. ``QuickSort`` is used by default for numeric arrays while ``MergeSort`` is used for other arrays. You can specify an algorithm to use via the ``alg`` keyword (see Sorting Algorithms for available algorithms). The ``by`` keyword lets you provide a function that will be applied to each element before comparison; the ``lt`` keyword allows providing a custom "less than" function; use ``rev=true`` to reverse the sorting order. These options are independent and can be used together in all possible combinations: if both ``by`` and ``lt`` are specified, the ``lt`` function is applied to the result of the ``by`` function; ``rev=true`` reverses whatever ordering specified via the ``by`` and ``lt`` keywords.
 
-.. function:: sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
-   Variant of ``sort!`` that returns a sorted copy of ``v`` leaving ``v`` itself unmodified.
+   Variant of :func:`sort!` that returns a sorted copy of ``v`` leaving ``v`` itself unmodified.
 
-.. function:: sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
    .. Docstring generated from Julia source
 
-   Sort a multidimensional array ``A`` along the given dimension.
+   Sort a multidimensional array ``A`` along the given dimension. ``lt`` defines the comparison to use.
 
-.. function:: sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
@@ -142,34 +142,32 @@ Sorting Functions
 
    See also :func:`sortperm!`\ .
 
-.. function:: sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+.. function:: sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
    .. Docstring generated from Julia source
 
-   Like ``sortperm``\ , but accepts a preallocated index vector ``ix``\ .  If ``initialized`` is ``false`` (the default), ix is initialized to contain the values ``1:length(v)``\ .
+   Like :func:`sortperm`\ , but accepts a preallocated index vector ``ix``\ .  If ``initialized`` is ``false`` (the default), ix is initialized to contain the values ``1:length(v)``\ .
 
-   See also :func:`sortperm`\ .
-
-.. function:: sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: sortrows(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
-   Sort the rows of matrix ``A`` lexicographically.
+   Sort the rows of matrix ``A`` lexicographically. See :func:`sort` for a description of possible keyword arguments.
 
-.. function:: sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
-   Sort the columns of matrix ``A`` lexicographically.
+   Sort the columns of matrix ``A`` lexicographically. See :func:`sort` for a description of possible keyword arguments.
 
 Order-Related Functions
 -----------------------
 
-.. function:: issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: issorted(v, by=identity, rev:Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
-   Test whether a vector is in sorted order. The ``by``\ , ``lt`` and ``rev`` keywords modify what order is considered to be sorted just as they do for ``sort``\ .
+   Test whether a vector is in sorted order. The ``by``\ , ``lt`` and ``rev`` keywords modify what order is considered to be sorted just as they do for :func:`sort`\ .
 
 .. function:: searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 

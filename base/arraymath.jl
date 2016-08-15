@@ -2,6 +2,13 @@
 
 ## Unary operators ##
 
+"""
+    conj!(A)
+
+Transform an array to its complex conjugate in-place.
+
+See also [`conj`](:func:`conj`).
+"""
 function conj!{T<:Number}(A::AbstractArray{T})
     for i in eachindex(A)
         A[i] = conj(A[i])
@@ -337,7 +344,25 @@ julia> rot180(a,2)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 
 ## Transpose ##
+
+"""
+    transpose!(dest,src)
+
+Transpose array `src` and store the result in the preallocated array `dest`, which should
+have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition is
+supported and unexpected results will happen if `src` and `dest` have overlapping memory
+regions.
+"""
 transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(transpose, B, A)
+
+"""
+    ctranspose!(dest,src)
+
+Conjugate transpose array `src` and store the result in the preallocated array `dest`, which
+should have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition
+is supported and unexpected results will happen if `src` and `dest` have overlapping memory
+regions.
+"""
 ctranspose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(ctranspose, B, A)
 function transpose!(B::AbstractVector, A::AbstractMatrix)
     indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
@@ -401,6 +426,11 @@ function ccopy!(B, A)
     end
 end
 
+"""
+    transpose(A)
+
+The transposition operator (`.'`).
+"""
 function transpose(A::AbstractMatrix)
     ind1, ind2 = indices(A)
     B = similar(A, (ind2, ind1))

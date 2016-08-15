@@ -44,11 +44,25 @@ Basic functions
 
    Returns the tuple of valid indices for array ``A``\ .
 
+   .. doctest::
+
+       julia> A = ones(5,6,7);
+
+       julia> indices(A)
+       (Base.OneTo(5),Base.OneTo(6),Base.OneTo(7))
+
 .. function:: indices(A, d)
 
    .. Docstring generated from Julia source
 
    Returns the valid range of indices for array ``A`` along dimension ``d``\ .
+
+   .. doctest::
+
+       julia> A = ones(5,6,7);
+
+       julia> indices(A,2)
+       Base.OneTo(6)
 
 .. function:: length(A::AbstractArray) -> Integer
 
@@ -96,7 +110,7 @@ Basic functions
        (iter.I[1],iter.I[2]) = (2,3)
        A[iter] = 0
 
-   If you supply more than one ``AbstractArray`` argument, ``eachindex`` will create an iterable object that is fast for all arguments (a ``UnitRange`` if all inputs have fast linear indexing, a CartesianRange otherwise).  If the arrays have different sizes and/or dimensionalities, ``eachindex`` returns an iterable that spans the largest range along each dimension.
+   If you supply more than one ``AbstractArray`` argument, ``eachindex`` will create an iterable object that is fast for all arguments (a ``UnitRange`` if all inputs have fast linear indexing, a ```CartesianRange`` <:obj`CartesianRange`>`_ otherwise). If the arrays have different sizes and/or dimensionalities, ``eachindex`` returns an iterable that spans the largest range along each dimension.
 
 .. function:: linearindices(A)
 
@@ -105,6 +119,15 @@ Basic functions
    Returns a ``UnitRange`` specifying the valid range of indices for ``A[i]`` where ``i`` is an ``Int``\ . For arrays with conventional indexing (indices start at 1), or any multidimensional array, this is ``1:length(A)``\ ; however, for one-dimensional arrays with unconventional indices, this is ``indices(A, 1)``\ .
 
    Calling this function is the "safe" way to write algorithms that exploit linear indexing.
+
+   .. doctest::
+
+       julia> A = ones(5,6,7);
+
+       julia> b = linearindices(A);
+
+       julia> extrema(b)
+       (1,210)
 
 .. function:: Base.linearindexing(A)
 
@@ -122,13 +145,15 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Counts the number of nonzero values in array ``A`` (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nnz``\ , which returns the number of stored values.
+   Counts the number of nonzero values in array ``A`` (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use :func:`nnz`\ , which returns the number of stored values.
 
 .. function:: conj!(A)
 
    .. Docstring generated from Julia source
 
-   Convert an array to its complex conjugate in-place.
+   Transform an array to its complex conjugate in-place.
+
+   See also :func:`conj`\ .
 
 .. function:: stride(A, k::Integer)
 
@@ -173,17 +198,46 @@ Basic functions
 
    provides the indices of the maximum element.
 
+   .. doctest::
+
+       julia> ind2sub((3,4),2)
+       (2,1)
+
+       julia> ind2sub((3,4),3)
+       (3,1)
+
+       julia> ind2sub((3,4),4)
+       (1,2)
+
 .. function:: ind2sub(a, index) -> subscripts
 
    .. Docstring generated from Julia source
 
    Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``\ .
 
+   .. doctest::
+
+       julia> A = ones(5,6,7);
+
+       julia> ind2sub(A,35)
+       (5,1,2)
+
+       julia> ind2sub(A,70)
+       (5,2,3)
+
 .. function:: sub2ind(dims, i, j, k...) -> index
 
    .. Docstring generated from Julia source
 
-   The inverse of ``ind2sub``\ , returns the linear index corresponding to the provided subscripts.
+   The inverse of :func:`ind2sub`\ , returns the linear index corresponding to the provided subscripts.
+
+   .. doctest::
+
+       julia> sub2ind((5,6,7),1,2,3)
+       66
+
+       julia> sub2ind((5,6,7),1,6,3)
+       86
 
 .. function:: LinAlg.checksquare(A)
 
@@ -258,7 +312,17 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (10,10))`` returns a 10×10 array of floats, with each element initialized to ``1.0``\ .
+   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (5,5))`` returns a 10×10 array of floats, with each element initialized to ``1.0``\ .
+
+   .. doctest::
+
+       julia> fill(1.0, (5,5))
+       5×5 Array{Float64,2}:
+        1.0  1.0  1.0  1.0  1.0
+        1.0  1.0  1.0  1.0  1.0
+        1.0  1.0  1.0  1.0  1.0
+        1.0  1.0  1.0  1.0  1.0
+        1.0  1.0  1.0  1.0  1.0
 
    If ``x`` is an object reference, all elements will refer to the same object. ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
 
@@ -374,17 +438,33 @@ Constructors
 
    Note the difference from :func:`ones`\ .
 
-.. function:: linspace(start, stop, n=50)
+.. function:: linspace(start::Real, stop::Real, n::Real=50)
 
    .. Docstring generated from Julia source
 
    Construct a range of ``n`` linearly spaced elements from ``start`` to ``stop``\ .
 
-.. function:: logspace(start, stop, n=50)
+   .. doctest::
+
+       julia> linspace(1.3,2.9,9)
+       9-element LinSpace{Float64}:
+        1.3,1.5,1.7,1.9,2.1,2.3,2.5,2.7,2.9
+
+.. function:: logspace(start::Real, stop::Real, n::Integer=50)
 
    .. Docstring generated from Julia source
 
    Construct a vector of ``n`` logarithmically spaced numbers from ``10^start`` to ``10^stop``\ .
+
+   .. doctest::
+
+       julia> logspace(1.,10.,5)
+       5-element Array{Float64,1}:
+          10.0
+        1778.28
+           3.16228e5
+           5.62341e7
+           1.0e10
 
 Mathematical operators and functions
 ------------------------------------
@@ -397,17 +477,53 @@ All mathematical operations and functions are supported for arrays
 
    Broadcasts the arrays ``As`` to a common size by expanding singleton dimensions, and returns an array of the results ``f(as...)`` for each position.
 
+   .. doctest::
+
+       julia> A = [1, 2, 3, 4, 5]
+       5-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
+
+       julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
+       5×2 Array{Int64,2}:
+        1   2
+        3   4
+        5   6
+        7   8
+        9  10
+
+       julia> broadcast(+, A, B)
+       5×2 Array{Int64,2}:
+         2   3
+         5   6
+         8   9
+        11  12
+        14  15
+
 .. function:: broadcast!(f, dest, As...)
 
    .. Docstring generated from Julia source
 
-   Like ``broadcast``\ , but store the result of ``broadcast(f, As...)`` in the ``dest`` array. Note that ``dest`` is only used to store the result, and does not supply arguments to ``f`` unless it is also listed in the ``As``\ , as in ``broadcast!(f, A, A, B)`` to perform ``A[:] = broadcast(f, A, B)``\ .
+   Like :func:`broadcast`\ , but store the result of ``broadcast(f, As...)`` in the ``dest`` array. Note that ``dest`` is only used to store the result, and does not supply arguments to ``f`` unless it is also listed in the ``As``\ , as in ``broadcast!(f, A, A, B)`` to perform ``A[:] = broadcast(f, A, B)``\ .
 
 .. function:: bitbroadcast(f, As...)
 
    .. Docstring generated from Julia source
 
-   Like ``broadcast``\ , but allocates a ``BitArray`` to store the result, rather then an ``Array``\ .
+   Like :func:`broadcast`\ , but allocates a ``BitArray`` to store the result, rather then an ``Array``\ .
+
+   .. doctest::
+
+       julia> bitbroadcast(isodd,[1,2,3,4,5])
+       5-element BitArray{1}:
+         true
+        false
+         true
+        false
+         true
 
 Indexing, Assignment, and Concatenation
 ---------------------------------------
@@ -442,11 +558,23 @@ Indexing, Assignment, and Concatenation
 
    From an array view ``A``\ , returns the corresponding indexes in the parent.
 
-.. function:: slicedim(A, d, i)
+.. function:: slicedim(A, d::Integer, i)
 
    .. Docstring generated from Julia source
 
    Return all the data of ``A`` where the index for dimension ``d`` equals ``i``\ . Equivalent to ``A[:,:,...,i,:,:,...]`` where ``i`` is in position ``d``\ .
+
+   .. doctest::
+
+       julia> A = [1 2 3 4; 5 6 7 8]
+       2×4 Array{Int64,2}:
+        1  2  3  4
+        5  6  7  8
+
+       julia> slicedim(A,2,3)
+       2-element Array{Int64,1}:
+        3
+        7
 
 .. function:: setindex!(A, X, inds...)
 
@@ -458,13 +586,45 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Broadcasts the ``inds`` arrays to a common size like ``broadcast``\ , and returns an array of the results ``A[ks...]``\ , where ``ks`` goes over the positions in the broadcast.
+   Broadcasts the ``inds`` arrays to a common size like :func:`broadcast` and returns an array of the results ``A[ks...]``\ , where ``ks`` goes over the positions in the broadcast result ``A``\ .
+
+   .. doctest::
+
+       julia> A = [1, 2, 3, 4, 5]
+       5-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+        5
+
+       julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
+       5×2 Array{Int64,2}:
+        1   2
+        3   4
+        5   6
+        7   8
+        9  10
+
+       julia> C = broadcast(+,A,B)
+       5×2 Array{Int64,2}:
+         2   3
+         5   6
+         8   9
+        11  12
+        14  15
+
+       julia> broadcast_getindex(C,[1,2,10])
+       3-element Array{Int64,1}:
+         2
+         5
+        15
 
 .. function:: broadcast_setindex!(A, X, inds...)
 
    .. Docstring generated from Julia source
 
-   Broadcasts the ``X`` and ``inds`` arrays to a common size and stores the value from each position in ``X`` at the indices given by the same positions in ``inds``\ .
+   Broadcasts the ``X`` and ``inds`` arrays to a common size and stores the value from each position in ``X`` at the indices in ``A`` given by the same positions in ``inds``\ .
 
 .. function:: isassigned(array, i) -> Bool
 
@@ -588,7 +748,7 @@ Indexing, Assignment, and Concatenation
 
    If the first argument is a single integer ``n``\ , then all block rows are assumed to have ``n`` block columns.
 
-.. function:: flipdim(A, d)
+.. function:: flipdim(A, d::Integer)
 
    .. Docstring generated from Julia source
 
@@ -635,7 +795,7 @@ Indexing, Assignment, and Concatenation
         4  8  12  16
         1  5   9  13
 
-   See also ``circshift!``\ .
+   See also :func:`circshift!`\ .
 
 .. function:: circshift!(dest, src, shifts)
 
@@ -1051,6 +1211,18 @@ Indexing, Assignment, and Concatenation
 
    Check two array shapes for compatibility, allowing trailing singleton dimensions, and return whichever shape has more dimensions.
 
+   .. doctest::
+
+       julia> a = ones(3,4,1,1,1);
+
+       julia> b = ones(3,4);
+
+       julia> promote_shape(a,b)
+       (Base.OneTo(3),Base.OneTo(4),Base.OneTo(1),Base.OneTo(1),Base.OneTo(1))
+
+       julia> promote_shape((2,3,1,4), (2,3,1,4,1))
+       (2,3,1,4,1)
+
 .. function:: checkbounds(A, I...)
 
    .. Docstring generated from Julia source
@@ -1061,15 +1233,23 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Return ``true`` if the specified indices ``I`` are in bounds for the given array ``A``\ . Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors; however, in many cases one can rely on ``A``\ 's indices and ``checkindex``\ .
+   Return ``true`` if the specified indices ``I`` are in bounds for the given array ``A``\ . Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors; however, in many cases one can rely on ``A``\ 's indices and :func:`checkindex`\ .
 
-   See also ``checkindex``\ .
+   See also :func:`checkindex`\ .
 
 .. function:: checkindex(Bool, inds::AbstractUnitRange, index)
 
    .. Docstring generated from Julia source
 
    Return ``true`` if the given ``index`` is within the bounds of ``inds``\ . Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.
+
+   .. doctest::
+
+       julia> checkindex(Bool,1:20,8)
+       true
+
+       julia> checkindex(Bool,1:20,21)
+       false
 
 .. function:: randsubseq(A, p) -> Vector
 
@@ -1081,7 +1261,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Like ``randsubseq``\ , but the results are stored in ``S`` (which is resized as needed).
+   Like :func:`randsubseq`\ , but the results are stored in ``S`` (which is resized as needed).
 
 Array functions
 ---------------
@@ -1144,7 +1324,7 @@ Array functions
 
    Cumulative sum of ``A`` along a dimension, storing the result in ``B``\ . The dimension defaults to 1.
 
-.. function:: cumsum_kbn(A, [dim])
+.. function:: cumsum_kbn(A, [dim::Integer=1])
 
    .. Docstring generated from Julia source
 
@@ -1162,17 +1342,40 @@ Array functions
 
    Cumulative maximum along a dimension. The dimension defaults to 1.
 
-.. function:: diff(A, [dim])
+.. function:: diff(A, [dim::Integer=1])
 
    .. Docstring generated from Julia source
 
-   Finite difference operator of matrix or vector.
+   Finite difference operator of matrix or vector ``A``\ . If ``A`` is a matrix, compute the finite difference over a dimension ``dim`` (default ``1``\ ).
 
-.. function:: gradient(F, [h])
+   .. doctest::
+
+       julia> a = [2 4; 6 16]
+       2×2 Array{Int64,2}:
+        2   4
+        6  16
+
+       julia> diff(a,2)
+       2×1 Array{Int64,2}:
+         2
+        10
+
+.. function:: gradient(F::AbstractVector, [h::Real])
 
    .. Docstring generated from Julia source
 
    Compute differences along vector ``F``\ , using ``h`` as the spacing between points. The default spacing is one.
+
+   .. doctest::
+
+       julia> a = [2,4,6,8];
+
+       julia> gradient(a)
+       4-element Array{Float64,1}:
+        2.0
+        2.0
+        2.0
+        2.0
 
 .. function:: rot180(A)
 
@@ -1417,7 +1620,7 @@ Array functions
 Combinatorics
 -------------
 
-.. function:: randperm([rng,] n)
+.. function:: randperm([rng=GLOBAL_RNG,] n::Integer)
 
    .. Docstring generated from Julia source
 
@@ -1449,19 +1652,19 @@ Combinatorics
 
    Like ``permute!``\ , but the inverse of the given permutation is applied.
 
-.. function:: randcycle([rng,] n)
+.. function:: randcycle([rng=GLOBAL_RNG,] n::Integer)
 
    .. Docstring generated from Julia source
 
    Construct a random cyclic permutation of length ``n``\ . The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
-.. function:: shuffle([rng,] v)
+.. function:: shuffle([rng=GLOBAL_RNG,] v)
 
    .. Docstring generated from Julia source
 
    Return a randomly permuted copy of ``v``\ . The optional ``rng`` argument specifies a random number generator (see :ref:`Random Numbers <random-numbers>`\ ). To permute ``v`` in-place, see :func:`shuffle!`\ .  To obtain randomly permuted indices, see :func:`randperm`\ .
 
-.. function:: shuffle!([rng,] v)
+.. function:: shuffle!([rng=GLOBAL_RNG,] v)
 
    .. Docstring generated from Julia source
 
