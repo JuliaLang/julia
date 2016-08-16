@@ -160,7 +160,7 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
                 urlusername : username)
             userpass = prompt("Password for '$schema$username@$host'", password=true)
         end
-        (creds.user != username) || (creds.pass != userpass) && reset!(creds)
+        ((creds.user != username) || (creds.pass != userpass)) && reset!(creds)
         creds.user = username # save credentials
         creds.pass = userpass # save credentials
 
