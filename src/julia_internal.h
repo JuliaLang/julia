@@ -765,6 +765,8 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 
 JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
 
+int isabspath(const char *in);
+
 #ifdef __cplusplus
 }
 #endif

@@ -137,12 +137,7 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
         goto done;
     }
 
-#ifdef _OS_WINDOWS_
-    abspath = modname[0] == '/' || modname[0] == '\\' ||
-        (modname[0] && modname[1] == ':' && (modname[2] == '\\' || modname[2] == '/'));
-#else
-    abspath = modname[0] == '/';
-#endif
+    abspath = isabspath(modname);
 
     /*
       this branch permutes all base paths in DL_LOAD_PATH with all extensions
