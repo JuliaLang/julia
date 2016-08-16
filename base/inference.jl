@@ -9,7 +9,8 @@ const MAX_TUPLETYPE_LEN = 15
 const MAX_TUPLE_DEPTH = 4
 
 const MAX_TUPLE_SPLAT = 16
-const MAX_UNION_SPLITTING = 6
+const MAX_UNION_SPLITTING = 4
+const UNION_SPLIT_MISMATCH_ERROR = false
 
 # alloc_elim_pass! relies on `Slot_AssignedOnce | Slot_UsedUndef` being
 # SSA. This should be true now but can break if we start to track conditional
@@ -2429,7 +2430,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                                 all = false
                             end
                         end
-                        if all
+                        if UNION_SPLIT_MISMATCH_ERROR && all
                             error_label === nothing && (error_label = genlabel(sv))
                             push!(stmts, GotoNode(error_label.label))
                         else
