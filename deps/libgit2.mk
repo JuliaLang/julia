@@ -47,9 +47,14 @@ ifeq ($(OS),Linux)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied
 endif
 ifneq ($(OS),WINNT)
+ifeq ($(USE_SYSTEM_CURL), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(CURL_OBJ_TARGET)
 endif
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied $(LIBSSH2_OBJ_TARGET)
+endif
+ifeq ($(USE_SYSTEM_LIBSSH2), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(LIBSSH2_OBJ_TARGET)
+endif
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
