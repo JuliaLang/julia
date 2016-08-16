@@ -315,7 +315,7 @@ static void *alloc_sigstack(size_t size)
     // Add one guard page to catch stack overflow in the signal handler
     size = LLT_ALIGN(size, pagesz) + pagesz;
     void *stackbuff = mmap(0, size, PROT_READ | PROT_WRITE,
-                           MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stackbuff == MAP_FAILED)
         jl_errorf("fatal error allocating signal stack: mmap: %s",
                   strerror(errno));
