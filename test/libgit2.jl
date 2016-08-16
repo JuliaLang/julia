@@ -76,6 +76,39 @@ const LIBGIT2_MIN_VER = v"0.23.0"
     @test sig3.email == sig.email
 #end
 
+#@testset "URL parsing" begin
+    # Use all named group
+    m = match(LibGit2.URL_REGEX, "https://user:pass@hostname.com:80/path/repo.git")
+    @test m[:scheme] == "https"
+    @test m[:user] == "user"
+    @test m[:password] == "pass"
+    @test m[:host] == "hostname.com"
+    @test m[:port] == "80"
+    @test m[:path] == "/path/repo.git"
+
+    # Realistic example HTTP example
+    m = match(LibGit2.URL_REGEX, "https://github.com/JuliaLang/Example.jl.git")
+    @test m[:scheme] == "https"
+    @test m[:user] == nothing
+    @test m[:password] == nothing
+    @test m[:host] == "github.com"
+    @test m[:port] == nothing
+    @test m[:path] == "/JuliaLang/Example.jl.git"
+
+    # Realistic example SSH example
+    m = match(LibGit2.URL_REGEX, "git@github.com:JuliaLang/Example.jl.git")
+    @test m[:scheme] == nothing
+    @test m[:user] == "git"
+    @test m[:password] == nothing
+    @test m[:host] == "github.com"
+    @test m[:port] == nothing
+    @test m[:path] == "JuliaLang/Example.jl.git"
+
+    # Make sure that a username can contain special characters
+    m = match(LibGit2.URL_REGEX, "user-name@hostname.com")
+    @test m[:user] == "user-name"
+#end
+
 mktempdir() do dir
     # test parameters
     repo_url = "https://github.com/JuliaLang/Example.jl"
