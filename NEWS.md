@@ -124,6 +124,10 @@ Deprecated or removed
     `maxabs` and `minabs` have similarly been deprecated in favor of `maximum(abs, x)` and `minimum(abs, x)`.
     Likewise for the in-place counterparts of these functions ([#19598]).
 
+  * `airy`, `airyx` and `airyprime` have been deprecated in favor of more specific
+    functions (`airyai`, `airybi`, `airyaiprime`, `airybiprimex`, `airyaix`, `airybix`,
+    `airyaiprimex`, `airybiprimex`) ([#18050]).
+
 Julia v0.5.0 Release Notes
 ==========================
 
@@ -744,6 +748,7 @@ Language tooling improvements
 [#17668]: https://github.com/JuliaLang/julia/issues/17668
 [#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
+[#18050]: https://github.com/JuliaLang/julia/issues/18050
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
