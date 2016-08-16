@@ -184,6 +184,7 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
         $s(v::AbstractVector, x;
            lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
+        $s(v::AbstractVector, x) = $s(v, x, Forward)
     end
 end
 
