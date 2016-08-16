@@ -100,12 +100,15 @@ end
     setrounding(T, mode)
 
 Set the rounding mode of floating point type `T`, controlling the rounding of basic
-arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`](:func:`/`)
-and [`sqrt`](:func:`sqrt`)) and type conversion.
+arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`),
+[`/`](:func:`/`) and [`sqrt`](:func:`sqrt`)) and type conversion. Other numerical
+functions may give incorrect or invalid values when using rounding modes other than the
+default `RoundNearest`.
 
 Note that this may affect other types, for instance changing the rounding mode of `Float64`
 will change the rounding mode of `Float32`. See [`RoundingMode`](:obj:`RoundingMode`) for
 available modes.
+
 """
 setrounding(T::Type, mode)
 
@@ -117,6 +120,8 @@ arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`
 and [`sqrt`](:func:`sqrt`)) and type conversion.
 
 See [`RoundingMode`](:obj:`RoundingMode`) for available modes.
+
+**Warning**: This feature is still experimental, and may give unexpected or incorrect values.
 """
 :rounding
 
@@ -138,6 +143,22 @@ equivalent to:
     setrounding(T, old)
 
 See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
+
+**Warning**: This feature is still experimental, and may give unexpected or incorrect values. A known problem is the interaction with compiler optimisations, e.g.
+
+    julia> setrounding(Float64,RoundDown) do
+               1.1 + 0.1
+           end
+    1.2000000000000002
+
+Here the compiler is *constant folding*, that is evaluating a known constant expression at compile time, however the rounding mode is only changed at runtime, so this is not reflected in the function result. This can be avoided by moving constants outside the expression, e.g.
+
+    julia> x = 1.1; y = 0.1;
+
+    julia> setrounding(Float64,RoundDown) do
+               x + y
+           end
+    1.2
 """
 function setrounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
     old_rounding_raw = rounding_raw(T)
