@@ -1247,6 +1247,14 @@ static void assign_arrayvar(jl_arrayvar_t &av, const jl_cgval_t &ainfo, jl_codec
         builder.CreateStore(emit_arraysize(ainfo, i+1, ctx), av.sizes[i]);
 }
 
+// Returns the size of the array represented by `tinfo` for the given dimension `dim` if
+// `dim` is a valid dimension, otherwise returns constant one.
+static Value *emit_arraysize_for_unsafe_dim(const jl_cgval_t &tinfo, jl_value_t *ex, size_t dim,
+                                            size_t nd, jl_codectx_t *ctx)
+{
+    return dim > nd ? ConstantInt::get(T_size, 1) : emit_arraysize(tinfo, ex, dim, ctx);
+}
+
 static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_t nd, jl_value_t **args,
                                   size_t nidxs, jl_codectx_t *ctx)
 {
@@ -1267,12 +1275,12 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
     for(size_t k=0; k < nidxs; k++) {
         idxs[k] = emit_unbox(T_size, emit_expr(args[k], ctx), NULL);
     }
+    Value *ii;
     for(size_t k=0; k < nidxs; k++) {
-        Value *ii = builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
+        ii = builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
         if (k < nidxs-1) {
-            Value *d =
-                k >= nd ? ConstantInt::get(T_size, 1) : emit_arraysize(ainfo, ex, k+1, ctx);
+            Value *d = emit_arraysize_for_unsafe_dim(ainfo, ex, k+1, nd, ctx);
 #if CHECK_BOUNDS==1
             if (bc) {
                 BasicBlock *okBB = BasicBlock::Create(jl_LLVMContext, "ib");
@@ -1287,9 +1295,21 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
     }
 #if CHECK_BOUNDS==1
     if (bc) {
-        Value *alen = emit_arraylen(ainfo, ex, ctx);
-        // if !(i < alen) goto error
-        builder.CreateCondBr(builder.CreateICmpULT(i, alen), endBB, failBB);
+        // We have already emitted a bounds check for each index except for
+        // the last one which we therefore have to do here.
+        bool linear_indexing = nidxs < nd;
+        if (linear_indexing) {
+            // Compare the linearized index `i` against the linearized size of
+            // the accessed array, i.e. `if !(i < alen) goto error`.
+            Value *alen = emit_arraylen(ainfo, ex, ctx);
+            builder.CreateCondBr(builder.CreateICmpULT(i, alen), endBB, failBB);
+        } else {
+            // Compare the last index of the access against the last dimension of
+            // the accessed array, i.e. `if !(last_index < last_dimension) goto error`.
+            Value *last_index = ii;
+            Value *last_dimension = emit_arraysize_for_unsafe_dim(ainfo, ex, nidxs, nd, ctx);
+            builder.CreateCondBr(builder.CreateICmpULT(last_index, last_dimension), endBB, failBB);
+        }
 
         ctx->f->getBasicBlockList().push_back(failBB);
         builder.SetInsertPoint(failBB);
