@@ -138,7 +138,8 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     }
 
 #ifdef _OS_WINDOWS_
-    abspath = modname[0] && modname[1] == ':' && (modname[2] == '\\' || modname[2] == '/');
+    abspath = modname[0] == '/' || modname[0] == '\\' ||
+        (modname[0] && modname[1] == ':' && (modname[2] == '\\' || modname[2] == '/'));
 #else
     abspath = modname[0] == '/';
 #endif
