@@ -66,6 +66,11 @@ endif
 	@echo "const DOCDIR = \"$(docdir_rel)\"" >> $@
 	@echo "const LIBDIR = \"$(libdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
+ifeq ($(SANITIZE),1)
+	@echo "const SANITIZE = true" >> $@
+else
+	@echo "const SANITIZE = false" >> $@
+endif
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible

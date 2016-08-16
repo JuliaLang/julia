@@ -221,7 +221,7 @@ module Tmp14173
     A = randn(2000, 2000)
 end
 whos(IOBuffer(), Tmp14173) # warm up
-@test @allocated(whos(IOBuffer(), Tmp14173)) < 10000
+@test @allocated(whos(IOBuffer(), Tmp14173)) < (Base.SANITIZE ? 25000 : 10000)
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
