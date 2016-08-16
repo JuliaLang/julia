@@ -19,8 +19,8 @@ function generic_scale!(s::Number, X::AbstractArray)
 end
 
 function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
-    if length(C) != length(X)
-        throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
+    if _length(C) != _length(X)
+        throw(DimensionMismatch("first array has length $(_length(C)) which does not match the length of the second, $(_length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
         @inbounds C[IC] = X[IX]*s
@@ -29,9 +29,9 @@ function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
 end
 
 function generic_scale!(C::AbstractArray, s::Number, X::AbstractArray)
-    if length(C) != length(X)
-        throw(DimensionMismatch("first array has length $(length(C)) which does not
-match the length of the second, $(length(X))."))
+    if _length(C) != _length(X)
+        throw(DimensionMismatch("first array has length $(_length(C)) which does not
+match the length of the second, $(_length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
         @inbounds C[IC] = s*X[IX]
@@ -126,7 +126,7 @@ function generic_vecnorm2(x)
     s = start(x)
     (v, s) = next(x, s)
     T = typeof(maxabs)
-    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+    if isfinite(_length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
         sum::promote_type(Float64, T) = norm_sqr(v)
         while !done(x, s)
             (v, s) = next(x, s)
@@ -156,7 +156,7 @@ function generic_vecnormp(x, p)
         T = typeof(float(norm(v)))
     end
     spp::promote_type(Float64, T) = p
-    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
+    if -1 <= p <= 1 || (isfinite(_length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
         while !done(x, s)
             (v, s) = next(x, s)
@@ -253,14 +253,14 @@ end
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
 function vecdot(x::AbstractArray, y::AbstractArray)
-    lx = length(x)
-    if lx != length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
+    lx = _length(x)
+    if lx != _length(y)
+        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(_length(y))."))
     end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
     end
-    s = zero(dot(x[1], y[1]))
+    s = zero(dot(first(x), first(y)))
     for (Ix, Iy) in zip(eachindex(x), eachindex(y))
         @inbounds  s += dot(x[Ix], y[Iy])
     end
@@ -378,11 +378,11 @@ condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs(inv(A))*
 condskeel{T<:Integer}(A::AbstractMatrix{T}, x::AbstractVector, p::Real=Inf) = norm(abs(inv(float(A)))*abs(A)*abs(x), p)
 
 function issymmetric(A::AbstractMatrix)
-    m, n = size(A)
-    if m != n
+    indsm, indsn = indices(A)
+    if indsm != indsn
         return false
     end
-    for i = 1:(n-1), j = (i+1):n
+    for i = first(indsn):last(indsn)-1, j = (i+1):last(indsn)
         if A[i,j] != transpose(A[j,i])
             return false
         end
@@ -393,11 +393,11 @@ end
 issymmetric(x::Number) = true
 
 function ishermitian(A::AbstractMatrix)
-    m, n = size(A)
-    if m != n
+    indsm, indsn = indices(A)
+    if indsm != indsn
         return false
     end
-    for i = 1:n, j = i:n
+    for i = indsn, j = i:last(indsn)
         if A[i,j] != ctranspose(A[j,i])
             return false
         end
@@ -497,26 +497,26 @@ end
 # BLAS-like in-place y = x*α+y function (see also the version in blas.jl
 #                                          for BlasFloat Arrays)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
-    n = length(x)
-    if n != length(y)
-        throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
+    n = _length(x)
+    if n != _length(y)
+        throw(DimensionMismatch("x has length $n, but y has length $(_length(y))"))
     end
-    for i = 1:n
-        @inbounds y[i] += x[i]*α
+    for (IY, IX) in zip(eachindex(y), eachindex(x))
+        @inbounds y[IY] += x[IX]*α
     end
     y
 end
 
 function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
-    if length(rx) != length(ry)
-        throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
-    elseif minimum(rx) < 1 || maximum(rx) > length(x)
+    if _length(rx) != _length(ry)
+        throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
+    elseif !checkindex(Bool, linearindices(x), rx)
         throw(BoundsError(x, rx))
-    elseif minimum(ry) < 1 || maximum(ry) > length(y)
+    elseif !checkindex(Bool, linearindices(y), ry)
         throw(BoundsError(y, ry))
     end
-    for i = 1:length(rx)
-        @inbounds y[ry[i]] += x[rx[i]]*α
+    for (IY, IX) in zip(eachindex(ry), eachindex(rx))
+        @inbounds y[ry[IY]] += x[rx[IX]]*α
     end
     y
 end
