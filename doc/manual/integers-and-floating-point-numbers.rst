@@ -507,12 +507,16 @@ rounded to an appropriate representable value, however, if wanted, the manner
 in which this rounding is done can be changed according to the rounding modes
 presented in the `IEEE 754 standard <https://en.wikipedia.org/wiki/IEEE_754-2008>`_::
 
+.. doctest::
 
-    julia> 1.1 + 0.1
+
+    julia> x = 1.1; y = 0.1;
+
+    julia> x + y
     1.2000000000000002
 
     julia> setrounding(Float64,RoundDown) do
-           1.1 + 0.1
+               x + y
            end
     1.2
 
