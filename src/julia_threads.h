@@ -159,7 +159,7 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
  *     2. (most importantly) we need interoperability between code written
  *        in different languages.
  *        The current c++ standard (c++14) does not allow using c11 atomic
- *        functions or types and there's currently no grantee that the two
+ *        functions or types and there's currently no guarantee that the two
  *        types are compatible (although most of them probably are).
  *        We also need to access these atomic variables from the LLVM JIT code
  *        which is very hard unless the layout of the object is fully
