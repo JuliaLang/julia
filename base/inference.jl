@@ -2258,7 +2258,7 @@ function effect_free(e::ANY, linfo::LambdaInfo, allow_volatile::Bool)
                 if !allow_volatile
                     if is_known_call(e, arrayref, linfo) || is_known_call(e, arraylen, linfo)
                         return false
-                    elseif is_known_call(e, getfield, linfo)
+                    elseif is_known_call(e, getfield, linfo) && !isa(exprtype(e,linfo), Const)
                         # first argument must be immutable to ensure e is affect_free
                         a = ea[2]
                         typ = widenconst(exprtype(a, linfo))
