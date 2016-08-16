@@ -32,6 +32,10 @@ end
 # maps of strings (character arrays) -- string.jl
 @test map((c)->Char(c+1), "abcDEF") == "bcdEFG"
 
+# issue #10633
+@test isa(map(Integer, Any[1, 2]), Vector{Int})
+@test isa(map(Integer, Any[]), Vector{Integer})
+
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
 # TODO: @test_throws isequal(filter(x->x+1, [0 1 2 3 2 1 0]), [2, 3, 2])
