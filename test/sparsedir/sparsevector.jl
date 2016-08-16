@@ -225,6 +225,13 @@ let x = SparseVector(10, [2, 7, 9], [2.0, 7.0, 9.0])
     @test Base.SparseArrays.dropstored!(x, 5) == SparseVector(10, [7, 9], [7.0, 9.0])
 end
 
+# find and findnz tests
+@test find(spv_x1) == find(x1_full)
+@test findnz(spv_x1) == (find(x1_full), filter(x->x!=0, x1_full))
+let xc = SparseVector(8, [2, 3, 5], [1.25, 0, -0.75]), fc = full(xc)
+    @test find(xc) == find(fc)
+    @test findnz(xc) == ([2, 5], [1.25, -0.75])
+end
 
 ### Array manipulation
 
