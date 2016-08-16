@@ -4470,6 +4470,13 @@ let
     @test k(1) == 1
 end
 
+# PR #18054: compilation of cfunction leaves IRBuilder in bad state,
+#            causing heap-use-after-free when compiling f18054
+function f18054()
+    return Cint(0)
+end
+cfunction(f18054, Cint, ())
+
 # issue #18085
 f18085(a,x...) = (0,)
 for (f,g) in ((:asin,:sin), (:acos,:cos))
