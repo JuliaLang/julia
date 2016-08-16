@@ -307,6 +307,21 @@ let T = Array{Tuple{Vararg{Float64,TypeVar(:dim)}},1},
 end
 @test f16530a(:d) == Vector
 
+let T1 = Tuple{Int, Float64},
+    T2 = Tuple{Int, Float32},
+    T = Tuple{T1, T2}
+
+    global f18037
+    f18037() = fieldtype(T, 1)
+    f18037(i) = fieldtype(T, i)
+
+    @test f18037() === T1
+    @test f18037(1) === T1
+    @test f18037(2) === T2
+
+    @test Base.return_types(f18037, ()) == Any[Type{T1}]
+    @test Base.return_types(f18037, (Int,)) == Any[Type{TypeVar(:T, Tuple{Int, AbstractFloat})}]
+end
 
 # issue #18015
 type Triple18015

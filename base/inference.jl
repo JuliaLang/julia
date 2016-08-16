@@ -479,7 +479,7 @@ function getfield_tfunc(s0::ANY, name)
                     # in the current type system
                     typ = limit_type_depth(R, 0, true,
                                            filter!(x->isa(x,TypeVar), Any[s.parameters...]))
-                    return typ, isleaftype(s) && typeseq(typ, R)
+                    return typ, isleaftype(s) && isa(R, Type) && typeof(R) === typeof(typ) && typeseq(R, typ)
                 end
             end
         end
@@ -502,14 +502,15 @@ function getfield_tfunc(s0::ANY, name)
     elseif length(s.types) == 1 && isempty(s.parameters)
         return s.types[1], true
     else
-        R = reduce(tmerge, Bottom, map(unwrapva,s.types)) #=Union{s.types...}=#
+        R = reduce(tmerge, Bottom, map(unwrapva, s.types)) #=Union{s.types...}=#
+        alleq = isa(R, Type) && typeof(R) === typeof(s.types[1]) && typeseq(R, s.types[1])
         # do the same limiting as the known-symbol case to preserve type-monotonicity
         if isempty(s.parameters)
-            return R, typeseq(R, s.types[1])
+            return R, alleq
         else
             typ = limit_type_depth(R, 0, true,
                                    filter!(x->isa(x,TypeVar), Any[s.parameters...]))
-            return typ, isleaftype(s) && typeseq(typ, R)
+            return typ, alleq && isleaftype(s) && typeof(R) === typeof(typ) && typeseq(R, typ)
         end
     end
 end
