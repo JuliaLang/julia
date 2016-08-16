@@ -4476,3 +4476,10 @@ function f18054()
     return Cint(0)
 end
 cfunction(f18054, Cint, ())
+
+# jl_get_option
+@test_throws ErrorException ccall(:jl_get_option, Bool, (Any,), "invalid")
+@test ccall(:jl_get_option, Bool, (Any,), :ALWAYS_DEFINED) == true
+@test ccall(:jl_get_option, Bool, (Any,), :NEVER_DEFINED) == false
+@test_throws ErrorException ccall(:jl_get_option, Bool, (Any,), :UNHANDLED) == true
+
