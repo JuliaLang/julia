@@ -577,3 +577,6 @@ end
 @test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4,Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32,Float32,Float32}"
+
+# Float32 printing
+@test sprint((io, x)->print(io, x), 1f-7) == "1.0e-7"
