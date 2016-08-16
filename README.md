@@ -53,7 +53,7 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - **FreeBSD**
 - **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md) is available too.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER (little-endian) is available too.
 
 <a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
@@ -235,11 +235,21 @@ When building Julia, or its dependencies, libraries installed by third party pac
 
 ### FreeBSD
 
-On *FreeBSD Release 9.0*, install the `gcc47`, `git`, and `gmake` packages/ports, and compile Julia with the command:
+On *FreeBSD Release 11.0*, install the gfortran, git, cmake, and gmake packages/ports (`pkg install gcc6 gmake git cmake`), and compile Julia with the command:
 
-    $ gmake FC=gfortran47
+    $ echo 'FC=gfortran6' >> Make.user
+    $ gmake
 
 You must use the `gmake` command on FreeBSD instead of `make`.
+
+Note that Julia is community-supported and we have little control over our upstream dependencies, you may still run into issues with its dependencies and YMMV. Current known issues includes:
+
+ - The x86 arch doesn't support threading due to lack of compiler runtime library support (set JULIA_THREADS=0).
+ - libunwind needs a small patch to its tests to compile.
+ - OpenBLAS patches in pkg haven't been upstreamed.
+ - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to workaround this (upstream bug submitted to FreeBSD pkg maintainers).
+ - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=/usr/local/lib` and `CPPFLAGS=/usr/local/include` to your environment or Make.user file to build successfully.
+
 
 ### Windows
 

@@ -47,7 +47,7 @@ static void *map_anon_page(size_t size)
     mem = (char*)LLT_ALIGN(uintptr_t(mem), jl_page_size);
 #else // _OS_WINDOWS_
     void *mem = mmap(nullptr, size, PROT_READ | PROT_WRITE,
-                     MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     assert(mem != MAP_FAILED && "Cannot allocate RW memory");
 #endif // _OS_WINDOWS_
     return mem;

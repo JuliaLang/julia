@@ -340,6 +340,11 @@ endif
 
 STDLIBCPP_FLAG :=
 
+ifeq ($(OS), FreeBSD)
+USEGCC := 0
+USECLANG := 1
+endif
+
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
