@@ -180,7 +180,11 @@ function show(io::IO, x::Union)
     show_comma_array(io, sorted_types, '{', '}')
 end
 
-show(io::IO, x::TypeConstructor) = show(io, x.body)
+function show(io::IO, x::UnionAll)
+    show(io, x.body)
+    print(io, " where ")
+    show(io, x.var)
+end
 
 function show_type_parameter(io::IO, p::ANY, has_tvar_env::Bool)
     if has_tvar_env
@@ -1218,7 +1222,7 @@ function dumptype(io::IO, x::ANY, n::Int, indent)
 end
 
 directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
-directsubtype(a::TypeConstructor, b::DataType) = directsubtype(a.body, b)
+directsubtype(a::UnionAll, b::DataType) = directsubtype(a.body, b)
 directsubtype(a::Union, b::DataType) = any(t->directsubtype(t, b), a.types)
 # Fallback to handle TypeVar's
 directsubtype(a, b::DataType) = false
@@ -1231,10 +1235,9 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
             elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
-            elseif isa(t, TypeConstructor) && directsubtype(t::TypeConstructor, x)
+            elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
                 println(io)
                 print(io, indent, "  ", m, ".", s)
-                isempty(t.parameters) || print(io, "{", join(t.parameters, ","), "}")
                 print(io, " = ", t)
             elseif isa(t, Union) && directsubtype(t::Union, x)
                 println(io)
