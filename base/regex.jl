@@ -226,6 +226,11 @@ search(s::AbstractString, r::Regex, idx::Integer) = throw(ArgumentError(
 ))
 search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
+function contains(haystack::Union{SubString{String}, String}, re::Regex)
+    compile(re)
+    PCRE.exec(re.regex, haystack, start(haystack)-1, re.match_options, re.match_data)
+end
+
 immutable SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
 end

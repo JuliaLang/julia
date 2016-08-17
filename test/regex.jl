@@ -47,3 +47,56 @@ end
 # Backcapture reference in substitution string
 @test replace("abcde", r"(..)(?P<byname>d)", s"\g<byname>xy\\\1") == "adxy\\bce"
 @test_throws ErrorException replace("a", r"(?P<x>)", s"\g<y>")
+
+# some test strings, the strings and the tests is equal to the test in test/strings/search.jl
+astr = "Hello, world.\n"
+u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
+
+# string search with a single-char regex
+@test search(astr, r"x") == 0:-1
+@test search(astr, r"H") == 1:1
+@test search(astr, r"H", 2) == 0:-1
+@test search(astr, r"l") == 3:3
+@test search(astr, r"l", 4) == 4:4
+@test search(astr, r"l", 5) == 11:11
+@test search(astr, r"l", 12) == 0:-1
+@test search(astr, r"\n") == 14:14
+@test search(astr, r"\n", 15) == 0:-1
+@test search(u8str, r"z") == 0:-1
+@test search(u8str, r"∄") == 0:-1
+@test search(u8str, r"∀") == 1:1
+@test search(u8str, r"∀", 4) == 0:-1
+@test search(u8str, r"∀") == search(u8str, r"\u2200")
+@test search(u8str, r"∀", 4) == search(u8str, r"\u2200", 4)
+@test search(u8str, r"∃") == 13:13
+@test search(u8str, r"∃", 16) == 0:-1
+@test search(u8str, r"x") == 26:26
+@test search(u8str, r"x", 27) == 43:43
+@test search(u8str, r"x", 44) == 0:-1
+@test search(u8str, r"ε") == 5:5
+@test search(u8str, r"ε", 7) == 54:54
+@test search(u8str, r"ε", 56) == 0:-1
+
+# string search with a two-char regex
+@test search("foo,bar,baz", r"xx") == 0:-1
+@test search("foo,bar,baz", r"fo") == 1:2
+@test search("foo,bar,baz", r"fo", 3) == 0:-1
+@test search("foo,bar,baz", r"oo") == 2:3
+@test search("foo,bar,baz", r"oo", 4) == 0:-1
+@test search("foo,bar,baz", r"o,") == 3:4
+@test search("foo,bar,baz", r"o,", 5) == 0:-1
+@test search("foo,bar,baz", r",b") == 4:5
+@test search("foo,bar,baz", r",b", 6) == 8:9
+@test search("foo,bar,baz", r",b", 10) == 0:-1
+@test search("foo,bar,baz", r"az") == 10:11
+@test search("foo,bar,baz", r"az", 12) == 0:-1
+
+@test contains(astr, r"w")
+@test contains(astr, r",\sw")
+@test !contains(astr, r"x")
+
+@test contains(u8str, r"x")
+@test contains(u8str, r"∃ δ >")
+@test !contains(u8str, r"9")
+@test !contains(u8str, r"> 0:9")
+@test contains(u8str, r">\s\d:")

@@ -182,30 +182,6 @@ end
 @test rsearch(u8str, "ε", 53) == 5:5
 @test rsearch(u8str, "ε", 4) == 0:-1
 
-# string search with a single-char regex
-@test search(astr, r"x") == 0:-1
-@test search(astr, r"H") == 1:1
-@test search(astr, r"H", 2) == 0:-1
-@test search(astr, r"l") == 3:3
-@test search(astr, r"l", 4) == 4:4
-@test search(astr, r"l", 5) == 11:11
-@test search(astr, r"l", 12) == 0:-1
-@test search(astr, r"\n") == 14:14
-@test search(astr, r"\n", 15) == 0:-1
-@test search(u8str, r"z") == 0:-1
-@test search(u8str, r"∄") == 0:-1
-@test search(u8str, r"∀") == 1:1
-@test search(u8str, r"∀", 4) == 0:-1
-@test search(u8str, r"∀") == search(u8str, r"\u2200")
-@test search(u8str, r"∀", 4) == search(u8str, r"\u2200", 4)
-@test search(u8str, r"∃") == 13:13
-@test search(u8str, r"∃", 16) == 0:-1
-@test search(u8str, r"x") == 26:26
-@test search(u8str, r"x", 27) == 43:43
-@test search(u8str, r"x", 44) == 0:-1
-@test search(u8str, r"ε") == 5:5
-@test search(u8str, r"ε", 7) == 54:54
-@test search(u8str, r"ε", 56) == 0:-1
 for i = 1:endof(astr)
     @test search(astr, r"."s, i) == i:i
 end
@@ -317,20 +293,6 @@ end
 @test rsearch(UInt8[1,2,3],UInt8[2,3],3) == 2:3
 @test rsearch(UInt8[1,2,3],UInt8[2,3],1) == 0:-1
 
-# string search with a two-char regex
-@test search("foo,bar,baz", r"xx") == 0:-1
-@test search("foo,bar,baz", r"fo") == 1:2
-@test search("foo,bar,baz", r"fo", 3) == 0:-1
-@test search("foo,bar,baz", r"oo") == 2:3
-@test search("foo,bar,baz", r"oo", 4) == 0:-1
-@test search("foo,bar,baz", r"o,") == 3:4
-@test search("foo,bar,baz", r"o,", 5) == 0:-1
-@test search("foo,bar,baz", r",b") == 4:5
-@test search("foo,bar,baz", r",b", 6) == 8:9
-@test search("foo,bar,baz", r",b", 10) == 0:-1
-@test search("foo,bar,baz", r"az") == 10:11
-@test search("foo,bar,baz", r"az", 12) == 0:-1
-
 @test searchindex("foo", 'o') == 2
 @test searchindex("foo", 'o', 3) == 3
 
@@ -373,3 +335,16 @@ end
 # string searchindex with a two-char UTF-8 (4 byte) string literal
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
+
+@test contains(astr, "w")
+@test contains(astr, 'w')
+@test contains(astr, ", w")
+@test !contains(astr, "x")
+@test !contains(astr, 'x')
+
+@test contains(u8str, "x")
+@test contains(u8str, 'x')
+@test contains(u8str, "∃ δ >")
+@test !contains(u8str, "9")
+@test !contains(u8str, '9')
+@test !contains(u8str, "> 0:9")
