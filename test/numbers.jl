@@ -2772,11 +2772,17 @@ testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
 testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 
 @test ndims(1) == 0
+@test ndims(Integer) == 0
 @test size(1,1) == 1
 @test_throws BoundsError size(1,-1)
 @test indices(1) == ()
 @test indices(1,1) == 1:1
 @test_throws BoundsError indices(1,-1)
+@test isinteger(Integer(2)) == true
+@test size(1) == ()
+@test length(1) == 1
+@test endof(1) == 1
+@test eltype(Integer) == Integer
 
 # issue #15920
 @test Rational(0, 1) / Complex(3, 2) == 0
