@@ -426,8 +426,8 @@ function Base.getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::Abstract
     @inbounds for j = 1:nJ
         col = J[j]
         rowI = i
-        ptrA = colptrA[col]
-        stopA = colptrA[col+1]-1
+        ptrA = Int(colptrA[col])
+        stopA = Int(colptrA[col+1]-1)
         if ptrA <= stopA
             if rowvalA[ptrA] <= rowI
                 ptrA = searchsortedfirst(rowvalA, rowI, ptrA, stopA, Base.Order.Forward)
