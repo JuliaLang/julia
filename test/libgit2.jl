@@ -112,7 +112,6 @@ const LIBGIT2_MIN_VER = v"0.23.0"
 mktempdir() do dir
     # test parameters
     repo_url = "https://github.com/JuliaLang/Example.jl"
-    ssh_prefix = "git@"
     cache_repo = joinpath(dir, "Example")
     test_repo = joinpath(dir, "Example.Test")
     test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
