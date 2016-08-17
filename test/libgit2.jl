@@ -77,16 +77,34 @@ const LIBGIT2_MIN_VER = v"0.23.0"
 #end
 
 #@testset "URL parsing" begin
-    # Use all named group
-    m = match(LibGit2.URL_REGEX, "https://user:pass@hostname.com:80/path/repo.git")
+    # HTTPS URL
+    m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80/org/project.git")
     @test m[:scheme] == "https"
     @test m[:user] == "user"
     @test m[:password] == "pass"
-    @test m[:host] == "hostname.com"
+    @test m[:host] == "server.com"
     @test m[:port] == "80"
-    @test m[:path] == "/path/repo.git"
+    @test m[:path] == "/org/project.git"
 
-    # Realistic example HTTP example
+    # SSH URL
+    m = match(LibGit2.URL_REGEX, "ssh://user:pass@server:22/project.git")
+    @test m[:scheme] == "ssh"
+    @test m[:user] == "user"
+    @test m[:password] == "pass"
+    @test m[:host] == "server"
+    @test m[:port] == "22"
+    @test m[:path] == "/project.git"
+
+    # SSH URL using scp-like syntax
+    m = match(LibGit2.URL_REGEX, "user@server:project.git")
+    @test m[:scheme] == nothing
+    @test m[:user] == "user"
+    @test m[:password] == nothing
+    @test m[:host] == "server"
+    @test m[:port] == nothing
+    @test m[:path] == "project.git"
+
+    # Realistic example from GitHub using HTTPS
     m = match(LibGit2.URL_REGEX, "https://github.com/JuliaLang/Example.jl.git")
     @test m[:scheme] == "https"
     @test m[:user] == nothing
@@ -95,7 +113,7 @@ const LIBGIT2_MIN_VER = v"0.23.0"
     @test m[:port] == nothing
     @test m[:path] == "/JuliaLang/Example.jl.git"
 
-    # Realistic example SSH example
+    # Realistic example from GitHub using SSH
     m = match(LibGit2.URL_REGEX, "git@github.com:JuliaLang/Example.jl.git")
     @test m[:scheme] == nothing
     @test m[:user] == "git"
@@ -104,7 +122,7 @@ const LIBGIT2_MIN_VER = v"0.23.0"
     @test m[:port] == nothing
     @test m[:path] == "JuliaLang/Example.jl.git"
 
-    # Make sure that a username can contain special characters
+    # Make sure usernames can contain special characters
     m = match(LibGit2.URL_REGEX, "user-name@hostname.com")
     @test m[:user] == "user-name"
 #end
