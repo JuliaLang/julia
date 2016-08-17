@@ -408,6 +408,13 @@ function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test convert(Array, X) == X
 end
 
+let
+    type TestThrowNoGetindex{T} <: AbstractVector{T} end
+    Base.length(::TestThrowNoGetindex) = 2
+    Base.size(::TestThrowNoGetindex) = (2,)
+    @test_throws ErrorException isassigned(TestThrowNoGetindex{Float64}(), 1)
+end
+
 function test_in_bounds(::Type{TestAbstractArray})
     n = rand(2:5)
     sz = rand(2:5, n)
