@@ -1588,3 +1588,8 @@ end
 
 # Test temporary fix for issue #16548 in PR #16979. Brittle. Expect to remove with `\` revisions.
 @test which(\, (SparseMatrixCSC, AbstractVecOrMat)).module == Base.SparseArrays
+
+# Row indexing a SparseMatrixCSC with non-Int integer type
+let A = sparse(UInt32[1,2,3], UInt32[1,2,3], [1.0,2.0,3.0])
+    @test A[1,1:3] == A[1,:] == [1,0,0]
+end
