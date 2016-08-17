@@ -669,4 +669,4 @@ let str = "[1] [2]"
 end
 
 # issue 15896 and PR 15913
-@test_throws ErrorException eval(:(macro test(d; y=0) end))
+@test_throws ErrorException eval(:(macro test15896(d; y=0) end))
