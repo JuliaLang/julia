@@ -181,12 +181,15 @@ function _strides{M,T,N}(out::NTuple{M}, A::AbstractArray{T,N})
 end
 
 function isassigned(a::AbstractArray, i::Int...)
-    # TODO
     try
         a[i...]
         true
-    catch
-        false
+    catch e
+        if isa(e, BoundsError) || isa(e, UndefRefError)
+            return false
+        else
+            rethrow(e)
+        end
     end
 end
 
