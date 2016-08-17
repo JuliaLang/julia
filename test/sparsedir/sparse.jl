@@ -16,6 +16,11 @@ using Base.Test
 @test_throws ArgumentError sparse([1,2,3], [1,2,4], [1,2,3], 3, 3)
 @test isequal(sparse(Int[], Int[], Int[], 0, 0), SparseMatrixCSC(0, 0, Int[1], Int[], Int[]))
 
+# check symmetric full
+a = sparse(complex(ones(5,5),ones(5,5)))
+@test isequal(full(Symmetric(triu(a + a.'))),a + a.')
+@test isequal(full(Symmetric(a + a.')),a + a.')
+
 # check matrix operations
 se33 = speye(3)
 do33 = ones(3)

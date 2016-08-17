@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base.LinAlg: checksquare
+import Base.LinAlg: checksquare, copytri!
 
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
@@ -196,6 +196,20 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
     C = SparseArrays.sortSparseMatrixCSC!(Cunsorted, sortindices=sortindices)
     return C
+end
+
+# copytri! - for make symmetric sparse mats full
+function copytri!(A::SparseMatrixCSC, uplo::Char, conjugate::Bool=false)
+    n = checksquare(A)
+    B = conjugate ? ctranspose(A) : transpose(A)
+    if uplo == 'U'
+        A = triu!(A) + tril!(B,-1)
+    elseif uplo == 'L'
+        A = tril!(A) + triu!(B,1)
+    else
+        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+    end
+    A
 end
 
 ## solvers
