@@ -41,6 +41,7 @@ type RefValue{T} <: Ref{T}
     RefValue(x) = new(x)
 end
 RefValue{T}(x::T) = RefValue{T}(x)
+isassigned(x::RefValue) = isdefined(x, :x)
 
 Ref(x::Ref) = x
 Ref(x::Any) = RefValue(x)
