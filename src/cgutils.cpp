@@ -895,9 +895,6 @@ static Value *julia_bool(Value *cond)
 
 // --- get the inferred type of an AST node ---
 
-static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true,
-                               bool allow_alloc=true);
-
 static inline jl_module_t *topmod(jl_codectx_t *ctx)
 {
     return jl_base_relative_to(ctx->module);
@@ -945,11 +942,13 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         goto type_of_constant;
     }
     if (jl_is_globalref(e)) {
-        jl_value_t *v = static_eval(e, ctx);
-        if (v == NULL)
-            return (jl_value_t*)jl_any_type;
-        e = v;
-        goto type_of_constant;
+        jl_sym_t *s = (jl_sym_t*)jl_globalref_name(e);
+        jl_binding_t *b = jl_get_binding(jl_globalref_mod(e), s);
+        if (b && b->constp) {
+            e = b->value;
+            goto type_of_constant;
+        }
+        return (jl_value_t*)jl_any_type;
     }
     if (jl_is_symbol(e)) {
         jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)e);

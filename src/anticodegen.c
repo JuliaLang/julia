@@ -36,12 +36,6 @@ int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int no
     return 0;
 }
 
-jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
-                           jl_lambda_info_t *li, int sparams, int allow_alloc)
-{
-    return NULL;
-}
-
 void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambda_info_t **linfos, size_t n)
 {
     (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
