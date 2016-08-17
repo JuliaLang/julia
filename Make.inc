@@ -460,6 +460,7 @@ endif #ARCH
 LD := link
 endif #USEMSVC
 RANLIB := $(CROSS_COMPILE)ranlib
+OBJCOPY := $(CROSS_COMPILE)objcopy
 
 # file extensions
 ifeq ($(OS), WINNT)

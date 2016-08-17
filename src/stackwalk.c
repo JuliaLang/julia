@@ -194,17 +194,21 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
 #endif
 }
 
+// Might be called from unmanaged thread.
 int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
+void jl_refresh_dbg_module_list(void)
 {
-    // Might be called from unmanaged thread.
     if (needsSymRefreshModuleList && hSymRefreshModuleList != 0 && !jl_in_stackwalk) {
         jl_in_stackwalk = 1;
         hSymRefreshModuleList(GetCurrentProcess());
         jl_in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
+}
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
+{
+    jl_refresh_dbg_module_list();
 #if !defined(_CPU_X86_64_)
     if (jl_in_stackwalk) {
         return 0;
@@ -372,7 +376,7 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
         jl_svecset(r, 3, frame.linfo != NULL ? (jl_value_t*)frame.linfo : jl_nothing);
         jl_svecset(r, 4, jl_box_bool(frame.fromC));
         jl_svecset(r, 5, jl_box_bool(frame.inlined));
-        jl_svecset(r, 6, jl_box_long((intptr_t)ip));
+        jl_svecset(r, 6, jl_box_voidpointer(ip));
     }
     free(frames);
     JL_GC_POP();
