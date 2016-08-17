@@ -1470,7 +1470,11 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         end
     end
 
-    if caller === nothing && in_typeinf_loop
+    ccall(:jl_typeinf_begin, Void, ())
+    thread_in_typeinf_loop = in_typeinf_loop::Bool
+    ccall(:jl_typeinf_end, Void, ())
+
+    if caller === nothing && thread_in_typeinf_loop
         # if the caller needed the ast, but we are already in the typeinf loop
         # then just return early -- we can't fulfill this request
         # if the client was inlining, then this means we decided not to try to infer this
