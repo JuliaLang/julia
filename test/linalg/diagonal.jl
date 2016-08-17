@@ -36,6 +36,13 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test D[1,1] == d[1]
     @test D[1,2] == 0
 
+    @test issymmetric(D)
+    @test istriu(D)
+    @test istril(D)
+    if elty <: Real
+        @test ishermitian(D)
+    end
+
     debug && println("Simple unary functions")
     for op in (-,)
       @test op(D)==op(DM)
@@ -69,6 +76,10 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             debug && println("Linear solve")
             @test_approx_eq_eps D*v DM*v n*eps(relty)*(elty<:Complex ? 2:1)
             @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(elty<:Complex ? 2:1)
+
+            @test U.'*D ≈ U.'*full(D)
+            @test U'*D ≈ U'*full(D)
+
             if relty != BigFloat
                 @test_approx_eq_eps D\v DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
                 @test_approx_eq_eps D\U DM\U 2n^3*eps(relty)*(elty<:Complex ? 2:1)
@@ -95,98 +106,100 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 b = view(rand(elty,n+1),collect(1:n+1))
                 @test_throws DimensionMismatch A_ldiv_B!(D,b)
             end
-
-            debug && println("Binary operations")
-            d = convert(Vector{elty}, randn(n))
-            D2 = Diagonal(d)
-            DM2= diagm(d)
-            for op in (+, -, *)
-                @test full(op(D, D2)) ≈ op(DM, DM2)
-            end
-            # binary ops with plain numbers
-            a = rand()
-            @test full(a*D) ≈ a*DM
-            @test full(D*a) ≈ DM*a
-            @test full(D/a) ≈ DM/a
-            if relty <: BlasFloat
-                b = rand(elty,n,n)
-                b = sparse(b)
-                @test A_mul_B!(copy(D), copy(b)) ≈ full(D)*full(b)
-                @test At_mul_B!(copy(D), copy(b)) ≈ full(D).'*full(b)
-                @test Ac_mul_B!(copy(D), copy(b)) ≈ full(D)'*full(b)
-            end
-
-            @test U.'*D ≈ U.'*full(D)
-            @test U'*D ≈ U'*full(D)
-
-            #division of two Diagonals
-            @test D/D2 ≈ Diagonal(D.diag./D2.diag)
-            @test D\D2 ≈ Diagonal(D2.diag./D.diag)
-            # test triu/tril
-            @test istriu(D)
-            @test istril(D)
-            @test triu(D,1)  == zeros(D)
-            @test triu(D,0)  == D
-            @test triu(D,-1) == D
-            @test tril(D,1)  == D
-            @test tril(D,-1) == zeros(D)
-            @test tril(D,0)  == D
-            @test_throws ArgumentError tril(D,n+1)
-            @test_throws ArgumentError triu(D,n+1)
-
-            # factorize
-            @test factorize(D) == D
-
-            debug && println("Eigensystem")
-            eigD = eigfact(D)
-            @test Diagonal(eigD[:values]) ≈ D
-            @test eigD[:vectors] == eye(D)
-
-            debug && println("ldiv")
-            v = rand(n + 1)
-            @test_throws DimensionMismatch D\v
-            v = rand(n)
-            @test D\v ≈ DM\v
-            V = rand(n + 1, n)
-            @test_throws DimensionMismatch D\V
-            V = rand(n, n)
-            @test D\V ≈ DM\V
-
-            debug && println("conj and transpose")
-            @test transpose(D) == D
-            if elty <: BlasComplex
-                @test full(conj(D)) ≈ conj(DM)
-                @test ctranspose(D) == conj(D)
-            end
-
-            #logdet
-            if relty <: Real
-                ld=convert(Vector{relty},rand(n))
-                @test logdet(Diagonal(ld)) ≈ logdet(diagm(ld))
-            end
-
-            #similar
-            @test isa(similar(D), Diagonal{elty})
-            @test isa(similar(D, Int), Diagonal{Int})
-            @test isa(similar(D, (3,2)), Matrix{elty})
-            @test isa(similar(D, Int, (3,2)), Matrix{Int})
-
-            #10036
-            @test issymmetric(D2)
-            @test ishermitian(D2)
-            if elty <: Complex
-                dc = d + im*convert(Vector{elty}, ones(n))
-                D3 = Diagonal(dc)
-                @test issymmetric(D3)
-                @test !ishermitian(D3)
-            end
-
-            U, s, V = svd(D)
-            @test (U*Diagonal(s))*V' ≈ D
-            @test svdvals(D) == s
-            @test svdfact(D)[:V] == V
         end
     end
+    debug && println("Binary operations")
+    d = convert(Vector{elty}, randn(n))
+    D2 = Diagonal(d)
+    DM2= diagm(d)
+    for op in (+, -, *)
+        @test full(op(D, D2)) ≈ op(DM, DM2)
+    end
+    # binary ops with plain numbers
+    a = rand()
+    @test full(a*D) ≈ a*DM
+    @test full(D*a) ≈ DM*a
+    @test full(D/a) ≈ DM/a
+    if relty <: BlasFloat
+        b = rand(elty,n,n)
+        b = sparse(b)
+        @test A_mul_B!(copy(D), copy(b)) ≈ full(D)*full(b)
+        @test At_mul_B!(copy(D), copy(b)) ≈ full(D).'*full(b)
+        @test Ac_mul_B!(copy(D), copy(b)) ≈ full(D)'*full(b)
+    end
+
+    #a few missing mults
+    bd = Bidiagonal(D2)
+    @test D*D2.' ≈ full(D)*full(D2).'
+    @test D2*D.' ≈ full(D2)*full(D).'
+    @test D2*D' ≈ full(D2)*full(D)'
+
+    #division of two Diagonals
+    @test D/D2 ≈ Diagonal(D.diag./D2.diag)
+    @test D\D2 ≈ Diagonal(D2.diag./D.diag)
+    # test triu/tril
+    @test istriu(D)
+    @test istril(D)
+    @test triu(D,1)  == zeros(D)
+    @test triu(D,0)  == D
+    @test triu(D,-1) == D
+    @test tril(D,1)  == D
+    @test tril(D,-1) == zeros(D)
+    @test tril(D,0)  == D
+    @test_throws ArgumentError tril(D,n+1)
+    @test_throws ArgumentError triu(D,n+1)
+
+    # factorize
+    @test factorize(D) == D
+
+    debug && println("Eigensystem")
+    eigD = eigfact(D)
+    @test Diagonal(eigD[:values]) ≈ D
+    @test eigD[:vectors] == eye(D)
+
+    debug && println("ldiv")
+    v = rand(n + 1)
+    @test_throws DimensionMismatch D\v
+    v = rand(n)
+    @test D\v ≈ DM\v
+    V = rand(n + 1, n)
+    @test_throws DimensionMismatch D\V
+    V = rand(n, n)
+    @test D\V ≈ DM\V
+
+    debug && println("conj and transpose")
+    @test transpose(D) == D
+    if elty <: BlasComplex
+        @test full(conj(D)) ≈ conj(DM)
+        @test ctranspose(D) == conj(D)
+    end
+
+    #logdet
+    if relty <: Real
+        ld=convert(Vector{relty},rand(n))
+        @test logdet(Diagonal(ld)) ≈ logdet(diagm(ld))
+    end
+
+    #similar
+    @test isa(similar(D), Diagonal{elty})
+    @test isa(similar(D, Int), Diagonal{Int})
+    @test isa(similar(D, (3,2)), Matrix{elty})
+    @test isa(similar(D, Int, (3,2)), Matrix{Int})
+
+    #10036
+    @test issymmetric(D2)
+    @test ishermitian(D2)
+    if elty <: Complex
+        dc = d + im*convert(Vector{elty}, ones(n))
+        D3 = Diagonal(dc)
+        @test issymmetric(D3)
+        @test !ishermitian(D3)
+    end
+
+    U, s, V = svd(D)
+    @test (U*Diagonal(s))*V' ≈ D
+    @test svdvals(D) == s
+    @test svdfact(D)[:V] == V
 end
 
 D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
