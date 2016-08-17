@@ -71,6 +71,7 @@ code_native(io, ambig, (Int, Int))
 # Test that ambiguous cases fail appropriately
 @test precompile(ambig, (UInt8, Int)) == false
 cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
+@test_throws ErrorException which(ambig, (UInt8, Int))
 @test_throws ErrorException code_llvm(io, ambig, (UInt8, Int))
 @test_throws ErrorException code_native(io, ambig, (UInt8, Int))
 
