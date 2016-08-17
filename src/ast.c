@@ -208,7 +208,7 @@ value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
         return fl_ctx->T;
     else if (iscvalue(args[0]) && fl_ctx->jl_sym == cv_type((cvalue_t*)ptr(args[0]))) {
         jl_value_t *v = *(jl_value_t**)cptr(args[0]);
-        if (jl_subtype(v,(jl_value_t*)jl_number_type,1))
+        if (jl_isa(v,(jl_value_t*)jl_number_type))
             return fl_ctx->T;
     }
     return fl_ctx->F;

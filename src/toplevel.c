@@ -690,29 +690,6 @@ JL_DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 
 extern int jl_boot_file_loaded;
 
-static int type_contains(jl_value_t *ty, jl_value_t *x);
-static int svec_contains(jl_svec_t *svec, jl_value_t *x)
-{
-    assert(jl_is_svec(svec));
-    size_t i, l=jl_svec_len(svec);
-    for(i=0; i < l; i++) {
-        jl_value_t *e = jl_svecref(svec, i);
-        if (e==x || type_contains(e, x))
-            return 1;
-    }
-    return 0;
-}
-
-static int type_contains(jl_value_t *ty, jl_value_t *x)
-{
-    if (ty == x) return 1;
-    if (jl_is_uniontype(ty))
-        return svec_contains((jl_svec_t*)jl_fieldref(ty,0), x);
-    if (jl_is_datatype(ty))
-        return svec_contains(((jl_datatype_t*)ty)->parameters, x);
-    return 0;
-}
-
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
 void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
@@ -780,21 +757,17 @@ static jl_datatype_t *first_arg_datatype(jl_value_t *a, int got_tuple1)
     else if (jl_is_typevar(a)) {
         return first_arg_datatype(((jl_tvar_t*)a)->ub, got_tuple1);
     }
-    else if (jl_is_typector(a)) {
-        return first_arg_datatype(((jl_typector_t*)a)->body, got_tuple1);
+    else if (jl_is_unionall(a)) {
+        return first_arg_datatype(((jl_unionall_t*)a)->body, got_tuple1);
     }
     else if (jl_is_uniontype(a)) {
-        jl_svec_t *ts = ((jl_uniontype_t*)a)->types;
-        if (jl_svec_len(ts) == 0) return NULL;
-        jl_datatype_t *dt = first_arg_datatype(jl_svecref(ts,0), got_tuple1);
-        if (dt == NULL) return NULL;
-        int i;
-        for(i=1; i < jl_svec_len(ts); i++) {
-            jl_datatype_t *ti = first_arg_datatype(jl_svecref(ts,i), got_tuple1);
-            if (ti==NULL || ti->name != dt->name)
-                return NULL;
-        }
-        return dt;
+        jl_uniontype_t *u = (jl_uniontype_t*)a;
+        jl_datatype_t *d1 = first_arg_datatype(u->a, got_tuple1);
+        if (d1 == NULL) return NULL;
+        jl_datatype_t *d2 = first_arg_datatype(u->b, got_tuple1);
+        if (d2 == NULL || d1->name != d2->name)
+            return NULL;
+        return d1;
     }
     return NULL;
 }
@@ -844,7 +817,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     mt = ftype->name->mt;
     name = mt->name;
 
-    if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type, 0))
+    if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
         jl_error("cannot add methods to a builtin function");
 
     m = jl_new_method(f, name, argtype, nargs, isva, tvars, isstaged == jl_true);
@@ -877,7 +850,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         jl_value_t *tv = jl_svecref(tvars,i);
         if (!jl_is_typevar(tv))
             jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
-        if (!ishidden && !type_contains((jl_value_t*)argtype, tv)) {
+        if (!ishidden && !jl_has_typevar((jl_value_t*)argtype, (jl_tvar_t*)tv)) {
             jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
                       jl_symbol_name(((jl_tvar_t*)tv)->name),
                       jl_symbol_name(name));

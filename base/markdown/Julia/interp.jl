@@ -41,11 +41,8 @@ toexpr(x) = x
 
 toexpr(xs::Vector{Any}) = Expr(:call, GlobalRef(Base,:vector_any), map(toexpr, xs)...)
 
-function deftoexpr(T)
+for T in Any[MD, Paragraph, Header, Link, Bold, Italic]
     @eval function toexpr(md::$T)
         Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), fieldnames(T))...))
     end
 end
-
-map(deftoexpr, [MD, Paragraph, Header,
-                Link, Bold, Italic])

@@ -31,7 +31,8 @@
 #end
 
 #type Union <: Type
-#    types::Tuple
+#    a
+#    b
 #end
 
 #type TypeVar
@@ -40,8 +41,8 @@
 #    ub::Type
 #end
 
-#type TypeConstructor
-#    parameters::Tuple
+#type UnionAll
+#    var::TypeVar
 #    body
 #end
 
@@ -120,7 +121,7 @@ import Core.Intrinsics.ccall
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
+    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
@@ -257,18 +258,12 @@ end
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
 TypeVar(n::Symbol, ub::ANY) =
-    (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, Any, ub) :
-     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub::Type))
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
-    (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, lb::Type, ub) :
-     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb::Type, ub::Type))
-TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
-    ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
 
-TypeConstructor(p::ANY, t::ANY) =
-    ccall(:jl_new_type_constructor, Ref{TypeConstructor}, (Any, Any), p::SimpleVector, t::Type)
+UnionAll(v::TypeVar, t::ANY) =
+    ccall(:jl_new_unionall_type, Ref{UnionAll}, (Any, Any), v, t)
 
 Void() = nothing
 
