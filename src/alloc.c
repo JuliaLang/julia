@@ -264,6 +264,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
+
 extern jl_value_t *jl_builtin_getfield;
 jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
 {
@@ -280,20 +281,37 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
             e->head == boundscheck_sym || e->head == simdloop_sym) {
         }
         else {
-            if (e->head == call_sym && jl_expr_nargs(e) == 3 && jl_is_quotenode(jl_exprarg(e,2)) &&
+            if (e->head == call_sym && jl_expr_nargs(e) == 3 && jl_is_quotenode(jl_exprarg(e, 2)) &&
                 lam->def->module != NULL) {
                 // replace getfield(module_expr, :sym) with GlobalRef
-                jl_value_t *s = jl_fieldref(jl_exprarg(e,2),0);
-                jl_value_t *fe = jl_exprarg(e,0);
+                jl_value_t *s = jl_fieldref(jl_exprarg(e, 2), 0);
+                jl_value_t *fe = jl_exprarg(e, 0);
                 if (jl_is_symbol(s) && jl_is_globalref(fe)) {
-                    jl_value_t *f = jl_static_eval(fe, NULL, lam->def->module, lam, 0, 0);
+                    jl_binding_t *b = jl_get_binding(jl_globalref_mod(fe), jl_globalref_name(fe));
+                    jl_value_t *f = NULL;
+                    if (b && b->constp) {
+                        f = b->value;
+                    }
                     if (f == jl_builtin_getfield) {
-                        jl_value_t *me = jl_exprarg(e,1);
-                        if (jl_is_globalref(me) ||
-                            (jl_is_symbol(me) && jl_binding_resolved_p(lam->def->module, (jl_sym_t*)me))) {
-                            jl_value_t *m = jl_static_eval(me, NULL, lam->def->module, lam, 0, 0);
-                            if (m && jl_is_module(m))
-                                return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
+                        jl_value_t *me = jl_exprarg(e, 1);
+                        jl_module_t *me_mod = NULL;
+                        jl_sym_t *me_sym = NULL;
+                        if (jl_is_globalref(me)) {
+                            me_mod = jl_globalref_mod(me);
+                            me_sym = jl_globalref_name(me);
+                        }
+                        else if (jl_is_symbol(me) && jl_binding_resolved_p(lam->def->module, (jl_sym_t*)me)) {
+                            me_mod = lam->def->module;
+                            me_sym = (jl_sym_t*)me;
+                        }
+                        if (me_mod && me_sym) {
+                            jl_binding_t *b = jl_get_binding(me_mod, me_sym);
+                            if (b && b->constp) {
+                                jl_value_t *m = b->value;
+                                if (m && jl_is_module(m)) {
+                                    return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
+                                }
+                            }
                         }
                     }
                 }
@@ -303,7 +321,7 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
                 e->head == bitstype_sym || e->head == module_sym)
                 i++;
             for(; i < jl_array_len(e->args); i++) {
-                jl_exprargset(e, i, jl_resolve_globals(jl_exprarg(e,i), lam));
+                jl_exprargset(e, i, jl_resolve_globals(jl_exprarg(e, i), lam));
             }
         }
     }
