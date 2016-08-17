@@ -352,6 +352,13 @@ end
 
 # low-level method lookup functions used by the compiler
 
+unionlen(x::Union) = unionlen(x.a) + unionlen(x.b)
+unionlen(x::ANY) = 1
+
+_uniontypes(x::Union, ts) = (_uniontypes(x.a,ts); _uniontypes(x.b,ts); ts)
+_uniontypes(x::ANY, ts) = (push!(ts, x); ts)
+uniontypes(x::ANY) = _uniontypes(x, Any[])
+
 function _methods(f::ANY, t::ANY, lim::Int, world::UInt)
     ft = isa(f,Type) ? Type{f} : typeof(f)
     tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
@@ -366,7 +373,7 @@ function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, ma
     nu = 1
     for ti in tp
         if isa(ti, Union)
-            nu *= length((ti::Union).types)
+            nu *= unionlen(ti::Union)
         end
     end
     if 1 < nu <= 64
@@ -385,7 +392,7 @@ function _methods_by_ftype(t::Array, i, lim::Integer, matching::Array{Any,1}, wo
     else
         ti = t[i]
         if isa(ti, Union)
-            for ty in (ti::Union).types
+            for ty in uniontypes(ti::Union)
                 t[i] = ty
                 if _methods_by_ftype(t, i - 1, lim, matching, world, min, max) === false
                     t[i] = ti
