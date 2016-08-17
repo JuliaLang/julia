@@ -339,26 +339,44 @@ uncompressed_ast(l::LambdaInfo) =
     isa(l.code,Array{UInt8,1}) ? ccall(:jl_uncompress_ast, Array{Any,1}, (Any,Any), l, l.code) : l.code
 
 # Printing code representations in IR and assembly
-function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("native reflection cannot be used from generated functions")
+function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
-    t = tt_cons(Core.Typeof(f), to_tuple_type(t))
-    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, wrapper, native)
+    # get the LambdaInfo for the method match
+    meth = which(f, t)
+    t = to_tuple_type(t)
+    ft = isa(f, Type) ? Type{f} : typeof(f)
+    tt = Tuple{ft, t.parameters...}
+    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
+                      tt, meth.sig, meth.tvars)::SimpleVector
+    li = func_for_method_checked(meth, tt)
+    # try to infer it
+    (linfo, ty, inf) = Core.Inference.typeinf(li, ti, env, true)
+    # get the code for it
+    return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module)
+end
 
+function _dump_function(linfo::LambdaInfo, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
+    if native
+        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool), linfo, wrapper)
+    else
+        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Void}, (Any, Bool), linfo, wrapper)
+    end
     if llvmf == C_NULL
-        error("did not find a unique method for the specified argument types")
+        error("could not compile the specified method")
     end
 
     if native
-        str = ccall(:jl_dump_function_asm, Ref{String}, (Ptr{Void},Cint), llvmf, 0)
+        str = ccall(:jl_dump_function_asm, Ref{String}, (Ptr{Void}, Cint), llvmf, 0)
     else
         str = ccall(:jl_dump_function_ir, Ref{String},
                     (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
     end
 
-    isleaftype(t) || (str = "# WARNING: This code may not match what actually runs.\n" * str)
+    # TODO: use jl_is_cacheable_sig instead of isleaftype
+    isleaftype(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
     return str
 end
 
@@ -450,11 +468,16 @@ function which(f::ANY, t::ANY)
         return first(ms)
     else
         ft = isa(f,Type) ? Type{f} : typeof(f)
-        m = ccall(:jl_gf_invoke_lookup, Any, (Any,), Tuple{ft, t.parameters...})
+        tt = Tuple{ft, t.parameters...}
+        m = ccall(:jl_gf_invoke_lookup, Any, (Any,), tt)
         if m === nothing
             error("no method found for the specified argument types")
         end
-        return m.func::Method
+        meth = m.func::Method
+        if ccall(:jl_has_call_ambiguities, Int32, (Any, Any), tt, meth) != 0
+            error("method match is ambiguous for the specified argument types")
+        end
+        return meth
     end
 end
 

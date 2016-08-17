@@ -1042,8 +1042,134 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 extern "C" JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
 
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
+void *jl_get_llvmf_defn(jl_lambda_info_t *linfo, bool getwrapper)
 {
+    if (linfo->def && linfo->def->lambda_template->code == jl_nothing) {
+        // not a generic function
+        return NULL;
+    }
+
+    jl_lambda_info_t *temp = NULL;
+    JL_GC_PUSH1(&temp);
+    if (linfo->code == jl_nothing && linfo->def) {
+        // re-infer if we've deleted the code
+        // first copy the linfo to avoid corrupting it and
+        // confusing the compiler about the
+        // validity of the code it already generated
+        temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
+        jl_type_infer(temp, 0);
+        if (temp->code == jl_nothing || temp->inInference) {
+            // something went wrong: abort!
+            JL_GC_POP();
+            return NULL;
+        }
+    }
+
+    // Backup the info for the nested compile
+    JL_LOCK(&codegen_lock);
+    BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    DebugLoc olddl = builder.getCurrentDebugLocation();
+    bool last_n_c = nested_compile;
+    nested_compile = true;
+    // emit this function into a new module
+    jl_llvm_functions_t declarations;
+    std::unique_ptr<Module> m;
+    JL_TRY {
+         m = emit_function(temp ? temp : linfo, &declarations);
+    }
+    JL_CATCH {
+        // something failed!
+        nested_compile = last_n_c;
+        if (old != NULL) {
+            builder.SetInsertPoint(old);
+            builder.SetCurrentDebugLocation(olddl);
+        }
+        JL_UNLOCK(&codegen_lock); // Might GC
+        jl_rethrow_with_add("error compiling %s", jl_symbol_name(linfo->def ? linfo->def->name : anonymous_sym));
+    }
+    // Restore the previous compile context
+    if (old != NULL) {
+        builder.SetInsertPoint(old);
+        builder.SetCurrentDebugLocation(olddl);
+    }
+    nested_compile = last_n_c;
+
+    jl_globalPM->run(*m.get());
+    Function *f = (llvm::Function*)declarations.functionObject;
+    Function *specf = (llvm::Function*)declarations.specFunctionObject;
+    // swap declarations for definitions and destroy declarations
+    if (specf) {
+        Function *tempf = cast<Function>(m->getNamedValue(specf->getName()));
+        delete specf;
+        specf = tempf;
+    }
+    if (f) {
+        Function *tempf = cast<Function>(m->getNamedValue(f->getName()));
+        delete f;
+        f = tempf;
+    }
+    // clone the name from the runtime linfo, if it exists
+    // to give the user a (false) sense of stability
+    Function *specf_decl = (Function*)linfo->functionObjectsDecls.specFunctionObject;
+    if (specf_decl) {
+        specf->setName(specf_decl->getName());
+    }
+    Function *f_decl = (Function*)linfo->functionObjectsDecls.functionObject;
+    if (f_decl) {
+        f->setName(f_decl->getName());
+    }
+    m.release(); // the return object `llvmf` will be the owning pointer
+    JL_UNLOCK(&codegen_lock); // Might GC
+    JL_GC_POP();
+    if (getwrapper || !specf)
+        return f;
+    else
+        return specf;
+}
+
+
+extern "C" JL_DLLEXPORT
+void *jl_get_llvmf_decl(jl_lambda_info_t *linfo, bool getwrapper)
+{
+    if (linfo->def && linfo->def->lambda_template->code == jl_nothing) {
+        // not a generic function
+        return NULL;
+    }
+
+    // compile this normally
+    linfo = jl_compile_for_dispatch(linfo);
+
+    if (linfo->jlcall_api == 2 && linfo->def) {
+        // normally we don't generate native code for these functions, so need an exception here
+        // This leaks a bit of memory to cache native code that we'll never actually need
+        if (linfo->functionObjectsDecls.functionObject == NULL) {
+            jl_lambda_info_t *temp = NULL;
+            JL_GC_PUSH1(&temp);
+            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
+            jl_type_infer(temp, 0);
+            temp->jlcall_api = 0;
+            temp->constval = jl_nothing;
+            if (temp->code == jl_nothing || temp->inInference) {
+                JL_GC_POP();
+                return NULL;
+            }
+            jl_compile_linfo(temp);
+            linfo->functionObjectsDecls = temp->functionObjectsDecls;
+            JL_GC_POP();
+        }
+        jl_set_lambda_code_null(linfo);
+    }
+
+    if (getwrapper || !linfo->functionObjectsDecls.specFunctionObject)
+        return linfo->functionObjectsDecls.functionObject;
+    else
+        return linfo->functionObjectsDecls.specFunctionObject;
+}
+
+
+extern "C" JL_DLLEXPORT
+void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
+{ // DEPRECATED
     jl_lambda_info_t *linfo = NULL, *temp = NULL;
     JL_GC_PUSH3(&linfo, &temp, &tt);
     if (tt != NULL) {
@@ -1062,91 +1188,15 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         JL_GC_POP();
         return NULL;
     }
-    if (linfo->def->lambda_template->code == jl_nothing) {
-        // not a generic function
-        JL_GC_POP();
-        return NULL;
-    }
-
-    // make sure to compile this normally first,
-    // since `emit_function` doesn't handle recursive compilation correctly
-    linfo = jl_compile_for_dispatch(linfo);
-
-    if (!getdeclarations) {
-        if (linfo->code == jl_nothing) {
-            // re-infer if we've deleted the code
-            // first copy the linfo to avoid corrupting it and
-            // confusing the compiler about the
-            // validity of the code it already generated
-            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
-            jl_type_infer(temp, 0);
-            if (temp->code == jl_nothing || temp->inInference) {
-                JL_GC_POP();
-                return NULL;
-            }
-        }
-        // emit this function into a new module
-        Function *f, *specf;
-        jl_llvm_functions_t declarations;
-        std::unique_ptr<Module> m = emit_function(temp ? temp : linfo, &declarations);
-        jl_globalPM->run(*m.get());
-        f = (llvm::Function*)declarations.functionObject;
-        specf = (llvm::Function*)declarations.specFunctionObject;
-        // swap declarations for definitions and destroy declarations
-        if (specf) {
-            Function *tempf = cast<Function>(m->getNamedValue(specf->getName()));
-            delete specf;
-            specf = tempf;
-        }
-        if (f) {
-            Function *tempf = cast<Function>(m->getNamedValue(f->getName()));
-            delete f;
-            f = tempf;
-        }
-        Function *specf_decl = (Function*)linfo->functionObjectsDecls.specFunctionObject;
-        if (specf_decl) {
-            specf->setName(specf_decl->getName());
-        }
-        Function *f_decl = (Function*)linfo->functionObjectsDecls.functionObject;
-        if (f_decl) {
-            f->setName(f_decl->getName());
-        }
-        m.release(); // the return object `llvmf` will be the owning pointer
-        JL_GC_POP();
-        if (getwrapper || !specf) {
-            return f;
-        }
-        else {
-            return specf;
-        }
-    }
-    if (linfo->jlcall_api == 2) {
-        // normally we don't generate native code for these functions, so need an exception here
-        // This leaks a bit of memory to cache the native code that we'll never actually need
-        if (linfo->functionObjectsDecls.functionObject == NULL) {
-            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
-            jl_type_infer(temp, 0);
-            temp->jlcall_api = 0;
-            temp->constval = jl_nothing;
-            if (temp->code == jl_nothing || temp->inInference) {
-                JL_GC_POP();
-                return NULL;
-            }
-            jl_compile_linfo(temp);
-            linfo->functionObjectsDecls = temp->functionObjectsDecls;
-        }
-        jl_set_lambda_code_null(linfo);
-    }
-    Function *llvmf;
-    if (!getwrapper && linfo->functionObjectsDecls.specFunctionObject != NULL) {
-        llvmf = (Function*)linfo->functionObjectsDecls.specFunctionObject;
-    }
-    else {
-        llvmf = (Function*)linfo->functionObjectsDecls.functionObject;
-    }
+    void *f;
+    if (getdeclarations)
+        f = jl_get_llvmf_decl(linfo, getwrapper);
+    else
+        f = jl_get_llvmf_defn(linfo, getwrapper);
     JL_GC_POP();
-    return llvmf;
+    return f;
 }
+
 
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
@@ -1160,6 +1210,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
     if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
         jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
+    JL_LOCK(&codegen_lock); // Might GC
     if (!llvmf->getParent()) {
         // print the function declaration as-is
         llvmf->print(stream);
@@ -1203,6 +1254,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
         }
         delete m;
     }
+    JL_UNLOCK(&codegen_lock); // Might GC
 
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
