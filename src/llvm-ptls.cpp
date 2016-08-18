@@ -147,6 +147,7 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
         Value *tls = nullptr;
         assert(0 && "Cannot emit thread pointer for this architecture.");
 #  endif
+        (void)T_pint8;
         ptlsStates->replaceAllUsesWith(tls);
         ptlsStates->eraseFromParent();
     }
