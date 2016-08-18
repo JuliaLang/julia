@@ -173,6 +173,7 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 # any & all
 
+@test any([]) == false
 @test any(Bool[]) == false
 @test any([true]) == true
 @test any([false, false]) == false
@@ -183,6 +184,7 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test any([true, false, true]) == true
 @test any([false, false, false]) == false
 
+@test all([]) == true
 @test all(Bool[]) == true
 @test all([true]) == true
 @test all([false, false]) == false
@@ -193,11 +195,13 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test all([true, false, true]) == false
 @test all([false, false, false]) == false
 
+@test any(x->x>0, []) == false
 @test any(x->x>0, Int[]) == false
 @test any(x->x>0, [-3]) == false
 @test any(x->x>0, [4]) == true
 @test any(x->x>0, [-3, 4, 5]) == true
 
+@test all(x->x>0, []) == true
 @test all(x->x>0, Int[]) == true
 @test all(x->x>0, [-3]) == false
 @test all(x->x>0, [4]) == true
