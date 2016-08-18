@@ -1601,6 +1601,34 @@ JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
     // put a breakpoint in your debugger here
 }
 
+// check whether a compile-time option is defined, returning a boolean value
+JL_DLLEXPORT int8_t jl_get_option(jl_value_t *v)
+{
+    // fragile set of macros to detect whether an option is defined.
+    // only works for non-valued definitions, ie. expanding to nothing if defined
+    #define JL_DEFINED(option) JL_DEFINED_##option
+    #define JL_DEFINED_ 1
+
+    #define JL_HANDLE_OPTION(input, option) \
+    const int8_t JL_DEFINED_##option = 0;   \
+    if (strcmp(input, #option) == 0) {      \
+        return JL_DEFINED(option);          \
+    }
+
+    if (!jl_is_symbol(v))
+        jl_error("option should be a symbol");
+    char *key = jl_symbol_name((jl_sym_t*) v);
+
+    // dummy options for testing purposes
+    #define ALWAYS_DEFINED
+    JL_HANDLE_OPTION(key, ALWAYS_DEFINED);
+    JL_HANDLE_OPTION(key, NEVER_DEFINED);
+
+    JL_HANDLE_OPTION(key, MEMDEBUG);
+
+    jl_errorf("unknown option '%s'", key);
+}
+
 #ifdef __cplusplus
 }
 #endif
