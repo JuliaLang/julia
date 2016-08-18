@@ -3,6 +3,9 @@
 #ifndef HASHING_H
 #define HASHING_H
 
+#include "utils.h"
+#include "dtypes.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -22,10 +25,17 @@ JL_DLLEXPORT uint32_t memhash32(const char *buf, size_t n);
 JL_DLLEXPORT uint32_t memhash32_seed(const char *buf, size_t n, uint32_t seed);
 
 #ifdef _P64
-#define bitmix(a,b) int64hash((a)^bswap_64(b))
+STATIC_INLINE uint64_t bitmix(uint64_t a, uint64_t b)
+{
+    return int64hash(a^bswap_64(b));
+}
 #else
-#define bitmix(a,b) int64to32hash((((uint64_t)a)<<32)|((uint64_t)b))
+STATIC_INLINE uint32_t bitmix(uint32_t a, uint32_t b)
+{
+    return int64to32hash((((uint64_t)a) << 32) | (uint64_t)b);
+}
 #endif
+#define bitmix(a, b) (bitmix)((uintptr_t)(a), (uintptr_t)(b))
 
 #ifdef __cplusplus
 }
