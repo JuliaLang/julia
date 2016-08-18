@@ -7,6 +7,11 @@ let d = [0x61,0x62,0x63,0x21]
 end
 @test String("abc!") == "abc!"
 
+@test isempty(string())
+@test eltype(GenericString) == Char
+@test start("abc") == 1
+@test cmp("ab","abc") == -1
+
 # {starts,ends}with
 @test startswith("abcd", 'a')
 @test startswith("abcd", "a")
