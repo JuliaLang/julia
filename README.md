@@ -242,13 +242,13 @@ On *FreeBSD Release 11.0*, install the gfortran, git, cmake, and gmake packages/
 
 You must use the `gmake` command on FreeBSD instead of `make`.
 
-Note that Julia is community-supported and we have little control over our upstream dependencies, you may still run into issues with its dependencies and YMMV. Current known issues includes:
+Note that Julia is community-supported and we have little control over our upstream dependencies, you may still run into issues with dependencies and YMMV. Current known issues include:
 
- - The x86 arch doesn't support threading due to lack of compiler runtime library support (set JULIA_THREADS=0).
+ - The x86 arch doesn't support threading due to lack of compiler runtime library support (set `JULIA_THREADS=0`).
  - libunwind needs a small patch to its tests to compile.
  - OpenBLAS patches in pkg haven't been upstreamed.
- - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to workaround this (upstream bug submitted to FreeBSD pkg maintainers).
- - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=/usr/local/lib` and `CPPFLAGS=/usr/local/include` to your environment or Make.user file to build successfully.
+ - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to work around this (upstream bug submitted to FreeBSD pkg maintainers).
+ - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=/usr/local/lib` and `CPPFLAGS=/usr/local/include` to your environment or `Make.user` file to build successfully.
 
 
 ### Windows
