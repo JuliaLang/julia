@@ -21,17 +21,15 @@
 extern "C" {
 #endif
 
-// The empty extension at the beginning and the end is a trick to change
-// the order of the loop.
 #if defined(__APPLE__)
-static char const *const extensions[] = { "", ".dylib", "" };
+static char const *const extensions[] = { "", ".dylib" };
 #elif defined(_OS_WINDOWS_)
-static char const *const extensions[] = { "", ".dll", "" };
+static char const *const extensions[] = { "", ".dll" };
 extern int needsSymRefreshModuleList;
 #else
-static char const *const extensions[] = { "", ".so", "" };
+static char const *const extensions[] = { "", ".so" };
 #endif
-#define N_EXTENSIONS (sizeof(extensions) / sizeof(char*) - 1)
+#define N_EXTENSIONS (sizeof(extensions) / sizeof(char*))
 
 static int endswith_extension(const char *path)
 {
@@ -118,11 +116,10 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     int i;
     uv_stat_t stbuf;
     void *handle;
-    // This determines if we try the no-extension name first or last
-    // We want to make sure the last one we try has higher chance of being
-    // a real file since the error reported will otherwise be a unhelpful
-    // file not found error due to the extra or missing extension name.
-    int hasext = endswith_extension(modname);
+    int abspath;
+    // number of extensions to try — if modname already ends with the
+    // standard extension, then we don't try adding additional extensions
+    int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
 
     /*
       this branch returns handle of libjulia
@@ -139,26 +136,15 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
 #endif
         goto done;
     }
-    /*
-      this branch shortcuts absolute paths
-    */
-#ifdef _OS_WINDOWS_
-    else if (modname[1] == ':') {
-#else
-    else if (modname[0] == '/') {
-#endif
-        handle = jl_dlopen(modname, flags);
-        if (handle)
-            goto done;
-        // bail out and show the error if file actually exists
-        if (jl_stat(modname, (char*)&stbuf) == 0)
-            goto notfound;
-    }
+
+    abspath = isabspath(modname);
+
     /*
       this branch permutes all base paths in DL_LOAD_PATH with all extensions
-      note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH)
+      note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH),
+            and also skip for absolute paths
     */
-    else if (jl_base_module != NULL) {
+    if (!abspath && jl_base_module != NULL) {
         jl_array_t *DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
         if (DL_LOAD_PATH != NULL) {
             size_t j;
@@ -167,9 +153,8 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
                 size_t len = strlen(dl_path);
                 if (len == 0)
                     continue;
-                for (i=0; i < N_EXTENSIONS; i++) {
-                    // Do the no-ext one last if hasext == 1
-                    const char *ext = extensions[i + hasext];
+                for (i=0; i < n_extensions; i++) {
+                    const char *ext = extensions[i];
                     path[0] = '\0';
                     if (dl_path[len-1] == PATHSEPSTRING[0])
                         snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
@@ -187,9 +172,8 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     }
 
     // now fall back and look in default library paths, for all extensions
-    for(i=0; i < N_EXTENSIONS; i++) {
-        // Do the no-ext one last if hasext == 1
-        const char *ext = extensions[i + hasext];
+    for(i=0; i < n_extensions; i++) {
+        const char *ext = extensions[i];
         path[0] = '\0';
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         handle = jl_dlopen(path, flags);
@@ -199,9 +183,11 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
 
 #if defined(__linux__) || defined(__FreeBSD__)
     // check map of versioned libs from "libX" to full soname "libX.so.ver"
-    handle = jl_dlopen_soname(modname, strlen(modname), flags);
-    if (handle)
-        goto done;
+    if (!abspath && n_extensions > 1) { // soname map only works for libX
+        handle = jl_dlopen_soname(modname, strlen(modname), flags);
+        if (handle)
+            goto done;
+    }
 #endif
 
 notfound:
