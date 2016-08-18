@@ -2871,7 +2871,7 @@ f(x) = yt(x)
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
                                (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
-                          `(block
+                          `(toplevel-butlast
                             ,@top-stmts
                             ,@sp-inits
                             (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
