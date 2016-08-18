@@ -1383,7 +1383,7 @@ JL_DLLEXPORT jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types)
     return li ? li : jl_nothing;
 }
 
-int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m)
+JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m)
 {
     if (m->ambig == jl_nothing) return 0;
     for (size_t i = 0; i < jl_array_len(m->ambig); i++) {
