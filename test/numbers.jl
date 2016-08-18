@@ -2138,7 +2138,7 @@ rationalize(nextfloat(0.0)) == 0//1
 @test 2.0f0^(1//3) == 2.0f0^(1.0f0/3)
 @test 2^(1//3) == 2^(1/3)
 # no loss of precision for rational powers (issue #18114)
-@test_approx_eq_eps BigFloat(2)^(BigFloat(1)/BigFloat(3)) BigFloat(2)^(1//3) 1e-20
+@test BigFloat(2)^(BigFloat(1)/BigFloat(3)) == BigFloat(2)^(1//3)
 
 # large shift amounts
 @test Int32(-1)>>31 == -1
