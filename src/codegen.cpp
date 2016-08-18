@@ -1499,10 +1499,6 @@ extern "C" void jl_write_malloc_log(void)
     write_log_data(mallocData, ".mem");
 }
 
-// --- code gen for intrinsic functions ---
-
-#include "intrinsics.cpp"
-
 // --- constant determination ---
 
 static void show_source_loc(JL_STREAM *out, jl_codectx_t *ctx)
@@ -1522,16 +1518,14 @@ static void cg_bdw(jl_binding_t *b, jl_codectx_t *ctx)
     }
 }
 
+
 // try to statically evaluate, NULL if not possible
-extern "C"
-jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
-                           jl_lambda_info_t *linfo, int sparams, int allow_alloc)
+static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, int sparams=true, int allow_alloc=true)
 {
-    jl_codectx_t *ctx = (jl_codectx_t*)ctx_;
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
-        if (jl_is_const(mod, sym))
-            return jl_get_global(mod, sym);
+        if (jl_is_const(ctx->module, sym))
+            return jl_get_global(ctx->module, sym);
         return NULL;
     }
     if (jl_is_slot(ex))
@@ -1539,36 +1533,34 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
     if (jl_is_ssavalue(ex)) {
         ssize_t idx = ((jl_ssavalue_t*)ex)->id;
         assert(idx >= 0);
-        if (ctx != NULL && ctx->ssavalue_assigned.at(idx)) {
+        if (ctx->ssavalue_assigned.at(idx)) {
             return ctx->SAvalues.at(idx).constant;
         }
         return NULL;
     }
     if (jl_is_quotenode(ex))
-        return jl_fieldref(ex,0);
+        return jl_fieldref(ex, 0);
     if (jl_is_lambda_info(ex))
         return NULL;
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
     if (jl_is_globalref(ex)) {
-        s = (jl_sym_t*)jl_globalref_name(ex);
-        if (s && jl_is_symbol(s)) {
-            jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
-            if (b && b->constp) {
-                if (b->deprecated) cg_bdw(b, ctx);
-                return b->value;
-            }
+        s = jl_globalref_name(ex);
+        jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
+        if (b && b->constp) {
+            if (b->deprecated) cg_bdw(b, ctx);
+            return b->value;
         }
         return NULL;
     }
     if (jl_is_expr(ex)) {
         jl_expr_t *e = (jl_expr_t*)ex;
         if (e->head == call_sym) {
-            jl_value_t *f = jl_static_eval(jl_exprarg(e,0),ctx,mod,linfo,sparams,allow_alloc);
+            jl_value_t *f = static_eval(jl_exprarg(e, 0), ctx, sparams, allow_alloc);
             if (f) {
                 if (jl_array_dim0(e->args) == 3 && f==jl_builtin_getfield) {
-                    m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,linfo,sparams,allow_alloc);
-                    s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,linfo,sparams,allow_alloc);
+                    m = (jl_module_t*)static_eval(jl_exprarg(e, 1), ctx, sparams, allow_alloc);
+                    s = (jl_sym_t*)static_eval(jl_exprarg(e, 2), ctx, sparams, allow_alloc);
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
                         if (b && b->constp) {
@@ -1586,7 +1578,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                     jl_value_t **v;
                     JL_GC_PUSHARGS(v, n);
                     for (i = 0; i < n; i++) {
-                        v[i] = jl_static_eval(jl_exprarg(e,i+1),ctx,mod,linfo,sparams,allow_alloc);
+                        v[i] = static_eval(jl_exprarg(e, i+1), ctx, sparams, allow_alloc);
                         if (v[i] == NULL) {
                             JL_GC_POP();
                             return NULL;
@@ -1608,9 +1600,9 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
             }
         }
         else if (e->head == static_parameter_sym) {
-            size_t idx = jl_unbox_long(jl_exprarg(e,0));
-            if (linfo && idx <= jl_svec_len(linfo->sparam_vals)) {
-                jl_value_t *e = jl_svecref(linfo->sparam_vals, idx - 1);
+            size_t idx = jl_unbox_long(jl_exprarg(e, 0));
+            if (idx <= jl_svec_len(ctx->linfo->sparam_vals)) {
+                jl_value_t *e = jl_svecref(ctx->linfo->sparam_vals, idx - 1);
                 if (jl_is_typevar(e))
                     return NULL;
                 return e;
@@ -1621,21 +1613,19 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
     return ex;
 }
 
-static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
-                               bool allow_alloc)
-{
-    return jl_static_eval(ex, ctx, ctx->module, ctx->linfo, sparams, allow_alloc);
-}
-
 static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
 {
-    return static_eval(ex,ctx,sparams) != NULL;
+    return static_eval(ex, ctx, sparams) != NULL;
 }
 
 static bool slot_eq(jl_value_t *e, int sl)
 {
     return jl_is_slot(e) && jl_slot_number(e)-1 == sl;
 }
+
+// --- code gen for intrinsic functions ---
+
+#include "intrinsics.cpp"
 
 // --- find volatile variables ---
 
