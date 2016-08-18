@@ -514,3 +514,15 @@ if is_windows()
     end
 
 end
+
+"""
+    crc32c(data, crc::UInt32=0x00000000)
+
+Compute the CRC-32c checksum of the given `data`, which can be
+an `Array{UInt8}` or a `String`.  Optionally, you can pass
+a starting `crc` integer to be mixed in with the checksum.
+(Technically, a little-endian checksum is computed.)
+"""
+function crc32c end
+crc32c(a::Array{UInt8}, crc::UInt32=0x00000000) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
+crc32c(s::String, crc::UInt32=0x00000000) = crc32c(s.data, crc)
