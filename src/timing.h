@@ -46,7 +46,8 @@ static inline uint64_t rdtscp(void)
         X(AST_COMPRESS),          \
         X(AST_UNCOMPRESS),        \
         X(SYSIMG_LOAD),           \
-        X(SYSIMG_DUMP),
+        X(SYSIMG_DUMP),           \
+        X(NATIVE_DUMP),
 
 enum jl_timing_owners {
 #define X(name) JL_TIMING_ ## name

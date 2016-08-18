@@ -439,7 +439,13 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
             }
         )
 {
-    addOptimizationPasses(&PM);
+    if (!jl_generating_output()) {
+        addOptimizationPasses(&PM);
+    }
+    else {
+        PM.add(createLowerGCFramePass(tbaa_gcframe));
+        PM.add(createLowerPTLSPass(imaging_mode, tbaa_const));
+    }
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 
@@ -1038,6 +1044,7 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
 extern "C"
 void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len)
 {
+    JL_TIMING(NATIVE_DUMP);
     assert(imaging_mode);
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
