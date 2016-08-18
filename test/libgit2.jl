@@ -76,10 +76,60 @@ const LIBGIT2_MIN_VER = v"0.23.0"
     @test sig3.email == sig.email
 #end
 
+#@testset "URL parsing" begin
+    # HTTPS URL
+    m = match(LibGit2.URL_REGEX, "https://user:pass@server.com:80/org/project.git")
+    @test m[:scheme] == "https"
+    @test m[:user] == "user"
+    @test m[:password] == "pass"
+    @test m[:host] == "server.com"
+    @test m[:port] == "80"
+    @test m[:path] == "/org/project.git"
+
+    # SSH URL
+    m = match(LibGit2.URL_REGEX, "ssh://user:pass@server:22/project.git")
+    @test m[:scheme] == "ssh"
+    @test m[:user] == "user"
+    @test m[:password] == "pass"
+    @test m[:host] == "server"
+    @test m[:port] == "22"
+    @test m[:path] == "/project.git"
+
+    # SSH URL using scp-like syntax
+    m = match(LibGit2.URL_REGEX, "user@server:project.git")
+    @test m[:scheme] == nothing
+    @test m[:user] == "user"
+    @test m[:password] == nothing
+    @test m[:host] == "server"
+    @test m[:port] == nothing
+    @test m[:path] == "project.git"
+
+    # Realistic example from GitHub using HTTPS
+    m = match(LibGit2.URL_REGEX, "https://github.com/JuliaLang/Example.jl.git")
+    @test m[:scheme] == "https"
+    @test m[:user] == nothing
+    @test m[:password] == nothing
+    @test m[:host] == "github.com"
+    @test m[:port] == nothing
+    @test m[:path] == "/JuliaLang/Example.jl.git"
+
+    # Realistic example from GitHub using SSH
+    m = match(LibGit2.URL_REGEX, "git@github.com:JuliaLang/Example.jl.git")
+    @test m[:scheme] == nothing
+    @test m[:user] == "git"
+    @test m[:password] == nothing
+    @test m[:host] == "github.com"
+    @test m[:port] == nothing
+    @test m[:path] == "JuliaLang/Example.jl.git"
+
+    # Make sure usernames can contain special characters
+    m = match(LibGit2.URL_REGEX, "user-name@hostname.com")
+    @test m[:user] == "user-name"
+#end
+
 mktempdir() do dir
     # test parameters
     repo_url = "https://github.com/JuliaLang/Example.jl"
-    ssh_prefix = "git@"
     cache_repo = joinpath(dir, "Example")
     test_repo = joinpath(dir, "Example.Test")
     test_sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
