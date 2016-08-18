@@ -438,13 +438,9 @@ int isabspath(const char *in)
     if (c0 == '/' || c0 == '\\') {
         return 1; // absolute path relative to %CD% (current drive), or UNC
     }
-    else {
-        int s = strlen(in);
-        if (s > 2) {
-            char c1 = in[1];
-            char c2 = in[2];
-            if (c1 == ':' && (c2 == '/' || c2 == '\\')) return 1; // absolute path
-        }
+    else if (c0 && in[1] == ':') {
+        char c2 = in[2];
+        return c2 == '/' || c2 == '\\'; // absolute path with drive name
     }
 #else
     if (in[0] == '/') return 1; // absolute path
