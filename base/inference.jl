@@ -2262,12 +2262,15 @@ function effect_free(e::ANY, linfo::LambdaInfo, allow_volatile::Bool)
                 if !allow_volatile
                     if is_known_call(e, arrayref, linfo) || is_known_call(e, arraylen, linfo)
                         return false
-                    elseif is_known_call(e, getfield, linfo) && !isa(exprtype(e,linfo), Const)
-                        # first argument must be immutable to ensure e is affect_free
-                        a = ea[2]
-                        typ = widenconst(exprtype(a, linfo))
-                        if !isa(typ, DataType) || typ.mutable || typ.abstract
-                            return false
+                    elseif is_known_call(e, getfield, linfo)
+                        et = exprtype(e,linfo)
+                        if !isa(et,Const) && !(isType(et) && isleaftype(et))
+                            # first argument must be immutable to ensure e is affect_free
+                            a = ea[2]
+                            typ = widenconst(exprtype(a, linfo))
+                            if !isa(typ, DataType) || typ.mutable || typ.abstract
+                                return false
+                            end
                         end
                     end
                 end
