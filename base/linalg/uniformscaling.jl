@@ -29,6 +29,11 @@ one{T}(J::UniformScaling{T}) = one(UniformScaling{T})
 zero{T}(::Type{UniformScaling{T}}) = UniformScaling(zero(T))
 zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
 
+istriu(::UniformScaling) = true
+istril(::UniformScaling) = true
+issymmetric(::UniformScaling) = true
+ishermitian(J::UniformScaling) = isreal(J.λ)
+
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+){T}(B::BitArray{2},J::UniformScaling{T}) = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)
