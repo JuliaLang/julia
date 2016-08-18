@@ -29,14 +29,10 @@
 #else
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
 #endif
-#ifdef _OS_DARWIN_
 #include <llvm/Object/MachO.h>
-#endif
-#ifdef _OS_WINDOWS_
 #include <llvm/Object/COFF.h>
-#   ifdef LLVM37
-#       include <llvm/Object/ELFObjectFile.h>
-#   endif
+#ifdef LLVM37
+#  include <llvm/Object/ELFObjectFile.h>
 #endif
 
 #if defined(USE_MCJIT) && !defined(LLVM36) && defined(_OS_DARWIN_)
@@ -896,23 +892,52 @@ calc_gnu_debuglink_crc32(const void *buf, size_t size)
         crc = g_crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
     return crc ^ ~0U;
 }
-static ErrorOr<object::OwningBinary<object::ObjectFile>> openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
+
+template<typename T>
+static inline void ignoreError(T &err)
+{
+#if defined(LLVM39) && !defined(NDEBUG)
+    consumeError(err.takeError());
+#endif
+}
+
+#ifdef LLVM39
+static Expected<object::OwningBinary<object::ObjectFile>>
+#else
+static ErrorOr<object::OwningBinary<object::ObjectFile>>
+#endif
+openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
 {
     auto SplitFile = MemoryBuffer::getFile(debuginfopath);
-    if (std::error_code EC = SplitFile.getError())
+    if (std::error_code EC = SplitFile.getError()) {
+#ifdef LLVM39
+        return errorCodeToError(EC);
+#else
         return EC;
+#endif
+    }
 
     uint32_t crc32 = calc_gnu_debuglink_crc32(
             SplitFile.get()->getBufferStart(),
             SplitFile.get()->getBufferSize());
-    if (crc32 != info.crc32)
+    if (crc32 != info.crc32) {
+#ifdef LLVM39
+        return errorCodeToError(object::object_error::arch_not_found);
+#else
         return object::object_error::arch_not_found;
+#endif
+    }
 
     auto error_splitobj = object::ObjectFile::createObjectFile(
             SplitFile.get().get()->getMemBufferRef(),
             sys::fs::file_magic::unknown);
-    if (std::error_code EC = error_splitobj.getError())
-        return EC;
+    if (!error_splitobj) {
+#ifdef LLVM39
+        return error_splitobj.takeError();
+#else
+        return error_splitobj.getError();
+#endif
+    }
 
     // successfully validated and loaded split debug info file
     return object::OwningBinary<object::ObjectFile>(
@@ -1139,31 +1164,43 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
             debug_link_info info = getDebuglink(*debugobj);
             if (!info.filename.empty()) {
                 size_t sep = fname.rfind('/');
-                ErrorOr<object::OwningBinary<object::ObjectFile>> DebugInfo(std::errc::no_such_file_or_directory);
+#ifdef LLVM39
+                Expected<object::OwningBinary<object::ObjectFile>>
+                    DebugInfo(errorCodeToError(std::make_error_code(std::errc::no_such_file_or_directory)));
+                // Can't find a way to construct an empty Expected object
+                // that can be ignored.
+                ignoreError(DebugInfo);
+#else
+                ErrorOr<object::OwningBinary<object::ObjectFile>>
+                    DebugInfo(std::errc::no_such_file_or_directory);
+#endif
                 if (fname.substr(sep + 1) != info.filename) {
                     debuginfopath = fname.substr(0, sep + 1);
                     debuginfopath += info.filename;
                     DebugInfo = openDebugInfo(debuginfopath, info);
                 }
-                if (DebugInfo.getError()) {
+                if (!DebugInfo) {
                     debuginfopath = fname.substr(0, sep + 1);
                     debuginfopath += ".debug/";
                     debuginfopath += info.filename;
+                    ignoreError(DebugInfo);
                     DebugInfo = openDebugInfo(debuginfopath, info);
                 }
-                if (DebugInfo.getError()) {
+                if (!DebugInfo) {
                     debuginfopath = "/usr/lib/debug/";
                     debuginfopath += fname.substr(0, sep + 1);
                     debuginfopath += info.filename;
+                    ignoreError(DebugInfo);
                     DebugInfo = openDebugInfo(debuginfopath, info);
                 }
-                if (DebugInfo.getError()) {
-                    // no split debug info found
-                    // should we warn the user?
+                if (DebugInfo) {
+                    errorobj = std::move(DebugInfo);
+                    // Yes, we've checked, and yes LLVM want us to check again.
+                    assert(errorobj);
+                    debugobj = errorobj->getBinary();
                 }
                 else {
-                    errorobj = std::move(DebugInfo);
-                    debugobj = errorobj->getBinary();
+                    ignoreError(DebugInfo);
                 }
             }
 #endif
@@ -1224,13 +1261,11 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         errorobj.release();
 #endif
     }
-#ifdef LLVM39
     else {
         // TODO: report the error instead of silently consuming it?
         //       jl_error might run into the same error again...
-        consumeError(errorobj.takeError());
+        ignoreError(errorobj);
     }
-#endif
 
     // update cache
     objfileentry_t entry = {*obj, *context, *slide, *section_slide};
