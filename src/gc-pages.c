@@ -37,6 +37,10 @@ void jl_gc_init_page(void)
 #endif
 }
 
+#ifndef MAP_NORESERVE // not defined in POSIX, FreeBSD, etc.
+#define MAP_NORESERVE (0)
+#endif
+
 // Try to allocate a memory block for a region with `pg_cnt` pages.
 // Return `NULL` if allocation failed. Result is aligned to `GC_PAGE_SZ`.
 static char *jl_gc_try_alloc_region(int pg_cnt)
