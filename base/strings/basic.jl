@@ -62,6 +62,7 @@ convert(::Type{Array{UInt8}}, s::AbstractString) = String(s).data
 convert(::Type{String}, s::AbstractString) = String(s)
 convert(::Type{Vector{Char}}, s::AbstractString) = collect(s)
 convert(::Type{Symbol}, s::AbstractString) = Symbol(s)
+convert(::Type{String}, s::Symbol) = unsafe_string(Cstring(s))
 
 ## generic supplied functions ##
 
