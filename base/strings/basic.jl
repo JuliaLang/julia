@@ -34,6 +34,7 @@ If you need to subsequently modify `v`, use `String(copy(v))` instead.
 """
 String(v::Array{UInt8,1})
 
+String(x::Symbol) = string(x)
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
