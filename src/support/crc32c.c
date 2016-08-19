@@ -8,7 +8,7 @@
  *    - exported function renamed to jl_crc32c, DLL exports added.
  *    - removed main() function
  *    - changed crc32c_table initialization to a single jl_crc23_init(0) call.
- *    - protect sse code with #ifdef __x86_64__
+ *    - protect sse code with #ifdef (correct architecture and compiler)
  *    - added header file
  */
 
@@ -362,7 +362,7 @@ JL_DLLEXPORT void jl_crc32c_init(int force_sw)
 JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const void *buf, size_t len)
 {
     return
-#ifdef __x86_64__
+#ifdef HW_CRC
     sse42 ? crc32c_hw(crc, buf, len) :
 #endif
     crc32c_sw(crc, buf, len);
