@@ -1695,7 +1695,7 @@
             (expand-forms `(call (top broadcast!) ,(from-lambda (cadr e)) ,lhs-view ,@(caddr e))))
         (if (null? lhs)
             (expand-forms e)
-            (expand-forms `(call (top broadcast!) identity ,lhs-view ,e))))))
+            (expand-forms `(call (top broadcast!) (top identity) ,lhs-view ,e))))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
