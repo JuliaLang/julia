@@ -14,6 +14,7 @@ data_out = collect(s)
 
 # eltype, similar
 @test is(eltype(IntSet()), Int64)
+@test is(eltype(IntSet), Int64)
 @test isequal(similar(IntSet([1,2,3])), IntSet())
 
 # show
@@ -33,6 +34,8 @@ s = IntSet([1,2,10,20,200,300,1000,10000,10002])
 @test !in(1,s)
 @test !in(10002,s)
 @test in(10000,s)
+@test in(10000.0,s)
+@test !in(10002.0,s)
 @test_throws ArgumentError first(IntSet())
 @test_throws ArgumentError last(IntSet())
 t = copy(s)
