@@ -16,7 +16,7 @@ MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
 ifeq ($(OS),WINNT)
 MBEDTLS_OPTS += -DENABLE_ZLIB_SUPPORT=OFF
 ifeq ($(BUILD_OS),WINNT)
-MBEDTLS_OPTS += -G"MSYS Makefiles" -DENABLE_TESTING=OFF
+MBEDTLS_OPTS += -G"MSYS Makefiles"
 endif
 else
 MBEDTLS_OPTS += -DENABLE_ZLIB_SUPPORT=ON
@@ -56,8 +56,10 @@ endif
 	echo 1 > $@
 
 $(MBEDTLS_OBJ_TARGET): $(MBEDTLS_OBJ_SOURCE) | $(build_shlibdir)
-ifeq ($(OS), WINNT)
+ifeq ($(BUILD_OS), WINNT)
 	cp $^ $(build_shlibdir)
+	cp $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedx509.$(SHLIB_EXT) $(build_shlibdir)
+	cp $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedtls.$(SHLIB_EXT) $(build_shlibdir)
 else
 	$(call make-install,mbedtls-$(MBEDTLS_VER),)
 endif
