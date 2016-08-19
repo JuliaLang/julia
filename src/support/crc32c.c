@@ -44,6 +44,10 @@
 
 #include "crc32c.h"
 
+#if defined(_CPU_X86_64_) && !defined(_COMPILER_MICROSOFT_)
+#  define HW_CRC
+#endif
+
 /* CRC-32C (iSCSI) polynomial in reversed bit order. */
 #define POLY 0x82f63b78
 
@@ -111,7 +115,7 @@ static uint32_t crc32c_sw(uint32_t crci, const void *buf, size_t len)
     return (uint32_t)crc ^ 0xffffffff;
 }
 
-#ifdef __x86_64__
+#ifdef HW_CRC
 
 /* Multiply a matrix times a vector over the Galois field of two elements,
    GF(2).  Each element is a bit in an unsigned integer.  mat must have at
@@ -334,14 +338,14 @@ static uint32_t crc32c_hw(uint32_t crc, const void *buf, size_t len)
 
 static int sse42 = 0;
 
-#endif /* ifdef __x86_64__ */
+#endif /* ifdef HW_CRC */
 
 /* jl_crc32c_init must be called before jl_crc32c.  Passing 1
    can be used to force the use of the software implementation,
    which is useful for testing purposes. */
 JL_DLLEXPORT void jl_crc32c_init(int force_sw)
 {
-#ifdef __x86_64__
+#ifdef HW_CRC
     if (force_sw)
         sse42 = 0; /* useful for testing purposes */
     else
