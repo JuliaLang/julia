@@ -1084,7 +1084,7 @@ static void write_mod_list(ios_t *s)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 2;
+static const int JI_FORMAT_VERSION = 3;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void write_header(ios_t *s)
@@ -1099,6 +1099,22 @@ static void write_header(ios_t *s)
     const char *branch = jl_git_branch(), *commit = jl_git_commit();
     ios_write(s, branch, strlen(branch)+1);
     ios_write(s, commit, strlen(commit)+1);
+}
+
+// serialize information about the result of deserializing this file
+static void write_work_list(ios_t *s)
+{
+    int i, l = jl_array_len(serializer_worklist);
+    for (i = 0; i < l; i++) {
+        jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, i);
+        if (workmod->parent == jl_main_module) {
+            size_t l = strlen(jl_symbol_name(workmod->name));
+            write_int32(s, l);
+            ios_write(s, jl_symbol_name(workmod->name), l);
+            write_uint64(s, workmod->uuid);
+        }
+    }
+    write_int32(s, 0);
 }
 
 // serialize the global _require_dependencies array of pathnames that
@@ -2197,8 +2213,10 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     serializer_worklist = worklist;
     write_header(&f);
-    write_mod_list(&f); // this can throw, keep it early (before any actual initialization)
+    write_work_list(&f);
     write_dependency_list(&f);
+    write_mod_list(&f); // this can return errors during deserialize,
+                        // best to keep it early (before any actual initialization)
 
     arraylist_new(&reinit_list, 0);
     htable_new(&backref_table, 5000);
@@ -2367,13 +2385,24 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
     }
+    { // skip past the mod list
+        size_t len;
+        while ((len = read_int32(f)))
+            ios_skip(f, len + sizeof(uint64_t));
+    }
+    { // skip past the dependency list
+        size_t deplen = read_uint64(f);
+        ios_skip(f, deplen);
+    }
+
+    // verify that the system state is valid
     jl_value_t *verify_error = read_verify_mod_list(f);
     if (verify_error) {
         ios_close(f);
         return verify_error;
     }
-    size_t deplen = read_uint64(f);
-    ios_skip(f, deplen); // skip past the dependency list
+
+    // prepare to deserialize
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
