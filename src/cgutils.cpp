@@ -96,7 +96,18 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (jdt->ditype != NULL) {
 #ifdef LLVM37
-        return (llvm::DIType*)jdt->ditype;
+        DIType* t = (DIType*)jdt->ditype;
+#ifndef LLVM39
+        // On LLVM 3.7 and 3.8, DICompositeType with a unique name
+        // are ref'd by their unique name and needs to be explicitly
+        // retained in order to be used in the module.
+        if (auto *Composite = dyn_cast<DICompositeType>(t)) {
+            if (Composite->getRawIdentifier()) {
+                dbuilder->retainType(Composite);
+            }
+        }
+#endif
+        return t;
 #else
         return DIType((llvm::MDNode*)jdt->ditype);
 #endif
@@ -130,17 +141,22 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     else if (jl_is_structtype(jt)) {
         jl_datatype_t *jst = (jl_datatype_t*)jt;
         size_t ntypes = jl_datatype_nfields(jst);
+        const char *tname = jl_symbol_name(jdt->name->name);
+        std::stringstream unique_name;
+        unique_name << tname << "_" << globalUnique++;
         llvm::DICompositeType *ct = dbuilder->createStructType(
             NULL,                       // Scope
-            jl_symbol_name(jdt->name->name),      // Name
+            tname,                      // Name
             NULL,                       // File
             0,                          // LineNumber
             8 * jdt->size,              // SizeInBits
-            8 * jdt->layout->alignment, // AlignmentInBits
+            8 * jdt->layout->alignment, // AlignInBits
             0,                          // Flags
             NULL,                       // DerivedFrom
             DINodeArray(),              // Elements
-            dwarf::DW_LANG_Julia        // RuntimeLanguage
+            dwarf::DW_LANG_Julia,       // RuntimeLanguage
+            nullptr,                    // VTableHolder
+            unique_name.str()           // UniqueIdentifier
             );
         jdt->ditype = ct;
         std::vector<llvm::Metadata*> Elements;
