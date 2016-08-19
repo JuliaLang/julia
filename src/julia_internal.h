@@ -240,6 +240,7 @@ void jl_set_gs_ctr(uint32_t ctr);
 
 void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args);
 void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...);
 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
