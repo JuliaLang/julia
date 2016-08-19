@@ -790,4 +790,9 @@ function delete!(::EnvHash, k::AbstractString, def)
     haskey(ENV,k) ? delete!(ENV,k) : def
 end
 
+@deprecate (+)(J::UniformScaling, x::Number) J.λ + x
+@deprecate (+)(x::Number, J::UniformScaling) x + J.λ
+@deprecate (-)(J::UniformScaling, x::Number) J.λ - x
+@deprecate (-)(x::Number, J::UniformScaling) x - J.λ
+
 # End deprecations scheduled for 0.6
