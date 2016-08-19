@@ -131,7 +131,7 @@ end
 
 function find_all_in_cache_path(mod::Symbol)
     name = string(mod)
-    paths = AbstractString[]
+    paths = String[]
     for prefix in LOAD_CACHE_PATH
         path = joinpath(prefix, name*".ji")
         if isfile_casesensitive(path)
@@ -180,7 +180,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
             m = fetch(ref)
             if m !== nothing
                 warn("Node state is inconsistent: node $id failed to load cache from $path_to_try. Got:")
-                warn(m)
+                warn(m, prefix="WARNING: ")
             end
         end
     elseif node == myid()
@@ -210,8 +210,8 @@ function _require_search_from_serialized(node::Int, mod::Symbol, sourcepath::Str
         paths = @fetchfrom node find_all_in_cache_path(mod)
     end
 
-    local restored = nothing
-    for path_to_try in paths
+    local restored = nothing, failedpath = ""
+    for path_to_try in paths::Vector{String}
         if stale_cachefile(sourcepath, path_to_try)
             continue
         end
@@ -220,18 +220,18 @@ function _require_search_from_serialized(node::Int, mod::Symbol, sourcepath::Str
             if isa(restored, ErrorException) && endswith(restored.msg, " uuid did not match cache file.")
                 # can't use this cache due to a module uuid mismatch,
                 # defer reporting error until after trying all of the possible matches
+                failedpath = path_to_try
                 continue
             end
             warn("Deserialization checks failed while attempting to load cache from $path_to_try.")
-            error(restored)
+            throw(restored)
         else
             return restored
         end
     end
     if isa(restored, Exception)
-        warn("""Deserialization checks failed while attempting to load cache from $path_to_try.
-             This is likely because module %s does not support precompilation but is imported by a module that does.""")
-        warn(restored)
+        warn("Deserialization checks failed while attempting to load cache from $failedpath.")
+        warn(restored, prefix="WARNING: ")
     end
     return !isempty(paths)
 end
@@ -240,12 +240,13 @@ end
 const package_locks = Dict{Symbol,Condition}()
 
 # used to optionally track dependencies when requiring a module:
-const _require_dependencies = Tuple{String,Float64}[]
-const _track_dependencies = [false]
+const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
+const _require_dependencies = Any[] # a list of (path, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
-    path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev),_path)
-    if myid() == 1 && _track_dependencies[1]
+    path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev), _path)
+    if myid() == 1 && _track_dependencies[]
         apath = abspath(path)
         push!(_require_dependencies, (apath, mtime(apath)))
     end
@@ -341,8 +342,8 @@ toplevel_load = true
 function require(mod::Symbol)
     # dependency-tracking is only used for one top-level include(path),
     # and is not applied recursively to imported modules:
-    old_track_dependencies = _track_dependencies[1]
-    _track_dependencies[1] = false
+    old_track_dependencies = _track_dependencies[]
+    _track_dependencies[] = false
 
     global toplevel_load
     loading = get(package_locks, mod, false)
@@ -356,32 +357,46 @@ function require(mod::Symbol)
     last = toplevel_load::Bool
     try
         toplevel_load = false
+        # perform the search operation to select the module file require intends to load
         name = string(mod)
         path = find_in_node_path(name, nothing, 1)
         if path === nothing
             throw(ArgumentError("module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
 
+        # attempt to load the module file via the precompile cache locations
         doneprecompile = false
         if JLOptions().use_compilecache != 0
             doneprecompile = _require_search_from_serialized(1, mod, path, last)
             if !isa(doneprecompile, Bool)
                 return # success
-            elseif doneprecompile === true || JLOptions().incremental != 0
-                # spawn off a new incremental pre-compile task from node 1 for recursive `require` calls
-                # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
-                cachefile = compilecache(mod)
-                m = _require_from_serialized(1, mod, cachefile, last)
-                if !isa(m, Exception)
-                    warn("Compilecache failed to create a usable precompiled cache file for module $name. Got:")
-                    warn(m)
-                else
-                    return # success
-                end
             end
-            # fall-through to attempting to load the source file
         end
 
+        # if the module being required was supposed to have a particular version
+        # but it was not handled by the precompile loader, complain
+        for (concrete_mod, concrete_uuid) in _concrete_dependencies
+            if mod === concrete_mod
+                warn("""Module $mod with uuid $concrete_uuid is missing from the cache.
+                     This may mean module $mod does not support precompilation but is imported by a module that does.""")
+            end
+        end
+
+        if doneprecompile === true || JLOptions().incremental != 0
+            # spawn off a new incremental pre-compile task from node 1 for recursive `require` calls
+            # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
+            cachefile = compilecache(mod)
+            m = _require_from_serialized(1, mod, cachefile, last)
+            if isa(m, Exception)
+                warn("Compilecache failed to create a usable precompiled cache file for module $name. Got:")
+                warn(m, prefix="WARNING: ")
+            else
+                return # success
+            end
+        end
+
+        # just load the file normally via include
+        # for unknown dependencies
         try
             if last && myid() == 1 && nprocs() > 1
                 # include on node 1 first to check for PrecompilableErrors
@@ -397,10 +412,11 @@ function require(mod::Symbol)
             if doneprecompile === true || JLOptions().use_compilecache == 0 || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
             end
+            # the file requested `__precompile__`, so try to build a cache file and use that
             cachefile = compilecache(mod)
             m = _require_from_serialized(1, mod, cachefile, last)
             if isa(m, Exception)
-                warn(m)
+                warn(m, prefix="WARNING: ")
                 error("module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
         end
@@ -408,7 +424,7 @@ function require(mod::Symbol)
         toplevel_load = last
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
-        _track_dependencies[1] = old_track_dependencies
+        _track_dependencies[] = old_track_dependencies
     end
     nothing
 end
@@ -452,7 +468,8 @@ task-local include path is set to the directory containing the file. Nested call
 in parallel, and files will be fetched from node 1. This function is typically used to load
 source interactively, or to combine files in packages that are broken into multiple source files.
 """
-function include_from_node1(_path::AbstractString)
+include_from_node1(path::AbstractString) = include_from_node1(String(path))
+function include_from_node1(_path::String)
     path, prev = _include_dependency(_path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
@@ -486,7 +503,7 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
-function create_expr_cache(input::AbstractString, output::AbstractString)
+function create_expr_cache(input::String, output::String, concrete_deps::Vector{Any})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
         while !eof(STDIN)
@@ -507,6 +524,9 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
                   append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
                   empty!(Base.DL_LOAD_PATH)
                   append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
+                  empty!(Base._concrete_dependencies)
+                  append!(Base._concrete_dependencies, $concrete_deps)
+                  Base._track_dependencies[] = true
                   end)
         source = source_path(nothing)
         if source !== nothing
@@ -514,7 +534,6 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
                       task_local_storage()[:SOURCE_PATH] = $(source)
                       end)
         end
-        serialize(io, :(Base._track_dependencies[1] = true))
         serialize(io, :(Base.include($(abspath(input)))))
         if source !== nothing
             serialize(io, :(delete!(task_local_storage(), :SOURCE_PATH)))
@@ -532,21 +551,38 @@ end
 compilecache(mod::Symbol) = compilecache(string(mod))
 function compilecache(name::String)
     myid() == 1 || error("can only precompile from node 1")
+    # decide where to get the source file from
     path = find_in_path(name, nothing)
     path === nothing && throw(ArgumentError("$name not found in path"))
+    path = String(path)
+    # decide where to put the resulting cache file
     cachepath = LOAD_CACHE_PATH[1]
     if !isdir(cachepath)
         mkpath(cachepath)
     end
-    cachefile = abspath(cachepath, name*".ji")
+    cachefile::String = abspath(cachepath, name*".ji")
+    # build up the list of modules that we want the precompile process to preserve
+    concrete_deps = copy(_concrete_dependencies)
+    for existing in names(Main)
+        if isdefined(Main, existing)
+            mod = getfield(Main, existing)
+            if isa(mod, Module) && !(mod === Main || mod === Core || mod === Base)
+                mod = mod::Module
+                if module_parent(mod) === Main && module_name(mod) === existing
+                    push!(concrete_deps, (existing, module_uuid(mod)))
+                end
+            end
+        end
+    end
+    # run the expression and cache the result
     if isinteractive()
-        if isfile(cachepath)
+        if isfile(cachefile)
             info("Recompiling stale cache file $cachefile for module $name.")
         else
             info("Precompiling module $name.")
         end
     end
-    if !success(create_expr_cache(path, cachefile))
+    if !success(create_expr_cache(path, cachefile, concrete_deps))
         error("Failed to precompile $name to $cachefile")
     end
     return cachefile
@@ -556,26 +592,55 @@ module_uuid(m::Module) = ccall(:jl_module_uuid, UInt64, (Any,), m)
 
 isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_read_verify_header, Cint, (Ptr{Void},), f.ios)
 
-function cache_dependencies(f::IO)
-    modules = Tuple{Symbol,UInt64}[]
+function parse_cache_header(f::IO)
+    modules = Dict{Symbol,UInt64}()
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        sym = Symbol(read(f, n)) # module symbol
+        uuid = ntoh(read(f, UInt64)) # module UUID (mostly just a timestamp)
+        modules[sym] = uuid
+    end
+    totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
+    # read the list of files
     files = Tuple{String,Float64}[]
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
-        push!(modules,
-              (Symbol(read(f, n)), # module symbol
-               ntoh(read(f, UInt64)))) # module UUID (timestamp)
+        totbytes -= 4 + n + 8
+        if n < 0 # probably means this wasn't a valid file to be read by Base.parse_cache_header
+            error("EOF while reading cache header")
+        end
+        push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
     end
-    read(f, Int64) # total bytes for file dependencies
+    @assert totbytes == 4 "header of cache file appears to be corrupt"
+    return modules, files
+end
+
+function parse_cache_header(cachefile::String)
+    io = open(cachefile, "r")
+    try
+        !isvalid_cache_header(io) && throw(ArgumentError("invalid cache file $cachefile"))
+        return parse_cache_header(io)
+    finally
+        close(io)
+    end
+end
+
+function cache_dependencies(f::IO)
+    defs, files = parse_cache_header(f)
+    modules = []
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
-        push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
+        sym = Symbol(read(f, n)) # module symbol
+        uuid = ntoh(read(f, UInt64)) # module UUID (mostly just a timestamp)
+        push!(modules, (sym, uuid))
     end
     return modules, files
 end
 
-function cache_dependencies(cachefile::AbstractString)
+function cache_dependencies(cachefile::String)
     io = open(cachefile, "r")
     try
         !isvalid_cache_header(io) && throw(ArgumentError("invalid cache file $cachefile"))
@@ -585,13 +650,26 @@ function cache_dependencies(cachefile::AbstractString)
     end
 end
 
-function stale_cachefile(modpath, cachefile)
+function stale_cachefile(modpath::String, cachefile::String)
     io = open(cachefile, "r")
     try
         if !isvalid_cache_header(io)
             return true # invalid cache file
         end
-        modules, files = cache_dependencies(io)
+        modules, files = parse_cache_header(io)
+
+        # check if this file is going to provide one of our concrete dependencies
+        provides_concrete = false
+        for (mod, uuid) in _concrete_dependencies
+            if get(modules, mod, UInt64(0)) === uuid
+                provides_concrete = true
+            else
+                return false # cachefile doesn't provide the required version of the dependency
+            end
+        end
+        provides_concrete && return false # this is the file we want
+
+        # now check if this file is fresh relative to its source files
         if files[1][1] != modpath
             return true # cache file was compiled from a different path
         end
