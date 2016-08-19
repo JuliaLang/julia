@@ -9,6 +9,7 @@ typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
 typealias DimOrInd Union{Integer, AbstractUnitRange}
 typealias IntOrInd Union{Int, AbstractUnitRange}
 typealias DimsOrInds{N} NTuple{N,DimOrInd}
+typealias NeedsShaping Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
 macro _inline_pure_meta()
     Expr(:meta, :inline, :pure)
@@ -413,14 +414,14 @@ different element type it will create a regular `Array` instead:
      2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 
 """
-similar{T}(a::AbstractArray{T})                          = similar(a, T)
-similar(   a::AbstractArray, T::Type)                    = similar(a, T, to_shape(indices(a)))
-similar{T}(a::AbstractArray{T}, dims::Tuple)             = similar(a, T, to_shape(dims))
-similar{T}(a::AbstractArray{T}, dims::DimOrInd...)       = similar(a, T, to_shape(dims))
-similar(   a::AbstractArray, T::Type, dims::DimOrInd...) = similar(a, T, to_shape(dims))
-similar(   a::AbstractArray, T::Type, dims)              = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray{T})                             = similar(a, T)
+similar{T}(a::AbstractArray, ::Type{T})                     = similar(a, T, to_shape(indices(a)))
+similar{T}(a::AbstractArray{T}, dims::Tuple)                = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray{T}, dims::DimOrInd...)          = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray, ::Type{T}, dims::DimOrInd...)  = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray, ::Type{T}, dims::NeedsShaping) = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar{N}(a::AbstractArray, T::Type, dims::Dims{N})     = Array{T,N}(dims)
+similar{T,N}(a::AbstractArray, ::Type{T}, dims::Dims{N})    = Array{T,N}(dims)
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
