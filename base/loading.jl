@@ -212,7 +212,7 @@ end
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
 
-cache_checksum(path) = crc32c(read(path))
+cache_checksum(path) = isfile(path) ? crc32c(read(path)) : 0x00000000
 
 # used to optionally track dependencies when requiring a module:
 const _require_dependencies = Tuple{String,Float64,UInt32}[]
@@ -553,7 +553,8 @@ function stale_cachefile(modpath, cachefile)
             return true # cache file was compiled from a different path
         end
         for (f,ftime,checksum) in files
-            # Issue #13606: compensate for Docker images rounding mtimes
+            # mtime check of ftime and floor(ftime) is due to issue #13606:
+            # compensate for Docker images rounding mtimes
             if mtime(f) ∉ (ftime, floor(ftime)) &&
                cache_checksum(f) != checksum
                 return true
