@@ -722,3 +722,8 @@ end
 
 #flipdim on empty
 @test flipdim(Diagonal([]),1) == Diagonal([])
+
+# ndims and friends
+@test ndims(Diagonal(rand(1:5,5))) == 2
+@test ndims(Diagonal{Float64}) == 2
+@test Base.elsize(Diagonal(rand(1:5,5))) == sizeof(Int)
