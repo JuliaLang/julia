@@ -1136,7 +1136,7 @@ end
 function test_add_procs_threaded_blas()
     define_get_num_threads()
     if get_num_threads() == nothing
-        print("Skipping blas num threads tests due to unsupported blas version")
+        warn("Skipping blas num threads tests due to unsupported blas version")
         return
     end
     master_blas_thread_count = get_num_threads()
