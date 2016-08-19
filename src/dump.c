@@ -1711,16 +1711,16 @@ static void jl_deserialize_lambdas_from_mod(jl_serializer_state *s)
     }
 }
 
-static int read_verify_mod_list(ios_t *s)
+static jl_value_t *read_verify_mod_list(ios_t *s)
 {
     if (!jl_main_module->uuid) {
-        jl_printf(JL_STDERR, "ERROR: Main module uuid state is invalid for module deserialization.\n");
-        return 0;
+        return jl_get_exceptionf(jl_errorexception_type,
+                "Main module uuid state is invalid for module deserialization.");
     }
     while (1) {
         size_t len = read_int32(s);
         if (len == 0)
-            return 1;
+            return NULL;
         char *name = (char*)alloca(len+1);
         ios_read(s, name, len);
         name[len] = '\0';
@@ -1742,20 +1742,17 @@ static int read_verify_mod_list(ios_t *s)
             m = (jl_module_t*)jl_get_global(jl_main_module, sym);
         }
         if (!m) {
-            jl_printf(JL_STDERR, "ERROR: requiring \"%s\" did not define a corresponding module\n", name);
-            return 0;
+            return jl_get_exceptionf(jl_errorexception_type,
+                    "Requiring \"%s\" did not define a corresponding module.", name);
         }
         if (!jl_is_module(m)) {
             ios_close(s);
-            jl_errorf("invalid module path (%s does not name a module)", name);
+            return jl_get_exceptionf(jl_errorexception_type,
+                "Invalid module path (%s does not name a module).", name);
         }
         if (m->uuid != uuid) {
-            jl_printf(JL_STDERR,
-                      "WARNING: Module %s uuid did not match cache file\n"
-                      "  This is likely because module %s does not support\n"
-                      "  precompilation but is imported by a module that does.\n",
-                      name, name);
-            return 0;
+            return jl_get_exceptionf(jl_errorexception_type,
+                "Module %s uuid did not match cache file.", name);
         }
     }
 }
@@ -1825,13 +1822,13 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
                 jl_declare_constant(b); // this can throw
                 if (b->value != NULL) {
                     if (!jl_is_module(b->value)) {
-                        jl_errorf("invalid redefinition of constant %s",
+                        jl_errorf("Invalid redefinition of constant %s.",
                                   jl_symbol_name(mod->name)); // this also throws
                     }
                     if (jl_generating_output() && jl_options.incremental) {
-                        jl_errorf("cannot replace module %s during incremental precompile", jl_symbol_name(mod->name));
+                        jl_errorf("Cannot replace module %s during incremental precompile.", jl_symbol_name(mod->name));
                     }
-                    jl_printf(JL_STDERR, "WARNING: replacing module %s\n",
+                    jl_printf(JL_STDERR, "WARNING: replacing module %s.\n",
                               jl_symbol_name(mod->name));
                 }
                 b->value = v;
@@ -2098,14 +2095,14 @@ JL_DLLEXPORT void jl_restore_system_image(const char *fname)
         int err = jl_load_sysimg_so();
         if (err != 0) {
             if (jl_sysimg_handle == 0)
-                jl_errorf("system image file \"%s\" not found", fname);
-            jl_errorf("library \"%s\" does not contain a valid system image", fname);
+                jl_errorf("System image file \"%s\" not found.", fname);
+            jl_errorf("Library \"%s\" does not contain a valid system image.", fname);
         }
     }
     else {
         ios_t f;
         if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
-            jl_errorf("system image file \"%s\" not found", fname);
+            jl_errorf("System image file \"%s\" not found.", fname);
         JL_SIGATOMIC_BEGIN();
         jl_restore_system_image_from_stream(&f);
         ios_close(&f);
@@ -2363,16 +2360,17 @@ static int trace_method(jl_typemap_entry_t *entry, void *closure)
     return 1;
 }
 
-static jl_array_t *_jl_restore_incremental(ios_t *f)
+static jl_value_t *_jl_restore_incremental(ios_t *f)
 {
-    if (ios_eof(f)) {
+    if (ios_eof(f) || !jl_read_verify_header(f)) {
         ios_close(f);
-        return NULL;
+        return jl_get_exceptionf(jl_errorexception_type,
+                "Precompile file header verification checks failed.");
     }
-    if (!jl_read_verify_header(f) ||
-        !read_verify_mod_list(f)) {
+    jl_value_t *verify_error = read_verify_mod_list(f);
+    if (verify_error) {
         ios_close(f);
-        return NULL;
+        return verify_error;
     }
     size_t deplen = read_uint64(f);
     ios_skip(f, deplen); // skip past the dependency list
@@ -2418,28 +2416,24 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     jl_init_restored_modules(init_order);
     JL_GC_POP();
 
-    return restored;
+    return (jl_value_t*)restored;
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz)
 {
     ios_t f;
-    jl_array_t *modules;
     ios_static_buffer(&f, (char*)buf, sz);
-    modules = _jl_restore_incremental(&f);
-    return modules ? (jl_value_t*) modules : jl_nothing;
+    return _jl_restore_incremental(&f);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
 {
     ios_t f;
-    jl_array_t *modules;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
-        jl_printf(JL_STDERR, "Cache file \"%s\" not found\n", fname);
-        return jl_nothing;
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Cache file \"%s\" not found.\n", fname);
     }
-    modules = _jl_restore_incremental(&f);
-    return modules ? (jl_value_t*) modules : jl_nothing;
+    return _jl_restore_incremental(&f);
 }
 
 // --- init ---
