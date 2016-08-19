@@ -161,7 +161,7 @@ try
     Base.compilecache("FooBar")
     @test isfile(joinpath(dir, "FooBar.ji"))
 
-    sleep(2) # wait to make sure file modification date changes
+    sleep(2) # wait to make sure file modification time changes
     touch(FooBar_file)
     insert!(Base.LOAD_CACHE_PATH, 1, dir2)
     Base.recompile_stale(:FooBar, joinpath(dir, "FooBar.ji"))
