@@ -84,12 +84,24 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
     *(void**)rsp = NULL;
     ctx->uc_mcontext.gregs[REG_RSP] = rsp;
     ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)fptr;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    rsp -= sizeof(void*);
+    *(void**)rsp = NULL;
+    ctx->uc_mcontext.mc_rsp = rsp;
+    ctx->uc_mcontext.mc_rip = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     rsp -= sizeof(void*);
     *(void**)rsp = NULL;
     ctx->uc_mcontext.gregs[REG_ESP] = rsp;
     ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)fptr;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    rsp -= sizeof(void*);
+    *(void**)rsp = NULL;
+    ctx->uc_mcontext.mc_esp = rsp;
+    ctx->uc_mcontext.mc_eip = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     ctx->uc_mcontext.sp = rsp;
@@ -112,7 +124,8 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
     ctx->uc_mcontext64->__ss.__rsp = rsp;
     ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
 #else
-    // TODO Add support for FreeBSD and PowerPC(64)?
+#warning "julia: throw-in-context not supported on this platform"
+    // TODO Add support for PowerPC(64)?
     fptr();
 #endif
 }
@@ -436,7 +449,7 @@ static void *alloc_sigstack(size_t size)
     // Add one guard page to catch stack overflow in the signal handler
     size = LLT_ALIGN(size, pagesz) + pagesz;
     void *stackbuff = mmap(0, size, PROT_READ | PROT_WRITE,
-                           MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stackbuff == MAP_FAILED)
         jl_errorf("fatal error allocating signal stack: mmap: %s",
                   strerror(errno));

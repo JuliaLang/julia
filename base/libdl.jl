@@ -69,6 +69,12 @@ end
 
 Load a shared library, returning an opaque handle.
 
+The extension given by the constant `dlext` (`.so`, `.dll`, or `.dylib`)
+can be omitted from the `libfile` string, as it is automatically appended
+if needed.   If `libfile` is not an absolute path name, then the paths
+in the array `DL_LOAD_PATH` are searched for `libfile`, followed by the
+system load path.
+
 The optional flags argument is a bitwise-or of zero or more of `RTLD_LOCAL`, `RTLD_GLOBAL`,
 `RTLD_LAZY`, `RTLD_NOW`, `RTLD_NODELETE`, `RTLD_NOLOAD`, `RTLD_DEEPBIND`, and `RTLD_FIRST`.
 These are converted to the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)

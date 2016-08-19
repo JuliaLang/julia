@@ -305,8 +305,6 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
-jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
-                           jl_lambda_info_t *li, int sparams, int allow_alloc);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr);
 
@@ -426,7 +424,7 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
-int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
+JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
 
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);
@@ -764,6 +762,8 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 }
 
 JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
+
+int isabspath(const char *in);
 
 #ifdef __cplusplus
 }

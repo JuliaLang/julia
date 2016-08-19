@@ -87,6 +87,7 @@
 
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
 #  include <llvm/IR/InlineAsm.h>
+#  include <sys/utsname.h>
 #endif
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
@@ -1041,8 +1042,134 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 extern "C" JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
 
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
+void *jl_get_llvmf_defn(jl_lambda_info_t *linfo, bool getwrapper)
 {
+    if (linfo->def && linfo->def->lambda_template->code == jl_nothing) {
+        // not a generic function
+        return NULL;
+    }
+
+    jl_lambda_info_t *temp = NULL;
+    JL_GC_PUSH1(&temp);
+    if (linfo->code == jl_nothing && linfo->def) {
+        // re-infer if we've deleted the code
+        // first copy the linfo to avoid corrupting it and
+        // confusing the compiler about the
+        // validity of the code it already generated
+        temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
+        jl_type_infer(temp, 0);
+        if (temp->code == jl_nothing || temp->inInference) {
+            // something went wrong: abort!
+            JL_GC_POP();
+            return NULL;
+        }
+    }
+
+    // Backup the info for the nested compile
+    JL_LOCK(&codegen_lock);
+    BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    DebugLoc olddl = builder.getCurrentDebugLocation();
+    bool last_n_c = nested_compile;
+    nested_compile = true;
+    // emit this function into a new module
+    jl_llvm_functions_t declarations;
+    std::unique_ptr<Module> m;
+    JL_TRY {
+         m = emit_function(temp ? temp : linfo, &declarations);
+    }
+    JL_CATCH {
+        // something failed!
+        nested_compile = last_n_c;
+        if (old != NULL) {
+            builder.SetInsertPoint(old);
+            builder.SetCurrentDebugLocation(olddl);
+        }
+        JL_UNLOCK(&codegen_lock); // Might GC
+        jl_rethrow_with_add("error compiling %s", jl_symbol_name(linfo->def ? linfo->def->name : anonymous_sym));
+    }
+    // Restore the previous compile context
+    if (old != NULL) {
+        builder.SetInsertPoint(old);
+        builder.SetCurrentDebugLocation(olddl);
+    }
+    nested_compile = last_n_c;
+
+    jl_globalPM->run(*m.get());
+    Function *f = (llvm::Function*)declarations.functionObject;
+    Function *specf = (llvm::Function*)declarations.specFunctionObject;
+    // swap declarations for definitions and destroy declarations
+    if (specf) {
+        Function *tempf = cast<Function>(m->getNamedValue(specf->getName()));
+        delete specf;
+        specf = tempf;
+    }
+    if (f) {
+        Function *tempf = cast<Function>(m->getNamedValue(f->getName()));
+        delete f;
+        f = tempf;
+    }
+    // clone the name from the runtime linfo, if it exists
+    // to give the user a (false) sense of stability
+    Function *specf_decl = (Function*)linfo->functionObjectsDecls.specFunctionObject;
+    if (specf_decl) {
+        specf->setName(specf_decl->getName());
+    }
+    Function *f_decl = (Function*)linfo->functionObjectsDecls.functionObject;
+    if (f_decl) {
+        f->setName(f_decl->getName());
+    }
+    m.release(); // the return object `llvmf` will be the owning pointer
+    JL_UNLOCK(&codegen_lock); // Might GC
+    JL_GC_POP();
+    if (getwrapper || !specf)
+        return f;
+    else
+        return specf;
+}
+
+
+extern "C" JL_DLLEXPORT
+void *jl_get_llvmf_decl(jl_lambda_info_t *linfo, bool getwrapper)
+{
+    if (linfo->def && linfo->def->lambda_template->code == jl_nothing) {
+        // not a generic function
+        return NULL;
+    }
+
+    // compile this normally
+    linfo = jl_compile_for_dispatch(linfo);
+
+    if (linfo->jlcall_api == 2 && linfo->def) {
+        // normally we don't generate native code for these functions, so need an exception here
+        // This leaks a bit of memory to cache native code that we'll never actually need
+        if (linfo->functionObjectsDecls.functionObject == NULL) {
+            jl_lambda_info_t *temp = NULL;
+            JL_GC_PUSH1(&temp);
+            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
+            jl_type_infer(temp, 0);
+            temp->jlcall_api = 0;
+            temp->constval = jl_nothing;
+            if (temp->code == jl_nothing || temp->inInference) {
+                JL_GC_POP();
+                return NULL;
+            }
+            jl_compile_linfo(temp);
+            linfo->functionObjectsDecls = temp->functionObjectsDecls;
+            JL_GC_POP();
+        }
+        jl_set_lambda_code_null(linfo);
+    }
+
+    if (getwrapper || !linfo->functionObjectsDecls.specFunctionObject)
+        return linfo->functionObjectsDecls.functionObject;
+    else
+        return linfo->functionObjectsDecls.specFunctionObject;
+}
+
+
+extern "C" JL_DLLEXPORT
+void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
+{ // DEPRECATED
     jl_lambda_info_t *linfo = NULL, *temp = NULL;
     JL_GC_PUSH3(&linfo, &temp, &tt);
     if (tt != NULL) {
@@ -1061,91 +1188,15 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         JL_GC_POP();
         return NULL;
     }
-    if (linfo->def->lambda_template->code == jl_nothing) {
-        // not a generic function
-        JL_GC_POP();
-        return NULL;
-    }
-
-    // make sure to compile this normally first,
-    // since `emit_function` doesn't handle recursive compilation correctly
-    linfo = jl_compile_for_dispatch(linfo);
-
-    if (!getdeclarations) {
-        if (linfo->code == jl_nothing) {
-            // re-infer if we've deleted the code
-            // first copy the linfo to avoid corrupting it and
-            // confusing the compiler about the
-            // validity of the code it already generated
-            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
-            jl_type_infer(temp, 0);
-            if (temp->code == jl_nothing || temp->inInference) {
-                JL_GC_POP();
-                return NULL;
-            }
-        }
-        // emit this function into a new module
-        Function *f, *specf;
-        jl_llvm_functions_t declarations;
-        std::unique_ptr<Module> m = emit_function(temp ? temp : linfo, &declarations);
-        jl_globalPM->run(*m.get());
-        f = (llvm::Function*)declarations.functionObject;
-        specf = (llvm::Function*)declarations.specFunctionObject;
-        // swap declarations for definitions and destroy declarations
-        if (specf) {
-            Function *tempf = cast<Function>(m->getNamedValue(specf->getName()));
-            delete specf;
-            specf = tempf;
-        }
-        if (f) {
-            Function *tempf = cast<Function>(m->getNamedValue(f->getName()));
-            delete f;
-            f = tempf;
-        }
-        Function *specf_decl = (Function*)linfo->functionObjectsDecls.specFunctionObject;
-        if (specf_decl) {
-            specf->setName(specf_decl->getName());
-        }
-        Function *f_decl = (Function*)linfo->functionObjectsDecls.functionObject;
-        if (f_decl) {
-            f->setName(f_decl->getName());
-        }
-        m.release(); // the return object `llvmf` will be the owning pointer
-        JL_GC_POP();
-        if (getwrapper || !specf) {
-            return f;
-        }
-        else {
-            return specf;
-        }
-    }
-    if (linfo->jlcall_api == 2) {
-        // normally we don't generate native code for these functions, so need an exception here
-        // This leaks a bit of memory to cache the native code that we'll never actually need
-        if (linfo->functionObjectsDecls.functionObject == NULL) {
-            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
-            jl_type_infer(temp, 0);
-            temp->jlcall_api = 0;
-            temp->constval = jl_nothing;
-            if (temp->code == jl_nothing || temp->inInference) {
-                JL_GC_POP();
-                return NULL;
-            }
-            jl_compile_linfo(temp);
-            linfo->functionObjectsDecls = temp->functionObjectsDecls;
-        }
-        jl_set_lambda_code_null(linfo);
-    }
-    Function *llvmf;
-    if (!getwrapper && linfo->functionObjectsDecls.specFunctionObject != NULL) {
-        llvmf = (Function*)linfo->functionObjectsDecls.specFunctionObject;
-    }
-    else {
-        llvmf = (Function*)linfo->functionObjectsDecls.functionObject;
-    }
+    void *f;
+    if (getdeclarations)
+        f = jl_get_llvmf_decl(linfo, getwrapper);
+    else
+        f = jl_get_llvmf_defn(linfo, getwrapper);
     JL_GC_POP();
-    return llvmf;
+    return f;
 }
+
 
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
@@ -1159,6 +1210,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
     if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
         jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
+    JL_LOCK(&codegen_lock); // Might GC
     if (!llvmf->getParent()) {
         // print the function declaration as-is
         llvmf->print(stream);
@@ -1202,6 +1254,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
         }
         delete m;
     }
+    JL_UNLOCK(&codegen_lock); // Might GC
 
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
@@ -1499,10 +1552,6 @@ extern "C" void jl_write_malloc_log(void)
     write_log_data(mallocData, ".mem");
 }
 
-// --- code gen for intrinsic functions ---
-
-#include "intrinsics.cpp"
-
 // --- constant determination ---
 
 static void show_source_loc(JL_STREAM *out, jl_codectx_t *ctx)
@@ -1522,16 +1571,14 @@ static void cg_bdw(jl_binding_t *b, jl_codectx_t *ctx)
     }
 }
 
+
 // try to statically evaluate, NULL if not possible
-extern "C"
-jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
-                           jl_lambda_info_t *linfo, int sparams, int allow_alloc)
+static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, int sparams=true, int allow_alloc=true)
 {
-    jl_codectx_t *ctx = (jl_codectx_t*)ctx_;
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
-        if (jl_is_const(mod, sym))
-            return jl_get_global(mod, sym);
+        if (jl_is_const(ctx->module, sym))
+            return jl_get_global(ctx->module, sym);
         return NULL;
     }
     if (jl_is_slot(ex))
@@ -1539,36 +1586,34 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
     if (jl_is_ssavalue(ex)) {
         ssize_t idx = ((jl_ssavalue_t*)ex)->id;
         assert(idx >= 0);
-        if (ctx != NULL && ctx->ssavalue_assigned.at(idx)) {
+        if (ctx->ssavalue_assigned.at(idx)) {
             return ctx->SAvalues.at(idx).constant;
         }
         return NULL;
     }
     if (jl_is_quotenode(ex))
-        return jl_fieldref(ex,0);
+        return jl_fieldref(ex, 0);
     if (jl_is_lambda_info(ex))
         return NULL;
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
     if (jl_is_globalref(ex)) {
-        s = (jl_sym_t*)jl_globalref_name(ex);
-        if (s && jl_is_symbol(s)) {
-            jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
-            if (b && b->constp) {
-                if (b->deprecated) cg_bdw(b, ctx);
-                return b->value;
-            }
+        s = jl_globalref_name(ex);
+        jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
+        if (b && b->constp) {
+            if (b->deprecated) cg_bdw(b, ctx);
+            return b->value;
         }
         return NULL;
     }
     if (jl_is_expr(ex)) {
         jl_expr_t *e = (jl_expr_t*)ex;
         if (e->head == call_sym) {
-            jl_value_t *f = jl_static_eval(jl_exprarg(e,0),ctx,mod,linfo,sparams,allow_alloc);
+            jl_value_t *f = static_eval(jl_exprarg(e, 0), ctx, sparams, allow_alloc);
             if (f) {
                 if (jl_array_dim0(e->args) == 3 && f==jl_builtin_getfield) {
-                    m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,linfo,sparams,allow_alloc);
-                    s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,linfo,sparams,allow_alloc);
+                    m = (jl_module_t*)static_eval(jl_exprarg(e, 1), ctx, sparams, allow_alloc);
+                    s = (jl_sym_t*)static_eval(jl_exprarg(e, 2), ctx, sparams, allow_alloc);
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
                         if (b && b->constp) {
@@ -1586,7 +1631,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                     jl_value_t **v;
                     JL_GC_PUSHARGS(v, n);
                     for (i = 0; i < n; i++) {
-                        v[i] = jl_static_eval(jl_exprarg(e,i+1),ctx,mod,linfo,sparams,allow_alloc);
+                        v[i] = static_eval(jl_exprarg(e, i+1), ctx, sparams, allow_alloc);
                         if (v[i] == NULL) {
                             JL_GC_POP();
                             return NULL;
@@ -1608,9 +1653,9 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
             }
         }
         else if (e->head == static_parameter_sym) {
-            size_t idx = jl_unbox_long(jl_exprarg(e,0));
-            if (linfo && idx <= jl_svec_len(linfo->sparam_vals)) {
-                jl_value_t *e = jl_svecref(linfo->sparam_vals, idx - 1);
+            size_t idx = jl_unbox_long(jl_exprarg(e, 0));
+            if (idx <= jl_svec_len(ctx->linfo->sparam_vals)) {
+                jl_value_t *e = jl_svecref(ctx->linfo->sparam_vals, idx - 1);
                 if (jl_is_typevar(e))
                     return NULL;
                 return e;
@@ -1621,21 +1666,19 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
     return ex;
 }
 
-static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams,
-                               bool allow_alloc)
-{
-    return jl_static_eval(ex, ctx, ctx->module, ctx->linfo, sparams, allow_alloc);
-}
-
 static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
 {
-    return static_eval(ex,ctx,sparams) != NULL;
+    return static_eval(ex, ctx, sparams) != NULL;
 }
 
 static bool slot_eq(jl_value_t *e, int sl)
 {
     return jl_is_slot(e) && jl_slot_number(e)-1 == sl;
 }
+
+// --- code gen for intrinsic functions ---
+
+#include "intrinsics.cpp"
 
 // --- find volatile variables ---
 
@@ -5541,10 +5584,68 @@ static void init_julia_llvm_env(Module *m)
     addOptimizationPasses(jl_globalPM);
 }
 
+static inline std::string getNativeTarget()
+{
+    std::string cpu = sys::getHostCPUName();
+#if defined(_CPU_ARM_)
+    // Try slightly harder than LLVM at determine the CPU architecture.
+    if (cpu == "generic") {
+        // This is the most reliable way I can find
+        // `/proc/cpuinfo` changes between kernel versions
+        struct utsname name;
+        if (uname(&name) >= 0) {
+            // name.machine is the elf_platform in the kernel.
+            if (strcmp(name.machine, "armv6l") == 0) {
+                return "armv6";
+            }
+            if (strcmp(name.machine, "armv7l") == 0) {
+                return "armv7";
+            }
+            if (strcmp(name.machine, "armv7ml") == 0) {
+                // Thumb
+                return "armv7-m";
+            }
+            if (strcmp(name.machine, "armv8l") == 0 ||
+                strcmp(name.machine, "aarch64") == 0) {
+                return "armv8";
+            }
+        }
+    }
+#endif
+    return cpu;
+}
+
+#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
+// Check if the cpu name is a ARM/AArch64 arch name and return a
+// string that can be used as LLVM feature name
+static inline std::string checkARMArchFeature(const std::string &cpu)
+{
+    const char *prefix = "armv";
+    size_t prefix_len = strlen(prefix);
+    if (cpu.size() <= prefix_len ||
+        memcmp(cpu.data(), prefix, prefix_len) != 0 ||
+        cpu[prefix_len] < '1' || cpu[prefix_len] > '9')
+        return std::string();
+#if defined(_CPU_ARM_)
+    // "v7" and "v8" are not available in the form of `armv*`
+    // in the feature list
+    if (cpu == "armv7") {
+        return "v7";
+    }
+    else if (cpu == "armv8") {
+        return "v8";
+    }
+    return cpu;
+#else
+    return cpu.substr(3);
+#endif
+}
+#endif
+
 // Helper to figure out what features to set for the LLVM target
 // If the user specifies native (or does not specify) we default
 // using the API provided by LLVM
-static inline SmallVector<std::string,10> getTargetFeatures()
+static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
 {
     StringMap<bool> HostFeatures;
     if (!strcmp(jl_options.cpu_target,"native")) {
@@ -5573,16 +5674,63 @@ static inline SmallVector<std::string,10> getTargetFeatures()
 #endif
 
     // Figure out if we know the cpu_target
-    std::string cpu = strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : sys::getHostCPUName();
-    if (cpu.empty() || cpu == "generic") {
-        jl_printf(JL_STDERR, "WARNING: unable to determine host cpu name.\n");
-#if defined(_CPU_ARM_) && defined(__ARM_PCS_VFP)
-        // Check if this is required when you have read the features directly from the processor
-        // This affects the platform calling convention.
-        // TODO: enable vfp3 for ARMv7+ (but adapt the ABI)
-        HostFeatures["vfp2"] = true;
+    cpu = (strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target :
+           getNativeTarget());
+#if defined(_CPU_ARM_)
+    // Figure out what we are compiling against from the C defines.
+    // This might affect ABI but is fine since
+    // 1. We define the C ABI explicitly.
+    // 2. This does not change when running the same binary on different
+    //    machines.
+    // This shouldn't affect making generic binaries since that requires a
+    // generic C -march anyway.
+    HostFeatures["vfp2"] = true;
+
+    // Arch version
+#if __ARM_ARCH >= 8
+    HostFeatures["v8"] = true;
+#elif __ARM_ARCH >= 7
+    HostFeatures["v7"] = true;
+#else
+    // minimum requirement
+    HostFeatures["v6"] = true;
 #endif
+
+    // ARM profile
+    // Only do this on ARM and not AArch64 since LLVM aarch64 backend
+    // doesn't support setting profiles.
+    // AFAIK there's currently no 64bit R and M profile either
+    // (v8r and v8m are both 32bit)
+#if defined(__ARM_ARCH_PROFILE)
+#  if __ARM_ARCH_PROFILE == 'A'
+    HostFeatures["aclass"] = true;
+#  elif __ARM_ARCH_PROFILE == 'R'
+    HostFeatures["rclass"] = true;
+#  elif __ARM_ARCH_PROFILE == 'M'
+    // Thumb
+    HostFeatures["mclass"] = true;
+#  endif
+#endif
+#endif // _CPU_ARM_
+
+    // On ARM and AArch64, allow using cpu_target to specify a CPU architecture
+    // which is specified in the feature set in LLVM.
+#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
+    // Supported ARM arch names on LLVM 3.8:
+    //   armv6, armv6-m, armv6j, armv6k, armv6kz, armv6s-m, armv6t2,
+    //   armv7, armv7-a, armv7-m, armv7-r, armv7e-m, armv7k, armv7s,
+    //   armv8, armv8-a, armv8.1-a, armv8.2-a
+    // Additional ARM arch names on LLVM 3.9:
+    //   armv8-m.base, armv8-m.main
+    //
+    // Supported AArch64 arch names on LLVM 3.8:
+    //   armv8.1a, armv8.2a
+    std::string arm_arch = checkARMArchFeature(cpu);
+    if (!arm_arch.empty()) {
+        HostFeatures[arm_arch] = true;
+        cpu = "generic";
     }
+#endif
 
     SmallVector<std::string,10> attr;
     for (StringMap<bool>::const_iterator it = HostFeatures.begin(); it != HostFeatures.end(); it++) {
@@ -5699,8 +5847,8 @@ extern "C" void jl_init_codegen(void)
     TheTriple.setEnvironment(Triple::ELF);
 #endif
 #endif
-    std::string TheCPU = strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : sys::getHostCPUName();
-    SmallVector<std::string, 10>  targetFeatures = getTargetFeatures( );
+    std::string TheCPU;
+    SmallVector<std::string, 10> targetFeatures = getTargetFeatures(TheCPU);
     jl_TargetMachine = eb.selectTarget(
             TheTriple,
             "",
