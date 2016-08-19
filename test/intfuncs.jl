@@ -2,6 +2,7 @@
 
 # Int32 and Int64 take different code paths -- test both
 for T in (Int32, Int64)
+    @test gcd(T(3)) === T(3)
     @test gcd(T(3), T(5)) === T(1)
     @test gcd(T(3), T(15)) === T(3)
     @test gcd(T(0), T(15)) === T(15)
@@ -16,6 +17,7 @@ for T in (Int32, Int64)
     @test gcd(typemin(T), T(1)) === T(1)
     @test_throws OverflowError gcd(typemin(T), typemin(T))
 
+    @test lcm(T(2)) === T(2)
     @test lcm(T(2), T(3)) === T(6)
     @test lcm(T(4), T(6)) === T(12)
     @test lcm(T(3), T(0)) === T(0)
@@ -86,6 +88,8 @@ let n = rand(Int)
     @test ndigits(n) == ndigits(big(n)) == ndigits(n, 10)
 end
 
+@test bin('3') == "110011"
+@test bin('3',7) == "0110011"
 @test bin(3) == "11"
 @test bin(3, 2) == "11"
 @test bin(3, 3) == "011"
@@ -103,8 +107,11 @@ end
 
 @test base(2, 5, 7) == "0000101"
 
+@test bits(Int16(3)) == "0000000000000011"
+@test bits('3') == "00000000000000000000000000110011"
 @test bits(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
     "0000000000000000000000000000000000000000000000000000010000001011")
+@test bits(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 
 @test digits(4, 2) == [0, 0, 1]
 @test digits(5, 3) == [2, 1]
@@ -115,6 +122,9 @@ end
 @test leading_zeros(UInt32(Int64(2) ^ 32 - 2)) == 0
 
 @test count_zeros(Int64(1)) == 63
+
+@test factorial(3) == 6
+@test_throws DomainError factorial(-3)
 
 @test isqrt(4) == 2
 @test isqrt(5) == 2
