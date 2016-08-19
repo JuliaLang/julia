@@ -257,24 +257,33 @@ the statements in a module often involves compiling a large amount of code.
 Julia provides the ability to create precompiled versions of modules
 to reduce this time.
 
-There are two mechanisms that can achieve this:
-incremental compile and custom system image.
-
-To create a custom system image that can be used when starting Julia with the ``-J`` option,
-recompile Julia after modifying the file ``base/userimg.jl`` to require the desired modules.
-
 To create an incremental precompiled module file, add
-``__precompile__()`` at the top of your module file (before the
-``module`` starts).  This will cause it to be automatically compiled
-the first time it is imported.  Alternatively, you can manually call
-``Base.compilecache(modulename)``.  The resulting cache files will be
-stored in ``Base.LOAD_CACHE_PATH[1]``.  Subsequently, the module is
-automatically recompiled upon ``import`` whenever any of its
-dependencies change; dependencies are modules it imports, the Julia
-build, files it includes, or explicit dependencies declared by
-``include_dependency(path)`` in the module file(s).  Precompiling a
-module also recursively precompiles any modules that are imported
-therein.  If you know that it is *not* safe to precompile your module
+``__precompile__()`` at the top of your module file
+(before the ``module`` starts).
+This will cause it to be automatically compiled the first time it is imported.
+Alternatively, you can manually call ``Base.compilecache(modulename)``.
+The resulting cache files will be stored in ``Base.LOAD_CACHE_PATH[1]``.
+Subsequently, the module is automatically recompiled upon ``import``
+whenever any of its dependencies change;
+dependencies are modules it imports, the Julia build, files it includes,
+or explicit dependencies declared by ``include_dependency(path)`` in the module file(s).
+
+For file dependencies, a change is determined by examining whether the modification time (mtime)
+of each file loaded by ``include`` or added explicity by ``include_dependency`` is unchanged,
+or equal to the modification time truncated to the nearest second
+(to accommodate systems that can't copy mtime with sub-second accuracy).
+It also takes into account whether the path to the file chosen by the search logic in ``require``
+matches the path that had created the precompile file.
+
+It also takes into account the set of dependencies already loaded into the current process
+and won't recompile those modules, even if their files change or disappear,
+in order to avoid creating incompatibilities between the running system and the precompile cache.
+If you want to have changes to the source reflected in the running system,
+you should call ``reload("Module")`` on the module you changed,
+and any module that depended on it in which you want to see the change reflected.
+
+Precompiling a module also recursively precompiles any modules that are imported therein.
+If you know that it is *not* safe to precompile your module
 (for the reasons described below), you should put
 ``__precompile__(false)`` in the module file to cause ``Base.compilecache`` to
 throw an error (and thereby prevent the module from being imported by
@@ -312,14 +321,17 @@ time) because the pointer address will change from run to run.  You
 could accomplish this by defining the following ``__init__`` function
 in your module::
 
+    const foo_data_ptr = Ref{Ptr{Void}}(0)
     function __init__()
-        ccall((:foo_init,:libfoo), Void, ())
-        global const foo_data_ptr = ccall((:foo_data,:libfoo), Ptr{Void}, ())
+        ccall((:foo_init, :libfoo), Void, ())
+        foo_data_ptr[] = ccall((:foo_data, :libfoo), Ptr{Void}, ())
     end
 
 Notice that it is perfectly possible to define a global inside
 a function like ``__init__``; this is one of the advantages of using a
-dynamic language.
+dynamic language. But by making it a constant at global scope,
+we can ensure that the type is known to the compiler and allow it to generate
+better optimized code.
 Obviously, any other globals in your module that depends on ``foo_data_ptr``
 would also have to be initialized in ``__init__``.
 
