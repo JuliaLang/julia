@@ -141,15 +141,18 @@ function find_all_in_cache_path(mod::Symbol)
     return paths
 end
 
+# these return either the array of modules loaded from the path / content given
+# or an Exception that describes why it couldn't be loaded
 function _include_from_serialized(content::Vector{UInt8})
     return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{UInt8}, Int), content, sizeof(content))
 end
-
 function _include_from_serialized(path::String)
     return ccall(:jl_restore_incremental, Any, (Cstring,), path)
 end
 
-# returns an array of modules loaded, or nothing if failed
+# returns an array of modules loaded, or an Exception that describes why it failed
+# and also attempts to load the same file across all nodes (if toplevel_node and myid() == master)
+# and it reconnects the Base.Docs.META
 function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, toplevel_load::Bool)
     local restored = nothing
     local content::Vector{UInt8}
@@ -161,13 +164,23 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
             content = remotecall_fetch(open, node, read, path_to_try)
         end
         restored = _include_from_serialized(content)
-        if restored !== nothing
-            others = filter(x -> x != myid(), procs())
-            refs = Any[ @spawnat p (nothing !== _include_from_serialized(content)) for p in others]
-            for (id, ref) in zip(others, refs)
-                if !fetch(ref)
-                    warn("node state is inconsistent: node $id failed to load cache from $path_to_try")
-                end
+        isa(restored, Exception) && return restored
+        others = filter(x -> x != myid(), procs())
+        refs = Any[
+            (p, @spawnat(p,
+                let m = try
+                            _include_from_serialized(content)
+                        catch ex
+                            isa(ex, Exception) ? ex : ErrorException(string(ex))
+                        end
+                    isa(m, Exception) ? m : nothing
+                end))
+            for p in others ]
+        for (id, ref) in refs
+            m = fetch(ref)
+            if m !== nothing
+                warn("Node state is inconsistent: node $id failed to load cache from $path_to_try. Got:")
+                warn(m)
             end
         end
     elseif node == myid()
@@ -177,8 +190,8 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
         restored = _include_from_serialized(content)
     end
 
-    if restored !== nothing
-        for M in restored
+    if !isa(restored, Exception)
+        for M in restored::Vector{Any}
             if isdefined(M, Base.Docs.META)
                 push!(Base.Docs.modules, M)
             end
@@ -197,16 +210,28 @@ function _require_search_from_serialized(node::Int, mod::Symbol, sourcepath::Str
         paths = @fetchfrom node find_all_in_cache_path(mod)
     end
 
+    local restored = nothing
     for path_to_try in paths
         if stale_cachefile(sourcepath, path_to_try)
             continue
         end
         restored = _require_from_serialized(node, mod, path_to_try, toplevel_load)
-        if restored === nothing
-            warn("deserialization checks failed while attempting to load cache from $path_to_try")
+        if isa(restored, Exception)
+            if isa(restored, ErrorException) && endswith(restored.msg, " uuid did not match cache file.")
+                # can't use this cache due to a module uuid mismatch,
+                # defer reporting error until after trying all of the possible matches
+                continue
+            end
+            warn("Deserialization checks failed while attempting to load cache from $path_to_try.")
+            error(restored)
         else
             return restored
         end
+    end
+    if isa(restored, Exception)
+        warn("""Deserialization checks failed while attempting to load cache from $path_to_try.
+             This is likely because module %s does not support precompilation but is imported by a module that does.""")
+        warn(restored)
     end
     return !isempty(paths)
 end
@@ -346,8 +371,10 @@ function require(mod::Symbol)
                 # spawn off a new incremental pre-compile task from node 1 for recursive `require` calls
                 # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
                 cachefile = compilecache(mod)
-                if nothing === _require_from_serialized(1, mod, cachefile, last)
-                    warn("compilecache failed to create a usable precompiled cache file for module $name.")
+                m = _require_from_serialized(1, mod, cachefile, last)
+                if !isa(m, Exception)
+                    warn("Compilecache failed to create a usable precompiled cache file for module $name. Got:")
+                    warn(m)
                 else
                     return # success
                 end
@@ -371,7 +398,9 @@ function require(mod::Symbol)
                 rethrow() # rethrow non-precompilable=true errors
             end
             cachefile = compilecache(mod)
-            if nothing === _require_from_serialized(1, mod, cachefile, last)
+            m = _require_from_serialized(1, mod, cachefile, last)
+            if isa(m, Exception)
+                warn(m)
                 error("module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
         end
@@ -569,15 +598,6 @@ function stale_cachefile(modpath, cachefile)
         for (f, ftime) in files
             # Issue #13606: compensate for Docker images rounding mtimes
             if mtime(f) ∉ (ftime, floor(ftime))
-                return true
-            end
-        end
-        # files are not stale, so module list is valid and needs checking
-        for (M,uuid) in modules
-            if !isdefined(Main, M)
-                require(M) # should recursively recompile module M if stale
-            end
-            if module_uuid(getfield(Main, M)) != uuid
                 return true
             end
         end
