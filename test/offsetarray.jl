@@ -369,3 +369,20 @@ for s = -5:5
 end
 
 end # let
+
+# Check that similar throws a MethodError rather than a
+# StackOverflowError if no appropriate method has been defined
+# (#18107)
+module SimilarUR
+    using Base.Test
+    immutable MyURange <: AbstractUnitRange{Int}
+        start::Int
+        stop::Int
+    end
+    ur = MyURange(1,3)
+    a = Array{Int}(2)
+    @test_throws MethodError similar(a, ur)
+    @test_throws MethodError similar(a, Float64, ur)
+    @test_throws MethodError similar(a, Float64, (ur,))
+    @test_throws MethodError similar(a, (2.0,3.0))
+end
