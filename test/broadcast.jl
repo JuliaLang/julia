@@ -284,6 +284,10 @@ let d = Dict(:foo => [1,3,7], (3,4) => [5,9])
     d[3,4] .-= 1
     @test d[3,4] == [4,8]
 end
+let identity = error, x = [1,2,3]
+    x .= 1 # make sure it goes to broadcast!(Base.identity, ...), not identity
+    @test x == [1,1,1]
+end
 
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
