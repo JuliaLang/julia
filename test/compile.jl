@@ -42,7 +42,7 @@ try
     # the module doesn't load from the image:
     try
         redirected_stderr()
-        @test nothing !== Base._require_from_serialized(myid(), Foo_module, #=broadcast-load=#false)
+        @test nothing !== Base._require_search_from_serialized(myid(), Foo_module, Foo_file, #=broadcast-load=#false)
     finally
         redirect_stderr(olderr)
     end
@@ -88,14 +88,15 @@ try
               end
               """)
     end
-    Base.compilecache("FooBar")
     sleep(2)
+
+    Base.compilecache("FooBar")
     @test isfile(joinpath(dir, "FooBar.ji"))
+    @test !Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
 
     touch(FooBar_file)
     insert!(Base.LOAD_CACHE_PATH, 1, dir2)
-    Base.recompile_stale(:FooBar, joinpath(dir, "FooBar.ji"))
-    sleep(2)
+    Base.compilecache("FooBar")
     @test isfile(joinpath(dir2, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))

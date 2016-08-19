@@ -28,9 +28,9 @@ end
 
 function find_in_node_path(name, srcpath, node::Int=1)
     if myid() == node
-        find_in_path(name, srcpath)
+        return find_in_path(name, srcpath)
     else
-        remotecall_fetch(node, find_in_path, name, srcpath)
+        return remotecall_fetch(node, find_in_path, name, srcpath)
     end
 end
 
@@ -39,7 +39,7 @@ function find_source_file(file)
     file2 = find_in_path(file)
     file2 !== nothing && return file2
     file2 = joinpath(JULIA_HOME, DATAROOTDIR, "julia", "base", file)
-    isfile(file2) ? file2 : nothing
+    return isfile(file2) ? file2 : nothing
 end
 
 function find_all_in_cache_path(mod::Symbol)
@@ -51,18 +51,22 @@ function find_all_in_cache_path(mod::Symbol)
             push!(paths, path)
         end
     end
-    paths
+    return paths
 end
 
 function _include_from_serialized(content::Vector{UInt8})
-    return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{UInt8},Int), content, sizeof(content))
+    return ccall(:jl_restore_incremental_from_buf, Any, (Ptr{UInt8}, Int), content, sizeof(content))
+end
+
+function _include_from_serialized(path::ByteString)
+    return ccall(:jl_restore_incremental, Any, (Cstring,), path)
 end
 
 # returns an array of modules loaded, or nothing if failed
 function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteString, toplevel_load::Bool)
-    restored = nothing
+    local restored = nothing
+    local content::Vector{UInt8}
     if toplevel_load && myid() == 1 && nprocs() > 1
-        recompile_stale(mod, path_to_try)
         # broadcast top-level import/using from node 1 (only)
         if node == myid()
             content = open(readbytes, path_to_try)
@@ -80,13 +84,11 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
             end
         end
     elseif node == myid()
-        myid() == 1 && recompile_stale(mod, path_to_try)
-        restored = ccall(:jl_restore_incremental, Any, (Ptr{UInt8},), path_to_try)
+        restored = _include_from_serialized(path_to_try)
     else
         content = remotecall_fetch(node, open, readbytes, path_to_try)
         restored = _include_from_serialized(content)
     end
-    # otherwise, continue search
 
     if restored !== nothing
         for M in restored
@@ -98,14 +100,20 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteStrin
     return restored
 end
 
-function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
+# returns `true` if require found a precompile cache for this mod, but couldn't load it
+# returns `false` if the module isn't known to be precompilable
+# returns the set of modules restored if the cache load succeeded
+function _require_search_from_serialized(node::Int, mod::Symbol, sourcepath::ByteString, toplevel_load::Bool)
     if node == myid()
         paths = find_all_in_cache_path(mod)
     else
         paths = @fetchfrom node find_all_in_cache_path(mod)
     end
-    sort!(paths, by=mtime, rev=true) # try newest cachefiles first
+
     for path_to_try in paths
+        if stale_cachefile(sourcepath, path_to_try)
+            continue
+        end
         restored = _require_from_serialized(node, mod, path_to_try, toplevel_load)
         if restored === nothing
             warn("deserialization checks failed while attempting to load cache from $path_to_try")
@@ -113,7 +121,7 @@ function _require_from_serialized(node::Int, mod::Symbol, toplevel_load::Bool)
             return restored
         end
     end
-    return nothing
+    return !isempty(paths)
 end
 
 # to synchronize multiple tasks trying to import/using something
@@ -232,21 +240,27 @@ function require(mod::Symbol)
     last = toplevel_load::Bool
     try
         toplevel_load = false
-        if nothing !== _require_from_serialized(1, mod, last)
-            return
-        end
-        if JLOptions().incremental != 0
-            # spawn off a new incremental precompile task from node 1 for recursive `require` calls
-            cachefile = compilecache(mod)
-            if nothing === _require_from_serialized(1, mod, cachefile, last)
-                warn("require failed to create a precompiled cache file")
-            end
-            return
-        end
-
         name = string(mod)
         path = find_in_node_path(name, nothing, 1)
-        path === nothing && throw(ArgumentError("$name not found in path"))
+        if path === nothing
+            throw(ArgumentError("module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
+        end
+
+        doneprecompile = _require_search_from_serialized(1, mod, path, last)
+        if !isa(doneprecompile, Bool)
+            return # success
+        elseif doneprecompile === true || JLOptions().incremental != 0
+            # spawn off a new incremental pre-compile task from node 1 for recursive `require` calls
+            # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
+            cachefile = compilecache(mod)
+            if nothing === _require_from_serialized(1, mod, cachefile, last)
+                warn("compilecache failed to create a usable precompiled cache file for module $name.")
+            else
+                return # success
+            end
+        end
+        # fall-through to attempting to load the source file
+
         try
             if last && myid() == 1 && nprocs() > 1
                 # include on node 1 first to check for PrecompilableErrors
@@ -259,13 +273,12 @@ function require(mod::Symbol)
                 eval(Main, :(Base.include_from_node1($path)))
             end
         catch ex
-            if !precompilableerror(ex, true)
+            if doneprecompile === true || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
             end
-            isinteractive() && info("Precompiling module $mod...")
             cachefile = compilecache(mod)
             if nothing === _require_from_serialized(1, mod, cachefile, last)
-                error("__precompile__(true) but require failed to create a precompiled cache file")
+                error("module $mod declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
         end
     finally
@@ -396,6 +409,13 @@ function compilecache(name::ByteString)
         mkpath(cachepath)
     end
     cachefile = abspath(cachepath, name*".ji")
+    if isinteractive()
+        if isfile(cachepath)
+            info("Recompiling stale cache file $cachefile for module $name.")
+        else
+            info("Precompiling module $name.")
+        end
+    end
     if !success(create_expr_cache(path, cachefile))
         error("Failed to precompile $name to $cachefile")
     end
@@ -445,7 +465,7 @@ function stale_cachefile(modpath, cachefile)
         if files[1][1] != modpath
             return true # cache file was compiled from a different path
         end
-        for (f,ftime) in files
+        for (f, ftime) in files
             # Issue #13606: compensate for Docker images rounding mtimes
             if mtime(f) ∉ (ftime, floor(ftime))
                 return true
@@ -463,16 +483,5 @@ function stale_cachefile(modpath, cachefile)
         return false # fresh cachefile
     finally
         close(io)
-    end
-end
-
-function recompile_stale(mod, cachefile)
-    path = find_in_path(string(mod), nothing)
-    if path === nothing
-        error("module $mod not found in current path; you should rm(\"$(escape_string(cachefile))\") to remove the orphaned cache file")
-    end
-    if stale_cachefile(path, cachefile)
-        info("Recompiling stale cache file $cachefile for module $mod.")
-        compilecache(mod)
     end
 end
