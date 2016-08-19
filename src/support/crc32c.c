@@ -44,7 +44,7 @@
 
 #include "crc32c.h"
 
-#if defined(_CPU_X86_64_) && !defined(_COMPILER_MICROSOFT_)
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
 #  define HW_CRC
 #endif
 
