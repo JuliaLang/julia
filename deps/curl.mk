@@ -17,13 +17,13 @@ $(BUILDDIR)/curl-$(CURL_VER)/config.status: $(SRCDIR)/srccache/curl-$(CURL_VER)/
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$< $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
-	--without-ssl --without-gnutls --without-gssapi \
-	--without-libidn --without-libmetalink --without-librtmp \
-	--without-nghttp2 --without-nss --without-polarssl \
-	--without-spnego --disable-ares --disable-ldap \
-	--disable-ldaps --without-zsh-functions-dir \
-	--with-libssh2=$(build_prefix) --with-mbedtls=$(build_prefix) \
-	CFLAGS="$(CFLAGS) $(CURL_CFLAGS)" LDFLAGS="$(LDFLAGS) $(CURL_LDFLAGS)"
+		--without-ssl --without-gnutls --without-gssapi \
+		--without-libidn --without-libmetalink --without-librtmp \
+		--without-nghttp2 --without-nss --without-polarssl \
+		--without-spnego --without-libpsl --disable-ares \
+		--disable-ldap --disable-ldaps --without-zsh-functions-dir \
+		--with-libssh2=$(build_prefix) --with-mbedtls=$(build_prefix) \
+		CFLAGS="$(CFLAGS) $(CURL_CFLAGS)" LDFLAGS="$(LDFLAGS) $(CURL_LDFLAGS)"
 	touch -c $@
 
 $(CURL_SRC_TARGET): $(BUILDDIR)/curl-$(CURL_VER)/config.status
