@@ -44,8 +44,8 @@ JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)
 
 extern int vasprintf(char **str, const char *fmt, va_list ap);
 
-static void JL_NORETURN jl_vexceptionf(jl_datatype_t *exception_type,
-                                       const char *fmt, va_list args)
+static jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
+                                  const char *fmt, va_list args)
 {
     if (exception_type == NULL) {
         jl_printf(JL_STDERR, "ERROR: ");
@@ -64,15 +64,18 @@ static void JL_NORETURN jl_vexceptionf(jl_datatype_t *exception_type,
         free(str);
     }
     JL_GC_PUSH1(&msg);
-    jl_throw(jl_new_struct(exception_type, msg));
+    jl_value_t *e = jl_new_struct(exception_type, msg);
+    JL_GC_POP();
+    return e;
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_errorf(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    jl_vexceptionf(jl_errorexception_type, fmt, args);
+    jl_value_t *e = jl_vexceptionf(jl_errorexception_type, fmt, args);
     va_end(args);
+    jl_throw(e);
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_exceptionf(jl_datatype_t *exception_type,
@@ -80,8 +83,19 @@ JL_DLLEXPORT void JL_NORETURN jl_exceptionf(jl_datatype_t *exception_type,
 {
     va_list args;
     va_start(args, fmt);
-    jl_vexceptionf(exception_type, fmt, args);
+    jl_value_t *e = jl_vexceptionf(exception_type, fmt, args);
     va_end(args);
+    jl_throw(e);
+}
+
+jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type,
+                              const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    jl_value_t *e = jl_vexceptionf(exception_type, fmt, args);
+    va_end(args);
+    return e;
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_too_few_args(const char *fname, int min)
