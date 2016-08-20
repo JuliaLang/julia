@@ -4,7 +4,7 @@
 # Run as: fixup-libstdc++.sh <libdir> <private_libdir>
 
 if [ -z "$1" ]; then
-    echo "Usage: $0 <libdir> <private_libdir>"
+    printf "Usage: $0 <libdir> <private_libdir>\n"
     exit 1
 fi
 
@@ -12,7 +12,7 @@ libdir="$1"
 private_libdir="$2"
 
 if [ ! -f "$libdir/libjulia.so" ]; then
-    echo "ERROR: Could not open $libdir/libjulia.so" >&2
+    printf "ERROR: Could not open $libdir/libjulia.so\n" >&2
     exit 2
 fi
 
