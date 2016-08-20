@@ -603,8 +603,8 @@ function findnz{Tv,Ti}(x::SparseVector{Tv,Ti})
 
     count -= 1
     if numnz != count
-      deleteat!(I, (count+1):numnz)
-      deleteat!(V, (count+1):numnz)
+        deleteat!(I, (count+1):numnz)
+        deleteat!(V, (count+1):numnz)
     end
 
     return (I, V)
@@ -932,7 +932,6 @@ function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractSparseVector{Tx},
                            y::AbstractSparseVector{Ty},
                            mode::Int)
-
     0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
     R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
@@ -1074,7 +1073,6 @@ function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractVector{Tx},
                            y::AbstractSparseVector{Ty},
                            mode::Int)
-
     0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
     R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
@@ -1117,7 +1115,6 @@ function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractSparseVector{Tx},
                            y::AbstractVector{Ty},
                            mode::Int)
-
     0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
     R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
