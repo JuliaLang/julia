@@ -1653,12 +1653,12 @@ end
 
 # These are needed because map(eltype, As) is not inferrable
 promote_eltype_op(::Any) = (@_pure_meta; Bottom)
-promote_eltype_op{T}(op, ::AbstractArray{T}) = (@_pure_meta; promote_op(op, T))
-promote_eltype_op{T}(op, ::T               ) = (@_pure_meta; promote_op(op, T))
-promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::AbstractArray{S}) = (@_pure_meta; promote_op(op, R, S))
-promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::S) = (@_pure_meta; promote_op(op, R, S))
-promote_eltype_op{R,S}(op, ::R, ::AbstractArray{S}) = (@_pure_meta; promote_op(op, R, S))
-promote_eltype_op(op, A, B, C, D...) = (@_pure_meta; promote_op(op, eltype(A), promote_eltype_op(op, B, C, D...)))
+promote_eltype_op(op, A) = (@_pure_meta; _promote_op(op, eltype(A)))
+promote_eltype_op{T}(op, ::AbstractArray{T}) = (@_pure_meta; _promote_op(op, T))
+promote_eltype_op{T}(op, ::AbstractArray{T}, A) = (@_pure_meta; _promote_op(op, T, eltype(A)))
+promote_eltype_op{T}(op, A, ::AbstractArray{T}) = (@_pure_meta; _promote_op(op, eltype(A), T))
+promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::AbstractArray{S}) = (@_pure_meta; _promote_op(op, R, S))
+promote_eltype_op(op, A, B, C, D...) = (@_pure_meta; promote_eltype_op(op, promote_eltype_op(op, A, B), C, D...))
 
 ## 1 argument
 map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
