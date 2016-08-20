@@ -22,7 +22,7 @@ case $bits in
     exc=seh
     ;;
   *)
-    printf "error: run script either as `./get_toolchain.sh 32` or `./get_toolchain.sh 64`\n" >&2
+    printf 'error: run script either as `./get_toolchain.sh 32` or `./get_toolchain.sh 64`\n' >&2
     exit 1
     ;;
 esac
