@@ -64,7 +64,27 @@ function edit(path::AbstractString, line::Integer=0)
     nothing
 end
 
-edit(f)          = edit(functionloc(f)...)
+function edit(f)
+    ms = methods(f)
+    nm = length(ms)
+    if nm <= 1
+        edit(functionloc(f)...)
+    else
+        for (i, m) in enumerate(ms)
+            @printf("%4u: %s\n", i, m)
+        end
+        ix = 0
+        while ix < 1 || ix > nm
+            print("Which method? [1-$nm] (<Enter> to cancel) > ")
+            (ix_str = strip(readline())) == "" && return
+            try
+                ix = parse(Int, ix_str)
+            end
+        end
+        edit(functionloc(collect(ms)[ix])...)
+    end
+end
+
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
 
