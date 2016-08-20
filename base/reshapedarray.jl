@@ -36,8 +36,9 @@ start(R::ReshapedArrayIterator) = start(R.iter)
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
 
-reshape(parent::AbstractArray, shp::Tuple)        = _reshape(parent, to_shape(shp))
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
+reshape(parent::AbstractArray, shp::NeedsShaping) = reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
 function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
@@ -47,7 +48,10 @@ end
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
 @pure rdims{N}(out::NTuple{N}, inds::Tuple{}, ::Type{Val{N}}) = out
-@pure rdims{N}(out::NTuple{N}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = (front(out)..., length(last(out)) * prod(map(length, inds)))
+@pure function rdims{N}(out::NTuple{N}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
+    l = length(last(out)) * prod(map(length, inds))
+    (front(out)..., OneTo(l))
+end
 @pure rdims{N}(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) = rdims((out..., OneTo(1)), (), Val{N})
 @pure rdims{N}(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(inds)), tail(inds), Val{N})
 
