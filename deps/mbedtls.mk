@@ -11,7 +11,7 @@ MBEDTLS_OBJ_SOURCE := $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedcrypto.$
 MBEDTLS_OBJ_TARGET := $(build_shlibdir)/libmbedcrypto.$(SHLIB_EXT)
 
 MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
-		-DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
+    -DUSE_STATIC_MBEDTLS_LIBRARY=OFF -DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
 
 MBEDTLS_OPTS += -DENABLE_ZLIB_SUPPORT=OFF
 ifeq ($(BUILD_OS),WINNT)
@@ -52,7 +52,7 @@ endif
 	echo 1 > $@
 
 $(MBEDTLS_OBJ_TARGET): $(MBEDTLS_OBJ_SOURCE) | $(build_shlibdir)
-ifeq ($(BUILD_OS), WINNT)
+ifeq ($(OS), WINNT)
 	cp $^ $(build_shlibdir)
 	cp $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedx509.$(SHLIB_EXT) $(build_shlibdir)
 	cp $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedtls.$(SHLIB_EXT) $(build_shlibdir)
