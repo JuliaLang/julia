@@ -9,7 +9,7 @@ valid_python() {
 
 for python in python python2 python2.7 python27; do
     if valid_python $python; then
-        echo `which $python`
+        printf "`which $python`\n"
         break
     fi
 done
