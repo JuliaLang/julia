@@ -741,26 +741,12 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
     builder.SetInsertPoint(passBB);
 }
 
-static bool is_inbounds(jl_codectx_t *ctx)
-{
-    // inbounds rule is either of top two values on inbounds stack are true
-    bool inbounds = !ctx->inbounds.empty() && ctx->inbounds.back();
-    if (ctx->inbounds.size() > 1)
-        inbounds |= ctx->inbounds[ctx->inbounds.size()-2];
-    return inbounds;
-}
-
-static bool is_bounds_check_block(jl_codectx_t *ctx)
-{
-    return !ctx->boundsCheck.empty() && ctx->boundsCheck.back();
-}
-
 #define CHECK_BOUNDS 1
 static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
 #if CHECK_BOUNDS==1
-    if ((!is_inbounds(ctx) &&
+    if ((!ctx->is_inbounds &&
          jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
          jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON) {
         Value *ok = builder.CreateICmpULT(im1, len);
@@ -1277,7 +1263,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
     Value *i = ConstantInt::get(T_size, 0);
     Value *stride = ConstantInt::get(T_size, 1);
 #if CHECK_BOUNDS==1
-    bool bc = (!is_inbounds(ctx) &&
+    bool bc = (!ctx->is_inbounds &&
                jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
         jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON;
     BasicBlock *failBB=NULL, *endBB=NULL;
