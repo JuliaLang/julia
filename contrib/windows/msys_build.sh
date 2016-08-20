@@ -20,9 +20,9 @@ checksum_download() {
   url=$2
   if [ -e "$f" ]; then
     deps/tools/jlchecksum "$f" 2> /dev/null && return
-    echo "Checksum for '$f' changed, download again." >&2
+    printf "Checksum for '$f' changed, download again.\n" >&2
   fi
-  echo "Downloading '$f'"
+  printf "Downloading '$f'\n"
   $curlflags -O "$url"
   deps/tools/jlchecksum "$f"
 }
@@ -31,27 +31,27 @@ checksum_download() {
 if [ -z "$ARCH" -a -z "$XC_HOST" ]; then
   export ARCH=`uname -m`
 elif [ -z "$ARCH" ]; then
-  ARCH=`echo $XC_HOST | sed 's/-w64-mingw32//'`
+  ARCH=`printf "$XC_HOST\n" | sed 's/-w64-mingw32//'`
 fi
 
-echo "" > Make.user
-echo "" > get-deps.log
+printf "\n" > Make.user
+printf "\n" > get-deps.log
 # set MARCH for consistency with how binaries get built
 if [ "$ARCH" = x86_64 ]; then
   bits=64
   archsuffix=64
   exc=seh
-  echo "override MARCH = x86-64" >> Make.user
-  echo 'USE_BLAS64 = 1' >> Make.user
-  echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_' >> Make.user
-  echo 'LIBBLASNAME = libopenblas64_' >> Make.user
+  printf "override MARCH = x86-64\n" >> Make.user
+  printf "USE_BLAS64 = 1\n" >> Make.user
+  printf "LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_\n" >> Make.user
+  printf "LIBBLASNAME = libopenblas64_\n" >> Make.user
 else
   bits=32
   archsuffix=86
   exc=sjlj
-  echo "override MARCH = pentium4" >> Make.user
-  echo 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas' >> Make.user
-  echo 'LIBBLASNAME = libopenblas' >> Make.user
+  printf "override MARCH = pentium4" >> Make.user
+  printf "LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas\n" >> Make.user
+  printf "LIBBLASNAME = libopenblas\n" >> Make.user
 fi
 
 # Set XC_HOST if in Cygwin or Linux
@@ -59,13 +59,13 @@ case $(uname) in
   CYGWIN*)
     if [ -z "$XC_HOST" ]; then
       XC_HOST="$ARCH-w64-mingw32"
-      echo "XC_HOST = $XC_HOST" >> Make.user
+      printf "XC_HOST = $XC_HOST\n" >> Make.user
     fi
     CROSS_COMPILE="$XC_HOST-"
     # Set BUILD_MACHINE and HOSTCC in case we don't have Cygwin gcc installed
-    echo "override BUILD_MACHINE = $ARCH-pc-cygwin" >> Make.user
+    printf "override BUILD_MACHINE = $ARCH-pc-cygwin\n" >> Make.user
     if [ -z "`which gcc 2>/dev/null`" ]; then
-      echo 'override HOSTCC = $(CROSS_COMPILE)gcc' >> Make.user
+      printf "override HOSTCC = $(CROSS_COMPILE)gcc\n" >> Make.user
     fi
     make win-extras >> get-deps.log
     SEVENZIP="dist-extras/7z"
@@ -73,7 +73,7 @@ case $(uname) in
   Linux)
     if [ -z "$XC_HOST" ]; then
       XC_HOST="$ARCH-w64-mingw32"
-      echo "XC_HOST = $XC_HOST" >> Make.user
+      printf "XC_HOST = $XC_HOST\n" >> Make.user
     fi
     CROSS_COMPILE="$XC_HOST-"
     make win-extras >> get-deps.log
@@ -88,9 +88,9 @@ esac
 # Download most recent Julia binary for dependencies
 if ! [ -e julia-installer.exe ]; then
   f=julia-latest-win$bits.exe
-  echo "Downloading $f"
+  printf "Downloading $f\n"
   $curlflags -O https://s3.amazonaws.com/julianightlies/bin/winnt/x$archsuffix/$f
-  echo "Extracting $f"
+  printf "Extracting $f\n"
   $SEVENZIP x -y $f >> get-deps.log
 fi
 for i in bin/*.dll; do
@@ -100,7 +100,7 @@ done
 for i in share/julia/base/pcre_h.jl; do
   $SEVENZIP e -y julia-installer.exe "$i" -obase >> get-deps.log
 done
-echo "override PCRE_INCL_PATH =" >> Make.user
+printf "override PCRE_INCL_PATH =\n" >> Make.user
 # Remove libjulia.dll if it was copied from downloaded binary
 rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
@@ -115,7 +115,7 @@ if [ -z "$USEMSVC" ]; then
     f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
     checksum_download \
         "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
-    echo "Extracting $f"
+    printf "Extracting $f\n"
     $SEVENZIP x -y $f >> get-deps.log
     export PATH=$PWD/mingw$bits/bin:$PATH
     # If there is a version of make.exe here, it is mingw32-make which won't work
@@ -125,35 +125,35 @@ if [ -z "$USEMSVC" ]; then
 
   f=llvm-3.7.1-$ARCH-w64-mingw32-juliadeps-r09.7z
 else
-  echo "override USEMSVC = 1" >> Make.user
-  echo "override ARCH = $ARCH" >> Make.user
-  echo "override XC_HOST = " >> Make.user
+  printf "override USEMSVC = 1\n" >> Make.user
+  printf "override ARCH = $ARCH\n" >> Make.user
+  printf "override XC_HOST = \n" >> Make.user
   export CC="$PWD/deps/srccache/libuv/compile cl -nologo -MD -Z7"
   export AR="$PWD/deps/srccache/libuv/ar-lib lib"
   export LD="$PWD/linkld link"
-  echo "override CC = $CC" >> Make.user
-  echo 'override CXX = $(CC) -EHsc' >> Make.user
-  echo "override AR = $AR" >> Make.user
-  echo "override LD = $LD -DEBUG" >> Make.user
+  printf "override CC = $CC\n" >> Make.user
+  printf "override CXX = $(CC) -EHsc\n" >> Make.user
+  printf "override AR = $AR\n" >> Make.user
+  printf "override LD = $LD -DEBUG\n" >> Make.user
 
   f=llvm-3.3-$ARCH-msvc12-juliadeps.7z
 fi
 
 checksum_download \
     "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
-echo "Extracting $f"
+printf "Extracting $f\n"
 $SEVENZIP x -y $f >> get-deps.log
-echo 'override LLVM_CONFIG := $(JULIAHOME)/usr/bin/llvm-config.exe' >> Make.user
-echo 'override LLVM_SIZE := $(JULIAHOME)/usr/bin/llvm-size.exe' >> Make.user
+printf "override LLVM_CONFIG := $(JULIAHOME)/usr/bin/llvm-config.exe\n" >> Make.user
+printf "override LLVM_SIZE := $(JULIAHOME)/usr/bin/llvm-size.exe\n" >> Make.user
 
 if [ -z "`which make 2>/dev/null`" ]; then
   if [ -n "`uname | grep CYGWIN`" ]; then
-    echo "Install the Cygwin package for 'make' and try again."
+    printf "Install the Cygwin package for 'make' and try again.\n"
     exit 1
   fi
   f="/make/make-3.81-2/make-3.81-2-msys-1.0.11-bin.tar"
   if ! [ -e `basename $f.lzma` ]; then
-    echo "Downloading `basename $f`"
+    printf "Downloading `basename $f`\n"
     $curlflags -O http://sourceforge.net/projects/mingw/files/MSYS/Base$f.lzma
   fi
   $SEVENZIP x -y `basename $f.lzma` >> get-deps.log
@@ -163,49 +163,49 @@ fi
 
 if ! [ -e usr/bin/busybox.exe ]; then
   f=busybox-w32-FRP-483-g31277ab.exe
-  echo "Downloading $f"
+  printf "Downloading $f\n"
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
-  echo "USE_SYSTEM_$lib = 1" >> Make.user
+  printf "USE_SYSTEM_$lib = 1\n" >> Make.user
 done
-echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
-echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
+printf "override LIBLAPACK = $(LIBBLAS)\n" >> Make.user
+printf "override LIBLAPACKNAME = $(LIBBLASNAME)\n" >> Make.user
 
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
 # utf8proc since its headers are not in the binary download
-echo 'override STAGE1_DEPS = libuv' >> Make.user
-echo 'override STAGE2_DEPS = utf8proc' >> Make.user
-echo 'override STAGE3_DEPS = ' >> Make.user
-echo 'override STAGE4_DEPS = ' >> Make.user
+printf "override STAGE1_DEPS = libuv\n" >> Make.user
+printf "override STAGE2_DEPS = utf8proc\n" >> Make.user
+printf "override STAGE3_DEPS = \n" >> Make.user
+printf "override STAGE4_DEPS = \n" >> Make.user
 
 if [ -n "$USEMSVC" ]; then
   # Openlibm doesn't build well with MSVC right now
-  echo 'USE_SYSTEM_OPENLIBM = 1' >> Make.user
+  printf "USE_SYSTEM_OPENLIBM = 1\n" >> Make.user
   # Since we don't have a static library for openlibm
-  echo 'override UNTRUSTED_SYSTEM_LIBM = 0' >> Make.user
+  printf "override UNTRUSTED_SYSTEM_LIBM = 0\n" >> Make.user
 
   # Compile libuv and utf8proc without -TP first, then add -TP
   make -C deps install-libuv install-utf8proc
   cp usr/lib/uv.lib usr/lib/libuv.a
-  echo 'override CC += -TP' >> Make.user
-  echo 'override STAGE1_DEPS += dsfmt' >> Make.user
+  printf "override CC += -TP\n" >> Make.user
+  printf "override STAGE1_DEPS += dsfmt\n" >> Make.user
 
   # Create a modified version of compile for wrapping link
   sed -e 's/-link//' -e 's/cl/link/g' -e 's/ -Fe/ -OUT:/' \
     -e 's|$dir/$lib|$dir/lib$lib|g' deps/srccache/libuv/compile > linkld
   chmod +x linkld
 else
-  echo 'override STAGE1_DEPS += openlibm' >> Make.user
+  printf "override STAGE1_DEPS += openlibm\n" >> Make.user
   make check-whitespace
   make VERBOSE=1 -C base version_git.jl.phony
-  echo 'NO_GIT = 1' >> Make.user
+  printf "NO_GIT = 1\n" >> Make.user
 fi
-echo 'FORCE_ASSERTIONS = 1' >> Make.user
+printf "FORCE_ASSERTIONS = 1\n" >> Make.user
 
 cat Make.user
 make -j3 VERBOSE=1
