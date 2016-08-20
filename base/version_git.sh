@@ -82,12 +82,12 @@ if [ -z "$fork_master_timestamp" ]; then
     fork_master_timestamp="0"
 fi
 
-printf "const GIT_VERSION_INFO = GitVersionInfo("
+printf "const GIT_VERSION_INFO = GitVersionInfo(\n"
 printf "    \"$commit\",\n"
 printf "    \"$commit_short\",\n"
 printf "    \"$branch\",\n"
 printf "    $build_number,\n"
-printf "    \"$date_string\",\n"pr
+printf "    \"$date_string\",\n"
 printf "    $tagged_commit,\n"
 printf "    $fork_master_distance,\n"
 printf "    $fork_master_timestamp.\n"
