@@ -667,3 +667,6 @@ end
 let str = "[1] [2]"
     @test_throws ParseError parse(str)
 end
+
+# issue 15896 and PR 15913
+@test_throws ErrorException eval(:(macro test15896(d; y=0) end))
