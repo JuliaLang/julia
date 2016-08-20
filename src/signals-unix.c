@@ -28,14 +28,10 @@
 #define HAVE_TIMER
 #endif
 
-#if defined(JL_USE_INTEL_JITEVENTS)
-unsigned sig_stack_size = SIGSTKSZ;
-#elif defined(_CPU_AARCH64_)
-// The default SIGSTKSZ causes stack overflow in libunwind.
-#define sig_stack_size (1 << 16)
-#else
-#define sig_stack_size SIGSTKSZ
-#endif
+// 8M signal stack, same as default stack size and enough
+// for reasonable finalizers.
+// Should also be enough for parallel GC when we have it =)
+#define sig_stack_size (8 * 1024 * 1024)
 
 static bt_context_t *jl_to_bt_context(void *sigctx)
 {
