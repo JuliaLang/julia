@@ -1,0 +1,53 @@
+machine:
+  environment:
+    ARCH: "i686"
+    BUILDOPTS: "-j3 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1"
+    TESTSTORUN: "all"
+    JULIA_CPU_CORES: 2
+    JULIA_TEST_MAXRSS_MB: 600
+    TEST_DIR: "/tmp/julia/share/julia/test"
+
+general:
+  branches:
+    only:
+      - master
+      - /release-.*/
+
+checkout:
+  post:
+    - git config --global --unset url.ssh://git@github.com:.insteadof
+    - make check-whitespace
+    - git clone -q git://git.kitenet.net/moreutils
+    - echo "override ARCH=$ARCH" >> Make.user
+
+dependencies:
+  pre:
+    - sudo dpkg --add-architecture i386
+    - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    - sudo apt-get update -y
+    - sudo apt-get install -y bar:i386 binutils:i386 gcc-5:i386 gcc-5-multilib:i386 g++-5:i386 g++-5-multilib:i386 gfortran-5:i386 gfortran-5-multilib:i386 make:i386 libssl-dev:i386
+    - mkdir -p $HOME/bin
+    - ln -s /usr/bin/gcc-5 $HOME/bin/gcc
+    - ln -s /usr/bin/g++-5 $HOME/bin/g++
+    - ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran
+    - gcc --version
+  override:
+    - make -C moreutils mispipe
+    - make $BUILDOPTS -C base version_git.jl.phony
+    - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps" bar > deps.log || cat deps.log
+    - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
+    - make $BUILDOPTS NO_GIT=1 build-stats
+    - du -sk /tmp/julia/*
+  cache_directories:
+    - deps/srccache
+    - deps/build
+
+test:
+  override:
+    - /tmp/julia/bin/julia --precompile=no -e 'true'
+    - /tmp/julia/bin/julia-debug --precompile=no -e 'true'
+    - /tmp/julia/bin/julia -e 'versioninfo()'
+    - cd $TEST_DIR && bash ~/julia/contrib/circle_balanceload.sh:
+        parallel: true
+  post:
+    - cd $HOME && rm -rf julia/deps/build/julia-env
