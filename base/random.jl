@@ -292,6 +292,19 @@ function rand(r::AbstractRNG, ::Type{Char})
     (c < 0xd800) ? Char(c) : Char(c+0x800)
 end
 
+# random values from Dict or Set (for efficiency)
+function rand(r::AbstractRNG, t::Dict)
+    isempty(t) && throw(ArgumentError("dict must be non-empty"))
+    n = length(t.slots)
+    while true
+        i = rand(r, 1:n)
+        Base.isslotfilled(t, i) && return (t.keys[i] => t.vals[i])
+    end
+end
+rand(t::Dict) = rand(GLOBAL_RNG, t)
+rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
+rand(s::Set) = rand(GLOBAL_RNG, s)
+
 ## Arrays of random numbers
 
 rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
