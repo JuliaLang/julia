@@ -63,3 +63,10 @@ end
 
 # Test for #10853
 @test withenv(Dict{Any,Any}()...) do; true; end
+
+# Test for #18141
+for (k, v) in ENV
+    if length(v) > 0
+        @test v[end] != '\0'
+    end
+end
