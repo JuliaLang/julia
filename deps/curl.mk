@@ -8,11 +8,17 @@ CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://curl.haxx.se/download/curl-$(CURL_VER).tar.bz2
 
-$(SRCDIR)/srccache/curl-$(CURL_VER)/configure: $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2 $(MBEDTLS_OBJ_TARGET) $(LIBSSH2_OBJ_TARGET)
+$(SRCDIR)/srccache/curl-$(CURL_VER)/configure: $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
 	touch -c $@
 
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/config.status: $(MBEDTLS_OBJ_TARGET)
+endif
+ifeq ($(USE_SYSTEM_LIBSSH2), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/config.status: $(LIBSSH2_OBJ_TARGET)
+endif
 $(BUILDDIR)/curl-$(CURL_VER)/config.status: $(SRCDIR)/srccache/curl-$(CURL_VER)/configure
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
