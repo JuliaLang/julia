@@ -893,14 +893,6 @@ calc_gnu_debuglink_crc32(const void *buf, size_t size)
     return crc ^ ~0U;
 }
 
-template<typename T>
-static inline void ignoreError(T &err)
-{
-#if defined(LLVM39) && !defined(NDEBUG)
-    consumeError(err.takeError());
-#endif
-}
-
 #ifdef LLVM39
 static Expected<object::OwningBinary<object::ObjectFile>>
 #else
@@ -956,6 +948,14 @@ extern "C" void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambd
     sysimg_fvars = fptrs;
     sysimg_fvars_linfo = linfos;
     sysimg_fvars_n = n;
+}
+
+template<typename T>
+static inline void ignoreError(T &err)
+{
+#if defined(LLVM39) && !defined(NDEBUG)
+    consumeError(err.takeError());
+#endif
 }
 
 extern "C" void jl_refresh_dbg_module_list(void);
