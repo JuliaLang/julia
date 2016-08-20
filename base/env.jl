@@ -91,7 +91,7 @@ if is_windows()
     function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
         pos = block[1]
         blk = block[2]
-        len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos) + 1
+        len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
         buf = Array{UInt16}(len)
         unsafe_copy!(pointer(buf), pos, len)
         env = transcode(String, buf)
@@ -99,7 +99,7 @@ if is_windows()
         if m === nothing
             error("malformed environment entry: $env")
         end
-        return (Pair{String,String}(m.captures[1], m.captures[2]), (pos+len*2, blk))
+        return (Pair{String,String}(m.captures[1], m.captures[2]), (pos+(len+1)*2, blk))
     end
 else # !windows
     start(::EnvHash) = 0
