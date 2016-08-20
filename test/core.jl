@@ -4117,6 +4117,18 @@ test_metadata_matches(f4, Tuple{})
 
 end
 
+# SSA value where the assignment is after the user in syntactic order
+let f = function(a, b)
+    @goto a
+    @label b
+    return j[1] + j[2] * 2
+    @label a
+    j = (a, b)
+    @goto b
+end
+    @test f(1, 2) == 5
+end
+
 # issue #8712
 type Issue8712; end
 @test isa(invoke(Issue8712, ()), Issue8712)
