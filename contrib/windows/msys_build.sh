@@ -49,7 +49,7 @@ else
   bits=32
   archsuffix=86
   exc=sjlj
-  printf "override MARCH = pentium4" >> Make.user
+  printf "override MARCH = pentium4\n" >> Make.user
   printf "LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas\n" >> Make.user
   printf "LIBBLASNAME = libopenblas\n" >> Make.user
 fi
