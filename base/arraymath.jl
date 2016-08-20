@@ -53,7 +53,7 @@ function _elementwise(op, ::Type{Any}, A::AbstractArray, B::AbstractArray)
     promote_shape(A, B) # check size compatibility
     return broadcast(op, A, B)
 end
-function _elementwise(op, T::Type, A::AbstractArray, B::AbstractArray)
+function _elementwise{T}(op, ::Type{T}, A::AbstractArray, B::AbstractArray)
     F = similar(A, T, promote_shape(A, B))
     for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
         @inbounds F[iF] = op(A[iA], B[iB])
