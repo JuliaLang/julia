@@ -88,31 +88,29 @@ MAKE_COMMON := DESTDIR="" prefix=$(build_prefix) bindir=$(build_depsbindir) libd
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS :=
-STAGE2_DEPS :=
 ifeq ($(USE_GPL_LIBS), 1)
-STAGE3_DEPS := suitesparse-wrapper
+DEP_LIBS := suitesparse-wrapper
 else
-STAGE3_DEPS :=
+DEP_LIBS :=
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
-STAGE1_DEPS += libuv
+DEP_LIBS += libuv
 endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
-STAGE1_DEPS += unwind
+DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
-STAGE1_DEPS += unwind
+DEP_LIBS += unwind
 else ifeq ($(OS), Darwin)
-STAGE1_DEPS += osxunwind
+DEP_LIBS += osxunwind
 endif
 endif
 
 ifeq ($(OS), Linux)
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
-STAGE1_DEPS += patchelf
+DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
 else
 PATCHELF:=patchelf
@@ -124,79 +122,79 @@ PATCHELF_BIN := $(CUSTOM_LD_LIBRARY_PATH) $(PATCHELF)
 
 ifeq ($(USE_SYSTEM_OPENLIBM), 0)
 ifeq ($(USE_SYSTEM_LIBM), 0)
-STAGE1_DEPS += openlibm
+DEP_LIBS += openlibm
 endif
 endif
 
 ifeq ($(USE_SYSTEM_OPENSPECFUN), 0)
-STAGE1_DEPS += openspecfun
+DEP_LIBS += openspecfun
 endif
 
 ifeq ($(USE_SYSTEM_DSFMT), 0)
-STAGE1_DEPS += dsfmt
+DEP_LIBS += dsfmt
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
-STAGE1_DEPS += llvm
+DEP_LIBS += llvm
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 0)
-STAGE1_DEPS += pcre
+DEP_LIBS += pcre
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-STAGE1_DEPS += openblas
+DEP_LIBS += openblas
 ifeq ($(USE_BLAS64), 1)
 ifeq ($(OS), Darwin)
-STAGE1_DEPS += objconv
+DEP_LIBS += objconv
 endif
 endif
 endif
 
 ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_FFTW), 0)
-STAGE1_DEPS += fftw
+DEP_LIBS += fftw
 endif
 endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
-STAGE1_DEPS += gmp
+DEP_LIBS += gmp
 endif
 
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-STAGE1_DEPS += mbedtls
+DEP_LIBS += mbedtls
 endif
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
-STAGE2_DEPS += libssh2
+DEP_LIBS += libssh2
 endif
 
 ifneq ($(OS), WINNT)
 ifeq ($(USE_SYSTEM_CURL), 0)
-STAGE3_DEPS += curl
+DEP_LIBS += curl
 endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-STAGE4_DEPS += libgit2
+DEP_LIBS += libgit2
 endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
-STAGE2_DEPS += mpfr
+DEP_LIBS += mpfr
 endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
-STAGE2_DEPS += arpack
+DEP_LIBS += arpack
 endif
 
 ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-STAGE2_DEPS += suitesparse
+DEP_LIBS += suitesparse
 endif
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 0)
-STAGE2_DEPS += utf8proc
+DEP_LIBS += utf8proc
 endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
@@ -205,7 +203,7 @@ endif
 # build LAPACK as the vendor LAPACK may be too old (eg. Apple vecLib)
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(USE_SYSTEM_LAPACK), 0)
-STAGE2_DEPS += lapack
+DEP_LIBS += lapack
 endif
 endif
 
@@ -216,8 +214,6 @@ LIBTOOL_CCLD := CCLD="$(CC) -no-undefined -avoid-version"
 endif
 
 ## Common build target prefixes
-
-DEP_LIBS := $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS) $(STAGE4_DEPS)
 
 default: install | $(build_prefix)
 get: $(addprefix get-, $(DEP_LIBS))
