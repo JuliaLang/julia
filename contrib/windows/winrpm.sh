@@ -11,7 +11,7 @@ toinstall=$2
 
 for i in curl xmllint gunzip sort sha256sum 7z; do
   if [ -z "$(which $i 2>/dev/null)" ]; then
-    echo "error: this script requires having $i installed" >&2
+    printf "error: this script requires having $i installed\n" >&2
     exit 1
   fi
 done
@@ -22,7 +22,7 @@ retry_curl() {
     curl -fLsS $1 && return
     #sleep 2
   done
-  echo "error: failed to download $1" >&2
+  printf "error: failed to download $1\n" >&2
   exit 1
 }
 
@@ -42,40 +42,40 @@ esac
 # outputs <package> xml string for newest version
 # don't include arch=src packages, those will list build-time dependencies
 rpm_select() {
-  candidates="<c>$(echo $primary | $xp "//*[$loc'package'] \
+  candidates="<c>$(printf "$primary\n" | $xp "//*[$loc'package'] \
     [./*[$loc'name' and .='$1']][./*[$loc'arch' and .='noarch']]" - \
     2>/dev/null | sed -e 's|<rpm:|<|g' -e 's|</rpm:|</|g')</c>"
   # remove rpm namespacing so output can be parsed by xmllint later
   if [ "$candidates" = "<c></c>" ]; then
-    echo "error: no package candidates found for $1" >&2
+    printf "error: no package candidates found for $1\n" >&2
     exit 1
   fi
   epochs=""
-  for i in $(echo $candidates | $xp "/c/package/version/@epoch" -); do
+  for i in $(printf "$candidates\n" | $xp "/c/package/version/@epoch" -); do
     eval $i
     epochs="$epochs $epoch"
   done
-  maxepoch=$(echo $epochs | sed 's/ /\n/g' | sort -V -u | tail -n 1)
+  maxepoch=$(printf "$epochs\n" | sed 's/ /\n/g' | sort -V -u | tail -n 1)
   vers=""
-  for i in $(echo $candidates | $xp "/c/package/version \
+  for i in $(printf "$candidates\n" | $xp "/c/package/version \
       [@epoch='$maxepoch']/@ver" -); do
     eval $i
     vers="$vers $ver"
   done
-  maxver=$(echo $vers | sed 's/ /\n/g' | sort -V -u | tail -n 1)
+  maxver=$(printf "$vers\n" | sed 's/ /\n/g' | sort -V -u | tail -n 1)
   rels=""
-  for i in $(echo $candidates | $xp "/c/package/version \
+  for i in $(printf "$candidates\n" | $xp "/c/package/version \
       [@epoch='$maxepoch'][@ver='$maxver']/@rel" -); do
     eval $i
     rels="$rels $rel"
   done
-  maxrel=$(echo $rels | sed 's/ /\n/g' | sort -V -u | tail -n 1)
-  repeats=$(echo $rels | sed 's/ /\n/g' | sort -V | uniq -d | tail -n 1)
+  maxrel=$(printf "$rels\n" | sed 's/ /\n/g' | sort -V -u | tail -n 1)
+  repeats=$(printf "$rels\n" | sed 's/ /\n/g' | sort -V | uniq -d | tail -n 1)
   if [ "$repeats" = "$maxrel" ]; then
-    echo "warning: multiple candidates found for $1 with same version:" >&2
-    echo "epoch $maxepoch, ver $maxver, rel $maxrel, picking at random" >&2
+    printf "warning: multiple candidates found for $1 with same version:\n" >&2
+    printf "epoch $maxepoch, ver $maxver, rel $maxrel, picking at random\n" >&2
   fi
-  echo $candidates | $xp "/c/package[version[@epoch='$maxepoch'] \
+  printf "$candidates\n" | $xp "/c/package[version[@epoch='$maxepoch'] \
     [@ver='$maxver'][@rel='$maxrel']][1]" -
 }
 
@@ -91,19 +91,19 @@ rpm_requires() {
   for i in $(rpm_select $1 | \
       $xp "/package/format/requires/entry/@name" - 2>/dev/null); do
     eval $i
-    echo $name
+    printf "$name\n"
   done
 }
 
 # outputs package name, warns if multiple providers with different names
 rpm_provides() {
-  providers=$(echo $primary | $xp "//*[$loc'package'][./*[$loc'format'] \
+  providers=$(printf "$primary\n" | $xp "//*[$loc'package'][./*[$loc'format'] \
     /*[$loc'provides']/*[$loc'entry'][@name='$1']]/*[$loc'name']" - | \
     sed -e 's|<name>||g' -e 's|</name>|\n|g' | sort -u)
-  if [ $(echo $providers | wc -w) -gt 1 ]; then
-    echo "warning: found multiple providers $providers for $1, adding all" >&2
+  if [ $(printf "$providers\n" | wc -w) -gt 1 ]; then
+    printf "warning: found multiple providers $providers for $1, adding all\n" >&2
   fi
-  echo $providers
+  printf "$providers\n"
 }
 
 newpkgs=$toinstall
@@ -138,11 +138,11 @@ done
 mkdir -p noarch
 for i in $toinstall; do
   pkgi=$(rpm_select $i)
-  checksum=$(echo $pkgi | $xp "/package/checksum/text()" -)
-  eval $(echo $pkgi | $xp "/package/location/@href" -)
-  echo "downloading $href"
+  checksum=$(printf "$pkgi\n" | $xp "/package/checksum/text()" -)
+  eval $(printf "$pkgi\n" | $xp "/package/location/@href" -)
+  printf "downloading $href\n"
   $(dirname "$0")/../../deps/tools/jldownload $href $url/$href
-  echo "$checksum *$href" | sha256sum -c
+  printf "$checksum *$href\n" | sha256sum -c
   7z x -y $href
   cpiofile=$(basename $href | sed 's/.rpm$/.cpio/')
   rm $href
