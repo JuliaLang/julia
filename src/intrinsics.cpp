@@ -50,6 +50,14 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
         ;
 }
 
+extern "C" JL_DLLEXPORT int8_t jl_is_memdebug() {
+#ifdef MEMDEBUG
+    return true;
+#else
+    return false;
+#endif
+}
+
 /*
   low-level intrinsics design: TODO: fix description below
   functions like add_int expect unboxed values of matching bit-length.
