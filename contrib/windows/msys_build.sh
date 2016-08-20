@@ -50,8 +50,8 @@ else
   archsuffix=86
   exc=sjlj
   printf "override MARCH = pentium4\n" >> Make.user
-  printf "LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas\n" >> Make.user
-  printf "LIBBLASNAME = libopenblas\n" >> Make.user
+  printf 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas\n' >> Make.user
+  printf 'LIBBLASNAME = libopenblas\n' >> Make.user
 fi
 
 # Set XC_HOST if in Cygwin or Linux
@@ -65,7 +65,7 @@ case $(uname) in
     # Set BUILD_MACHINE and HOSTCC in case we don't have Cygwin gcc installed
     printf "override BUILD_MACHINE = $ARCH-pc-cygwin\n" >> Make.user
     if [ -z "`which gcc 2>/dev/null`" ]; then
-      printf "override HOSTCC = $(CROSS_COMPILE)gcc\n" >> Make.user
+      printf 'override HOSTCC = $(CROSS_COMPILE)gcc\n' >> Make.user
     fi
     make win-extras >> get-deps.log
     SEVENZIP="dist-extras/7z"
@@ -132,7 +132,7 @@ else
   export AR="$PWD/deps/srccache/libuv/ar-lib lib"
   export LD="$PWD/linkld link"
   printf "override CC = $CC\n" >> Make.user
-  printf "override CXX = $(CC) -EHsc\n" >> Make.user
+  printf 'override CXX = $(CC) -EHsc\n' >> Make.user
   printf "override AR = $AR\n" >> Make.user
   printf "override LD = $LD -DEBUG\n" >> Make.user
 
@@ -171,8 +171,8 @@ for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
   printf "USE_SYSTEM_$lib = 1\n" >> Make.user
 done
-printf "override LIBLAPACK = $(LIBBLAS)\n" >> Make.user
-printf "override LIBLAPACKNAME = $(LIBBLASNAME)\n" >> Make.user
+printf 'override LIBLAPACK = $(LIBBLAS)\n' >> Make.user
+printf 'override LIBLAPACKNAME = $(LIBBLASNAME)\n' >> Make.user
 
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
