@@ -1337,3 +1337,10 @@ let
     end
     @test norm(normalize!(v) - w, Inf) < eps()
 end
+
+# JuliaLang/julia#16603
+@test sprint(join, [1, 2, 3]) == "123"
+@test sprint(join, [1, 2, 3], ',') == "1,2,3"
+@test sprint(join, [1, 2, 3], ", ", ", and ") == "1, 2, and 3"
+@test sprint(escape_string, "xyz\n", "z") == "xy\\z\\n"
+@test sprint(unescape_string, "xyz\\n") == "xyz\n"

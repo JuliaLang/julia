@@ -1425,4 +1425,17 @@ else
     import Base.promote_eltype_op
 end
 
+if VERSION < v"0.5.0-dev+4351"
+    Base.join(io::IO, items) =
+        print_joined(io, items)
+    Base.join(io::IO, items, delim) =
+        print_joined(io, items, delim)
+    Base.join(io::IO, items, delim, last) =
+        print_joined(io, items, delim, last)
+    Base.unescape_string(io, s::AbstractString) =
+        print_unescaped(io, s)
+    Base.escape_string(io, str::AbstractString, esc::AbstractString) =
+        print_escaped(io, str, esc)
+end
+
 end # module

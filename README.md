@@ -203,6 +203,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `fieldoffsets` has been deprecated in favor of `fieldoffset`[#14777](https://github.com/JuliaLang/julia/pull/14777).
 
+* `print_escaped` is now another method of `escape_string`, `print_unescaped` a method of `unescape_string`, and `print_joined` a method of `join`. [#16603](https://github.com/JuliaLang/julia/pull/16603)
+
 ## New macros
 
 * `@static` has been added [#16219](https://github.com/JuliaLang/julia/pull/16219).
