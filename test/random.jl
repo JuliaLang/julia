@@ -53,6 +53,12 @@ let mt = MersenneTwister()
     rand(coll, 2, 3)
 end
 
+# rand using Dict, Set
+adict = Dict(1=>2, 3=>4, 5=>6)
+@test rand(adict) in adict
+aset = Set(1:10)
+@test rand(aset) in aset
+
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
 A = zeros(2, 2)
