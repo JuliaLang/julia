@@ -124,6 +124,14 @@ a = zeros(0, 5)  # an empty linearslow array
 s = view(a, :, [2,3,5])
 @test length(reshape(s, length(s))) == 0
 
+# reshape(a, Val{N})
+a = ones(Int,3,3)
+s = view(a, 1:2, 1:2)
+for N in (1,3)
+    @test isa(reshape(a, Val{N}), Array{Int,N})
+    @test isa(reshape(s, Val{N}), Base.ReshapedArray{Int,N})
+end
+
 @test reshape(1:5, (5,)) === 1:5
 @test reshape(1:5, 5) === 1:5
 
