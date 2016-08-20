@@ -161,6 +161,7 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 DEP_LIBS += gmp
 endif
 
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 DEP_LIBS += mbedtls
 endif
@@ -175,9 +176,8 @@ DEP_LIBS += curl
 endif
 endif
 
-ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 DEP_LIBS += libgit2
-endif
+endif # USE_SYSTEM_LIBGIT2
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
