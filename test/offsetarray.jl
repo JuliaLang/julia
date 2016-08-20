@@ -341,7 +341,7 @@ v = OffsetArray(rand(8), (-2,))
 
 src = reshape(collect(1:16), (4,4))
 dest = OffsetArray(Array{Int}(4,4), (-1,1))
-circcopy!(dest, src)
+Base.circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
 
@@ -359,8 +359,8 @@ for s = -5:5
         thisc = c[mod1(i+s+5,5)]
         @test_approx_eq fft(thisa) thisc
         @test_approx_eq fft(thisa, 1) thisc
-        @test_approx_eq ifft(fft(thisa)) circcopy!(a1, thisa)
-        @test_approx_eq ifft(fft(thisa, 1), 1) circcopy!(a1, thisa)
+        @test_approx_eq ifft(fft(thisa)) Base.circcopy!(a1, thisa)
+        @test_approx_eq ifft(fft(thisa, 1), 1) Base.circcopy!(a1, thisa)
         @test_approx_eq rfft(thisa) thisc[1:3]
         @test_approx_eq rfft(thisa, 1) thisc[1:3]
         @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
