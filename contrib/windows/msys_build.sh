@@ -42,9 +42,9 @@ if [ "$ARCH" = x86_64 ]; then
   archsuffix=64
   exc=seh
   printf "override MARCH = x86-64\n" >> Make.user
-  printf "USE_BLAS64 = 1\n" >> Make.user
-  printf "LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_\n" >> Make.user
-  printf "LIBBLASNAME = libopenblas64_\n" >> Make.user
+  printf 'USE_BLAS64 = 1\n' >> Make.user
+  printf 'LIBBLAS = -L$(JULIAHOME)/usr/bin -lopenblas64_\n' >> Make.user
+  printf 'LIBBLASNAME = libopenblas64_\n' >> Make.user
 else
   bits=32
   archsuffix=86
