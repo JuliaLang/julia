@@ -445,7 +445,9 @@ export CCACHE_CPP2 := yes
 endif
 else #USECCACHE
 CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
+CC_ARG := $(shell echo $(CC) | cut -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
+CXX_ARG := $(shell echo $(CXX) | cut -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -683,8 +685,10 @@ endif
 
 ifeq ($(OS),WINNT)
 ifneq ($(ARCH),x86_64)
+ifneq ($(USECLANG),1)
 JCFLAGS += -mincoming-stack-boundary=2
 JCXXFLAGS += -mincoming-stack-boundary=2
+endif
 endif
 endif
 

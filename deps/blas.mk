@@ -54,7 +54,9 @@ OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
 endif
 ifeq ($(OS),WINNT)
 ifneq ($(ARCH),x86_64)
+ifneq ($(USECLANG),1)
 OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) -mincoming-stack-boundary=2"
+endif
 OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) -mincoming-stack-boundary=2"
 endif
 endif
