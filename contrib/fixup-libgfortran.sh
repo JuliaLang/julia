@@ -4,7 +4,7 @@
 # Run as: fixup-libgfortran.sh <$private_libdir>
 
 if [ -z "$1" ]; then
-    echo "Usage: $0 <private_libdir>"
+    printf "Usage: $0 <private_libdir>\n"
     exit 1
 fi
 
@@ -14,7 +14,7 @@ if [ "$UNAME" = "Linux" ]; then
 elif [ "$UNAME" = "Darwin" ]; then
     SHLIB_EXT="dylib"
 else
-    echo "WARNING: Could not autodetect platform type ('uname -s' == $UNAME); assuming Linux"
+    printf "WARNING: Could not autodetect platform type ('uname -s' == $UNAME); assuming Linux\n"
     UNAME="Linux"
     SHLIB_EXT="so"
 fi
@@ -22,7 +22,7 @@ fi
 private_libdir=$1
 
 if [ ! -f "$private_libdir/libarpack.$SHLIB_EXT" ]; then
-    echo "ERROR: Could not open $private_libdir/libarpack.$SHLIB_EXT" >&2
+    printf "ERROR: Could not open $private_libdir/libarpack.$SHLIB_EXT\n" >&2
     exit 2
 fi
 
@@ -46,7 +46,7 @@ for lib in arpack openlibm openspecfun lapack; do
     fi
 done
 
-LIBGFORTRAN_DIRS=$(echo "$LIBGFORTRAN_DIRS" | tr " " "\n" | sort | uniq | grep -v '^$' | tr "\n" " ")
+LIBGFORTRAN_DIRS=$(printf "$LIBGFORTRAN_DIRS\n" | tr " " "\n" | sort | uniq | grep -v '^$' | tr "\n" " ")
 
 # If only we could agree on something
 if [ "$UNAME" = "Linux" ]; then
@@ -76,8 +76,8 @@ for lib in gfortran.3 quadmath.0 gcc_s.1 ; do
     fi
 done
 
-LIBGFORTRAN_DIRS=$(echo "$LIBGFORTRAN_DIRS" | tr " " "\n" | sort | uniq | grep -v '^$' | tr "\n" " ")
-echo "Found traces of libgfortran/libgcc in $LIBGFORTRAN_DIRS"
+LIBGFORTRAN_DIRS=$(printf "$LIBGFORTRAN_DIRS\n" | tr " " "\n" | sort | uniq | grep -v '^$' | tr "\n" " ")
+printf "Found traces of libgfortran/libgcc in $LIBGFORTRAN_DIRS\n"
 
 
 # Do the private_libdir libraries

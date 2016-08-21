@@ -9,7 +9,7 @@ cd "$(dirname "$0")"/.. # run in top-level directory
 shashort=$(git rev-parse --short=10 HEAD)
 tag=$(git tag --points-at $shashort)
 if [ -z "$tag" ]; then
-  echo "error: this script must be run with a tagged commit checked out" >&2
+  printf "error: this script must be run with a tagged commit checked out\n" >&2
   exit 1
 fi
 version=$(cat VERSION)
@@ -17,7 +17,7 @@ majmin=$(cut -d. -f1-2 VERSION)
 # remove -rc# if present
 majminpatch=$(cut -d- -f1 VERSION)
 if [ "$tag" != "v$version" ]; then
-  echo "error: tagged commit does not match content of VERSION file" >&2
+  printf "error: tagged commit does not match content of VERSION file\n" >&2
   exit 1
 fi
 
@@ -53,8 +53,8 @@ curl -L -o julia-$version-win32.exe \
   $julianightlies/winnt/x86/$majmin/julia-$majminpatch-$shashort-win32.exe
 cp julia-$version-win32.exe julia-$majmin-latest-win32.exe
 
-echo "Note: if windows code signing is not working on the buildbots, then the"
-echo "checksums need to be re-calculated after the binaries are manually signed!"
+printf "Note: if windows code signing is not working on the buildbots, then the\n"
+printf "checksums need to be re-calculated after the binaries are manually signed!\n"
 
 shasum -a 256 julia-$version* | grep -v -e sha256 -e md5 -e asc > julia-$version.sha256
 md5sum julia-$version* | grep -v -e sha256 -e md5 -e asc > julia-$version.md5
@@ -65,7 +65,7 @@ gpg -u julia --armor --detach-sig julia-$version-linux-x86_64.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-i686.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-arm.tar.gz
 
-echo "All files prepared. Attach julia-$version.tar.gz and julia-$version-full.tar.gz"
-echo "to github releases, upload all binaries and checksums to julialang S3. Be sure"
-echo "to set all S3 uploads to publicly readable, and replace $majmin-latest binaries."
+printf "All files prepared. Attach julia-$version.tar.gz and julia-$version-full.tar.gz\n"
+printf "to github releases, upload all binaries and checksums to julialang S3. Be sure\n"
+printf "to set all S3 uploads to publicly readable, and replace $majmin-latest binaries.\n"
 # TODO: also automate uploads via aws cli and github api?

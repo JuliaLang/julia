@@ -25,12 +25,12 @@ file_patterns='
 
 # TODO: Look also for trailing empty lines, and missing '\n' after the last line
 if git --no-pager grep --color -n --full-name -e ' $' -- $file_patterns; then
-    echo "Error: trailing whitespace found in source file(s)"
-    echo ""
-    echo "This can often be fixed with:"
-    echo "    git rebase --whitespace=fix HEAD~1"
-    echo "or"
-    echo "    git rebase --whitespace=fix master"
-    echo "and then a forced push of the correct branch"
+    printf "Error: trailing whitespace found in source file(s)\n"
+    printf "\n"
+    printf "This can often be fixed with:\n"
+    printf "    git rebase --whitespace=fix HEAD~1\n"
+    printf "or\n"
+    printf "    git rebase --whitespace=fix master\n"
+    printf "and then a forced push of the correct branch\n"
     exit 1
 fi

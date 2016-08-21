@@ -22,11 +22,11 @@ case $bits in
     exc=seh
     ;;
   *)
-    echo 'error: run script either as `./get_toolchain.sh 32` or `./get_toolchain.sh 64`' >&2
+    printf 'error: run script either as `./get_toolchain.sh 32` or `./get_toolchain.sh 64`\n' >&2
     exit 1
     ;;
 esac
-echo "Downloading $host toolchain, check $PWD/get_toolchain.log for full output"
+printf "Downloading $host toolchain, check $PWD/get_toolchain.log for full output\n"
 contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win$bits/openSUSE_13.2 \
   "mingw$bits-gcc mingw$bits-gcc-c++ mingw$bits-gcc-fortran \
    mingw$bits-libssp0 mingw$bits-libstdc++6 mingw$bits-libgfortran3" > get_toolchain.log
@@ -55,5 +55,5 @@ esac
 if ! [ -e $mingwdir/$host/include ]; then
   $mklink $(cygpath -w $mingwdir/$host/include) $(cygpath -w $mingwdir/include)
 fi
-echo "Toolchain successfully downloaded to $PWD/$mingwdir"
-echo "Add toolchain to your path by running \`export PATH=$PWD/$mingwdir/bin:\$PATH\`"
+printf "Toolchain successfully downloaded to $PWD/$mingwdir\n"
+printf "Add toolchain to your path by running \`export PATH=$PWD/$mingwdir/bin:\$PATH\`\n"

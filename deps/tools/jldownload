@@ -35,8 +35,8 @@ elif [ -x "$WGET" ] && $WGET -V >/dev/null; then
 elif [ -x "$FETCH" ]; then
     GETURL="$FETCH $FETCH_OPTS"
 else
-    echo "Could not find working curl, wget, or fetch."
-    echo "You need to install one of these to download dependencies."
+    printf "Could not find working curl, wget, or fetch.\n"
+    printf "You need to install one of these to download dependencies.\n"
     exit 1
 fi
 

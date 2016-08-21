@@ -19,13 +19,13 @@ relpath () {
         [ "$current" != '/' ] && [ "$appendix" = "$target" ]; do
         if [ "$current" = "$appendix" ]; then
             relative="${relative:-.}"
-            echo "${relative#/}"
+            printf "${relative#/}\n"
             return 0
         fi
         current="${current%/*}"
         relative="$relative${relative:+/}.."
     done
     relative="$relative${relative:+${appendix:+/}}${appendix#/}"
-    echo "$relative"
+    printf "$relative\n"
 }
 relpath "$@"

@@ -3,7 +3,7 @@
 
 # Loop over all command line arguments
 for i in "$@"; do
-    # If an argument starts with -L, echo it out sans -L!
+    # If an argument starts with -L, print it out sans -L!
     case $i in
     -L*) printf '"%s"\n' "${i#-L}" ;;
     esac
