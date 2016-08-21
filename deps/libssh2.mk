@@ -8,7 +8,7 @@ LIBSSH2_OBJ_SOURCE := $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/src/libssh2.$(SHLIB_EXT)
 LIBSSH2_OBJ_TARGET := $(build_shlibdir)/libssh2.$(SHLIB_EXT)
 
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
-				-DCMAKE_BUILD_TYPE=Release
+		-DCMAKE_BUILD_TYPE=Release
 
 ifeq ($(OS),WINNT)
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG -DENABLE_ZLIB_COMPRESSION=OFF
@@ -16,7 +16,7 @@ ifeq ($(BUILD_OS),WINNT)
 LIBSSH2_OPTS += -G"MSYS Makefiles"
 endif
 else
-LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=ON
+LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
 endif
 
 ifeq ($(OS),Linux)
@@ -30,7 +30,10 @@ $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: | $(SR
 	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/CMakeLists.txt $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-mbedtls.patch-applied $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied $(MBEDTLS_OBJ_TARGET)
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile: $(MBEDTLS_OBJ_TARGET)
+endif
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/CMakeLists.txt $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-mbedtls.patch-applied $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)

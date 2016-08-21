@@ -71,7 +71,7 @@ endif
 	echo 1 > $@
 
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
-ifeq ($(BUILD_OS),WINNT)
+ifeq ($(OS),WINNT)
 	cp $< $@
 else
 	$(call make-install,$(LIBGIT2_SRC_DIR),)
