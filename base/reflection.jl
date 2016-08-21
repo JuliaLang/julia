@@ -206,6 +206,15 @@ isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.ab
 isstructtype(x) = (@_pure_meta; false)
 
 """
+    isimmutabletype(T)
+
+Return `true` if the type `T` is immutable.  See [manual](:ref:`man-immutable-composite-types`)
+for a discussion of immutability.   See also [`isimmutable`](:func:`isimmutable`)
+for the corresponding function acting on values rather than types.
+"""
+isimmutabletype(t::ANY) = (@_pure_meta; isa(t, DataType) && !t.mutable)
+
+"""
     isbits(T)
 
 Return `true` if `T` is a "plain data" type, meaning it is immutable and contains no

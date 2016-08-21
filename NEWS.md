@@ -210,6 +210,8 @@ Library improvements
 
   * New `iszero(x)` function to quickly check whether `x` is zero (or is all zeros, for an array) ([#19950]).
 
+  * New function `isimmutabletype(T)` ([#18168]).
+
   * `notify` now returns a count of tasks woken up ([#19841]).
 
 Compiler/Runtime improvements
@@ -883,6 +885,7 @@ Language tooling improvements
 [#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
 [#18050]: https://github.com/JuliaLang/julia/issues/18050
+[#18168]: https://github.com/JuliaLang/julia/issues/18168
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
@@ -919,4 +922,5 @@ Language tooling improvements
 [#19919]: https://github.com/JuliaLang/julia/issues/19919
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
+[#20079]: https://github.com/JuliaLang/julia/issues/20079
 [#20164]: https://github.com/JuliaLang/julia/issues/20164

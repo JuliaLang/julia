@@ -159,6 +159,13 @@ not_const = 1
 
 @test isimmutable(1) == true
 @test isimmutable([]) == false
+@test isimmutable("abc") == true
+@test isimmutable((3,4,5)) == true
+@test isimmutabletype(Int) == true
+@test isimmutabletype(Vector{Int}) == false
+@test isimmutabletype(String) == true
+@test isimmutabletype(Tuple{Int}) == true
+
 
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
