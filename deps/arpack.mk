@@ -32,10 +32,9 @@ ARPACK_OBJ_TARGET := $(build_shlibdir)/libarpack.$(SHLIB_EXT)
 
 ARPACK_MFLAGS := F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
-ARPACK_FLAGS := --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(CFLAGS) $(ARPACK_CFLAGS)"
-ifneq ($(OS),WINNT)
-ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
-endif
+ARPACK_FLAGS := --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" \
+    --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" \
+    CFLAGS="$(CFLAGS) $(ARPACK_CFLAGS)" LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 
 # ARPACK-NG upstream keeps changing their download filenames
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCDIR)/srccache
