@@ -46,6 +46,14 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #include <unistd.h>
 #endif
 
+#ifdef JL_ASAN_ENABLED
+JL_DLLEXPORT const char* __asan_default_options() {
+    return "allow_user_segv_handler=1:detect_leaks=0";
+    // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
+    //        or defining __lsan_default_options = exitcode=0 once publicly available
+}
+#endif
+
 static const char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
 
 jl_options_t jl_options = { 0,    // quiet
@@ -626,17 +634,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
         sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
     }
-#endif
-
-
-#ifdef JL_ASAN_ENABLED
-    const char *asan_options = getenv("ASAN_OPTIONS");
-    if (!asan_options || !(strstr(asan_options, "allow_user_segv_handler=1") ||
-                           strstr(asan_options, "handle_segv=0"))) {
-        jl_printf(JL_STDERR,"WARNING: ASAN overrides Julia's SIGSEGV handler; "
-                            "disable SIGSEGV handling or allow custom handlers.\n");
-    }
-
 #endif
 
     jl_init_threading();
