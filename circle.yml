@@ -7,11 +7,11 @@ machine:
     JULIA_TEST_MAXRSS_MB: 600
     TEST_DIR: "/tmp/julia/share/julia/test"
 
-general:
-  branches:
-    only:
-      - master
-      - /release-.*/
+# general:
+#   branches:
+#     only:
+#       - master
+#       - /release-.*/
 
 checkout:
   post:
