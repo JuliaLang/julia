@@ -595,6 +595,7 @@ int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_tupletype_t *types, int8_t inexact, jl_svec_t **penv)
 {
     size_t n = jl_field_count(types);
+    int typesisva = n == 0 ? 0 : jl_is_vararg_type(jl_tparam(types, n-1));
     while (ml != (void*)jl_nothing) {
         size_t lensig = jl_field_count(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
@@ -611,10 +612,10 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
 
             if (ismatch == 0)
                 ; // nothing
-            else if (ml->isleafsig)
+            else if (ml->isleafsig && !typesisva)
                 ismatch = sig_match_by_type_leaf(jl_svec_data(types->parameters),
                                                  ml->sig, lensig);
-            else if (ml->issimplesig)
+            else if (ml->issimplesig && !typesisva)
                 ismatch = sig_match_by_type_simple(jl_svec_data(types->parameters), n,
                                                    ml->sig, lensig, ml->va);
             else if (ml->tvars == jl_emptysvec)
