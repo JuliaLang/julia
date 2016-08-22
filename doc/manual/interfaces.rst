@@ -66,7 +66,7 @@ A simple example is an iterable sequence of square numbers with a defined length
            end
            Base.start(::Squares) = 1
            Base.next(S::Squares, state) = (state*state, state+1)
-           Base.done(S::Squares, s) = s > S.count;
+           Base.done(S::Squares, state) = state > S.count;
            Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
            Base.length(S::Squares) = S.count;
 

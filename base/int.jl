@@ -182,11 +182,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 # note: this early during bootstrap, `>=` is not yet available
 # note: we only define Int shift counts here; the generic case is handled later
 >>(x::BitInteger, y::Int) =
-    0 <= y ? x >> unsigned(y) : x << unsigned(-y)
+    select_value(0 <= y, x >> unsigned(y), x << unsigned(-y))
 <<(x::BitInteger, y::Int) =
-    0 <= y ? x << unsigned(y) : x >> unsigned(-y)
+    select_value(0 <= y, x << unsigned(y), x >> unsigned(-y))
 >>>(x::BitInteger, y::Int) =
-    0 <= y ? x >>> unsigned(y) : x << unsigned(-y)
+    select_value(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
 ## integer conversions ##
 
@@ -304,6 +304,9 @@ promote_rule(::Type{UInt32}, ::Type{Int64}) = Int64
 promote_rule{T<:BitSigned64}(::Type{UInt64}, ::Type{T}) = UInt64
 promote_rule{T<:Union{UInt32, UInt64}}(::Type{T}, ::Type{Int128}) = Int128
 promote_rule{T<:BitSigned}(::Type{UInt128}, ::Type{T}) = UInt128
+
+_default_type(T::Type{Unsigned}) = UInt
+_default_type(T::Union{Type{Integer},Type{Signed}}) = Int
 
 ## traits ##
 

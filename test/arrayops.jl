@@ -124,6 +124,14 @@ a = zeros(0, 5)  # an empty linearslow array
 s = view(a, :, [2,3,5])
 @test length(reshape(s, length(s))) == 0
 
+# reshape(a, Val{N})
+a = ones(Int,3,3)
+s = view(a, 1:2, 1:2)
+for N in (1,3)
+    @test isa(reshape(a, Val{N}), Array{Int,N})
+    @test isa(reshape(s, Val{N}), Base.ReshapedArray{Int,N})
+end
+
 @test reshape(1:5, (5,)) === 1:5
 @test reshape(1:5, 5) === 1:5
 
@@ -1439,7 +1447,6 @@ b = rand(6,7)
 @test_throws ArgumentError copy!(a,2:3,1:3,b,1:5,2:7)
 @test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 
-# return type declarations (promote_op)
 module RetTypeDecl
     using Base.Test
     import Base: +, *, .*, convert
@@ -1457,7 +1464,6 @@ module RetTypeDecl
     (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
     (.*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
     convert{T,pow}(::Type{MeterUnits{T,pow}}, y::Real) = MeterUnits{T,pow}(convert(T,y))
-    Base.promote_op{R,S}(::typeof(*), ::Type{MeterUnits{R,1}}, ::Type{MeterUnits{S,1}}) = MeterUnits{promote_type(R,S),2}
 
     @test @inferred(m+[m,m]) == [m+m,m+m]
     @test @inferred([m,m]+m) == [m+m,m+m]

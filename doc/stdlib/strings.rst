@@ -259,7 +259,7 @@
 
    .. Docstring generated from Julia source
 
-   Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``\ 's second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``keep`` is taken to be ``false``\ . The two keyword arguments are optional: they are are a maximum size for the result and a flag determining whether empty fields should be kept in the result.
+   Return an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``\ 's second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``keep`` is taken to be ``false``\ . The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.
 
 .. function:: rsplit(string, [chars]; limit=0, keep=true)
 

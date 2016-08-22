@@ -28,14 +28,10 @@
 #define HAVE_TIMER
 #endif
 
-#if defined(JL_USE_INTEL_JITEVENTS)
-unsigned sig_stack_size = SIGSTKSZ;
-#elif defined(_CPU_AARCH64_)
-// The default SIGSTKSZ causes stack overflow in libunwind.
-#define sig_stack_size (1 << 16)
-#else
-#define sig_stack_size SIGSTKSZ
-#endif
+// 8M signal stack, same as default stack size and enough
+// for reasonable finalizers.
+// Should also be enough for parallel GC when we have it =)
+#define sig_stack_size (8 * 1024 * 1024)
 
 static bt_context_t *jl_to_bt_context(void *sigctx)
 {
@@ -315,7 +311,7 @@ static void *alloc_sigstack(size_t size)
     // Add one guard page to catch stack overflow in the signal handler
     size = LLT_ALIGN(size, pagesz) + pagesz;
     void *stackbuff = mmap(0, size, PROT_READ | PROT_WRITE,
-                           MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stackbuff == MAP_FAILED)
         jl_errorf("fatal error allocating signal stack: mmap: %s",
                   strerror(errno));

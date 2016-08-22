@@ -11,15 +11,11 @@ MBEDTLS_OBJ_SOURCE := $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedcrypto.$
 MBEDTLS_OBJ_TARGET := $(build_shlibdir)/libmbedcrypto.$(SHLIB_EXT)
 
 MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
-		-DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
+    -DUSE_STATIC_MBEDTLS_LIBRARY=OFF -DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
 
-ifeq ($(OS),WINNT)
 MBEDTLS_OPTS += -DENABLE_ZLIB_SUPPORT=OFF
 ifeq ($(BUILD_OS),WINNT)
-MBEDTLS_OPTS += -G"MSYS Makefiles" -DENABLE_TESTING=OFF
-endif
-else
-MBEDTLS_OPTS += -DENABLE_ZLIB_SUPPORT=ON
+MBEDTLS_OPTS += -G"MSYS Makefiles"
 endif
 
 ifeq ($(OS),Linux)
@@ -35,7 +31,11 @@ $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt: $(SRCDIR)/srccache/$(MBEDTLS_S
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
 	touch -c $@
 
-$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/Makefile: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt
+$(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied: | $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt
+	cd $(SRCDIR)/srccache/$(MBEDTLS_SRC)/include/mbedtls && patch -p0 -f < $(SRCDIR)/patches/mbedtls-ssl.h.patch
+	echo 1 > $@
+
+$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/Makefile: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(MBEDTLS_OPTS)
@@ -54,6 +54,8 @@ endif
 $(MBEDTLS_OBJ_TARGET): $(MBEDTLS_OBJ_SOURCE) | $(build_shlibdir)
 ifeq ($(OS), WINNT)
 	cp $^ $(build_shlibdir)
+	cp $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedx509.$(SHLIB_EXT) $(build_shlibdir)
+	cp $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedtls.$(SHLIB_EXT) $(build_shlibdir)
 else
 	$(call make-install,mbedtls-$(MBEDTLS_VER),)
 endif
@@ -67,7 +69,7 @@ endif
 
 clean-mbedtls:
 	-$(MAKE) -C $(BUILDDIR)/mbedtls-$(MBEDTLS_VER) clean
-	-rm -f $(MBEDTLS_OBJ_TARGET)
+	-rm -f $(MBEDTLS_OBJ_TARGET) $(build_shlibdir)/libmbed*
 
 distclean-mbedtls:
 	-rm -rf $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz \

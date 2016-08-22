@@ -4469,3 +4469,25 @@ let
     k(x) = (k = x; k)
     @test k(1) == 1
 end
+
+# PR #18054: compilation of cfunction leaves IRBuilder in bad state,
+#            causing heap-use-after-free when compiling f18054
+function f18054()
+    return Cint(0)
+end
+cfunction(f18054, Cint, ())
+
+# issue #18085
+f18085(a,x...) = (0,)
+for (f,g) in ((:asin,:sin), (:acos,:cos))
+    gx = eval(g)
+    f18085(::Type{Val{f}},x...) = map(x->2gx(x), f18085(Val{g},x...))
+end
+@test f18085(Val{:asin},3) === (0.0,)
+
+# issue #18173
+function f18173()
+    identity(()->successflag)
+    successflag = false
+end
+@test f18173() == false

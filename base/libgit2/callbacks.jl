@@ -160,7 +160,7 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
                 urlusername : username)
             userpass = prompt("Password for '$schema$username@$host'", password=true)
         end
-        (creds.user != username) || (creds.pass != userpass) && reset!(creds)
+        ((creds.user != username) || (creds.pass != userpass)) && reset!(creds)
         creds.user = username # save credentials
         creds.pass = userpass # save credentials
 
@@ -209,12 +209,10 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     url = unsafe_string(url_ptr)
 
     # parse url for schema and host
-    urlparts = match(urlmatcher, url)
-    schema = urlparts.captures[1]
-    urlusername = urlparts.captures[4]
-    urlusername = urlusername === nothing ? "" : String(urlusername)
-    host = urlparts.captures[5]
-    schema = schema === nothing ? "" : schema*"://"
+    urlparts = match(URL_REGEX, url)
+    schema = urlparts[:scheme] === nothing ? "" : urlparts[:scheme] * "://"
+    urlusername = urlparts[:user] === nothing ? "" : urlparts[:user]
+    host = urlparts[:host]
 
     # get credentials object from payload pointer
     @assert payload_ptr != C_NULL

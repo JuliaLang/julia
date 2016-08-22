@@ -1226,7 +1226,7 @@ Return an array of substrings by splitting the given string on occurrences of th
 character delimiters, which may be specified in any of the formats allowed by `search`'s
 second argument (i.e. a single character, collection of characters, string, or regular
 expression). If `chars` is omitted, it defaults to the set of all space characters, and
-`keep` is taken to be `false`. The two keyword arguments are optional: they are are a
+`keep` is taken to be `false`. The two keyword arguments are optional: they are a
 maximum size for the result and a flag determining whether empty fields should be kept in
 the result.
 """
@@ -2128,29 +2128,11 @@ Largest integer less than or equal to `x/y`.
 fld
 
 """
-    withenv(f::Function, kv::Pair...)
-
-Execute `f()` in an environment that is temporarily modified (not replaced as in `setenv`)
-by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
-`withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
-environment variable (if it is set). When `withenv` returns, the original environment has
-been restored.
-"""
-withenv
-
-"""
     setdiff!(s, iterable)
 
 Remove each element of `iterable` from set `s` in-place.
 """
 setdiff!
-
-"""
-    EOFError()
-
-No more data was available to read from a file or stream.
-"""
-EOFError
 
 """
     isascii(c::Union{Char,AbstractString}) -> Bool
@@ -2913,21 +2895,6 @@ Squared absolute value of `x`.
 abs2
 
 """
-    write(stream::IO, x)
-    write(filename::AbstractString, x)
-
-Write the canonical binary representation of a value to the given I/O stream or file.
-Returns the number of bytes written into the stream.
-
-You can write multiple values with the same :func:`write` call. i.e. the following are
-equivalent:
-
-    write(stream, x, y...)
-    write(stream, x) + write(stream, y...)
-"""
-write
-
-"""
     sizehint!(s, n)
 
 Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
@@ -2968,12 +2935,6 @@ handle properly.
 """
 OutOfMemoryError
 
-"""
-    SystemError(prefix::AbstractString, [errno::Int32])
-
-A system call failed with an error code (in the `errno` global variable).
-"""
-SystemError
 
 """
     binomial(n,k)
@@ -3011,14 +2972,6 @@ Print information about the version of Julia in use. If the `verbose` argument i
 detailed system information is shown as well.
 """
 versioninfo
-
-"""
-    DimensionMismatch([msg])
-
-The objects called do not have matching dimensionality. Optional argument `msg` is a
-descriptive error string.
-"""
-DimensionMismatch
 
 """
     sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -3589,13 +3542,6 @@ Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In gener
 cannot be used with empty collections (see `reduce(op, itr)`).
 """
 foldr(op, itr)
-
-"""
-    ParseError(msg)
-
-The expression passed to the `parse` function could not be interpreted as a valid Julia expression.
-"""
-ParseError
 
 """
     delete!(collection, key)
@@ -4448,22 +4394,6 @@ readbytes!
 Get the file name part of a path.
 """
 basename
-
-"""
-    ArgumentError(msg)
-
-The parameters to a function call do not match a valid signature. Argument `msg` is a
-descriptive error string.
-"""
-ArgumentError
-
-"""
-    KeyError(key)
-
-An indexing operation into an `Associative` (`Dict`) or `Set` like object tried to access or
-delete a non-existent element.
-"""
-KeyError
 
 """
     isdiag(A) -> Bool
@@ -5320,13 +5250,6 @@ indexes. If the array length is insufficient, the least significant digits are f
 the array length. If the array length is excessive, the excess portion is filled with zeros.
 """
 digits!
-
-"""
-    MethodError(f, args)
-
-A method with the required type signature does not exist in the given generic function. Alternatively, there is no unique most-specific method.
-"""
-MethodError
 
 """
     cat(dims, A...)
@@ -6621,22 +6544,6 @@ Compute the phase angle in radians of a complex number `z`.
 angle
 
 """
-    LoadError(file::AbstractString, line::Int, error)
-
-An error occurred while `include`ing, `require`ing, or `using` a file. The error specifics
-should be available in the `.error` field.
-"""
-LoadError
-
-"""
-    InitError(mod::Symbol, error)
-
-An error occurred when running a module's `__init__` function. The actual error thrown is
-available in the `.error` field.
-"""
-InitError
-
-"""
     copy!(dest, src)
 
 Copy all elements from collection `src` to array `dest`. Returns `dest`.
@@ -7511,14 +7418,6 @@ seekend
 Integer division was attempted with a denominator value of 0.
 """
 DivideError
-
-"""
-    AssertionError([msg])
-
-The asserted condition did not evaluate to `true`.
-Optional argument `msg` is a descriptive error string.
-"""
-AssertionError
 
 """
     Ac_ldiv_Bc(A, B)

@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: scalarmax, scalarmin, sort
+import Base: scalarmax, scalarmin, sort, find, findnz
 
 ### The SparseVector
 
@@ -426,8 +426,8 @@ function Base.getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, i::Integer, J::Abstract
     @inbounds for j = 1:nJ
         col = J[j]
         rowI = i
-        ptrA = colptrA[col]
-        stopA = colptrA[col+1]-1
+        ptrA = Int(colptrA[col])
+        stopA = Int(colptrA[col+1]-1)
         if ptrA <= stopA
             if rowvalA[ptrA] <= rowI
                 ptrA = searchsortedfirst(rowvalA, rowI, ptrA, stopA, Base.Order.Forward)
@@ -560,6 +560,55 @@ function getindex{Tv}(A::SparseMatrixCSC{Tv}, I::AbstractVector)
     SparseVector(n, rowvalB, nzvalB)
 end
 
+function find{Tv,Ti}(x::SparseVector{Tv,Ti})
+    numnz = nnz(x)
+    I = Array(Ti, numnz)
+
+    nzind = x.nzind
+    nzval = x.nzval
+
+    count = 1
+    @inbounds for i = 1 : numnz
+        if nzval[i] != 0
+            I[count] = nzind[i]
+            count += 1
+        end
+    end
+
+    count -= 1
+    if numnz != count
+        deleteat!(I, (count+1):numnz)
+    end
+
+    return I
+end
+
+function findnz{Tv,Ti}(x::SparseVector{Tv,Ti})
+    numnz = nnz(x)
+
+    I = Array(Ti, numnz)
+    V = Array(Tv, numnz)
+
+    nzind = x.nzind
+    nzval = x.nzval
+
+    count = 1
+    @inbounds for i = 1 : numnz
+        if nzval[i] != 0
+            I[count] = nzind[i]
+            V[count] = nzval[i]
+            count += 1
+        end
+    end
+
+    count -= 1
+    if numnz != count
+        deleteat!(I, (count+1):numnz)
+        deleteat!(V, (count+1):numnz)
+    end
+
+    return (I, V)
+end
 
 ### Generic functions operating on AbstractSparseVector
 
@@ -883,7 +932,6 @@ function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractSparseVector{Tx},
                            y::AbstractSparseVector{Ty},
                            mode::Int)
-
     0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
     R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
@@ -1025,7 +1073,6 @@ function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractVector{Tx},
                            y::AbstractSparseVector{Ty},
                            mode::Int)
-
     0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
     R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)
@@ -1068,7 +1115,6 @@ function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractSparseVector{Tx},
                            y::AbstractVector{Ty},
                            mode::Int)
-
     0 <= mode <= 2 || throw(ArgumentError("Incorrect mode $mode."))
     R = typeof(f(zero(Tx), zero(Ty)))
     n = length(x)

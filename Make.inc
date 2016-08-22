@@ -38,6 +38,7 @@ USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
 USE_SYSTEM_MBEDTLS:=0
 USE_SYSTEM_LIBSSH2:=0
+USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 
@@ -339,6 +340,11 @@ endif
 
 STDLIBCPP_FLAG :=
 
+ifeq ($(OS), FreeBSD)
+USEGCC := 0
+USECLANG := 1
+endif
+
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
 DARWINVER_GTE13 := $(shell expr `uname -r | cut -b 1-2` \>= 13)
@@ -459,6 +465,7 @@ endif #ARCH
 LD := link
 endif #USEMSVC
 RANLIB := $(CROSS_COMPILE)ranlib
+OBJCOPY := $(CROSS_COMPILE)objcopy
 
 # file extensions
 ifeq ($(OS), WINNT)

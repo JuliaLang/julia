@@ -56,7 +56,7 @@ immutable StackFrame # this type should be kept platform-agnostic so that profil
     "true if the code is from an inlined frame"
     inlined::Bool
     "representation of the pointer to the execution context as returned by `backtrace`"
-    pointer::Int64  # Large enough to be read losslessly on 32- and 64-bit machines.
+    pointer::UInt64  # Large enough to be read losslessly on 32- and 64-bit machines.
 end
 
 StackFrame(func, file, line) = StackFrame(func, file, line, Nullable{LambdaInfo}(), false, false, 0)
@@ -123,7 +123,7 @@ inlined at that point, innermost function first.
 """
 function lookup(pointer::Ptr{Void})
     infos = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), pointer - 1, false)
-    isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, Nullable{LambdaInfo}(), true, false, convert(Int64, pointer))]
+    isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, Nullable{LambdaInfo}(), true, false, convert(UInt64, pointer))]
     res = Array{StackFrame}(length(infos))
     for i in 1:length(infos)
         info = infos[i]

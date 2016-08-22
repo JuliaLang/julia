@@ -35,30 +35,26 @@ function !(A::AbstractArray{Bool})
 end
 
 ## Binary arithmetic operators ##
-@pure promote_array_type{S<:Number, A<:AbstractArray}(F, ::Type{S}, ::Type{A}) =
-    promote_array_type(F, S, eltype(A), promote_op(F, S, eltype(A)))
-@pure promote_array_type{S<:Number, A<:AbstractArray}(F, ::Type{A}, ::Type{S}) =
-    promote_array_type(F, S, eltype(A), promote_op(F, eltype(A), S))
 
-@pure promote_array_type{S, A, P}(F, ::Type{S}, ::Type{A}, ::Type{P}) = P
-@pure promote_array_type{S<:Real, A<:AbstractFloat, P}(F, ::Type{S}, ::Type{A}, ::Type{P}) = A
-@pure promote_array_type{S<:Integer, A<:Integer, P}(F::typeof(./), ::Type{S}, ::Type{A}, ::Type{P}) = P
-@pure promote_array_type{S<:Integer, A<:Integer, P}(F::typeof(.\), ::Type{S}, ::Type{A}, ::Type{P}) = P
-@pure promote_array_type{S<:Integer, A<:Integer, P}(F, ::Type{S}, ::Type{A}, ::Type{P}) = A
-@pure promote_array_type{S<:Integer, P}(F::typeof(./), ::Type{S}, ::Type{Bool}, ::Type{P}) = P
-@pure promote_array_type{S<:Integer, P}(F::typeof(.\), ::Type{S}, ::Type{Bool}, ::Type{P}) = P
-@pure promote_array_type{S<:Integer, P}(F, ::Type{S}, ::Type{Bool}, ::Type{P}) = P
+promote_array_type(F, ::Type, ::Type, T::Type) = T
+promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
+promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
+promote_array_type{S<:Integer, A<:Integer}(::typeof(./), ::Type{S}, ::Type{A}, T::Type) = T
+promote_array_type{S<:Integer, A<:Integer}(::typeof(.\), ::Type{S}, ::Type{A}, T::Type) = T
+promote_array_type{S<:Integer}(::typeof(./), ::Type{S}, ::Type{Bool}, T::Type) = T
+promote_array_type{S<:Integer}(::typeof(.\), ::Type{S}, ::Type{Bool}, T::Type) = T
+promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
-    @eval ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T}) =
-        _elementwise($f, A, B, promote_eltype_op($f, A, B))
+    @eval ($f){R,S}(A::AbstractArray{R}, B::AbstractArray{S}) =
+        _elementwise($f, promote_op($f, R, S), A, B)
 end
-function _elementwise{S,T}(op, A::AbstractArray{S}, B::AbstractArray{T}, ::Type{Any})
-    promote_shape(A,B) # check size compatibility
+function _elementwise(op, ::Type{Any}, A::AbstractArray, B::AbstractArray)
+    promote_shape(A, B) # check size compatibility
     return broadcast(op, A, B)
 end
-function _elementwise{S,T,R}(op, A::AbstractArray{S}, B::AbstractArray{T}, ::Type{R})
-    F = similar(A, R, promote_shape(A,B))
+function _elementwise{T}(op, ::Type{T}, A::AbstractArray, B::AbstractArray)
+    F = similar(A, T, promote_shape(A, B))
     for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
         @inbounds F[iF] = op(A[iA], B[iB])
     end
@@ -68,14 +64,20 @@ end
 for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::AbstractArray{T})
-            F = similar(B, promote_array_type($f,typeof(A),typeof(B)))
+            R = promote_op($f, typeof(A), T)
+            S = promote_array_type($f, typeof(A), T, R)
+            S === Any && return [($f)(A, b) for b in B]
+            F = similar(B, S)
             for (iF, iB) in zip(eachindex(F), eachindex(B))
                 @inbounds F[iF] = ($f)(A, B[iB])
             end
             return F
         end
         function ($f){T}(A::AbstractArray{T}, B::Number)
-            F = similar(A, promote_array_type($f,typeof(A),typeof(B)))
+            R = promote_op($f, T, typeof(B))
+            S = promote_array_type($f, typeof(B), T, R)
+            S === Any && return [($f)(a, B) for a in A]
+            F = similar(A, S)
             for (iF, iA) in zip(eachindex(F), eachindex(A))
                 @inbounds F[iF] = ($f)(A[iA], B)
             end

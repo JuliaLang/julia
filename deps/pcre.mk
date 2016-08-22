@@ -5,9 +5,7 @@ PCRE_OBJ_TARGET := $(build_shlibdir)/libpcre2-8.$(SHLIB_EXT)
 
 # Force optimization for PCRE flags (Issue #11668)
 PCRE_CFLAGS := -O3
-ifneq ($(OS),WINNT)
-PCRE_LDFLAGS := "-Wl,-rpath,'$(build_libdir)'"
-endif
+PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
 $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre2-$(PCRE_VER).tar.bz2
@@ -36,7 +34,7 @@ $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET)
 	touch -c $@
 
 clean-pcre:
-	-$(MAKE) -C pcre2-$(PCRE_VER) clean
+	-$(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean
 	-rm -f $(build_shlibdir)/libpcre*
 distclean-pcre:
 	-rm -rf $(SRCDIR)/srccache/pcre2-$(PCRE_VER).tar.bz2 $(SRCDIR)/srccache/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)

@@ -441,6 +441,32 @@ Global Variables
 
 Adds docstring ``"..."`` to the ``Binding``\ s ``a``, ``b``, and ``c``.
 
+.. note::
+
+    When a ``const`` definition is only used to define an alias of another definition, such
+    as is the case with the function ``div`` and its alias ``÷`` in ``Base``, do not
+    document the alias and instead document the actual function.
+
+    If the alias is documented and not the real definition then the docsystem (``?`` mode)
+    will not return the docstring attached to the alias when the real definition is
+    searched for.
+
+    For example you should write
+
+    .. code-block:: julia
+
+        "..."
+        f(x) = x + 1
+        const alias = f
+
+    rather than
+
+    .. code-block:: julia
+
+        f(x) = x + 1
+        "..."
+        const alias = f
+
 .. code-block:: julia
 
     "..."

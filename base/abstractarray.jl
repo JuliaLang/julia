@@ -9,6 +9,7 @@ typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
 typealias DimOrInd Union{Integer, AbstractUnitRange}
 typealias IntOrInd Union{Int, AbstractUnitRange}
 typealias DimsOrInds{N} NTuple{N,DimOrInd}
+typealias NeedsShaping Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
 macro _inline_pure_meta()
     Expr(:meta, :inline, :pure)
@@ -51,7 +52,11 @@ size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) = (size(x, d1), siz
 
 Returns the valid range of indices for array `A` along dimension `d`.
 """
-indices{T,N}(A::AbstractArray{T,N}, d) = d <= N ? indices(A)[d] : OneTo(1)
+function indices{T,N}(A::AbstractArray{T,N}, d)
+    @_inline_meta
+    d <= N ? indices(A)[d] : OneTo(1)
+end
+
 """
     indices(A)
 
@@ -59,7 +64,7 @@ Returns the tuple of valid indices for array `A`.
 """
 function indices(A)
     @_inline_meta
-    map(s->OneTo(s), size(A))
+    map(OneTo, size(A))
 end
 
 # Performance optimization: get rid of a branch on `d` in `indices(A,
@@ -177,12 +182,15 @@ function _strides{M,T,N}(out::NTuple{M}, A::AbstractArray{T,N})
 end
 
 function isassigned(a::AbstractArray, i::Int...)
-    # TODO
     try
         a[i...]
         true
-    catch
-        false
+    catch e
+        if isa(e, BoundsError) || isa(e, UndefRefError)
+            return false
+        else
+            rethrow(e)
+        end
     end
 end
 
@@ -413,14 +421,14 @@ different element type it will create a regular `Array` instead:
      2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 
 """
-similar{T}(a::AbstractArray{T})                          = similar(a, T)
-similar(   a::AbstractArray, T::Type)                    = similar(a, T, to_shape(indices(a)))
-similar{T}(a::AbstractArray{T}, dims::Tuple)             = similar(a, T, to_shape(dims))
-similar{T}(a::AbstractArray{T}, dims::DimOrInd...)       = similar(a, T, to_shape(dims))
-similar(   a::AbstractArray, T::Type, dims::DimOrInd...) = similar(a, T, to_shape(dims))
-similar(   a::AbstractArray, T::Type, dims)              = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray{T})                             = similar(a, T)
+similar{T}(a::AbstractArray, ::Type{T})                     = similar(a, T, to_shape(indices(a)))
+similar{T}(a::AbstractArray{T}, dims::Tuple)                = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray{T}, dims::DimOrInd...)          = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray, ::Type{T}, dims::DimOrInd...)  = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray, ::Type{T}, dims::NeedsShaping) = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar{N}(a::AbstractArray, T::Type, dims::Dims{N})     = Array{T,N}(dims)
+similar{T,N}(a::AbstractArray, ::Type{T}, dims::Dims{N})    = Array{T,N}(dims)
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
@@ -708,10 +716,6 @@ Represents the array `y` as an array having the same indices type as `x`.
 of_indices(x, y) = similar(dims->y, oftype(indices(x), indices(y)))
 
 full(x::AbstractArray) = x
-
-map(::Type{Integer},  a::Array) = map!(Integer, similar(a,typeof(Integer(one(eltype(a))))), a)
-map(::Type{Signed},   a::Array) = map!(Signed, similar(a,typeof(Signed(one(eltype(a))))), a)
-map(::Type{Unsigned}, a::Array) = map!(Unsigned, similar(a,typeof(Unsigned(one(eltype(a))))), a)
 
 ## range conversions ##
 
@@ -1653,12 +1657,12 @@ end
 
 # These are needed because map(eltype, As) is not inferrable
 promote_eltype_op(::Any) = (@_pure_meta; Bottom)
+promote_eltype_op(op, A) = (@_pure_meta; promote_op(op, eltype(A)))
 promote_eltype_op{T}(op, ::AbstractArray{T}) = (@_pure_meta; promote_op(op, T))
-promote_eltype_op{T}(op, ::T               ) = (@_pure_meta; promote_op(op, T))
+promote_eltype_op{T}(op, ::AbstractArray{T}, A) = (@_pure_meta; promote_op(op, T, eltype(A)))
+promote_eltype_op{T}(op, A, ::AbstractArray{T}) = (@_pure_meta; promote_op(op, eltype(A), T))
 promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::AbstractArray{S}) = (@_pure_meta; promote_op(op, R, S))
-promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::S) = (@_pure_meta; promote_op(op, R, S))
-promote_eltype_op{R,S}(op, ::R, ::AbstractArray{S}) = (@_pure_meta; promote_op(op, R, S))
-promote_eltype_op(op, A, B, C, D...) = (@_pure_meta; promote_op(op, eltype(A), promote_eltype_op(op, B, C, D...)))
+promote_eltype_op(op, A, B, C, D...) = (@_pure_meta; promote_eltype_op(op, promote_eltype_op(op, A, B), C, D...))
 
 ## 1 argument
 map!{F}(f::F, A::AbstractArray) = map!(f, A, A)

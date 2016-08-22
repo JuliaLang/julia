@@ -36,8 +36,9 @@ start(R::ReshapedArrayIterator) = start(R.iter)
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
 
-reshape(parent::AbstractArray, shp::Tuple)        = _reshape(parent, to_shape(shp))
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
+reshape(parent::AbstractArray, shp::NeedsShaping) = reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
 function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
@@ -47,24 +48,34 @@ end
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
 @pure rdims{N}(out::NTuple{N}, inds::Tuple{}, ::Type{Val{N}}) = out
-@pure rdims{N}(out::NTuple{N}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = (front(out)..., length(last(out)) * prod(map(length, inds)))
+@pure function rdims{N}(out::NTuple{N}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
+    l = length(last(out)) * prod(map(length, inds))
+    (front(out)..., OneTo(l))
+end
 @pure rdims{N}(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) = rdims((out..., OneTo(1)), (), Val{N})
 @pure rdims{N}(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(inds)), tail(inds), Val{N})
 
+# _reshape on Array returns an Array
+_reshape(parent::Vector, dims::Dims{1}) = parent
+_reshape(parent::Array, dims::Dims{1}) = reshape(parent, dims)
+_reshape(parent::Array, dims::Dims) = reshape(parent, dims)
+
+# When reshaping Vector->Vector, don't wrap with a ReshapedArray
+function _reshape(v::AbstractVector, dims::Dims{1})
+    len = dims[1]
+    len == length(v) || throw(DimensionMismatch("parent has $(length(v)) elements, which is incompatible with length $len"))
+    v
+end
+# General reshape
 function _reshape(parent::AbstractArray, dims::Dims)
     n = _length(parent)
     prod(dims) == n || throw(DimensionMismatch("parent has $n elements, which is incompatible with size $dims"))
     __reshape((parent, linearindexing(parent)), dims)
 end
-_reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
-# When reshaping Vector->Vector, don't wrap with a ReshapedArray
-_reshape{T}(v::ReshapedArray{T,1}, dims::Tuple{Int}) = _reshape(v.parent, dims)
-function _reshape(v::AbstractVector, dims::Tuple{Int})
-    len = dims[1]
-    len == length(v) || throw(DimensionMismatch("parent has $(length(v)) elements, which is incompatible with length $len"))
-    v
-end
+# Reshaping a ReshapedArray
+_reshape{T}(v::ReshapedArray{T,1}, dims::Dims{1}) = _reshape(v.parent, dims)
+_reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
     parent = p[1]

@@ -178,9 +178,7 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
 # utf8proc since its headers are not in the binary download
-echo 'override STAGE1_DEPS = libuv' >> Make.user
-echo 'override STAGE2_DEPS = utf8proc' >> Make.user
-echo 'override STAGE3_DEPS = ' >> Make.user
+echo 'override DEP_LIBS = libuv utf8proc' >> Make.user
 
 if [ -n "$USEMSVC" ]; then
   # Openlibm doesn't build well with MSVC right now
@@ -192,14 +190,14 @@ if [ -n "$USEMSVC" ]; then
   make -C deps install-libuv install-utf8proc
   cp usr/lib/uv.lib usr/lib/libuv.a
   echo 'override CC += -TP' >> Make.user
-  echo 'override STAGE1_DEPS += dsfmt' >> Make.user
+  echo 'override DEP_LIBS += dsfmt' >> Make.user
 
   # Create a modified version of compile for wrapping link
   sed -e 's/-link//' -e 's/cl/link/g' -e 's/ -Fe/ -OUT:/' \
     -e 's|$dir/$lib|$dir/lib$lib|g' deps/srccache/libuv/compile > linkld
   chmod +x linkld
 else
-  echo 'override STAGE1_DEPS += openlibm' >> Make.user
+  echo 'override DEP_LIBS += openlibm' >> Make.user
   make check-whitespace
   make VERBOSE=1 -C base version_git.jl.phony
   echo 'NO_GIT = 1' >> Make.user

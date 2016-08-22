@@ -22,9 +22,7 @@ ifneq ($(OS), WINNT)
 SUITE_SPARSE_LIB += -lrt
 endif
 endif
-ifneq ($(OS), WINNT)
-SUITE_SPARSE_LIB += -Wl,-rpath,'$(build_libdir)'
-endif
+SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
 SUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"

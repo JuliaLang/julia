@@ -123,8 +123,26 @@ $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLV
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
+
+ifeq ($(OS), Linux)
+JULIA_SPLITDEBUG := 1
+else
+JULIA_SPLITDEBUG := 0
+endif
 $(build_shlibdir)/libccalltest.$(SHLIB_EXT): $(SRCDIR)/ccalltest.c
-	@$(call PRINT_CC, $(CC) $(CFLAGS) $(CPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS))
+	@$(call PRINT_CC, $(CC) $(CFLAGS) $(CPPFLAGS) $(DEBUGFLAGS) -O3 $< $(fPIC) -shared -o $@.tmp $(LDFLAGS))
+ifeq ($(JULIA_SPLITDEBUG),1)
+	@# Create split debug info file for libccalltest stacktraces test
+	@# packagers should disable this by setting JULIA_SPLITDEBUG=0 if this is already done by your build system
+	$(OBJCOPY) --only-keep-debug $@.tmp $@.debug
+	$(OBJCOPY) --strip-debug $@.tmp
+	$(OBJCOPY) --add-gnu-debuglink=$@.debug $@.tmp
+endif
+	@## clang should have made the dSYM split-debug directory,
+	@## but we are intentionally not going to give it the correct name
+	@## because we want to test the non-default debug configuration
+	@#rm -r $@.dSYM && mv $@.tmp.dSYM $@.dSYM
+	mv $@.tmp $@
 
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
@@ -220,9 +238,11 @@ ifneq ($(OS), WINNT)
 	@ln -sf libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 endif
 	$(DSYMUTIL) $@
+
 $(BUILDDIR)/libjulia-debug.a: $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(DOBJS))
+
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 
 $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
@@ -233,6 +253,7 @@ ifneq ($(OS), WINNT)
 	@ln -sf libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 endif
 	$(DSYMUTIL) $@
+
 $(BUILDDIR)/libjulia.a: julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(OBJS))

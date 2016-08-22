@@ -53,7 +53,7 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - **FreeBSD**
 - **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md) is available too.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER (little-endian) is available too.
 
 <a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
@@ -235,11 +235,21 @@ When building Julia, or its dependencies, libraries installed by third party pac
 
 ### FreeBSD
 
-On *FreeBSD Release 9.0*, install the `gcc47`, `git`, and `gmake` packages/ports, and compile Julia with the command:
+On *FreeBSD Release 11.0*, install the gfortran, git, cmake, and gmake packages/ports (`pkg install gcc6 gmake git cmake`), and compile Julia with the command:
 
-    $ gmake FC=gfortran47
+    $ echo 'FC=gfortran6' >> Make.user
+    $ gmake
 
 You must use the `gmake` command on FreeBSD instead of `make`.
+
+Note that Julia is community-supported and we have little control over our upstream dependencies, you may still run into issues with dependencies and YMMV. Current known issues include:
+
+ - The x86 arch doesn't support threading due to lack of compiler runtime library support (set `JULIA_THREADS=0`).
+ - libunwind needs a small patch to its tests to compile.
+ - OpenBLAS patches in pkg haven't been upstreamed.
+ - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to work around this (upstream bug submitted to FreeBSD pkg maintainers).
+ - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=/usr/local/lib` and `CPPFLAGS=/usr/local/include` to your environment or `Make.user` file to build successfully.
+
 
 ### Windows
 
@@ -263,6 +273,7 @@ Building Julia requires that the following software be installed:
 - **[patch]**                   — for modifying source code.
 - **[cmake]**                   — needed to build `libgit2`.
 - **[openssl]**                 — needed for HTTPS support in `libgit2` on Linux, install via `apt-get install libssl-dev` or `yum install openssl-devel`.
+- **[pkg-config]**              - needed to build libgit2 correctly, especially for proxy support
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
@@ -283,6 +294,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
 - **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager
+- **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager
 - **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes
 - **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
@@ -325,6 +337,7 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [openssl]:      https://www.openssl.org
 [libssh2]:      https://www.libssh2.org
 [mbedtls]:      https://tls.mbed.org/
+[pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 
 <a name="System-Provided-Libraries">
 ### System Provided Libraries

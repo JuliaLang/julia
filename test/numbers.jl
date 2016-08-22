@@ -2139,7 +2139,8 @@ rationalize(nextfloat(0.0)) == 0//1
 # rational-exponent promotion rules (issue #3155):
 @test 2.0f0^(1//3) == 2.0f0^(1.0f0/3)
 @test 2^(1//3) == 2^(1/3)
-
+# no loss of precision for rational powers (issue #18114)
+@test BigFloat(2)^(BigFloat(1)/BigFloat(3)) == BigFloat(2)^(1//3)
 
 # large shift amounts
 @test Int32(-1)>>31 == -1
@@ -2772,11 +2773,17 @@ testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
 testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 
 @test ndims(1) == 0
+@test ndims(Integer) == 0
 @test size(1,1) == 1
 @test_throws BoundsError size(1,-1)
 @test indices(1) == ()
 @test indices(1,1) == 1:1
 @test_throws BoundsError indices(1,-1)
+@test isinteger(Integer(2)) == true
+@test size(1) == ()
+@test length(1) == 1
+@test endof(1) == 1
+@test eltype(Integer) == Integer
 
 # issue #15920
 @test Rational(0, 1) / Complex(3, 2) == 0
@@ -2791,21 +2798,21 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
     for S in types
         for op in (+, -)
-            T = @inferred Base.promote_op(op, S)
+            T = @inferred Base._promote_op(op, S)
             t = @inferred op(one(S))
             @test T === typeof(t)
         end
-    end
 
-    @test @inferred(Base.promote_op(!, Bool)) === Bool
-
-    for R in types, S in types
-        for op in (+, -, *, /, ^)
-            T = @inferred Base.promote_op(op, R, S)
-            t = @inferred op(one(R), one(S))
-            @test T === typeof(t)
+        for R in types
+            for op in (+, -, *, /, ^)
+                T = @inferred Base._promote_op(op, S, R)
+                t = @inferred op(one(S), one(R))
+                @test T === typeof(t)
+            end
         end
     end
+
+    @test @inferred(Base._promote_op(!, Bool)) === Bool
 end
 
 let types = (Base.BitInteger_types..., BigInt, Bool,
@@ -2813,23 +2820,23 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Float16, Float32, Float64, BigFloat)
     for S in types, T in types
         for op in (<, >, <=, >=, (==))
-            @test @inferred(Base.promote_op(op, S, T)) === Bool
+            @test @inferred(Base._promote_op(op, S, T)) === Bool
         end
     end
 end
 
 let types = (Base.BitInteger_types..., BigInt, Bool)
     for S in types
-        T = @inferred Base.promote_op(~, S)
+        T = @inferred Base._promote_op(~, S)
         t = @inferred ~one(S)
         @test T === typeof(t)
-    end
 
-    for S in types, T in types
-        for op in (&, |, <<, >>, (>>>), %, ÷)
-            T = @inferred Base.promote_op(op, S, T)
-            t = @inferred op(one(S), one(T))
-            @test T === typeof(t)
+        for R in types
+            for op in (&, |, <<, >>, (>>>), %, ÷)
+                T = @inferred Base._promote_op(op, S, R)
+                t = @inferred op(one(S), one(R))
+                @test T === typeof(t)
+            end
         end
     end
 end

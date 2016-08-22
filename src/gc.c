@@ -618,7 +618,11 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
     bigval_t *v = (bigval_t*)malloc_cache_align(allocsz);
     if (v == NULL)
         jl_throw(jl_memory_exception);
+#ifdef JULIA_ENABLE_THREADING
     jl_atomic_fetch_add(&gc_num.allocd, allocsz);
+#else
+    gc_num.allocd += allocsz;
+#endif
     gc_num.bigalloc++;
 #ifdef MEMDEBUG
     memset(v, 0xee, allocsz);
@@ -1596,7 +1600,7 @@ static void post_mark(arraylist_t *list)
 }
 
 // collector entry point and control
-static volatile uint64_t jl_gc_disable_counter = 0;
+static volatile uint32_t jl_gc_disable_counter = 0;
 
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
@@ -2087,7 +2091,7 @@ void *jl_gc_perm_alloc_nolock(size_t sz)
         pool = (void*)LLT_ALIGN((uintptr_t)pool, JL_SMALL_BYTE_ALIGNMENT);
 #else
         void *pool = mmap(0, GC_PERM_POOL_SIZE, PROT_READ | PROT_WRITE,
-                          MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         if (__unlikely(pool == MAP_FAILED))
             return NULL;
 #endif

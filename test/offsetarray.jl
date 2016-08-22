@@ -1,108 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# OffsetArrays (arrays with indexing that doesn't start at 1)
-
-# This test file is designed to exercise support for generic indexing,
-# even though offset arrays aren't implemented in Base.
-
-module OAs
-
-using Base: Indices, LinearSlow, LinearFast, tail
-
-export OffsetArray
-
-immutable OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
-    parent::AA
-    offsets::NTuple{N,Int}
-end
-typealias OffsetVector{T,AA<:AbstractArray} OffsetArray{T,1,AA}
-
-OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) = OffsetArray{T,N,typeof(A)}(A, offsets)
-OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A, offsets)
-
-(::Type{OffsetArray{T,N}}){T,N}(inds::Indices{N}) = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
-(::Type{OffsetArray{T}}){T,N}(inds::Indices{N}) = OffsetArray{T,N}(inds)
-
-Base.linearindexing{T<:OffsetArray}(::Type{T}) = Base.linearindexing(parenttype(T))
-parenttype{T,N,AA}(::Type{OffsetArray{T,N,AA}}) = AA
-parenttype(A::OffsetArray) = parenttype(typeof(A))
-
-Base.parent(A::OffsetArray) = A.parent
-
-errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
-Base.size(A::OffsetArray) = errmsg(A)
-Base.size(A::OffsetArray, d) = errmsg(A)
-Base.eachindex(::LinearSlow, A::OffsetArray) = CartesianRange(indices(A))
-Base.eachindex(::LinearFast, A::OffsetVector) = indices(A, 1)
-
-# Implementations of indices and indices1. Since bounds-checking is
-# performance-critical and relies on indices, these are usually worth
-# optimizing thoroughly.
-@inline Base.indices(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? indices(parent(A))[d] + A.offsets[d] : (1:1)
-@inline Base.indices(A::OffsetArray) = _indices(indices(parent(A)), A.offsets)  # would rather use ntuple, but see #15276
-@inline _indices(inds, offsets) = (inds[1]+offsets[1], _indices(tail(inds), tail(offsets))...)
-_indices(::Tuple{}, ::Tuple{}) = ()
-Base.indices1{T}(A::OffsetArray{T,0}) = 1:1  # we only need to specialize this one
-
-function Base.similar(A::OffsetArray, T::Type, dims::Dims)
-    B = similar(parent(A), T, dims)
-end
-function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{UnitRange}})
-    B = similar(A, T, map(length, inds))
-    OffsetArray(B, map(indsoffset, inds))
-end
-
-Base.similar(f::Union{Function,DataType}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
-
-Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
-
-@inline function Base.getindex{T,N}(A::OffsetArray{T,N}, I::Vararg{Int,N})
-    checkbounds(A, I...)
-    @inbounds ret = parent(A)[offset(A.offsets, I)...]
-    ret
-end
-@inline function Base._getindex(::LinearFast, A::OffsetVector, i::Int)
-    checkbounds(A, i)
-    @inbounds ret = parent(A)[offset(A.offsets, (i,))[1]]
-    ret
-end
-@inline function Base._getindex(::LinearFast, A::OffsetArray, i::Int)
-    checkbounds(A, i)
-    @inbounds ret = parent(A)[i]
-    ret
-end
-@inline function Base.setindex!{T,N}(A::OffsetArray{T,N}, val, I::Vararg{Int,N})
-    checkbounds(A, I...)
-    @inbounds parent(A)[offset(A.offsets, I)...] = val
-    val
-end
-@inline function Base._setindex!(::LinearFast, A::OffsetVector, val, i::Int)
-    checkbounds(A, i)
-    @inbounds parent(A)[offset(A.offsets, (i,))[1]] = val
-    val
-end
-@inline function Base._setindex!(::LinearFast, A::OffsetArray, val, i::Int)
-    checkbounds(A, i)
-    @inbounds parent(A)[i] = val
-    val
-end
-
-# Computing a shifted index (subtracting the offset)
-offset{N}(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) = _offset((), offsets, inds)
-_offset(out, ::Tuple{}, ::Tuple{}) = out
-@inline _offset(out, offsets, inds) = _offset((out..., inds[1]-offsets[1]), Base.tail(offsets), Base.tail(inds))
-
-indsoffset(r::Range) = first(r) - 1
-indsoffset(i::Integer) = 0
-
-end
-
-using OAs
+isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+using TestHelpers.OAs
 
 let
 # Basics
 v0 = rand(4)
 v = OffsetArray(v0, (-3,))
+h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test indices(v) == (-2:1,)
 @test_throws ErrorException size(v)
 @test_throws ErrorException size(v, 1)
@@ -143,6 +48,16 @@ S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # LinearSlow
 @test_throws BoundsError S[CartesianIndex(1,1)]
 @test eachindex(A) == 1:4
 @test eachindex(S) == CartesianRange((0:1,3:4))
+
+# logical indexing
+@test A[A .> 2] == [3,4]
+@test_throws BoundsError h[trues(2)]
+@test_throws BoundsError h[trues(5)]
+@test h[OffsetArray(trues(5), (-3,))] == parent(h)
+@test h[OffsetArray([true,false,false,true,true], (-3,))] == parent(h)[[1,4,5]]
+@test A[OffsetArray([true false; false true], A.offsets)] == [1,4]
+@test A[OffsetArray([true true;  false true], A.offsets)] == [1,3,4]
+@test_throws BoundsError A[[true true;  false true]]
 
 # view
 S = view(A, :, 3)
@@ -219,11 +134,11 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&c
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # columns fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
-targets1 = ["0-dimensional OAs.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
-            "OAs.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
-            "OAs.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
-            "OAs.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
-            "OAs.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
+targets1 = ["0-dimensional TestHelpers.OAs.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
+            "TestHelpers.OAs.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
+            "TestHelpers.OAs.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
+            "TestHelpers.OAs.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
+            "TestHelpers.OAs.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(1.0,1.0)",
             "([1.0],[1.0])",
             "(\n[1.0],\n\n[1.0])",
@@ -267,9 +182,6 @@ v = view(A0, i1, 1)
 @test indices(v) === (-4:-3,)
 v = view(A0, 1:1, i1)
 @test indices(v) === (Base.OneTo(1), -4:-3)
-
-# logical indexing
-@test A[A .> 2] == [3,4]
 
 # copy! and fill!
 a = OffsetArray{Int}((-3:-1,))
@@ -377,6 +289,14 @@ I,J,N = findnz(z)
 @test I == [-1]
 @test J == [0]
 @test N == [2]
+@test find(h) == [-2:1;]
+@test find(x->x>0, h) == [-1,1]
+@test find(x->x<0, h) == [-2,0]
+@test find(x->x==0, h) == [2]
+
+@test_approx_eq vecnorm(v) vecnorm(parent(v))
+@test_approx_eq vecnorm(A) vecnorm(parent(A))
+@test_approx_eq vecdot(v, v) vecdot(v0, v0)
 
 v  = OffsetArray([1,1e100,1,-1e100], (-3,))*1000
 v2 = OffsetArray([1,-1e100,1,1e100], (5,))*1000
@@ -411,10 +331,58 @@ v = OffsetArray(rand(8), (-2,))
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
 @test flipdim(A, 1) == OffsetArray(flipdim(parent(A), 1), A.offsets)
 @test flipdim(A, 2) == OffsetArray(flipdim(parent(A), 2), A.offsets)
-@test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
 
 @test A+1 == OffsetArray(parent(A)+1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
 @test A+A == OffsetArray(parent(A)+parent(A), A.offsets)
 @test A.*A == OffsetArray(parent(A).*parent(A), A.offsets)
+
+@test circshift(A, (-1,2)) == OffsetArray(circshift(parent(A), (-1,2)), A.offsets)
+
+src = reshape(collect(1:16), (4,4))
+dest = OffsetArray(Array{Int}(4,4), (-1,1))
+Base.circcopy!(dest, src)
+@test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
+@test dest[1:3,2:4] == src[1:3,2:4]
+
+e = eye(5)
+a = [e[:,1], e[:,2], e[:,3], e[:,4], e[:,5]]
+a1 = zeros(5)
+c = [ones(Complex{Float64}, 5),
+     exp(-2*pi*im*(0:4)/5),
+     exp(-4*pi*im*(0:4)/5),
+     exp(-6*pi*im*(0:4)/5),
+     exp(-8*pi*im*(0:4)/5)]
+for s = -5:5
+    for i = 1:5
+        thisa = OffsetArray(a[i], (s,))
+        thisc = c[mod1(i+s+5,5)]
+        @test_approx_eq fft(thisa) thisc
+        @test_approx_eq fft(thisa, 1) thisc
+        @test_approx_eq ifft(fft(thisa)) Base.circcopy!(a1, thisa)
+        @test_approx_eq ifft(fft(thisa, 1), 1) Base.circcopy!(a1, thisa)
+        @test_approx_eq rfft(thisa) thisc[1:3]
+        @test_approx_eq rfft(thisa, 1) thisc[1:3]
+        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+        @test_approx_eq irfft(rfft(thisa, 1), 5, 1) a1
+    end
+end
+
+end # let
+
+# Check that similar throws a MethodError rather than a
+# StackOverflowError if no appropriate method has been defined
+# (#18107)
+module SimilarUR
+    using Base.Test
+    immutable MyURange <: AbstractUnitRange{Int}
+        start::Int
+        stop::Int
+    end
+    ur = MyURange(1,3)
+    a = Array{Int}(2)
+    @test_throws MethodError similar(a, ur)
+    @test_throws MethodError similar(a, Float64, ur)
+    @test_throws MethodError similar(a, Float64, (ur,))
+    @test_throws MethodError similar(a, (2.0,3.0))
 end

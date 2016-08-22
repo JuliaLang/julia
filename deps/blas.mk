@@ -200,10 +200,9 @@ LAPACK_OBJ_TARGET :=
 LAPACK_OBJ_SOURCE :=
 endif
 
-LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS) -O0" OPTS="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS)" FORTRAN="$(FC)" LOADER="$(FC)"
-ifneq ($(OS),WINNT)
-LAPACK_MFLAGS += BLASLIB="-Wl,-rpath,'$(build_libdir)' $(LIBBLAS)"
-endif
+LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS) -O0" \
+    OPTS="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS)" FORTRAN="$(FC)" \
+    LOADER="$(FC)" BLASLIB="$(RPATH_ESCAPED_ORIGIN) $(LIBBLAS)"
 
 $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$(notdir $@)

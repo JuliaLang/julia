@@ -68,7 +68,7 @@ end
 abstract Outer5906{T}
 
 immutable Inner5906{T}
-   a:: T
+    a:: T
 end
 
 immutable Empty5906{T} <: Outer5906{T}
@@ -281,4 +281,59 @@ let I = Integer[]
     @test typeof(I) == Array{Any,1}
     push!(I, 1)
     @test I == Any[1]
+end
+
+# issue #16530
+type Foo16530a{dim}
+    c::Vector{NTuple{dim, Float64}}
+    d::Vector
+end
+type Foo16530b{dim}
+    c::Vector{NTuple{dim, Float64}}
+end
+f16530a() = fieldtype(Foo16530a, :c)
+f16530a(c) = fieldtype(Foo16530a, c)
+f16530b() = fieldtype(Foo16530b, :c)
+f16530b(c) = fieldtype(Foo16530b, c)
+
+let T = Array{Tuple{Vararg{Float64,TypeVar(:dim)}},1},
+    TTlim = Type{TypeVar(:_,Array{TypeVar(:_,Tuple),1})}
+
+    @test f16530a() == T
+    @test f16530a(:c) == T
+    @test Base.return_types(f16530a, ()) == Any[TTlim]
+    @test Base.return_types(f16530b, ()) == Any[TTlim]
+    @test Base.return_types(f16530b, (Symbol,)) == Any[TTlim]
+end
+@test f16530a(:d) == Vector
+
+let T1 = Tuple{Int, Float64},
+    T2 = Tuple{Int, Float32},
+    T = Tuple{T1, T2}
+
+    global f18037
+    f18037() = fieldtype(T, 1)
+    f18037(i) = fieldtype(T, i)
+
+    @test f18037() === T1
+    @test f18037(1) === T1
+    @test f18037(2) === T2
+
+    @test Base.return_types(f18037, ()) == Any[Type{T1}]
+    @test Base.return_types(f18037, (Int,)) == Any[Type{TypeVar(:T, Tuple{Int, AbstractFloat})}]
+end
+
+# issue #18015
+type Triple18015
+    a::Int
+    b::Int
+    c::Int
+end
+a18015(tri) = tri.a
+b18015(tri) = tri.b
+c18015(tri) = tri.c
+setabc18015!(tri, a, b, c) = (tri.a = a; tri.b = b; tri.c = c)
+let tri = Triple18015(1, 2, 3)
+    setabc18015!(tri, b18015(tri), c18015(tri), a18015(tri))
+    @test tri.a === 2 && tri.b === 3 && tri.c === 1
 end

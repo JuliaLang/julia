@@ -353,7 +353,7 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
                 " push %%ebp;\n" // instead of ESP
                 " jmp %P1;\n" // call `start_task` with fake stack frame
                 " ud2"
-                : : "r" (stackbase), ""(&start_task) : "memory" );
+                : : "r" (stackbase), "X"(&start_task) : "memory" );
 #elif defined(_CPU_AARCH64_)
             asm(" mov sp, %0;\n"
                 " mov x29, xzr;\n" // Clear link register (x29) and frame pointer

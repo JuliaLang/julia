@@ -206,6 +206,15 @@ end
     @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
 end
 
+@test !Base.is_unix(:Windows)
+@test !Base.is_linux(:Windows)
+@test Base.is_linux(:Linux)
+@test Base.is_windows(:Windows)
+@test Base.is_windows(:NT)
+@test !Base.is_windows(:Darwin)
+@test Base.is_apple(:Darwin)
+@test Base.is_apple(:Apple)
+@test !Base.is_apple(:Windows)
 @test Base.is_unix(:Darwin)
 @test Base.is_unix(:FreeBSD)
 @test_throws ArgumentError Base.is_unix(:BeOS)
@@ -221,7 +230,8 @@ module Tmp14173
     A = randn(2000, 2000)
 end
 whos(IOBuffer(), Tmp14173) # warm up
-@test @allocated(whos(IOBuffer(), Tmp14173)) < 10000
+const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
+@test @allocated(whos(IOBuffer(), Tmp14173)) < (MEMDEBUG ? 30000 : 8000)
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 

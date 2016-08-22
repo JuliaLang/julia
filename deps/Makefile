@@ -17,7 +17,7 @@ include $(SRCDIR)/llvm-ver.make
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv
+# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv curl
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
 # entirely custom: virtualenv
 # CMake libs: libgit2 libssh2 mbedtls
@@ -47,6 +47,8 @@ CMAKE_CC_ARG := $(CC_ARG) $(DEPS_CFLAGS)
 CMAKE_CXX_ARG := $(CXX_ARG) $(DEPS_CXXFLAGS)
 
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
+CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir) -DCMAKE_INSTALL_BINDIR=$(build_bindir)
+CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
@@ -88,31 +90,29 @@ MAKE_COMMON := DESTDIR="" prefix=$(build_prefix) bindir=$(build_depsbindir) libd
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS :=
-STAGE2_DEPS :=
 ifeq ($(USE_GPL_LIBS), 1)
-STAGE3_DEPS := suitesparse-wrapper
+DEP_LIBS := suitesparse-wrapper
 else
-STAGE3_DEPS :=
+DEP_LIBS :=
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
-STAGE1_DEPS += libuv
+DEP_LIBS += libuv
 endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
-STAGE1_DEPS += unwind
+DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
-STAGE1_DEPS += unwind
+DEP_LIBS += unwind
 else ifeq ($(OS), Darwin)
-STAGE1_DEPS += osxunwind
+DEP_LIBS += osxunwind
 endif
 endif
 
 ifeq ($(OS), Linux)
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
-STAGE1_DEPS += patchelf
+DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
 else
 PATCHELF:=patchelf
@@ -124,73 +124,79 @@ PATCHELF_BIN := $(CUSTOM_LD_LIBRARY_PATH) $(PATCHELF)
 
 ifeq ($(USE_SYSTEM_OPENLIBM), 0)
 ifeq ($(USE_SYSTEM_LIBM), 0)
-STAGE1_DEPS += openlibm
+DEP_LIBS += openlibm
 endif
 endif
 
 ifeq ($(USE_SYSTEM_OPENSPECFUN), 0)
-STAGE1_DEPS += openspecfun
+DEP_LIBS += openspecfun
 endif
 
 ifeq ($(USE_SYSTEM_DSFMT), 0)
-STAGE1_DEPS += dsfmt
+DEP_LIBS += dsfmt
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
-STAGE1_DEPS += llvm
+DEP_LIBS += llvm
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 0)
-STAGE1_DEPS += pcre
+DEP_LIBS += pcre
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-STAGE1_DEPS += openblas
+DEP_LIBS += openblas
 ifeq ($(USE_BLAS64), 1)
 ifeq ($(OS), Darwin)
-STAGE1_DEPS += objconv
+DEP_LIBS += objconv
 endif
 endif
 endif
 
 ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_FFTW), 0)
-STAGE1_DEPS += fftw
+DEP_LIBS += fftw
 endif
 endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
-STAGE1_DEPS += gmp
-endif
-
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-STAGE1_DEPS += mbedtls
-endif
-
-ifeq ($(USE_SYSTEM_LIBSSH2), 0)
-STAGE2_DEPS += libssh2
+DEP_LIBS += gmp
 endif
 
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-STAGE3_DEPS += libgit2
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+DEP_LIBS += mbedtls
 endif
 
+ifeq ($(USE_SYSTEM_LIBSSH2), 0)
+DEP_LIBS += libssh2
+endif
+
+ifneq ($(OS), WINNT)
+ifeq ($(USE_SYSTEM_CURL), 0)
+DEP_LIBS += curl
+endif
+endif
+
+DEP_LIBS += libgit2
+endif # USE_SYSTEM_LIBGIT2
+
 ifeq ($(USE_SYSTEM_MPFR), 0)
-STAGE2_DEPS += mpfr
+DEP_LIBS += mpfr
 endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
-STAGE2_DEPS += arpack
+DEP_LIBS += arpack
 endif
 
 ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-STAGE2_DEPS += suitesparse
+DEP_LIBS += suitesparse
 endif
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 0)
-STAGE2_DEPS += utf8proc
+DEP_LIBS += utf8proc
 endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
@@ -199,7 +205,7 @@ endif
 # build LAPACK as the vendor LAPACK may be too old (eg. Apple vecLib)
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(USE_SYSTEM_LAPACK), 0)
-STAGE2_DEPS += lapack
+DEP_LIBS += lapack
 endif
 endif
 
@@ -211,8 +217,6 @@ endif
 
 ## Common build target prefixes
 
-DEP_LIBS := $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
-
 default: install | $(build_prefix)
 get: $(addprefix get-, $(DEP_LIBS))
 configure: $(addprefix configure-, $(DEP_LIBS))
@@ -222,7 +226,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-mbedtls get-libssh2 get-libgit2
+getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-mbedtls get-libssh2 get-curl get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -271,6 +275,7 @@ include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
 include $(SRCDIR)/mbedtls.mk
 include $(SRCDIR)/libssh2.mk
+include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/virtualenv.mk
 

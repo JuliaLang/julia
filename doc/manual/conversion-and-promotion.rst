@@ -90,6 +90,16 @@ action:
     julia> typeof(ans)
     Float64
 
+    julia> a = Any[1 2 3; 4 5 6]
+    2×3 Array{Any,2}:
+     1  2  3
+     4  5  6
+
+    julia> convert(Array{Float64}, a)
+    2×3 Array{Float64,2}:
+     1.0  2.0  3.0
+     4.0  5.0  6.0
+
 Conversion isn't always possible, in which case a no method error is
 thrown indicating that ``convert`` doesn't know how to perform the
 requested conversion:

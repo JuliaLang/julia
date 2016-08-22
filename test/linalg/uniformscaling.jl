@@ -8,12 +8,20 @@ srand(123)
 @test I[1,1] == 1 # getindex
 @test I[1,2] == 0 # getindex
 @test I === I' # transpose
+@test ndims(I) == 2
 @test one(UniformScaling{Float32}) == UniformScaling(one(Float32))
 @test zero(UniformScaling{Float32}) == UniformScaling(zero(Float32))
+@test eltype(one(UniformScaling{Float32})) == Float32
 @test zero(UniformScaling(rand(Complex128))) == zero(UniformScaling{Complex128})
 @test one(UniformScaling(rand(Complex128))) == one(UniformScaling{Complex128})
 @test eltype(one(UniformScaling(rand(Complex128)))) == Complex128
 @test -one(UniformScaling(2)) == UniformScaling(-1)
+@test istriu(I)
+@test istril(I)
+@test issymmetric(I)
+@test issymmetric(UniformScaling(complex(1.0,1.0)))
+@test ishermitian(I)
+@test !ishermitian(UniformScaling(complex(1.0,1.0)))
 
 α = randn()
 @test α .* UniformScaling(1.0) == UniformScaling(1.0) .* α

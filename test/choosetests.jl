@@ -26,7 +26,7 @@ function choosetests(choices = [])
         "priorityqueue", "file", "read", "mmap", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
         "floatapprox", "datafmt", "reflection", "regex", "float16",
-        "combinatorics", "sysinfo", "rounding", "ranges", "mod2pi",
+        "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "test", "goto", "llvmcall", "grisu",
         "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",

@@ -126,7 +126,7 @@ similar{N}(a::Array, T::Type, dims::Dims{N}) = Array{T,N}(dims)
 similar{T,N}(a::Array{T}, dims::Dims{N})     = Array{T,N}(dims)
 
 # T[x...] constructs Array{T,1}
-function getindex(T::Type, vals...)
+function getindex{T}(::Type{T}, vals...)
     a = Array{T,1}(length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
@@ -134,10 +134,10 @@ function getindex(T::Type, vals...)
     return a
 end
 
-getindex(T::Type) = Array{T,1}(0)
-getindex(T::Type, x) = (a = Array{T,1}(1); @inbounds a[1] = x; a)
-getindex(T::Type, x, y) = (a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
-getindex(T::Type, x, y, z) = (a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
+getindex{T}(::Type{T}) = (@_inline_meta; Array{T,1}(0))
+getindex{T}(::Type{T}, x) = (@_inline_meta; a = Array{T,1}(1); @inbounds a[1] = x; a)
+getindex{T}(::Type{T}, x, y) = (@_inline_meta; a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
+getindex{T}(::Type{T}, x, y, z) = (@_inline_meta; a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array{Any,1}(length(vals))
@@ -288,8 +288,8 @@ else
     _default_eltype(itr::ANY) = Any
 end
 
-_array_for(T, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
-_array_for(T, itr, ::HasShape) = similar(Array{T}, indices(itr))
+_array_for{T}(::Type{T}, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
+_array_for{T}(::Type{T}, itr, ::HasShape) = similar(Array{T}, indices(itr))
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
@@ -1077,15 +1077,18 @@ function find(testf::Function, A)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array{Int,1}(0)
+    inds = _index_remapper(A)
     for (i,a) = enumerate(A)
         if testf(a)
-            push!(tmpI, i)
+            push!(tmpI, inds[i])
         end
     end
     I = Array{Int,1}(length(tmpI))
     copy!(I, tmpI)
     return I
 end
+_index_remapper(A::AbstractArray) = linearindices(A)
+_index_remapper(iter) = Colon()  # safe for objects that don't implement length
 
 """
     find(A)
@@ -1110,9 +1113,10 @@ function find(A)
     nnzA = countnz(A)
     I = Vector{Int}(nnzA)
     count = 1
+    inds = _index_remapper(A)
     for (i,a) in enumerate(A)
         if a != 0
-            I[count] = i
+            I[count] = inds[i]
             count += 1
         end
     end
