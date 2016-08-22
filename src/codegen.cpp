@@ -5830,7 +5830,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef DISABLE_OPT
         .setOptLevel(CodeGenOpt::None)
 #else
-        .setOptLevel(CodeGenOpt::Aggressive)
+        .setOptLevel(jl_options.opt_level == 0 ? CodeGenOpt::None : CodeGenOpt::Aggressive)
 #endif
 #if defined(USE_MCJIT) && !defined(LLVM36)
         .setUseMCJIT(true)
