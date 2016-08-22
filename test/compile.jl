@@ -159,16 +159,23 @@ try
           """)
 
     Base.compilecache("FooBar")
-    sleep(2)
     @test isfile(joinpath(dir, "FooBar.ji"))
 
+    sleep(2) # wait to make sure file modification time changes
     touch(FooBar_file)
     insert!(Base.LOAD_CACHE_PATH, 1, dir2)
     Base.recompile_stale(:FooBar, joinpath(dir, "FooBar.ji"))
-    sleep(2)
+    # just touching the file should not invalidate the old cachefile (#17845)
+    @test !isfile(joinpath(dir2, "FooBar.ji"))
+    @test !Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+
+    open(FooBar_file, "a") do io
+        println(io) # invalidate checksum
+    end
+    Base.recompile_stale(:FooBar, joinpath(dir, "FooBar.ji"))
     @test isfile(joinpath(dir2, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
 
     write(FooBar_file,
           """
@@ -177,6 +184,8 @@ try
           error("break me")
           end
           """)
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
 
     try
         redirected_stderr()

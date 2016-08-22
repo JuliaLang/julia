@@ -212,15 +212,17 @@ end
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
 
+cache_checksum(path) = isfile(path) ? crc32c(read(path)) : 0x00000000
+
 # used to optionally track dependencies when requiring a module:
-const _require_dependencies = Tuple{String,Float64}[]
+const _require_dependencies = Tuple{String,Float64,UInt32}[]
 const _track_dependencies = [false]
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
     path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev),_path)
     if myid() == 1 && _track_dependencies[1]
         apath = abspath(path)
-        push!(_require_dependencies, (apath, mtime(apath)))
+        push!(_require_dependencies, (apath, mtime(apath), cache_checksum(path)))
     end
     return path, prev
 end
@@ -513,7 +515,7 @@ isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_read_verify_header, Cint, (Pt
 
 function cache_dependencies(f::IO)
     modules = Tuple{Symbol,UInt64}[]
-    files = Tuple{String,Float64}[]
+    files = Tuple{String,Float64,UInt32}[]
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
@@ -525,7 +527,7 @@ function cache_dependencies(f::IO)
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
-        push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
+        push!(files, (String(read(f, n)), ntoh(read(f, Float64)), ntoh(read(f, UInt32))))
     end
     return modules, files
 end
@@ -550,9 +552,11 @@ function stale_cachefile(modpath, cachefile)
         if files[1][1] != modpath
             return true # cache file was compiled from a different path
         end
-        for (f,ftime) in files
-            # Issue #13606: compensate for Docker images rounding mtimes
-            if mtime(f) ∉ (ftime, floor(ftime))
+        for (f,ftime,checksum) in files
+            # mtime check of ftime and floor(ftime) is due to issue #13606:
+            # compensate for Docker images rounding mtimes
+            if mtime(f) ∉ (ftime, floor(ftime)) &&
+               cache_checksum(f) != checksum
                 return true
             end
         end

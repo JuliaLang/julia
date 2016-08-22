@@ -1084,7 +1084,7 @@ static void write_mod_list(ios_t *s)
 }
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 2;
+static const int JI_FORMAT_VERSION = 3;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static void write_header(ios_t *s)
@@ -1101,8 +1101,8 @@ static void write_header(ios_t *s)
     ios_write(s, commit, strlen(commit)+1);
 }
 
-// serialize the global _require_dependencies array of pathnames that
-// are include depenencies
+// serialize the global _require_dependencies array of
+// (pathname, timestamp, checksum) that are include dependencies
 static void write_dependency_list(ios_t *s)
 {
     size_t total_size = 0;
@@ -1124,7 +1124,7 @@ static void write_dependency_list(ios_t *s)
         for (size_t i=0; i < l; i++) {
             jl_value_t *dep = jl_fieldref(jl_array_ptr_ref(udeps, i), 0);
             size_t slen = jl_string_len(dep);
-            total_size += 4 + slen + 8;
+            total_size += 4 + slen + 8 + 4;
         }
         total_size += 4;
     }
@@ -1140,6 +1140,7 @@ static void write_dependency_list(ios_t *s)
             write_int32(s, slen);
             ios_write(s, jl_string_data(dep), slen);
             write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 1)));
+            write_int32(s, jl_unbox_int32(jl_fieldref(deptuple, 2)));
         }
         write_int32(s, 0); // terminator, for ease of reading
     }

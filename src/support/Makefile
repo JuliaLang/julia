@@ -7,7 +7,7 @@ override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
 SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
-	int2str libsupportinit arraylist strtod
+	int2str libsupportinit arraylist strtod crc32c
 ifeq ($(OS),WINNT)
 SRCS += asprintf wsasocketpair strptime
 ifeq ($(ARCH),i686)
