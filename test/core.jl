@@ -4484,3 +4484,10 @@ for (f,g) in ((:asin,:sin), (:acos,:cos))
     f18085(::Type{Val{f}},x...) = map(x->2gx(x), f18085(Val{g},x...))
 end
 @test f18085(Val{:asin},3) === (0.0,)
+
+# issue #18173
+function f18173()
+    identity(()->successflag)
+    successflag = false
+end
+@test f18173() == false
