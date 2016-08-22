@@ -22,6 +22,7 @@ checkout:
 
 dependencies:
   pre:
+    - gem install gist # to upload a gist of the log on failure
     - sudo dpkg --add-architecture i386
     - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
     - sudo apt-get update -y
@@ -32,9 +33,10 @@ dependencies:
     - ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran
     - gcc --version
   override:
+    - make -C deps distcleanall # REMOVE ME
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
-    - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps" bar > deps.log || cat deps.log
+    - make $BUILDOPTS NO_GIT=1 -C deps 1> deps.log || gist deps.log
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
