@@ -1668,6 +1668,7 @@ typedef struct {
     int8_t check_bounds;
     int8_t depwarn;
     int8_t can_inline;
+    int8_t polly;
     int8_t fast_math;
     const char *worker;
     int8_t handle_signals;
@@ -1721,6 +1722,9 @@ JL_DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_DEPWARN_OFF 0
 #define JL_OPTIONS_DEPWARN_ON 1
 #define JL_OPTIONS_DEPWARN_ERROR 2
+
+#define JL_OPTIONS_POLLY_ON 1
+#define JL_OPTIONS_POLLY_OFF 0
 
 #define JL_OPTIONS_FAST_MATH_ON 1
 #define JL_OPTIONS_FAST_MATH_OFF 2

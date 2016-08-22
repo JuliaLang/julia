@@ -24,6 +24,7 @@ immutable JLOptions
     check_bounds::Int8
     depwarn::Int8
     can_inline::Int8
+    polly::Int8
     fast_math::Int8
     worker::Ptr{UInt8}
     handle_signals::Int8
