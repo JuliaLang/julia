@@ -350,17 +350,35 @@ General I/O
 
    Replace ``STDOUT`` by stream for all C and Julia level output to ``STDOUT``\ . Note that ``stream`` must be a TTY, a ``Pipe`` or a ``TCPSocket``\ .
 
+.. function:: redirect_stdout(f::Function, stream)
+
+   .. Docstring generated from Julia source
+
+   Run the function ``f`` while redirecting ``STDOUT`` to ``stream``\ . Upon completion, ``STDOUT`` is restored to its prior setting.
+
 .. function:: redirect_stderr([stream])
 
    .. Docstring generated from Julia source
 
    Like ``redirect_stdout``\ , but for ``STDERR``\ .
 
+.. function:: redirect_stderr(f::Function, stream)
+
+   .. Docstring generated from Julia source
+
+   Run the function ``f`` while redirecting ``STDERR`` to ``stream``\ . Upon completion, ``STDERR`` is restored to its prior setting.
+
 .. function:: redirect_stdin([stream])
 
    .. Docstring generated from Julia source
 
    Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read from STDIN, may be written to wr.
+
+.. function:: redirect_stdin(f::Function, stream)
+
+   .. Docstring generated from Julia source
+
+   Run the function ``f`` while redirecting ``STDIN`` to ``stream``\ . Upon completion, ``STDIN`` is restored to its prior setting.
 
 .. function:: readchomp(x)
 
