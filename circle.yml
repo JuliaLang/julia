@@ -44,8 +44,8 @@ dependencies:
 
 test:
   override:
-    - /tmp/julia/bin/julia --precompile=no -e 'true'
-    - /tmp/julia/bin/julia-debug --precompile=no -e 'true'
+    - /tmp/julia/bin/julia --precompiled=no -e 'true'
+    - /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - cd $TEST_DIR && bash ~/julia/contrib/circle_balanceload.sh:
         parallel: true
