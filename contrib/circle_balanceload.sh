@@ -1,6 +1,8 @@
 #!/bin/bash
 # Balance the testing load between 2 CircleCI parallel containers
 
+set -e
+
 tests=($(/tmp/julia/bin/julia -e 'include("choosetests.jl"); t = choosetests(["all"])[1]; print(join(t, " "))'))
 
 # Command to run tests -- append names for specific tests
