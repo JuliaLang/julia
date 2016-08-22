@@ -74,6 +74,9 @@ try
               (::Type{Vector{NominalValue{T, R}}}){T, R}() = 3
               (::Type{Vector{NominalValue{T, T}}}){T}() = 4
               (::Type{Vector{NominalValue{Int, Int}}})() = 5
+
+              #const some_method = @which Base.include("string") // FIXME: support for serializing a direct reference to an external Method not implemented
+              const some_linfo = @code_typed Base.include("string")
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -129,6 +132,8 @@ try
                 Val{3},
                 Val{nothing}},
             0:25)
+
+        @test Foo.some_linfo === @code_typed Base.include("string")
     end
 
     Baz_file = joinpath(dir, "Baz.jl")

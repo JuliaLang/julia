@@ -535,7 +535,7 @@ static jl_lambda_info_t *jl_copy_lambda(jl_lambda_info_t *linfo)
 }
 
 // return a new lambda-info that has some extra static parameters merged in
-JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp)
+JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp, int allow_exec)
 {
     jl_lambda_info_t *linfo = m->lambda_template;
     jl_lambda_info_t *new_linfo;
@@ -546,6 +546,13 @@ JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t
         new_linfo->specTypes = types;
         new_linfo->def = m;
         new_linfo->sparam_vals = sp;
+    }
+    else if (!allow_exec) {
+        new_linfo = jl_copy_lambda(linfo);
+        new_linfo->specTypes = types;
+        new_linfo->def = m;
+        new_linfo->sparam_vals = sp;
+        jl_set_lambda_code_null(new_linfo);
     }
     else {
         new_linfo = jl_instantiate_staged(m, types, sp);
