@@ -3937,14 +3937,6 @@ Convert `x` from degrees to radians.
 deg2rad
 
 """
-    redirect_stdin([stream])
-
-Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still
-(rd,wr), i.e. data to be read from STDIN, may be written to wr.
-"""
-redirect_stdin
-
-"""
     mktemp([parent=tempdir()])
 
 Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
@@ -5195,13 +5187,6 @@ secd
 The result of an expression is too large for the specified type and will cause a wraparound.
 """
 OverflowError
-
-"""
-    redirect_stderr([stream])
-
-Like `redirect_stdout`, but for `STDERR`.
-"""
-redirect_stderr
 
 """
     ctranspose!(dest,src)
@@ -6758,24 +6743,6 @@ General unescaping of traditional C and Unicode escape sequences. Reverse of
 [`escape_string`](:func:`escape_string`). See also [`unescape_string`](:func:`unescape_string`).
 """
 unescape_string(s)
-
-"""
-    redirect_stdout()
-
-Create a pipe to which all C and Julia level `STDOUT` output will be redirected. Returns a
-tuple `(rd,wr)` representing the pipe ends. Data written to `STDOUT` may now be read from
-the rd end of the pipe. The wr end is given for convenience in case the old `STDOUT` object
-was cached by the user and needs to be replaced elsewhere.
-"""
-redirect_stdout
-
-"""
-    redirect_stdout(stream)
-
-Replace `STDOUT` by stream for all C and Julia level output to `STDOUT`. Note that `stream`
-must be a TTY, a `Pipe` or a `TCPSocket`.
-"""
-redirect_stdout(stream)
 
 """
     print_with_color(color::Symbol, [io], strings...)
