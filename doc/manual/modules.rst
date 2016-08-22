@@ -422,6 +422,14 @@ A few other points to be aware of:
 4. WeakRef objects and finalizers are not currently handled properly by the serializer
    (this will be fixed in an upcoming release).
 
+5. It is usually best to avoid capturing references to instances of internal metadata objects such as
+   Method, LambdaInfo, MethodTable, TypeMapLevel, TypeMapEntry
+   and fields of those objects, as this can confuse the serializer
+   and may not lead to the outcome you desire.
+   It is not necessarily an error to do this,
+   but you simply need to be prepared that the system will
+   try to copy some of these and to create a single unique instance of others.
+
 It is sometimes helpful during module development to turn off incremental precompilation.
 The command line flag ``--compilecache={yes|no}`` enables you to toggle module precompilation on and off.
 When Julia is started with ``--compilecache=no`` the serialized modules in the compile cache are ignored when loading modules and module dependencies.

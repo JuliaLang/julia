@@ -854,6 +854,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         writetag(s->s, jl_method_type);
         jl_method_t *m = (jl_method_t*)v;
         union jl_typemap_t *tf = &m->specializations;
+        if (s->mode == MODE_MODULE || s->mode == MODE_MODULE_POSTWORK) {
+            int external = !module_in_worklist(m->module);
+            if (external)
+                jl_error("support for serializing a direct reference to an external Method not implemented");
+        }
         if (tf->unknown && tf->unknown != jl_nothing) {
             // go through the t-func cache, replacing ASTs with just return
             // types for abstract argument types. these ASTs are generally
@@ -879,6 +884,19 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
     else if (jl_is_lambda_info(v)) {
         writetag(s->s, jl_lambda_info_type);
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+        jl_serialize_value(s, (jl_value_t*)li->specTypes);
+        write_int8(s->s, li->inferred);
+        if (s->mode == MODE_MODULE || s->mode == MODE_MODULE_POSTWORK) {
+            int external = li->def && !module_in_worklist(li->def->module);
+            write_uint8(s->s, external);
+            if (external) {
+                // also flag this in the backref table as special
+                uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
+                assert(*bp != (uintptr_t)HT_NOTFOUND);
+                *bp |= 1; assert(((uintptr_t)HT_NOTFOUND)|1);
+                return;
+            }
+        }
         if (li->jlcall_api == 2)
             jl_serialize_value(s, jl_nothing);
         else
@@ -890,8 +908,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_serialize_value(s, li->rettype);
         jl_serialize_value(s, (jl_value_t*)li->sparam_syms);
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
-        jl_serialize_value(s, (jl_value_t*)li->specTypes);
-        write_int8(s->s, li->inferred);
         write_int8(s->s, li->pure);
         write_int8(s->s, li->inlineable);
         write_int8(s->s, li->isva);
@@ -1389,7 +1405,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
             isunboxed = !(elsize>>15);
             elsize = elsize&0x7fff;
         }
-        int pos = backref_list.len;
+        uintptr_t pos = backref_list.len;
         if (usetable)
             arraylist_push(&backref_list, NULL);
         size_t *dims = (size_t*)alloca(ndims*sizeof(size_t));
@@ -1452,6 +1468,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         jl_method_t *m =
             (jl_method_t*)jl_gc_alloc(ptls, sizeof(jl_method_t),
                                       jl_method_type);
+        memset(m, 0, sizeof(jl_method_type));
         if (usetable)
             arraylist_push(&backref_list, m);
         m->specializations.unknown = jl_deserialize_value(s, (jl_value_t**)&m->specializations);
@@ -1490,8 +1507,42 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         jl_lambda_info_t *li =
             (jl_lambda_info_t*)jl_gc_alloc(ptls, sizeof(jl_lambda_info_t),
                                            jl_lambda_info_type);
+        memset(li, 0, sizeof(jl_lambda_info_t));
+        uintptr_t pos = backref_list.len;
         if (usetable)
             arraylist_push(&backref_list, li);
+
+        li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
+        if (li->specTypes) jl_gc_wb(li, li->specTypes);
+        int inferred = read_int8(s->s);
+        li->inferred = inferred;
+
+        if (s->mode == MODE_MODULE) {
+            int external = read_uint8(s->s);
+            if (external) {
+                assert(loc != NULL);
+                arraylist_push(&flagref_list, loc);
+                arraylist_push(&flagref_list, (void*)pos);
+                return (jl_value_t*)li;
+            }
+        }
+        if (s->mode == MODE_MODULE_POSTWORK) {
+            int external = read_uint8(s->s);
+            if (external) {
+                jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)li->specTypes);
+                jl_methtable_t *mt = ftype->name->mt;
+                li = jl_method_lookup_by_type(mt, li->specTypes, 1, 0, 0);
+                assert(li);
+                backref_list.items[pos] = li;
+                // if it can be inferred but isn't, encourage codegen to infer it
+                if (inferred && !li->inferred) {
+                    jl_set_lambda_code_null(li);
+                    li->inferred = 1;
+                }
+                return (jl_value_t*)li;
+            }
+        }
+
         li->code = jl_deserialize_value(s, &li->code); jl_gc_wb(li, li->code);
         li->slotnames = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slotnames); jl_gc_wb(li, li->slotnames);
         li->slottypes = jl_deserialize_value(s, &li->slottypes); jl_gc_wb(li, li->slottypes);
@@ -1503,10 +1554,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         jl_gc_wb(li, li->sparam_syms);
         li->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_vals);
         jl_gc_wb(li, li->sparam_vals);
-        li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
-        if (li->specTypes) jl_gc_wb(li, li->specTypes);
         li->unspecialized_ducttape = NULL;
-        li->inferred = read_int8(s->s);
         li->pure = read_int8(s->s);
         li->inlineable = read_int8(s->s);
         li->isva = read_int8(s->s);
@@ -1530,7 +1578,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         return (jl_value_t*)li;
     }
     else if (vtag == (jl_value_t*)jl_module_type) {
-        int pos = backref_list.len;
+        uintptr_t pos = backref_list.len;
         if (usetable)
             arraylist_push(&backref_list, NULL);
         jl_sym_t *mname = (jl_sym_t*)jl_deserialize_value(s, NULL);
@@ -1620,7 +1668,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
     else if (vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)SmallDataType_tag) {
         int32_t sz = (vtag == (jl_value_t*)SmallDataType_tag ? read_uint8(s->s) : read_int32(s->s));
         jl_value_t *v = jl_gc_alloc(ptls, sz, NULL);
-        int pos = backref_list.len;
+        uintptr_t pos = backref_list.len;
         if (usetable)
             arraylist_push(&backref_list, v);
         jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, &jl_astaggedvalue(v)->type);
@@ -2327,30 +2375,72 @@ static void jl_recache_types(void)
         int offs = (int)(intptr_t)flagref_list.items[i++];
         jl_value_t *v, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
         jl_datatype_t *dt, *t;
-        if (jl_is_datatype(o)) {
-            dt = (jl_datatype_t*)o;
-            v = dt->instance;
-            assert(dt->uid == -1);
-            t = jl_recache_type(dt, i, NULL);
-        }
-        else {
-            dt = (jl_datatype_t*)jl_typeof(o);
+        if (jl_is_lambda_info(o)) {
+            // lookup the real LambdaInfo based on the placeholder specTypes
+            jl_lambda_info_t *li = (jl_lambda_info_t*)o;
+            int inferred = li->inferred;
+            jl_datatype_t *argtypes = jl_recache_type(li->specTypes, i, NULL);
+            jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
+            jl_methtable_t *mt = ftype->name->mt;
+            jl_set_typeof(li, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
+            li = jl_method_lookup_by_type(mt, argtypes, 1, 0, 0);
+            assert(li);
+            // if it can be inferred but isn't, encourage codegen to infer it
+            if (inferred && !li->inferred) {
+                jl_set_lambda_code_null(li);
+                li->inferred = 1;
+            }
+            // update the backref list
+            if (loc) *loc = (jl_value_t*)li;
+            if (offs > 0) backref_list.items[offs] = li;
             v = o;
-            t = jl_recache_type(dt, i, v);
-        }
-        assert(dt);
-        if (t != dt) {
-            jl_set_typeof(dt, (void*)(intptr_t)0x10); // invalidate the old value to help catch errors
-            if ((jl_value_t*)dt == o) {
-                if (loc) *loc = (jl_value_t*)t;
-                if (offs > 0) backref_list.items[offs] = t;
+            size_t j = i;
+            while (j < flagref_list.len) {
+                jl_value_t **loc = (jl_value_t**)flagref_list.items[j];
+                int offs = (int)(intptr_t)flagref_list.items[j+1];
+                jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+                if ((jl_value_t*)v == o) { // same item, update this entry
+                    if (loc) *loc = (jl_value_t*)li;
+                    if (offs > 0) backref_list.items[offs] = li;
+                    // delete this item from the flagref list, so it won't be re-encountered later
+                    flagref_list.len -= 2;
+                    if (j >= flagref_list.len)
+                        break;
+                    flagref_list.items[j+0] = flagref_list.items[flagref_list.len+0];
+                    flagref_list.items[j+1] = flagref_list.items[flagref_list.len+1];
+                }
+                else {
+                    j += 2;
+                }
             }
         }
-        if (t->instance != v) {
-            jl_set_typeof(v, (void*)(intptr_t)0x20); // invalidate the old value to help catch errors
-            if (v == o) {
-                *loc = t->instance;
-                if (offs > 0) backref_list.items[offs] = t->instance;
+        else {
+            if (jl_is_datatype(o)) {
+                dt = (jl_datatype_t*)o;
+                v = dt->instance;
+                assert(dt->uid == -1);
+                t = jl_recache_type(dt, i, NULL);
+            }
+            else {
+                dt = (jl_datatype_t*)jl_typeof(o);
+                v = o;
+                assert(dt->instance);
+                t = jl_recache_type(dt, i, v);
+            }
+            assert(dt);
+            if (t != dt) {
+                jl_set_typeof(dt, (void*)(intptr_t)0x10); // invalidate the old value to help catch errors
+                if ((jl_value_t*)dt == o) {
+                    if (loc) *loc = (jl_value_t*)t;
+                    if (offs > 0) backref_list.items[offs] = t;
+                }
+            }
+            if (t->instance != v) {
+                jl_set_typeof(v, (void*)(intptr_t)0x20); // invalidate the old value to help catch errors
+                if (v == o) {
+                    *loc = t->instance;
+                    if (offs > 0) backref_list.items[offs] = t->instance;
+                }
             }
         }
     }
