@@ -472,6 +472,45 @@ static int module_in_worklist(jl_module_t *mod)
     return 0;
 }
 
+// compute whether a type references something internal to worklist
+// and thus could not have existed before deserialize
+// and thus does not need delayed unique-ing
+static int type_in_worklist(jl_datatype_t *dt)
+{
+    if (module_in_worklist(dt->name->module))
+        return 1;
+    int i, l = jl_svec_len(dt->parameters);
+    for (i = 0; i < l; i++) {
+        jl_value_t *p = jl_tparam(dt, i);
+        if (type_in_worklist((jl_datatype_t*)(jl_is_datatype(p) ? p : jl_typeof(p))))
+            return 1;
+    }
+    return 0;
+}
+
+// returns true if all of the parameters are tag 6 or 7
+static int type_recursively_external(jl_datatype_t *dt)
+{
+    if (dt->uid == 0)
+        return 0;
+    if (jl_svec_len(dt->parameters) == 0)
+        return 1;
+
+    int i, l = jl_svec_len(dt->parameters);
+    for (i = 0; i < l; i++) {
+        jl_datatype_t *p = (jl_datatype_t*)jl_tparam(dt, i);
+        if (!jl_is_datatype(p))
+            return 0;
+        if (module_in_worklist(p->name->module))
+            return 0;
+        if (p->name->primary != (jl_value_t*)p) {
+            if (!type_recursively_external(p))
+                return 0;
+        }
+    }
+    return 1;
+}
+
 static int jl_prune_tcache(jl_typemap_entry_t *ml, void *closure)
 {
     jl_value_t *ret = ml->func.value;
@@ -496,31 +535,31 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
     }
     else if (s->mode == MODE_MODULE) {
         int internal = module_in_worklist(dt->name->module);
-        int i, l = jl_array_len(serializer_worklist);
-        for (i = 0; i < l; i++) {
-            jl_module_t *mod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, i);
-            if (jl_is_module(mod) && jl_is_submodule(dt->name->module, mod)) {
-                internal = 1;
-                break;
-            }
-        }
         if (!internal && dt->name->primary == (jl_value_t*)dt) {
             tag = 6; // external primary type
         }
         else if (dt->uid == 0) {
             tag = 0; // normal struct
         }
-        else if (!internal && jl_svec_len(dt->parameters) == 0) {
+        else if (internal) {
+            if (dt->name->primary == (jl_value_t*)dt) // comes up often since functions create types
+                tag = 5; // internal, and not in the typename cache (just needs uid reassigned)
+            else
+                tag = 10; // anything else that's internal (just needs uid reassigned and possibly recaching)
+        }
+        else if (type_recursively_external(dt)) {
             tag = 7; // external type that can be immediately recreated (with apply_type)
         }
+        else if (type_in_worklist(dt)) {
+            tag = 10; // external, but definitely new (still needs uid and caching, but not full unique-ing)
+        }
         else {
-            tag = 5; // anything else (needs uid assigned later)
-            if (!internal) {
-                // also flag this in the backref table as special
-                uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, dt);
-                assert(*bp != (uintptr_t)HT_NOTFOUND);
-                *bp |= 1; assert(((uintptr_t)HT_NOTFOUND)|1);
-            }
+            // this'll need a uid and unique-ing later
+            // flag this in the backref table as special
+            uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, dt);
+            assert(*bp != (uintptr_t)HT_NOTFOUND);
+            *bp |= 1;
+            tag = 10;
         }
     }
     else if (dt == jl_int32_type)
@@ -534,7 +573,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
 
     if (strncmp(jl_symbol_name(dt->name->name), "#kw#", 4) == 0) {
         /* XXX: yuck, but the auto-generated kw types from the serializer isn't a real type, so we *must* be very careful */
-        assert(tag == 0 || tag == 5 || tag == 6);
+        assert(tag == 0 || tag == 5 || tag == 6 || tag == 10);
         if (tag == 6) {
             jl_methtable_t *mt = dt->name->mt;
             jl_datatype_t *primarydt = (jl_datatype_t*)jl_get_global(mt->module, mt->name);
@@ -576,7 +615,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
         }
     }
 
-     if (has_layout) {
+    if (has_layout) {
         uint8_t layout = 0;
         if (dt->layout == jl_array_type->layout) {
             layout = 1;
@@ -893,7 +932,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
                 // also flag this in the backref table as special
                 uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
                 assert(*bp != (uintptr_t)HT_NOTFOUND);
-                *bp |= 1; assert(((uintptr_t)HT_NOTFOUND)|1);
+                *bp |= 1;
                 return;
             }
         }
@@ -940,11 +979,12 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         }
         else {
             if (v == t->instance) {
-                if (s->mode == MODE_MODULE) {
+                if (s->mode == MODE_MODULE && !type_in_worklist(t)) {
                     // also flag this in the backref table as special
+                    // if it might not be unique (is external)
                     uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
                     assert(*bp != (uintptr_t)HT_NOTFOUND);
-                    *bp |= 1; assert(((uintptr_t)HT_NOTFOUND)|1);
+                    *bp |= 1;
                 }
                 writetag(s->s, (jl_value_t*)Singleton_tag);
                 jl_serialize_value(s, t);
@@ -1206,7 +1246,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         dt = jl_int64_type;
     else if (tag == 8)
         dt = jl_uint8_type;
-    else if (tag == 0 || tag == 5)
+    else if (tag == 0 || tag == 5 || tag == 10)
         dt = jl_new_uninitialized_datatype();
     else
         assert(0);
@@ -1267,6 +1307,9 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     }
 
     if (tag == 5) {
+        dt->uid = jl_assign_type_uid();
+    }
+    else if (tag == 10) {
         assert(pos > 0);
         assert(s->mode != MODE_MODULE_POSTWORK);
         arraylist_push(&flagref_list, loc);
