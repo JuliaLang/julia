@@ -294,12 +294,22 @@ initialization steps that must occur at *runtime* from steps that can
 occur at *compile time*.  For this purpose, Julia allows you to define
 an ``__init__()`` function in your module that executes any
 initialization steps that must occur at runtime.
+This function will not be called during compilation
+(``--output-*`` or ``__precompile__()``).
+You may, of course, call it manually if necessary,
+but the default is to assume this function deals with computing state for
+the local machine, which does not need to be -- or even should not be --
+captured in the compiled image.
+It will be called after the module is loaded into a process,
+including if it is being loaded into an incremental compile
+(``--output-incremental=yes``), but not if it is being loaded
+into a full-compilation process.
 
 In particular, if you define a ``function __init__()`` in a module,
 then Julia will call ``__init__()`` immediately *after* the module is
 loaded (e.g., by ``import``, ``using``, or ``require``) at runtime for
 the *first* time (i.e., ``__init__`` is only called once, and only
-after all statements in the module have been executed).  Because it is
+after all statements in the module have been executed). Because it is
 called after the module is fully imported, any submodules or other
 imported modules have their ``__init__`` functions called *before* the
 ``__init__`` of the enclosing module.
@@ -308,7 +318,7 @@ Two typical uses of ``__init__`` are calling runtime initialization
 functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.  For example,
 suppose that we are calling a C library ``libfoo`` that requires us
-to call a ``foo_init()`` initialization function at runtime.   Suppose
+to call a ``foo_init()`` initialization function at runtime. Suppose
 that we also want to define a global constant ``foo_data_ptr`` that
 holds the return value of a ``void *foo_data()`` function defined by
 ``libfoo`` — this constant must be initialized at runtime (not at compile
