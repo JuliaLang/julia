@@ -1438,4 +1438,8 @@ if VERSION < v"0.5.0-dev+4351"
         print_escaped(io, str, esc)
 end
 
+if VERSION < v"0.5.0-dev+4340"
+    Base.show(io::IO, mime, x) = writemime(io, mime, x)
+end
+
 end # module

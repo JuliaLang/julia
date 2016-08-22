@@ -205,6 +205,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `print_escaped` is now another method of `escape_string`, `print_unescaped` a method of `unescape_string`, and `print_joined` a method of `join`. [#16603](https://github.com/JuliaLang/julia/pull/16603)
 
+* `writemime` has been merged into `show` [#16563](https://github.com/JuliaLang/julia/pull/16563). Note that to extend this function requires `@compat`; see the [Supported Syntax](#supported-syntax) section for more information.
+
 ## New macros
 
 * `@static` has been added [#16219](https://github.com/JuliaLang/julia/pull/16219).
