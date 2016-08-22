@@ -2721,27 +2721,25 @@ f(x) = yt(x)
              (any vinfo:sa vi))
         (let* ((leading
                 (filter (lambda (x) (and (pair? x)
-                                         (let ((cx (car x)))
-                                           (or (and (eq? cx 'method) (length> x 2))
-                                               (eq? cx '=)
-                                               (eq? cx 'call)))))
+                                         (or (and (eq? (car x) 'method)
+                                                  (length> x 2))
+                                             (eq? (car x) '=))))
                         (take-statements-while
                          (lambda (e)
                            (or (atom? e)
                                (memq (car e) '(quote top core line inert local unnecessary
                                                meta inbounds boundscheck simdloop
                                                implicit-global global globalref
-                                               const newvar = null method call))))
+                                               const newvar = null method))))
                          (lam:body lam))))
-               (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
-                                         leading)))
+               (unused (map cadr leading))
                (def (table)))
           ;; TODO: reorder leading statements to put assignments where the RHS is
           ;; `simple-atom?` at the top.
           (for-each (lambda (e)
                       (set! unused (filter (lambda (v) (not (expr-uses-var e v)))
                                            unused))
-                      (if (and (memq (car e) '(method =)) (memq (cadr e) unused))
+                      (if (memq (cadr e) unused)
                           (put! def (cadr e) #t)))
                     leading)
           (for-each (lambda (v)
