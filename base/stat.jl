@@ -10,11 +10,14 @@ export
     isblockdev,
     ischardev,
     isdir,
+    isdir_casesensitive,
     isfifo,
     isfile,
+    isfile_casesensitive,
     islink,
     ismount,
     ispath,
+    ispath_casesensitive,
     issetgid,
     issetuid,
     issocket,
@@ -162,4 +165,90 @@ function ismount(path...)
     (s1.device != s2.device) && return true
     (s1.inode == s2.inode) && return true
     false
+end
+
+# Cross-platform case-sensitive path canonicalization.
+# _ispath_casesensitive(path) assumes that ispath(path) is true,
+# and returns whether path matches the case stored in the filesystem.
+if is_unix() && !is_apple()
+    # assume case-sensitive filesystems, don't have to do anything
+    _ispath_casesensitive(path) = true
+elseif is_windows()
+    # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
+    _ispath_casesensitive(path) = Filesystem.longpath(path) == path
+elseif is_apple()
+    # HFS+ filesystem is case-preserving. The getattrlist API returns
+    # a case-preserved filename. In the rare event that HFS+ is operating
+    # in case-sensitive mode, this will still work but will be redundant.
+
+    # Constants from <sys/attr.h>
+    const ATRATTR_BIT_MAP_COUNT = 5
+    const ATTR_CMN_NAME = 1
+    const BITMAPCOUNT = 1
+    const COMMONATTR = 5
+    const FSOPT_NOFOLLOW = 1  # Don't follow symbolic links
+
+    const attr_list = zeros(UInt8, 24)
+    attr_list[BITMAPCOUNT] = ATRATTR_BIT_MAP_COUNT
+    attr_list[COMMONATTR] = ATTR_CMN_NAME
+
+    # This essentially corresponds to the following C code:
+    # attrlist attr_list;
+    # memset(&attr_list, 0, sizeof(attr_list));
+    # attr_list.bitmapcount = ATTR_BIT_MAP_COUNT;
+    # attr_list.commonattr = ATTR_CMN_NAME;
+    # struct Buffer {
+    #    u_int32_t total_length;
+    #    u_int32_t filename_offset;
+    #    u_int32_t filename_length;
+    #    char filename[max_filename_length];
+    # };
+    # Buffer buf;
+    # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    function _ispath_casesensitive(path)
+        path_basename = String(basename(path))
+        local casepreserved_basename
+        const header_size = 12
+        buf = Array{UInt8}(length(path_basename) + header_size + 1)
+        while true
+            ret = ccall(:getattrlist, Cint,
+                        (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
+                        path, attr_list, buf, sizeof(buf), FSOPT_NOFOLLOW)
+            systemerror(:getattrlist, ret ≠ 0)
+            filename_length = unsafe_load(
+              convert(Ptr{UInt32}, pointer(buf) + 8))
+            if (filename_length + header_size) > length(buf)
+                resize!(buf, filename_length + header_size)
+                continue
+            end
+            casepreserved_basename =
+              view(buf, (header_size+1):(header_size+filename_length-1))
+            break
+        end
+        # Hack to compensate for inability to create a string from a subarray with no allocations.
+        path_basename.data == casepreserved_basename && return true
+
+        # If there is no match, it's possible that the file does exist but HFS+
+        # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
+        isascii(path_basename) && return false
+        normalize_string(path_basename, :NFD).data == casepreserved_basename
+    end
+else
+    # Generic fallback that performs a slow directory listing.
+    function _ispath_casesensitive(path)
+        dir, filename = splitdir(path)
+        any(readdir(dir) .== filename)
+    end
+end
+for f in (:ispath, :isfile, :isdir)
+    fc = Symbol(f,"_casesensitive")
+    @eval @doc let f=$(string(f)); """
+    $(f)_casesensitive(path)
+
+This function implements a case-sensitive `$f` on filesystems (e.g. Mac and Windows)
+that are case-insensitive but case-preserving.   It is identical to `$f` except
+that it returns `false` if `basename(path)` does not also match the *case*
+of the path stored in the filesystem.  (It is equivalent to `$f` on case-sensitive
+filesystems.)"""; end ->$fc(path) = $f(path) && _ispath_casesensitive(path)
+    @eval $fc(path...) = $fc(joinpath(path...))
 end

@@ -3,7 +3,7 @@
 module Read
 
 import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError, ..Dir
-using ..Types
+using ..Types, Base.Filesystem
 
 readstrip(path...) = strip(readstring(joinpath(path...)))
 
@@ -52,8 +52,15 @@ function latest(names=readdir("METADATA"))
     return pkgs
 end
 
+function check_case(pkg::AbstractString)
+    if ispath_casemismatch(pkg)
+        throw(PkgError("$pkg matches the name but not the case of an installed package."))
+    end
+    return true
+end
+
 isinstalled(pkg::AbstractString) =
-    pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir(pkg)
+    pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir_casesensitive(pkg)
 
 function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
     isinstalled(pkg) || throw(PkgError("$pkg is not an installed package."))

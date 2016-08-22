@@ -7,7 +7,7 @@ import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 import ...LibGit2
 importall ...LibGit2
 import ...Pkg.PkgError
-using ..Types
+using ..Types, Base.Filesystem
 
 macro recover(ex)
     quote
@@ -50,7 +50,7 @@ function add(pkg::AbstractString, vers::VersionSet)
     outdated = :maybe
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
-            ispath(pkg) || throw(PkgError("unknown package $pkg"))
+            ispath_casesensitive(pkg) || throw(PkgError("unknown package $pkg"))
             info("Nothing to be done")
         end
         branch = Dir.getmetabranch()
@@ -79,7 +79,7 @@ add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("Nothing to be done")
+    ispath_casesensitive(pkg) || return info("Nothing to be done")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
 end
@@ -222,6 +222,7 @@ function clone(url_or_pkg::AbstractString)
 end
 
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
+    isdir_casesensitive(pkg) || throw(PkgError("$pkg is not installed"))
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     info("Checking out $pkg $branch...")
     with(GitRepo, pkg) do r
@@ -291,6 +292,7 @@ function free(pkgs)
 end
 
 function pin(pkg::AbstractString, head::AbstractString)
+    isdir_casesensitive(pkg) || throw(PkgError("$pkg is not installed"))
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     should_resolve = true
     with(GitRepo, pkg) do repo
@@ -685,6 +687,10 @@ function test!(pkg::AbstractString,
                errs::Vector{AbstractString},
                nopkgs::Vector{AbstractString},
                notests::Vector{AbstractString}; coverage::Bool=false)
+    if !isdir_casesensitive(pkg)
+        push!(nopkgs, pkg)
+        return false
+    end
     reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
         tests_require = Reqs.parse(reqs_path)
@@ -694,9 +700,7 @@ function test!(pkg::AbstractString,
         end
     end
     test_path = abspath(pkg,"test","runtests.jl")
-    if !isdir(pkg)
-        push!(nopkgs, pkg)
-    elseif !isfile(test_path)
+    if !isfile(test_path)
         push!(notests, pkg)
     else
         info("Testing $pkg")
