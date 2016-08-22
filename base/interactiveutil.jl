@@ -500,7 +500,7 @@ function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
             !isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && any(u -> u===t, x.types))
+           (isa(x,Union) && isa(t,DataType) && (type_close_enough(x.a, t) || type_close_enough(x.b, t)))
 end
 
 # `methodswith` -- shows a list of methods using the type given

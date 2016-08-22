@@ -7,25 +7,24 @@ typejoin(t::ANY) = (@_pure_meta; t)
 typejoin(t::ANY, ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
 function typejoin(a::ANY, b::ANY)
     @_pure_meta
-    if isa(a,TypeConstructor); a = a.body; end
-    if isa(b,TypeConstructor); b = b.body; end
     if a <: b
         return b
     elseif b <: a
         return a
     end
+    if isa(a,UnionAll); a = a.body; end
+    if isa(b,UnionAll); b = b.body; end
     if isa(a,TypeVar)
         return typejoin(a.ub, b)
     end
     if isa(b,TypeVar)
         return typejoin(a, b.ub)
     end
-    if isa(a,Union) || isa(b,Union)
-        u = Union{a, b}
-        if !isa(u,Union)
-            return u
-        end
-        return reduce(typejoin, Bottom, u.types)
+    if isa(a,Union)
+        return typejoin(typejoin(a.a,a.b), b)
+    end
+    if isa(b,Union)
+        return typejoin(a, typejoin(b.a,b.b))
     end
     if a <: Tuple
         if !(b <: Tuple)
@@ -72,22 +71,26 @@ function typejoin(a::ANY, b::ANY)
         return Any
     end
     while b !== Any
-        if a <: b.name.primary
+        if a <: b.name.wrapper
             while a.name !== b.name
                 a = supertype(a)
             end
+            aprimary = unwrap_unionall(a.name.wrapper)
             # join on parameters
             n = length(a.parameters)
+            if n == 0
+                return aprimary
+            end
             p = Vector{Any}(n)
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
                     p[i] = ai
                 else
-                    p[i] = a.name.primary.parameters[i]
+                    p[i] = aprimary.parameters[i]
                 end
             end
-            return a.name.primary{p...}
+            return a.name.wrapper{p...}
         end
         b = supertype(b)
     end
