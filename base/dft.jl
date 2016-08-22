@@ -24,6 +24,7 @@ typealias FFTWFloat Union{Float32,Float64}
 fftwfloat(x) = _fftwfloat(float(x))
 _fftwfloat{T<:FFTWFloat}(::Type{T}) = T
 _fftwfloat(::Type{Float16}) = Float32
+_fftwfloat{T}(::Type{Complex{T}}) = Complex{_fftwfloat(T)}
 _fftwfloat{T}(::Type{T}) = error("type $T not supported")
 _fftwfloat{T}(x::T) = _fftwfloat(T)(x)
 
