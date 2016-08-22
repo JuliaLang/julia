@@ -670,3 +670,110 @@ end
 
 # issue 15896 and PR 15913
 @test_throws ErrorException eval(:(macro test15896(d; y=0) end))
+
+# Issue #16578 (Lowering) mismatch between push_loc and pop_loc
+module TestMeta_16578
+using Base.Test
+function get_expr_list(ex)
+    if isa(ex, LambdaInfo)
+        return Base.uncompressed_ast(ex)
+    elseif ex.head == :thunk
+        return get_expr_list(ex.args[1])
+    else
+        return ex.args
+    end
+end
+
+function count_meta_loc(exprs)
+    push_count = 0
+    pop_count = 0
+    for expr in exprs
+        Meta.isexpr(expr, :meta) || continue
+        expr = expr::Expr
+        if expr.args[1] === :push_loc
+            push_count += 1
+        elseif expr.args[1] === :pop_loc
+            pop_count += 1
+        end
+        @test push_count >= pop_count
+    end
+    @test push_count == pop_count
+    return push_count
+end
+
+function is_return_ssavalue(ex::Expr)
+    ex.head === :return && isa(ex.args[1], SSAValue)
+end
+
+function is_pop_loc(ex::Expr)
+    ex.head === :meta && ex.args[1] === :pop_loc
+end
+
+# Macros
+macro m1()
+    quote
+        sin(1)
+    end
+end
+macro m2()
+    quote
+        1
+    end
+end
+include_string("""
+macro m3()
+    quote
+        @m1
+    end
+end
+macro m4()
+    quote
+        @m2
+    end
+end
+""", "another_file.jl")
+m1_exprs = get_expr_list(expand(:(@m1)))
+m2_exprs = get_expr_list(expand(:(@m2)))
+m3_exprs = get_expr_list(expand(:(@m3)))
+m4_exprs = get_expr_list(expand(:(@m4)))
+
+# Check the expanded expresion has expected number of matching push/pop
+# and the return is handled correctly
+@test count_meta_loc(m1_exprs) == 1
+@test is_return_ssavalue(m1_exprs[end])
+@test is_pop_loc(m1_exprs[end - 1])
+
+@test count_meta_loc(m2_exprs) == 1
+@test m2_exprs[end] == :(return 1)
+@test is_pop_loc(m2_exprs[end - 1])
+
+@test count_meta_loc(m3_exprs) == 2
+@test is_return_ssavalue(m3_exprs[end])
+@test is_pop_loc(m3_exprs[end - 1])
+
+@test count_meta_loc(m4_exprs) == 2
+@test m4_exprs[end] == :(return 1)
+@test is_pop_loc(m4_exprs[end - 1])
+
+function f1(a)
+    b = a + 100
+    b
+end
+
+@generated function f2(a)
+    quote
+        b = a + 100
+        b
+    end
+end
+
+f1_exprs = get_expr_list(@code_typed f1(1))
+@test count_meta_loc(f1_exprs) == 0
+@test Meta.isexpr(f1_exprs[end], :return)
+
+f2_exprs = get_expr_list(@code_typed f2(1))
+@test count_meta_loc(f2_exprs) == 1
+@test is_pop_loc(f2_exprs[end - 1])
+@test Meta.isexpr(f2_exprs[end], :return)
+
+end
