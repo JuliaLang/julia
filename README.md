@@ -280,11 +280,11 @@ is at least this version by `VERSION >= v"X.Y.Z-aaa+NNNN"`.
 
 [#15032]: https://github.com/JuliaLang/julia/issues/15032
 
-### Tagging the correct minimum version of Compat 
+### Tagging the correct minimum version of Compat
 
 One of the most frequent problems package developers encounter is finding the right
 version of `Compat` to add to their REQUIRE. This is meant to be a guide on how to
-specify the right lower bound. 
+specify the right lower bound.
 
 * Find the appropriate fix needed for your package from the `Compat` README. Every
 function or feature added to `Compat` is documented in its README, so you are

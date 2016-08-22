@@ -1135,7 +1135,7 @@ if !isdefined(Base, :normalize)
         end
     end
 
-    export normalize, normalize! 
+    export normalize, normalize!
 end
 
 if !isdefined(Base, :AsyncCondition)
