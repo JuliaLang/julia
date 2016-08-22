@@ -114,7 +114,7 @@ static int equiv_svec_dt(jl_svec_t *sa, jl_svec_t *sb)
             return 0;
         if (jl_is_typevar(a) && ((jl_tvar_t*)a)->name != ((jl_tvar_t*)b)->name)
             return 0;
-        if (!jl_subtype(a, b, 0) || !jl_subtype(b, a, 0))
+        if (!jl_subtype(a, b) || !jl_subtype(b, a))
             return 0;
     }
     return 1;
@@ -129,8 +129,8 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
             dta->ninitialized == dtb->ninitialized &&
             equiv_svec_dt(dta->parameters, dtb->parameters) &&
             equiv_svec_dt(dta->types, dtb->types) &&
-            jl_subtype((jl_value_t*)dta->super, (jl_value_t*)dtb->super, 0) &&
-            jl_subtype((jl_value_t*)dtb->super, (jl_value_t*)dta->super, 0) &&
+            jl_subtype((jl_value_t*)dta->super, (jl_value_t*)dtb->super) &&
+            jl_subtype((jl_value_t*)dtb->super, (jl_value_t*)dta->super) &&
             jl_egal((jl_value_t*)dta->name->names, (jl_value_t*)dtb->name->names));
 }
 
@@ -148,9 +148,9 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->name == ((jl_datatype_t*)super)->name ||
-        jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
+        jl_subtype(super,(jl_value_t*)jl_vararg_type) ||
         jl_is_tuple_type(super) ||
-        jl_subtype(super,(jl_value_t*)jl_type_type,0) ||
+        jl_subtype(super,(jl_value_t*)jl_type_type) ||
         super == (jl_value_t*)jl_builtin_type) {
         jl_errorf("invalid subtyping in definition of %s",
                   jl_symbol_name(tt->name->name));
@@ -313,7 +313,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         jl_value_t *super = NULL;
         jl_value_t *temp = NULL;
         jl_datatype_t *dt = NULL;
-        JL_GC_PUSH4(&para, &super, &temp, &dt);
+        jl_value_t *w = NULL;
+        JL_GC_PUSH4(&para, &super, &temp, &w);
         assert(jl_is_svec(para));
         if (jl_is_globalref(name)) {
             modu = jl_globalref_mod(name);
@@ -321,11 +322,12 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         }
         assert(jl_is_symbol(name));
         dt = jl_new_abstracttype(name, NULL, (jl_svec_t*)para);
+        w = dt->name->wrapper;
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;
         check_can_assign_type(b);
-        b->value = (jl_value_t*)dt;
-        jl_gc_wb_binding(b, dt);
+        b->value = w;
+        jl_gc_wb_binding(b, w);
         JL_TRY {
             inside_typedef = 1;
             super = eval(args[2], s);
@@ -338,8 +340,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_rethrow();
         }
         b->value = temp;
-        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
-            jl_checked_assignment(b, (jl_value_t*)dt);
+        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(temp))) {
+            jl_checked_assignment(b, w);
         }
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
@@ -350,7 +352,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         jl_value_t *name = args[0];
         jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
         jl_datatype_t *dt = NULL;
-        JL_GC_PUSH4(&para, &super, &temp, &dt);
+        jl_value_t *w = NULL;
+        JL_GC_PUSH4(&para, &super, &temp, &w);
         if (jl_is_globalref(name)) {
             modu = jl_globalref_mod(name);
             name = (jl_value_t*)jl_globalref_name(name);
@@ -367,11 +370,12 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_errorf("invalid number of bits in type %s",
                       jl_symbol_name((jl_sym_t*)name));
         dt = jl_new_bitstype(name, NULL, (jl_svec_t*)para, nb);
+        w = dt->name->wrapper;
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;
         check_can_assign_type(b);
-        b->value = (jl_value_t*)dt;
-        jl_gc_wb_binding(b, dt);
+        b->value = w;
+        jl_gc_wb_binding(b, w);
         JL_TRY {
             inside_typedef = 1;
             super = eval(args[3], s);
@@ -384,8 +388,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_rethrow();
         }
         b->value = temp;
-        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
-            jl_checked_assignment(b, (jl_value_t*)dt);
+        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(temp))) {
+            jl_checked_assignment(b, w);
         }
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
@@ -398,7 +402,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         jl_value_t *temp = NULL;
         jl_value_t *super = NULL;
         jl_datatype_t *dt = NULL;
-        JL_GC_PUSH4(&para, &super, &temp, &dt);
+        jl_value_t *w = NULL;
+        JL_GC_PUSH4(&para, &super, &temp, &w);
         if (jl_is_globalref(name)) {
             modu = jl_globalref_mod(name);
             name = (jl_value_t*)jl_globalref_name(name);
@@ -406,22 +411,17 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         assert(jl_is_symbol(name));
         assert(jl_is_svec(para));
         temp = eval(args[2], s);  // field names
-#ifndef NDEBUG
-        size_t i, l = jl_svec_len(para);
-        for (i = 0; i < l; i++) {
-            assert(!((jl_tvar_t*)jl_svecref(para, i))->bound);
-        }
-#endif
         dt = jl_new_datatype((jl_sym_t*)name, NULL, (jl_svec_t*)para,
                              (jl_svec_t*)temp, NULL,
                              0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
+        w = dt->name->wrapper;
 
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;  // save old value
         // temporarily assign so binding is available for field types
         check_can_assign_type(b);
-        b->value = (jl_value_t*)dt;
-        jl_gc_wb_binding(b,dt);
+        b->value = w;
+        jl_gc_wb_binding(b,w);
 
         JL_TRY {
             inside_typedef = 1;
@@ -454,8 +454,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         }
 
         b->value = temp;
-        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
-            jl_checked_assignment(b, (jl_value_t*)dt);
+        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)jl_unwrap_unionall(temp))) {
+            jl_checked_assignment(b, w);
         }
 
         JL_GC_POP();
