@@ -1759,7 +1759,7 @@ Statistics
 
    .. Docstring generated from Julia source
 
-   Compute the sample variance of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sumabs2(v - mean(v)) / (length(v) - 1)``\ . If ``corrected`` is ``true``\ , then the sum is scaled with ``n-1``\ , whereas the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x)``\ . The mean ``m`` over the region may be provided.
+   Compute the sample variance of a vector or array ``v``\ , optionally along dimensions in ``region``\ . The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID drawn from that generative distribution. This computation is equivalent to calculating ``sumabs2(v - mean(v)) / (length(v) - 1)``\ . If ``corrected`` is ``true``\ , then the sum is scaled with ``n-1``\ , whereas the sum is scaled with ``n`` if ``corrected`` is ``false`` where ``n = length(x)``\ . The mean ``mean`` over the region may be provided.
 
    .. note::
       Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArrays.jl`` package is recommended.

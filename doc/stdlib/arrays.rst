@@ -110,7 +110,7 @@ Basic functions
        (iter.I[1],iter.I[2]) = (2,3)
        A[iter] = 0
 
-   If you supply more than one ``AbstractArray`` argument, ``eachindex`` will create an iterable object that is fast for all arguments (a ``UnitRange`` if all inputs have fast linear indexing, a ```CartesianRange`` <:obj`CartesianRange`>`_ otherwise). If the arrays have different sizes and/or dimensionalities, ``eachindex`` returns an iterable that spans the largest range along each dimension.
+   If you supply more than one ``AbstractArray`` argument, ``eachindex`` will create an iterable object that is fast for all arguments (a :obj:`UnitRange` if all inputs have fast linear indexing, a :obj:`CartesianRange` otherwise). If the arrays have different sizes and/or dimensionalities, ``eachindex`` returns an iterable that spans the largest range along each dimension.
 
 .. function:: linearindices(A)
 
@@ -312,7 +312,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (5,5))`` returns a 10×10 array of floats, with each element initialized to ``1.0``\ .
+   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (5,5))`` returns a 5×5 array of floats, with each element initialized to ``1.0``\ .
 
    .. doctest::
 

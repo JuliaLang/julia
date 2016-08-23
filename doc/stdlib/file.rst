@@ -32,7 +32,7 @@
 
    .. Docstring generated from Julia source
 
-   The ``walkdir`` method returns an iterator that walks the directory tree of a directory. The iterator returns a tuple containing ``(rootpath, dirs, files)``\ . The directory tree can be traversed top-down or bottom-up. If ``walkdir`` encounters a :obj:`SystemError` it will raise the error by default. A custom error handling function can be provided through ``onerror`` keyword argument. ``onerror`` is called with a ``SystemError`` as argument.
+   The ``walkdir`` method returns an iterator that walks the directory tree of a directory. The iterator returns a tuple containing ``(rootpath, dirs, files)``\ . The directory tree can be traversed top-down or bottom-up. If ``walkdir`` encounters a :obj:`SystemError` it will rethrow the error by default. A custom error handling function can be provided through ``onerror`` keyword argument. ``onerror`` is called with a ``SystemError`` as argument.
 
    .. code-block:: julia
 

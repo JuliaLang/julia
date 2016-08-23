@@ -746,11 +746,11 @@ A[iter] = 0
 ```
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a `UnitRange` if all inputs have fast
-linear indexing, a [`CartesianRange`](:obj`CartesianRange`) otherwise).
-If the arrays have different sizes and/or
-dimensionalities, `eachindex` returns an iterable that spans the largest range along each
-dimension.
+iterable object that is fast for all arguments (a [`UnitRange`](:obj:`UnitRange`)
+if all inputs have fast linear indexing, a [`CartesianRange`](:obj:`CartesianRange`)
+otherwise).
+If the arrays have different sizes and/or dimensionalities, `eachindex` returns an
+iterable that spans the largest range along each dimension.
 """
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
 

@@ -558,7 +558,11 @@ dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
 """
     rank(M[, tol::Real])
 
-Compute the rank of a matrix.
+Compute the rank of a matrix by summing the singular
+values of `M` with magnitude greater than `tol`.
+By default, the value of `tol` is the largest
+dimension of `M` multiplied by the [`eps`](:func:`eps`)
+of the [`eltype`](:func:`eltype`) of `M`.
 """
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)

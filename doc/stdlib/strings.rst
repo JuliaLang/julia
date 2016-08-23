@@ -440,7 +440,7 @@
        julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
        "apples, bananas and pineapples"
 
-   ``strings`` can be any iterable over elements ``x`` which are convertible to strings via ``print(io::IOBuffer, x)``\ .
+   ``strings`` can be any iterable over elements ``x`` which are convertible to strings via ``print(io::IOBuffer, x)``\ . ``strings`` will be printed to ``io``\ .
 
 .. function:: chop(s::AbstractString)
 

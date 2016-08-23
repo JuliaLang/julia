@@ -431,7 +431,7 @@ The `walkdir` method returns an iterator that walks the directory tree of a dire
 The iterator returns a tuple containing `(rootpath, dirs, files)`.
 The directory tree can be traversed top-down or bottom-up.
 If `walkdir` encounters a [`SystemError`](:obj:`SystemError`)
-it will raise the error by default.
+it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `SystemError` as argument.
 

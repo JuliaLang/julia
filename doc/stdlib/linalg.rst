@@ -1126,6 +1126,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. doctest::
 
+       julia> A = [1 2 3; 4 5 6; 7 8 9]
+       3×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+        7  8  9
+
        julia> diag(A,1)
        2-element Array{Int64,1}:
         2
@@ -1135,7 +1141,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Construct a diagonal matrix and place ``v`` on the ``k``\ th diagonal.
+   Construct a matrix by placing ``v`` on the ``k``\ th diagonal.
 
    .. doctest::
 
@@ -1191,7 +1197,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the rank of a matrix.
+   Compute the rank of a matrix by summing the singular values of ``M`` with magnitude greater than ``tol``\ . By default, the value of ``tol`` is the largest dimension of ``M`` multiplied by the :func:`eps` of the :func:`eltype` of ``M``\ .
 
 .. function:: norm(A, [p::Real=2])
 
