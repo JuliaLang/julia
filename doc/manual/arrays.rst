@@ -517,7 +517,7 @@ the name of the function to vectorize. Here is a simple example:
 
     julia> methods(square)
     # 2 methods for generic function "square":
-    square{T<:Number}(x::AbstractArray{T,N<:Any}) at operators.jl:914
+    square{T<:Number}(x::AbstractArray{T,N<:Any}) at operators.jl:918
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])

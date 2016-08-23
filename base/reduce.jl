@@ -646,8 +646,6 @@ all(f::typeof(identity), itr) =
 
 ## in & contains
 
-in(x, itr) = any(Predicate(y -> y == x), itr)
-
 """
     in(item, collection) -> Bool
     ∈(item,collection) -> Bool
@@ -673,6 +671,8 @@ julia> 5 in a
 false
 ```
 """
+in(x, itr) = any(Predicate(y -> y == x), itr)
+
 const ∈ = in
 ∉(x, itr)=!∈(x, itr)
 ∋(itr, x)= ∈(x, itr)

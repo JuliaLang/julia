@@ -323,7 +323,18 @@ println_with_color(color::Symbol, msg::AbstractString...) =
 """
     info(msg...; prefix="INFO: ")
 
-Display an informational message. Argument `msg` is a string describing the information to be displayed.
+Display an informational message.
+Argument `msg` is a string describing the information to be displayed.
+The `prefix` kwarg can be used to override the default prepending of
+`msg`.
+
+```jldoctest
+julia> info("hello world")
+INFO: hello world
+
+julia> info("hello world"; prefix="MY INFO: ")
+MY INFO: hello world
+```
 """
 function info(io::IO, msg...; prefix="INFO: ")
     println_with_color(info_color(), io, prefix, chomp(string(msg...)))

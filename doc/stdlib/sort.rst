@@ -132,7 +132,7 @@ Sorting Functions
 
    .. Docstring generated from Julia source
 
-   Sort a multidimensional array ``A`` along the given dimension. ``lt`` defines the comparison to use.
+   Sort a multidimensional array ``A`` along the given dimension. See :func:`sort!` for a description of possible keyword arguments.
 
 .. function:: sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
@@ -152,13 +152,13 @@ Sorting Functions
 
    .. Docstring generated from Julia source
 
-   Sort the rows of matrix ``A`` lexicographically. See :func:`sort` for a description of possible keyword arguments.
+   Sort the rows of matrix ``A`` lexicographically. See :func:`sort!` for a description of possible keyword arguments.
 
 .. function:: sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
-   Sort the columns of matrix ``A`` lexicographically. See :func:`sort` for a description of possible keyword arguments.
+   Sort the columns of matrix ``A`` lexicographically. See :func:`sort!` for a description of possible keyword arguments.
 
 Order-Related Functions
 -----------------------

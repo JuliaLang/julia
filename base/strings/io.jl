@@ -6,8 +6,9 @@
 """
     print(io::IO, x)
 
-Write (to the default output stream) a canonical (un-decorated) text
-representation of a value if there is one, otherwise call [`show`](:func:`show`).
+Write to `io` (or to the default output stream [`STDOUT`](:obj:`STDOUT`)
+if `io` is not given) a canonical (un-decorated) text representation
+of a value if there is one, otherwise call [`show`](:func:`show`).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 """
@@ -153,7 +154,7 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 ```
 
 `strings` can be any iterable over elements `x` which are convertible to strings
-via `print(io::IOBuffer, x)`.
+via `print(io::IOBuffer, x)`. `strings` will be printed to `io`.
 """
 function join(io::IO, strings, delim, last)
     i = start(strings)
