@@ -161,6 +161,12 @@ The `k`th diagonal of a matrix, as a vector.
 Use [`diagm`](:func:`diagm`) to construct a diagonal matrix.
 
 ```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
 julia> diag(A,1)
 2-element Array{Int64,1}:
  2
@@ -172,7 +178,7 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 """
     diagm(v, k::Integer=0)
 
-Construct a diagonal matrix and place `v` on the `k`th diagonal.
+Construct a matrix by placing `v` on the `k`th diagonal.
 
 ```jldoctest
 julia> diagm([1,2,3],1)

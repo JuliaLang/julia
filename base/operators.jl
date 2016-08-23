@@ -103,6 +103,7 @@ Determine whether `x` and `y` are identical, in the sense that no program could 
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
 numbers) by contents at the bit level. This function is sometimes called `egal`.
 """
+is
 const ≡ = is
 
 """
@@ -303,17 +304,6 @@ floating-point results for integer arguments.
 .>>(x::Integer,y::Integer) = x>>y
 
 .==(x::Number,y::Number) = x == y
-.!=(x::Number,y::Number) = x != y
-.<( x::Real,y::Real) = x < y
-.<=(x::Real,y::Real) = x <= y
-
-"""
-    .<=(x, y)
-    .≤(x,y)
-
-Element-wise less-than-or-equals comparison operator.
-"""
-const .≤ = .<=
 
 """
     .!=(x, y)
@@ -321,6 +311,18 @@ const .≤ = .<=
 
 Element-wise not-equals comparison operator.
 """
+.!=(x::Number,y::Number) = x != y
+.<( x::Real,y::Real) = x < y
+
+"""
+    .<=(x, y)
+    .≤(x,y)
+
+Element-wise less-than-or-equals comparison operator.
+"""
+.<=(x::Real,y::Real) = x <= y
+
+const .≤ = .<=
 const .≠ = .!=
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
@@ -466,6 +468,7 @@ magnitude than `y`. This value is always exact.
 x == div(x,y)*y + rem(x,y)
 ```
 """
+rem
 const % = rem
 .%(x::Real, y::Real) = x%y
 
@@ -475,6 +478,7 @@ const % = rem
 
 The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
 """
+div
 const ÷ = div
 .÷(x::Real, y::Real) = x÷y
 

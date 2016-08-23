@@ -165,7 +165,7 @@ end
 """
     fill(x, dims)
 
-Create an array filled with the value `x`. For example, `fill(1.0, (5,5))` returns a 10×10
+Create an array filled with the value `x`. For example, `fill(1.0, (5,5))` returns a 5×5
 array of floats, with each element initialized to `1.0`.
 
 ```jldoctest

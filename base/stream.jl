@@ -975,6 +975,9 @@ Data written to [`STDOUT`](:obj:`STDOUT`) may now be read from the `rd` end of
 the pipe. The `wr` end is given for convenience in case the old
 [`STDOUT`](:obj:`STDOUT`) object was cached by the user and needs to be replaced
 elsewhere.
+
+!!! note
+    `stream` must be a `TTY`, a [`Pipe`](:obj:`Pipe`), or a [`TCPSocket`](:obj:`TCPSocket`).
 """
 redirect_stdout
 
@@ -982,6 +985,9 @@ redirect_stdout
     redirect_stderr([stream]) -> (rd, wr)
 
 Like [`redirect_stdout`](:func:`redirect_stdout`), but for [`STDERR`](:obj:`STDERR`).
+
+!!! note
+    `stream` must be a `TTY`, a [`Pipe`](:obj:`Pipe`), or a [`TCPSocket`](:obj:`TCPSocket`).
 """
 redirect_stderr
 
@@ -991,6 +997,9 @@ redirect_stderr
 Like [`redirect_stdout`](:func:`redirect_stdout`), but for [`STDIN`](:obj:`STDIN`).
 Note that the order of the return tuple is still `(rd, wr)`,
 i.e. data to be read from [`STDIN`](:obj:`STDIN`) may be written to `wr`.
+
+!!! note
+    `stream` must be a `TTY`, a [`Pipe`](:obj:`Pipe`), or a [`TCPSocket`](:obj:`TCPSocket`).
 """
 redirect_stdin
 
@@ -1011,21 +1020,33 @@ end
 """
     redirect_stdout(f::Function, stream)
 
-Run the function `f` while redirecting `STDOUT` to `stream`. Upon completion, `STDOUT` is restored to its prior setting.
+Run the function `f` while redirecting [`STDOUT`](:obj:`STDOUT`) to `stream`.
+Upon completion, [`STDOUT`](:obj:`STDOUT`) is restored to its prior setting.
+
+!!! note
+    `stream` must be a `TTY`, a [`Pipe`](:obj:`Pipe`), or a [`TCPSocket`](:obj:`TCPSocket`).
 """
 redirect_stdout(f::Function, stream)
 
 """
     redirect_stderr(f::Function, stream)
 
-Run the function `f` while redirecting `STDERR` to `stream`. Upon completion, `STDERR` is restored to its prior setting.
+Run the function `f` while redirecting [`STDERR`](:obj:`STDERR`) to `stream`.
+Upon completion, [`STDERR`](:obj:`STDERR`) is restored to its prior setting.
+
+!!! note
+    `stream` must be a `TTY`, a [`Pipe`](:obj:`Pipe`), or a [`TCPSocket`](:obj:`TCPSocket`).
 """
 redirect_stderr(f::Function, stream)
 
 """
     redirect_stdin(f::Function, stream)
 
-Run the function `f` while redirecting `STDIN` to `stream`. Upon completion, `STDIN` is restored to its prior setting.
+Run the function `f` while redirecting [`STDIN`](:obj:`STDIN`) to `stream`.
+Upon completion, [`STDIN`](:obj:`STDIN`) is restored to its prior setting.
+
+!!! note
+    `stream` must be a `TTY`, a [`Pipe`](:obj:`Pipe`), or a [`TCPSocket`](:obj:`TCPSocket`).
 """
 redirect_stdin(f::Function, stream)
 

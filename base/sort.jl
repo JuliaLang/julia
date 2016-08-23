@@ -522,7 +522,9 @@ end
 """
     sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
-Sort a multidimensional array `A` along the given dimension. `lt` defines the comparison to use.
+Sort a multidimensional array `A` along the given dimension.
+See [`sort!`](:func:`sort!`) for a description of possible
+keyword arguments.
 """
 function sort(A::AbstractArray, dim::Integer;
               alg::Algorithm=DEFAULT_UNSTABLE,
@@ -559,7 +561,7 @@ end
     sortrows(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the rows of matrix `A` lexicographically.
-See [`sort`](:func:`sort`) for a description of possible
+See [`sort!`](:func:`sort!`) for a description of possible
 keyword arguments.
 """
 function sortrows(A::AbstractMatrix; kws...)
@@ -577,7 +579,7 @@ end
     sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the columns of matrix `A` lexicographically.
-See [`sort`](:func:`sort`) for a description of possible
+See [`sort!`](:func:`sort!`) for a description of possible
 keyword arguments.
 """
 function sortcols(A::AbstractMatrix; kws...)
