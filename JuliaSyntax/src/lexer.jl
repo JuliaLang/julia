@@ -21,7 +21,7 @@ end
 ishex(c::Char) =  isdigit(c) || ('a' <= c <= 'f')
 iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
-type Lexer{IO_t <: Union{IO, String}}
+type Lexer{IO_t <: Union{IO, AbstractString}}
     io::IO_t
 
     token_start_row::Int
