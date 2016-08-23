@@ -385,7 +385,7 @@ JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti
 ifneq ($(OS), WINNT)
-# Do no enable on windows to avoid warnings from libuv.
+# Do not enable on windows to avoid warnings from libuv.
 JCXXFLAGS += -pedantic
 endif
 DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector-all
