@@ -955,6 +955,74 @@ for (x, writable, unix_fd, c_symbol) in
     end
 end
 
+"""
+    redirect_stdout()
+
+Create a pipe to which all C and Julia level `STDOUT` output will be redirected. Returns a
+tuple `(rd,wr)` representing the pipe ends. Data written to `STDOUT` may now be read from
+the rd end of the pipe. The wr end is given for convenience in case the old `STDOUT` object
+was cached by the user and needs to be replaced elsewhere.
+"""
+redirect_stdout
+
+"""
+    redirect_stdout(stream)
+
+Replace `STDOUT` by stream for all C and Julia level output to `STDOUT`. Note that `stream`
+must be a TTY, a `Pipe` or a `TCPSocket`.
+"""
+redirect_stdout(stream)
+
+"""
+    redirect_stderr([stream])
+
+Like `redirect_stdout`, but for `STDERR`.
+"""
+redirect_stderr
+
+"""
+    redirect_stdin([stream])
+
+Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still
+(rd,wr), i.e. data to be read from STDIN, may be written to wr.
+"""
+redirect_stdin
+
+for (F,S) in ((:redirect_stdin, :STDIN), (:redirect_stdout, :STDOUT), (:redirect_stderr, :STDERR))
+    @eval function $F(f::Function, stream)
+        STDOLD = $S
+        local ret
+        $F(stream)
+        try
+            ret = f()
+        finally
+            $F(STDOLD)
+        end
+        ret
+    end
+end
+
+"""
+    redirect_stdout(f::Function, stream)
+
+Run the function `f` while redirecting `STDOUT` to `stream`. Upon completion, `STDOUT` is restored to its prior setting.
+"""
+redirect_stdout(f::Function, stream)
+
+"""
+    redirect_stderr(f::Function, stream)
+
+Run the function `f` while redirecting `STDERR` to `stream`. Upon completion, `STDERR` is restored to its prior setting.
+"""
+redirect_stderr(f::Function, stream)
+
+"""
+    redirect_stdin(f::Function, stream)
+
+Run the function `f` while redirecting `STDIN` to `stream`. Upon completion, `STDIN` is restored to its prior setting.
+"""
+redirect_stdin(f::Function, stream)
+
 mark(x::LibuvStream)     = mark(x.buffer)
 unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
