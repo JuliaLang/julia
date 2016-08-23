@@ -191,11 +191,29 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     return scmresult;
 }
 
+// Check whether v is a scalar for purposes of inlining fused-broadcast
+// arguments when lowering; should agree with broadcast.jl on what is a
+// scalar.  When in doubt, return false, since this is only an optimization.
+// (TODO: update after #16966 is resolved.)
+int fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "julia-scalar?", nargs, 1);
+    if (fl_isnumber(fl_ctx, args[0]))
+        return fl_ctx->T;
+    else if (iscvalue(args[0]) && fl_ctx->jl_sym == cv_type((cvalue_t*)ptr(args[0]))) {
+        jl_value_t *v = *(jl_value_t**)cptr(args[0]);
+        if (jl_subtype(v,(jl_value_t*)jl_number_type,1))
+            return fl_ctx->T;
+    }
+    return fl_ctx->F;
+}
+
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global },
     { "invoke-julia-macro", fl_invoke_julia_macro },
     { "current-julia-module", fl_current_julia_module },
     { "current-julia-module-counter", fl_current_module_counter },
+    { "julia-scalar?", fl_julia_scalar },
     { NULL, NULL }
 };
 
