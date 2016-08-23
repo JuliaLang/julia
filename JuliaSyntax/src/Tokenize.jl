@@ -10,7 +10,9 @@ import .Tokens: untokenize
 
 export tokenize
 
-include("precompile.jl")
-_precompile_()
+if VERSION > v"0.5-"
+    include("precompile.jl")
+    _precompile_()
+end
 
 end # module
