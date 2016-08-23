@@ -445,9 +445,9 @@ export CCACHE_CPP2 := yes
 endif
 else #USECCACHE
 CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
-CC_ARG := $(shell echo $(CC) | cut -d' ' -f2-)
+CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
-CXX_ARG := $(shell echo $(CXX) | cut -d' ' -f2-)
+CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
