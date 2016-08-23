@@ -2317,7 +2317,7 @@ type Obj; x; end
         test_wr(ref, wref)
         pop!(ref)
         gc()
-        @test wref[1].value == nothing
+        @test wref[1].value === nothing
     end
     test_wr()
 end

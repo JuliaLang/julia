@@ -1,4 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+
+@test convert(Tuple, (1,2)) == (1,2)
 @testset "indexing" begin
     @test length(()) == 0
     @test length((1,)) === 1

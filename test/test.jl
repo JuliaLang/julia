@@ -30,15 +30,9 @@ a[1,1,1,1,1] = 10
 
 @test rand() != rand()
 
-# Test printing of Pass results
-# Pass - constant
-#@test contains(sprint(show, @test true), "Expression: true")
-# Pass - expression
-#@test contains(sprint(show, @test 10 == 2*5), "Evaluated: 10 == 10")
-#@test contains(sprint(show, @test !false), "Expression: !false")
 # Pass - exception
-#@test contains(sprint(show, @test_throws ErrorException error()),
-#                "Thrown: ErrorException")
+@test contains(sprint(show, @test_throws ErrorException error()),
+                "Thrown: ErrorException")
 
 # Test printing of Fail results
 type NoThrowTestSet <: Base.Test.AbstractTestSet
@@ -66,7 +60,7 @@ end
 @test contains(sprint(show, fails[4]), "Unexpected Pass")
 
 # Test printing of a TestSetException
-tse_str = sprint(show, Test.TestSetException(1,2,3,4,nothing))
+tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}()))
 @test contains(tse_str, "1 passed")
 @test contains(tse_str, "2 failed")
 @test contains(tse_str, "3 errored")
@@ -166,6 +160,9 @@ end
             end
         end
     end
+    # These lines shouldn't be called
+    redirect_stdout(OLD_STDOUT)
+    error("No exception was thrown!")
     catch ex
         #redirect_stdout(OLD_STDOUT)
         #redirect_stderr(OLD_STDERR)

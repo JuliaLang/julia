@@ -368,7 +368,7 @@ type TestSetException <: Exception
     fail::Int
     error::Int
     broken::Int
-    errors_and_fails
+    errors_and_fails::Vector{Union{Fail, Error}}
 end
 
 function Base.show(io::IO, ex::TestSetException)
