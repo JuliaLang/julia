@@ -734,3 +734,12 @@ end
 @test ndims(Diagonal(rand(1:5,5))) == 2
 @test ndims(Diagonal{Float64}) == 2
 @test Base.elsize(Diagonal(rand(1:5,5))) == sizeof(Int)
+
+# Issue #17811
+let A17811 = Integer[]
+    I = [abs(x) for x in A17811]
+    @test isa(I, Array{Any,1})
+    push!(I, 1)
+    @test I == Any[1]
+    @test isa(map(abs, A17811), Array{Any,1})
+end
