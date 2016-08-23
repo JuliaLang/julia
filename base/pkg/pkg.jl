@@ -15,6 +15,7 @@ type PkgError <: Exception
 end
 PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
 function Base.showerror(io::IO, pkgerr::PkgError)
+    print(io, "PkgError: ")
     print(io, pkgerr.msg)
     if !isnull(pkgerr.ex)
         pkgex = get(pkgerr.ex)

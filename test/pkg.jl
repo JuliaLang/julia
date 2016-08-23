@@ -99,8 +99,24 @@ temp_pkg_dir() do
     Pkg.setprotocol!("")
     @test Pkg.Cache.rewrite_url_to === nothing
     Pkg.setprotocol!("https")
+
+    # test that Pkg.add is case sensitive
+    @test_throws PkgError Pkg.add("example") === nothing
+
     Pkg.add("Example")
     @test [keys(Pkg.installed())...] == ["Example"]
+
+    # test that Pkg.installed, Pkg.checkout,
+    # Pkg.status, Pkg.free, Pkg.test, and Pkg.available are case sensitive
+    @test_throws PkgError Pkg.installed("example")
+    @test_throws PkgError Pkg.checkout("example")
+    @test Pkg.status("example") === nothing
+    @test_throws PkgError Pkg.free("example")
+    @test_throws PkgError Pkg.test("example")
+    Pkg.rm("example")
+    @test [keys(Pkg.installed())...] == ["Example"]
+    @test_throws PkgError Pkg.available("example")
+
     iob = IOBuffer()
     Pkg.checkout("Example")
     Pkg.status("Example", iob)
@@ -206,8 +222,8 @@ temp_pkg_dir() do
         Pkg.add("REPL")
         error("unexpected")
     catch err
-        @test isa(err.exceptions[1].ex, PkgError)
-        @test err.exceptions[1].ex.msg == "REPL can't be installed because " *
+        @test isa(err, PkgError)
+        @test err.msg == "REPL can't be installed because " *
             "it has no versions that support $VERSION of julia. You may " *
             "need to update METADATA by running `Pkg.update()`"
     end
@@ -217,8 +233,8 @@ temp_pkg_dir() do
         Pkg.add("NonexistentPackage")
         error("unexpected")
     catch err
-        @test isa(err.exceptions[1].ex, PkgError)
-        @test err.exceptions[1].ex.msg == "unknown package NonexistentPackage"
+        @test isa(err, PkgError)
+        @test err.msg == "unknown package NonexistentPackage"
     end
     try
         Pkg.available("NonexistentPackage")

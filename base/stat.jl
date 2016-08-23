@@ -206,10 +206,12 @@ elseif is_apple()
     # Buffer buf;
     # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function _ispath_casesensitive(path)
-        path_basename = String(basename(path))
-        local casepreserved_basename
+        # we need to strip out trailing '/' for directories
+        path = rstrip(path, '/')
         const header_size = 12
+        path_basename = String(basename(path))
         buf = Array{UInt8}(length(path_basename) + header_size + 1)
+        local casepreserved_basename
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
@@ -249,6 +251,6 @@ This function implements a case-sensitive `$f` on filesystems (e.g. Mac and Wind
 that are case-insensitive but case-preserving.   It is identical to `$f` except
 that it returns `false` if `basename(path)` does not also match the *case*
 of the path stored in the filesystem.  (It is equivalent to `$f` on case-sensitive
-filesystems.)"""; end ->$fc(path) = $f(path) && _ispath_casesensitive(path)
+filesystems.)"""; end -> $fc(path) = $f(path) && _ispath_casesensitive(path)
     @eval $fc(path...) = $fc(joinpath(path...))
 end

@@ -5,16 +5,27 @@ module Read
 import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError, ..Dir
 using ..Types, Base.Filesystem
 
-readstrip(path...) = strip(readstring(joinpath(path...)))
+isgitrepo(pkg) =
+    isdir_casesensitive(pkg) && ispath(pkg, ".git")
 
-url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
-sha1(pkg::AbstractString, ver::VersionNumber) = readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
+readstrip(path...) =
+    strip(readstring(joinpath(path...)))
+
+url(pkg::AbstractString) =
+    readstrip(Dir.path("METADATA"), pkg, "url")
+
+sha1(pkg::AbstractString, ver::VersionNumber) =
+    readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
 
 function available(names=readdir("METADATA"))
     pkgs = Dict{String,Dict{VersionNumber,Available}}()
     for pkg in names
-        isfile("METADATA", pkg, "url") || continue
-        versdir = joinpath("METADATA", pkg, "versions")
+        pkgdir = joinpath("METADATA", pkg)
+        if !isdir_casesensitive(pkgdir)
+            continue
+        end
+        isfile(pkgdir, "url") || continue
+        versdir = joinpath(pkgdir, "versions")
         isdir(versdir) || continue
         for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
@@ -28,13 +39,18 @@ function available(names=readdir("METADATA"))
     end
     return pkgs
 end
-available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
+available(pkg::AbstractString) =
+    get(available([pkg]),pkg,Dict{VersionNumber,Available}())
 
 function latest(names=readdir("METADATA"))
     pkgs = Dict{String,Available}()
     for pkg in names
-        isfile("METADATA", pkg, "url") || continue
-        versdir = joinpath("METADATA", pkg, "versions")
+        pkgdir = joinpath("METADATA", pkg)
+        if !isdir_casesensitive(pkgdir)
+            continue
+        end
+        isfile(pkgdir, "url") || continue
+        versdir = joinpath(pkgdir, "versions")
         isdir(versdir) || continue
         pkgversions = VersionNumber[]
         for ver in readdir(versdir)
@@ -52,20 +68,13 @@ function latest(names=readdir("METADATA"))
     return pkgs
 end
 
-function check_case(pkg::AbstractString)
-    if ispath_casemismatch(pkg)
-        throw(PkgError("$pkg matches the name but not the case of an installed package."))
-    end
-    return true
-end
-
 isinstalled(pkg::AbstractString) =
     pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir_casesensitive(pkg)
 
 function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
     isinstalled(pkg) || throw(PkgError("$pkg is not an installed package."))
     isfile("METADATA", pkg, "url") || return true
-    ispath(pkg, ".git") || return true
+    isgitrepo(pkg) || return true
 
     LibGit2.isdirty(prepo) && return true
     LibGit2.isattached(prepo) && return true
@@ -108,7 +117,7 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
 end
 
 function ispinned(pkg::AbstractString)
-    ispath(pkg,".git") || return false
+    isgitrepo(pkg) || return false
     LibGit2.with(LibGit2.GitRepo, pkg) do repo
         return ispinned(repo)
     end
@@ -122,7 +131,7 @@ function ispinned(prepo::LibGit2.GitRepo)
 end
 
 function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
-    ispath(pkg,".git") || return typemin(VersionNumber)
+    isgitrepo(pkg) || return typemin(VersionNumber)
 
     # get package repo head hash
     local head
@@ -183,7 +192,7 @@ end
 
 function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     pkgreq = joinpath(pkg,"REQUIRE")
-    ispath(pkg,".git") || return pkgreq
+    isgitrepo(pkg) || return pkgreq
     repo = LibGit2.GitRepo(pkg)
     head = LibGit2.with(LibGit2.GitRepo, pkg) do repo
         LibGit2.isdirty(repo, "REQUIRE") && return pkgreq
@@ -210,7 +219,7 @@ function installed(avail::Dict=available())
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
-        if ispath(pkg,".git")
+        if isgitrepo(pkg)
             LibGit2.with(LibGit2.GitRepo, pkg) do repo
                 ver = installed_version(pkg, repo, ap)
                 fixed = isfixed(pkg, repo, ap)
@@ -245,7 +254,7 @@ function free(inst::Dict=installed(), dont_update::Set{String}=Set{String}())
 end
 
 function issue_url(pkg::AbstractString)
-    ispath(pkg,".git") || return ""
+    isgitrepo(pkg) || return ""
     m = match(LibGit2.GITHUB_REGEX, url(pkg))
     m === nothing && return ""
     return "https://github.com/" * m.captures[1] * "/issues"
