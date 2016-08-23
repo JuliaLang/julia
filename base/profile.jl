@@ -72,6 +72,7 @@ typealias LineInfoFlatDict Dict{UInt64, StackFrame}
 immutable ProfileFormat
     maxdepth::Int
     mincount::Int
+    noisefloor::Float64
     sortedby::Symbol
     combine::Bool
     C::Bool
@@ -80,25 +81,38 @@ immutable ProfileFormat
         combine = true,
         maxdepth::Int = typemax(Int),
         mincount::Int = 0,
+        noisefloor = 0,
         sortedby::Symbol = :filefuncline)
-        return new(maxdepth, mincount, sortedby, combine, C)
+        return new(maxdepth, mincount, noisefloor, sortedby, combine, C)
     end
 end
 
 """
-    print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, maxdepth = typemax(Int), sortedby = :filefuncline, mincount = 0)
+    print([io::IO = STDOUT,] [data::Vector]; kwargs...)
 
 Prints profiling results to `io` (by default, `STDOUT`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
-will be used. `format` can be `:tree` or `:flat`.
-If `C==true`, backtraces from C and Fortran code are shown.
-`combine==true` merges instruction pointers that correspond to the same line of code.
-`maxdepth` can be used to limit the depth of printing in `:tree` format,
-while `sortedby` can be used to control the order in `:flat` format
-(`:filefuncline` sorts by the source line, whereas `:count`
-sorts in order of number of collected samples).
-`mincount` can also be used to limit the printout to only those
-lines with at least mincount occurances.
+will be used.
+
+The keyword arguments can be any combination of:
+
+ - `format` can be `:tree` (default) or `:flat`.
+
+ - If `C` is `true`, backtraces from C and Fortran code are shown (normally they are excluded).
+
+ - If `combine` is `true` (default), instruction pointers are merged that correspond to the same line of code.
+
+ - `maxdepth` can be used to limit the depth of printing in `:tree` format,
+   while `sortedby` can be used to control the order in `:flat` format
+   `:filefuncline` (default) sorts by the source line, whereas `:count`
+   sorts in order of number of collected samples.
+
+ - `noisefloor` only shows frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
+   A suggested value to try for this is 2.0 (the default is 0). This parameters hides samples for which `n <= noisefloor * √N`,
+   where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
+
+ - `mincount` can also be used to limit the printout to only those
+   lines with at least mincount occurrences.
 """
 function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,
@@ -106,11 +120,13 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoD
         combine = true,
         maxdepth::Int = typemax(Int),
         mincount::Int = 0,
+        noisefloor = 0,
         sortedby::Symbol = :filefuncline)
     print(io, data, lidict, ProfileFormat(C = C,
             combine = combine,
             maxdepth = maxdepth,
             mincount = mincount,
+            noisefloor = noisefloor,
             sortedby = sortedby),
         format)
 end
@@ -127,7 +143,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::LineInfoDict, fmt::
 end
 
 """
-    print([io::IO = STDOUT,] data::Vector, lidict::LineInfoDict; kwargs)
+    print([io::IO = STDOUT,] data::Vector, lidict::LineInfoDict; kwargs...)
 
 Prints profiling results to `io`. This variant is used to examine results exported by a
 previous call to [`retrieve`](:func:`retrieve`). Supply the vector `data` of backtraces and
@@ -479,7 +495,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
 end
 
 # Print a "branch" starting at a particular level. This gets called recursively.
-function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int}, lidict::LineInfoFlatDict, level::Int, cols::Int, fmt::ProfileFormat)
+function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int}, lidict::LineInfoFlatDict, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
     if level > fmt.maxdepth
         return
     end
@@ -546,6 +562,7 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int}, lidict::L
     len = Int[length(x) for x in bt]
     for i = 1:length(lilist)
         n[i] < fmt.mincount && continue
+        n[i] < noisefloor && continue
         if !isempty(strs[i])
             println(io, strs[i])
         end
@@ -553,7 +570,7 @@ function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int}, lidict::L
         keep = len[idx] .> level+1
         if any(keep)
             idx = idx[keep]
-            tree(io, bt[idx], counts[idx], lidict, level + 1, cols, fmt)
+            tree(io, bt[idx], counts[idx], lidict, level + 1, cols, fmt, fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(n[i])) : 0)
         end
     end
     nothing
@@ -571,7 +588,7 @@ function tree(io::IO, data::Vector{UInt64}, lidict::LineInfoFlatDict, cols::Int,
     level = 0
     len = Int[length(x) for x in bt]
     keep = len .> 0
-    tree(io, bt[keep], counts[keep], lidict, level, cols, fmt)
+    tree(io, bt[keep], counts[keep], lidict, level, cols, fmt, 0)
     nothing
 end
 
