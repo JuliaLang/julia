@@ -25,105 +25,84 @@ export @fastmath
 
 import Core.Intrinsics: box, unbox, powi_llvm, sqrt_llvm_fast
 
-const fast_op =
-    Dict(# basic arithmetic
-         :+ => :add_fast,
-         :- => :sub_fast,
-         :* => :mul_fast,
-         :/ => :div_fast,
-         :(==) => :eq_fast,
-         :!= => :ne_fast,
-         :< => :lt_fast,
-         :<= => :le_fast,
-         :abs => :abs_fast,
-         :abs2 => :abs2_fast,
-         :cmp => :cmp_fast,
-         :conj => :conj_fast,
-         :inv => :inv_fast,
-         :mod => :mod_fast,
-         :rem => :rem_fast,
-         :sign => :sign_fast,
-         :isfinite => :isfinite_fast,
-         :isinf => :isinf_fast,
-         :isnan => :isnan_fast,
-         :issubnormal => :issubnormal_fast,
-         # math functions
-         :^ => :pow_fast,
-         :acos => :acos_fast,
-         :acosh => :acosh_fast,
-         :angle => :angle_fast,
-         :asin => :asin_fast,
-         :asinh => :asinh_fast,
-         :atan => :atan_fast,
-         :atan2 => :atan2_fast,
-         :atanh => :atanh_fast,
-         :cbrt => :cbrt_fast,
-         :cis => :cis_fast,
-         :cos => :cos_fast,
-         :cosh => :cosh_fast,
-         :exp10 => :exp10_fast,
-         :exp2 => :exp2_fast,
-         :exp => :exp_fast,
-         :expm1 => :expm1_fast,
-         :hypot => :hypot_fast,
-         :lgamma => :lgamma_fast,
-         :log10 => :log10_fast,
-         :log1p => :log1p_fast,
-         :log2 => :log2_fast,
-         :log => :log_fast,
-         :max => :max_fast,
-         :min => :min_fast,
-         :minmax => :minmax_fast,
-         :sin => :sin_fast,
-         :sinh => :sinh_fast,
-         :sqrt => :sqrt_fast,
-         :tan => :tan_fast,
-         :tanh => :tanh_fast)
+# generic fallback
+fastmath(x) = x
 
-const rewrite_op =
-    Dict(:+= => :+,
-         :-= => :-,
-         :*= => :*,
-         :/= => :/,
-         :^= => :^)
+fastmath(::typeof(+)) = add_fast
+fastmath(::typeof(-)) = sub_fast
+fastmath(::typeof(*)) = mul_fast
+fastmath(::typeof(/)) = div_fast
+fastmath(::typeof(==)) = eq_fast
+fastmath(::typeof(!=)) = ne_fast
+fastmath(::typeof(<)) = lt_fast
+fastmath(::typeof(<=)) = le_fast
+fastmath(::typeof(abs)) = abs_fast
+fastmath(::typeof(abs2)) = abs2_fast
+fastmath(::typeof(cmp)) = cmp_fast
+fastmath(::typeof(conj)) = conj_fast
+fastmath(::typeof(inv)) = inv_fast
+fastmath(::typeof(mod)) = mod_fast
+fastmath(::typeof(rem)) = rem_fast
+fastmath(::typeof(sign)) = sign_fast
+fastmath(::typeof(isfinite)) = isfinite_fast
+fastmath(::typeof(isinf)) = isinf_fast
+fastmath(::typeof(isnan)) = isnan_fast
+fastmath(::typeof(issubnormal)) = issubnormal_fast
+fastmath(::typeof(^)) = pow_fast
+fastmath(::typeof(acos)) = acos_fast
+fastmath(::typeof(acosh)) = acosh_fast
+fastmath(::typeof(angle)) = angle_fast
+fastmath(::typeof(asin)) = asin_fast
+fastmath(::typeof(asinh)) = asinh_fast
+fastmath(::typeof(atan)) = atan_fast
+fastmath(::typeof(atan2)) = atan2_fast
+fastmath(::typeof(atanh)) = atanh_fast
+fastmath(::typeof(cbrt)) = cbrt_fast
+fastmath(::typeof(cis)) = cis_fast
+fastmath(::typeof(cos)) = cos_fast
+fastmath(::typeof(cosh)) = cosh_fast
+fastmath(::typeof(exp10)) = exp10_fast
+fastmath(::typeof(exp2)) = exp2_fast
+fastmath(::typeof(exp)) = exp_fast
+fastmath(::typeof(expm1)) = expm1_fast
+fastmath(::typeof(hypot)) = hypot_fast
+fastmath(::typeof(lgamma)) = lgamma_fast
+fastmath(::typeof(log10)) = log10_fast
+fastmath(::typeof(log1p)) = log1p_fast
+fastmath(::typeof(log2)) = log2_fast
+fastmath(::typeof(log)) = log_fast
+fastmath(::typeof(max)) = max_fast
+fastmath(::typeof(min)) = min_fast
+fastmath(::typeof(minmax)) = minmax_fast
+fastmath(::typeof(sin)) = sin_fast
+fastmath(::typeof(sinh)) = sinh_fast
+fastmath(::typeof(sqrt)) = sqrt_fast
+fastmath(::typeof(tan)) = tan_fast
+fastmath(::typeof(tanh)) = tanh_fast
 
-function make_fastmath(expr::Expr)
+macro fastmath(expr::Expr)
     if expr.head === :quote
         return expr
-    end
-    op = get(rewrite_op, expr.head, :nothing)
-    if op !== :nothing
-        var = expr.args[1]
-        rhs = expr.args[2]
-        if isa(var, Symbol)
-            # simple assignment
-            expr = :($var = $op($var, $rhs))
-        elseif isa(var, Expr) && var.head === :ref
-            # array reference
-            arr = var.args[1]
-            inds = tuple(var.args[2:end]...)
-            arrvar = gensym()
-            indvars = tuple([gensym() for i in inds]...)
-            expr = quote
-                $(Expr(:(=), arrvar, arr))
-                $(Expr(:(=), Expr(:tuple, indvars...), Expr(:tuple, inds...)))
-                $arrvar[$(indvars...)] = $op($arrvar[$(indvars...)], $rhs)
-            end
+    elseif expr.head === :(=) || expr.head === :function || expr.head === :->
+        expr.args[2] = :(Base.FastMath.@fastmath $(expr.args[2]))
+    elseif (h = string(expr.head); length(h) == 2 && h[2] == '=')
+        op = Symbol(h[1])
+        lhs = deepcopy(expr.args[1])
+        expr = :($lhs = (Base.FastMath.fastmath($op))(Base.FastMath.@fastmath($(expr.args[1])), Base.FastMath.@fastmath($(expr.args[2]))))
+    elseif expr.head === :.
+        expr = :(Base.FastMath.fastmath($expr))
+    else
+        for i in 1:endof(expr.args)
+            expr.args[i] = :(Base.FastMath.@fastmath $(expr.args[i]))
         end
     end
-    Expr(make_fastmath(expr.head), map(make_fastmath, expr.args)...)
+    esc(expr)
 end
-function make_fastmath(symb::Symbol)
-    fast_symb = get(fast_op, symb, :nothing)
-    if fast_symb === :nothing
-        return symb
-    end
-    :(Base.FastMath.$fast_symb)
+macro fastmath(x::Symbol)
+    esc(:(Base.FastMath.fastmath($x)))
 end
-make_fastmath(expr) = expr
-
-macro fastmath(expr)
-    make_fastmath(esc(expr))
+macro fastmath(x)
+    x
 end
 
 
@@ -225,15 +204,14 @@ end
 # fall-back implementations and type promotion
 
 for op in (:abs, :abs2, :conj, :inv, :sign)
-    op_fast = fast_op[op]
+    op_fast = Symbol(string(op,"_fast"))
     @eval begin
         # fall-back implementation for non-numeric types
         $op_fast(xs...) = $op(xs...)
     end
 end
 
-for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :mod, :rem)
-    op_fast = fast_op[op]
+for (op,op_fast) in ((:+,:add_fast), (:-,:sub_fast), (:*,:mul_fast), (:/,:div_fast), (:(==),:eq_fast), (:!=,:ne_fast), (:<,:lt_fast), (:<=,:le_fast))
     @eval begin
         # fall-back implementation for non-numeric types
         $op_fast(xs...) = $op(xs...)
@@ -245,7 +223,18 @@ for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :mod, :rem)
     end
 end
 
-
+for op in (:cmp, :mod, :rem)
+    op_fast = Symbol(string(op,"_fast"))
+    @eval begin
+        # fall-back implementation for non-numeric types
+        $op_fast(xs...) = $op(xs...)
+        # type promotion
+        $op_fast(x::Number, y::Number, zs::Number...) =
+            $op_fast(promote(x,y,zs...)...)
+        # fall-back implementation that applies after promotion
+        $op_fast{T<:Number}(x::T,ys::T...) = $op(x,ys...)
+    end
+end
 # Math functions
 
 # builtins
@@ -265,7 +254,7 @@ const libm = Base.libm_name
 for f in (:acos, :acosh, :asin, :asinh, :atan, :atanh, :cbrt, :cos,
           :cosh, :exp2, :exp, :expm1, :lgamma, :log10, :log1p, :log2,
           :log, :sin, :sinh, :tan, :tanh)
-    f_fast = fast_op[f]
+    f_fast = Symbol(string(f,"_fast"))
     @eval begin
         $f_fast(x::Float32) =
             ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -340,14 +329,14 @@ for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
           :cis, :cos, :cosh, :exp10, :exp2, :exp, :expm1, :lgamma,
           :log10, :log1p, :log2, :log, :sin, :sinh, :sqrt, :tan,
           :tanh)
-    f_fast = fast_op[f]
+    f_fast = Symbol(string(f,"_fast"))
     @eval begin
         $f_fast(x) = $f(x)
     end
 end
 
-for f in (:^, :atan2, :hypot, :max, :min, :minmax)
-    f_fast = fast_op[f]
+for f in (:atan2, :hypot, :max, :min, :minmax)
+    f_fast = Symbol(string(f,"_fast"))
     @eval begin
         # fall-back implementation for non-numeric types
         $f_fast(x, y) = $f(x, y)
@@ -356,6 +345,15 @@ for f in (:^, :atan2, :hypot, :max, :min, :minmax)
         # fall-back implementation that applies after promotion
         $f_fast{T<:Number}(x::T, y::T) = $f(x, y)
     end
+end
+f = :^; f_fast = :pow_fast
+@eval begin
+    # fall-back implementation for non-numeric types
+    $f_fast(x, y) = $f(x, y)
+    # type promotion
+    $f_fast(x::Number, y::Number) = $f_fast(promote(x, y)...)
+    # fall-back implementation that applies after promotion
+    $f_fast{T<:Number}(x::T, y::T) = $f(x, y)
 end
 
 end
