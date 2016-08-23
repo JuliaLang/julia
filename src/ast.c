@@ -55,6 +55,7 @@ STATIC_INLINE void jl_ast_context_list_delete(jl_ast_context_list_t *node)
 typedef struct _jl_ast_context_t {
     fl_context_t fl;
     fltype_t *jvtype;
+    fltype_t *jvscalartype;
 
     value_t true_sym;
     value_t false_sym;
@@ -215,6 +216,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
     fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "__init_globals")));
 
     jl_ast_ctx(fl_ctx)->jvtype = define_opaque_type(fl_ctx->jl_sym, sizeof(void*), NULL, NULL);
+    jl_ast_ctx(fl_ctx)->jvscalartype = define_opaque_type(fl_ctx->jl_scalar_sym, sizeof(void*), NULL, NULL);
     assign_global_builtins(fl_ctx, julia_flisp_ast_ext);
     jl_ast_ctx(fl_ctx)->true_sym = symbol(fl_ctx, "true");
     jl_ast_ctx(fl_ctx)->false_sym = symbol(fl_ctx, "false");
@@ -506,8 +508,12 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
     if (iscprim(e) && cp_class((cprim_t*)ptr(e)) == fl_ctx->wchartype) {
         return jl_box32(jl_char_type, *(int32_t*)cp_data((cprim_t*)ptr(e)));
     }
-    if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jl_ast_ctx(fl_ctx)->jvtype) {
-        return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
+    if (iscvalue(e)) {
+        fltype_t *cls = cv_class((cvalue_t*)ptr(e));
+        jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
+        if (cls == ctx->jvtype || cls == ctx->jvscalartype) {
+            return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
+        }
     }
     jl_error("malformed tree");
 
@@ -594,6 +600,14 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         return julia_to_list2(fl_ctx, (jl_value_t*)newvar_sym, jl_fieldref(v,0));
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
+    if (jl_subtype(v,(jl_value_t*)jl_number_type,1)) {
+        // mark scalars for compress-fuse optimization of broadcast fusion.
+        // TODO: once #16966 is fixed, include strings (etc.) here;
+        // (It's okay if we miss some types since this is just an optimization.)
+        value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvscalartype, sizeof(void*));
+        *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
+        return opaque;
+    }
     if (jl_is_ssavalue(v))
         jl_error("SSAValue objects should not occur in an AST");
     if (jl_is_slot(v))

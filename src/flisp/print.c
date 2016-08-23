@@ -657,7 +657,7 @@ static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,
 #endif
                 init = 1;
             }
-            if (jl_static_print != NULL && fl_ctx->jl_sym == type) {
+            if (jl_static_print != NULL && (fl_ctx->jl_sym == type || fl_ctx->jl_scalar_sym == type)) {
                 fl_ctx->HPOS += ios_printf(f, "#<julia: ");
                 fl_ctx->HPOS += jl_static_print(f, *(void**)data);
                 fl_ctx->HPOS += ios_printf(f, ">");
