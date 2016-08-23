@@ -5,7 +5,7 @@ $(eval $(call git-external,openlibm,OPENLIBM,Makefile,libopenlibm.$(SHLIB_EXT),$
 
 OPENLIBM_OBJ_TARGET := $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_OBJ_SOURCE := $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/libopenlibm.$(SHLIB_EXT)
-OPENLIBM_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+OPENLIBM_FLAGS := CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 $(OPENLIBM_OBJ_SOURCE): $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/Makefile
 	$(MAKE) -C $(dir $<) $(OPENLIBM_FLAGS) $(MAKE_COMMON)
@@ -17,8 +17,7 @@ $(build_shlibdir)/libopenlibm%$(SHLIB_EXT) $(build_libdir)/libopenlibm%a: $(OPEN
 
 clean-openlibm:
 	-$(MAKE) -C $(BUILDDIR)/$(OPENLIBM_SRC_DIR) distclean $(OPENLIBM_FLAGS)
-	-rm $(OPENLIBM_OBJ_TARGET)
-	-rm $(build_libdir)/libopenlibm.a
+	-rm -f $(OPENLIBM_OBJ_TARGET)
 
 get-openlibm: $(OPENLIBM_SRC_FILE)
 configure-openlibm: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/Makefile
