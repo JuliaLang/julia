@@ -195,6 +195,12 @@ This section lists changes that do not have deprecation warnings.
   * `map` on a dictionary now expects a function that expects and returns a `Pair`.
     The result is now another dictionary instead of an array ([#16622]).
 
+  * Bit shift operations (i.e. `<<`, `>>`, and `>>>`) now handle
+    negative shift counts differently: Negative counts are interpreted
+    as shifts in the opposite direction. For example, `4 >> -1 == 4 <<
+    +1 == 8`. Previously, negative counts would implicitly overflow to
+    large positive counts, always yielding either `0` or `-1`.
+
 Library improvements
 --------------------
 
