@@ -288,6 +288,8 @@ let identity = error, x = [1,2,3]
     x .= 1 # make sure it goes to broadcast!(Base.identity, ...), not identity
     @test x == [1,1,1]
 end
+# See issue #18176:
+@test ((a,b,c) -> a+b+c).(1.0:2, 3, 4) == ((a,b,c) -> a+b+c).(1.0:2, 3.0, 4.0) == [8,9]
 
 # PR 16988
 @test Base.promote_op(+, Bool) === Int

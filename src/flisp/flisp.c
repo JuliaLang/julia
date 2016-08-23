@@ -2398,6 +2398,7 @@ static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
 #endif
 
     fl_ctx->jl_sym = symbol(fl_ctx, "julia_value");
+    fl_ctx->jl_scalar_sym = symbol(fl_ctx, "julia_scalar_value");
 
     fl_ctx->the_empty_vector = tagptr(alloc_words(fl_ctx, 1), TAG_VECTOR);
     vector_setsize(fl_ctx->the_empty_vector, 0);

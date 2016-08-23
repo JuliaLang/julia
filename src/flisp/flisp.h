@@ -476,6 +476,7 @@ struct _fl_context_t {
     value_t apply_func, apply_v, apply_e;
 
     value_t jl_sym;
+    value_t jl_scalar_sym;
     // persistent buffer (avoid repeated malloc/free)
     // for julia_extensions.c: normalize
     size_t jlbuflen;

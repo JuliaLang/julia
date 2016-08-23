@@ -9,7 +9,7 @@
         ((string? e) (print-to-string e))
         ((eq? e #t) "true")
         ((eq? e #f) "false")
-        ((eq? (typeof e) 'julia_value)
+        ((or (eq? (typeof e) 'julia_value) (eq? (typeof e) 'julia_scalar_value))
          (let ((s (string e)))
            (if (string.find s "#<julia: ")
                ;; successfully printed as a julia value
