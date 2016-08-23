@@ -289,6 +289,13 @@ let identity = error, x = [1,2,3]
     @test x == [1,1,1]
 end
 
+# make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
+import Base.Meta: isexpr
+@test isexpr(expand(:(f.(x,y))), :call)
+@test isexpr(expand(:(f.(x,1))), :thunk)
+@test isexpr(expand(:(f.(x,1.0))), :thunk)
+@test isexpr(expand(:(f.(x,$π))), :thunk)
+
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
 @test isa(broadcast(+, [true]), Array{Int,1})
