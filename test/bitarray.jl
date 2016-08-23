@@ -1317,6 +1317,14 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
     @test map!(!=, b, b1, b2) == map!((x,y)->x!=y, b, b1, b2) == (b1 .!= b2) == b
 end
 
+# Issue #17970
+let A17970 = [1,2,3] .== [3,2,1]
+    B17970 = map(x -> x ? 1 : 2, A17970)
+    @test B17970::Array{Int,1} == [2,1,2]
+    C17970 = map(x -> x ? false : true, A17970)
+    @test C17970::BitArray{1} == map(~, A17970)
+end
+
 ## Filter ##
 
 # TODO
