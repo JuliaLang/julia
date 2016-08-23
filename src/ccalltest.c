@@ -292,6 +292,8 @@ typedef struct {
     complex double r89;
 } struct_huge4b;
 
+// Intel compiler does not currently support complex int (which is GNU extension)
+#ifndef _COMPILER_INTEL_
 typedef struct {
     complex int r1;
     complex int r2;
@@ -314,6 +316,7 @@ typedef struct {
     complex int r8;
     complex int r9;
 } struct_huge5b;
+#endif // _COMPILER_INTEL_
 
 
 JL_DLLEXPORT struct1 test_1(struct1 a, float b) {
@@ -503,8 +506,11 @@ test_huge(3b, r1);
 test_huge(3c, r1);
 test_huge(4a, r12);
 test_huge(4b, r12);
+// Intel compiler does not currently support complex int (which is GNU extension)
+#ifndef _COMPILER_INTEL_
 test_huge(5a, r1);
 test_huge(5b, r1);
+#endif // _COMPILER_INTEL_
 
 JL_DLLEXPORT int get_c_int(void)
 {
