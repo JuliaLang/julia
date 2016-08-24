@@ -14,6 +14,9 @@ New language features
 Language changes
 ----------------
 
+ * Function definition arguments are now by default hidden in the backtrace of error messages in the REPL.
+   To re enable this, you can add `ENV["JULIA_ARGS_BACKTRACE"] = ""` to your `.juliarc` file.
+
 Breaking changes
 ----------------
 
