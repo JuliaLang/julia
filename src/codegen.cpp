@@ -4519,20 +4519,21 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         return inbounds;
     };
     StmtProp cur_prop{topdebugloc, filename, toplineno, true, false, true, false};
-    // this should not be necessary but it seems that meta node can cause
-    // an offset between the label number and the statement number
-    std::map<int, int> label_map;
     for (i = 0; i < stmtslen; i++) {
         cur_prop.loc_changed = false;
         cur_prop.is_poploc = false;
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
+#ifndef NDEBUG
         if (jl_is_labelnode(stmt)) {
             int lname = jl_labelnode_label(stmt);
             if (lname != i + 1) {
-                label_map[lname] = i + 1;
+                jl_safe_printf("Label number mismatch.\n");
+                jl_(stmts);
+                abort();
             }
         }
+#endif
         if (jl_is_linenode(stmt) || (expr && expr->head == line_sym)) {
             ssize_t lno = -1;
             if (jl_is_linenode(stmt)) {
@@ -4718,9 +4719,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // if `unconditional` a unconditional branch is created to the target
     // label and the cursor is set to the next statement to process
     auto handle_label = [&] (int lname, bool unconditional) {
-        auto it = label_map.find(lname);
-        if (it != label_map.end())
-            lname = it->second;
         auto &bb = labels[lname];
         BasicBlock *cur_bb = builder.GetInsertBlock();
         // Check if we've already visited this label
