@@ -323,6 +323,11 @@ function get{K,V}(pq::PriorityQueue{K,V}, key, deflt)
     i == 0 ? deflt : pq.xs[i].second
 end
 
+function get{K,V}(pq::PriorityQueue{K,V}, key)
+    i = get(pq.index, key, 0)
+    i == 0 ? Nullable{V}() : Nullable{V}(pq.xs[i].second)
+end
+
 
 # Change the priority of an existing element, or equeue it if it isn't present.
 function setindex!{K,V}(pq::PriorityQueue{K, V}, value, key)
