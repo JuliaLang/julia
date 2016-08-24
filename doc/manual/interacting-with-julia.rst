@@ -304,3 +304,13 @@ informational messages in cyan you can add the following to your ``juliarc.jl`` 
 
     ENV["JULIA_WARN_COLOR"] = :yellow
     ENV["JULIA_INFO_COLOR"] = :cyan
+
+Customizing Error Messages
+--------------------------
+
+By default Julia will not show the arguments for the functions in a backtrace since this can lead to quite large error messages.
+It is possible to activate this by adding the following to your ``juliarc.jl`` file::
+
+    ENV["JULIA_ARGS_BACKTRACE"] = ""
+
+The last error message showed in the REPL can be showed again with `Base.REPL.show_lasterror()`.

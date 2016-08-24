@@ -110,7 +110,11 @@ function ip_matches_func(ip, func::Symbol)
     return false
 end
 
+global last_err = nothing
+
 function display_error(io::IO, er, bt)
+    global last_err
+    last_err = er, bt
     Base.with_output_color(:red, io) do io
         print(io, "ERROR: ")
         # remove REPL-related frames from interactive printing
@@ -118,8 +122,19 @@ function display_error(io::IO, er, bt)
         if eval_ind != 0
             bt = bt[1:eval_ind-1]
         end
-        Base.showerror(io, er, bt)
+        Base.showerror(IOContext(io, :hide_args_in_signature => !haskey(ENV, "JULIA_ARGS_BACKTRACE")), er, bt)
     end
+end
+
+"""
+Reshows the latest error that the REPL showed.
+"""
+function show_lasterror()
+    global last_err
+    if last_err == nothing
+        error("no error has yet been shown")
+    end
+    display_error(outstream(Base.active_repl), last_err[1], last_err[2])
 end
 
 immutable REPLDisplay{R<:AbstractREPL} <: Display

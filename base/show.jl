@@ -1008,8 +1008,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     nothing
 end
 
+# print a method signature tuple for a lambda definition
+# if ::hide_args_in_signature is true for the io the
+# arguments in the signatures will not be printed
 function show_lambda_types(io::IO, li::LambdaInfo)
-    # print a method signature tuple for a lambda definition
     if li.specTypes === Tuple
         print(io, li.def.name, "(...)")
         return
@@ -1027,14 +1029,16 @@ function show_lambda_types(io::IO, li::LambdaInfo)
     else
         print(io, "(::", ft, ")")
     end
-    first = true
-    print(io, '(')
-    for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
-        first || print(io, ", ")
-        first = false
-        print(io, "::", sig[i])
+    if !get(io, :hide_args_in_signature, false)
+        first = true
+        print(io, '(')
+        for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
+            first || print(io, ", ")
+            first = false
+            print(io, "::", sig[i])
+        end
+        print(io, ')')
     end
-    print(io, ')')
     nothing
 end
 
