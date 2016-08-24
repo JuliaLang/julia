@@ -263,6 +263,7 @@ isordered(list::List) = list.ordered >= 0
 const BULLETS = r"^ {0,3}(\*|\+|-)( |$)"
 const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|\d+(\.|\)))( |$)"
 
+@breaking true ->
 function list(stream::IO, block::MD)
     withstream(stream) do
         bullet = startswith(stream, NUM_OR_BULLETS; eat = false)
