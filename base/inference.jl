@@ -2519,6 +2519,30 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         return invoke_NF()
     end
 
+    na = method.lambda_template.nargs
+    # check for vararg function
+    isva = false
+    if na > 0 && method.lambda_template.isva
+        @assert length(argexprs) >= na-1
+        # construct tuple-forming expression for argument tail
+        vararg = mk_tuplecall(argexprs[na:end], sv)
+        argexprs = Any[argexprs[1:(na-1)]..., vararg]
+        isva = true
+    elseif na != length(argexprs)
+        # we have a method match only because an earlier
+        # inference step shortened our call args list, even
+        # though we have too many arguments to actually
+        # call this function
+        return NF
+    end
+
+    @assert na == length(argexprs)
+
+    for i = 1:length(methsp)
+        si = methsp[i]
+        isa(si, TypeVar) && return NF
+    end
+
     (linfo, ty, inferred) = typeinf(method, metharg, methsp, false)
     if linfo === nothing || !inferred
         return invoke_NF()
@@ -2535,36 +2559,13 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         return invoke_NF()
     end
 
-    na = linfo.nargs
-    # check for vararg function
-    isva = false
-    if na > 0 && linfo.isva
-        @assert length(argexprs) >= na-1
-        # construct tuple-forming expression for argument tail
-        vararg = mk_tuplecall(argexprs[na:end], sv)
-        argexprs = Any[argexprs[1:(na-1)]..., vararg]
-        isva = true
-    elseif na != length(argexprs)
-        # we have a method match only because an earlier
-        # inference step shortened our call args list, even
-        # though we have too many arguments to actually
-        # call this function
-        return NF
-    end
-
-    @assert na == length(argexprs)
-
     spvals = Any[]
     for i = 1:length(methsp)
-        si = methsp[i]
-        if isa(si, TypeVar)
-            return NF
-        end
-        push!(spvals, si)
+        push!(spvals, methsp[i])
     end
-    for i=1:length(spvals)
+    for i = 1:length(spvals)
         si = spvals[i]
-        if isa(si,Symbol) || isa(si,SSAValue) || isa(si,Slot)
+        if isa(si, Symbol) || isa(si, SSAValue) || isa(si, Slot)
             spvals[i] = QuoteNode(si)
         end
     end
