@@ -195,7 +195,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 // arguments when lowering; should agree with broadcast.jl on what is a
 // scalar.  When in doubt, return false, since this is only an optimization.
 // (TODO: update after #16966 is resolved.)
-int fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "julia-scalar?", nargs, 1);
     if (fl_isnumber(fl_ctx, args[0]))
