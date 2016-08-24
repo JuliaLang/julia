@@ -166,6 +166,33 @@ let doc = md"""
     @test doc.content[2].items[3][1].content[1] == "zombie"
 end
 
+let doc = Markdown.parse(
+        """
+        A paragraph...
+        - one
+        - two
+           * three
+           * four
+        ... another paragraph.
+        """
+    )
+
+    @test length(doc.content) === 3
+    @test isa(doc.content[1], Markdown.Paragraph)
+    @test isa(doc.content[2], Markdown.List)
+    @test isa(doc.content[3], Markdown.Paragraph)
+
+    @test length(doc.content[2].items) === 2
+    @test doc.content[2].items[1][1].content[1] == "one"
+    @test length(doc.content[2].items[2]) == 2
+    @test doc.content[2].items[2][1].content[1] == "two"
+
+    @test isa(doc.content[2].items[2][2], Markdown.List)
+    @test length(doc.content[2].items[2][2].items) === 2
+    @test doc.content[2].items[2][2].items[1][1].content[1] == "three"
+    @test doc.content[2].items[2][2].items[2][1].content[1] == "four"
+end
+
 @test md"Foo [bar]" == MD(Paragraph("Foo [bar]"))
 @test md"Foo [bar](baz)" != MD(Paragraph("Foo [bar](baz)"))
 @test md"Foo \[bar](baz)" == MD(Paragraph("Foo [bar](baz)"))
