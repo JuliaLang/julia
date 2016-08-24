@@ -15,6 +15,11 @@ supertype(T::DataType) = T.super
 ==(x, y) = x === y
 isequal(x, y) = x == y
 
+# TODO: these can be deleted once the deprecations of ==(x::Char, y::Integer) and
+# ==(x::Integer, y::Char) are gone and the above returns false anyway
+isequal(x::Char, y::Integer) = false
+isequal(x::Integer, y::Char) = false
+
 ## minimally-invasive changes to test == causing NotComparableError
 # export NotComparableError
 # =={T}(x::T, y::T) = x === y
