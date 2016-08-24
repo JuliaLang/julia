@@ -37,7 +37,7 @@ There are a few noteworthy high-level features about Julia's strings:
 -  The built-in concrete type used for strings (and string literals) in Julia is :obj:`String`.
    This supports the full range of `Unicode <https://en.wikipedia.org/wiki/Unicode>`_ characters
    via the `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_ encoding.
-   (A :func:`transcode` function is provided to convert from other Unicode encodings.)
+   (A :func:`transcode` function is provided to convert to/from other Unicode encodings.)
 -  All string types are subtypes of the abstract type :obj:`AbstractString`,
    and external packages define additional :obj:`AbstractString` subtypes
    (e.g. for other encodings).  If you define a function expecting
