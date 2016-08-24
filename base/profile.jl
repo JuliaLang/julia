@@ -66,37 +66,84 @@ Clear any existing backtraces from the internal buffer.
 """
 clear() = ccall(:jl_profile_clear_data, Void, ())
 
+typealias LineInfoDict Dict{UInt64, Vector{StackFrame}}
+typealias LineInfoFlatDict Dict{UInt64, StackFrame}
+
+immutable ProfileFormat
+    maxdepth::Int
+    mincount::Int
+    noisefloor::Float64
+    sortedby::Symbol
+    combine::Bool
+    C::Bool
+    function ProfileFormat(;
+        C = false,
+        combine = true,
+        maxdepth::Int = typemax(Int),
+        mincount::Int = 0,
+        noisefloor = 0,
+        sortedby::Symbol = :filefuncline)
+        return new(maxdepth, mincount, noisefloor, sortedby, combine, C)
+    end
+end
+
 """
-    print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, maxdepth = typemax(Int), sortedby = :filefuncline)
+    print([io::IO = STDOUT,] [data::Vector]; kwargs...)
 
 Prints profiling results to `io` (by default, `STDOUT`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
-will be used. `format` can be `:tree` or `:flat`. If `C==true`,
-backtraces from C and Fortran code are shown. `combine==true` merges
-instruction pointers that correspond to the same line of
-code. `maxdepth` can be used to limit the depth of printing in `:tree`
-format, while `sortedby` can be used to control the order in `:flat`
-format (`:filefuncline` sorts by the source line, whereas `:count`
-sorts in order of number of collected samples).
+will be used.
+
+The keyword arguments can be any combination of:
+
+ - `format` can be `:tree` (default) or `:flat`.
+
+ - If `C` is `true`, backtraces from C and Fortran code are shown (normally they are excluded).
+
+ - If `combine` is `true` (default), instruction pointers are merged that correspond to the same line of code.
+
+ - `maxdepth` can be used to limit the depth of printing in `:tree` format,
+   while `sortedby` can be used to control the order in `:flat` format
+   `:filefuncline` (default) sorts by the source line, whereas `:count`
+   sorts in order of number of collected samples.
+
+ - `noisefloor` only shows frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
+   A suggested value to try for this is 2.0 (the default is 0). This parameters hides samples for which `n <= noisefloor * √N`,
+   where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
+
+ - `mincount` can also be used to limit the printout to only those
+   lines with at least mincount occurrences.
 """
-function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = getdict(data);
+function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data);
         format = :tree,
         C = false,
         combine = true,
         maxdepth::Int = typemax(Int),
+        mincount::Int = 0,
+        noisefloor = 0,
         sortedby::Symbol = :filefuncline)
-    cols = Base.displaysize(io)[2]
+    print(io, data, lidict, ProfileFormat(C = C,
+            combine = combine,
+            maxdepth = maxdepth,
+            mincount = mincount,
+            noisefloor = noisefloor,
+            sortedby = sortedby),
+        format)
+end
+
+function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::LineInfoDict, fmt::ProfileFormat, format::Symbol)
+    cols::Int = Base.displaysize(io)[2]
     if format == :tree
-        tree(io, data, lidict, C, combine, cols, maxdepth)
+        tree(io, data, lidict, cols, fmt)
     elseif format == :flat
-        flat(io, data, lidict, C, combine, cols, sortedby)
+        flat(io, data, lidict, cols, fmt)
     else
         throw(ArgumentError("output format $(repr(format)) not recognized"))
     end
 end
 
 """
-    print([io::IO = STDOUT,] data::Vector, lidict::Dict; kwargs)
+    print([io::IO = STDOUT,] data::Vector, lidict::LineInfoDict; kwargs...)
 
 Prints profiling results to `io`. This variant is used to examine results exported by a
 previous call to [`retrieve`](:func:`retrieve`). Supply the vector `data` of backtraces and
@@ -104,7 +151,7 @@ a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
-print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::Dict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
+print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
 
 """
     retrieve() -> data, lidict
@@ -116,16 +163,16 @@ allows you to save profiling results for future analysis.
 """
 function retrieve()
     data = fetch()
-    copy(data), getdict(data)
+    return (copy(data), getdict(data))
 end
 
 function getdict(data::Vector{UInt})
     uip = unique(data)
-    Dict{UInt, Vector{StackFrame}}(ip=>lookup(ip) for ip in uip)
+    return LineInfoDict(UInt64(ip)=>lookup(ip) for ip in uip)
 end
 
 """
-    flatten(btdata, lidict) -> (newdata, newdict)
+    flatten(btdata, lidict) -> (newdata::Vector{UInt64}, newdict::LineInfoFlatDict)
 
 Produces "flattened" backtrace data. Individual instruction pointers
 sometimes correspond to a multi-frame backtrace due to inlining; in
@@ -133,17 +180,17 @@ such cases, this function inserts fake instruction pointers for the
 inlined calls, and returns a dictionary that is a 1-to-1 mapping
 between instruction pointers and a single StackFrame.
 """
-function flatten(data::Vector{UInt}, lidict::Dict{UInt,Vector{StackFrame}})
+function flatten(data::Vector, lidict::LineInfoDict)
     # Makes fake instruction pointers, counting down from typemax(UInt)
-    newip = typemax(UInt)
+    newip = typemax(UInt64) - 1
     taken = Set(keys(lidict))  # make sure we don't pick one that's already used
-    newdict = Dict{UInt,StackFrame}()
-    newmap  = Dict{UInt,Vector{UInt}}()
+    newdict = Dict{UInt64,StackFrame}()
+    newmap  = Dict{UInt64,Vector{UInt64}}()
     for (ip, trace) in lidict
         if length(trace) == 1
             newdict[ip] = trace[1]
         else
-            newm = UInt[]
+            newm = UInt64[]
             for sf in trace
                 while newip ∈ taken && newip > 0
                     newip -= 1
@@ -156,15 +203,16 @@ function flatten(data::Vector{UInt}, lidict::Dict{UInt,Vector{StackFrame}})
             newmap[ip] = newm
         end
     end
-    newdata = UInt[]
+    newdata = UInt64[]
     for ip in data
+        local ip::UInt64
         if haskey(newmap, ip)
             append!(newdata, newmap[ip])
         else
             push!(newdata, ip)
         end
     end
-    newdata, newdict
+    return (newdata, newdict)
 end
 
 """
@@ -179,7 +227,7 @@ profile buffer is used.
 """
 function callers end
 
-function callers(funcname::String, bt::Vector{UInt}, lidict; filename = nothing, linerange = nothing)
+function callers(funcname::String, bt::Vector, lidict::LineInfoDict; filename = nothing, linerange = nothing)
     if filename === nothing && linerange === nothing
         return callersf(li -> li.func == funcname, bt, lidict)
     end
@@ -192,7 +240,7 @@ function callers(funcname::String, bt::Vector{UInt}, lidict; filename = nothing,
 end
 
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
-callers(func::Function, bt::Vector{UInt}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
+callers(func::Function, bt::Vector, lidict::LineInfoDict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
 
 ##
@@ -244,9 +292,11 @@ function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init\nwith a larger buffer and/or larger delay.")
+        warn("""The profile data buffer is full; profiling probably terminated
+                before your program finished. To profile for longer runs, call Profile.init
+                with a larger buffer and/or larger delay.""")
     end
-    unsafe_wrap(Array, get_data_pointer(), (len,))
+    return unsafe_wrap(Array, get_data_pointer(), (len,))
 end
 
 
@@ -276,10 +326,10 @@ function count_flat{T<:Unsigned}(data::Vector{T})
         push!(iplist, k)
         push!(n, v)
     end
-    return iplist, n
+    return (iplist, n)
 end
 
-function parse_flat(iplist, n, lidict, C::Bool)
+function parse_flat(iplist, n, lidict::LineInfoFlatDict, C::Bool)
     # Convert instruction pointers to names & line numbers
     lilist = [lidict[ip] for ip in iplist]
     # Keep only the interpretable ones
@@ -289,11 +339,11 @@ function parse_flat(iplist, n, lidict, C::Bool)
     keep = !Bool[x == UNKNOWN || x.line == 0 || (x.from_c && !C) for x in lilist]
     n = n[keep]
     lilist = lilist[keep]
-    lilist, n
+    return (lilist, n)
 end
 
-function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,StackFrame}, C::Bool, combine::Bool, cols::Integer, sortedby)
-    if !C
+function flat(io::IO, data::Vector, lidict::LineInfoFlatDict, cols::Int, fmt::ProfileFormat)
+    if !fmt.C
         data = purgeC(data, lidict)
     end
     iplist, n = count_flat(data)
@@ -301,20 +351,22 @@ function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,StackFrame}, 
         warning_empty()
         return
     end
-    lilist, n = parse_flat(iplist, n, lidict, C)
-    print_flat(io, lilist, n, combine, cols, sortedby)
+    lilist, n = parse_flat(iplist, n, lidict, fmt.C)
+    print_flat(io, lilist, n, cols, fmt)
+    nothing
 end
 
-function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,Vector{StackFrame}}, C::Bool, combine::Bool, cols::Integer, sortedby)
+function flat(io::IO, data::Vector, lidict::LineInfoDict, cols::Int, fmt::ProfileFormat)
     newdata, newdict = flatten(data, lidict)
-    flat(io, newdata, newdict, C, combine, cols, sortedby)
+    flat(io, newdata, newdict, cols, fmt)
+    nothing
 end
 
-function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine::Bool, cols::Integer, sortedby)
+function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, cols::Int, fmt::ProfileFormat)
     p = liperm(lilist)
     lilist = lilist[p]
     n = n[p]
-    if combine
+    if fmt.combine
         j = 1
         for i = 2:length(lilist)
             if lilist[i] == lilist[j]
@@ -328,7 +380,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine:
         n = n[keep]
         lilist = lilist[keep]
     end
-    if sortedby == :count
+    if fmt.sortedby == :count
         p = sortperm(n)
         n = n[p]
         lilist = lilist[p]
@@ -349,11 +401,12 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine:
         wfile = maxfile
         wfunc = maxfunc
     else
-        wfile = floor(Integer,2*ntext/5)
-        wfunc = floor(Integer,3*ntext/5)
+        wfile = floor(Integer, 2*ntext/5)
+        wfunc = floor(Integer, 3*ntext/5)
     end
     println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
     for i = 1:length(n)
+        n[i] < fmt.mincount && continue
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
         Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
@@ -365,44 +418,45 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine:
         Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
         println(io)
     end
+    nothing
 end
 
 ## A tree representation
 # Identify and counts repetitions of all unique backtraces
-function tree_aggregate{T<:Unsigned}(data::Vector{T})
+function tree_aggregate(data::Vector{UInt64})
     iz = find(data .== 0)  # find the breaks between backtraces
-    treecount = Dict{Vector{T},Int}()
-    istart = 1+btskip
+    treecount = Dict{Vector{UInt64},Int}()
+    istart = 1 + btskip
     for iend in iz
-        tmp = data[iend-1:-1:istart]
-        treecount[tmp] = get(treecount, tmp, 0)+1
-        istart = iend+1+btskip
+        tmp = data[iend - 1 : -1 : istart]
+        treecount[tmp] = get(treecount, tmp, 0) + 1
+        istart = iend + 1 + btskip
     end
-    bt = Array{Vector{T}}(0)
+    bt = Array{Vector{UInt64}}(0)
     counts = Array{Int}(0)
-    for (k,v) in treecount
+    for (k, v) in treecount
         if !isempty(k)
             push!(bt, k)
             push!(counts, v)
         end
     end
-    bt, counts
+    return (bt, counts)
 end
 
-tree_format_linewidth(x::StackFrame) = ndigits(x.line)+6
+tree_format_linewidth(x::StackFrame) = ndigits(x.line) + 6
 
-function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Integer)
+function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int, cols::Int)
     nindent = min(cols>>1, level)
     ndigcounts = ndigits(maximum(counts))
     ndigline = maximum([tree_format_linewidth(x) for x in lilist])
-    ntext = cols-nindent-ndigcounts-ndigline-5
-    widthfile = floor(Integer,0.4ntext)
-    widthfunc = floor(Integer,0.6ntext)
+    ntext = cols - nindent - ndigcounts - ndigline - 5
+    widthfile = floor(Integer, 0.4ntext)
+    widthfunc = floor(Integer, 0.6ntext)
     strs = Array{String}(length(lilist))
     showextra = false
     if level > nindent
-        nextra = level-nindent
-        nindent -= ndigits(nextra)+2
+        nextra = level - nindent
+        nindent -= ndigits(nextra) + 2
         showextra = true
     end
     for i = 1:length(lilist)
@@ -437,26 +491,26 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
             strs[i] = ""
         end
     end
-    strs
+    return strs
 end
 
 # Print a "branch" starting at a particular level. This gets called recursively.
-function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, lidict::Dict, level::Int, combine::Bool, cols::Integer, maxdepth)
-    if level > maxdepth
+function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int}, lidict::LineInfoFlatDict, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
+    if level > fmt.maxdepth
         return
     end
     # Organize backtraces into groups that are identical up to this level
-    if combine
+    if fmt.combine
         # Combine based on the line information
         d = Dict{StackFrame,Vector{Int}}()
         for i = 1:length(bt)
-            ip = bt[i][level+1]
+            ip = bt[i][level + 1]
             key = lidict[ip]
             indx = Base.ht_keyindex(d, key)
-            if indx == -1
-                d[key] = [i]
+            if haskey(d, key)
+                push!(d[key], i)
             else
-                push!(d.vals[indx], i)
+                d[key] = [i]
             end
         end
         # Generate counts
@@ -473,14 +527,13 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         end
     else
         # Combine based on the instruction pointer
-        d = Dict{T,Vector{Int}}()
+        d = Dict{UInt64,Vector{Int}}()
         for i = 1:length(bt)
             key = bt[i][level+1]
-            indx = Base.ht_keyindex(d, key)
-            if indx == -1
-                d[key] = [i]
+            if haskey(d, key)
+                push!(d[key], i)
             else
-                push!(d.vals[indx], i)
+                d[key] = [i]
             end
         end
         # Generate counts, and do the code lookup
@@ -508,6 +561,8 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     # Recurse to the next level
     len = Int[length(x) for x in bt]
     for i = 1:length(lilist)
+        n[i] < fmt.mincount && continue
+        n[i] < noisefloor && continue
         if !isempty(strs[i])
             println(io, strs[i])
         end
@@ -515,13 +570,14 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         keep = len[idx] .> level+1
         if any(keep)
             idx = idx[keep]
-            tree(io, bt[idx], counts[idx], lidict, level+1, combine, cols, maxdepth)
+            tree(io, bt[idx], counts[idx], lidict, level + 1, cols, fmt, fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(n[i])) : 0)
         end
     end
+    nothing
 end
 
-function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,StackFrame}, C::Bool, combine::Bool, cols::Integer, maxdepth)
-    if !C
+function tree(io::IO, data::Vector{UInt64}, lidict::LineInfoFlatDict, cols::Int, fmt::ProfileFormat)
+    if !fmt.C
         data = purgeC(data, lidict)
     end
     bt, counts = tree_aggregate(data)
@@ -532,15 +588,17 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,StackFrame}, 
     level = 0
     len = Int[length(x) for x in bt]
     keep = len .> 0
-    tree(io, bt[keep], counts[keep], lidict, level, combine, cols, maxdepth)
+    tree(io, bt[keep], counts[keep], lidict, level, cols, fmt, 0)
+    nothing
 end
 
-function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,Vector{StackFrame}}, C::Bool, combine::Bool, cols::Integer, maxdepth)
+function tree(io::IO, data::Vector, lidict::LineInfoDict, cols::Int, fmt::ProfileFormat)
     newdata, newdict = flatten(data, lidict)
-    tree(io, newdata, newdict, C, combine, cols, maxdepth)
+    tree(io, newdata, newdict, cols, fmt)
+    nothing
 end
 
-function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
+function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoDict)
     counts = Dict{StackFrame, Int}()
     lastmatched = false
     for id in bt
@@ -561,23 +619,23 @@ function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
     k = collect(keys(counts))
     v = collect(values(counts))
     p = sortperm(v, rev=true)
-    [(v[i], k[i]) for i in p]
+    return [(v[i], k[i]) for i in p]
 end
 
 # Utilities
 function rtruncto(str::String, w::Int)
-    ret = str
-    if length(str) > w
-        ret = string("...", str[end-w+4:end])
+    if length(str) <= w
+        return str
+    else
+        return string("...", str[end-w+4:end])
     end
-    ret
 end
 function ltruncto(str::String, w::Int)
-    ret = str
-    if length(str) > w
-        ret = string(str[1:w-4], "...")
+    if length(str) <= w
+        return str
+    else
+        return string(str[1:w-4], "...")
     end
-    ret
 end
 
 
@@ -594,7 +652,7 @@ function liperm(lilist::Vector{StackFrame})
             comb[i] = "zzz"
         end
     end
-    sortperm(comb)
+    return sortperm(comb)
 end
 
 warning_empty() = warn("""
@@ -602,9 +660,9 @@ warning_empty() = warn("""
             running it multiple times), or adjust the delay between samples with
             Profile.init().""")
 
-function purgeC(data, lidict)
+function purgeC(data::Vector{UInt64}, lidict::LineInfoFlatDict)
     keep = Bool[d == 0 || lidict[d].from_c == false for d in data]
-    data[keep]
+    return data[keep]
 end
 
 end # module
