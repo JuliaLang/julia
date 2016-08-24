@@ -1902,6 +1902,7 @@ function finish(me::InferenceState)
     type_annotate!(me.linfo, me.stmt_types, me, me.nargs)
 
     # run optimization passes on fulltree
+    force_noinline = false
     if me.optimize
         # This pass is required for the AST to be valid in codegen
         # if any `SSAValue` is created by type inference. Ref issue #6068
@@ -1915,6 +1916,8 @@ function finish(me::InferenceState)
         getfield_elim_pass!(me.linfo, me)
         # remove placeholders
         filter!(x->x!==nothing, me.linfo.code)
+        # Pop metadata before label reindexing
+        force_noinline = popmeta!(me.linfo.code::Array{Any,1}, :noinline)[1]
         reindex_labels!(me.linfo, me)
     end
     widen_all_consts!(me.linfo)
@@ -1949,7 +1952,7 @@ function finish(me::InferenceState)
     end
 
     # determine and cache inlineability
-    if !me.linfo.inlineable
+    if !me.linfo.inlineable && !force_noinline
         me.linfo.inlineable = me.linfo.jlcall_api==2 || isinlineable(me.linfo)
     end
 
