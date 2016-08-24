@@ -1176,7 +1176,7 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         linfo = jl_get_specialization1(tt);
         if (linfo == NULL) {
             linfo = jl_method_lookup_by_type(
-                ((jl_datatype_t*)jl_tparam0(tt))->name->mt, tt, 0, 0);
+                ((jl_datatype_t*)jl_tparam0(tt))->name->mt, tt, 0, 0, 1);
             if (linfo == NULL || jl_has_call_ambiguities(tt, linfo->def)) {
                 JL_GC_POP();
                 return NULL;
@@ -5830,7 +5830,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef DISABLE_OPT
         .setOptLevel(CodeGenOpt::None)
 #else
-        .setOptLevel(CodeGenOpt::Aggressive)
+        .setOptLevel(jl_options.opt_level == 0 ? CodeGenOpt::None : CodeGenOpt::Aggressive)
 #endif
 #if defined(USE_MCJIT) && !defined(LLVM36)
         .setUseMCJIT(true)
