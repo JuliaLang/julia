@@ -209,7 +209,7 @@ try
           end
           """)
 
-    t = redirected_stderr("ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\n in __precompile__")
+    t = redirected_stderr("ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\n\nStacktrace:\n [1] __precompile__")
     try
         Base.compilecache("Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
@@ -306,7 +306,7 @@ try
           error("break me")
           end
           """)
-    t = redirected_stderr("ERROR: LoadError: break me\n in error")
+    t = redirected_stderr("ERROR: LoadError: break me\n\nStacktrace:\n [1] error")
     try
         Base.require(:FooBar)
         error("\"LoadError: break me\" test failed")
