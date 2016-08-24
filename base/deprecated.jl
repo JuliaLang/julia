@@ -461,12 +461,11 @@ end
 
 @deprecate ==(x::Char, y::Integer) UInt32(x) == y
 @deprecate ==(x::Integer, y::Char) x == UInt32(y)
+# Note: when these deprecations are deleted, the specialized definitions isequal(x::Char, y::Integer)
+# and isequal(x::Integer, y::Char) in operators.jl can be deleted, too
 @deprecate isless(x::Char, y::Integer) UInt32(x) < y
 @deprecate isless(x::Integer, y::Char) x < UInt32(y)
 
-# delete these methods along with deprecations:
-isequal(x::Char, y::Integer) = false
-isequal(x::Integer, y::Char) = false
 
 #6674 and #4233
 macro windows(qm,ex)
