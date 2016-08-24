@@ -1679,7 +1679,7 @@
                                 new-fargs new-args (cons (cons (cadr farg) (cadr varfarg)) renames)
                                 varfarg vararg)
                             (error "multiple splatted args cannot be fused into a single broadcast"))))
-                   ((number? arg) ; inline numeric literals
+                   ((julia-scalar? arg) ; inline numeric literals etc.
                     (cf (cdr old-fargs) (cdr old-args)
                         new-fargs new-args
                         (cons (cons farg arg) renames)
