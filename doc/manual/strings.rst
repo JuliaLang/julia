@@ -34,28 +34,29 @@ handle non-ASCII data is straightforward.
 
 There are a few noteworthy high-level features about Julia's strings:
 
--  :obj:`AbstractString` is an abstraction, not a concrete type — many different
-   representations can implement the :obj:`AbstractString` interface, but they can
-   easily be used together and interact transparently. Any string type
-   can be used in any function expecting a :obj:`AbstractString`.
+-  The built-in concrete type used for strings (and string literals) in Julia is :obj:`String`.
+   This supports the full range of `Unicode <https://en.wikipedia.org/wiki/Unicode>`_ characters
+   via the `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_ encoding.
+   (A :func:`transcode` function is provided to convert from other Unicode encodings.)
+-  All string types are subtypes of the abstract type :obj:`AbstractString`,
+   and external packages define additional :obj:`AbstractString` subtypes
+   (e.g. for other encodings).  If you define a function expecting
+   a string argument, you should declare the type as :obj:`AbstractString` in
+   order to accept any string type.
 -  Like C and Java, but unlike most dynamic languages, Julia has a
    first-class type representing a single character, called :obj:`Char`.
    This is just a special kind of 32-bit bitstype whose numeric value
    represents a Unicode code point.
--  As in Java, strings are immutable: the value of a :obj:`AbstractString` object
+-  As in Java, strings are immutable: the value of an :obj:`AbstractString` object
    cannot be changed. To construct a different string value, you
    construct a new string from parts of other strings.
 -  Conceptually, a string is a *partial function* from indices to
-   characters — for some index values, no character value is returned,
+   characters: for some index values, no character value is returned,
    and instead an exception is thrown. This allows for efficient
    indexing into strings by the byte index of an encoded representation
    rather than by a character index, which cannot be implemented both
    efficiently and simply for variable-width encodings of Unicode
    strings.
--  Julia supports the full range of
-   `Unicode <https://en.wikipedia.org/wiki/Unicode>`_ characters: literal
-   strings are always `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_ but
-   other encodings for strings from external sources can be supported.
 
 .. _man-characters:
 
