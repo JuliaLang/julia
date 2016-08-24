@@ -420,6 +420,16 @@ function lex_digit(l::Lexer)
 
     accept_batch(l, isdigit)
 
+    # Accept "_" in digits
+    while true
+        if !accept(l, '_')
+            break
+        end
+        if !accept_batch(l, isdigit)
+            return emit_error(l)
+        end
+    end
+
     if accept(l, '.')
         if peekchar(l) == '.' # 43.. -> [43, ..]
             backup!(l)
