@@ -1913,8 +1913,11 @@ function finish(me::InferenceState)
         gotoifnot_elim_pass!(me.linfo, me)
         inlining_pass!(me.linfo, me)
         inbounds_meta_elim_pass!(me.linfo.code)
+        void_use_elim_pass!(me.linfo, me)
         alloc_elim_pass!(me.linfo, me)
         getfield_elim_pass!(me.linfo, me)
+        # Clean up for `alloc_elim_pass!` and `getfield_elim_pass!`
+        void_use_elim_pass!(me.linfo, me)
         # remove placeholders
         filter!(x->x!==nothing, me.linfo.code)
         # Pop metadata before label reindexing
@@ -3207,6 +3210,29 @@ function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
         end
     end
     return false
+end
+
+function void_use_elim_pass!(linfo::LambdaInfo, sv)
+    # Remove top level SSAValue and slots that is `!usedUndef`.
+    # Also remove some `nothing` while we are at it....
+    not_void_use = function (ex::ANY)
+        if isa(ex, SSAValue)
+            # Explicitly listed here for clarity
+            return false
+        elseif isa(ex, Slot)
+            return linfo.slotflags[(ex::Slot).id] & Slot_UsedUndef != 0
+        elseif isa(ex, GlobalRef)
+            ex = ex::GlobalRef
+            return !isdefined(ex.mod, ex.name)
+        elseif (isa(ex, Expr) || isa(ex, GotoNode) || isa(ex, LineNumberNode) ||
+                isa(ex, NewvarNode) || isa(ex, Symbol) || isa(ex, LabelNode))
+            # This is a list of special type handled by the compiler
+            return true
+        end
+        return false
+    end
+    filter!(not_void_use, linfo.code::Array{Any,1})
+    return
 end
 
 # removes inbounds metadata if we never encounter an inbounds=true or
