@@ -1604,6 +1604,7 @@ function typeinf_ext(linfo::LambdaInfo)
             linfo.ssavaluetypes = code.ssavaluetypes
             linfo.pure = code.pure
             linfo.inlineable = code.inlineable
+            linfo.propagate_inbounds = code.propagate_inbounds
             ccall(:jl_set_lambda_rettype, Void, (Any, Any), linfo, code.rettype)
             if code.jlcall_api == 2
                 linfo.constval = code.constval
@@ -2587,7 +2588,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     body = Expr(:block)
     body.args = ast
-    propagate_inbounds, _ = popmeta!(body, :propagate_inbounds)
+    propagate_inbounds = linfo.propagate_inbounds
 
     # see if each argument occurs only once in the body expression
     stmts = Any[]
