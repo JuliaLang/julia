@@ -72,7 +72,6 @@ let
             @test_throws ArgumentError eigs(a+a.',which=:LI)
             @test_throws ArgumentError eigs(a,sigma=rand(Complex64))
         end
-        @test_throws Base.LinAlg.PosDefException eigs(a,b)
     end
 end
 
@@ -212,3 +211,12 @@ svds(rand(1:10, 10, 8))
 @test_throws MethodError eigs(big(rand(1:10, 10, 10)))
 @test_throws MethodError eigs(big(rand(1:10, 10, 10)), rand(1:10, 10, 10))
 @test_throws MethodError svds(big(rand(1:10, 10, 8)))
+
+# Symmetric generalized with singular B
+let
+    n = 10
+    k = 3
+    A = randn(n,n); A = A'A
+    B = randn(n,k);  B = B*B'
+    @test sort(eigs(A, B, nev = k, sigma = 1.0)[1]) ≈ sort(eigvals(A, B)[1:k])
+end
