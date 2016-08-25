@@ -1452,4 +1452,15 @@ else
     end
 end
 
+import Base: redirect_stdin, redirect_stdout, redirect_stderr
+if VERSION < v"0.6.0-dev.374"
+    for (F,S) in ((:redirect_stdin, :STDIN), (:redirect_stdout, :STDOUT), (:redirect_stderr, :STDERR))
+        @eval function $F(f::Function, stream)
+            STDOLD = $S
+            $F(stream)
+            try f() finally $F(STDOLD) end
+        end
+    end
+end
+
 end # module
