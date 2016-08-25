@@ -794,4 +794,62 @@ end
 @deprecate (-)(J::UniformScaling, x::Number) J.λ - x
 @deprecate (-)(x::Number, J::UniformScaling) x - J.λ
 
+# Deprecate methods that convert Diagonal and Bidiagonal to <:AbstractTriangular.
+function convert(::Type{UpperTriangular}, A::Diagonal)
+    depwarn(string("`convert(::Type{UpperTriangular}, A::Diagonal)` and other methods ",
+        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
+        "Consider calling the `UpperTriangular` constructor directly ",
+        "(`UpperTriangular(A)`) instead."), :convert)
+    UpperTriangular(A)
+end
+function convert(::Type{LowerTriangular}, A::Diagonal)
+    depwarn(string("`convert(::Type{LowerTriangular}, A::Diagonal)` and other methods ",
+        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
+        "Consider calling the `LowerTriangular` constructor directly ",
+        "(`LowerTriangular(A)`) instead."), :convert)
+    LowerTriangular(A)
+end
+function convert(::Type{Base.LinAlg.UnitUpperTriangular}, A::Diagonal)
+    depwarn(string("`convert(::Type{UnitUpperTriangular}, A::Diagonal)` and other methods ",
+        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
+        "Consider calling the `UnitUpperTriangular` constructor directly ",
+        "(`Base.LinAlg.UnitUpperTriangular(A)`) instead."), :convert)
+    if !all(A.diag .== one(eltype(A)))
+        throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
+    end
+    Base.LinAlg.UnitUpperTriangular(full(A))
+end
+function convert(::Type{Base.LinAlg.UnitLowerTriangular}, A::Diagonal)
+    depwarn(string("`convert(::Type{UnitLowerTriangular}, A::Diagonal)` and other methods ",
+        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
+        "Consider calling the `UnitLowerTriangular` constructor directly ",
+        "(`Base.LinAlg.UnitLowerTriangular(A)`) instead."), :convert)
+    if !all(A.diag .== one(eltype(A)))
+        throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
+    end
+    Base.LinAlg.UnitLowerTriangular(full(A))
+end
+function convert(::Type{LowerTriangular}, A::Bidiagonal)
+    depwarn(string("`convert(::Type{LowerTriangular}, A::Bidiagonal)` and other methods ",
+        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
+        "Consider calling the `LowerTriangular` constructor directly (`LowerTriangular(A)`) ",
+        "instead."), :convert)
+    if !A.isupper
+        LowerTriangular(full(A))
+    else
+        throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
+    end
+end
+function convert(::Type{UpperTriangular}, A::Bidiagonal)
+    depwarn(string("`convert(::Type{UpperTriangular}, A::Bidiagonal)` and other methods ",
+        "that convert `Diagoinal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
+        "Consider calling the `UpperTriangular` constructor directly (`UpperTriangular(A)`) ",
+        "instead."), :convert)
+    if A.isupper
+        UpperTriangular(full(A))
+    else
+        throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
+    end
+end
+
 # End deprecations scheduled for 0.6
