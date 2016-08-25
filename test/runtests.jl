@@ -1354,3 +1354,30 @@ let n=5, a=rand(n), incx=1, b=rand(n), incy=1
           &n, a, &incx, b, &incy)
     @test a == b
 end
+
+# do-block redirect_std*
+let filename = tempname()
+    ret = open(filename, "w") do f
+        redirect_stdout(f) do
+            println("hello")
+            [1,3]
+        end
+    end
+    @test ret == [1,3]
+    @test chomp(readstring(filename)) == "hello"
+    ret = open(filename, "w") do f
+        redirect_stderr(f) do
+            warn("hello")
+            [2]
+        end
+    end
+    @test ret == [2]
+    @test contains(readstring(filename), "WARNING: hello")
+    ret = open(filename) do f
+        redirect_stdin(f) do
+            readline()
+        end
+    end
+    @test contains(ret, "WARNING: hello")
+    rm(filename)
+end
