@@ -25,7 +25,9 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
     apd  = a'*a                  # symmetric positive-definite
-    apds = Symmetric(apd)
+
+    apds  = Symmetric(apd)
+    apdsL = Symmetric(apd, :L)
     ε = εa = eps(abs(float(one(eltya))))
 
     @inferred cholfact(apd)
@@ -78,11 +80,15 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test tril(lapd.factors) ≈ capd[:L]
     if eltya <: Real
         capds = cholfact(apds)
-        lapds = cholfact(Symmetric(apds.data, :L))
+        lapds = cholfact(apdsL)
+        cl    = chol(apdsL)
         ls = lapds[:L]
         @test ls*ls' ≈ apd
         @test triu(capds.factors) ≈ lapds[:U]
         @test tril(lapds.factors) ≈ capds[:L]
+        @test istriu(cl)
+        @test cl'cl ≈ apds
+        @test cl'cl ≈ apdsL
     end
 
     #pivoted upper Cholesky
