@@ -80,7 +80,7 @@ before_install:
         brew rm --force $(brew deps --HEAD julia);
         brew install -v staticfloat/juliadeps/libgfortran;
         brew install -v --only-dependencies --HEAD julia;
-        BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm37-julia)/bin/llvm-config-3.7.1 LLVM_SIZE=$(brew --prefix llvm37-julia)/bin/llvm-size-3.7.1";
+        BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm37-julia)/bin/llvm-config-3.7 LLVM_SIZE=$(brew --prefix llvm37-julia)/bin/llvm-size-3.7";
         BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
         for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
