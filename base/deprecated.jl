@@ -1058,4 +1058,22 @@ function reduced_dims0(dims::Dims, region)
     map(last, reduced_dims0(map(n->OneTo(n), dims), region))
 end
 
+# #18218
+eval(Base.LinAlg, quote
+    function arithtype(T)
+        depwarn(string("arithtype is now deprecated. If you were using it inside a ",
+            "promote_op call, use promote_op(LinAlg.matprod, Ts...) instead. Otherwise, ",
+            "if you need its functionality, consider defining it locally."),
+            :arithtype)
+        T
+    end
+    function arithtype(::Type{Bool})
+        depwarn(string("arithtype is now deprecated. If you were using it inside a ",
+            "promote_op call, use promote_op(LinAlg.matprod, Ts...) instead. Otherwise, ",
+            "if you need its functionality, consider defining it locally."),
+            :arithtype)
+        Int
+    end
+end)
+
 # End deprecations scheduled for 0.6
