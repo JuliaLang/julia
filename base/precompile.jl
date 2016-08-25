@@ -120,7 +120,7 @@ precompile(Base.REPL.display, (Base.REPL.REPLDisplay{Base.REPL.LineEditREPL}, Ba
 precompile(Base.REPL.display, (Base.REPL.REPLDisplay{Base.REPL.LineEditREPL}, Int))
 precompile(Base.REPL.ends_with_semicolon, (String,))
 precompile(Base.REPL.find_hist_file, ())
-precompile(Base.REPL.hist_from_file, (Base.REPL.REPLHistoryProvider, IOStream))
+precompile(Base.REPL.hist_from_file, (Base.REPL.REPLHistoryProvider, IOStream, String))
 precompile(Base.REPL.history_next, (Base.LineEdit.MIState,  Base.REPL.REPLHistoryProvider, Int))
 precompile(Base.REPL.history_next_prefix, (Base.LineEdit.MIState, Base.REPL.REPLHistoryProvider,))
 precompile(Base.REPL.history_prev_prefix, (Base.LineEdit.MIState, Base.REPL.REPLHistoryProvider,))
