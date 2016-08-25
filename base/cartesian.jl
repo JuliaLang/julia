@@ -258,7 +258,7 @@ function inlineanonymous(ex::Expr, val)
 end
 
 # Given :i and 3, this generates :i_3
-inlineanonymous(base::Symbol, ext) = Symbol(base,"_",string(ext))
+inlineanonymous(base::Symbol, ext) = Symbol(base,'_',ext)
 
 # Replace a symbol by a value or a "coded" symbol
 # E.g., for d = 3,
