@@ -600,27 +600,6 @@ $(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binar
 pass 'MARCH=pentium4'.)
 endif
 
-ifneq ($(MARCH),)
-CC += -march=$(MARCH)
-CXX += -march=$(MARCH)
-FC += -march=$(MARCH)
-JULIA_CPU_TARGET ?= $(MARCH)
-ifeq ($(OS),Darwin)
-# on Darwin, the standalone `as` program doesn't know
-# how to handle AVX instructions, but it does know how
-# to dispatch to the clang assembler (if we ask it to)
-ifeq ($(USECLANG),1)
-CC += -integrated-as
-CXX += -integrated-as
-else
-CC += -Wa,-q
-CXX += -Wa,-q
-endif
-FC += -Wa,-q
-AS += -q
-endif
-endif
-
 JULIA_CPU_TARGET ?= native
 
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
@@ -652,12 +631,13 @@ ISX86:=0
 endif
 
 # If we are running on powerpc64 or ppc64, set certain options automatically
-ifneq (,$(filter $(ARCH), powerpc64 ppc64le))
+ifneq (,$(filter $(ARCH), powerpc64 powerpc64le ppc64 ppc64le))
 JCFLAGS += -fsigned-char
 override LLVM_VER:=3.8.1
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=POWER8
-
+# GCC doesn't do -march= on ppc64le
+override MARCH=
 endif
 
 # If we are running on ARM, set certain options automatically
@@ -669,7 +649,28 @@ override USE_BLAS64:=0
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=ARMV7
 override USE_SYSTEM_LIBM:=1
+endif
 
+# Set MARCH-specific flags
+ifneq ($(MARCH),)
+CC += -march=$(MARCH)
+CXX += -march=$(MARCH)
+FC += -march=$(MARCH)
+JULIA_CPU_TARGET ?= $(MARCH)
+ifeq ($(OS),Darwin)
+# on Darwin, the standalone `as` program doesn't know
+# how to handle AVX instructions, but it does know how
+# to dispatch to the clang assembler (if we ask it to)
+ifeq ($(USECLANG),1)
+CC += -integrated-as
+CXX += -integrated-as
+else
+CC += -Wa,-q
+CXX += -Wa,-q
+endif
+FC += -Wa,-q
+AS += -q
+endif
 endif
 
 # Set some ARCH-specific flags
