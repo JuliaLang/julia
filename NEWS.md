@@ -478,6 +478,8 @@ Deprecated or removed
   * The no-op `transpose` fallback has been deprecated. Consider introducing suitable
     `transpose` methods or calling `permutedims(x, [2,1])` ([#13171], [#17075], [#17374]).
 
+  * The macros @unix_only, @linux_only, apple_only, @bsd__only, and @windows_only have been decrecated. Instead use the functions is_unix, is_linux, is_apple, is_bsd, and is_windows. It can be helpful to use them with the new @static macro. See [Handling Operating System Variation in the manual.](http://docs.julialang.org/en/latest/manual/handling-operating-system-variation/#man-handling-operating-system-variation)
+
 Command-line option changes
 ---------------------------
 
