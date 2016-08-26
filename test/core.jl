@@ -4497,6 +4497,28 @@ for (f,g) in ((:asin,:sin), (:acos,:cos))
 end
 @test f18085(Val{:asin},3) === (0.0,)
 
+# issue #18236 constant VecElement in ast triggers codegen assertion/undef
+# VecElement of scalar
+v18236 = VecElement(1.0)
+ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
+@eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
+                                    (VecElement{Float64},), $v18236)
+@test f18236(ptr18236) === v18236
+@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Void}}), "double undef")
+# VecElement of struct type, not necessarily useful but does have special
+# ABI so should be handled correctly
+# This struct should be small enough to be passed by value in C ABI
+# in order to trigger the problematic code path.
+# We should be at least testing this on some platforms.
+# Not sure if there's a better way to trigger unboxing in codegen.
+v18236_2 = VecElement((Int8(1), Int8(2)))
+ptr18236_2 = cfunction(identity, VecElement{NTuple{2,Int8}},
+                       Tuple{VecElement{NTuple{2,Int8}}})
+@eval @noinline f18236_2(ptr) = ccall(ptr, VecElement{NTuple{2,Int8}},
+                                      (VecElement{NTuple{2,Int8}},),
+                                      $v18236_2)
+@test f18236_2(ptr18236_2) === v18236_2
+
 # issue #18173
 function f18173()
     identity(()->successflag)

@@ -155,55 +155,52 @@ static Value *uint_cnvt(Type *to, Value *x)
 }
 
 #define LLVM_FP(a,b) APFloat(a,b)
-static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
+static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
 {
-    jl_value_t *jt = jl_typeof(e);
-    jl_datatype_t *bt = (jl_datatype_t*)jt;
+    // assume `jl_isbits(bt)`.
+    // `ptr` can point to a inline field, do not read the tag from it.
+    if (bt == (jl_value_t*)jl_bool_type)
+        return ConstantInt::get(T_int8, (*(uint8_t*)ptr) ? 1 : 0);
 
-    if (!jl_is_datatype(bt) || bt == jl_ssavalue_type)
+    if (bt == (jl_value_t*)jl_ssavalue_type)
         return NULL;
 
-    if (e == jl_true)
-        return ConstantInt::get(T_int8, 1);
-    if (e == jl_false)
-        return ConstantInt::get(T_int8, 0);
+    if (jl_is_vecelement_type(bt))
+        bt = jl_tparam0(bt);
 
-    if (jl_is_cpointer_type(jt))
-        return ConstantExpr::getIntToPtr(ConstantInt::get(T_size, jl_unbox_long(e)), julia_type_to_llvm((jl_value_t*)bt));
-    if (jl_is_bitstype(jt)) {
+    if (jl_is_cpointer_type(bt))
+        return ConstantExpr::getIntToPtr(ConstantInt::get(T_size, *(uintptr_t*)ptr), julia_type_to_llvm(bt));
+    if (jl_is_bitstype(bt)) {
         int nb = jl_datatype_size(bt);
-        //TODO: non-power-of-2 size datatypes may not be interpreted correctly on big-endian systems
+        // TODO: non-power-of-2 size datatypes may not be interpreted correctly on big-endian systems
         switch (nb) {
         case 1: {
-            uint8_t data8 = *(uint8_t*)jl_data_ptr(e);
+            uint8_t data8 = *(uint8_t*)ptr;
             return ConstantInt::get(T_int8, data8);
         }
         case 2: {
-            uint16_t data16 = *(uint16_t*)jl_data_ptr(e);
+            uint16_t data16 = *(uint16_t*)ptr;
 #ifndef DISABLE_FLOAT16
-            if (jl_is_float(e)) {
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,APInt(16,data16)));
-            }
+            if (jl_is_floattype(bt))
+                return ConstantFP::get(jl_LLVMContext, LLVM_FP(APFloat::IEEEhalf,APInt(16,data16)));
 #endif
             return ConstantInt::get(T_int16, data16);
         }
         case 4: {
-            uint32_t data32 = *(uint32_t*)jl_data_ptr(e);
-            if (jl_is_float(e)) {
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,APInt(32,data32)));
-            }
+            uint32_t data32 = *(uint32_t*)ptr;
+            if (jl_is_floattype(bt))
+                return ConstantFP::get(jl_LLVMContext, LLVM_FP(APFloat::IEEEsingle,APInt(32,data32)));
             return ConstantInt::get(T_int32, data32);
         }
         case 8: {
-            uint64_t data64 = *(uint64_t*)jl_data_ptr(e);
-            if (jl_is_float(e)) {
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,APInt(64,data64)));
-            }
+            uint64_t data64 = *(uint64_t*)ptr;
+            if (jl_is_floattype(bt))
+                return ConstantFP::get(jl_LLVMContext, LLVM_FP(APFloat::IEEEdouble,APInt(64,data64)));
             return ConstantInt::get(T_int64, data64);
         }
         default:
             size_t nw = (nb+sizeof(uint64_t)-1)/sizeof(uint64_t);
-            uint64_t *data = (uint64_t*)jl_data_ptr(e);
+            uint64_t *data = (uint64_t*)ptr;
             APInt val;
 #if !defined(_P64)
             // malloc may not be 16-byte aligned on P32,
@@ -218,54 +215,48 @@ static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
             else
 #endif
             val = APInt(8*nb, ArrayRef<uint64_t>(data, nw));
-            if (nb == 16 && jl_is_float(e)) {
+            if (nb == 16 && jl_is_floattype(bt)) {
                 return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val));
                 // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
             }
             return ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
         }
     }
-    if (jl_isbits(jt)) {
-        size_t nf = jl_datatype_nfields(bt), i;
-        size_t llvm_nf = 0;
-        Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
-        jl_value_t *f=NULL;
-        JL_GC_PUSH1(&f);
-        for(i=0; i < nf; i++) {
-            f = jl_get_nth_field(e, i);
-            Constant *val;
-            if (f == jl_true)
-                val = ConstantInt::get(T_int8,1);
-            else if (f == jl_false)
-                val = ConstantInt::get(T_int8,0);
-            else
-                val = julia_const_to_llvm(f, true);
-            if (val == NULL) {
-                JL_GC_POP();
-                return NULL;
-            }
-            fields[llvm_nf++] = val;
-        }
-        JL_GC_POP();
-
-        Type *t = julia_struct_to_llvm(jt, NULL);
-        if (type_is_ghost(t))
-            return UndefValue::get(NoopType);
-        if (t->isVectorTy())
-            return ConstantVector::get(ArrayRef<Constant*>(fields,llvm_nf));
-        if (t->isStructTy()) {
-            StructType *st = dyn_cast<StructType>(t);
-            assert(st);
-            return ConstantStruct::get(st, ArrayRef<Constant*>(fields,llvm_nf));
-        }
-        else {
-            assert(t->isArrayTy());
-            ArrayType *at = dyn_cast<ArrayType>(t);
-            assert(at);
-            return ConstantArray::get(at, ArrayRef<Constant*>(fields,llvm_nf));
-        }
+    size_t nf = jl_datatype_nfields(bt);
+    Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
+    for (size_t i = 0; i < nf; i++) {
+        size_t offs = jl_field_offset((jl_datatype_t*)bt, i);
+        jl_value_t *ft = jl_field_type(bt, i);
+        Constant *val = julia_const_to_llvm((char*)ptr + offs, ft);
+        if (val == NULL)
+            return NULL;
+        fields[i] = val;
     }
-    return NULL;
+
+    Type *t = julia_struct_to_llvm(bt, NULL);
+    if (type_is_ghost(t))
+        return UndefValue::get(NoopType);
+    if (t->isVectorTy())
+        return ConstantVector::get(ArrayRef<Constant*>(fields, nf));
+    if (StructType *st = dyn_cast<StructType>(t)) {
+        return ConstantStruct::get(st, ArrayRef<Constant*>(fields, nf));
+    }
+    else {
+        ArrayType *at = cast<ArrayType>(t);
+        return ConstantArray::get(at, ArrayRef<Constant*>(fields, nf));
+    }
+}
+
+static Constant *julia_const_to_llvm(jl_value_t *e)
+{
+    if (e == jl_true)
+        return ConstantInt::get(T_int8, 1);
+    if (e == jl_false)
+        return ConstantInt::get(T_int8, 0);
+    jl_value_t *bt = jl_typeof(e);
+    if (!jl_isbits(bt))
+        return NULL;
+    return julia_const_to_llvm(e, bt);
 }
 
 static jl_cgval_t ghostValue(jl_value_t *ty);
