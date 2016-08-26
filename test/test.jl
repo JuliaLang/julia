@@ -76,7 +76,8 @@ tse_str = sprint(show, Test.TestSetException(1,2,3,4))
 
 OLD_STDOUT = STDOUT
 catch_out = IOStream("")
-rd, wr = redirect_stdout()
+# Capture a reference to make sure the read end doesn't get closed
+pipe = redirect_stdout()
 
 # Check that the fallback test set throws immediately
 @test_throws ErrorException (@test 1 == 2)
