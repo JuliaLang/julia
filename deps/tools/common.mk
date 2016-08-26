@@ -144,7 +144,9 @@ $$(build_staging)/$2.tgz: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mkdir -p $$(build_staging)/$2$$(build_prefix)
 	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
-	cd $$(build_staging)/$2$$(build_prefix) && tar -czf $$@ .
+	cd $$(build_staging)/$2$$(build_prefix) && tar -czf $$@.tmp .
+	rm -rf $$(build_staging)/$2
+	mv $$@.tmp $$@
 
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix)/manifest
 	mkdir -p $$(build_prefix)
