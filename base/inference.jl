@@ -2042,15 +2042,9 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, undefs, pass)
 end
 
 function expr_cannot_delete(ex::Expr)
-    # This alone should be enough for any sane use of
-    # `Expr(:inbounds)` and `Expr(:boundscheck)`. However, it is still possible
-    # to have these embeded in other expressions (e.g. `return @inbounds ...`)
-    # so we check recursively if there's a matching expression
-    (ex.head === :inbounds || ex.head === :boundscheck) && return true
-    for arg in ex.args
-        isa(arg, Expr) && expr_cannot_delete(arg::Expr) && return true
-    end
-    return false
+    head = ex.head
+    return (head === :inbounds || head === :boundscheck || head === :meta ||
+            head === :line)
 end
 
 # annotate types of all symbols in AST
@@ -2081,7 +2075,8 @@ function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, nargs)
                 record_slot_type!(id, widenconst(states[i+1][id].typ), linfo.slottypes)
             end
         elseif optimize
-            if isa(expr, Expr) && expr_cannot_delete(expr::Expr)
+            if ((isa(expr, Expr) && expr_cannot_delete(expr::Expr)) ||
+                isa(expr, LineNumberNode))
                 i += 1
                 continue
             end
