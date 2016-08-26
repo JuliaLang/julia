@@ -1068,20 +1068,21 @@ Here is an example with both :obj:`@inbounds` and :obj:`@simd` markup::
         time = @elapsed for j in 1:reps
             s+=inner(x,y)
         end
-        println("GFlop        = ",2.0*n*reps/time*1E-9)
+        println("GFlop/sec        = ",2.0*n*reps/time*1E-9)
         time = @elapsed for j in 1:reps
             s+=innersimd(x,y)
         end
-        println("GFlop (SIMD) = ",2.0*n*reps/time*1E-9)
+        println("GFlop/sec (SIMD) = ",2.0*n*reps/time*1E-9)
     end
 
     timeit(1000,1000)
 
 On a computer with a 2.4GHz Intel Core i5 processor, this produces::
 
-    GFlop        = 1.9467069505224963
-    GFlop (SIMD) = 17.578554163920018
+    GFlop/sec        = 1.9467069505224963
+    GFlop/sec (SIMD) = 17.578554163920018
 
+(``GFlop/sec`` measures the performance, and larger numbers are better.)
 The range for a ``@simd for`` loop should be a one-dimensional range.
 A variable used for accumulating, such as ``s`` in the example, is called
 a *reduction variable*. By using :obj:`@simd`, you are asserting several
@@ -1167,13 +1168,11 @@ evaluates the L2-norm of the result::
 
 On a computer with a 2.7 GHz Intel Core i7 processor, this produces::
 
-    $ julia wave.jl
+    $ julia wave.jl;
     elapsed time: 1.207814709 seconds (0 bytes allocated)
-    4.443986180758243
 
-    $ julia --math-mode=ieee wave.jl
+    $ julia --math-mode=ieee wave.jl;
     elapsed time: 4.487083643 seconds (0 bytes allocated)
-    4.443986180758243
 
 Here, the option ``--math-mode=ieee`` disables the :obj:`@fastmath`
 macro, so that we can compare results.
