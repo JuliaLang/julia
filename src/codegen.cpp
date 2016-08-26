@@ -506,7 +506,6 @@ typedef struct {
     std::vector<jl_cgval_t> SAvalues;
     std::vector<bool> ssavalue_assigned;
     std::map<int, jl_arrayvar_t> *arrayvars;
-    std::map<int, BasicBlock*> *labels;
     jl_module_t *module;
     jl_lambda_info_t *linfo;
     const char *name;
@@ -519,14 +518,12 @@ typedef struct {
     bool vaStack;      // varargs stack-allocated
     bool sret;
     int nReqArgs;
-    std::vector<bool> boundsCheck;
-    std::vector<bool> inbounds;
 
     CallInst *ptlsStates;
     Value *signalPage;
 
-    llvm::DIBuilder *dbuilder;
     bool debug_enabled;
+    bool is_inbounds{false};
     std::vector<CallInst*> to_inline;
 } jl_codectx_t;
 
@@ -3099,14 +3096,27 @@ static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
         }
         return;
     }
-    if (jl_is_expr(expr)) {
-        jl_sym_t *head = ((jl_expr_t*)expr)->head;
-        // some expression types are metadata and can be ignored in statement position
-        if (head == line_sym || head == meta_sym)
-            return;
-        // fall-through
+    if (!jl_is_expr(expr)) {
+        (void)emit_expr(expr, ctx);
+        return;
     }
-    (void)emit_expr(expr, ctx);
+    jl_expr_t *ex = (jl_expr_t*)expr;
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
+    jl_sym_t *head = ex->head;
+    if (head == line_sym || head == meta_sym || head == boundscheck_sym ||
+        head == inbounds_sym) {
+        // some expression types are metadata and can be ignored
+        // in statement position
+        return;
+    }
+    else if (head == leave_sym) {
+        assert(jl_is_long(args[0]));
+        builder.CreateCall(prepare_call(jlleave_func),
+                           ConstantInt::get(T_int32, jl_unbox_long(args[0])));
+    }
+    else {
+        (void)emit_expr(expr, ctx);
+    }
 }
 
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
@@ -3129,33 +3139,17 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             return ctx->SAvalues.at(idx); // at this point, SAvalues[idx] actually contains the SAvalue
         }
     }
+    if (jl_is_globalref(expr)) {
+        return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
+    }
     if (jl_is_labelnode(expr)) {
-        int labelname = jl_labelnode_label(expr);
-        BasicBlock *bb = (*ctx->labels)[labelname];
-        assert(bb);
-        if (builder.GetInsertBlock()->getTerminator() == NULL) {
-            builder.CreateBr(bb); // all BasicBlocks must exit explicitly
-        }
-        builder.SetInsertPoint(bb);
-        return jl_cgval_t();
+        jl_error("Labelnode in value position");
     }
     if (jl_is_linenode(expr)) {
         jl_error("Linenode in value position");
     }
     if (jl_is_gotonode(expr)) {
-        if (builder.GetInsertBlock()->getTerminator() == NULL) {
-            int labelname = jl_gotonode_label(expr);
-            BasicBlock *bb = (*ctx->labels)[labelname];
-            assert(bb);
-            builder.CreateBr(bb);
-            BasicBlock *after = BasicBlock::Create(jl_LLVMContext,
-                                                   "br", ctx->f);
-            builder.SetInsertPoint(after);
-        }
-        return jl_cgval_t();
-    }
-    if (jl_is_globalref(expr)) {
-        return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
+        jl_error("Gotonode in value position");
     }
     if (!jl_is_expr(expr)) {
         int needroot = true;
@@ -3191,19 +3185,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
-    if (head == goto_ifnot_sym) {
-        jl_value_t *cond = args[0];
-        int labelname = jl_unbox_long(args[1]);
-        BasicBlock *ifso = BasicBlock::Create(jl_LLVMContext, "if", ctx->f);
-        BasicBlock *ifnot = (*ctx->labels)[labelname];
-        assert(ifnot);
-        // Any branches treated as constant in type inference should be
-        // eliminated before running
-        Value *isfalse = emit_condition(cond, "if", ctx);
-        builder.CreateCondBr(isfalse, ifnot, ifso);
-        builder.SetInsertPoint(ifso);
-    }
-    else if (head == invoke_sym) {
+    if (head == invoke_sym) {
         return emit_invoke(ex, ctx);
     }
     else if (head == call_sym) {
@@ -3294,82 +3276,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
                                                   /*isvolatile*/true),
                                true, jl_any_type, ctx);
     }
-    else if (head == leave_sym) {
-        assert(jl_is_long(args[0]));
-        builder.CreateCall(prepare_call(jlleave_func),
-                           ConstantInt::get(T_int32, jl_unbox_long(args[0])));
-    }
-    else if (head == enter_sym) {
-        assert(jl_is_long(args[0]));
-        int labl = jl_unbox_long(args[0]);
-        CallInst *sj = builder.CreateCall(prepare_call(except_enter_func));
-        // We need to mark this on the call site as well. See issue #6757
-        sj->setCanReturnTwice();
-        Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
-        BasicBlock *tryblk = BasicBlock::Create(jl_LLVMContext, "try",
-                                                ctx->f);
-        BasicBlock *handlr = (*ctx->labels)[labl];
-        assert(handlr);
-#ifdef _OS_WINDOWS_
-        BasicBlock *cond_resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "cond_resetstkoflw", ctx->f);
-        BasicBlock *resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "resetstkoflw", ctx->f);
-        builder.CreateCondBr(isz, tryblk, cond_resetstkoflw_blk);
-        builder.SetInsertPoint(cond_resetstkoflw_blk);
-        builder.CreateCondBr(builder.CreateICmpEQ(
-                    literal_pointer_val(jl_stackovf_exception),
-                    builder.CreateLoad(emit_exc_in_transit(ctx), true)),
-                resetstkoflw_blk, handlr);
-        builder.SetInsertPoint(resetstkoflw_blk);
-        builder.CreateCall(prepare_call(resetstkoflw_func)
-#                          ifdef LLVM37
-                           , {}
-#                          endif
-                           );
-        builder.CreateBr(handlr);
-#else
-        builder.CreateCondBr(isz, tryblk, handlr);
-#endif
-        builder.SetInsertPoint(tryblk);
-    }
-    else if (head == inbounds_sym) {
-        // manipulate inbounds stack
-        // note that when entering an inbounds context, we must also update
-        // the boundsCheck context to be false
-        if (jl_array_len(ex->args) > 0) {
-            jl_value_t *arg = args[0];
-            if (arg == jl_true) {
-                ctx->inbounds.push_back(true);
-                ctx->boundsCheck.push_back(false);
-            }
-            else if (arg == jl_false) {
-                ctx->inbounds.push_back(false);
-                ctx->boundsCheck.push_back(false);
-            }
-            else {
-                if (!ctx->inbounds.empty())
-                    ctx->inbounds.pop_back();
-                if (!ctx->boundsCheck.empty())
-                    ctx->boundsCheck.pop_back();
-            }
-        }
-        return ghostValue(jl_void_type);
-    }
-    else if (head == boundscheck_sym) {
-        if (jl_array_len(ex->args) > 0) {
-            jl_value_t *arg = args[0];
-            if (arg == jl_true) {
-                ctx->boundsCheck.push_back(true);
-            }
-            else if (arg == jl_false) {
-                ctx->boundsCheck.push_back(false);
-            }
-            else {
-                if (!ctx->boundsCheck.empty())
-                    ctx->boundsCheck.pop_back();
-            }
-        }
-        return ghostValue(jl_void_type);
-    }
     else if (head == copyast_sym) {
         jl_value_t *arg = args[0];
         if (jl_is_quotenode(arg)) {
@@ -3386,6 +3292,21 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         if (!llvm::annotateSimdLoop(builder.GetInsertBlock()))
             jl_printf(JL_STDERR, "WARNING: could not attach metadata for @simd loop.\n");
         return jl_cgval_t();
+    }
+    else if (head == goto_ifnot_sym) {
+        jl_error("Expr(:goto_ifnot) in value position");
+    }
+    else if (head == leave_sym) {
+        jl_error("Expr(:leave) in value position");
+    }
+    else if (head == enter_sym) {
+        jl_error("Expr(:enter) in value position");
+    }
+    else if (head == inbounds_sym) {
+        jl_error("Expr(:inbounds) in value position");
+    }
+    else if (head == boundscheck_sym) {
+        jl_error("Expr(:boundscheck) in value position");
     }
     else {
         if (!strcmp(jl_symbol_name(head), "$"))
@@ -3926,15 +3847,12 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     std::map<int, BasicBlock*> labels;
     jl_codectx_t ctx = {};
     ctx.arrayvars = &arrayvars;
-    ctx.labels = &labels;
     ctx.module = lam->def ? lam->def->module : ptls->current_module;
     ctx.linfo = lam;
     ctx.name = jl_symbol_name(lam->def ? lam->def->name : anonymous_sym);
     ctx.funcName = ctx.name;
     ctx.vaSlot = -1;
     ctx.vaStack = false;
-    ctx.inbounds.push_back(false);
-    ctx.boundsCheck.push_back(false);
     ctx.spvals_ptr = NULL;
 
     // step 2. process var-info lists to see what vars need boxing
@@ -4139,17 +4057,12 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     ctx.file = filename;
 
     DIBuilder dbuilder(*M);
-    ctx.dbuilder = &dbuilder;
 #ifdef LLVM37
     DIFile *topfile = NULL;
     DISubprogram *SP = NULL;
-    std::vector<DILocation *> DI_loc_stack;
-    std::vector<DISubprogram *> DI_sp_stack;
 #else
     DIFile topfile;
     DISubprogram SP;
-    std::vector<DebugLoc> DI_loc_stack;
-    std::vector<DISubprogram> DI_sp_stack;
 #endif
 
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
@@ -4199,14 +4112,14 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             for(size_t i=0; i < jl_nparams(lam->specTypes); i++) { // assumes !va
                 if (i < largslen && ctx.slots[i].value.isghost)
                     continue;
-                ditypes.push_back(julia_type_to_di(jl_tparam(lam->specTypes,i),ctx.dbuilder,false));
+                ditypes.push_back(julia_type_to_di(jl_tparam(lam->specTypes,i),&dbuilder,false));
             }
 #ifdef LLVM38
-            subrty = ctx.dbuilder->createSubroutineType(ctx.dbuilder->getOrCreateTypeArray(ditypes));
+            subrty = dbuilder.createSubroutineType(dbuilder.getOrCreateTypeArray(ditypes));
 #elif defined(LLVM36)
-            subrty = ctx.dbuilder->createSubroutineType(topfile,ctx.dbuilder->getOrCreateTypeArray(ditypes));
+            subrty = dbuilder.createSubroutineType(topfile,dbuilder.getOrCreateTypeArray(ditypes));
 #else
-            subrty = ctx.dbuilder->createSubroutineType(topfile,ctx.dbuilder->getOrCreateArray(ditypes));
+            subrty = dbuilder.createSubroutineType(topfile,dbuilder.getOrCreateArray(ditypes));
 #endif
         }
 
@@ -4249,24 +4162,24 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             if (argname == unused_sym) continue;
             jl_varinfo_t &varinfo = ctx.slots[i];
 #ifdef LLVM38
-            varinfo.dinfo = ctx.dbuilder->createParameterVariable(
+            varinfo.dinfo = dbuilder.createParameterVariable(
                 SP,                                 // Scope (current function will be fill in later)
                 jl_symbol_name(argname),            // Variable name
                 ctx.sret + i + 1,                   // Argument number (1-based)
                 topfile,                            // File
                 toplineno == -1 ? 0 : toplineno,  // Line
                 // Variable type
-                julia_type_to_di(varinfo.value.typ,ctx.dbuilder,false),
+                julia_type_to_di(varinfo.value.typ,&dbuilder,false),
                 AlwaysPreserve,                  // May be deleted if optimized out
                 0);                     // Flags (TODO: Do we need any)
 #else
-            varinfo.dinfo = ctx.dbuilder->createLocalVariable(
+            varinfo.dinfo = dbuilder.createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,    // Tag
                 SP,         // Scope (current function will be fill in later)
                 jl_symbol_name(argname),    // Variable name
                 topfile,                    // File
                 toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
-                julia_type_to_di(varinfo.value.typ, ctx.dbuilder,false), // Variable type
+                julia_type_to_di(varinfo.value.typ, &dbuilder,false), // Variable type
                 AlwaysPreserve,                  // May be deleted if optimized out
                 0,                      // Flags (TODO: Do we need any)
                 ctx.sret + i + 1);                   // Argument number (1-based)
@@ -4274,23 +4187,23 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
         if (va && ctx.vaSlot != -1) {
 #ifdef LLVM38
-            ctx.slots[ctx.vaSlot].dinfo = ctx.dbuilder->createParameterVariable(
+            ctx.slots[ctx.vaSlot].dinfo = dbuilder.createParameterVariable(
                 SP,                     // Scope (current function will be fill in later)
                 std::string(jl_symbol_name(slot_symbol(ctx.vaSlot, &ctx))) + "...",  // Variable name
                 ctx.sret + nreq + 1,               // Argument number (1-based)
                 topfile,                    // File
                 toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
-                julia_type_to_di(ctx.slots[ctx.vaSlot].value.typ, ctx.dbuilder, false),
+                julia_type_to_di(ctx.slots[ctx.vaSlot].value.typ, &dbuilder, false),
                 AlwaysPreserve,                  // May be deleted if optimized out
                 0);                     // Flags (TODO: Do we need any)
 #else
-            ctx.slots[ctx.vaSlot].dinfo = ctx.dbuilder->createLocalVariable(
+            ctx.slots[ctx.vaSlot].dinfo = dbuilder.createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,   // Tag
                 SP,                                 // Scope (current function will be fill in later)
                 std::string(jl_symbol_name(slot_symbol(ctx.vaSlot, &ctx))) + "...",  // Variable name
                 topfile,                            // File
                 toplineno == -1 ? 0 : toplineno,  // Line (for now, use lineno of the function)
-                julia_type_to_di(ctx.slots[ctx.vaSlot].value.typ, ctx.dbuilder, false),      // Variable type
+                julia_type_to_di(ctx.slots[ctx.vaSlot].value.typ, &dbuilder, false),      // Variable type
                 AlwaysPreserve,                  // May be deleted if optimized out
                 0,                      // Flags (TODO: Do we need any)
                 ctx.sret + nreq + 1);              // Argument number (1-based)
@@ -4302,16 +4215,16 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             if (varinfo.isArgument || s == compiler_temp_sym || s == unused_sym)
                 continue;
 #ifdef LLVM38
-            varinfo.dinfo = ctx.dbuilder->createAutoVariable(
+            varinfo.dinfo = dbuilder.createAutoVariable(
 #else
-            varinfo.dinfo = ctx.dbuilder->createLocalVariable(
+            varinfo.dinfo = dbuilder.createLocalVariable(
                 llvm::dwarf::DW_TAG_auto_variable,    // Tag
 #endif
                 SP,                     // Scope (current function will be fill in later)
                 jl_symbol_name(s),       // Variable name
                 topfile,                 // File
                 toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
-                julia_type_to_di(varinfo.value.typ, ctx.dbuilder, false), // Variable type
+                julia_type_to_di(varinfo.value.typ, &dbuilder, false), // Variable type
                 AlwaysPreserve,                  // May be deleted if optimized out
                 0                       // Flags (TODO: Do we need any)
 #ifndef LLVM38
@@ -4383,7 +4296,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 #ifdef LLVM36
                     if (ctx.debug_enabled && varinfo.dinfo) {
                         assert((Metadata*)varinfo.dinfo->getType() != jl_pvalue_dillvmt);
-                        ctx.dbuilder->insertDeclare(lv, varinfo.dinfo, ctx.dbuilder->createExpression(),
+                        dbuilder.insertDeclare(lv, varinfo.dinfo, dbuilder.createExpression(),
 #ifdef LLVM37
                                                     topdebugloc,
 #endif
@@ -4404,14 +4317,14 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             if (ctx.debug_enabled && varinfo.dinfo) {
                 DIExpression *expr;
                 if ((Metadata*)varinfo.dinfo->getType() == jl_pvalue_dillvmt) {
-                    expr = ctx.dbuilder->createExpression();
+                    expr = dbuilder.createExpression();
                 }
                 else {
                     SmallVector<uint64_t, 8> addr;
                     addr.push_back(llvm::dwarf::DW_OP_deref);
-                    expr = ctx.dbuilder->createExpression(addr);
+                    expr = dbuilder.createExpression(addr);
                 }
-                ctx.dbuilder->insertDeclare(av, varinfo.dinfo, expr,
+                dbuilder.insertDeclare(av, varinfo.dinfo, expr,
 #ifdef LLVM37
                                             topdebugloc,
 #endif
@@ -4470,7 +4383,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                         addr.push_back((i - 1) * sizeof(void*));
                         if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt)
                             addr.push_back(llvm::dwarf::DW_OP_deref);
-                        ctx.dbuilder->insertDeclare(pargArray, vi.dinfo, ctx.dbuilder->createExpression(addr),
+                        dbuilder.insertDeclare(pargArray, vi.dinfo, dbuilder.createExpression(addr),
 #ifdef LLVM37
                                         topdebugloc,
 #endif
@@ -4502,7 +4415,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                             parg = builder.CreateAlloca(theArg.V->getType(), NULL, jl_symbol_name(s));
                             builder.CreateStore(theArg.V, parg);
                         }
-                        ctx.dbuilder->insertDeclare(parg, vi.dinfo, ctx.dbuilder->createExpression(addr),
+                        dbuilder.insertDeclare(parg, vi.dinfo, dbuilder.createExpression(addr),
 #ifdef LLVM37
                                                     topdebugloc,
 #endif
@@ -4563,79 +4476,107 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
     }
 
-    // step 11. associate labels with basic blocks to resolve forward jumps
-    BasicBlock *prev=NULL;
-    for(i=0; i < stmtslen; i++) {
-        jl_value_t *ex = jl_array_ptr_ref(stmts,i);
-        if (jl_is_labelnode(ex)) {
-            int lname = jl_labelnode_label(ex);
-            if (prev != NULL) {
-                // fuse consecutive labels
-                labels[lname] = prev;
-            }
-            else {
-                prev = BasicBlock::Create(jl_LLVMContext, "L", f);
-                labels[lname] = prev;
-            }
-        }
-        else {
-            prev = NULL;
-        }
-    }
-
-    // step 12. compile body statements
-    if (ctx.debug_enabled)
-        // set initial line number
-        builder.SetCurrentDebugLocation(topdebugloc);
-    if (do_coverage)
-        coverageVisitLine(ctx.file, toplineno);
-    bool prevlabel = false;
-    int lno = -1;
-    int prevlno = -1;
+    // step 11. Compute properties for each statements
+    //     This needs to be computed by iterating in the IR order
+    //     instead of control flow order.
+#ifdef LLVM37
+    struct DbgState {
+        DebugLoc loc;
+        DISubprogram *sp;
+        StringRef file;
+        ssize_t line;
+    };
+#else
+    struct DbgState {
+        DebugLoc loc;
+        DISubprogram sp;
+        StringRef file;
+        ssize_t line;
+    };
+#endif
+    struct StmtProp {
+        DebugLoc loc;
+        StringRef file;
+        ssize_t line;
+        bool enabled;
+        bool is_inbounds;
+        bool loc_changed;
+        bool is_poploc;
+    };
+    std::vector<StmtProp> stmtprops(stmtslen);
+    std::vector<DbgState> DI_stack;
+    std::vector<bool> boundsCheck_stack{false};
+    std::vector<bool> inbounds_stack{false};
+    auto is_bounds_check_block = [&] () {
+        return !boundsCheck_stack.empty() && boundsCheck_stack.back();
+    };
+    auto is_inbounds = [&] () {
+        // inbounds rule is either of top two values on inbounds stack are true
+        size_t sz = inbounds_stack.size();
+        bool inbounds = sz && inbounds_stack.back();
+        if (sz > 1)
+            inbounds |= inbounds_stack[sz - 2];
+        return inbounds;
+    };
+    StmtProp cur_prop{topdebugloc, filename, toplineno, true, false, true, false};
+    // this should not be necessary but it seems that meta node can cause
+    // an offset between the label number and the statement number
+    std::map<int, int> label_map;
     for (i = 0; i < stmtslen; i++) {
+        cur_prop.loc_changed = false;
+        cur_prop.is_poploc = false;
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-        if (jl_is_linenode(stmt) ||
-            (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym)) {
-
+        jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
+        if (jl_is_labelnode(stmt)) {
+            int lname = jl_labelnode_label(stmt);
+            if (lname != i + 1) {
+                label_map[lname] = i + 1;
+            }
+        }
+        if (jl_is_linenode(stmt) || (expr && expr->head == line_sym)) {
+            ssize_t lno = -1;
             if (jl_is_linenode(stmt)) {
                 lno = jl_linenode_line(stmt);
             }
-            else if (jl_is_expr(stmt)) {
+            else {
                 lno = jl_unbox_long(jl_exprarg(stmt,0));
             }
             MDNode *inlinedAt = NULL;
-            if (DI_loc_stack.size() > 0) {
+            if (DI_stack.size() > 0) {
 #ifdef LLVM37
-                inlinedAt = DI_loc_stack.back();
+                inlinedAt = DI_stack.back().loc;
 #else
-                inlinedAt = DI_loc_stack.back().getAsMDNode(jl_LLVMContext);
+                inlinedAt = DI_stack.back().loc.getAsMDNode(jl_LLVMContext);
 #endif
             }
             if (ctx.debug_enabled)
-                builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, SP, inlinedAt));
+                cur_prop.loc = DebugLoc::get(lno, 0, SP, inlinedAt);
+            cur_prop.line = lno;
+            cur_prop.loc_changed = true;
         }
-        else if (ctx.debug_enabled && jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == meta_sym && jl_array_len(((jl_expr_t*)stmt)->args) >= 1) {
-            jl_expr_t *stmt_e = (jl_expr_t*)stmt;
-            jl_value_t *meta_arg = jl_exprarg(stmt_e, 0);
+        else if (expr && expr->head == meta_sym &&
+                 jl_array_len(expr->args) >= 1) {
+            jl_value_t *meta_arg = jl_exprarg(expr, 0);
             if (meta_arg == (jl_value_t*)jl_symbol("push_loc")) {
-                std::string new_filename = "<missing>";
-                assert(jl_array_len(stmt_e->args) > 1);
-                jl_sym_t *filesym = (jl_sym_t*)jl_exprarg(stmt_e, 1);
+                const char *new_filename = "<missing>";
+                assert(jl_array_len(expr->args) > 1);
+                jl_sym_t *filesym = (jl_sym_t*)jl_exprarg(expr, 1);
                 if (filesym != empty_sym)
                     new_filename = jl_symbol_name(filesym);
 #ifdef LLVM37
-                DIFile *new_file = dbuilder.createFile(new_filename, ".");
+                DIFile *new_file = nullptr;
 #else
-                DIFile new_file = dbuilder.createFile(new_filename, ".");
+                DIFile new_file;
 #endif
-                DI_sp_stack.push_back(SP);
-                DI_loc_stack.push_back(builder.getCurrentDebugLocation());
-                std::string inl_name;
+                if (ctx.debug_enabled)
+                    new_file = dbuilder.createFile(new_filename, ".");
+                DI_stack.push_back({cur_prop.loc, SP,
+                            cur_prop.file, cur_prop.line});
+                const char *inl_name = "";
                 int inlined_func_lineno = 0;
-                if (jl_array_len(stmt_e->args) > 2) {
-                    size_t ii;
-                    for(ii=2; ii < jl_array_len(stmt_e->args); ii++) {
-                        jl_value_t *arg = jl_exprarg(stmt_e, ii);
+                if (jl_array_len(expr->args) > 2) {
+                    for (size_t ii = 2; ii < jl_array_len(expr->args); ii++) {
+                        jl_value_t *arg = jl_exprarg(expr, ii);
                         if (jl_is_symbol(arg))
                             inl_name = jl_symbol_name((jl_sym_t*)arg);
                         else if (jl_is_int32(arg))
@@ -4647,57 +4588,211 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 else {
                     inl_name = "macro expansion";
                 }
-                SP = dbuilder.createFunction(new_file,
-                                             inl_name + ";",
-                                             inl_name,
-                                             new_file,
-                                             0,
-                                             jl_di_func_sig,
-                                             false,
-                                             true,
-                                             0,
-                                             0,
-                                             true,
-                                             nullptr);
-                MDNode *inlinedAt = NULL;
+                if (ctx.debug_enabled) {
+                    SP = dbuilder.createFunction(new_file,
+                                                 std::string(inl_name) + ";",
+                                                 inl_name,
+                                                 new_file,
+                                                 0,
+                                                 jl_di_func_sig,
+                                                 false,
+                                                 true,
+                                                 0,
+                                                 0,
+                                                 true,
+                                                 nullptr);
+                    MDNode *inlinedAt = NULL;
 #ifdef LLVM37
-                inlinedAt = builder.getCurrentDebugLocation();
+                    inlinedAt = cur_prop.loc;
 #else
-                inlinedAt = builder.getCurrentDebugLocation().getAsMDNode(jl_LLVMContext);
+                    inlinedAt = cur_proc.loc.getAsMDNode(jl_LLVMContext);
 #endif
-                builder.SetCurrentDebugLocation(DebugLoc::get(inlined_func_lineno, 0, SP, inlinedAt));
+                    cur_prop.loc = DebugLoc::get(inlined_func_lineno,
+                                                 0, SP, inlinedAt);
+                }
+                cur_prop.file = new_filename;
+                cur_prop.line = inlined_func_lineno;
+                cur_prop.loc_changed = true;
             }
             else if (meta_arg == (jl_value_t*)jl_symbol("pop_loc")) {
-                SP = DI_sp_stack.back();
-                DI_sp_stack.pop_back(); // because why not make pop a void function
-                builder.SetCurrentDebugLocation(DI_loc_stack.back());
-                DI_loc_stack.pop_back();
+                cur_prop.is_poploc = true;
+                auto &DI = DI_stack.back();
+                SP = DI.sp;
+                cur_prop.loc = DI.loc;
+                cur_prop.file = DI.file;
+                cur_prop.line = DI.line;
+                DI_stack.pop_back();
+                cur_prop.loc_changed = true;
             }
         }
-
-        if (do_coverage)
-            coverageVisitLine(filename, lno);
-        if (jl_is_labelnode(stmt)) {
-            if (prevlabel) continue;
-            prevlabel = true;
+        if (expr) {
+            jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
+            if (expr->head == boundscheck_sym) {
+                if (jl_array_len(expr->args) > 0) {
+                    jl_value_t *arg = args[0];
+                    if (arg == jl_true) {
+                        boundsCheck_stack.push_back(true);
+                    }
+                    else if (arg == jl_false) {
+                        boundsCheck_stack.push_back(false);
+                    }
+                    else {
+                        if (!boundsCheck_stack.empty()) {
+                            boundsCheck_stack.pop_back();
+                        }
+                    }
+                }
+            }
+            else if (cur_prop.enabled && expr->head == inbounds_sym) {
+                // manipulate inbounds stack
+                // note that when entering an inbounds context, we must also update
+                // the boundsCheck context to be false
+                if (jl_array_len(expr->args) > 0) {
+                    jl_value_t *arg = args[0];
+                    if (arg == jl_true) {
+                        inbounds_stack.push_back(true);
+                        boundsCheck_stack.push_back(false);
+                    }
+                    else if (arg == jl_false) {
+                        inbounds_stack.push_back(false);
+                        boundsCheck_stack.push_back(false);
+                    }
+                    else {
+                        if (!inbounds_stack.empty())
+                            inbounds_stack.pop_back();
+                        if (!boundsCheck_stack.empty())
+                            boundsCheck_stack.pop_back();
+                    }
+                }
+            }
+        }
+        bool is_ib = is_inbounds();
+        if (is_ib && is_bounds_check_block() &&
+            jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_ON) {
+            // elide bounds check blocks in inbounds context
+            cur_prop.enabled = false;
+        }
+        else if (is_bounds_check_block() &&
+                 jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_OFF) {
+            // elide bounds check blocks when turned off by options
+            cur_prop.enabled = false;
         }
         else {
-            prevlabel = false;
+            cur_prop.enabled = true;
         }
-        if (do_malloc_log) {
-            // Check memory allocation after finishing a line or hitting the next branch
-            if (lno != prevlno ||
-                (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == goto_ifnot_sym) ||
-                jl_is_gotonode(stmt)) {
-                if (prevlno != -1)
-                    mallocVisitLine(filename, prevlno);
-                prevlno = lno;
+        cur_prop.is_inbounds = is_ib;
+        stmtprops[i] = cur_prop;
+    }
+    DI_stack.clear();
+    boundsCheck_stack.clear();
+    inbounds_stack.clear();
+
+    // step 12. Do codegen in control flow order
+    std::vector<std::pair<int,BasicBlock*>> workstack;
+    int cursor = 0;
+    auto find_next_stmt = [&] (int seq_next) {
+        // `seq_next` is the next statement we want to emit
+        // i.e. if it exists, it's the next one following control flow and
+        // should be emitted into the current insert point.
+        if (seq_next >= 0 && seq_next < stmtslen) {
+            cursor = seq_next;
+            return;
+        }
+        if (!builder.GetInsertBlock()->getTerminator())
+            builder.CreateUnreachable();
+        if (workstack.empty()) {
+            cursor = -1;
+            return;
+        }
+        auto &item = workstack.back();
+        builder.SetInsertPoint(item.second);
+        cursor = item.first;
+        workstack.pop_back();
+    };
+    auto add_to_list = [&] (int pos, BasicBlock *bb) {
+        if (pos >= stmtslen)
+            return;
+        workstack.push_back({pos, bb});
+    };
+    // returns the corresponding basic block.
+    // if `unconditional` a unconditional branch is created to the target
+    // label and the cursor is set to the next statement to process
+    auto handle_label = [&] (int lname, bool unconditional) {
+        auto it = label_map.find(lname);
+        if (it != label_map.end())
+            lname = it->second;
+        auto &bb = labels[lname];
+        BasicBlock *cur_bb = builder.GetInsertBlock();
+        // Check if we've already visited this label
+        if (bb) {
+            // Already in the work list
+            // branch to it and pop one from the work list
+            if (unconditional) {
+                if (!cur_bb->getTerminator())
+                    builder.CreateBr(bb);
+                find_next_stmt(-1);
+            }
+            return bb;
+        }
+        // If this is a label node in an empty bb
+        if (lname == cursor + 1 && cur_bb->begin() == cur_bb->end()) {
+            assert(unconditional);
+            // Use this bb as the one for the new label.
+            bb = cur_bb;
+        }
+        else {
+            // Otherwise, create a new BB
+            // use the label name as the BB name.
+            bb = BasicBlock::Create(jl_LLVMContext,
+                                    "L" + std::to_string(lname), f);
+            if (unconditional) {
+                if (!cur_bb->getTerminator())
+                    builder.CreateBr(bb);
+                builder.SetInsertPoint(bb);
+            }
+            else {
+                add_to_list(lname, bb);
             }
         }
-        if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
-            jl_expr_t *ex = (jl_expr_t*)stmt;
-            Value *retval;
-            bool retboxed;
+        if (unconditional)
+            find_next_stmt(lname);
+        return bb;
+    };
+
+    // If the first expresion changes the line number, we need to visit
+    // the start of the function. This can happen when the first line is
+    // a inlined function call.
+    if (stmtprops[0].loc_changed && do_coverage) {
+        if (ctx.debug_enabled)
+            builder.SetCurrentDebugLocation(topdebugloc);
+        coverageVisitLine(filename, toplineno);
+    }
+    stmtprops[0].loc_changed = true;
+    while (cursor != -1) {
+        auto &props = stmtprops[cursor];
+        if (props.loc_changed) {
+            if (ctx.debug_enabled)
+                builder.SetCurrentDebugLocation(props.loc);
+            // Disable coverage for pop_loc, it doesn't start a new expression
+            if (do_coverage && props.enabled && !props.is_poploc) {
+                coverageVisitLine(props.file, props.line);
+            }
+        }
+        ctx.is_inbounds = props.is_inbounds;
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
+        jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
+        if (jl_is_labelnode(stmt)) {
+            // Label node
+            int lname = jl_labelnode_label(stmt);
+            handle_label(lname, true);
+            continue;
+        }
+        if (!props.enabled) {
+            find_next_stmt(cursor + 1);
+            continue;
+        }
+        if (expr && expr->head == return_sym) {
+            bool retboxed = false;
             Type *retty;
             if (specsig) {
                 retty = julia_type_to_llvm(jlrettype, &retboxed);
@@ -4706,7 +4801,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 retty = T_pjlvalue;
                 retboxed = true;
             }
-            jl_cgval_t retvalinfo = emit_expr(jl_exprarg(ex,0), &ctx);
+            jl_cgval_t retvalinfo = emit_expr(jl_exprarg(expr, 0), &ctx);
+            Value *retval;
             if (retboxed) {
                 retval = boxed(retvalinfo, &ctx, false); // skip the gcroot on the return path
                 assert(!ctx.sret);
@@ -4715,52 +4811,77 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 retval = emit_unbox(retty, retvalinfo, jlrettype,
                                     ctx.sret ? &*ctx.f->arg_begin() : NULL);
             }
-            else // undef return type
+            else { // undef return type
                 retval = NULL;
-            if (do_malloc_log && lno != -1)
-                mallocVisitLine(filename, lno);
+            }
+            if (do_malloc_log && props.line != -1)
+                mallocVisitLine(props.file, props.line);
             if (type_is_ghost(retty) || ctx.sret)
                 builder.CreateRetVoid();
             else
                 builder.CreateRet(retval);
-            if (i != stmtslen-1) {
-                BasicBlock *bb =
-                    BasicBlock::Create(jl_LLVMContext, "ret", ctx.f);
-                builder.SetInsertPoint(bb);
-            }
+            find_next_stmt(-1);
+            continue;
         }
-        else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == boundscheck_sym) {
-            // always emit expressions that update the boundscheck stack
-            emit_stmtpos(stmt, &ctx);
+        if (jl_is_gotonode(stmt)) {
+            int lname = jl_gotonode_label(stmt);
+            handle_label(lname, true);
+            continue;
         }
-        else if (is_inbounds(&ctx) && is_bounds_check_block(&ctx) &&
-                 jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_ON) {
-            // elide bounds check blocks in inbounds context
+        if (expr && expr->head == goto_ifnot_sym) {
+            jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
+            jl_value_t *cond = args[0];
+            int lname = jl_unbox_long(args[1]);
+            Value *isfalse = emit_condition(cond, "if", &ctx);
+            if (do_malloc_log && props.line != -1)
+                mallocVisitLine(props.file, props.line);
+            BasicBlock *ifso = BasicBlock::Create(jl_LLVMContext, "if", f);
+            BasicBlock *ifnot = handle_label(lname, false);
+            // Any branches treated as constant in type inference should be
+            // eliminated before running
+            builder.CreateCondBr(isfalse, ifnot, ifso);
+            builder.SetInsertPoint(ifso);
         }
-        else if (is_bounds_check_block(&ctx) &&
-                 jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_OFF) {
-            // elide bounds check blocks when turned off by options
+        else if (expr && expr->head == enter_sym) {
+            jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
+            assert(jl_is_long(args[0]));
+            int lname = jl_unbox_long(args[0]);
+            CallInst *sj = builder.CreateCall(prepare_call(except_enter_func));
+            // We need to mark this on the call site as well. See issue #6757
+            sj->setCanReturnTwice();
+            Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32, 0));
+            BasicBlock *tryblk = BasicBlock::Create(jl_LLVMContext, "try", f);
+            BasicBlock *handlr = handle_label(lname, false);
+#ifdef _OS_WINDOWS_
+            BasicBlock *cond_resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "cond_resetstkoflw", f);
+            BasicBlock *resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "resetstkoflw", f);
+            builder.CreateCondBr(isz, tryblk, cond_resetstkoflw_blk);
+            builder.SetInsertPoint(cond_resetstkoflw_blk);
+            builder.CreateCondBr(builder.CreateICmpEQ(
+                                     literal_pointer_val(jl_stackovf_exception),
+                                     builder.CreateLoad(emit_exc_in_transit(&ctx), true)),
+                                 resetstkoflw_blk, handlr);
+            builder.SetInsertPoint(resetstkoflw_blk);
+            builder.CreateCall(prepare_call(resetstkoflw_func)
+#                          ifdef LLVM37
+                               , {}
+#                          endif
+                );
+            builder.CreateBr(handlr);
+#else
+            builder.CreateCondBr(isz, tryblk, handlr);
+#endif
+            builder.SetInsertPoint(tryblk);
         }
         else {
             emit_stmtpos(stmt, &ctx);
+            if (do_malloc_log && props.line != -1) {
+                mallocVisitLine(props.file, props.line);
+            }
         }
+        find_next_stmt(cursor + 1);
     }
-
     builder.SetCurrentDebugLocation(noDbg);
-
-    // sometimes we have dangling labels after the end
-    if (builder.GetInsertBlock()->getTerminator() == NULL) {
-        builder.CreateUnreachable();
-    }
-
-    // patch up dangling BasicBlocks from skipped labels
-    for (std::map<int,BasicBlock*>::iterator it = labels.begin(); it != labels.end(); ++it) {
-        if (it->second->getTerminator() == NULL) {
-            builder.SetInsertPoint(it->second);
-            builder.CreateUnreachable();
-        }
-    }
-
     builder.ClearInsertionPoint();
 
     // step 13, Apply LLVM level inlining
@@ -4780,7 +4901,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 
     // step 14. Perform any delayed instantiations
     if (ctx.debug_enabled) {
-        ctx.dbuilder->finalize();
+        dbuilder.finalize();
     }
 
     JL_GC_POP();
