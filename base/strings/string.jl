@@ -80,6 +80,8 @@ end
     return Char(c), i
 end
 
+done(s::String, state) = state > endof(s.data)
+
 @inline function next(s::String, i::Int)
     # function is split into this critical fast-path
     # for pure ascii data, such as parsing numbers,
