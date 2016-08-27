@@ -1444,6 +1444,7 @@ function unshare_linfo!(li::LambdaInfo)
 end
 
 inlining_enabled() = (JLOptions().can_inline == 1)
+coverage_enabled() = (JLOptions().code_coverage != 0)
 
 #### entry points for inferring a LambdaInfo given a type signature ####
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool, optimize::Bool, cached::Bool, caller)
@@ -1917,14 +1918,12 @@ function finish(me::InferenceState)
         # optimizing and use unoptimized IR in codegen.
         gotoifnot_elim_pass!(me.linfo, me)
         inlining_pass!(me.linfo, me)
-        inbounds_meta_elim_pass!(me.linfo.code)
         void_use_elim_pass!(me.linfo, me)
         alloc_elim_pass!(me.linfo, me)
         getfield_elim_pass!(me.linfo, me)
         # Clean up for `alloc_elim_pass!` and `getfield_elim_pass!`
         void_use_elim_pass!(me.linfo, me)
-        # remove placeholders
-        filter!(x->x!==nothing, me.linfo.code)
+        meta_elim_pass!(me.linfo, me.linfo.code::Array{Any,1})
         # Pop metadata before label reindexing
         force_noinline = popmeta!(me.linfo.code::Array{Any,1}, :noinline)[1]
         reindex_labels!(me.linfo, me)
@@ -2479,7 +2478,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 if spec_miss !== nothing
                     push!(stmts, merge)
                 end
-                #println(stmts)
                 return (ret_var, stmts)
             end
         else
@@ -3229,14 +3227,256 @@ function void_use_elim_pass!(linfo::LambdaInfo, sv)
     return
 end
 
-# removes inbounds metadata if we never encounter an inbounds=true or
-# boundscheck context in the method body
-function inbounds_meta_elim_pass!(code::Array{Any,1})
-    if findfirst(x -> isa(x, Expr) &&
-                      ((x.head === :inbounds && x.args[1] === true) || x.head === :boundscheck),
-                 code) == 0
-        filter!(x -> !(isa(x, Expr) && x.head === :inbounds), code)
+function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1})
+    # 1. Remove place holders
+    #
+    # 2. If coverage is off, remove line number nodes that don't mark any
+    #    real expressions.
+    #
+    # 3. Remove top level SSAValue
+    #
+    # 4. Handle bounds check elision
+    #
+    #    4.1. If check_bounds is always on, delete all `Expr(:boundscheck)`
+    #    4.2. If check_bounds is always off, delete all boundscheck blocks.
+    #    4.3. If check_bounds is default, figure out whether each checkbounds
+    #         blocks needs to be eliminated or could be eliminated when inlined
+    #         into another function. Delete the blocks that should be eliminated
+    #         and delete the `Expr(:boundscheck)` for blocks that will never be
+    #         deleted. (i.e. the ones that are not eliminated with
+    #         `length(inbounds_stack) >= 2`)
+    #
+    #    When deleting IR with boundscheck, keep the label node in order to not
+    #    confuse later passes or codegen. (we could also track if  any SSAValue
+    #    is deleted while still having uses that are not but that's a little
+    #    expensive).
+    #
+    # 5. Clean up `Expr(:inbounds)`
+    #
+    #    Delete all `Expr(:inbounds)` that is unnecessary, which is all of them
+    #    for non-default check_bounds. For default check_bounds this includes
+    #
+    #    * `Expr(:inbounds, true)` in `Expr(:inbounds, true)`
+    #    * `Expr(:inbounds, false)` when
+    #      `!is_inbounds && length(inbounds_stack) >= 2`
+    #
+    #    Functions without `propagate_inbounds` have an implicit `false` on the
+    #    `inbounds_stack`
+    #
+    #    There are other cases in which we can eliminate `Expr(:inbounds)` or
+    #    `Expr(:boundscheck)` (e.g. when they don't enclose any non-meta
+    #    expressions). Those are a little harder to detect and are hopefully
+    #    not too common.
+    do_coverage = coverage_enabled()
+    check_bounds = JLOptions().check_bounds
+
+    inbounds_stack = linfo.propagate_inbounds ? Bool[] : [false]
+    # Whether the push is deleted (therefore if the pop has to be too)
+    # Shared for `Expr(:boundscheck)` and `Expr(:inbounds)`
+    bounds_elim_stack = Bool[]
+    # The expression index of the push, set to `0` when encountering a
+    # non-meta expression that might be affect by the push.
+    # The clearing needs to be propagated up during pop
+    # This is not pushed to if the push is already eliminated
+    # Also shared for `Expr(:boundscheck)` and `Expr(:inbounds)`
+    bounds_push_pos_stack = [0]
+    # Number of boundscheck pushes in a eliminated boundscheck block
+    void_boundscheck_depth = 0
+    is_inbounds = check_bounds == 2
+    enabled = true
+
+    # Position of the last line number node without any non-meta expressions
+    # in between.
+    prev_dbg_stack = [0]
+    # Whether there's any non-meta exprs after the enclosing `push_loc`
+    push_loc_pos_stack = [0]
+
+    for i in 1:length(code)
+        ex = code[i]
+        if ex === nothing
+            continue
+        elseif isa(ex, SSAValue)
+            code[i] = nothing
+            continue
+        elseif isa(ex, LabelNode)
+            prev_dbg_stack[end] = 0
+            push_loc_pos_stack[end] = 0
+            continue
+        elseif !do_coverage && (isa(ex, LineNumberNode) ||
+                                (isa(ex, Expr) && (ex::Expr).head === :line))
+            prev_label = prev_dbg_stack[end]
+            if prev_label != 0
+                code[prev_label] = nothing
+            end
+            prev_dbg_stack[end] = i
+            continue
+        elseif !isa(ex, Expr)
+            if enabled
+                prev_dbg_stack[end] = 0
+                push_loc_pos_stack[end] = 0
+                bounds_push_pos_stack[end] = 0
+            else
+                code[i] = nothing
+            end
+            continue
+        end
+        ex = ex::Expr
+        args = ex.args
+        head = ex.head
+        if head === :boundscheck
+            if !enabled
+                # we are in an eliminated boundscheck, simply record the number
+                # of push/pop
+                if !(args[1] === :pop)
+                    void_boundscheck_depth += 1
+                elseif void_boundscheck_depth == 0
+                    pop!(bounds_elim_stack)
+                    enabled = true
+                else
+                    void_boundscheck_depth -= 1
+                end
+                code[i] = nothing
+            elseif args[1] === :pop
+                # This will also delete pops that don't match
+                if (isempty(bounds_elim_stack) ? true :
+                    pop!(bounds_elim_stack))
+                    code[i] = nothing
+                    continue
+                end
+                push_idx = bounds_push_pos_stack[end]
+                if length(bounds_push_pos_stack) > 1
+                    pop!(bounds_push_pos_stack)
+                end
+                if push_idx > 0
+                    code[push_idx] = nothing
+                    code[i] = nothing
+                else
+                    bounds_push_pos_stack[end] = 0
+                end
+            elseif is_inbounds
+                code[i] = nothing
+                push!(bounds_elim_stack, true)
+                enabled = false
+            elseif check_bounds == 1 || length(inbounds_stack) >= 2
+                # Not inbounds and at least two levels deep, this will never
+                # be eliminated when inlined to another function.
+                code[i] = nothing
+                push!(bounds_elim_stack, true)
+            else
+                push!(bounds_elim_stack, false)
+                push!(bounds_push_pos_stack, i)
+            end
+            continue
+        end
+        if !enabled && !(do_coverage && head === :meta)
+            code[i] = nothing
+            continue
+        end
+        if head === :inbounds
+            if check_bounds != 0
+                code[i] = nothing
+                continue
+            end
+            arg1 = args[1]
+            if arg1 === true
+                if inbounds_stack[end]
+                    code[i] = nothing
+                    push!(bounds_elim_stack, true)
+                else
+                    is_inbounds = true
+                    push!(bounds_elim_stack, false)
+                    push!(bounds_push_pos_stack, i)
+                end
+                push!(inbounds_stack, true)
+            elseif arg1 === false
+                if is_inbounds
+                    if !inbounds_stack[end]
+                        is_inbounds = false
+                    end
+                    push!(bounds_elim_stack, false)
+                    push!(bounds_push_pos_stack, i)
+                elseif length(inbounds_stack) >= 2
+                    code[i] = nothing
+                    push!(bounds_elim_stack, true)
+                else
+                    push!(bounds_elim_stack, false)
+                    push!(bounds_push_pos_stack, i)
+                end
+                push!(inbounds_stack, false)
+            else
+                # pop
+                inbounds_len = length(inbounds_stack)
+                if inbounds_len != 0
+                    pop!(inbounds_stack)
+                    inbounds_len -= 1
+                end
+                # This will also delete pops that don't match
+                if (isempty(bounds_elim_stack) ? true :
+                    pop!(bounds_elim_stack))
+                    # No need to update `is_inbounds` since the push was a no-op
+                    code[i] = nothing
+                    continue
+                end
+                if inbounds_len >= 2
+                    is_inbounds = (inbounds_stack[inbounds_len] ||
+                                   inbounds_stack[inbounds_len - 1])
+                elseif inbounds_len == 1
+                    is_inbounds = inbounds_stack[inbounds_len]
+                else
+                    is_inbounds = false
+                end
+                push_idx = bounds_push_pos_stack[end]
+                if length(bounds_push_pos_stack) > 1
+                    pop!(bounds_push_pos_stack)
+                end
+                if push_idx > 0
+                    code[push_idx] = nothing
+                    code[i] = nothing
+                else
+                    bounds_push_pos_stack[end] = 0
+                end
+            end
+            continue
+        end
+        if head !== :meta
+            prev_dbg_stack[end] = 0
+            push_loc_pos_stack[end] = 0
+            bounds_push_pos_stack[end] = 0
+            continue
+        end
+        nargs = length(args)
+        if do_coverage || nargs == 0
+            continue
+        end
+        arg1 = args[1]
+        if arg1 === :push_loc
+            push!(prev_dbg_stack, 0)
+            push!(push_loc_pos_stack, i)
+        elseif arg1 === :pop_loc
+            prev_dbg = if length(prev_dbg_stack) > 1
+                pop!(prev_dbg_stack)
+            else
+                prev_dbg_stack[end]
+            end
+            if prev_dbg > 0
+                code[prev_dbg] = nothing
+            end
+            push_loc = if length(push_loc_pos_stack) > 1
+                pop!(push_loc_pos_stack)
+            else
+                push_loc_pos_stack[end]
+            end
+            if push_loc > 0
+                code[push_loc] = nothing
+                code[i] = nothing
+            else
+                push_loc_pos_stack[end] = 0
+            end
+        else
+            continue
+        end
     end
+    filter!(x->x!==nothing, code)
 end
 
 # does the same job as alloc_elim_pass for allocations inline in getfields
