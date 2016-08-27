@@ -146,6 +146,22 @@ for idx in ((3,), (2,2), (Base.ReshapedIndex(1),))
     end
 end
 
+# conversion from ReshapedArray to Array (#18262)
+a = Base.ReshapedArray(1:3, (3, 1), ())
+@test convert(Array, a) == a
+@test convert(Array{Int}, a) == a
+@test convert(Array{Float64}, a) == a
+@test convert(Matrix, a) == a
+@test convert(Matrix{Int}, a) == a
+@test convert(Matrix{Float64}, a) == a
+b = Base.ReshapedArray(1:3, (3,), ())
+@test convert(Array, b) == b
+@test convert(Array{Int}, b) == b
+@test convert(Array{Float64}, b) == b
+@test convert(Vector, b) == b
+@test convert(Vector{Int}, b) == b
+@test convert(Vector{Float64}, b) == b
+
 # operations with LinearFast ReshapedArray
 b = collect(1:12)
 a = Base.ReshapedArray(b, (4,3), ())
