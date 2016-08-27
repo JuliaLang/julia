@@ -87,7 +87,7 @@ static int _enonfatal(int err)
 #define MAXSIZE ((1l << 31) - 1)   // OSX cannot handle blocks larger than this
 #define LIMIT_IO_SIZE(n) ((n) < MAXSIZE ? (n) : MAXSIZE)
 #elif defined(_OS_WINDOWS_)
-#define MAXSIZE (0x7fffffff)       // Windows read() takes a uint
+#define MAXSIZE (0x00003fff)       // Windows read() takes a uint
 #define LIMIT_IO_SIZE(n) ((n) < (size_t)MAXSIZE ? (unsigned int)(n) : MAXSIZE)
 #else
 #define LIMIT_IO_SIZE(n) (n)
