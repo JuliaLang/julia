@@ -286,7 +286,7 @@ end
 
 # conj
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
-@test full(conj(cA)) == conj(full(cA))
+@test full(conj.(cA)) == conj(full(cA))
 
 # Test SparseMatrixCSC [c]transpose[!] and permute[!] methods
 let smalldim = 5, largedim = 10, nzprob = 0.4
@@ -461,21 +461,46 @@ end
 @test maximum(sparse(-ones(3,3))) == -1
 @test minimum(sparse(ones(3,3))) == 1
 
-# Unary functions
-a = sprand(5,15, 0.5)
-afull = full(a)
-for op in (:sin, :cos, :tan, :ceil, :floor, :abs, :abs2)
-    @eval begin
-        @test ($op)(afull) == full($(op)(a))
+# Test unary functions with specialized broadcast over SparseMatrixCSCs
+let
+    A = sprand(5, 15, 0.5)
+    C = A + im*A
+    Afull = full(A)
+    Cfull = full(C)
+    # Test representatives of [unary functions that map zeros to zeros and may map nonzeros to zeros]
+    @test sin.(Afull) == full(sin.(A))
+    @test tan.(Afull) == full(tan.(A)) # should be redundant with sin test
+    @test ceil.(Afull) == full(ceil.(A))
+    @test floor.(Afull) == full(floor.(A)) # should be redundant with ceil test
+    @test real.(Afull) == full(real.(A))
+    @test imag.(Afull) == full(imag.(A))
+    @test real.(Cfull) == full(real.(C))
+    @test imag.(Cfull) == full(imag.(C))
+    # Test representatives of [unary functions that map zeros to zeros and nonzeros to nonzeros]
+    @test expm1.(Afull) == full(expm1.(A))
+    @test abs.(Afull) == full(abs.(A))
+    @test abs2.(Afull) == full(abs2.(A))
+    @test abs.(Cfull) == full(abs.(C))
+    @test abs2.(Cfull) == full(abs2.(C))
+    # Test representatives of [unary functions that map both zeros and nonzeros to nonzeros]
+    @test cos.(Afull) == full(cos.(A))
+    # Test representatives of remaining vectorized-nonbroadcast unary functions
+    @test ceil(Int, Afull) == full(ceil(Int, A))
+    @test floor(Int, Afull) == full(floor(Int, A))
+    # Tests of real, imag, abs, and abs2 for SparseMatrixCSC{Int,X}s previously elsewhere
+    for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
+        R = rand(T[1:100;], 2, 2)
+        I = rand(T[1:100;], 2, 2)
+        D = R + I*im
+        S = sparse(D)
+        @test R == real.(S)
+        @test I == imag.(S)
+        @test real.(sparse(R)) == R
+        @test nnz(imag.(sparse(R))) == 0
+        @test abs.(S) == abs(D)
+        @test abs2.(S) == abs2(D)
     end
 end
-
-for op in (:ceil, :floor)
-    @eval begin
-        @test ($op)(Int,afull) == full($(op)(Int,a))
-    end
-end
-
 
 # getindex tests
 ni = 23
@@ -872,7 +897,7 @@ end
 @test_throws ArgumentError sparsevec(Dict(-1=>1,1=>2))
 
 # issue #8976
-@test conj(sparse([1im])) == sparse(conj([1im]))
+@test conj.(sparse([1im])) == sparse(conj([1im]))
 @test conj!(sparse([1im])) == sparse(conj!([1im]))
 
 # issue #9525
@@ -1038,18 +1063,6 @@ end
 x = speye(100)
 @test_throws BoundsError x[-10:10]
 
-for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
-    let R=rand(T[1:100;],2,2), I=rand(T[1:100;],2,2)
-        D = R + I*im
-        S = sparse(D)
-        @test R == real(S)
-        @test I == imag(S)
-        @test real(sparse(R)) == R
-        @test nnz(imag(sparse(R))) == 0
-        @test abs(S) == abs(D)
-        @test abs2(S) == abs2(D)
-    end
-end
 
 # issue #10407
 @test maximum(spzeros(5, 5)) == 0.0
