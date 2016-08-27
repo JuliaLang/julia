@@ -1280,6 +1280,13 @@ widenconst(t::ANY) = t
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
 
+# Meta expression head, these generally can't be deleted even when they are
+# in a dead branch but can be ignored when analyzing uses/liveness.
+is_meta_expr_head(head::Symbol) =
+    (head === :inbounds || head === :boundscheck || head === :meta ||
+     head === :line)
+is_meta_expr(ex::Expr) = is_meta_expr_head(ex.head)
+
 function tmerge(typea::ANY, typeb::ANY)
     typea ⊑ typeb && return typeb
     typeb ⊑ typea && return typea
@@ -1389,9 +1396,7 @@ function find_ssavalue_uses(e::ANY, uses, line)
     elseif isa(e,Expr)
         b = e::Expr
         head = b.head
-        if head === :line
-            return
-        end
+        is_meta_expr_head(head) && return
         if head === :(=)
             if isa(b.args[1],SSAValue)
                 id = (b.args[1]::SSAValue).id+1
@@ -2032,7 +2037,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, undefs, pass)
 
     e = e::Expr
     head = e.head
-    if is(head,:line) || is(head,:const)
+    if is_meta_expr_head(head) || is(head,:const)
         return e
     elseif is(head,:(=))
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, undefs, pass)
@@ -2046,12 +2051,6 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, undefs, pass)
         end
     end
     return e
-end
-
-function expr_cannot_delete(ex::Expr)
-    head = ex.head
-    return (head === :inbounds || head === :boundscheck || head === :meta ||
-            head === :line)
 end
 
 # annotate types of all symbols in AST
@@ -2082,7 +2081,7 @@ function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, nargs)
                 record_slot_type!(id, widenconst(states[i+1][id].typ), linfo.slottypes)
             end
         elseif optimize
-            if ((isa(expr, Expr) && expr_cannot_delete(expr::Expr)) ||
+            if ((isa(expr, Expr) && is_meta_expr(expr::Expr)) ||
                 isa(expr, LineNumberNode))
                 i += 1
                 continue
@@ -2154,9 +2153,10 @@ function substitute!(e::ANY, na, argexprs, spvals, offset)
     end
     if isa(e,Expr)
         e = e::Expr
-        if e.head === :static_parameter
+        head = e.head
+        if head === :static_parameter
             return spvals[e.args[1]]
-        elseif e.head !== :line
+        elseif !is_meta_expr_head(head)
             for i=1:length(e.args)
                 e.args[i] = substitute!(e.args[i], na, argexprs, spvals, offset)
             end
@@ -2170,8 +2170,7 @@ function occurs_more(e::ANY, pred, n)
     if isa(e,Expr)
         e = e::Expr
         head = e.head
-        (head === :line || head === :meta || head === :inbounds ||
-         head === :boundscheck) && return 0
+        is_meta_expr_head(head) && return 0
         c = 0
         for a = e.args
             c += occurs_more(a, pred, n)
@@ -2256,8 +2255,7 @@ function effect_free(e::ANY, linfo::LambdaInfo, allow_volatile::Bool)
     elseif isa(e, Expr)
         e = e::Expr
         head = e.head
-        if head === :static_parameter || head === :meta || head === :line ||
-            head === :inbounds || head === :boundscheck
+        if head === :static_parameter || is_meta_expr_head(head)
             return true
         end
         ea = e.args
@@ -2729,7 +2727,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     if !isempty(stmts)
-        if all(stmt -> (isa(stmt,Expr) && stmt.head === :line) || isa(stmt, LineNumberNode) || stmt === nothing,
+        if all(stmt -> (isa(stmt, Expr) && is_meta_expr(stmt::Expr)) || isa(stmt, LineNumberNode) || stmt === nothing,
                stmts)
             empty!(stmts)
         else
@@ -2778,13 +2776,7 @@ function inline_ignore(ex::ANY)
     if isa(ex, LineNumberNode) || ex === nothing
         return true
     end
-    if isa(ex, Expr)
-        ex = ex::Expr
-        head = ex.head
-        return (head === :line || head === :meta || head === :inbounds ||
-                head === :boundscheck)
-    end
-    return false
+    return isa(ex, Expr) && is_meta_expr(ex::Expr)
 end
 
 function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost; nominal cost = 1000
@@ -2811,7 +2803,7 @@ end
 ssavalue_increment(body::ANY, incr) = body
 ssavalue_increment(body::SSAValue, incr) = SSAValue(body.id + incr)
 function ssavalue_increment(body::Expr, incr)
-    if body.head === :line
+    if is_meta_expr(body)
         return body
     end
     for i in 1:length(body.args)
@@ -3179,6 +3171,8 @@ function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
     end
     if isa(e,Expr)
         e = e::Expr
+        head = e.head
+        is_meta_expr_head(head) && return false
         if is_known_call(e, getfield, linfo) && symequal(e.args[2],sym)
             idx = e.args[3]
             if isa(idx,QuoteNode) && (idx.value in field_names)
@@ -3189,11 +3183,11 @@ function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
             end
             return true
         end
-        if is(e.head,:(=))
+        if head === :(=)
             return occurs_outside_getfield(linfo, e.args[2], sym, sv,
                                            field_count, field_names)
         else
-            if (e.head === :block && isa(sym, Slot) &&
+            if (head === :block && isa(sym, Slot) &&
                 linfo.slotflags[(sym::Slot).id] & Slot_UsedUndef == 0)
                 ignore_void = true
             else
