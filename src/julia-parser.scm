@@ -1218,11 +1218,8 @@
         (list 'bitstype (with-space-sensitive (parse-cond s))
               (parse-subtype-spec s)))
        ((typealias)
-        (let ((lhs (parse-call s)))
-          (if (and (pair? lhs) (eq? (car lhs) 'call))
-              ;; typealias X (...) is tuple type alias, not call
-              (list 'typealias (cadr lhs) (cons 'tuple (cddr lhs)))
-              (list 'typealias lhs (parse-arrow s)))))
+        (let ((lhs (with-space-sensitive (parse-call s))))
+              (list 'typealias lhs (parse-arrow s))))
        ((try)
         (let ((try-block (if (memq (require-token s) '(catch finally))
                              '(block)
