@@ -151,4 +151,27 @@ end
 
 @test B2() == 0
 
+# Make sure type inference doesn't incorrectly optimize out
+# `Expr(:inbounds, false)`
+# Simply `return a[1]` doesn't work due to inlining bug
+@inline function f1(a)
+    # This has to be an arrayget / arrayset since these currently have a
+    # implicit `Expr(:boundscheck)` that's not visible to type inference
+    x = a[1]
+    return x
+end
+# second level
+@inline function g1(a)
+    x = f1(a)
+    return x
+end
+function k1(a)
+    # This `Expr(:inbounds, true)` shouldn't affect `f1`
+    @inbounds x = g1(a)
+    return x
+end
+if bc_opt != bc_off
+    @test_throws BoundsError k1(Int[])
+end
+
 end
