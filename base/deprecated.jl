@@ -852,4 +852,17 @@ function convert(::Type{UpperTriangular}, A::Bidiagonal)
     end
 end
 
+# Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
+for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
+        :tan, :tanh, :tand, :atan, :atanh, :atand,
+        :sinpi, :cosc, :ceil, :floor, :trunc, :round, :real, :imag,
+        :log1p, :expm1, :abs, :abs2, :conj,
+        :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
+        :cos, :cosh, :cosd, :acos, :acosd,
+        :cot, :coth, :cotd, :acot, :acotd,
+        :sec, :sech, :secd, :asech,
+        :csc, :csch, :cscd, :acsch)
+    @eval @deprecate $f(A::SparseMatrixCSC) $f.(A)
+end
+
 # End deprecations scheduled for 0.6
