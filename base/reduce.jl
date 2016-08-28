@@ -45,7 +45,7 @@ function mapfoldl_impl(f, op, v0, itr, i)
         (x, i) = next(itr, i)
         v = op(r_promote(op, v0), f(x))
         while !done(itr, i)
-            (x, i) = next(itr, i)
+            @inbounds (x, i) = next(itr, i)
             v = op(v, f(x))
         end
         return v
