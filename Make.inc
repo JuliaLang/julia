@@ -630,14 +630,19 @@ else
 ISX86:=0
 endif
 
-# If we are running on powerpc64 or ppc64, set certain options automatically
-ifneq (,$(filter $(ARCH), powerpc64 powerpc64le ppc64 ppc64le))
+# If we are running on powerpc64le or ppc64le, set certain options automatically
+ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
 override LLVM_VER:=3.8.1
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=POWER8
 # GCC doesn't do -march= on ppc64le
 override MARCH=
+endif
+
+# If we are running on powerpc64 or ppc64, fail out dramatically
+ifneq (,$(filter $(ARCH), powerpc64 ppc64))
+$(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
 endif
 
 # If we are running on ARM, set certain options automatically
