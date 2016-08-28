@@ -273,11 +273,20 @@ end
 # they are taken from the range/vector
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
-indices(S::SubArray) = (@_inline_pure_meta; _indices_sub(S, indices(S.parent), S.indexes...))
+indices(S::SubArray) = (@_inline_meta; _indices_sub(S, indices(S.parent), S.indexes...))
 _indices_sub(S::SubArray, pinds) = ()
-_indices_sub(S::SubArray, pinds, ::Real, I...) = _indices_sub(S, tail(pinds), I...)
-_indices_sub(S::SubArray, pinds, ::Colon, I...) = (pinds[1], _indices_sub(S, tail(pinds), I...)...)
-_indices_sub(S::SubArray, pinds, i1::AbstractArray, I...) = (unsafe_indices(i1)..., _indices_sub(S, tail(pinds), I...)...)
+function _indices_sub(S::SubArray, pinds, ::Real, I...)
+    @_inline_meta
+    _indices_sub(S, tail(pinds), I...)
+end
+function _indices_sub(S::SubArray, pinds, ::Colon, I...)
+    @_inline_meta
+    (pinds[1], _indices_sub(S, tail(pinds), I...)...)
+end
+function _indices_sub(S::SubArray, pinds, i1::AbstractArray, I...)
+    @_inline_meta
+    (unsafe_indices(i1)..., _indices_sub(S, tail(pinds), I...)...)
+end
 
 ## Compatability
 # deprecate?
