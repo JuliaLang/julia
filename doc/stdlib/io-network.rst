@@ -494,13 +494,13 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call ``show``\ . The representation used by ``print`` includes minimal formatting and tries to avoid Julia-specific details.
+   Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call ``show``\ . The representation used by ``print`` includes minimal formatting and tries to avoid Julia-specific details. To write to a specific output stream use ``print(io, x)`` where the first argument is a stream. In case of additional arguments, ``print(x...)`` or ``print(io, x...)`` will write the text representation of all arguments to the respective output stream.
 
 .. function:: println(x)
 
    .. Docstring generated from Julia source
 
-   Print (using :func:`print`\ ) ``x`` followed by a newline.
+   Print (using :func:`print`\ ) ``x`` followed by a newline. To print to a specific output stream use ``println(io, x)`` where the first argument is a stream. In case of multiple arguments, ``println(x...)`` or ``println(io, x...)`` will print all arguments followed by a newline to the respective output stream.
 
 .. function:: print_with_color(color::Symbol, [io], strings...)
 
