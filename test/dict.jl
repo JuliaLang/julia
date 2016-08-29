@@ -555,3 +555,6 @@ let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9
         end
     end
 end
+
+# #18213
+Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a deprecation
