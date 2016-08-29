@@ -338,6 +338,7 @@ ifeq ($(OS),WINNT)
 	-$(INSTALL_M) $(build_bindir)/*.dll $(DESTDIR)$(bindir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 else
 	-cp -a $(build_libexecdir) $(DESTDIR)$(prefix)
 
