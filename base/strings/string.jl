@@ -80,6 +80,8 @@ end
     return Char(c), i
 end
 
+# This implementation relies on `next` returning a value past the end of the
+# String's underlying data, which is true for valid Strings
 done(s::String, state) = state > endof(s.data)
 
 @inline function next(s::String, i::Int)

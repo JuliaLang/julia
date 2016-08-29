@@ -427,3 +427,9 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 
 # issue #17624, missing getindex method for String
 @test "abc"[:] == "abc"
+
+# issue #18280: next/nextind must return past String's underlying data
+for s in ("Hello", "Σ", "こんにちは", "😊😁")
+    @test next(s, endof(s))[2] > endof(s.data)
+    @test nextind(s, endof(s)) > endof(s.data)
+end
