@@ -49,7 +49,7 @@ function issorted(itr, order::Ordering)
     prev, state = next(itr, state)
     while !done(itr, state)
         this, state = next(itr, state)
-        lt(order, this, prev) && return false
+        lt(order, this, prev) && !lt(order, prev, this) && return false
         prev = this
     end
     return true
