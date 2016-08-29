@@ -1343,6 +1343,14 @@ indexes = collect(R)
 @test length(indexes) == 12
 @test length(R) == 12
 @test ndims(R) == 2
+@test in(CartesianIndex((2,3)), R)
+@test in(CartesianIndex((3,3)), R)
+@test in(CartesianIndex((3,5)), R)
+@test in(CartesianIndex((5,5)), R)
+@test !in(CartesianIndex((1,3)), R)
+@test !in(CartesianIndex((3,2)), R)
+@test !in(CartesianIndex((3,6)), R)
+@test !in(CartesianIndex((6,5)), R)
 
 @test CartesianRange((3:5,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(5,7))
 @test CartesianRange((3,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(3,7))

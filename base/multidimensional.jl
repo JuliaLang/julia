@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, zero, one, isless, eachindex, ndims, iteratorsize
+import Base: eltype, length, size, start, done, next, last, in, getindex, setindex!, linearindexing, min, max, zero, one, isless, eachindex, ndims, iteratorsize
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index
 using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
@@ -129,6 +129,12 @@ dimlength(start, stop) = stop-start+1
 length(iter::CartesianRange) = prod(size(iter))
 
 last(iter::CartesianRange) = iter.stop
+
+@inline function in{I<:CartesianIndex}(i::I, r::CartesianRange{I})
+    _in(true, i.I, r.start.I, r.stop.I)
+end
+_in(b, ::Tuple{}, ::Tuple{}, ::Tuple{}) = b
+@inline _in(b, i, start, stop) = _in(b & (start[1] <= i[1] <= stop[1]), tail(i), tail(start), tail(stop))
 
 simd_outer_range(iter::CartesianRange{CartesianIndex{0}}) = iter
 function simd_outer_range{I}(iter::CartesianRange{I})
