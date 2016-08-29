@@ -213,7 +213,7 @@ function broadcast_t(f, ::Type{Any}, As...)
     shape = broadcast_shape(As...)
     iter = CartesianRange(shape)
     if isempty(iter)
-        return similar(Array{Union{}}, shape)
+        return similar(Array{Any}, shape)
     end
     nargs = length(As)
     keeps, Idefaults = map_newindexer(shape, As)
