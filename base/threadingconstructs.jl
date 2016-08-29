@@ -18,39 +18,31 @@ on `threadid()`.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
-function _threadsfor(iter,lbody)
+function _threadsfor(iters,lbody)
     fun = gensym("_threadsfor")
-    lidx = iter.args[1]         # index
-    range = iter.args[2]
+    if iters.head == :(=)
+        lidxs = Expr(:tuple, iters.args[1])
+        ranges = Expr(:tuple, iters.args[2])
+    else
+        lidxs = Expr(:tuple, (iter.args[1] for iter in iters.args)...)
+        ranges = Expr(:tuple, (iter.args[2] for iter in iters.args)...)
+    end
+    ndim = length(lidxs.args)
     quote
         function $fun()
             tid = threadid()
-            r = $(esc(range))
-            # divide loop iterations among threads
-            len, rem = divrem(length(r), nthreads())
-            # not enough iterations for all the threads?
-            if len == 0
-                if tid > rem
-                    return
-                end
-                len, rem = 1, 0
+            rs = $(esc(ranges))
+            dims = map(length,rs)
+            # convert a "flattened" 1-d index into the N-tuple index into an N-d array
+            ndi(i,dims::NTuple{1,Integer}) = i
+            function ndi{N}(i,dims::NTuple{N,Integer})
+                d,r = divrem(i-1,dims[1])
+                tuple(r+1,ndi(d+1,dims[2:end])...)
             end
-            # compute this thread's iterations
-            f = 1 + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
-                else
-                    f = f + rem
-                    l = l + rem
-                end
-            end
-            # run this thread's iterations
-            for i = f:l
-                local $(esc(lidx)) = Base.unsafe_getindex(r,i)
+            # each thread does every `nthreads`-th flattened index
+            for i = tid:nthreads():*(dims...)
+                $(Expr(:tuple,(Symbol("i_$i") for i=1:ndim)...)) = ndi(i,dims)
+                $(esc(lidxs)) = $(Expr(:tuple,(:(Base.unsafe_getindex(rs[$i],$(Symbol("i_$i")))) for i=1:ndim)...))
                 $(esc(lbody))
             end
         end
@@ -80,4 +72,3 @@ macro threads(args...)
         throw(ArgumentError("unrecognized argument to @threads"))
     end
 end
-

@@ -397,3 +397,28 @@ function test_load_and_lookup_18020(n)
     end
 end
 test_load_and_lookup_18020(10000)
+
+
+# make sure syntax is parsed correctly and all elements are visited once
+function test_thread_nloop(size)
+    a = zeros(size,size,size)
+    @threads for i=1:size, j=1:size, k=1:size
+        a[i,j,k] += 1
+    end
+    @test all(a.==1)
+end
+test_thread_nloop(10)
+
+
+# make sure syntax is parsed correctly and all elements are visited once
+function test_thread_tupleloop()
+    idxs = [(1,2),(3,4)]
+    a = zeros(5,5)
+    @threads for (i,j) = idxs
+        a[i,j] += 1
+    end
+    for i=1:5, j=1:5
+        @test a[i,j] == ((i,j) in idxs ? 1 : 0)
+    end
+end
+test_thread_tupleloop()
