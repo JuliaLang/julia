@@ -311,9 +311,19 @@ end
 let f17314 = x -> x < 0 ? false : x
     @test eltype(broadcast(f17314, 1:3)) === Int
     @test eltype(broadcast(f17314, -1:1)) === Integer
-    @test eltype(broadcast(f17314, Int[])) === Union{}
+    @test eltype(broadcast(f17314, Int[])) === Any
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects
     @test takebuf_array(io) == [0x31,0x32,0x33,0x34,0x35]
+end
+
+# Issue 18176
+let f18176(a, b, c) = a + b + c
+    @test f18176.(1.0:2, 3, 4) == f18176.(3.0, 1.0:2, 4.0) == broadcast(f18176, 3, 4, 1.0:2)
+end
+
+# Issue #17984
+let A17984 = []
+    @test isa(abs.(A17984), Array{Any,1})
 end
