@@ -2,15 +2,70 @@
 
 module Read
 
-import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError, ..Dir
+import ...LibGit2, ..Cache, ..Reqs, ...Pkg.PkgError, ..Dir, ..isdevmetadata
 using ..Types
+
+devmetapkgpath(s::AbstractString) = joinpath(uppercase(string(s[1])), s * ".versions")
 
 readstrip(path...) = strip(readstring(joinpath(path...)))
 
-url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
-sha1(pkg::AbstractString, ver::VersionNumber) = readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
+function url(pkg::AbstractString, dev::Bool = false)
+    if dev
+        chomp(readline(joinpath(Dir.path("METADATA"), devmetapkgpath(pkg))))
+    else
+        readstrip(Dir.path("METADATA"), pkg, "url")
+    end
+end
 
-function available(names=readdir("METADATA"))
+# Should only be called when cache is guaranteed to be updated
+sha1(pkg::AbstractString, ver::VersionNumber) = PKG_AVAILABLE_CACHE.pkgs[pkg][ver].sha1
+
+type AvailableCache
+    sha::String
+    pkgs::Dict{String, Dict{VersionNumber, Available}}
+end
+
+PKG_AVAILABLE_CACHE = AvailableCache("", Dict{String, Dict{VersionNumber, Available}}())
+
+# Reads
+function read_version{T <: AbstractString}(s::Vector{T}, i::Int)
+    version = s[i]; i += 1
+    i += 1 # skip "-----" under the version
+    sha = s[i]; i += 1
+    requires = String[]
+    while i <= length(s) && !isempty(s[i])
+        push!(requires, s[i]); i += 1
+    end
+    i += 1 # skip the empty string
+    return version, sha, requires, i
+end
+
+
+function read_package!(pkgs, lines::Vector, pkg_name::AbstractString)
+    i = 3 # Skip url + empty line
+    isempty(lines[i]) && return
+    while i <= length(lines)
+        ver, sha, requires, i = read_version(lines, i)
+        haskey(pkgs, pkg_name) || (pkgs[pkg_name] = Dict{VersionNumber,Available}())
+        z = Reqs.parse(requires)
+        q = Available(sha, z)
+        pkgs[pkg_name][VersionNumber(ver)] = q
+    end
+end
+
+function available_dev(names)
+    cd("METADATA") do
+        pkgs = Dict{String,Dict{VersionNumber,Available}}()
+        for pkg in names
+            path = devmetapkgpath(pkg)
+            !isfile(path) && continue
+            read_package!(pkgs, split(readstring(path), '\n'), pkg)
+        end
+        return pkgs
+    end
+end
+
+function available_orig(names)
     pkgs = Dict{String,Dict{VersionNumber,Available}}()
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
@@ -28,27 +83,78 @@ function available(names=readdir("METADATA"))
     end
     return pkgs
 end
-available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
 
-function latest(names=readdir("METADATA"))
-    pkgs = Dict{String,Available}()
-    for pkg in names
-        isfile("METADATA", pkg, "url") || continue
-        versdir = joinpath("METADATA", pkg, "versions")
-        isdir(versdir) || continue
-        pkgversions = VersionNumber[]
-        for ver in readdir(versdir)
-            ismatch(Base.VERSION_REGEX, ver) || continue
-            isfile(versdir, ver, "sha1") || continue
-            push!(pkgversions, convert(VersionNumber,ver))
+available(names) = isdevmetadata() ? available_dev(names) : available_orig(names)
+
+function available(pkg::AbstractString)
+    avail = isdevmetadata() ? available_dev([pkg]) : available_orig([pkg])
+    get(avail, pkg, Dict{VersionNumber,Available}())
+end
+
+# Uses cached data if not outdated
+function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
+    if isdevmetadata()
+        names = String[]
+        cd("METADATA") do
+            for firstletterpath in filter(x->isdir(x) && !startswith(x, '.'), readdir())
+                append!(names, map(x -> split(x, ".versions")[1], readdir(firstletterpath)))
+            end
         end
-        isempty(pkgversions) && continue
-        ver = string(maximum(pkgversions))
-        pkgs[pkg] = Available(
-                readchomp(joinpath(versdir,ver,"sha1")),
-                Reqs.parse(joinpath(versdir,ver,"requires"))
-            )
+    else
+        names = readdir("METADATA")
     end
+    return LibGit2.with(LibGit2.GitRepo("METADATA")) do repo
+        LibGit2.with(LibGit2.head(repo)) do head
+            sha = string(Base.LibGit2.Oid(head))
+            LibGit2.with(LibGit2.GitStatus(repo)) do status
+                # Only use cache if nothing funky is going on, this should be true in the majority of cases
+                if length(status) == 0
+                    # Sha does not match, update the cache with the new pkgs
+                    if cache.sha != sha
+                        cache.pkgs = available(names)
+                        cache.sha = sha
+                    end
+                    return cache.pkgs
+                end
+                return available(names)
+            end
+        end
+    end
+end
+
+function latest(dev::Bool = false)
+    pkgs = Dict{String,Available}()
+    if dev
+         # Use the cache in available() for dev version
+        pkgs_all = available()
+        for (pkg, v) in pkgs_all
+            isempty(pkg) && continue
+            ver = maximum(keys(v))
+            pkgs[pkg] = v[ver]
+        end
+    else
+        # For the current metadata version `isdirty` is actually slow enough
+        # that using the cache is not worth it in terms of performance.
+        names = readdir("METADATA")
+        for pkg in names
+            isfile("METADATA", pkg, "url") || continue
+            versdir = joinpath("METADATA", pkg, "versions")
+            isdir(versdir) || continue
+            pkgversions = VersionNumber[]
+            for ver in readdir(versdir)
+                ismatch(Base.VERSION_REGEX, ver) || continue
+                isfile(versdir, ver, "sha1") || continue
+                push!(pkgversions, convert(VersionNumber,ver))
+            end
+            isempty(pkgversions) && continue
+            ver = string(maximum(pkgversions))
+            pkgs[pkg] = Available(
+                    readchomp(joinpath(versdir,ver,"sha1")),
+                    Reqs.parse(joinpath(versdir,ver,"requires"))
+                )
+        end
+    end
+
     return pkgs
 end
 
@@ -57,7 +163,11 @@ isinstalled(pkg::AbstractString) =
 
 function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
     isinstalled(pkg) || throw(PkgError("$pkg is not an installed package."))
-    isfile("METADATA", pkg, "url") || return true
+    if isdevmetadata()
+        isfile("METADATA", devmetapkgpath(pkg)) || return true
+    else
+        isfile("METADATA", pkg, "url") || return true
+    end
     ispath(pkg, ".git") || return true
 
     LibGit2.isdirty(prepo) && return true

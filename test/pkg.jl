@@ -2,13 +2,13 @@
 
 import Base.Pkg.PkgError
 
-function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
+function temp_pkg_dir(fn::Function, branch, remove_tmp_dir::Bool=true)
     # Used in tests below to set up and tear down a sandboxed package directory
     const tmpdir = joinpath(tempdir(),randstring())
     withenv("JULIA_PKGDIR" => tmpdir) do
         @test !isdir(Pkg.dir())
         try
-            Pkg.init()
+            Pkg.init(Pkg.DEFAULT_META, branch)
             @test isdir(Pkg.dir())
             Pkg.resolve()
             fn()
@@ -57,9 +57,10 @@ macro grab_outputs(ex)
     end
 end
 
+for branch in (Pkg.META_BRANCH, Pkg.DEVEL_META_BRANCH)
 # Test basic operations: adding or removing a package, status, free
 # Also test for the existence of REQUIRE and META_BRANCH
-temp_pkg_dir() do
+temp_pkg_dir(branch) do
     @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
     @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
     @test isempty(Pkg.installed())
@@ -434,7 +435,7 @@ temp_pkg_dir() do
     end
 
     # Test Pkg.Read.url works
-    @test Pkg.Read.url("Example") == "git://github.com/JuliaLang/Example.jl.git"
+    @test Pkg.Read.url("Example", Pkg.isdevmetadata()) == "git://github.com/JuliaLang/Example.jl.git"
 
     # issue #15789, build failure warning are printed correctly.
     # Also makes sure `Pkg.build()` works even for non-git repo
@@ -513,32 +514,35 @@ temp_pkg_dir() do
         @test contains(err, nothingtodomsg)
 
         metadata_dir = Pkg.dir("METADATA")
-        const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
+        if !Pkg.isdevmetadata()
+            const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
 
-        # Force a METADATA rollback to an old version, so that we will install some
-        # outdated versions of some packages and then update some of those
-        # (note that the following Pkg.update calls will update METADATA to the
-        # latest version even though they don't update all packages)
-        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
-            LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
+            # Force a METADATA rollback to an old version, so that we will install some
+            # outdated versions of some packages and then update some of those
+            # (note that the following Pkg.update calls will update METADATA to the
+            # latest version even though they don't update all packages)
+            LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
+                LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
+            end
+
+            ret, out, err = @grab_outputs Pkg.add("Colors")
+            @test ret === nothing && out == ""
+            @test contains(err, "INFO: Installing Colors v0.6.4")
+            @test contains(err, "INFO: Installing ColorTypes v0.2.2")
+            @test contains(err, "INFO: Installing FixedPointNumbers v0.1.3")
+            @test contains(err, "INFO: Installing Compat v0.7.18")
+            @test contains(err, "INFO: Installing Reexport v0.0.3")
+
+            ret, out, err = @grab_outputs Pkg.update("ColorTypes")
+            @test ismatch(r"INFO: Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+", err)
+            @test ismatch(r"INFO: Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+", err)
+            @test !contains(err, "INFO: Upgrading Colors: ")
+            @test Pkg.installed("Colors") == v"0.6.4"
+
+            ret, out, err = @grab_outputs Pkg.update("FixedPointNumbers")
+            @test ret === nothing && out == ""
+            @test contains(err, nothingtodomsg)
         end
-
-        ret, out, err = @grab_outputs Pkg.add("Colors")
-        @test ret === nothing && out == ""
-        @test contains(err, "INFO: Installing Colors v0.6.4")
-        @test contains(err, "INFO: Installing ColorTypes v0.2.2")
-        @test contains(err, "INFO: Installing FixedPointNumbers v0.1.3")
-        @test contains(err, "INFO: Installing Compat v0.7.18")
-        @test contains(err, "INFO: Installing Reexport v0.0.3")
-
-        ret, out, err = @grab_outputs Pkg.update("ColorTypes")
-        @test ismatch(r"INFO: Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+", err)
-        @test ismatch(r"INFO: Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+", err)
-        @test !contains(err, "INFO: Upgrading Colors: ")
-        @test Pkg.installed("Colors") == v"0.6.4"
-
-        ret, out, err = @grab_outputs Pkg.update("FixedPointNumbers")
-        @test ret === nothing && out == ""
-        @test contains(err, nothingtodomsg)
     end
+end
 end

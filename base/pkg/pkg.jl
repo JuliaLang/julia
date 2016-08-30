@@ -8,6 +8,9 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
+const DEVEL_META_BRANCH = "metadata-v3"
+
+isdevmetadata() = Dir.getmetabranch() == DEVEL_META_BRANCH
 
 type PkgError <: Exception
     msg::AbstractString

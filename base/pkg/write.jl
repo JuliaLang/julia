@@ -2,11 +2,11 @@
 
 module Write
 
-import ...LibGit2, ..Cache, ..Read, ...Pkg.PkgError
+import ...LibGit2, ..Cache, ..Read, ...Pkg.PkgError, ..isdevmetadata
 importall ...LibGit2
 
 function prefetch(pkg::AbstractString, sha1::AbstractString)
-    isempty(Cache.prefetch(pkg, Read.url(pkg), sha1)) && return
+    isempty(Cache.prefetch(pkg, Read.url(pkg, isdevmetadata()), sha1)) && return
     throw(PkgError("$pkg: couldn't find commit $(sha1[1:10])"))
 end
 
@@ -27,7 +27,7 @@ function fetch(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
 end
 
 function checkout(repo::GitRepo, pkg::AbstractString, sha1::AbstractString)
-    LibGit2.set_remote_url(repo, Cache.normalize_url(Read.url(pkg)))
+    LibGit2.set_remote_url(repo, Cache.normalize_url(Read.url(pkg, isdevmetadata())))
     LibGit2.checkout!(repo, sha1)
 end
 

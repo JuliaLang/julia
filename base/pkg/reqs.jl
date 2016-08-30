@@ -3,7 +3,7 @@
 module Reqs
 
 import Base: ==
-import ...Pkg.PkgError
+import ...Pkg: PkgError, isdevmetadata
 using ..Types
 
 # representing lines of REQUIRE files
@@ -113,8 +113,9 @@ parse(x) = parse(read(x))
 
 function dependents(packagename::AbstractString)
     pkgs = AbstractString[]
+    devmetadata = isdevmetadata()
     cd(Pkg.dir()) do
-        for (pkg,latest) in Pkg.Read.latest()
+        for (pkg,latest) in Pkg.Read.latest(devmetadata)
             if haskey(latest.requires, packagename)
                 push!(pkgs, pkg)
             end
