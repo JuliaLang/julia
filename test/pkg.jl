@@ -439,13 +439,13 @@ temp_pkg_dir() do
         touch(depsbuild)
         # Pkg.build works without the src directory now
         # but it's probably fine to require it.
-        msg = readstring(`$(Base.julia_cmd()) -f -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
         @test contains(msg, "Building BuildFail")
         @test !contains(msg, "ERROR")
         open(depsbuild, "w") do fd
             println(fd, "error(\"Throw build error\")")
         end
-        msg = readstring(`$(Base.julia_cmd()) -f -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
         @test contains(msg, "Building BuildFail")
         @test contains(msg, "ERROR")
         @test contains(msg, "Pkg.build(\"BuildFail\")")
@@ -456,7 +456,7 @@ temp_pkg_dir() do
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
-        msg = readstring(ignorestatus(`$(Base.julia_cmd()) -f -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
+        msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")
     end
