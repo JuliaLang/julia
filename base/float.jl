@@ -503,8 +503,6 @@ isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
-
-isinf(x::Float16) = reinterpret(UInt16,x)&0x7fff == 0x7c00
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## hashing small, built-in numeric types ##
