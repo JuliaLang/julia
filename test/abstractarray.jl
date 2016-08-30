@@ -405,7 +405,19 @@ function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
 
     # convert{T, N}(::Type{Array}, A::AbstractArray{T, N})
     X = [1:10...]
+    Y = [1 2; 3 4]
     @test convert(Array, X) == X
+    @test convert(Array, Y) == Y
+
+    # convert{T}(::Type{Vector}, A::AbstractVector{T})
+    @test convert(Vector, X) == X
+    @test convert(Vector, view(X, 2:4)) == [2,3,4]
+    @test_throws MethodError convert(Vector, Y)
+
+    # convert{T}(::Type{Matrix}, A::AbstractMatrix{T})
+    @test convert(Matrix, Y) == Y
+    @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
+    @test_throws MethodError convert(Matrix, X)
 end
 
 let
@@ -734,3 +746,12 @@ end
 @test ndims(Diagonal(rand(1:5,5))) == 2
 @test ndims(Diagonal{Float64}) == 2
 @test Base.elsize(Diagonal(rand(1:5,5))) == sizeof(Int)
+
+# Issue #17811
+let A17811 = Integer[]
+    I = [abs(x) for x in A17811]
+    @test isa(I, Array{Any,1})
+    push!(I, 1)
+    @test I == Any[1]
+    @test isa(map(abs, A17811), Array{Any,1})
+end
