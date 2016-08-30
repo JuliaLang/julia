@@ -127,6 +127,7 @@ temp_pkg_dir() do
     Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
     @test [keys(Pkg.installed())...] == ["Example"]
     Pkg.status("Example", iob)
+    Pkg.status("notapackage", iob)
     str = chomp(takebuf_string(iob))
     @test startswith(str, " - Example")
     @test endswith(str, "master")
