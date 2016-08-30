@@ -267,6 +267,10 @@ else
     fma(x::Float32, y::Float32, z::Float32) = fma_libm(x,y,z)
     fma(x::Float64, y::Float64, z::Float64) = fma_libm(x,y,z)
 end
+function fma(a::Float16, b::Float16, c::Float16)
+    Float16(fma(Float32(a), Float32(b), Float32(c)))
+end
+
 # This is necessary at least on 32-bit Intel Linux, since fma_llvm may
 # have called glibc, and some broken glibc fma implementations don't
 # properly restore the rounding mode
