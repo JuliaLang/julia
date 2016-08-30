@@ -50,22 +50,26 @@ function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
     names = readdir("METADATA")
     # Not a git repo so just bail on using cache
     if in(".git", names)
-        repo = LibGit2.GitRepo("METADATA")
-        head = LibGit2.head(repo)
-        sha = string(Base.LibGit2.Oid(head))
-        # Only use cache if nothing funky is going on.
-        # This should be true in the majority of cases
-        # Note that GitStatus is unfortunately quite slow due to the way METADATA
-        # is currently structured with so many files.
-        if length(LibGit2.GitStatus(repo)) == 0
-            # Sha does not match, update the cache with the new pkgs
-            if cache.sha != sha
-                cache.pkgs = _available(names)
-                cache.sha = sha
+        pkg, usecache = LibGit2.with(LibGit2.GitRepo("METADATA")) do repo
+            LibGit2.with(LibGit2.head(repo)) do head
+                sha = string(Base.LibGit2.Oid(head))
+                # Only use cache if nothing funky is going on.
+                # This should be true in the majority of cases
+                # Note that GitStatus is unfortunately quite slow due to the way METADATA
+                # is currently structured with so many files.
+                if length(LibGit2.GitStatus(repo)) == 0
+                    # Sha does not match, update the cache with the new pkgs
+                    if cache.sha != sha
+                        cache.pkgs = _available(names)
+                        cache.sha = sha
+                    end
+                    # Copy because some functions that uses this data mutate state, like Pkg.Query.requirements
+                    return copypkg(cache.pkgs), true
+                end
+                nothing, false
             end
-            # Copy because some functions that uses this data mutate state, like Pkg.Query.requirements
-            return copypkg(cache.pkgs)
         end
+        usecache && return pkg
     end
     return _available(names)
 end
