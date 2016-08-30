@@ -468,6 +468,7 @@ end
     box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,Int32(y))))
 ^(x::Float32, y::Integer) =
     box(Float32, powi_llvm(unbox(Float32,x), unbox(Int32,Int32(y))))
+^(x::Float16, y::Integer) = Float16(Float32(x)^y)
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01
