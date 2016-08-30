@@ -28,6 +28,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
     apds  = Symmetric(apd)
     apdsL = Symmetric(apd, :L)
+    apdh  = Hermitian(apd)
+    apdhL = Hermitian(apd, :L)
     ε = εa = eps(abs(float(one(eltya))))
 
     @inferred cholfact(apd)
@@ -64,6 +66,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         capds = cholfact(apds)
         @test inv(capds)*apds ≈ eye(n)
         @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+    else
+        capdh = cholfact(apdh)
+        @test inv(capdh)*apdh ≈ eye(n)
+        @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
     end
 
     # test chol of 2x2 Strang matrix
@@ -89,6 +95,17 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test istriu(cl)
         @test cl'cl ≈ apds
         @test cl'cl ≈ apdsL
+    else
+        capdh = cholfact(apdh)
+        lapdh = cholfact(apdhL)
+        cl    = chol(apdhL)
+        ls = lapdh[:L]
+        @test ls*ls' ≈ apd
+        @test triu(capdh.factors) ≈ lapdh[:U]
+        @test tril(lapdh.factors) ≈ capdh[:L]
+        @test istriu(cl)
+        @test cl'cl ≈ apdh
+        @test cl'cl ≈ apdhL
     end
 
     #pivoted upper Cholesky
@@ -226,4 +243,5 @@ end
 @test_throws ArgumentError cholfact(complex(randn(5,5), randn(5,5)))
 @test_throws ArgumentError Base.LinAlg.chol!(randn(5,5))
 @test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{false})
+@test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{true})
 @test_throws ArgumentError cholfact(randn(5,5),:U,Val{false})
