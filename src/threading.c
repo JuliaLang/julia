@@ -137,7 +137,7 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 // The general solution is to add one more indirection in the C entry point
 // (see `jl_get_ptls_states_wrapper`).
 //
-// When `ifunc` is availabe, we can use it to trick the linker to use the
+// When `ifunc` is available, we can use it to trick the linker to use the
 // real address (`jl_get_ptls_states_static`) directly as the symbol address.
 // (see `jl_get_ptls_states_resolve`).
 //
@@ -145,8 +145,7 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 // is not guaranteed to be reliable, we still need to fallback to the wrapper
 // version as the symbol address if we didn't find the static version in `ifunc`.
 #if defined(__GLIBC__) && (defined(_CPU_X86_64_) || defined(_CPU_X86_) || \
-                           ((defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || \
-                             defined(_CPU_PPC64_) || defined(_CPU_PPC_)) && \
+                          ((defined(_CPU_AARCH64_) || defined(_CPU_ARM_)) && \
                             __GNUC__ >= 6))
 // Only enable this on architectures that are tested.
 // For example, GCC doesn't seem to support the `ifunc` attribute on power yet.
