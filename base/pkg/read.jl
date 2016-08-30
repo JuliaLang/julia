@@ -15,7 +15,7 @@ type AvailableCache
     pkgs::Dict{String, Dict{VersionNumber, Available}}
 end
 
-PKG_AVAILABLE_CACHE = AvailableCache("", Dict{VersionNumber,Available}())
+PKG_AVAILABLE_CACHE = AvailableCache("", Dict{String, Dict{VersionNumber, Available}}())
 
 function copypkg(old_pkg)
     new_pkg = Dict{String, Dict{VersionNumber, Available}}()
