@@ -10,7 +10,22 @@ readstrip(path...) = strip(readstring(joinpath(path...)))
 url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
 sha1(pkg::AbstractString, ver::VersionNumber) = readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
 
-function available(names=readdir("METADATA"))
+type AvailableCache
+    sha::String
+    pkgs::Dict{String, Dict{VersionNumber, Available}}
+end
+
+PKG_AVAILABLE_CACHE = AvailableCache("", Dict{VersionNumber,Available}())
+
+function copypkg(old_pkg)
+    new_pkg = Dict{String, Dict{VersionNumber, Available}}()
+    for (k, v) in old_pkg
+        new_pkg[k] = copy(old_pkg[k])
+    end
+    return new_pkg
+end
+
+function _available(names)
     pkgs = Dict{String,Dict{VersionNumber,Available}}()
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
@@ -28,7 +43,32 @@ function available(names=readdir("METADATA"))
     end
     return pkgs
 end
-available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
+available(pkg::AbstractString) = get(_available([pkg]),pkg,Dict{VersionNumber,Available}())
+
+# Uses cached data if not outdated
+function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
+    names = readdir("METADATA")
+    # Not a git repo so just bail on using cache
+    if in(".git", names)
+        repo = LibGit2.GitRepo("METADATA")
+        head = LibGit2.head(repo)
+        sha = string(Base.LibGit2.Oid(head))
+        # Only use cache if nothing funky is going on.
+        # This should be true in the majority of cases
+        # Note that GitStatus is unfortunately quite slow due to the way METADATA
+        # is currently structured with so many files.
+        if length(LibGit2.GitStatus(repo)) == 0
+            # Sha does not match, update the cache with the new pkgs
+            if cache.sha != sha
+                cache.pkgs = _available(names)
+                cache.sha = sha
+            end
+            # Copy because some functions that uses this data mutate state, like Pkg.Query.requirements
+            return copypkg(cache.pkgs)
+        end
+    end
+    return _available(names)
+end
 
 function latest(names=readdir("METADATA"))
     pkgs = Dict{String,Available}()
