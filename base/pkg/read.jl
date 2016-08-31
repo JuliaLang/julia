@@ -11,11 +11,11 @@ url(pkg::AbstractString) = readstrip(Dir.path("METADATA"), pkg, "url")
 sha1(pkg::AbstractString, ver::VersionNumber) = readstrip(Dir.path("METADATA"), pkg, "versions", string(ver), "sha1")
 
 type AvailableCache
-    sha::String
+    sha::LibGit2.Oid
     pkgs::Dict{String, Dict{VersionNumber, Available}}
 end
 
-PKG_AVAILABLE_CACHE = AvailableCache("", Dict{String, Dict{VersionNumber, Available}}())
+PKG_AVAILABLE_CACHE = AvailableCache(LibGit2.Oid(), Dict{String, Dict{VersionNumber, Available}}())
 
 function copypkg(old_pkg)
     new_pkg = Dict{String, Dict{VersionNumber, Available}}()
@@ -25,7 +25,7 @@ function copypkg(old_pkg)
     return new_pkg
 end
 
-function _available(names)
+function available(names)
     pkgs = Dict{String,Dict{VersionNumber,Available}}()
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
@@ -43,7 +43,7 @@ function _available(names)
     end
     return pkgs
 end
-available(pkg::AbstractString) = get(_available([pkg]),pkg,Dict{VersionNumber,Available}())
+available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
 
 # Uses cached data if not outdated
 function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
@@ -52,7 +52,7 @@ function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
     if in(".git", names)
         pkg, usecache = LibGit2.with(LibGit2.GitRepo("METADATA")) do repo
             LibGit2.with(LibGit2.head(repo)) do head
-                sha = string(Base.LibGit2.Oid(head))
+                sha = Base.LibGit2.Oid(head)
                 # Only use cache if nothing funky is going on.
                 # This should be true in the majority of cases
                 # Note that GitStatus is unfortunately quite slow due to the way METADATA
@@ -61,10 +61,10 @@ function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
                     if length(gitstatus) == 0
                         # Sha does not match, update the cache with the new pkgs
                         if cache.sha != sha
-                            cache.pkgs = _available(names)
+                            cache.pkgs = available(names)
                             cache.sha = sha
                         end
-                        # Copy because some functions that uses this data mutate state, like Pkg.Query.requirements
+                        # Copy because some functions that use this data mutate state, like Pkg.Query.requirements
                         return copypkg(cache.pkgs), true
                     end
                     nothing, false
@@ -73,7 +73,7 @@ function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
         end
         usecache && return pkg
     end
-    return _available(names)
+    return available(names)
 end
 
 function latest(names=readdir("METADATA"))
