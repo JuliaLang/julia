@@ -40,10 +40,6 @@ extern "C" {
 // useful constants
 extern jl_methtable_t *jl_type_type_mt;
 
-// execution of certain certain unpure
-// statements is prohibited from certain
-// callbacks (such as generated functions)
-extern int in_pure_callback;
 typedef void (*tracer_cb)(jl_value_t *tracee);
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 

@@ -472,10 +472,11 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
     jl_svec_t *sparam_vals = env;
     jl_lambda_info_t *func = generator->lambda_template;
     JL_GC_PUSH4(&ex, &linenum, &sparam_vals, &func);
-    int last_in = in_pure_callback;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    int last_in = ptls->in_pure_callback;
     assert(jl_svec_len(func->sparam_syms) == jl_svec_len(sparam_vals));
     JL_TRY {
-        in_pure_callback = 1;
+        ptls->in_pure_callback = 1;
         ex = jl_exprn(lambda_sym, 2);
 
         int nargs = func->nargs;
@@ -525,10 +526,10 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
         for(i = 0, l = jl_array_len(stmts); i < l; i++) {
             jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), func));
         }
-        in_pure_callback = last_in;
+        ptls->in_pure_callback = last_in;
     }
     JL_CATCH {
-        in_pure_callback = last_in;
+        ptls->in_pure_callback = last_in;
         jl_rethrow();
     }
     JL_GC_POP();

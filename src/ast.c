@@ -673,7 +673,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (in_pure_callback)
+    if (ptls->in_pure_callback)
         jl_error("cannot use include inside a generated function");
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
