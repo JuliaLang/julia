@@ -1,2 +1,7 @@
+ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
+OPENBLAS_BRANCH=develop
+OPENBLAS_SHA1=515bc56ea92cf7afa6c8316eb0f760439944300b
+else
 OPENBLAS_BRANCH=v0.2.18
 OPENBLAS_SHA1=12ab1804b6ebcd38b26960d65d254314d8bc33d6
+endif
