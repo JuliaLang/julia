@@ -2,8 +2,6 @@
 
 abstract AbstractChannel
 
-const DEF_CHANNEL_SZ=32
-
 type Channel{T} <: AbstractChannel
     cond_take::Condition    # waiting for data to become available
     cond_put::Condition     # waiting for a writeable slot
@@ -13,12 +11,11 @@ type Channel{T} <: AbstractChannel
     sz_max::Int             # maximum size of channel
 
     function Channel(sz)
-        sz_max = sz == typemax(Int) ? typemax(Int) - 1 : sz
-        new(Condition(), Condition(), :open, Array{T}(0), sz_max)
+        new(Condition(), Condition(), :open, Array{T}(0), sz)
     end
 end
 
-Channel(sz::Int = DEF_CHANNEL_SZ) = Channel{Any}(sz)
+Channel(sz::Int = typemax(Int)) = Channel{Any}(sz)
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 
