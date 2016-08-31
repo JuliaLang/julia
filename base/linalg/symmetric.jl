@@ -313,7 +313,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
             if isposdef(F)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
             else
-                retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
+                retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
             end
             return Symmetric(retmat)
         end

@@ -231,9 +231,9 @@ ctranspose(D::Diagonal) = conj(D)
 diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
-logdet{T<:Real}(D::Diagonal{T}) = sum(log.(D.diag))
+logdet{T<:Real}(D::Diagonal{T}) = sum(log, D.diag)
 function logdet{T<:Complex}(D::Diagonal{T}) #Make sure branch cut is correct
-    x = sum(log.(D.diag))
+    x = sum(log, D.diag)
     -pi<imag(x)<pi ? x : real(x)+(mod2pi(imag(x)+pi)-pi)*im
 end
 # identity matrices via eye(Diagonal{type},n)
@@ -311,7 +311,7 @@ eigvecs(D::Diagonal) = eye(D)
 eigfact(D::Diagonal) = Eigen(eigvals(D), eigvecs(D))
 
 #Singular system
-svdvals{T<:Number}(D::Diagonal{T}) = sort(abs.(D.diag), rev = true)
+svdvals{T<:Number}(D::Diagonal{T}) = sort!(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
 function svd{T<:Number}(D::Diagonal{T})
     S   = abs.(D.diag)
