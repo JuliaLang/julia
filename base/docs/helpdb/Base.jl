@@ -4951,9 +4951,9 @@ Get the process title. On some systems, will always return empty string. (not ex
 Sys.get_process_title
 
 """
-    readcsv(source, T::Type; options...)
+    readcsv(source, [T::Type]; options...)
 
-Equivalent to `readdlm` with `delim` set to comma.
+Equivalent to `readdlm` with `delim` set to comma, and type optionally defined by `T`.
 """
 readcsv
 
