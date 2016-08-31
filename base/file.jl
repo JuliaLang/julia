@@ -205,8 +205,8 @@ end
 """
     cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
 
-Copy the file, link, or directory from *src* to *dest*. `remove_destination=true` will first
-remove an existing `dst`.
+Copy the file, link, or directory from `src` to `dest`.
+`remove_destination=true` will first remove an existing `dst`.
 
 If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
 symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` will be a copy
@@ -566,7 +566,7 @@ end
 """
     readlink(path::AbstractString) -> AbstractString
 
-Returns the value of a symbolic link `path`.
+Returns the target location a symbolic link `path` points to.
 """
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)

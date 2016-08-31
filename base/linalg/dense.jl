@@ -35,7 +35,7 @@ isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(char_up
 """
     isposdef!(A) -> Bool
 
-Test whether a matrix is positive definite, overwriting `A` in the processes.
+Test whether a matrix is positive definite, overwriting `A` in the process.
 """
 isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 

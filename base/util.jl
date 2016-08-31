@@ -325,8 +325,8 @@ println_with_color(color::Symbol, msg::AbstractString...) =
 
 Display an informational message.
 Argument `msg` is a string describing the information to be displayed.
-The `prefix` kwarg can be used to override the default prepending of
-`msg`.
+The `prefix` keyword argument can be used to override the default
+prepending of `msg`.
 
 ```jldoctest
 julia> info("hello world")
