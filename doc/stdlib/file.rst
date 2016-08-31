@@ -73,7 +73,7 @@
 
    .. Docstring generated from Julia source
 
-   Returns the value of a symbolic link ``path``\ .
+   Returns the target location a symbolic link ``path`` points to.
 
 .. function:: chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
 
@@ -185,7 +185,7 @@
 
    .. Docstring generated from Julia source
 
-   Copy the file, link, or directory from *src* to *dest*. ``remove_destination=true`` will first remove an existing ``dst``\ .
+   Copy the file, link, or directory from ``src`` to ``dest``\ . ``remove_destination=true`` will first remove an existing ``dst``\ .
 
    If ``follow_symlinks=false``\ , and ``src`` is a symbolic link, ``dst`` will be created as a symbolic link. If ``follow_symlinks=true`` and ``src`` is a symbolic link, ``dst`` will be a copy of the file or directory ``src`` refers to.
 

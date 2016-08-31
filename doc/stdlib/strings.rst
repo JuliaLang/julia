@@ -347,13 +347,13 @@
 
    .. Docstring generated from Julia source
 
-   Return ``s`` with any leading whitespace and delimiters removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
+   Return ``s`` with any leading whitespace and delimiters removed. The default delimiters to remove are ``' '``\ , ``\t``\ , ``\n``\ , ``\v``\ , ``\f``\ , and ``\r``\ . If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
 
 .. function:: rstrip(s::AbstractString[, chars::Chars])
 
    .. Docstring generated from Julia source
 
-   Return ``s`` with any trailing whitespace and delimiters removed. If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
+   Return ``s`` with any trailing whitespace and delimiters removed. The default delimiters to remove are ``' '``\ , ``\t``\ , ``\n``\ , ``\v``\ , ``\f``\ , and ``\r``\ . If ``chars`` (a character, or vector or set of characters) is provided, instead remove characters contained in it.
 
    .. doctest::
 
@@ -446,7 +446,7 @@
 
    .. Docstring generated from Julia source
 
-   Remove the last character from a string.
+   Remove the last character from ``s``\ .
 
    .. doctest::
 
@@ -466,7 +466,7 @@
 
    .. Docstring generated from Julia source
 
-   Convert a byte index ``i`` to a character index.
+   Convert a byte index ``i`` to a character index with respect to string ``s``\ .
 
 .. function:: chr2ind(s::AbstractString, i::Integer)
 

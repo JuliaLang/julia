@@ -1197,7 +1197,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the rank of a matrix by summing the singular values of ``M`` with magnitude greater than ``tol``\ . By default, the value of ``tol`` is the largest dimension of ``M`` multiplied by the :func:`eps` of the :func:`eltype` of ``M``\ .
+   Compute the rank of a matrix by counting how many singular values of ``M`` have magnitude greater than ``tol``\ . By default, the value of ``tol`` is the largest dimension of ``M`` multiplied by the :func:`eps` of the :func:`eltype` of ``M``\ .
 
 .. function:: norm(A, [p::Real=2])
 
@@ -1268,7 +1268,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Matrix trace.
+   Matrix trace. Sums the diagonal elements of ``M``\ .
+
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> trace(A)
+       5
 
 .. function:: det(M)
 
@@ -1292,7 +1302,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Matrix inverse.
+   Matrix inverse. Computes matrix ``N`` such that ``M * N = I``\ , where ``I`` is the identity matrix. Computed by solving the left-division ``N = M \ I``\ .
 
 .. function:: pinv(M[, tol::Real])
 
@@ -1490,7 +1500,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Test whether a matrix is positive definite, overwriting ``A`` in the processes.
+   Test whether a matrix is positive definite, overwriting ``A`` in the process.
 
 .. function:: istril(A) -> Bool
 

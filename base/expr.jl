@@ -50,6 +50,7 @@ copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
     expand(x)
 
 Takes the expression `x` and returns an equivalent expression in lowered form.
+See also [`code_lowered`](:func:`code_lowered`).
 """
 expand(x::ANY) = ccall(:jl_expand, Any, (Any,), x)
 

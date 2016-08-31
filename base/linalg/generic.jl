@@ -558,8 +558,8 @@ dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
 """
     rank(M[, tol::Real])
 
-Compute the rank of a matrix by summing the singular
-values of `M` with magnitude greater than `tol`.
+Compute the rank of a matrix by counting how many singular
+values of `M` have magnitude greater than `tol`.
 By default, the value of `tol` is the largest
 dimension of `M` multiplied by the [`eps`](:func:`eps`)
 of the [`eltype`](:func:`eltype`) of `M`.
@@ -576,7 +576,17 @@ rank(x::Number) = x==0 ? 0 : 1
 """
     trace(M)
 
-Matrix trace.
+Matrix trace. Sums the diagonal elements of `M`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> trace(A)
+5
+```
 """
 function trace(A::AbstractMatrix)
     checksquare(A)
@@ -594,7 +604,10 @@ inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
 """
     inv(M)
 
-Matrix inverse.
+Matrix inverse. Computes matrix `N` such that
+`M * N = I`, where `I` is the identity matrix.
+Computed by solving the left-division
+`N = M \\ I`.
 """
 function inv{T}(A::AbstractMatrix{T})
     S = typeof(zero(T)/one(T))

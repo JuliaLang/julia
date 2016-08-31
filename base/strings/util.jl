@@ -62,7 +62,7 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 """
     chop(s::AbstractString)
 
-Remove the last character from a string.
+Remove the last character from `s`.
 
 ```jldoctest
 julia> a = string("March")
@@ -106,6 +106,8 @@ const _default_delims = [' ','\t','\n','\v','\f','\r']
     lstrip(s::AbstractString[, chars::Chars])
 
 Return `s` with any leading whitespace and delimiters removed.
+The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
+`\\f`, and `\\r`.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 """
@@ -125,6 +127,8 @@ end
     rstrip(s::AbstractString[, chars::Chars])
 
 Return `s` with any trailing whitespace and delimiters removed.
+The default delimiters to remove are `' '`, `\\t`, `\\n`, `\\v`,
+`\\f`, and `\\r`.
 If `chars` (a character, or vector or set of characters) is provided,
 instead remove characters contained in it.
 

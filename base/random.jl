@@ -153,13 +153,13 @@ end
 """
     randjump(r::MersenneTwister, jumps::Integer, [jumppoly::AbstractString=dSFMT.JPOLY1e21]) -> Vector{MersenneTwister}
 
-Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects where the
-first RNG object given as a parameter and following `MersenneTwister` RNGs in the array
+Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects. The
+first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
 initialized such that a state of the RNG object in the array would be moved forward (without
 generating numbers) from a previous RNG object array element on a particular number of steps
 encoded by the jump polynomial `jumppoly`.
 
-Default jump polynomial moves forward `MersenneTwister` RNG state by 10^20 steps.
+Default jump polynomial moves forward `MersenneTwister` RNG state by `10^20` steps.
 """
 function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     mts = MersenneTwister[]
