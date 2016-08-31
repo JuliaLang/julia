@@ -116,7 +116,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
 
     dmap = x->abs.(x)
     if iparam[7] == 3 # shift-and-invert
-        dmap = x->abs.(1./(x-sigma))
+        dmap = x->abs.(1 ./ (x .- sigma))
     elseif which == "LR" || which == "LA" || which == "BE"
         dmap = real
     elseif which == "SR" || which == "SA"
