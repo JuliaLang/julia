@@ -198,7 +198,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Copy nbytes from the ``IO`` stream object into ``ref`` (converted to a pointer).
+   Copy ``nbytes`` from the ``IO`` stream object into ``ref`` (converted to a pointer).
 
    It is recommended that subtypes ``T<:IO`` override the following method signature to provide more efficient implementations: ``unsafe_read(s::T, p::Ptr{UInt8}, n::UInt)``
 
@@ -206,7 +206,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Copy nbytes from ref (converted to a pointer) into the IO stream object.
+   Copy ``nbytes`` from ``ref`` (converted to a pointer) into the ``IO`` object.
 
    It is recommended that subtypes ``T<:IO`` override the following method signature to provide more efficient implementations: ``unsafe_write(s::T, p::Ptr{UInt8}, n::UInt)``
 
@@ -514,7 +514,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Display an informational message. Argument ``msg`` is a string describing the information to be displayed. The ``prefix`` kwarg can be used to override the default prepending of ``msg``\ .
+   Display an informational message. Argument ``msg`` is a string describing the information to be displayed. The ``prefix`` keyword argument can be used to override the default prepending of ``msg``\ .
 
    .. doctest::
 

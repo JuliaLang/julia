@@ -124,7 +124,7 @@ Getting Around
 
    This function is part of the implementation of ``using`` / ``import``\ , if a module is not already defined in ``Main``\ . It can also be called directly to force reloading a module, regardless of whether it has been loaded before (for example, when interactively developing libraries).
 
-   Loads a source files, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``\ ). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+   Loads a source file, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``\ ). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
 
    When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ . ``require`` is case-sensitive on all platforms, including those with case-insensitive filesystems like macOS and Windows.
 
@@ -132,7 +132,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Creates a precompiled cache file for module (see help for :func:`require`\ ) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``\ , which defaults to ``~/.julia/lib/VERSION``\ . See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
+   Creates a :ref:`man-modules-initialization-precompilation` for a module and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``\ , which defaults to ``~/.julia/lib/VERSION``\ . See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 
 .. function:: __precompile__(isprecompilable::Bool=true)
 
@@ -198,7 +198,7 @@ Getting Around
 
    If ``types`` is specified, returns an array of methods whose types match.
 
-.. function:: methodswith(typ[, module or function][, showparents::Bool=false, meths=Method[]])
+.. function:: methodswith(typ[, module or function][, showparents::Bool=false])
 
    .. Docstring generated from Julia source
 
@@ -1484,7 +1484,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Takes the expression ``x`` and returns an equivalent expression in lowered form.
+   Takes the expression ``x`` and returns an equivalent expression in lowered form. See also :func:`code_lowered`\ .
 
 .. function:: code_lowered(f, types)
 

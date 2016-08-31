@@ -273,7 +273,8 @@ chr2ind(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
 """
     ind2chr(s::AbstractString, i::Integer)
 
-Convert a byte index `i` to a character index.
+Convert a byte index `i` to a character index with
+respect to string `s`.
 """
 function ind2chr(s::AbstractString, i::Integer)
     s[i] # throws error if invalid

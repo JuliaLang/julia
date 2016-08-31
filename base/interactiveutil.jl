@@ -498,7 +498,7 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function][, showparents::Bool=false, meths=Method[]])
+    methodswith(typ[, module or function][, showparents::Bool=false])
 
 Return an array of methods with an argument of type `typ`.
 

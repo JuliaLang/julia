@@ -47,8 +47,6 @@ function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
     r % T
 end
 
-# explicit a==0 test is to handle case of lcm(0,0) correctly
-
 """
     lcm(x,y)
 
@@ -61,7 +59,14 @@ julia> lcm(-2,3)
 6
 ```
 """
-lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : checked_abs(a * div(b, gcd(b,a)))
+function lcm{T<:Integer}(a::T, b::T)
+    # explicit a==0 test is to handle case of lcm(0,0) correctly
+    if a == 0
+        return a
+    else
+        return checked_abs(a * div(b, gcd(b,a)))
+    end
+end
 
 gcd(a::Integer) = a
 lcm(a::Integer) = a
