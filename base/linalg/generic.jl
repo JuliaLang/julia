@@ -658,7 +658,6 @@ cond(x::Number, p) = cond(x)
 
 #Skeel condition numbers
 condskeel(A::AbstractMatrix, p::Real=Inf) = norm(abs.(inv(A))*abs.(A), p)
-condskeel{T<:Integer}(A::AbstractMatrix{T}, p::Real=Inf) = norm(abs.(inv(float(A)))*abs.(A), p)
 
 """
     condskeel(M, [x, p::Real=Inf])
@@ -676,7 +675,6 @@ This quantity is also known in the literature as the Bauer condition number, rel
 condition number, or componentwise relative condition number.
 """
 condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
-condskeel{T<:Integer}(A::AbstractMatrix{T}, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(float(A)))*(abs.(A)*abs.(x)), p)
 
 """
     issymmetric(A) -> Bool
