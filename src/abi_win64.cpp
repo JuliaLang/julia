@@ -37,14 +37,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "abi_x86_vec.h"
+struct ABI_Win64Layout : AbiLayout {
 
-struct AbiState {
-};
-
-const AbiState default_abi_state = {};
-
-bool use_sret(AbiState *state, jl_datatype_t *dt)
+bool use_sret(jl_datatype_t *dt) override
 {
     size_t size = jl_datatype_size(dt);
     if (size <= 8 || is_native_simd_type(dt))
@@ -52,14 +47,14 @@ bool use_sret(AbiState *state, jl_datatype_t *dt)
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
+void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
 {
     size_t size = jl_datatype_size(dt);
     if (size > 8)
         *byRef = true;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
     size_t size = jl_datatype_size(dt);
     if (size > 0 && size <= 8 && !jl_is_bitstype(dt))
@@ -67,8 +62,4 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
     return NULL;
 }
 
-// Windows needs all types pased byRef to be passed in caller allocated memory
-bool need_private_copy(jl_value_t *ty, bool byRef)
-{
-    return byRef;
-}
+};
