@@ -24,25 +24,46 @@ function _threadsfor(iters,lbody)
         lidxs = Expr(:tuple, iters.args[1])
         ranges = Expr(:tuple, iters.args[2])
     else
-        lidxs = Expr(:tuple, (iter.args[1] for iter in iters.args)...)
-        ranges = Expr(:tuple, (iter.args[2] for iter in iters.args)...)
+        # note the `reverse` to put the last "lidx" first (since it varies
+        # first) to match array ordering and make the code below clearer
+        lidxs = Expr(:tuple, (iter.args[1] for iter in reverse(iters.args))...)
+        ranges = Expr(:tuple, (iter.args[2] for iter in reverse(iters.args))...)
     end
     ndim = length(lidxs.args)
+    # recursively get all symbols in the iteration variables, which might
+    # look like ((i,j),k,..), so we can declare them local
+    allsyms(ex) = (typeof(ex) == Symbol) ? [ex] : vcat(map(allsyms,ex.args)...)
+    localvars = allsyms(lidxs)
     quote
         function $fun()
-            tid = threadid()
+            # get dimensions of loops, N1 x N2 x N3....
             rs = $(esc(ranges))
             dims = map(length,rs)
-            # convert a "flattened" 1-d index into the N-tuple index into an N-d array
-            ndi(i,dims::NTuple{1,Integer}) = i
-            function ndi{N}(i,dims::NTuple{N,Integer})
-                d,r = divrem(i-1,dims[1])
-                tuple(r+1,ndi(d+1,dims[2:end])...)
+
+            # split linear index of work, 1:N1*N2*N3*..., evenly among threads
+            tid = threadid()
+            q, r = divrem(*(dims...), nthreads())
+            len = q + (tid <= r ? 1 : 0)
+            if len == 0
+                return
             end
-            # each thread does every `nthreads`-th flattened index
-            for i = tid:nthreads():*(dims...)
-                $(Expr(:tuple,(Symbol("i_$i") for i=1:ndim)...)) = ndi(i,dims)
-                $(esc(lidxs)) = $(Expr(:tuple,(:(Base.unsafe_getindex(rs[$i],$(Symbol("i_$i")))) for i=1:ndim)...))
+            start = q*(tid-1) + min(tid-1,r) + 1
+
+            # get N-d index (i1,i2,i3...) from linear index (and move back one
+            # since the first thing we do in the for loop is increment)
+            i_lidxs = [ind2sub(dims,start-1)...]
+
+            for i=1:len
+                # increment and carry N-d index (i1,i2,i3,...)
+                i_lidxs[1] += 1
+                for j=1:$ndim
+                    if i_lidxs[j]>dims[j]
+                        i_lidxs[j+1] += 1
+                        i_lidxs[j] = 1
+                    end
+                end
+                $(esc(Expr(:local,localvars...)))
+                $(esc(lidxs)) = $(Expr(:tuple,(:(Base.unsafe_getindex(rs[$i],i_lidxs[$i])) for i=1:ndim)...))
                 $(esc(lbody))
             end
         end
