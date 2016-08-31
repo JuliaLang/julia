@@ -153,6 +153,16 @@ end
 show(io::IO, ::MIME"text/plain", X::AbstractArray) = showarray(io, X, false)
 show(io::IO, ::MIME"text/plain", r::Range) = show(io, r) # always use the compact form for printing ranges
 
+# display something useful even for strings containing arbitrary
+# (non-UTF8) binary data:
+function show(io::IO, ::MIME"text/plain", s::String)
+    if isvalid(s)
+        show(io, s)
+    else
+        println(io, sizeof(s), "-byte String of invalid UTF-8 data:")
+        showarray(io, s.data, false; header=false)
+    end
+end
 
 # showing exception objects as descriptive error messages
 
