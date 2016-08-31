@@ -370,7 +370,9 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 {
     // GC safe
     // Get the host information
-    std::string TripleName = sys::getDefaultTargetTriple();
+    std::string TripleName;
+    if (TripleName.empty())
+        TripleName = sys::getDefaultTargetTriple();
     Triple TheTriple(Triple::normalize(TripleName));
 
     std::string MCPU = sys::getHostCPUName();

@@ -87,7 +87,6 @@
 
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
 #  include <llvm/IR/InlineAsm.h>
-#  include <sys/utsname.h>
 #endif
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
@@ -5563,68 +5562,10 @@ static void init_julia_llvm_env(Module *m)
     addOptimizationPasses(jl_globalPM);
 }
 
-static inline std::string getNativeTarget()
-{
-    std::string cpu = sys::getHostCPUName();
-#if defined(_CPU_ARM_)
-    // Try slightly harder than LLVM at determine the CPU architecture.
-    if (cpu == "generic") {
-        // This is the most reliable way I can find
-        // `/proc/cpuinfo` changes between kernel versions
-        struct utsname name;
-        if (uname(&name) >= 0) {
-            // name.machine is the elf_platform in the kernel.
-            if (strcmp(name.machine, "armv6l") == 0) {
-                return "armv6";
-            }
-            if (strcmp(name.machine, "armv7l") == 0) {
-                return "armv7";
-            }
-            if (strcmp(name.machine, "armv7ml") == 0) {
-                // Thumb
-                return "armv7-m";
-            }
-            if (strcmp(name.machine, "armv8l") == 0 ||
-                strcmp(name.machine, "aarch64") == 0) {
-                return "armv8";
-            }
-        }
-    }
-#endif
-    return cpu;
-}
-
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
-// Check if the cpu name is a ARM/AArch64 arch name and return a
-// string that can be used as LLVM feature name
-static inline std::string checkARMArchFeature(const std::string &cpu)
-{
-    const char *prefix = "armv";
-    size_t prefix_len = strlen(prefix);
-    if (cpu.size() <= prefix_len ||
-        memcmp(cpu.data(), prefix, prefix_len) != 0 ||
-        cpu[prefix_len] < '1' || cpu[prefix_len] > '9')
-        return std::string();
-#if defined(_CPU_ARM_)
-    // "v7" and "v8" are not available in the form of `armv*`
-    // in the feature list
-    if (cpu == "armv7") {
-        return "v7";
-    }
-    else if (cpu == "armv8") {
-        return "v8";
-    }
-    return cpu;
-#else
-    return cpu.substr(3);
-#endif
-}
-#endif
-
 // Helper to figure out what features to set for the LLVM target
 // If the user specifies native (or does not specify) we default
 // using the API provided by LLVM
-static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
+static inline SmallVector<std::string,10> getTargetFeatures()
 {
     StringMap<bool> HostFeatures;
     if (!strcmp(jl_options.cpu_target,"native")) {
@@ -5653,63 +5594,16 @@ static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
 #endif
 
     // Figure out if we know the cpu_target
-    cpu = (strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target :
-           getNativeTarget());
-#if defined(_CPU_ARM_)
-    // Figure out what we are compiling against from the C defines.
-    // This might affect ABI but is fine since
-    // 1. We define the C ABI explicitly.
-    // 2. This does not change when running the same binary on different
-    //    machines.
-    // This shouldn't affect making generic binaries since that requires a
-    // generic C -march anyway.
-    HostFeatures["vfp2"] = true;
-
-    // Arch version
-#if __ARM_ARCH >= 8
-    HostFeatures["v8"] = true;
-#elif __ARM_ARCH >= 7
-    HostFeatures["v7"] = true;
-#else
-    // minimum requirement
-    HostFeatures["v6"] = true;
+    std::string cpu = strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : sys::getHostCPUName();
+    if (cpu.empty() || cpu == "generic") {
+        jl_printf(JL_STDERR, "WARNING: unable to determine host cpu name.\n");
+#if defined(_CPU_ARM_) && defined(__ARM_PCS_VFP)
+        // Check if this is required when you have read the features directly from the processor
+        // This affects the platform calling convention.
+        // TODO: enable vfp3 for ARMv7+ (but adapt the ABI)
+        HostFeatures["vfp2"] = true;
 #endif
-
-    // ARM profile
-    // Only do this on ARM and not AArch64 since LLVM aarch64 backend
-    // doesn't support setting profiles.
-    // AFAIK there's currently no 64bit R and M profile either
-    // (v8r and v8m are both 32bit)
-#if defined(__ARM_ARCH_PROFILE)
-#  if __ARM_ARCH_PROFILE == 'A'
-    HostFeatures["aclass"] = true;
-#  elif __ARM_ARCH_PROFILE == 'R'
-    HostFeatures["rclass"] = true;
-#  elif __ARM_ARCH_PROFILE == 'M'
-    // Thumb
-    HostFeatures["mclass"] = true;
-#  endif
-#endif
-#endif // _CPU_ARM_
-
-    // On ARM and AArch64, allow using cpu_target to specify a CPU architecture
-    // which is specified in the feature set in LLVM.
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
-    // Supported ARM arch names on LLVM 3.8:
-    //   armv6, armv6-m, armv6j, armv6k, armv6kz, armv6s-m, armv6t2,
-    //   armv7, armv7-a, armv7-m, armv7-r, armv7e-m, armv7k, armv7s,
-    //   armv8, armv8-a, armv8.1-a, armv8.2-a
-    // Additional ARM arch names on LLVM 3.9:
-    //   armv8-m.base, armv8-m.main
-    //
-    // Supported AArch64 arch names on LLVM 3.8:
-    //   armv8.1a, armv8.2a
-    std::string arm_arch = checkARMArchFeature(cpu);
-    if (!arm_arch.empty()) {
-        HostFeatures[arm_arch] = true;
-        cpu = "generic";
     }
-#endif
 
     SmallVector<std::string,10> attr;
     for (StringMap<bool>::const_iterator it = HostFeatures.begin(); it != HostFeatures.end(); it++) {
@@ -5826,8 +5720,8 @@ extern "C" void jl_init_codegen(void)
     TheTriple.setEnvironment(Triple::ELF);
 #endif
 #endif
-    std::string TheCPU;
-    SmallVector<std::string, 10> targetFeatures = getTargetFeatures(TheCPU);
+    std::string TheCPU = strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : sys::getHostCPUName();
+    SmallVector<std::string, 10>  targetFeatures = getTargetFeatures( );
     jl_TargetMachine = eb.selectTarget(
             TheTriple,
             "",
