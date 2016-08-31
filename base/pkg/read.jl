@@ -57,16 +57,18 @@ function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
                 # This should be true in the majority of cases
                 # Note that GitStatus is unfortunately quite slow due to the way METADATA
                 # is currently structured with so many files.
-                if length(LibGit2.GitStatus(repo)) == 0
-                    # Sha does not match, update the cache with the new pkgs
-                    if cache.sha != sha
-                        cache.pkgs = _available(names)
-                        cache.sha = sha
+                LibGit2.with(LibGit2.GitStatus(repo)) do gitstatus
+                    if length(gitstatus) == 0
+                        # Sha does not match, update the cache with the new pkgs
+                        if cache.sha != sha
+                            cache.pkgs = _available(names)
+                            cache.sha = sha
+                        end
+                        # Copy because some functions that uses this data mutate state, like Pkg.Query.requirements
+                        return copypkg(cache.pkgs), true
                     end
-                    # Copy because some functions that uses this data mutate state, like Pkg.Query.requirements
-                    return copypkg(cache.pkgs), true
+                    nothing, false
                 end
-                nothing, false
             end
         end
         usecache && return pkg
