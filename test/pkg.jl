@@ -515,6 +515,12 @@ temp_pkg_dir() do
             LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
+        # METADATA has changed, see if cache realizes it.
+        empty!(Pkg.Read.PKG_AVAILABLE_CACHE.pkgs)
+        Pkg.available()
+        @test Pkg.Read.PKG_AVAILABLE_CACHE.sha == LibGit2.Oid(old_commit)
+        @test !isempty(Pkg.Read.PKG_AVAILABLE_CACHE.pkgs)
+
         ret, out, err = @grab_outputs Pkg.add("Colors")
         @test ret === nothing && out == ""
         @test contains(err, "INFO: Installing Colors v0.6.4")
