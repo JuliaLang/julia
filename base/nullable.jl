@@ -110,6 +110,26 @@ isequal(x::Nullable{Union{}}, y::Nullable{Union{}}) = true
 isequal(x::Nullable{Union{}}, y::Nullable) = y.isnull
 isequal(x::Nullable, y::Nullable{Union{}}) = x.isnull
 
+null_safe_op{S<:NullSafeTypes,
+             T<:NullSafeTypes}(::typeof(isless), ::Type{S}, ::Type{T}) = true
+null_safe_op{S<:NullSafeTypes,
+             T<:NullSafeTypes}(::typeof(isless), ::Type{Complex{S}}, ::Type{Complex{T}}) = true
+null_safe_op{S<:NullSafeTypes,
+             T<:NullSafeTypes}(::typeof(isless), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
+
+function isless{S,T}(x::Nullable{S}, y::Nullable{T})
+    # NULL values are sorted last
+    if null_safe_op(isless, S, T)
+        (!x.isnull & y.isnull) | (!x.isnull & !y.isnull & isless(x.value, y.value))
+    else
+        (!x.isnull & y.isnull) || (!x.isnull & !y.isnull && isless(x.value, y.value))
+    end
+end
+
+isless(x::Nullable{Union{}}, y::Nullable{Union{}}) = false
+isless(x::Nullable{Union{}}, y::Nullable) = false
+isless(x::Nullable, y::Nullable{Union{}}) = !x.isnull
+
 ==(x::Nullable, y::Nullable) = throw(NullException())
 
 const nullablehash_seed = UInt === UInt64 ? 0x932e0143e51d0171 : 0xe51d0171
