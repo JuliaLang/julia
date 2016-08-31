@@ -607,8 +607,6 @@ $(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binar
 pass 'MARCH=pentium4'.)
 endif
 
-JULIA_CPU_TARGET ?= native
-
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
 override ARCH := x86_64
@@ -684,6 +682,8 @@ FC += -Wa,-q
 AS += -q
 endif
 endif
+
+JULIA_CPU_TARGET ?= native
 
 # Set some ARCH-specific flags
 ifneq ($(USEICC),1)
