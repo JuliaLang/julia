@@ -148,9 +148,9 @@ LLVM_CMAKE += -DLLDB_DISABLE_PYTHON=ON
 endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
 
-ifeq ($(ARCH), ppc64)
+ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 LLVM_CXXFLAGS += -mminimal-toc
-endif # ARCH == ppc64
+endif
 
 # LLVM bug #24157
 ifeq ($(USE_LLVM_SHLIB),1)
