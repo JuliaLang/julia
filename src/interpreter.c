@@ -15,7 +15,8 @@ extern "C" {
 #endif
 
 typedef struct {
-    jl_lambda_info_t *lam;
+    jl_source_info_t *src;
+    jl_module_t *module;
     jl_value_t **locals;
     jl_svec_t *sparam_vals;
 } interpreter_state;
@@ -32,14 +33,18 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 }
 
 JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
-                                                       jl_lambda_info_t *lam)
+                                                       jl_source_info_t *src,
+                                                       jl_svec_t *sparam_vals)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *v=NULL;
     jl_module_t *last_m = ptls->current_module;
     jl_module_t *task_last_m = ptls->current_task->current_module;
     interpreter_state s;
-    s.lam = lam; s.locals = NULL; s.sparam_vals = NULL;
+    s.src = src;
+    s.module = m;
+    s.locals = NULL;
+    s.sparam_vals = sparam_vals;
 
     JL_TRY {
         ptls->current_task->current_module = ptls->current_module = m;
@@ -150,34 +155,34 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     jl_gc_wb(tt, tt->super);
 }
 
-static int jl_linfo_nslots(jl_lambda_info_t *li)
+static int jl_source_nslots(jl_source_info_t *src)
 {
-    return jl_array_len(li->slotflags);
+    return jl_array_len(src->slotflags);
 }
 
-static int jl_linfo_nssavalues(jl_lambda_info_t *li)
+static int jl_source_nssavalues(jl_source_info_t *src)
 {
-    return jl_is_long(li->ssavaluetypes) ? jl_unbox_long(li->ssavaluetypes) : jl_array_len(li->ssavaluetypes);
+    return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
 }
 
 static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_lambda_info_t *lam = s==NULL ? NULL : s->lam;
+    jl_source_info_t *src = s==NULL ? NULL : s->src;
     if (jl_is_ssavalue(e)) {
         ssize_t id = ((jl_ssavalue_t*)e)->id;
-        if (id >= jl_linfo_nssavalues(lam) || id < 0 || s->locals == NULL)
+        if (id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
             jl_error("access to invalid SSAValue");
         else
-            return s->locals[jl_linfo_nslots(lam) + id];
+            return s->locals[jl_source_nslots(src) + id];
     }
     if (jl_is_slot(e)) {
         ssize_t n = jl_slot_number(e);
-        if (n > jl_linfo_nslots(lam) || n < 1 || s->locals == NULL)
+        if (n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
         jl_value_t *v = s->locals[n-1];
         if (v == NULL)
-            jl_undefined_var_error((jl_sym_t*)jl_array_ptr_ref(lam->slotnames,n-1));
+            jl_undefined_var_error((jl_sym_t*)jl_array_ptr_ref(src->slotnames, n - 1));
         return v;
     }
     if (jl_is_globalref(e)) {
@@ -189,7 +194,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     }
     if (jl_is_quotenode(e))
         return jl_fieldref(e,0);
-    jl_module_t *modu = (lam == NULL || lam->def == NULL) ? ptls->current_module : lam->def->module;
+    jl_module_t *modu = (s == NULL ? ptls->current_module : s->module);
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         jl_value_t *v = jl_get_global(modu, (jl_sym_t*)e);
         if (v == NULL)
@@ -222,10 +227,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     else if (ex->head == static_parameter_sym) {
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
-        if (s->sparam_vals)
-            return jl_svecref(s->sparam_vals, n - 1);
-        if (n <= jl_svec_len(lam->sparam_vals)) {
-            jl_value_t *sp = jl_svecref(lam->sparam_vals, n - 1);
+        if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
+            jl_value_t *sp = jl_svecref(s->sparam_vals, n - 1);
             if (!jl_is_typevar(sp))
                 return sp;
         }
@@ -263,7 +266,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], s);
         meth = eval(args[2], s);
-        jl_method_def((jl_svec_t*)atypes, (jl_lambda_info_t*)meth, args[3]);
+        jl_method_def((jl_svec_t*)atypes, (jl_source_info_t*)meth, args[3]);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -481,13 +484,13 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                 jl_value_t *rhs = eval(jl_exprarg(stmt,1), s);
                 if (jl_is_ssavalue(sym)) {
                     ssize_t genid = ((jl_ssavalue_t*)sym)->id;
-                    if (genid >= jl_linfo_nssavalues(s->lam) || genid < 0)
+                    if (genid >= jl_source_nssavalues(s->src) || genid < 0)
                         jl_error("assignment to invalid GenSym location");
-                    s->locals[jl_linfo_nslots(s->lam) + genid] = rhs;
+                    s->locals[jl_source_nslots(s->src) + genid] = rhs;
                 }
                 else if (jl_is_slot(sym)) {
                     ssize_t n = jl_slot_number(sym);
-                    assert(n <= jl_linfo_nslots(s->lam) && n > 0);
+                    assert(n <= jl_source_nslots(s->src) && n > 0);
                     s->locals[n-1] = rhs;
                 }
                 else {
@@ -497,7 +500,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                         sym = (jl_value_t*)jl_globalref_name(sym);
                     }
                     else {
-                        m = (s==NULL || s->lam==NULL || s->lam->def==NULL) ? ptls->current_module : s->lam->def->module;
+                        m = (s == NULL ? ptls->current_module : s->module);
                     }
                     assert(jl_is_symbol(sym));
                     JL_GC_PUSH1(&rhs);
@@ -555,7 +558,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
             jl_value_t *var = jl_fieldref(stmt,0);
             assert(jl_is_slot(var));
             ssize_t n = jl_slot_number(var);
-            assert(n <= jl_linfo_nslots(s->lam) && n > 0);
+            assert(n <= jl_source_nslots(s->src) && n > 0);
             s->locals[n-1] = NULL;
         }
         else {
@@ -567,29 +570,48 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
     return NULL;
 }
 
-jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t nargs, jl_svec_t *sparam_vals)
+jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t nargs)
 {
-    jl_array_t *stmts = (jl_array_t*)lam->code;
+    jl_source_info_t *src = lam->inferred;
+    if (src == NULL)
+        src = lam->def->source;
+    jl_array_t *stmts = src->code;
+    // XXX: need to uncompress stmts
     assert(jl_typeis(stmts, jl_array_any_type));
     jl_value_t **locals;
-    JL_GC_PUSHARGS(locals, jl_linfo_nslots(lam) + jl_linfo_nssavalues(lam));
+    JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src));
     interpreter_state s;
-    s.lam = lam; s.locals = locals; s.sparam_vals = sparam_vals;
+    s.src = src;
+    s.module = lam->def->module;
+    s.locals = locals;
+    s.sparam_vals = lam->sparam_vals;
     size_t i;
-    for(i=0; i < lam->nargs; i++) {
-        if (lam->isva && i == lam->nargs-1)
-            locals[i] = jl_f_tuple(NULL, &args[i], nargs-i);
+    for (i = 0; i < lam->def->nargs; i++) {
+        if (lam->def->isva && i == lam->def->nargs - 1)
+            locals[i] = jl_f_tuple(NULL, &args[i], nargs - i);
         else
             locals[i] = args[i];
     }
-    jl_value_t *r = eval_body(stmts, &s, 0, lam->nargs==0);
+    jl_value_t *r = eval_body(stmts, &s, 0, 0);
     JL_GC_POP();
     return r;
 }
 
-jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
+jl_value_t *jl_interpret_toplevel_thunk(jl_source_info_t *src)
 {
-    return jl_interpret_call(lam, NULL, 0, NULL);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_array_t *stmts = src->code;
+    assert(jl_typeis(stmts, jl_array_any_type));
+    jl_value_t **locals;
+    JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src));
+    interpreter_state s;
+    s.src = src;
+    s.locals = locals;
+    s.module = ptls->current_module;
+    s.sparam_vals = jl_emptysvec;
+    jl_value_t *r = eval_body(stmts, &s, 0, 1);
+    JL_GC_POP();
+    return r;
 }
 
 #ifdef __cplusplus

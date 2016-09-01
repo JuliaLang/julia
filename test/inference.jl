@@ -189,7 +189,8 @@ end
 end
 let
     ast12474 = code_typed(f12474, Tuple{Float64})
-    @test all(isleaftype, ast12474[1].slottypes)
+    @test isleaftype(ast12474[1][2])
+    @test all(isleaftype, ast12474[1][1].slottypes)
 end
 
 
@@ -202,7 +203,7 @@ end
 @eval f15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); (a.x, a.y, getfield(a,1), getfield(a, 2)))
 @test isempty(filter(x -> isa(x,Expr) && x.head === :(=) &&
                           isa(x.args[2], Expr) && x.args[2].head === :new,
-                     code_typed(f15259, (Any,Int))[1].code))
+                     code_typed(f15259, (Any,Int))[1][1].code))
 @test f15259(1,2) == (1,2,1,2)
 # check that error cases are still correct
 @eval g15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); a.z)

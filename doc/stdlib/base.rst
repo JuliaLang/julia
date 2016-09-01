@@ -58,7 +58,7 @@ Getting Around
 
    The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
-.. function:: Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) -> Int
+.. function:: Base.summarysize(obj; exclude=Union{Module,DataType,TypeName}) -> Int
 
    .. Docstring generated from Julia source
 

@@ -256,18 +256,23 @@ public:
         if (linfo_it != linfo_in_flight.end()) {
             linfo = linfo_it->second;
             linfo_in_flight.erase(linfo_it);
-            if (((Function*)linfo->functionObjectsDecls.functionObject)->getName().equals(sName))
-                linfo->fptr = (jl_fptr_t)(uintptr_t)Code;
+            if (!linfo->fptr && linfo->functionObjectsDecls.functionObject &&
+                    ((Function*)linfo->functionObjectsDecls.functionObject)->getName().equals(sName)) {
+                int jlcall_api = (F.getFunctionType() == jl_func_sig ? 0 : 1);
+                if (linfo->inferred || jlcall_api != 0) {
+                    linfo->jlcall_api = jlcall_api;
+                    linfo->fptr = (jl_fptr_t)(uintptr_t)Code;
+                }
+                else {
+                    linfo->unspecialized_ducttape = (jl_fptr_t)(uintptr_t)Code;
+                }
+            }
         }
 #if defined(_OS_WINDOWS_)
         create_PRUNTIME_FUNCTION((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size, NULL);
 #endif
         FuncInfo tmp = {&F, Size, Details.LineStarts, linfo};
         info[(size_t)(Code)] = tmp;
-#ifndef KEEP_BODIES
-        if (!jl_generating_output())
-            const_cast<Function*>(&F)->deleteBody();
-#endif
         uv_rwlock_wrunlock(&threadsafe);
         jl_gc_safe_leave(ptls, gc_state);
     }
@@ -487,8 +492,17 @@ public:
                 if (linfo->compile_traced)
                     triggered_linfos.push_back(linfo);
                 linfo_in_flight.erase(linfo_it);
-                if (((Function*)linfo->functionObjectsDecls.functionObject)->getName().equals(sName))
-                    linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
+                Function *F = (Function*)linfo->functionObjectsDecls.functionObject;
+                if (!linfo->fptr && F && F->getName().equals(sName)) {
+                    int jlcall_api = (F->getFunctionType() == jl_func_sig ? 0 : 1);
+                    if (linfo->inferred || jlcall_api != 0) {
+                        linfo->jlcall_api = jlcall_api;
+                        linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
+                    }
+                    else {
+                        linfo->unspecialized_ducttape = (jl_fptr_t)(uintptr_t)Addr;
+                    }
+                }
             }
             if (linfo)
                 linfomap[Addr] = std::make_pair(Size, linfo);
@@ -561,8 +575,17 @@ public:
             if (linfo_it != linfo_in_flight.end()) {
                 linfo = linfo_it->second;
                 linfo_in_flight.erase(linfo_it);
-                if (((Function*)linfo->functionObjectsDecls.functionObject)->getName().equals(sName))
-                    linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
+                Function *F = (Function*)linfo->functionObjectsDecls.functionObject;
+                if (!linfo->fptr && F && F->getName().equals(sName)) {
+                    int jlcall_api = (F->getFunctionType() == jl_func_sig ? 0 : 1);
+                    if (linfo->inferred || jlcall_api != 0) {
+                        linfo->jlcall_api = jlcall_api;
+                        linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
+                    }
+                    else {
+                        linfo->unspecialized_ducttape = (jl_fptr_t)(uintptr_t)Addr;
+                    }
+                }
             }
             if (linfo)
                 linfomap[Addr] = std::make_pair(Size, linfo);

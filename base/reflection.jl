@@ -336,7 +336,13 @@ tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.paramet
 
 Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 """
-code_lowered(f, t::ANY=Tuple) = map(m -> (m::Method).lambda_template, methods(f, t))
+function code_lowered(f, t::ANY=Tuple)
+    asts = map(methods(f, t)) do m
+        m = m::Method
+        return uncompressed_ast(m, m.isstaged ? m.unspecialized.inferred : m.source)
+    end
+    return asts
+end
 
 # low-level method lookup functions used by the compiler
 
@@ -345,6 +351,7 @@ function _methods(f::ANY,t::ANY,lim)
     tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
     return _methods_by_ftype(tt, lim)
 end
+
 function _methods_by_ftype(t::ANY, lim)
     tp = t.parameters::SimpleVector
     nu = 1
@@ -359,6 +366,7 @@ function _methods_by_ftype(t::ANY, lim)
     # XXX: the following can return incorrect answers that the above branch would have corrected
     return ccall(:jl_matching_methods, Any, (Any,Cint,Cint), t, lim, 0)
 end
+
 function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
         new = ccall(:jl_matching_methods, Any, (Any,Cint,Cint), Tuple{t...}, lim, 0)
@@ -401,7 +409,7 @@ function MethodList(mt::MethodTable)
     visit(mt) do m
         push!(ms, m)
     end
-    MethodList(ms, mt)
+    return MethodList(ms, mt)
 end
 
 """
@@ -470,9 +478,14 @@ function length(mt::MethodTable)
 end
 isempty(mt::MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(l::Method) = uncompressed_ast(l.lambda_template)
-uncompressed_ast(l::LambdaInfo) =
-    isa(l.code,Array{UInt8,1}) ? ccall(:jl_uncompress_ast, Array{Any,1}, (Any,Any), l, l.code) : l.code
+uncompressed_ast(m::Method) = uncompressed_ast(m, m.source)
+function uncompressed_ast(m::Method, s::SourceInfo)
+    if isa(s.code, Array{UInt8,1})
+        s = ccall(:jl_copy_source_info, Ref{SourceInfo}, (Any,), s)
+        s.code = ccall(:jl_uncompress_ast, Array{Any,1}, (Any, Any), m, s.code)
+    end
+    return s
+end
 
 # Printing code representations in IR and assembly
 function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
@@ -487,9 +500,8 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_me
     tt = Tuple{ft, t.parameters...}
     (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
                       tt, meth.sig, meth.tvars)::SimpleVector
-    li = func_for_method_checked(meth, tt)
-    # try to infer it
-    (linfo, ty, inf) = Core.Inference.typeinf(li, ti, env, true)
+    meth = func_for_method_checked(meth, tt)
+    linfo = ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any), meth, tt, env)
     # get the code for it
     return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module)
 end
@@ -540,7 +552,7 @@ code_native(io::IO, f::ANY, types::ANY=Tuple) =
 code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types)
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
-function func_for_method_checked(m::Method, types)
+function func_for_method_checked(m::Method, types::ANY)
     if m.isstaged && !isleaftype(types)
         error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
@@ -564,16 +576,16 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
-        linfo = func_for_method_checked(x[3], types)
+        meth = func_for_method_checked(x[3], types)
         if optimize
-            (li, ty, inf) = Core.Inference.typeinf(linfo, x[1], x[2], true)
+            (code, ty, inf) = Core.Inference.typeinf(meth, x[1], x[2], true)
         else
-            (li, ty, inf) = Core.Inference.typeinf_uncached(linfo, x[1], x[2], optimize=false)
+            (code, ty, inf) = Core.Inference.typeinf_uncached(meth, x[1], x[2], optimize=false)
         end
         inf || error("inference not successful") # Inference disabled
-        push!(asts, li)
+        push!(asts, uncompressed_ast(meth, code) => ty)
     end
-    asts
+    return asts
 end
 
 function return_types(f::ANY, types::ANY=Tuple)
@@ -584,12 +596,12 @@ function return_types(f::ANY, types::ANY=Tuple)
     types = to_tuple_type(types)
     rt = []
     for x in _methods(f,types,-1)
-        linfo = func_for_method_checked(x[3], types)
-        (_li, ty, inf) = Core.Inference.typeinf(linfo, x[1], x[2])
+        meth = func_for_method_checked(x[3], types)
+        (code, ty, inf) = Core.Inference.typeinf(meth, x[1], x[2])
         inf || error("inference not successful") # Inference disabled
         push!(rt, ty)
     end
-    rt
+    return rt
 end
 
 """
@@ -635,7 +647,7 @@ function which_module(m::Module, s::Symbol)
     if !isdefined(m, s)
         error("\"$s\" is not defined in module $m")
     end
-    binding_module(m, s)
+    return binding_module(m, s)
 end
 
 # function reflection
@@ -658,7 +670,7 @@ function functionloc(m::Method)
     if ln <= 0
         error("could not determine location of method definition")
     end
-    (find_source_file(string(m.file)), ln)
+    return (find_source_file(string(m.file)), ln)
 end
 
 """
@@ -668,10 +680,10 @@ Returns a tuple `(filename,line)` giving the location of a generic `Function` de
 """
 functionloc(f::ANY, types::ANY) = functionloc(which(f,types))
 
-function functionloc(f)
+function functionloc(f::ANY)
     mt = methods(f)
     if isempty(mt)
-        if isa(f,Function)
+        if isa(f, Function)
             error("function has no definitions")
         else
             error("object is not callable")
@@ -680,7 +692,7 @@ function functionloc(f)
     if length(mt) > 1
         error("function has multiple methods; please specify a type signature")
     end
-    functionloc(first(mt))
+    return functionloc(first(mt))
 end
 
 """
@@ -696,12 +708,12 @@ function_module(f::Function) = datatype_module(typeof(f))
 
 Determine the module containing a given definition of a generic function.
 """
-function function_module(f, types::ANY)
+function function_module(f::ANY, types::ANY)
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
     end
-    first(m).module
+    return first(m).module
 end
 
 """

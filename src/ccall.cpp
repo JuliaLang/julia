@@ -628,7 +628,7 @@ static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failu
     if (constant || jl_is_ssavalue(ex))
         return constant;
     JL_TRY {
-        constant = jl_interpret_toplevel_expr_in(ctx->module, ex, ctx->linfo);
+        constant = jl_interpret_toplevel_expr_in(ctx->module, ex, ctx->source, ctx->linfo->sparam_vals);
     }
     JL_CATCH {
         if (compiletime)

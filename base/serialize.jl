@@ -29,7 +29,7 @@ const TAGS = Any[
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
     LineNumberNode, Slot, LabelNode, GotoNode,
-    QuoteNode, :reserved23 #=was TopNode=#, TypeVar, Core.Box, LambdaInfo,
+    QuoteNode, Core.SourceInfo, TypeVar, Core.Box, LambdaInfo,
     Module, #=UndefRefTag=#Symbol, Task, String, Float16,
     SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef,
 
@@ -335,33 +335,27 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.line)
     serialize(s, meth.sig)
     serialize(s, meth.tvars)
+    serialize(s, meth.sparam_syms)
     serialize(s, meth.ambig)
+    serialize(s, meth.nargs)
+    serialize(s, meth.isva)
     serialize(s, meth.isstaged)
-    serialize(s, meth.lambda_template)
+    if meth.isstaged
+        serialize(s, uncompressed_ast(meth, meth.unspecialized.inferred))
+    else
+        serialize(s, uncompressed_ast(meth, meth.source))
+    end
     nothing
 end
 
 function serialize(s::AbstractSerializer, linfo::LambdaInfo)
     serialize_cycle(s, linfo) && return
+    isdefined(linfo, :def) && error("can only serialize toplevel LambdaInfo objects")
     writetag(s.io, LAMBDAINFO_TAG)
-    serialize(s, uncompressed_ast(linfo))
-    serialize(s, linfo.slotnames)
-    serialize(s, linfo.slottypes)
-    serialize(s, linfo.slotflags)
-    serialize(s, linfo.ssavaluetypes)
-    serialize(s, linfo.sparam_syms)
+    serialize(s, linfo.inferred)
     serialize(s, linfo.sparam_vals)
     serialize(s, linfo.rettype)
     serialize(s, linfo.specTypes)
-    serialize(s, linfo.inferred)
-    if isdefined(linfo, :def)
-        serialize(s, linfo.def)
-    else
-        writetag(s.io, UNDEFREF_TAG)
-    end
-    serialize(s, linfo.pure)
-    serialize(s, linfo.nargs)
-    serialize(s, linfo.isva)
 end
 
 function serialize(s::AbstractSerializer, t::Task)
@@ -621,12 +615,15 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     mod = deserialize(s)::Module
     name = deserialize(s)::Symbol
     file = deserialize(s)::Symbol
-    line = deserialize(s)
+    line = deserialize(s)::Int32
     sig = deserialize(s)
-    tvars = deserialize(s)
-    ambig = deserialize(s)
+    tvars = deserialize(s)::Union{SimpleVector, TypeVar}
+    sparam_syms = deserialize(s)::SimpleVector
+    ambig = deserialize(s)::Union{Array{Any,1}, Void}
+    nargs = deserialize(s)::Int32
+    isva = deserialize(s)::Bool
     isstaged = deserialize(s)::Bool
-    template = deserialize(s)::LambdaInfo
+    template = deserialize(s)::Core.SourceInfo
     if makenew
         meth.module = mod
         meth.name = name
@@ -634,10 +631,20 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.line = line
         meth.sig = sig
         meth.tvars = tvars
+        meth.sparam_syms = sparam_syms
         meth.ambig = ambig
         meth.isstaged = isstaged
-        meth.lambda_template = template
-        ccall(:jl_method_init_properties, Void, (Any,), meth)
+        meth.nargs = nargs
+        meth.isva = isva
+        # TODO: compress template
+        if isstaged
+            linfo = ccall(:jl_new_lambda_info_uninit, Ref{LambdaInfo}, ())
+            linfo.specTypes = Tuple
+            linfo.inferred = template
+            meth.unspecialized = linfo
+        else
+            meth.source = template
+        end
         known_object_data[lnumber] = meth
     end
     return meth
@@ -646,23 +653,10 @@ end
 function deserialize(s::AbstractSerializer, ::Type{LambdaInfo})
     linfo = ccall(:jl_new_lambda_info_uninit, Ref{LambdaInfo}, (Ptr{Void},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.code = deserialize(s)
-    linfo.slotnames = deserialize(s)
-    linfo.slottypes = deserialize(s)
-    linfo.slotflags = deserialize(s)
-    linfo.ssavaluetypes = deserialize(s)
-    linfo.sparam_syms = deserialize(s)::SimpleVector
+    linfo.inferred = deserialize(s)::Core.SourceInfo
     linfo.sparam_vals = deserialize(s)::SimpleVector
     linfo.rettype = deserialize(s)
     linfo.specTypes = deserialize(s)
-    linfo.inferred = deserialize(s)::Bool
-    tag = Int32(read(s.io, UInt8)::UInt8)
-    if tag != UNDEFREF_TAG
-        linfo.def = handle_deserialize(s, tag)::Method
-    end
-    linfo.pure = deserialize(s)::Bool
-    linfo.nargs = deserialize(s)
-    linfo.isva = deserialize(s)::Bool
     return linfo
 end
 
