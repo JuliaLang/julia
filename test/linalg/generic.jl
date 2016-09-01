@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base: *
+import Base: -, *
 using Base.Test
 
 # A custom Quaternion type with minimal defined interface and methods.
@@ -10,16 +10,19 @@ immutable Quaternion{T<:Real} <: Number
     v1::T
     v2::T
     v3::T
-    norm::Bool
 end
-Quaternion(s::Real, v1::Real, v2::Real, v3::Real, n::Bool = false) =
-    Quaternion( promote(s, v1, v2, v3)..., n)
-Quaternion(a::Vector) = Quaternion(0, a[1], a[2], a[3])
+Quaternion(s::Real, v1::Real, v2::Real, v3::Real) = Quaternion(promote(s, v1, v2, v3)...)
+Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
+Base.abs(q::Quaternion) = sqrt(abs2(q))
+Base.real{T}(::Type{Quaternion{T}}) = T
+Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
+
+(-)(ql::Quaternion, qr::Quaternion) =
+    Quaternion(ql.s - qr.s, ql.v1 - qr.v1, ql.v2 - qr.v2, ql.v3 - qr.v3)
 (*)(q::Quaternion, w::Quaternion) = Quaternion(q.s*w.s - q.v1*w.v1 - q.v2*w.v2 - q.v3*w.v3,
                                                q.s*w.v1 + q.v1*w.s + q.v2*w.v3 - q.v3*w.v2,
                                                q.s*w.v2 - q.v1*w.v3 + q.v2*w.s + q.v3*w.v1,
-                                               q.s*w.v3 + q.v1*w.v2 - q.v2*w.v1 + q.v3*w.s,
-                                               q.norm && w.norm)
+                                               q.s*w.v3 + q.v1*w.v2 - q.v2*w.v1 + q.v3*w.s)
 
 debug = false
 
@@ -199,10 +202,12 @@ end
 @test isequal(BigFloat[1.0] * 2.0f0im,   Complex{BigFloat}[2.0im])
 
 # test scale and scale! for non-commutative multiplication
-q = Quaternion([0.44567, 0.755871, 0.882548, 0.423612])
-qmat = []
-push!(qmat, Quaternion([0.015007, 0.355067, 0.418645, 0.318373]))
+q = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
+qmat = [Quaternion(0.015007, 0.355067, 0.418645, 0.318373)]
 @test scale!(q, copy(qmat)) != scale!(copy(qmat), q)
+## Test * because it doesn't dispatch to scale!
+@test q*qmat != qmat*q
+@test conj(q*qmat) ≈ conj(qmat)*conj(q)
 
 # test ops on Numbers
 for elty in [Float32,Float64,Complex64,Complex128]
