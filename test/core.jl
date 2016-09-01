@@ -4067,10 +4067,10 @@ function count_expr_push(ex::Expr, head::Symbol, counter)
     return false
 end
 
-function metadata_matches(ast::LambdaInfo)
+function metadata_matches(ast::Core.SourceInfo)
     inbounds_cnt = Ref(0)
     boundscheck_cnt = Ref(0)
-    for ex in Base.uncompressed_ast(ast)
+    for ex in ast.code::Array{Any,1}
         if isa(ex, Expr)
             ex = ex::Expr
             count_expr_push(ex, :inbounds, inbounds_cnt)
@@ -4082,7 +4082,7 @@ function metadata_matches(ast::LambdaInfo)
 end
 
 function test_metadata_matches(f::ANY, tt::ANY)
-    metadata_matches(code_typed(f, tt)[1])
+    metadata_matches(code_typed(f, tt)[1][1])
 end
 
 function f1()

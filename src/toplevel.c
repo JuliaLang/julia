@@ -355,7 +355,7 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_array_t *body, int compileloops, jl_module_t *m)
+static int jl_eval_with_compiler_p(jl_source_info_t *src, jl_array_t *body, int compileloops, jl_module_t *m)
 {
     size_t i, maxlabl=0;
     // compile if there are backwards branches
@@ -388,7 +388,7 @@ static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_array_t *body, int c
                 }
             }
         }
-        if (jl_has_intrinsics(li, stmt, m)) return 1;
+        if (jl_has_intrinsics(NULL, stmt, m)) return 1;
     }
     return 0;
 }
@@ -397,7 +397,8 @@ static int jl_eval_expr_with_compiler_p(jl_value_t *e, int compileloops, jl_modu
 {
     if (jl_is_expr(e) && ((jl_expr_t*)e)->head == body_sym)
         return jl_eval_with_compiler_p(NULL, ((jl_expr_t*)e)->args, compileloops, m);
-    if (jl_has_intrinsics(NULL, e, m)) return 1;
+    if (jl_has_intrinsics(NULL, e, m))
+        return 1;
     return 0;
 }
 
@@ -504,6 +505,14 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == toplevel_sym);
 }
 
+static jl_lambda_info_t *jl_new_thunk(jl_source_info_t *src)
+{
+    jl_lambda_info_t *li = jl_new_lambda_info_uninit();
+    li->inferred = (jl_value_t*)src;
+    li->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
+    return li;
+}
+
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -575,9 +584,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         return jl_nothing;
     }
 
-    jl_value_t *thunk=NULL;
+    jl_value_t *thunk = NULL;
     jl_value_t *result;
-    jl_lambda_info_t *thk=NULL;
+    jl_source_info_t *thk = NULL;
     int ewc = 0;
     JL_GC_PUSH3(&thunk, &thk, &ex);
 
@@ -598,8 +607,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     }
 
     if (head == thunk_sym) {
-        thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
-        assert(jl_is_lambda_info(thk));
+        thk = (jl_source_info_t*)jl_exprarg(ex,0);
+        assert(jl_is_source_info(thk));
         assert(jl_typeis(thk->code, jl_array_any_type));
         ewc = jl_eval_with_compiler_p(thk, (jl_array_t*)thk->code, fast, ptls->current_module);
     }
@@ -623,11 +632,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         }
     }
 
-    thk->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple); // no gc_wb needed
     if (ewc) {
-        jl_type_infer(thk, 0);
-        jl_value_t *dummy_f_arg=NULL;
-        result = jl_call_method_internal(thk, &dummy_f_arg, 1);
+        jl_lambda_info_t *li = jl_new_thunk(thk);
+        jl_type_infer(li, 0);
+        jl_value_t *dummy_f_arg = NULL;
+        result = jl_call_method_internal(li, &dummy_f_arg, 1);
     }
     else {
         result = jl_interpret_toplevel_thunk(thk);
@@ -699,14 +708,16 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
 void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
 {
-    jl_lambda_info_t *li = m->lambda_template;
-    size_t nvars = jl_array_len(li->slotnames);
+    jl_source_info_t *src = m->isstaged ? (jl_source_info_t*)m->unspecialized->inferred : m->source;
+    size_t nvars = jl_array_len(src->slotnames);
 
-    for(size_t i=0; i < jl_svec_len(t); i++) {
-        for(size_t j=0; j < nvars; j++) {
-            jl_value_t *tv = jl_svecref(t,i);
+    size_t i, n = jl_svec_len(t);
+    for (i = 0; i < n; i++) {
+        jl_value_t *tv = jl_svecref(t, i);
+        size_t j;
+        for (j = 0; j < nvars; j++) {
             if (jl_is_typevar(tv)) {
-                if ((jl_sym_t*)jl_array_ptr_ref(li->slotnames, j) == ((jl_tvar_t*)tv)->name) {
+                if ((jl_sym_t*)jl_array_ptr_ref(src->slotnames, j) == ((jl_tvar_t*)tv)->name) {
                     jl_printf(JL_STDERR,
                               "WARNING: local variable %s conflicts with a static parameter in %s",
                               jl_symbol_name(((jl_tvar_t*)tv)->name),
@@ -786,31 +797,35 @@ jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
 }
 
 extern tracer_cb jl_newmeth_tracer;
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged)
+JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
+                                jl_source_info_t *f,
+                                jl_value_t *isstaged)
 {
-    // argdata is svec({types...}, svec(typevars...))
-    jl_tupletype_t *argtypes = (jl_tupletype_t*)jl_svecref(argdata,0);
-    jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata,1);
+    // argdata is svec(svec(types...), svec(typevars...))
+    jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
+    jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata, 1);
+    size_t nargs = jl_svec_len(atypes);
+    int isva = jl_is_vararg_type(jl_svecref(atypes, nargs - 1));
+    assert(jl_is_svec(atypes));
+    assert(nargs > 0);
+    assert(jl_is_svec(tvars));
+    if (!jl_is_type(jl_svecref(atypes, 0)) || (isva && nargs == 1))
+        jl_error("function type in method definition is not a type");
     jl_methtable_t *mt;
     jl_sym_t *name;
     jl_method_t *m = NULL;
-    JL_GC_PUSH2(&f, &m);
+    jl_tupletype_t *argtype = jl_apply_tuple_type(atypes);
+    JL_GC_PUSH3(&f, &m, &argtype);
 
-    if (!jl_is_lambda_info(f)) {
+    if (!jl_is_source_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
         // the result is that the closure variables get interpolated directly into the AST
-        f = jl_new_lambda_info_from_ast((jl_expr_t*)f);
+        f = jl_new_source_info_from_ast((jl_expr_t*)f);
     }
 
-    assert(jl_is_lambda_info(f));
-    assert(jl_is_tuple_type(argtypes));
-    assert(jl_is_svec(tvars));
-    assert(jl_nparams(argtypes)>0);
-
-    if (jl_is_tuple_type(argtypes) && jl_nparams(argtypes) > 0 && !jl_is_type(jl_tparam0(argtypes)))
-        jl_error("function type in method definition is not a type");
-    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
+    assert(jl_is_source_info(f));
+    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtype);
     if (ftype == NULL ||
         !(jl_is_type_type((jl_value_t*)ftype) ||
           (jl_is_datatype(ftype) &&
@@ -823,13 +838,12 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type, 0))
         jl_error("cannot add methods to a builtin function");
 
-    m = jl_new_method(f, name, argtypes, tvars, isstaged == jl_true);
-    f = m->lambda_template; // because jl_new_method makes a copy
+    m = jl_new_method(f, name, argtype, nargs, isva, tvars, isstaged == jl_true);
     jl_check_static_parameter_conflicts(m, tvars);
 
-    size_t i, na = jl_nparams(argtypes);
+    size_t i, na = jl_nparams(argtype);
     for (i = 0; i < na; i++) {
-        jl_value_t *elt = jl_tparam(argtypes, i);
+        jl_value_t *elt = jl_tparam(argtype, i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == unused_sym)
@@ -854,7 +868,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
         jl_value_t *tv = jl_svecref(tvars,i);
         if (!jl_is_typevar(tv))
             jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
-        if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
+        if (!ishidden && !type_contains((jl_value_t*)argtype, tv)) {
             jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
                       jl_symbol_name(((jl_tvar_t*)tv)->name),
                       jl_symbol_name(name));
@@ -866,11 +880,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
-
-    if (jl_boot_file_loaded && f->code && jl_typeis(f->code, jl_array_any_type)) {
-        f->code = (jl_value_t*)jl_compress_ast(f, (jl_array_t*)f->code);
-        jl_gc_wb(f, f->code);
-    }
     JL_GC_POP();
 }
 

@@ -316,22 +316,23 @@ See [Manual](:ref:`man-code-warntype`) for more information.
 """
 function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
-    for li in code_typed(f, t)
+    for (src, rettype) in code_typed(f, t)
         println(emph_io, "Variables:")
-        slotnames = lambdainfo_slotnames(li)
+        slotnames = sourceinfo_slotnames(src)
         for i = 1:length(slotnames)
             print(emph_io, "  ", slotnames[i])
-            if isa(li.slottypes,Array)
-                show_expr_type(emph_io, li.slottypes[i], true)
+            if isa(src.slottypes, Array)
+                show_expr_type(emph_io, src.slottypes[i], true)
             end
             print(emph_io, '\n')
         end
         print(emph_io, "\nBody:\n  ")
-        body = Expr(:body); body.args = uncompressed_ast(li)
-        body.typ = li.rettype
+        body = Expr(:body)
+        body.args = src.code
+        body.typ = rettype
         # Fix slot names and types in function body
-        show_unquoted(IOContext(IOContext(emph_io, :LAMBDAINFO => li),
-                                          :LAMBDA_SLOTNAMES => slotnames),
+        show_unquoted(IOContext(IOContext(emph_io, :SOURCEINFO => src),
+                                          :SOURCE_SLOTNAMES => slotnames),
                       body, 2)
         print(emph_io, '\n')
     end
@@ -709,12 +710,12 @@ whos(pat::Regex) = whos(STDOUT, current_module(), pat)
 #################################################################################
 
 """
-    Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) -> Int
+    Base.summarysize(obj; exclude=Union{Module,DataType,TypeName}) -> Int
 
 Compute the amount of memory used by all unique objects reachable from the argument.
 Keyword argument `exclude` specifies a type of objects to exclude from the traversal.
 """
-summarysize(obj; exclude = Union{Module,Function,DataType,TypeName}) =
+summarysize(obj; exclude = Union{Module,DataType,TypeName}) =
     summarysize(obj, ObjectIdDict(), exclude)
 
 summarysize(obj::Symbol, seen, excl) = 0

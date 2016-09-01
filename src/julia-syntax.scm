@@ -338,12 +338,12 @@
              (renames (map cons names temps))
              (mdef
               (if (null? sparams)
-                  `(method ,name (call (core svec) (curly Tuple ,@(dots->vararg types)) (call (core svec)))
+                  `(method ,name (call (core svec) (call (core svec) ,@(dots->vararg types)) (call (core svec)))
                            ,body ,isstaged)
                   `(method ,name
                            (block
                             ,@(map make-assignment temps (symbols->typevars names bounds #t))
-                            (call (core svec) (curly Tuple
+                            (call (core svec) (call (core svec)
                                                     ,@(dots->vararg
                                                        (map (lambda (ty)
                                                               (replace-vars ty renames))
@@ -2644,7 +2644,7 @@ f(x) = yt(x)
                   (pattern-set
                    (pattern-lambda (call (core (-/ Typeof)) name)
                                    (get namemap name __)))
-                  (cdddr typapp)))
+                  (cddr typapp)))
          (closure-type (if (null? type-sp)
                            typ
                            `(call (core apply_type) ,typ ,@type-sp)))
@@ -2652,7 +2652,7 @@ f(x) = yt(x)
           (if iskw
               `(,(car types) ,(cadr types) ,closure-type ,@(cdddr types))
               `(,closure-type ,@(cdr types)))))
-    `(call (core svec) (call (core apply_type) Tuple ,@newtypes)
+    `(call (core svec) (call (core svec) ,@newtypes)
            (call (core svec) ,@(append (cddr (cadddr te)) type-sp)))))
 
 ;; collect all toplevel-butlast expressions inside `e`, and return

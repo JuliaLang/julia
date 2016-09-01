@@ -87,8 +87,12 @@ try
               (::Type{Vector{NominalValue{T, T}}}){T}() = 4
               (::Type{Vector{NominalValue{Int, Int}}})() = 5
 
-              #const some_method = @which Base.include("string") // FIXME: support for serializing a direct reference to an external Method not implemented
-              const some_linfo = @code_typed Base.include("string")
+              let some_method = @which Base.include("string")
+                    # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
+                  global const some_linfo =
+                      ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any),
+                          some_method, Tuple{typeof(Base.include), String}, Core.svec())
+              end
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -150,8 +154,11 @@ try
                 Val{3},
                 Val{nothing}},
             0:25)
-
-        @test Foo.some_linfo === @code_typed Base.include("string")
+        some_method = @which Base.include("string")
+        some_linfo =
+                ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any),
+                    some_method, Tuple{typeof(Base.include), String}, Core.svec())
+        @test Foo.some_linfo::Core.LambdaInfo === some_linfo
     end
 
     Baz_file = joinpath(dir, "Baz.jl")

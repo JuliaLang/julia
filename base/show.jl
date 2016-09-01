@@ -272,8 +272,8 @@ function show(io::IO, m::Module)
     end
 end
 
-function lambdainfo_slotnames(l::LambdaInfo)
-    slotnames = l.slotnames
+function sourceinfo_slotnames(src::SourceInfo)
+    slotnames = src.slotnames
     isa(slotnames, Array) || return String[]
     names = Dict{String,Int}()
     printnames = Vector{String}(length(slotnames))
@@ -294,8 +294,8 @@ end
 
 function show(io::IO, l::LambdaInfo)
     if isdefined(l, :def)
-        if l === l.def.lambda_template
-            print(io, "LambdaInfo template for ")
+        if l.def.isstaged && l === l.def.unspecialized
+            print(io, "LambdaInfo generator for ")
             show(io, l.def)
         else
             print(io, "LambdaInfo for ")
@@ -304,6 +304,23 @@ function show(io::IO, l::LambdaInfo)
     else
         print(io, "Toplevel LambdaInfo thunk")
     end
+end
+
+function show(io::IO, src::SourceInfo)
+    # Fix slot names and types in function body
+    print(io, "SourceInfo(")
+    if isa(src.code, Array{Any,1})
+        lambda_io = IOContext(io, :SOURCEINFO => src)
+        if src.slotnames !== nothing
+            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
+        end
+        body = Expr(:body)
+        body.args = src.code
+        show(lambda_io, body)
+    else
+        print(io, "<compressed>")
+    end
+    print(io, ")")
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
@@ -593,16 +610,16 @@ show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.',
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     typ = isa(ex,TypedSlot) ? ex.typ : Any
     slotid = ex.id
-    li = get(io, :LAMBDAINFO, false)
-    if isa(li, LambdaInfo)
-        slottypes = (li::LambdaInfo).slottypes
+    src = get(io, :SOURCEINFO, false)
+    if isa(src, SourceInfo)
+        slottypes = (src::SourceInfo).slottypes
         if isa(slottypes, Array) && slotid <= length(slottypes::Array)
             slottype = slottypes[slotid]
             # The Slot in assignment can somehow have an Any type
             slottype <: typ && (typ = slottype)
         end
     end
-    slotnames = get(io, :LAMBDA_SLOTNAMES, false)
+    slotnames = get(io, :SOURCE_SLOTNAMES, false)
     if (isa(slotnames, Vector{String}) &&
         slotid <= length(slotnames::Vector{String}))
         print(io, (slotnames::Vector{String})[slotid])

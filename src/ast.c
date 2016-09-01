@@ -515,7 +515,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             e = cdr_(e);
         }
         if (sym == lambda_sym)
-            ex = (jl_value_t*)jl_new_lambda_info_from_ast((jl_expr_t*)ex);
+            ex = (jl_value_t*)jl_new_source_info_from_ast((jl_expr_t*)ex);
         JL_GC_POP();
         if (sym == list_sym)
             return (jl_value_t*)((jl_expr_t*)ex)->args;
@@ -813,13 +813,13 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 }
 
 // wrap expr in a thunk AST
-jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
+jl_source_info_t *jl_wrap_expr(jl_value_t *expr)
 {
     // `(lambda () (() () () ()) ,expr)
     jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
     jl_value_t *mt = jl_an_empty_vec_any;
-    jl_lambda_info_t *li = NULL;
-    JL_GC_PUSH4(&le, &vi, &bo, &li);
+    jl_source_info_t *src = NULL;
+    JL_GC_PUSH4(&le, &vi, &bo, &src);
     le = jl_exprn(lambda_sym, 3);
     jl_array_ptr_set(le->args, 0, mt);
     vi = (jl_value_t*)jl_alloc_vec_any(4);
@@ -836,25 +836,12 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
         expr = (jl_value_t*)bo;
     }
     jl_array_ptr_set(le->args, 2, expr);
-    li = jl_new_lambda_info_from_ast(le);
+    src = jl_new_source_info_from_ast(le);
     JL_GC_POP();
-    return li;
+    return src;
 }
 
 // syntax tree accessors
-
-JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
-{
-    if (!jl_is_expr(ex)) return 0;
-    if (((jl_expr_t*)ex)->head != colons_sym) return 0;
-    jl_expr_t *atype = (jl_expr_t*)jl_exprarg(ex,1);
-    if (!jl_is_expr(atype)) return 0;
-    if (((jl_expr_t*)atype)->head == dots_sym)
-        return 1;
-    if (atype->head != call_sym || jl_array_len(atype->args) < 3 || jl_array_len(atype->args) > 4)
-        return 0;
-    return ((jl_sym_t*)jl_exprarg(atype,1)) == vararg_sym;
-}
 
 JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
 {

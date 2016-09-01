@@ -1188,6 +1188,7 @@ void jl_init_primitives(void)
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
     add_builtin("LambdaInfo", (jl_value_t*)jl_lambda_info_type);
+    add_builtin("SourceInfo", (jl_value_t*)jl_source_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
@@ -1274,7 +1275,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
         else {
             n += jl_printf(out, "<toplevel thunk> -> ");
-            n += jl_static_show_x(out, (jl_value_t*)li->code, depth);
+            n += jl_static_show_x(out, li->inferred, depth);
         }
     }
     else if (vt == jl_simplevector_type) {

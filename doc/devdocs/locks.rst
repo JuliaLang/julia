@@ -48,21 +48,9 @@ The following is a level 3 lock, which can only acquire level 1 or level 2 locks
 
    * Method->writelock
 
-     but note that this is violated by staged functions!
-
 The following is a level 4 lock, which can only recurse to acquire level 1, 2, or 3 locks:
 
    * MethodTable->writelock
-
-     but note that this is violated by staged functions!
-
-The following is a proposed level 5 lock, which can only recurse to acquire locks at lower levels:
-
-   * staged
-
-       this theoretical lock would create a priority inversion from the `method->writelock` (level 3),
-       but only prohibiting running any staging function in parallel
-       (thus allowing temporary release of the MethodTable and Method locks)
 
 The following is a level 6 lock, which can only recurse to acquire locks at lower levels:
 
@@ -73,6 +61,8 @@ The following is an almost root lock (level end-1), meaning only the root look m
    * typeinf
 
        this one is perhaps one of the most tricky ones, since type-inference can be invoked from many points
+
+       currently the lock is merged with the codegen lock, since they call each other recursively
 
 The following is the root lock, meaning no other lock shall be held when trying to acquire it:
 
@@ -97,7 +87,7 @@ The following locks are broken:
 
 * codegen
 
-    recursive (through ``static_eval``), but caller might also be holding locks (due to staged functions)
+    recursive (through ``static_eval``), but caller might also be holding locks (due to staged functions and type_infer)
 
     other issues?
 
@@ -108,15 +98,6 @@ The following locks are broken:
     not certain of whether there are issues here or what they are. staging functions, of course, are a source of deadlocks here.
 
     fix: unknown
-
-* staged
-
-    possible solution to prevent staged functions from causing deadlock.
-
-    this theoretical lock would create a priority inversion such that the Method and MethodTable write locks could be released
-    by ensuring that no staging functions can run in parallel allow this level 5 lock to protect staged function conflicts (a level 3 operation)
-
-    fix: create it
 
 
 Shared Global Data Structures

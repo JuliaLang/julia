@@ -165,30 +165,61 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
-jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force);
-void jl_generate_fptr(jl_lambda_info_t *li);
-void jl_compile_linfo(jl_lambda_info_t *li);
+jl_source_info_t *jl_type_infer(jl_lambda_info_t *li, int force);
+jl_generic_fptr_t jl_generate_fptr(jl_lambda_info_t *li, void *F);
+jl_llvm_functions_t jl_compile_linfo(jl_lambda_info_t *li, jl_source_info_t *src);
+jl_llvm_functions_t jl_compile_for_dispatch(jl_lambda_info_t *li);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
-jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li);
-JL_DLLEXPORT void jl_set_lambda_code_null(jl_lambda_info_t *li);
+jl_source_info_t *jl_new_source_info_from_ast(jl_expr_t *ast);
+jl_method_t *jl_new_method(jl_source_info_t *definition,
+                           jl_sym_t *name,
+                           jl_tupletype_t *sig,
+                           size_t nargs,
+                           int isva,
+                           jl_svec_t *tvars,
+                           int isstaged);
 
 // invoke (compiling if necessary) the jlcall function pointer for a method
 STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
 {
-    jl_lambda_info_t *mfptr = meth;
-    if (__unlikely(mfptr->fptr == NULL && mfptr->jlcall_api != 2)) {
-        mfptr = jl_compile_for_dispatch(mfptr);
-        if (!mfptr->fptr)
-            jl_generate_fptr(mfptr);
+    jl_generic_fptr_t fptr;
+    fptr.fptr = meth->fptr;
+    fptr.jlcall_api = meth->jlcall_api;
+    if (fptr.jlcall_api == 2)
+        return meth->inferred;
+    if (__unlikely(fptr.fptr == NULL)) {
+        // first see if it likely needs to be compiled
+        void *F = meth->functionObjectsDecls.functionObject;
+        if (!F) // ask codegen to try to turn it into llvm code
+            F = jl_compile_for_dispatch(meth).functionObject;
+        if (meth->jlcall_api == 2)
+            return meth->inferred;
+        // if it hasn't been inferred, try using the unspecialized meth cache instead
+        if (!meth->inferred) {
+            fptr.fptr = meth->unspecialized_ducttape;
+            fptr.jlcall_api = 0;
+            if (!fptr.fptr) {
+                if (meth->def && !meth->def->isstaged && meth->def->unspecialized) {
+                    fptr.fptr = meth->def->unspecialized->fptr;
+                    fptr.jlcall_api = meth->def->unspecialized->jlcall_api;
+                    if (fptr.jlcall_api == 2)
+                        return meth->def->unspecialized->inferred;
+                }
+            }
+        }
+        if (!fptr.fptr) {
+            // ask codegen to make the fptr
+            fptr = jl_generate_fptr(meth, F);
+            if (fptr.jlcall_api == 2)
+                return meth->inferred;
+        }
     }
-    if (mfptr->jlcall_api == 0)
-        return mfptr->fptr(args[0], &args[1], nargs-1);
-    else if (mfptr->jlcall_api == 1)
-        return ((jl_fptr_sparam_t)mfptr->fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
-    else if (mfptr->jlcall_api == 2)
-        return meth->constval;
-    else if (mfptr->jlcall_api == 3)
-        return ((jl_fptr_linfo_t)mfptr->fptr)(mfptr, &args[0], nargs, meth->sparam_vals);
+    if (fptr.jlcall_api == 0)
+        return fptr.fptr0(args[0], &args[1], nargs-1);
+    else if (fptr.jlcall_api == 1)
+        return fptr.fptr1(meth->sparam_vals, args[0], &args[1], nargs-1);
+    else if (fptr.jlcall_api == 3)
+        return fptr.fptr3(meth, &args[0], nargs, meth->sparam_vals);
     else
         abort();
 }
@@ -296,12 +327,15 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded);
 jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex,
                                      int delay_warn);
 
-jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
+jl_source_info_t *jl_wrap_expr(jl_value_t *expr);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen);
-jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
+jl_value_t *jl_interpret_toplevel_thunk(jl_source_info_t *src);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
+jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
+                                          jl_source_info_t *src,
+                                          jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr);
 
@@ -423,7 +457,7 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
 JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
-JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp, int allow_exec);
+jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
 
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);
