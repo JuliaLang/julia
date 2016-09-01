@@ -36,7 +36,15 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 
 # TODO: fast endswith
 
-chop(s::AbstractString) = s[1:end-1]
+function chop(s::AbstractString, n::Integer=1)
+   n < 0 && throw(BoundsError())
+   i = endof(s)
+   while n > 0 && i > 0
+       i = prevind(s, i)
+       n -= 1
+   end
+   return s[1:i]
+end
 
 function chomp(s::AbstractString)
     i = endof(s)
