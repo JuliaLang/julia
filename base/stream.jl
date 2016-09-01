@@ -946,11 +946,13 @@ for (x, writable, unix_fd, c_symbol) in
                 handle.handle)
             handle
         end
+        function ($f)(handle::Pipe)
+            link_pipe(handle, julia_only_read = $(writable), julia_only_write = $(!writable))
+            $(f)($(writable) ? handle.in : handle.out)
+            handle
+        end
         function ($f)()
-            read,write = (PipeEndpoint(), PipeEndpoint())
-            link_pipe(read,$(writable),write,$(!writable))
-            ($f)($(writable? :write : :read))
-            (read,write)
+            $(f)(Pipe())
         end
     end
 end
@@ -959,9 +961,9 @@ end
     redirect_stdout()
 
 Create a pipe to which all C and Julia level `STDOUT` output will be redirected. Returns a
-tuple `(rd,wr)` representing the pipe ends. Data written to `STDOUT` may now be read from
-the rd end of the pipe. The wr end is given for convenience in case the old `STDOUT` object
-was cached by the user and needs to be replaced elsewhere.
+Pipe object representing the pipe ends. Data written to `STDOUT` may now be read from
+the pipe. Note that `STDOUT` will be set to `pipe.in` (which is a `PipeEndpoint`), not the
+pipe itself.
 """
 redirect_stdout
 
@@ -969,7 +971,7 @@ redirect_stdout
     redirect_stdout(stream)
 
 Replace `STDOUT` by stream for all C and Julia level output to `STDOUT`. Note that `stream`
-must be a TTY, a `Pipe` or a `TCPSocket`.
+must be a TTY, a `Pipe`, a `PipeEndpoint` or a `TCPSocket`.
 """
 redirect_stdout(stream)
 
@@ -983,8 +985,8 @@ redirect_stderr
 """
     redirect_stdin([stream])
 
-Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still
-(rd,wr), i.e. data to be read from STDIN, may be written to wr.
+Like redirect_stdout, but for STDIN. Note however, that in this case, STDIN will be `pipe.out`
+(such that data written to `pipe` will be available to read from `STDIN`).
 """
 redirect_stdin
 
