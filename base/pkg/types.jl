@@ -3,7 +3,7 @@
 module Types
 
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
-import Base: show, isempty, in, intersect, ==, hash, deepcopy_internal
+import Base: show, isempty, in, intersect, ==, hash, copy, deepcopy_internal
 
 immutable VersionInterval
     lower::VersionNumber
@@ -69,6 +69,7 @@ end
 
 ==(a::Available, b::Available) = a.sha1 == b.sha1 && a.requires == b.requires
 hash(a::Available, h::UInt) = hash((a.sha1, a.requires), h + (0xbc8ae0de9d11d972 % UInt))
+copy(a::Available) = Available(a.sha1, copy(a.requires))
 
 show(io::IO, a::Available) = isempty(a.requires) ?
     print(io, "Available(", repr(a.sha1), ")") :

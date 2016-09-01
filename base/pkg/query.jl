@@ -27,8 +27,21 @@ function requirements(reqs::Dict, fix::Dict, avail::Dict)
     reqs
 end
 
+# Specialized copy for the avail argument below because the deepcopy is slow
+function availcopy(avail)
+    new_avail = similar(avail)
+    for (pkg, vers_avail) in avail
+        new_vers_avail = similar(vers_avail)
+        for (version, avail) in vers_avail
+            new_vers_avail[version] = copy(avail)
+        end
+        new_avail[pkg] = new_vers_avail
+    end
+    return new_avail
+end
+
 function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed(VERSION)))
-    avail = deepcopy(avail)
+    avail = availcopy(avail)
     conflicts = Dict{String,Set{String}}()
     for (fp,fx) in fix
         delete!(avail, fp)
