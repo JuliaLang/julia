@@ -66,6 +66,14 @@ temp_pkg_dir() do
     @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
     @test !isempty(Pkg.available())
 
+    # 18325
+    cd(Pkg.dir()) do
+        avail = Pkg.Read.available()
+        avail_copy = Pkg.Query.availcopy(avail);
+        delete!(avail_copy["Example"][v"0.0.1"].requires, "julia")
+        @test haskey(avail["Example"][v"0.0.1"].requires, "julia")
+    end
+
     @test_throws PkgError Pkg.installed("MyFakePackage")
     @test Pkg.installed("Example") === nothing
 
