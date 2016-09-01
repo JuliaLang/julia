@@ -32,8 +32,8 @@ function availcopy(avail)
     new_avail = similar(avail)
     for (pkg, vers_avail) in avail
         new_vers_avail = similar(vers_avail)
-        for (version, avail) in vers_avail
-            new_vers_avail[version] = copy(avail)
+        for (version, pkg_avail) in vers_avail
+            new_vers_avail[version] = copy(pkg_avail)
         end
         new_avail[pkg] = new_vers_avail
     end
