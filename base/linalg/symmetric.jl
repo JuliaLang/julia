@@ -240,8 +240,55 @@ function svdvals!{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{
     return sort!(vals, rev = true)
 end
 
-#Matrix-valued functions
-function expm(A::Symmetric)
+#Matrix functions
+function ^{T<:Real}(A::Symmetric{T}, p::Integer)
+    if p < 0
+        return Symmetric(Base.power_by_squaring(inv(A), -p))
+    else
+        return Symmetric(Base.power_by_squaring(A, p))
+    end
+end
+function ^{T<:Real}(A::Symmetric{T}, p::Real)
+    F = eigfact(full(A))
+    if isposdef(F)
+        retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
+    else
+        retmat = (F.vectors * Diagonal((complex(F.values)).^p)) * F.vectors'
+    end
+    return Symmetric(retmat)
+end
+function ^(A::Hermitian, p::Integer)
+    n = checksquare(A)
+    if p < 0
+        retmat = Base.power_by_squaring(inv(A), -p)
+    else
+        retmat = Base.power_by_squaring(A, p)
+    end
+    for i = 1:n
+        retmat[i,i] = real(retmat[i,i])
+    end
+    return Hermitian(retmat)
+end
+function ^{T}(A::Hermitian{T}, p::Real)
+    n = checksquare(A)
+    F = eigfact(A)
+    if isposdef(F)
+        retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
+        if T <: Real
+            return Hermitian(retmat)
+        else
+            for i = 1:n
+                retmat[i,i] = real(retmat[i,i])
+            end
+            return Hermitian(retmat)
+        end
+    else
+        retmat = (F.vectors * Diagonal((complex(F.values).^p))) * F.vectors'
+        return retmat
+    end
+end
+
+function expm{T<:Real}(A::Symmetric{T})
     F = eigfact(A)
     return Symmetric((F.vectors * Diagonal(exp(F.values))) * F.vectors')
 end
@@ -260,10 +307,8 @@ function expm{T}(A::Hermitian{T})
 end
 
 for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
-
     @eval begin
-
-        function ($funm)(A::Symmetric)
+        function ($funm){T<:Real}(A::Symmetric{T})
             F = eigfact(A)
             if isposdef(F)
                 retmat = (F.vectors * Diagonal(($func)(F.values))) * F.vectors'
@@ -291,7 +336,5 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
                 return retmat
             end
         end
-
     end
-
 end

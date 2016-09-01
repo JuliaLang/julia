@@ -239,9 +239,13 @@ end
 # identity matrices via eye(Diagonal{type},n)
 eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
 
-expm(D::Diagonal) = Diagonal(exp(D.diag))
-logm(D::Diagonal) = Diagonal(log(D.diag))
-sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
+# Matrix functions
+^(D::Diagonal, p::Real) = Diagonal((D.diag).^p)
+for (funm, func) in ([:expm,:exp], [:sqrtm,:sqrt], [:logm,:log])
+    @eval begin
+        ($funm)(D::Diagonal) = Diagonal(($func)(D.diag))
+    end
+end
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)

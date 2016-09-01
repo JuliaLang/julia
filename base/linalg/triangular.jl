@@ -1574,18 +1574,105 @@ At_mul_Bt(A::AbstractTriangular, B::AbstractTriangular) = At_mul_B(A, B.')
 At_mul_Bt(A::AbstractTriangular, B::AbstractMatrix) = At_mul_B(A, B.')
 At_mul_Bt(A::AbstractMatrix, B::AbstractTriangular) = A_mul_Bt(A.', B)
 
+function ^(A::UpperTriangular, p::Integer)
+    if p < 0
+        return UpperTriangular(Base.power_by_squaring(inv(A), -p))
+    else
+        return UpperTriangular(Base.power_by_squaring(A, p))
+    end
+end
+function ^(A::UpperTriangular, p::Real)
+    # For integer powers, use repeated squaring
+    if isinteger(p)
+        return A^Integer(real(p))
+    end
+
+    # General UpperTriangular matrices
+    p1 = p - floor(p)
+    if cond(A) >= exp(log(p1/(1 - p1)) / p1)
+        return powm(A,p1) * A^floor(Integer, p)
+    else
+        return powm(A,p - ceil(p)) * A^ceil(Integer, p)
+    end
+end
+# Complex matrix power for upper triangular factor, see:
+#   Higham and Lin, "A Schur-Padé algorithm for fractional powers of a Matrix",
+#     SIAM J. Matrix Anal. & Appl., 32 (3), (2011) 1056–1078.
+#   Higham and Lin, "An improved Schur-Padé algorithm for fractional powers of
+#     a matrix and their Fréchet derivatives", SIAM. J. Matrix Anal. & Appl.,
+#     34(3), (2013) 1341–1360.
+function powm{T<:Union{Float32,Float64,Complex{Float32},Complex{Float64}}}(A0::UpperTriangular{T}, p::Real)
+
+    if abs(p) >= 1
+        ArgumentError("p must be a real number in (-1,1), got $p")
+    end
+
+    theta = [1.53e-5, 2.25e-3, 1.92e-2, 6.08e-2, 1.25e-1, 2.03e-1, 2.84e-1]
+    n = checksquare(A0)
+
+    A, m, s = invsquaring(A0,theta)
+    A = I - A
+
+    # Compute accurate diagonal of I - T
+    sqrt_diag!(A0,A,s)
+    for i = 1:n
+        A[i,i] = -A[i,i]
+    end
+    # Compute the Padé approximant
+    c = 0.5 * (p - m) / (2 * m - 1)
+    triu!(A)
+    S = c * A
+    Stmp = similar(S)
+    for j = m-1:-1:1
+        j4 = 4 * j
+        c = (-p - j) / (j4 + 2)
+        for i = 1:n
+            @inbounds S[i,i] = S[i,i] + 1
+        end
+        copy!(Stmp,S)
+        scale!(S,A,c)
+        A_ldiv_B!(Stmp,S.data)
+
+        c = (p - j) / (j4 - 2)
+        for i = 1:n
+            @inbounds S[i,i] = S[i,i] + 1
+        end
+        copy!(Stmp,S)
+        scale!(S,A,c)
+        A_ldiv_B!(Stmp,S.data)
+    end
+    for i = 1:n
+        S[i,i] = S[i,i] + 1
+    end
+    copy!(Stmp,S)
+    scale!(S,A,-p)
+    A_ldiv_B!(Stmp,S.data)
+    for i = 1:n
+        @inbounds S[i,i] = S[i,i] + 1
+    end
+
+    blockpower!(A0,S,p/(2^s))
+    for m = 1:s
+        A_mul_B!(Stmp.data,S,S)
+        copy!(S,Stmp)
+        blockpower!(A0,S,p/(2^(s-m)))
+    end
+    return S
+end
+^(A::LowerTriangular, p::Integer) = ^(A.', p::Integer).'
+powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
+
 # Complex matrix logarithm for the upper triangular factor, see:
 #   Al-Mohy and Higham, "Improved inverse  scaling and squaring algorithms for
-#     the matrix logarithm", SIAM J. Sci. Comput., 34(4), (2012), pp. C153-C169.
+#     the matrix logarithm", SIAM J. Sci. Comput., 34(4), (2012), pp. C153–C169.
 #   Al-Mohy, Higham and Relton, "Computing the Frechet derivative of the matrix
-#     logarithm and estimating the condition number", SIAM J. Sci. Comput., 35(4),
-#     (2013), C394-C410.
+#     logarithm and estimating the condition number", SIAM J. Sci. Comput.,
+#     35(4), (2013), C394–C410.
 #
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
-    maxsqrt = 100
+function logm{T<:Union{Float32,Float64,Complex{Float32},Complex{Float64}}}(A0::UpperTriangular{T})
     theta = [1.586970738772063e-005,
          2.313807884242979e-003,
          1.938179313533253e-002,
@@ -1593,15 +1680,110 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
          1.276404810806775e-001,
          2.060962623452836e-001,
          2.879093714241194e-001]
+
+    n = checksquare(A0)
+
+    A, m, s = invsquaring(A0,theta)
+
+    # Compute accurate diagonal of A - I
+    sqrt_diag!(A0, A, s)
+
+    # Compute the Gauss-Legendre quadrature formula
+    x, w = Base.QuadGK.gauss(Float64, m)
+    for i = 1:m
+        @inbounds x[i] += 0.5(x[i] + 1)
+    end
+    scale!(w, 0.5)
+
+    # Compute the Padé approximation
+    Y = UpperTriangular(zeros(T, n, n))
+    D = similar(A)
+    Dtmp = similar(A)
+    triu!(Dtmp)
+    for k = 1:m
+        scale!(D,A,x[k])
+        for i = 1:n
+            @inbounds D[i,i] = D[i,i] + 1
+        end
+        scale!(Dtmp,A,w[k])
+        A_rdiv_B!(Dtmp.data,D)
+        for j = 1:n
+            for i = 1:j
+                @inbounds Y[i,j] = Y[i,j] + Dtmp[i,j]
+            end
+        end
+    end
+
+    # Scale back
+    scale!(2^s,Y.data)
+
+    # Compute accurate diagonal and superdiagonal of log(A)
+    for k = 1:n-1
+        Ak = complex(A0[k,k])
+        Akp1 = complex(A0[k+1,k+1])
+        logAk = log(Ak)
+        logAkp1 = log(Akp1)
+        Y[k,k] = logAk
+        Y[k+1,k+1] = logAkp1
+        if Ak == Akp1
+            Y[k,k+1] = A0[k,k+1] / Ak
+        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
+            Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
+        else
+            w = atanh((Akp1 - Ak)/(Akp1 + Ak) + im * pi * unw(logAkp1-logAk))
+            Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
+        end
+    end
+    if isreal(Y)
+        return UpperTriangular(real(Y))
+    else
+        return UpperTriangular(Y)
+    end
+end
+logm(A::LowerTriangular) = logm(A.').'
+
+# Auxiliary functions for logm and matrix power
+
+# Compute accurate diagonal of A = A0^s - I
+#   Al-Mohy, "A more accurate Briggs method for the logarithm",
+#      Numer. Algorithms, 59, (2012), 393–402.
+function sqrt_diag!(A0::UpperTriangular, A::UpperTriangular, s)
+    n = checksquare(A0)
+    for i = 1:n
+        a = complex(A0[i,i])
+        if s == 0
+            A[i,i] = a - 1
+        else
+            s0 = s
+            if imag(a) >= 0 && real(a) <= 0 && a != 0
+                a = sqrt(a)
+                s0 = s - 1
+            end
+            z0 = a - 1
+            a = sqrt(a)
+            r = 1 + a
+            for j = 1:s0-1
+                a = sqrt(a)
+                r = r * (1 + a)
+            end
+            A[i,i] = z0 / r
+        end
+    end
+end
+
+# Repeatedly compute the square roots of A so that in the end its
+# eigenvalues are close enough to the positive real line
+function invsquaring(A0::UpperTriangular, theta)
+    maxsqrt = 100
     tmax = size(theta, 1)
-    n = size(A0, 1)
-    A = copy(A0)
+    n = checksquare(A0)
+    A = complex(copy(A0))
     p = 0
     m = 0
 
     # Compute repeated roots
-    d = diag(A)
-    dm1 = Array{T}(n)
+    d = complex(diag(A))
+    dm1 = similar(d, n)
     s = 0
     for i = 1:n
         dm1[i] = d[i] - 1.
@@ -1645,6 +1827,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
             end
             if j <= 6
                 m = j
+                foundm = true
                 break
             elseif alpha3 / 2 <= theta[5] && p < 2
                 more = true
@@ -1664,12 +1847,14 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
                         break
                     end
                 end
+                foundm = true
                 break
             end
         end
 
         if s == maxsqrt
             m = tmax
+            foundm = true
             break
         end
         A = sqrtm(A)
@@ -1679,13 +1864,26 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
 
     # Compute accurate superdiagonal of T
     p = 1 / 2^s
-    for k = 1:n-1
-        Ak = A0[k,k]
-        Akp1 = A0[k+1,k+1]
+    A = complex(A)
+    blockpower!(A, A0, p)
+    return A,m,s
+
+end
+
+# Compute accurate diagonal and superdiagonal of A = A0^p
+function blockpower!(A::UpperTriangular, A0::UpperTriangular, p)
+    n = checksquare(A0)
+    @inbounds for k = 1:n-1
+
+        Ak = complex(A0[k,k])
+        Akp1 = complex(A0[k+1,k+1])
+
         Akp = Ak^p
         Akp1p = Akp1^p
+
         A[k,k] = Akp
         A[k+1,k+1] = Akp1p
+
         if Ak == Akp1
             A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
         elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
@@ -1693,77 +1891,18 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
         else
             logAk = log(Ak)
             logAkp1 = log(Akp1)
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im*pi*ceil((imag(logAkp1-logAk)-pi)/(2*pi))
-            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak)
+            w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im * pi * unw(logAkp1-logAk)
+            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
             A[k,k+1] = A0[k,k+1] * dd
         end
     end
-
-    # Compute accurate diagonal of T
-    for i = 1:n
-        a = A0[i,i]
-        if s == 0
-            r = a - 1
-        end
-        s0 = s
-        if angle(a) >= pi / 2
-            a = sqrt(a)
-            s0 = s - 1
-        end
-        z0 = a - 1
-        a = sqrt(a)
-        r = 1 + a
-        for j = 1:s0-1
-            a = sqrt(a)
-            r = r * (1 + a)
-        end
-        A[i,i] = z0 / r
-    end
-
-    # Compute the Gauss-Legendre quadrature formula
-    R = zeros(Float64, m, m)
-    for i = 1:m - 1
-        R[i,i+1] = i / sqrt((2 * i)^2 - 1)
-        R[i+1,i] = R[i,i+1]
-    end
-    x,V = eig(R)
-    w = Array{Float64}(m)
-    for i = 1:m
-        x[i] = (x[i] + 1) / 2
-        w[i] = V[1,i]^2
-    end
-
-    # Compute the Padé approximation
-    Y = zeros(T, n, n)
-    for k = 1:m
-        Y = Y + w[k] * (A / (x[k] * A + I))
-    end
-
-    # Scale back
-    scale!(2^s, Y)
-
-    # Compute accurate diagonal and superdiagonal of log(T)
-    for k = 1:n-1
-        Ak = A0[k,k]
-        Akp1 = A0[k+1,k+1]
-        logAk = log(Ak)
-        logAkp1 = log(Akp1)
-        Y[k,k] = logAk
-        Y[k+1,k+1] = logAkp1
-        if Ak == Akp1
-            Y[k,k+1] = A0[k,k+1] / Ak
-        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
-            Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
-        else
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak) + im*pi*(ceil((imag(logAkp1-logAk) - pi)/(2*pi))))
-            Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
-        end
-    end
-
-    return UpperTriangular(Y)
-
 end
-logm(A::LowerTriangular) = logm(A.').'
+
+# Unwinding number
+unw(x::Real) = 0
+unw(x::Number) = ceil((imag(x) - pi) / (2 * pi))
+
+# End of auxiliary functions for logm and matrix power
 
 function sqrtm{T}(A::UpperTriangular{T})
     n = checksquare(A)
