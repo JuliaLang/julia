@@ -209,7 +209,7 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/reduce.jl \
 		base/reflection.jl \
 		base/tuple.jl)
-BASE_SRCS := $(shell find $(JULIAHOME)/base -name \*.jl)
+BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl) $(shell find $(BUILDROOT)/base -name \*.jl))
 
 $(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
