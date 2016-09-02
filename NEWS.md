@@ -443,6 +443,17 @@ Deprecated or removed
   * The no-op `transpose` fallback has been deprecated. Consider introducing suitable
     `transpose` methods or calling `permutedims(x, [2,1])` ([#13171], [#17075], [#17374]).
 
+  * The following macros have been deprecated ([#16219]):
+    * `@windows` is deprecated in favor of `is_windows()`
+    * `@unix` is deprecated in favor of `is_unix()`
+    * `@osx` is deprecated in favor of `is_apple()`
+    * `@linux` is deprecated in favor of `is_linux()`
+    * `@windows_only` is deprecated in favor of `if is_windows()`
+    * `@unix_only` is deprecated in favor of `if is_unix()`
+    * `@osx_only` is deprecated in favor of `if is_apple()`
+    * `@linux_only` is deprecated in favor of `if is_linux()`
+    * NOTE: Using `@static` could be useful/necessary when used in a function's local scope. See details at the section entitled [Handling Operating System Variation](http://docs.julialang.org/en/latest/manual/handling-operating-system-variation/#man-handling-operating-system-variation) in the manual.
+
 Command-line option changes
 ---------------------------
 
