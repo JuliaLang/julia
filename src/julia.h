@@ -258,6 +258,7 @@ typedef struct _jl_lambda_info_t {
     int8_t inferred;
     int8_t pure;
     int8_t inlineable;
+    int8_t propagate_inbounds;
     int8_t inInference; // flags to tell if inference is running on this function
     int8_t inCompile; // flag to tell if codegen is running on this function
     int8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
@@ -555,36 +556,7 @@ extern JL_DLLEXPORT jl_value_t *jl_false;
 extern JL_DLLEXPORT jl_value_t *jl_nothing;
 
 // some important symbols
-extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
-extern jl_sym_t *empty_sym;   extern jl_sym_t *body_sym;
-extern jl_sym_t *dots_sym;    extern jl_sym_t *vararg_sym;
-extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
-extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
-extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
-extern jl_sym_t *core_sym;    extern jl_sym_t *globalref_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_incomplete_sym;
-extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
-extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
-extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
-extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
-extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
-extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
-extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
-extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
-extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
-extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
-extern jl_sym_t *compiler_temp_sym;
-extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
-extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
-extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
-extern jl_sym_t *compositetype_sym;
-extern jl_sym_t *global_sym; extern jl_sym_t *unused_sym;
-extern jl_sym_t *boundscheck_sym; extern jl_sym_t *inbounds_sym;
-extern jl_sym_t *copyast_sym; extern jl_sym_t *fastmath_sym;
-extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
-extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
-extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
-extern jl_sym_t *polly_sym; extern jl_sym_t *inline_sym;
 
 // gc -------------------------------------------------------------------------
 
