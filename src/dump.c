@@ -949,6 +949,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         write_int8(s->s, li->pure);
         write_int8(s->s, li->inlineable);
+        write_int8(s->s, li->propagate_inbounds);
         write_int8(s->s, li->isva);
         write_int32(s->s, li->nargs);
         jl_serialize_value(s, (jl_value_t*)li->def);
@@ -1616,6 +1617,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         li->unspecialized_ducttape = NULL;
         li->pure = read_int8(s->s);
         li->inlineable = read_int8(s->s);
+        li->propagate_inbounds = read_int8(s->s);
         li->isva = read_int8(s->s);
         li->nargs = read_int32(s->s);
         li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);

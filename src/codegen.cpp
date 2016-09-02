@@ -4498,18 +4498,13 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         DebugLoc loc;
         StringRef file;
         ssize_t line;
-        bool enabled;
         bool is_inbounds;
         bool loc_changed;
         bool is_poploc;
     };
     std::vector<StmtProp> stmtprops(stmtslen);
     std::vector<DbgState> DI_stack;
-    std::vector<bool> boundsCheck_stack{false};
     std::vector<bool> inbounds_stack{false};
-    auto is_bounds_check_block = [&] () {
-        return !boundsCheck_stack.empty() && boundsCheck_stack.back();
-    };
     auto is_inbounds = [&] () {
         // inbounds rule is either of top two values on inbounds stack are true
         size_t sz = inbounds_stack.size();
@@ -4518,21 +4513,22 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             inbounds |= inbounds_stack[sz - 2];
         return inbounds;
     };
-    StmtProp cur_prop{topdebugloc, filename, toplineno, true, false, true, false};
-    // this should not be necessary but it seems that meta node can cause
-    // an offset between the label number and the statement number
-    std::map<int, int> label_map;
+    StmtProp cur_prop{topdebugloc, filename, toplineno, false, true, false};
     for (i = 0; i < stmtslen; i++) {
         cur_prop.loc_changed = false;
         cur_prop.is_poploc = false;
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
+#ifndef NDEBUG
         if (jl_is_labelnode(stmt)) {
             int lname = jl_labelnode_label(stmt);
             if (lname != i + 1) {
-                label_map[lname] = i + 1;
+                jl_safe_printf("Label number mismatch.\n");
+                jl_(stmts);
+                abort();
             }
         }
+#endif
         if (jl_is_linenode(stmt) || (expr && expr->head == line_sym)) {
             ssize_t lno = -1;
             if (jl_is_linenode(stmt)) {
@@ -4627,64 +4623,26 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
         if (expr) {
             jl_value_t **args = (jl_value_t**)jl_array_data(expr->args);
-            if (expr->head == boundscheck_sym) {
-                if (jl_array_len(expr->args) > 0) {
-                    jl_value_t *arg = args[0];
-                    if (arg == jl_true) {
-                        boundsCheck_stack.push_back(true);
-                    }
-                    else if (arg == jl_false) {
-                        boundsCheck_stack.push_back(false);
-                    }
-                    else {
-                        if (!boundsCheck_stack.empty()) {
-                            boundsCheck_stack.pop_back();
-                        }
-                    }
-                }
-            }
-            else if (cur_prop.enabled && expr->head == inbounds_sym) {
+            if (expr->head == inbounds_sym) {
                 // manipulate inbounds stack
-                // note that when entering an inbounds context, we must also update
-                // the boundsCheck context to be false
                 if (jl_array_len(expr->args) > 0) {
                     jl_value_t *arg = args[0];
                     if (arg == jl_true) {
                         inbounds_stack.push_back(true);
-                        boundsCheck_stack.push_back(false);
                     }
                     else if (arg == jl_false) {
                         inbounds_stack.push_back(false);
-                        boundsCheck_stack.push_back(false);
                     }
-                    else {
-                        if (!inbounds_stack.empty())
-                            inbounds_stack.pop_back();
-                        if (!boundsCheck_stack.empty())
-                            boundsCheck_stack.pop_back();
+                    else if (!inbounds_stack.empty()) {
+                        inbounds_stack.pop_back();
                     }
                 }
             }
         }
-        bool is_ib = is_inbounds();
-        if (is_ib && is_bounds_check_block() &&
-            jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_ON) {
-            // elide bounds check blocks in inbounds context
-            cur_prop.enabled = false;
-        }
-        else if (is_bounds_check_block() &&
-                 jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_OFF) {
-            // elide bounds check blocks when turned off by options
-            cur_prop.enabled = false;
-        }
-        else {
-            cur_prop.enabled = true;
-        }
-        cur_prop.is_inbounds = is_ib;
+        cur_prop.is_inbounds = is_inbounds();
         stmtprops[i] = cur_prop;
     }
     DI_stack.clear();
-    boundsCheck_stack.clear();
     inbounds_stack.clear();
 
     // step 12. Do codegen in control flow order
@@ -4718,9 +4676,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // if `unconditional` a unconditional branch is created to the target
     // label and the cursor is set to the next statement to process
     auto handle_label = [&] (int lname, bool unconditional) {
-        auto it = label_map.find(lname);
-        if (it != label_map.end())
-            lname = it->second;
         auto &bb = labels[lname];
         BasicBlock *cur_bb = builder.GetInsertBlock();
         // Check if we've already visited this label
@@ -4774,7 +4729,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             if (ctx.debug_enabled)
                 builder.SetCurrentDebugLocation(props.loc);
             // Disable coverage for pop_loc, it doesn't start a new expression
-            if (do_coverage && props.enabled && !props.is_poploc) {
+            if (do_coverage && !props.is_poploc) {
                 coverageVisitLine(props.file, props.line);
             }
         }
@@ -4785,10 +4740,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             // Label node
             int lname = jl_labelnode_label(stmt);
             handle_label(lname, true);
-            continue;
-        }
-        if (!props.enabled) {
-            find_next_stmt(cursor + 1);
             continue;
         }
         if (expr && expr->head == return_sym) {
