@@ -1036,8 +1036,6 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 // for use in reflection from Julia.
 // this is paired with jl_dump_function_ir and jl_dump_function_asm in particular ways:
 // misuse will leak memory or cause read-after-free
-extern "C" JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
-
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_defn(jl_lambda_info_t *linfo, bool getwrapper)
 {
@@ -1053,7 +1051,7 @@ void *jl_get_llvmf_defn(jl_lambda_info_t *linfo, bool getwrapper)
         // first copy the linfo to avoid corrupting it and
         // confusing the compiler about the
         // validity of the code it already generated
-        temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
+        temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals, 1);
         jl_type_infer(temp, 0);
         if (temp->code == jl_nothing || temp->inInference) {
             // something went wrong: abort!
@@ -1142,7 +1140,7 @@ void *jl_get_llvmf_decl(jl_lambda_info_t *linfo, bool getwrapper)
         if (linfo->functionObjectsDecls.functionObject == NULL) {
             jl_lambda_info_t *temp = NULL;
             JL_GC_PUSH1(&temp);
-            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
+            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals, 1);
             jl_type_infer(temp, 0);
             temp->jlcall_api = 0;
             temp->constval = jl_nothing;
@@ -4521,7 +4519,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
 #ifndef NDEBUG
         if (jl_is_labelnode(stmt)) {
-            int lname = jl_labelnode_label(stmt);
+            size_t lname = jl_labelnode_label(stmt);
             if (lname != i + 1) {
                 jl_safe_printf("Label number mismatch.\n");
                 jl_(stmts);
@@ -4652,7 +4650,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         // `seq_next` is the next statement we want to emit
         // i.e. if it exists, it's the next one following control flow and
         // should be emitted into the current insert point.
-        if (seq_next >= 0 && seq_next < stmtslen) {
+        if (seq_next >= 0 && (unsigned)seq_next < stmtslen) {
             cursor = seq_next;
             return;
         }
@@ -4667,7 +4665,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         cursor = item.first;
         workstack.pop_back();
     };
-    auto add_to_list = [&] (int pos, BasicBlock *bb) {
+    auto add_to_list = [&] (unsigned pos, BasicBlock *bb) {
         if (pos >= stmtslen)
             return;
         workstack.push_back({pos, bb});
