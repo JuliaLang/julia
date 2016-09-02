@@ -53,7 +53,7 @@ function lgamma end
 end
 
 # Compute the logΓ(z) function using a combination of the asymptotic series,
-# the Taylor series around z=1, the reflection formula, and the shift formula.
+# the Taylor series around z=1 and z=2, the reflection formula, and the shift formula.
 # Many details of these techniques are discussed in D. E. G. Hare,
 # "Computing the principal branch of log-Gamma," J. Algorithms 25, pp. 221-236 (1997),
 # and similar techniques are used (in a somewhat different way) by the
@@ -87,6 +87,11 @@ function lgamma(z::Complex{Float64})
         # ... coefficients are [-eulergamma; [(-1)^k * zeta(k)/k for k in 2:15]]
         w = Complex(x - 1, y)
         return w * @evalpoly(w, -5.7721566490153286060651188e-01,8.2246703342411321823620794e-01,-4.0068563438653142846657956e-01,2.705808084277845478790009e-01,-2.0738555102867398526627303e-01,1.6955717699740818995241986e-01,-1.4404989676884611811997107e-01,1.2550966952474304242233559e-01,-1.1133426586956469049087244e-01,1.000994575127818085337147e-01,-9.0954017145829042232609344e-02,8.3353840546109004024886499e-02,-7.6932516411352191472827157e-02,7.1432946295361336059232779e-02,-6.6668705882420468032903454e-02)
+    elseif abs(x - 2) + yabs < 0.1
+        # taylor series around zero at z=2
+        # ... coefficients are [1-eulergamma; [(-1)^k * (zeta(k)-1)/k for k in 2:15]]
+        w = Complex(x - 2, y)
+        return w * @evalpoly(w, 4.2278433509846713939348812e-01,3.2246703342411321823620794e-01,-6.7352301053198095133246196e-02,2.0580808427784547879000897e-02,-7.3855510286739852662729527e-03,2.8905103307415232857531201e-03,-1.1927539117032609771139825e-03,5.0966952474304242233558822e-04,-2.2315475845357937976132853e-04,9.9457512781808533714662972e-05,-4.4926236738133141700224489e-05,2.0507212775670691553131246e-05,-9.4394882752683959040399766e-06,4.374866789907487804177898e-06,-2.0392157538013662367869141e-06)
     end
     # use recurrence relation lgamma(z) = lgamma(z+1) - log(z) to shift to x > 7 for asymptotic series
     shiftprod = Complex(x,yabs)
