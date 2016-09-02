@@ -1038,8 +1038,6 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 // for use in reflection from Julia.
 // this is paired with jl_dump_function_ir and jl_dump_function_asm in particular ways:
 // misuse will leak memory or cause read-after-free
-extern "C" JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
-
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
 {
@@ -1077,7 +1075,7 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
             // first copy the linfo to avoid corrupting it and
             // confusing the compiler about the
             // validity of the code it already generated
-            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
+            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals, 1);
             jl_type_infer(temp, 0);
             if (temp->code == jl_nothing || temp->inInference) {
                 JL_GC_POP();
@@ -1123,7 +1121,7 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         // normally we don't generate native code for these functions, so need an exception here
         // This leaks a bit of memory to cache the native code that we'll never actually need
         if (linfo->functionObjectsDecls.functionObject == NULL) {
-            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals);
+            temp = jl_get_specialized(linfo->def, linfo->specTypes, linfo->sparam_vals, 1);
             jl_type_infer(temp, 0);
             temp->jlcall_api = 0;
             temp->constval = jl_nothing;
