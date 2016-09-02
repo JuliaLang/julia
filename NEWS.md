@@ -478,7 +478,7 @@ Deprecated or removed
   * The no-op `transpose` fallback has been deprecated. Consider introducing suitable
     `transpose` methods or calling `permutedims(x, [2,1])` ([#13171], [#17075], [#17374]).
 
-  * The following macros have been deprecated ([#6674] and [#4233]):
+  * The following macros have been deprecated ([#16219]):
     * `@windows` is deprecated in favor of `is_windows()`
     * `@unix` is deprecated in favor of `is_unix()`
     * `@osx` is deprecated in favor of `is_apple()`
