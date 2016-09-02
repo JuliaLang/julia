@@ -52,6 +52,13 @@ function lgamma end
        zinv*@evalpoly(t, 8.3333333333333333333333368e-02,-2.7777777777777777777777776e-03,7.9365079365079365079365075e-04,-5.9523809523809523809523806e-04,8.4175084175084175084175104e-04,-1.9175269175269175269175262e-03,6.4102564102564102564102561e-03,-2.9550653594771241830065352e-02)
 end
 
+# Compute the logΓ(z) function using a combination of the asymptotic series,
+# the Taylor series around z=1, the reflection formula, and the shift formula.
+# Many details of these techniques are discussed in D. E. G. Hare,
+# "Computing the principal branch of log-Gamma," J. Algorithms 25, pp. 221-236 (1997),
+# and similar techniques are used (in a somewhat different way) by the
+# SciPy loggamma function.  The key identities are also described
+# at http://functions.wolfram.com/GammaBetaErf/LogGamma/
 function lgamma(z::Complex{Float64})
     x = real(z)
     y = imag(z)
@@ -82,14 +89,26 @@ function lgamma(z::Complex{Float64})
         return w * @evalpoly(w, -5.7721566490153286060651188e-01,8.2246703342411321823620794e-01,-4.0068563438653142846657956e-01,2.705808084277845478790009e-01,-2.0738555102867398526627303e-01,1.6955717699740818995241986e-01,-1.4404989676884611811997107e-01,1.2550966952474304242233559e-01,-1.1133426586956469049087244e-01,1.000994575127818085337147e-01,-9.0954017145829042232609344e-02,8.3353840546109004024886499e-02,-7.6932516411352191472827157e-02,7.1432946295361336059232779e-02,-6.6668705882420468032903454e-02)
     end
     # use recurrence relation lgamma(z) = lgamma(z+1) - log(z) to shift to x > 7 for asymptotic series
-    shift = log(z)
+    shiftprod = Complex(x,yabs)
     x += 1
+    sb = false # == signbit(imag(shiftprod)) == signbit(yabs)
+    # To use log(product of shifts) rather than sum(logs of shifts),
+    # we need to keep track of the number of + to - sign flips in
+    # imag(shiftprod), as described in Hare (1997), proposition 2.2.
+    signflips = 0
     while x <= 7
-        shift += log(Complex(x,y))
+        shiftprod *= Complex(x,yabs)
+        sb′ = signbit(imag(shiftprod))
+        signflips += sb′ & (sb′ != sb)
+        sb = sb′
         x += 1
     end
-    # note: it is faster to take the product of the log arguments, and *then*
-    #       take the log to get `shift`, but this gives the wrong branch cut
+    shift = log(shiftprod)
+    if signbit(y) # if y is negative, conjugate the shift
+        shift = Complex(real(shift), signflips*-6.2831853071795864769252842 - imag(shift))
+    else
+        shift = Complex(real(shift), imag(shift) + signflips*6.2831853071795864769252842)
+    end
     return lgamma_asymptotic(Complex(x,y)) - shift
 end
 lgamma{T<:Union{Integer,Rational}}(z::Complex{T}) = lgamma(float(z))
