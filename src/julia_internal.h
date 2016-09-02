@@ -312,6 +312,12 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
 jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
+jl_datatype_t *jl_new_datatype_(jl_sym_t *name, jl_datatype_t *super,
+                                jl_svec_t *parameters,
+                                jl_svec_t *fnames, jl_svec_t *ftypes,
+                                int abstract, int mutabl,
+                                int ninitialized, int boxed);
+
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);
 void jl_precompute_memoized_dt(jl_datatype_t *dt);

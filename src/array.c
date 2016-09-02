@@ -24,8 +24,7 @@ extern "C" {
 
 static inline int store_unboxed(jl_value_t *el_type) // jl_isbits
 {
-    return jl_is_leaf_type(el_type) && jl_is_immutable(el_type) &&
-        ((jl_datatype_t*)el_type)->layout && (((jl_datatype_t*)el_type)->layout->pointerfree || jl_is_vt(el_type));
+    return jl_is_leaf_type(el_type) && jl_is_unboxed(el_type);
 }
 
 int jl_array_store_unboxed(jl_value_t *el_type)

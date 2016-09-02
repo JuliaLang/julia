@@ -380,6 +380,8 @@ typedef struct _jl_datatype_t {
     int8_t hastypevars; // bound
     int8_t haswildcard; // unbound
     int8_t isleaftype;
+    //
+    int8_t boxed; // if true, we box instances of this even if they are immutable
 } jl_datatype_t;
 
 typedef struct {
@@ -497,7 +499,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_task_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_function_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_builtin_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_valuetype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_uniontype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_datatype_type;
 
@@ -1766,10 +1767,13 @@ typedef struct {
 #define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)
 #define jl_task_arg_in_transit (jl_get_ptls_states()->task_arg_in_transit)
 
-static inline int jl_is_vt(void* t)
+static inline int jl_is_unboxed(jl_value_t* t)
 {
-    //return ((jl_datatype_t*)t)->super == jl_valuetype_type;
-    return jl_is_datatype(t) && !((jl_datatype_t*)t)->mutabl && ((jl_datatype_t*)t)->layout && !((jl_datatype_t*)t)->layout->pointerfree;
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        return !dt->mutabl && dt->layout && !dt->boxed;
+    }
+    return 0;
 }
 
 #ifdef __cplusplus

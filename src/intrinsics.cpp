@@ -301,7 +301,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
         builder.CreateStore(unboxed, dest, volatile_store);
         return NULL;
     }
-    if (jl_is_vt(x.typ) && !dest && needsroot) {
+    if (!((jl_datatype_t*)x.typ)->layout->pointerfree && !dest && needsroot) {
         assert(0 && "Should never actually unbox !ptrfree");
         abort();
     }

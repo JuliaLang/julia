@@ -872,6 +872,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->hastypevars = 0;
     t->haswildcard = 0;
     t->isleaftype = 1;
+    t->boxed = 0;
     t->layout = NULL;
     return t;
 }
@@ -1006,7 +1007,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
-        if ((jl_isbits(ty) || jl_is_vt(ty)) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
+        if (jl_is_unboxed(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
             fsz = jl_datatype_size(ty);
             // Should never happen
             if (__unlikely(fsz > max_size))
@@ -1062,6 +1063,14 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
                                             int abstract, int mutabl,
                                             int ninitialized)
 {
+    return jl_new_datatype_(name, super, parameters, fnames, ftypes, abstract, mutabl, ninitialized, 0);
+}
+
+jl_datatype_t* jl_new_datatype_(jl_sym_t* name, jl_datatype_t *super, jl_svec_t *parameters,
+                                jl_svec_t* fnames, jl_svec_t *ftypes,
+                                int abstract, int mutabl, int ninitialized,
+                                int boxed)
+{
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_datatype_t *t=NULL;
     jl_typename_t *tn=NULL;
@@ -1093,6 +1102,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->ninitialized = ninitialized;
+    t->boxed = boxed;
     t->instance = NULL;
     t->struct_decl = NULL;
     t->ditype = NULL;

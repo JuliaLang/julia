@@ -761,7 +761,7 @@ static void CreateTrap(IRBuilder<> &builder)
 
 static bool isbits_spec(jl_value_t *jt, bool allow_unsized = true)
 {
-    return (jl_is_vt(jt) || jl_isbits(jt)) && jl_is_leaf_type(jt) && (allow_unsized ||
+    return jl_is_unboxed(jt) && jl_is_leaf_type(jt) && (allow_unsized ||
         ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) ||
          (jl_is_datatype(jt) && jl_datatype_nfields(jt)>0)));
 }
@@ -2061,7 +2061,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
 // Emit a gc-root slot indicator
 static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi)
 {
-    CallInst *newroot = CallInst::Create(prepare_call(gcroot_func), {V_null}, None, "", /*InsertBefore*/ctx->ptlsStates);
+    CallInst *newroot = CallInst::Create(prepare_call(gcroot_func), ArrayRef<Value*>(V_null), "", /*InsertBefore*/ctx->ptlsStates);
     if (vi) {
         vi->memloc->replaceAllUsesWith(newroot);
         newroot->takeName(vi->memloc);
@@ -2072,7 +2072,7 @@ static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi)
 
 static Value *emit_local_root(jl_codectx_t *ctx, jl_value_t* typ, Type* T)
 {
-    CallInst *ptr = CallInst::Create(prepare_call(gcroot_func), {literal_pointer_val(typ)}, None, "");
+    CallInst *ptr = CallInst::Create(prepare_call(gcroot_func), ArrayRef<Value*>(literal_pointer_val(typ)), "");
     CastInst *cast = CastInst::CreatePointerCast(ptr, PointerType::get(T,0), "");
     cast->insertAfter(ctx->ptlsStates);
     ptr->insertBefore(ctx->ptlsStates);
@@ -3739,7 +3739,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                         builder.CreateLoad(builder.CreatePointerCast(val, T_ppjlvalue)),
                         true, jargty, &ctx);
             }
-            else if (!(jl_isbits(jargty) || jl_is_vt(jargty))) {
+            else if (!jl_is_unboxed(jargty)) {
                 // must be a jl_value_t* (because it's mutable or contains gc roots)
                 inputarg = mark_julia_type(builder.CreatePointerCast(val, T_pjlvalue), true, jargty, &ctx);
             }

@@ -347,7 +347,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
         }
         return Type::getIntNTy(jl_LLVMContext, nb*8);
     }
-    if (jl_is_vt(jt) || jl_isbits(jt)) {
+    if (jl_is_unboxed(jt)) {
         if (((jl_datatype_t*)jt)->size == 0) {
             return T_void;
         }
@@ -1525,7 +1525,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         v = builder.CreateExtractValue(v, makeArrayRef(&zero, 1));
         box = call_with_unsigned(box_ssavalue_func, v);
     }
-    else if (!(jl_isbits(jt) || jl_is_vt(jt)) || !jl_is_leaf_type(jt)) {
+    else if (!jl_is_unboxed(jt) || !jl_is_leaf_type(jt)) {
         assert("Don't know how to box this type" && false);
         return NULL;
     }
@@ -1534,7 +1534,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         return literal_pointer_val(jb->instance);
     }
     else {
-        if (jl_is_vt(jt))
+        if (!jb->layout->pointerfree)
             assert(vinfo.ispointer());
         box = init_bits_cgval(emit_allocobj(ctx, jl_datatype_size(jt), vinfo), vinfo, jb->mutabl ? tbaa_mutab : tbaa_immut, ctx);
     }
@@ -1709,8 +1709,6 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                 jl_is_vecelement_type(ty) ||
                 type_is_ghost(lt)) // maybe also check the size ?
                 init_as_value = true;
-            if (jl_is_vt(sty))
-                assert(!init_as_value);
             size_t na = nargs-1 < nf ? nargs-1 : nf;
             Value *strct;
             if (init_as_value)
@@ -1767,7 +1765,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             f1 = boxed(fval_info, ctx);
             j++;
         }
-        bool isvt = jl_is_vt(sty);
+        bool isvt = jl_is_unboxed((jl_value_t*)sty);
         Value *strct;
         jl_cgval_t strctinfo;
         if (!isvt) {

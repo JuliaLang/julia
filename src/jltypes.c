@@ -3645,11 +3645,14 @@ void jl_init_types(void)
     jl_set_typeof(jl_nothing, jl_void_type);
     jl_void_type->instance = jl_nothing;
 
-    jl_uniontype_type = jl_new_datatype(jl_symbol("Union"),
-                                        jl_type_type, jl_emptysvec,
-                                        jl_svec(1, jl_symbol("types")),
-                                        jl_svec(1, jl_simplevector_type),
-                                        0, 1, 1);
+    jl_uniontype_type = jl_new_datatype_(jl_symbol("Union"),
+                                         jl_type_type, jl_emptysvec,
+                                         jl_svec(1, jl_symbol("types")),
+                                         jl_svec(1, jl_simplevector_type),
+                                         0, 0, 1, 1 /* force boxing */);
+    // we force boxing for uniontypes while keeping them immutable because
+    // 1. making them mutable breaks object_id and ObjectIdDict are used in several places to index types
+    // 2. making them immutables breaks Bottom uniquing which is assumed in a lot of places
 
     jl_bottom_type = (jl_value_t*)jl_new_struct(jl_uniontype_type, jl_emptysvec);
 
