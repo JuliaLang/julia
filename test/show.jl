@@ -603,3 +603,6 @@ end
 @test repr(NTuple{7,Int64}) == "NTuple{7,Int64}"
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4,Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32,Float32,Float32}"
+
+# Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
+@test isa(stringmime("text/plain", String(UInt8[0x00:0xff;])), String)
