@@ -985,7 +985,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
             idx = emit_bounds_check(strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
             Value *fld = tbaa_decorate(strct.tbaa, builder.CreateLoad(
                         builder.CreateGEP(data_pointer(strct, ctx), idx)));
-            if ((unsigned)stt->ninitialized != nfields)
+            if (1 || (unsigned)stt->ninitialized != nfields)
                 null_pointer_check(fld, ctx);
             *ret = mark_julia_type(fld, true, jl_any_type, ctx, strct.gcroot || !strct.isimmutable);
             return true;
@@ -1062,7 +1062,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
                               ConstantInt::get(T_size, jl_field_offset(jt,idx)));
         if (jl_field_isptr(jt, idx)) {
             Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
-            if (idx >= (unsigned)jt->ninitialized)
+            if (1 || idx >= (unsigned)jt->ninitialized)
                 null_pointer_check(fldv, ctx);
             jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx, strct.gcroot || !strct.isimmutable);
             return ret;
@@ -1086,7 +1086,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         assert(!jt->mutabl);
         if (jl_field_isptr(jt, idx)) {
             Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr, T_ppjlvalue)));
-            if (idx >= (unsigned)jt->ninitialized)
+            if (1 || idx >= (unsigned)jt->ninitialized)
                 null_pointer_check(fldv, ctx);
             jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx, true);
             return ret;
