@@ -107,3 +107,21 @@ for priority in values(priorities)
     heappush!(xs, priority)
 end
 @test issorted([heappop!(xs) for _ in length(priorities)])
+
+
+# test length, in, haskey, get
+let
+    pq = PriorityQueue(Dict(
+        i => i+5 for i in 1:5
+    ))
+    @test length(pq) == 5
+
+    for i in 1:5
+        @test haskey(pq, i)
+        @test (i=>i+5) in pq
+        @test get(pq, i, 0) == i + 5
+        @test get(get(pq, i)) == i+5
+    end
+    @test get(pq, 10, 0) == 0
+    @test isnull(get(pq, 10))
+end

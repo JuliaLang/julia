@@ -987,6 +987,12 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    Determine whether a collection has a mapping for a given key.
 
+.. function:: get(collection, key) -> Nullable
+
+   .. Docstring generated from Julia source
+
+   Return the value stored for the given key as ``Nullable(value)``\ , or if no mapping for the key is present, return null.
+
 .. function:: get(collection, key, default)
 
    .. Docstring generated from Julia source

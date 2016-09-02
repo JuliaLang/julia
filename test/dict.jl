@@ -256,6 +256,10 @@ let f(x) = x^2, d = Dict(8=>19)
         f(4)
     end == 16
 
+    # get (returning Nullable)
+    @test get(get(d, 8)) == 19
+    @test isnull(get(d, 13))
+
     @test d == Dict(8=>19, 19=>2, 42=>4)
 end
 
@@ -453,6 +457,10 @@ let d = ImmutableDict{String, String}(),
     @test in(k2 => 1.0, dnum, is)
     @test !in(k2 => 1, dnum, <)
     @test in(k2 => 0, dnum, <)
+    @test get(d1, "key1") === Nullable{String}(v1)
+    @test get(d4, "key1") === Nullable{String}(v2)
+    @test get(d4, "foo") === Nullable{String}()
+    @test get(d, k1) === Nullable{String}()
     @test get(d1, "key1", :default) === v1
     @test get(d4, "key1", :default) === v2
     @test get(d4, "foo", :default) === :default

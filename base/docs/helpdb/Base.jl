@@ -4015,6 +4015,14 @@ end
 get
 
 """
+    get(collection, key) -> Nullable
+
+Return the value stored for the given key as `Nullable(value)`,
+or if no mapping for the key is present, return null.
+"""
+get(collection, key)
+
+"""
     .!=(x, y)
     .≠(x,y)
 

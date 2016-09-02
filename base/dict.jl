@@ -6,6 +6,8 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))
 
+get{K,V}(d::Associative{K,V}, k) = haskey(d, k) ? Nullable{V}(d[k]::V) : Nullable{V}()
+
 function in(p::Pair, a::Associative, valcmp=(==))
     v = get(a,p[1],secret_table_token)
     if !is(v, secret_table_token)
@@ -698,6 +700,11 @@ function get{K,V}(default::Callable, h::Dict{K,V}, key)
     return (index < 0) ? default() : h.vals[index]::V
 end
 
+function get{K,V}(h::Dict{K,V}, key)
+    index = ht_keyindex(h, key)
+    return (index<0) ? Nullable{V}() : Nullable{V}(h.vals[index]::V)
+end
+
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
 
@@ -828,12 +835,21 @@ function getindex(dict::ImmutableDict, key)
     end
     throw(KeyError(key))
 end
+
 function get(dict::ImmutableDict, key, default)
     while isdefined(dict, :parent)
         dict.key == key && return dict.value
         dict = dict.parent
     end
     return default
+end
+
+function get{K,V}(dict::ImmutableDict{K,V}, key)
+    while isdefined(dict, :parent)
+        dict.key == key && return Nullable{V}(dict.value::V)
+        dict = dict.parent
+    end
+    Nullable{V}()
 end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
