@@ -55,3 +55,6 @@ let xs = [[i:i+4;] for i in 1:10]
         @test max(xs[1:n]...) == [n:n+4;]
     end
 end
+
+@test ((x -> x+1) ∘ (x -> 2x))(5) == 11
+@test (!isless)(1,2) == false

@@ -346,8 +346,60 @@ eltype(::Type{Any}) = Any
 eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
-# function pipelining
+# function pipelining, composition & negation
+
 |>(x, f) = f(x)
+
+"""
+    ∘(f, g)
+
+Creates a composition of two functions (or callable objects) `f` and `g`, such
+that `(f ∘ g)(x...) == f(g(x...))`. The `∘` symbol can be accessed at the REPL 
+using `\\circ`.
+
+By default, a function equivalent to `(x...) -> f(g(x...))` is returned, but
+this may be specialized to create any functionally-equivalent, callable object.
+"""
+function ∘(f, g)
+    # Avoids splatting penalty. TODO: remove when that is fixed.
+    # Chose to implement up to length 16 (current setting of MAX_TUPLE_SPLAT)
+    composed() = f(g())
+    composed(x1) = f(g(x1))
+    composed(x1,x2) = f(g(x1,x2))
+    composed(x1,x2,x3) = f(g(x1,x2,x3))
+    composed(x1,x2,x3,x4) = f(g(x1,x2,x3,x4))
+    composed(x1,x2,x3,x4,x5) = f(g(x1,x2,x3,x4,x5))
+    composed(x1,x2,x3,x4,x5,x6) = f(g(x1,x2,x3,x4,x5,x6))
+    composed(x1,x2,x3,x4,x5,x6,x7) = f(g(x1,x2,x3,x4,x5,x6,x7))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8) = f(g(x1,x2,x3,x4,x5,x6,x7,x8))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8,x9) = f(g(x1,x2,x3,x4,x5,x6,x7,x8,x9))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10) =
+        f(g(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11) =
+        f(g(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12) =
+        f(g(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13) =
+        f(g(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14) =
+        f(g(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15) =
+        f(g(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15))
+    composed(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16) =
+        f(g(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16))
+
+    composed(xs...) = f(g(xs...))
+
+    return composed # This name is remembered and visible at the REPL
+end
+
+"""
+    !(f::Function)
+
+Returns a new function which applies boolean not to the output of `f`,
+equivalent to `(x...) -> !f(x...)`.
+"""
+!(f::Function) = (!) ∘ f
 
 # array shape rules
 
@@ -684,6 +736,7 @@ export
     ∪,
     √,
     ∛,
+    ∘,
     colon,
     hcat,
     vcat,
@@ -697,6 +750,6 @@ import ..this_module: !, !=, $, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, ./,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ∘
 
 end
