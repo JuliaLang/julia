@@ -331,14 +331,40 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module)
     return expr;
 }
 
-// copy a :lambda Expr into its SourceInfo representation
+// copy a :lambda Expr into its SourceInfo representation,
+// including popping of known meta nodes
 static void jl_source_info_set_ast(jl_source_info_t *li, jl_expr_t *ast)
 {
     assert(jl_is_expr(ast));
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ast, 2);
     assert(jl_is_expr(bodyex));
-    li->code = bodyex->args;
+    jl_array_t *body = bodyex->args;
+    li->code = body;
     jl_gc_wb(li, li->code);
+    size_t j, n = jl_array_len(body);
+    jl_value_t **bd = (jl_value_t**)jl_array_data((jl_array_t*)li->code);
+    for (j = 0; j < n; j++) {
+        jl_value_t *st = bd[j];
+        if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
+            size_t k, ins = 0, na = jl_expr_nargs(st);
+            jl_array_t *meta = ((jl_expr_t*)st)->args;
+            for (k = 0; k < na; k++) {
+                jl_value_t *ma = jl_array_ptr_ref(meta, k);
+                if (ma == (jl_value_t*)pure_sym)
+                    li->pure = 1;
+                else if (ma == (jl_value_t*)inline_sym)
+                    li->inlineable = 1;
+                else if (ma == (jl_value_t*)propagate_inbounds_sym)
+                    li->propagate_inbounds = 1;
+                else
+                    jl_array_ptr_set(meta, ins++, ma);
+            }
+            if (ins == 0)
+                bd[j] = jl_nothing;
+            else
+                jl_array_del_end(meta, na - ins);
+        }
+    }
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
@@ -555,9 +581,6 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_source_info_t *src)
     jl_array_t *copy = jl_alloc_vec_any(n);
     JL_GC_PUSH1(&copy);
     int set_lineno = 0;
-    int pure = 0;
-    int inlineable = 0;
-    int propagate_inbounds = 0;
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
         if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
@@ -568,54 +591,15 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_source_info_t *src)
                 set_lineno = 1;
             }
         }
-        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
-            size_t k, ins = 0, na = jl_expr_nargs(st);
-            jl_array_t *meta = ((jl_expr_t*)st)->args;
-            for (k = 0; k < na; k++) {
-                jl_value_t *ma = jl_array_ptr_ref(meta, k);
-                if (ma == (jl_value_t*)pure_sym)
-                    pure = 1;
-                else if (ma == (jl_value_t*)inline_sym)
-                    inlineable = 1;
-                else if (ma == (jl_value_t*)propagate_inbounds_sym)
-                    propagate_inbounds = 1;
-                else
-                    ins++;
-            }
-            if (ins == 0) {
-                st = jl_nothing;
-            }
-            else {
-                jl_expr_t *meta_copy = jl_exprn(meta_sym, ins);
-                ins = 0;
-                for (k = 0; k < na; k++) {
-                    jl_value_t *ma = jl_array_ptr_ref(meta, k);
-                    if (ma != (jl_value_t*)pure_sym &&
-                            ma != (jl_value_t*)inline_sym &&
-                            ma != (jl_value_t*)propagate_inbounds_sym) {
-                        jl_array_ptr_set(meta_copy->args, ins++, ma);
-                    }
-                }
-                st = (jl_value_t*)meta_copy;
-            }
-        }
         else {
             st = jl_resolve_globals(st, m->module);
         }
         jl_array_ptr_set(copy, i, st);
     }
-
     copy = jl_compress_ast(m, copy);
-    m->source = jl_new_source_info_uninit();
+    m->source = jl_copy_source_info(src);
     jl_gc_wb(m, m->source);
     m->source->code = copy;
-    m->source->slotnames = src->slotnames;
-    m->source->slotflags = src->slotflags;
-    m->source->slottypes = src->slottypes;
-    m->source->ssavaluetypes = src->ssavaluetypes;
-    m->source->pure = pure;
-    m->source->inlineable = inlineable;
-    m->source->propagate_inbounds = propagate_inbounds;
     JL_GC_POP();
 }
 

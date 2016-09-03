@@ -205,9 +205,7 @@ typedef struct _jl_llvm_functions_t {
     void *specFunctionObject; // specialized llvm Function
 } jl_llvm_functions_t;
 
-// This holds data for a single executable function body:
-// code in Julia IR, static parameters, and (if it has been compiled)
-// a function pointer.
+// This type describes a single function body
 typedef struct _jl_source_info_t {
     jl_array_t *code;  // compressed uint8 array, or Any array of statements
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
@@ -267,6 +265,7 @@ typedef struct _jl_method_t {
     jl_mutex_t writelock;
 } jl_method_t;
 
+// This type caches the data for a specType signature specialization of a Method
 typedef struct _jl_lambda_info_t {
     JL_DATA_TYPE
     jl_tupletype_t *specTypes;  // argument types this was specialized for
