@@ -596,7 +596,7 @@ static AllocaInst *emit_static_alloca(Type *lty)
             /*InsertBefore=*/&*builder.GetInsertBlock()->getParent()->getEntryBlock().getFirstInsertionPt());
 }
 
-static Instruction *emit_static_alloca(Type *lty, jl_value_t *tag, jl_codectx_t *ctx)
+static Instruction *emit_rooted_static_alloca(Type *lty, jl_value_t *tag, jl_codectx_t *ctx)
 {
     auto prevBlock = builder.GetInsertBlock();
     auto prevPoint = builder.GetInsertPoint();
@@ -678,7 +678,7 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
         if (jt->layout->pointerfree || !needsroot) {
             loc = emit_static_alloca(T);
         } else {
-            loc = emit_static_alloca(T, typ, ctx);
+            loc = emit_rooted_static_alloca(T, typ, ctx);
         }
         builder.CreateStore(v, loc);
         return mark_julia_slot(loc, typ, tbaa_stack, ctx, needsroot);
@@ -804,7 +804,7 @@ static Value *alloc_local(int s, jl_codectx_t *ctx)
     bool needsroot = !((jl_datatype_t*)jt)->layout->pointerfree;
     Value *lv;
     if (needsroot) {
-        lv = emit_static_alloca(vtype, jt, ctx);
+        lv = emit_rooted_static_alloca(vtype, jt, ctx);
     } else {
         lv = emit_static_alloca(vtype);
     }
@@ -2892,7 +2892,7 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
             bool ret_needsroot = !((jl_datatype_t*)jlretty)->layout->pointerfree;
             Type *llvm_retty = cft->getParamType(0)->getContainedType(0);
             if (ret_needsroot)
-                result = emit_static_alloca(llvm_retty, jlretty, ctx);
+                result = emit_rooted_static_alloca(llvm_retty, jlretty, ctx);
             else
                 result = emit_static_alloca(llvm_retty);//builder.CreateAlloca();
             argvals[idx] = result;
@@ -3205,7 +3205,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             Value *dest;
             bool needsroot = !((jl_datatype_t*)slot.typ)->layout->pointerfree;
             if (needsroot)
-                dest = emit_static_alloca(vtype, slot.typ, ctx);
+                dest = emit_rooted_static_alloca(vtype, slot.typ, ctx);
             else
                 dest = emit_static_alloca(vtype);
             emit_unbox(vtype, slot, slot.typ, dest);
@@ -4031,8 +4031,8 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, bool
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned idx = 0;
     Value *result;
+    bool ret_needsroot = jl_is_unboxed(jlretty) && !((jl_datatype_t*)jlretty)->layout->pointerfree;
     if (sret) {
-        bool ret_needsroot = !((jl_datatype_t*)jlretty)->layout->pointerfree;
         Type *llvm_retty = f->getFunctionType()->getParamType(0)->getContainedType(0);
         if (ret_needsroot)
             result = emit_static_alloca(llvm_retty, jlretty, &ctx);
@@ -4070,7 +4070,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, bool
     bool retboxed;
     (void)julia_type_to_llvm(jlretty, &retboxed);
     if (sret) { assert(!retboxed); }
-    jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty, tbaa_stack, &ctx, true) : mark_julia_type(call, retboxed, jlretty, &ctx, /*needsroot*/ false);
+    jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty, tbaa_stack, &ctx, true) : mark_julia_type(call, retboxed, jlretty, &ctx, /*needsroot*/ ret_needsroot);
     builder.CreateRet(boxed(retval, &ctx, false)); // no gcroot needed since this on the return path
 
     return w;

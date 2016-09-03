@@ -1717,7 +1717,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                 if (sty->layout->pointerfree)
                     strct = emit_static_alloca(lt);
                 else
-                    strct = emit_static_alloca(lt, (jl_value_t*)sty, ctx);
+                    strct = emit_rooted_static_alloca(lt, (jl_value_t*)sty, ctx);
             }
 
             unsigned idx = 0;
@@ -1778,7 +1778,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             if (sty->layout->pointerfree)
                 strct = emit_static_alloca(lt);
             else
-                strct = emit_static_alloca(lt, (jl_value_t*)sty, ctx);
+                strct = emit_rooted_static_alloca(lt, (jl_value_t*)sty, ctx);
             strctinfo = mark_julia_slot(strct, ty, tbaa_stack, ctx, !sty->layout->pointerfree);
         }
         if (f1) {
