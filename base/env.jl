@@ -58,6 +58,11 @@ end # os test
 
 ## ENV: hash interface ##
 
+"""
+    EnvHash() -> EnvHash
+
+A singleton of this type provides a hash table interface to environment variables.
+"""
 type EnvHash <: Associative{String,String}; end
 
 """

@@ -154,6 +154,11 @@ end
 free_memory() = ccall(:uv_get_free_memory, UInt64, ())
 total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 
+"""
+    Sys.get_process_title()
+
+Get the process title. On some systems, will always return empty string. (not exported)
+"""
 function get_process_title()
     buf = zeros(UInt8, 512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
@@ -161,6 +166,11 @@ function get_process_title()
     return unsafe_string(pointer(buf))
 end
 
+"""
+    Sys.set_process_title(title::AbstractString)
+
+Set the process title. No-op on some operating systems. (not exported)
+"""
 function set_process_title(title::AbstractString)
     err = ccall(:uv_set_process_title, Cint, (Cstring,), title)
     Base.uv_error("set_process_title", err)

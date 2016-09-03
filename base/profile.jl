@@ -6,6 +6,12 @@ import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo
 
 export @profile
 
+"""
+    @profile
+
+`@profile <expression>` runs your expression while taking periodic backtraces. These are
+appended to an internal buffer of backtraces.
+"""
 macro profile(ex)
     quote
         try

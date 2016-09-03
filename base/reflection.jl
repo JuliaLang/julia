@@ -1,10 +1,54 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # name and module reflection
+
+"""
+    module_name(m::Module) -> Symbol
+
+Get the name of a `Module` as a `Symbol`.
+
+```jldoctest
+julia> module_name(Base.LinAlg)
+:LinAlg
+```
+"""
 module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+
+"""
+    module_parent(m::Module) -> Module
+
+Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
+```jldoctest
+julia> module_parent(Main)
+Main
+
+julia> module_parent(Base.LinAlg.BLAS)
+Base.LinAlg
+```
+"""
 module_parent(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+
+"""
+    current_module() -> Module
+
+Get the *dynamically* current `Module`, which is the `Module` code is currently being read
+from. In general, this is not the same as the module containing the call to this function.
+"""
 current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
 
+"""
+    fullname(m::Module)
+
+Get the fully-qualified name of a module as a tuple of symbols. For example,
+
+```jldoctest
+julia> fullname(Base.Pkg)
+(:Base,:Pkg)
+
+julia> fullname(Main)
+()
+```
+"""
 function fullname(m::Module)
     m === Main && return ()
     m === Base && return (:Base,)  # issue #10653
@@ -27,6 +71,12 @@ function fullname(m::Module)
     return tuple(fullname(mp)..., mn)
 end
 
+"""
+    names(x::Module, all::Bool=false, imported::Bool=false)
+
+Get an array of the names exported by a `Module`, with optionally more `Module` globals
+according to the additional parameters.
+"""
 names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported))
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
@@ -48,9 +98,17 @@ function resolve(g::GlobalRef; force::Bool=false)
 end
 
 """
-    fieldname(x::DataType, i)
+    fieldname(x::DataType, i::Integer)
 
 Get the name of field `i` of a `DataType`.
+
+```jldoctest
+julia> fieldname(SparseMatrixCSC,1)
+:m
+
+julia> fieldname(SparseMatrixCSC,5)
+:nzval
+```
 """
 fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
 fieldname{T<:Tuple}(t::Type{T}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
@@ -59,6 +117,13 @@ fieldname{T<:Tuple}(t::Type{T}, i::Integer) = i < 1 || i > nfields(t) ? throw(Bo
     fieldnames(x::DataType)
 
 Get an array of the fields of a `DataType`.
+
+```jldoctest
+julia> fieldnames(Hermitian)
+2-element Array{Symbol,1}:
+ :data
+ :uplo
+```
 """
 function fieldnames(v)
     t = typeof(v)
@@ -86,6 +151,12 @@ datatype_module(t::DataType) = t.name.module
 
 isconst(s::Symbol) = ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
 
+"""
+    isconst([m::Module], s::Symbol) -> Bool
+
+Determine whether a global is declared `const` in a given `Module`. The default `Module`
+argument is [`current_module()`](:func:`current_module`).
+"""
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
 
@@ -115,14 +186,50 @@ datatype_pointerfree(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()
 datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
     (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30) & 3
 
+"""
+    isimmutable(v)
+
+Return `true` iff value `v` is immutable.  See [manual](:ref:`man-immutable-composite-types`)
+for a discussion of immutability. Note that this function works on values, so if you give it
+a type, it will tell you that a value of `DataType` is mutable.
+"""
 isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
 isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
 isstructtype(x) = (@_pure_meta; false)
+
+"""
+    isbits(T)
+
+Return `true` if `T` is a "plain data" type, meaning it is immutable and contains no
+references to other values. Typical examples are numeric types such as `UInt8`, `Float64`,
+and `Complex{Float64}`.
+
+```jldoctest
+julia> isbits(Complex{Float64})
+true
+
+julia> isbits(Complex)
+false
+```
+"""
 isbits(t::DataType) = (@_pure_meta; !t.mutable & (t.layout != C_NULL) && datatype_pointerfree(t))
 isbits(t::Type) = (@_pure_meta; false)
 isbits(x) = (@_pure_meta; isbits(typeof(x)))
+
+"""
+    isleaftype(T)
+
+Determine whether `T` is a concrete type that can have instances, meaning its only subtypes
+are itself and `Union{}` (but `T` itself is not `Union{}`).
+"""
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
+"""
+    typeintersect(T, S)
+
+Compute a type that contains the intersection of `T` and `S`. Usually this will be the
+smallest such type or one close to it.
+"""
 typeintersect(a::ANY,b::ANY) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
 typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)
 
@@ -163,6 +270,13 @@ fieldtype
 type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
 
 # return all instances, for types that can be enumerated
+
+"""
+    instances(T::Type)
+
+Return a collection of all instances of the given type, if applicable. Mostly used for
+enumerated types (see `@enum`).
+"""
 function instances end
 
 # subtypes
@@ -182,6 +296,22 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     return sts
 end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
+
+"""
+    subtypes(T::DataType)
+
+Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes
+are included, including those not visible in the current module.
+
+```jldoctest
+julia> subtypes(Integer)
+4-element Array{Any,1}:
+ BigInt
+ Bool
+ Signed
+ Unsigned
+```
+"""
 subtypes(x::DataType) = subtypes(Main, x)
 
 function to_tuple_type(t::ANY)
@@ -274,6 +404,13 @@ function MethodList(mt::MethodTable)
     MethodList(ms, mt)
 end
 
+"""
+    methods(f, [types])
+
+Returns the method table for `f`.
+
+If `types` is specified, returns an array of methods whose types match.
+"""
 function methods(f::ANY, t::ANY)
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -290,7 +427,6 @@ function methods_including_ambiguous(f::ANY, t::ANY)
     ms = ccall(:jl_matching_methods, Any, (Any,Cint,Cint), tt, -1, 1)::Array{Any,1}
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
-
 function methods(f::ANY)
     # return all matches
     return methods(f, Tuple{Vararg{Any}})
@@ -456,6 +592,13 @@ function return_types(f::ANY, types::ANY=Tuple)
     rt
 end
 
+"""
+    which(f, types)
+
+Returns the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
+
+If `types` is an abstract type, then the method that would be called by `invoke` is returned.
+"""
 function which(f::ANY, t::ANY)
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -481,6 +624,11 @@ function which(f::ANY, t::ANY)
     end
 end
 
+"""
+    which(symbol)
+
+Return the module in which the binding for the variable referenced by `symbol` was created.
+"""
 which(s::Symbol) = which_module(current_module(), s)
 # TODO: making this a method of which() causes a strange error
 function which_module(m::Module, s::Symbol)
@@ -499,6 +647,12 @@ Get the name of a generic `Function` as a symbol, or `:anonymous`.
 function_name(f::Function) = typeof(f).name.mt.name
 
 functionloc(m::LambdaInfo) = functionloc(m.def)
+
+"""
+    functionloc(m::Method)
+
+Returns a tuple `(filename,line)` giving the location of a `Method` definition.
+"""
 function functionloc(m::Method)
     ln = m.line
     if ln <= 0
@@ -507,6 +661,11 @@ function functionloc(m::Method)
     (find_source_file(string(m.file)), ln)
 end
 
+"""
+    functionloc(f::Function, types)
+
+Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
+"""
 functionloc(f::ANY, types::ANY) = functionloc(which(f,types))
 
 function functionloc(f)
@@ -545,6 +704,17 @@ function function_module(f, types::ANY)
     first(m).module
 end
 
+"""
+    method_exists(f, Tuple type) -> Bool
+
+Determine whether the given generic function has a method matching the given
+[`Tuple`](:obj:`Tuple`) of argument types.
+
+```jldoctest
+julia> method_exists(length, Tuple{Array})
+true
+```
+"""
 function method_exists(f::ANY, t::ANY)
     t = to_tuple_type(t)
     t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}

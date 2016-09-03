@@ -113,6 +113,15 @@ function next(s::RevString, i::Int)
     (s.string[j], n-prevind(s.string,j)+1)
 end
 
+"""
+    reverse(s::AbstractString) -> AbstractString
+
+Reverses a string.
+```jldoctest
+julia> reverse("JuliaLang")
+"gnaLailuJ"
+```
+"""
 reverse(s::AbstractString) = RevString(s)
 reverse(s::RevString) = s.string
 
@@ -175,6 +184,17 @@ function repeat(s::String, r::Integer)
     convert(typeof(s), out)
 end
 
+"""
+    ^(s::AbstractString, n::Integer)
+
+Repeat `n` times the string `s`.
+The [`repeat`](:func:`repeat`) function is an alias to this operator.
+
+```jldoctest
+julia> "Test "^3
+"Test Test Test "
+```
+"""
 (^)(s::AbstractString, r::Integer) = repeat(s,r)
 
 pointer(x::SubString{String}) = pointer(x.string.data) + x.offset

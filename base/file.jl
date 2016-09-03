@@ -28,6 +28,11 @@ export
 
 # get and set current directory
 
+"""
+    pwd() -> AbstractString
+
+Get the current working directory.
+"""
 function pwd()
     b = Array{UInt8}(1024)
     len = Ref{Csize_t}(length(b))
@@ -35,6 +40,11 @@ function pwd()
     String(b[1:len[]])
 end
 
+"""
+    cd(dir::AbstractString=homedir())
+
+Set the current working directory.
+"""
 function cd(dir::AbstractString)
     uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Cstring,), dir))
 end
@@ -63,8 +73,19 @@ else
         end
     end
 end
+"""
+    cd(f::Function, dir::AbstractString=homedir())
+
+Temporarily changes the current working directory and applies function `f` before returning.
+"""
 cd(f::Function) = cd(f, homedir())
 
+"""
+    mkdir(path::AbstractString, mode::Unsigned=0o777)
+
+Make a new directory with name `path` and permissions `mode`. `mode` defaults to `0o777`,
+modified by the current file creation mask.
+"""
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
     @static if is_windows()
         ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
@@ -74,6 +95,12 @@ function mkdir(path::AbstractString, mode::Unsigned=0o777)
     systemerror(:mkdir, ret != 0; extrainfo=path)
 end
 
+"""
+    mkpath(path::AbstractString, mode::Unsigned=0o777)
+
+Create all directories in the given `path`, with permissions `mode`. `mode` defaults to
+`0o777`, modified by the current file creation mask.
+"""
 function mkpath(path::AbstractString, mode::Unsigned=0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
@@ -95,6 +122,13 @@ end
 mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 
+"""
+    rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
+
+Delete the file, link, or empty directory at the given path. If `force=true` is passed, a
+non-existing path is not treated as error. If `recursive=true` is passed and the path is a
+directory, then all contents are removed recursively.
+"""
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
         try
@@ -168,6 +202,16 @@ function cptree(src::AbstractString, dst::AbstractString; remove_destination::Bo
     end
 end
 
+"""
+    cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false, follow_symlinks::Bool=false)
+
+Copy the file, link, or directory from `src` to `dest`.
+`remove_destination=true` will first remove an existing `dst`.
+
+If `follow_symlinks=false`, and `src` is a symbolic link, `dst` will be created as a
+symbolic link. If `follow_symlinks=true` and `src` is a symbolic link, `dst` will be a copy
+of the file or directory `src` refers to.
+"""
 function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=false,
                                                          follow_symlinks::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "copying"; remove_destination=remove_destination)
@@ -180,11 +224,22 @@ function cp(src::AbstractString, dst::AbstractString; remove_destination::Bool=f
     end
 end
 
+"""
+    mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
+
+Move the file, link, or directory from `src` to `dst`.
+`remove_destination=true` will first remove an existing `dst`.
+"""
 function mv(src::AbstractString, dst::AbstractString; remove_destination::Bool=false)
     checkfor_mv_cp_cptree(src, dst, "moving"; remove_destination=remove_destination)
     rename(src, dst)
 end
 
+"""
+    touch(path::AbstractString)
+
+Update the last-modified timestamp on a file to the current time.
+"""
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
@@ -196,6 +251,7 @@ function touch(path::AbstractString)
 end
 
 if is_windows()
+
 function tempdir()
     temppath = Array{UInt16}(32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
@@ -218,10 +274,12 @@ function tempname(temppath::AbstractString,uunique::UInt32)
     resize!(tname,lentname)
     return transcode(String, tname)
 end
+
 function mktemp(parent=tempdir())
     filename = tempname(parent, UInt32(0))
     return (filename, Base.open(filename, "r+"))
 end
+
 function mktempdir(parent=tempdir())
     seed::UInt32 = rand(UInt32)
     while true
@@ -270,6 +328,42 @@ end
 
 end # os-test
 
+
+"""
+    tempdir()
+
+Obtain the path of a temporary directory (possibly shared with other processes).
+"""
+tempdir()
+
+"""
+    tempname()
+
+Generate a unique temporary file path.
+"""
+tempname()
+
+"""
+    mktemp(parent=tempdir())
+
+Returns `(path, io)`, where `path` is the path of a new temporary file in `parent` and `io`
+is an open file object for this path.
+"""
+mktemp(parent)
+
+"""
+    mktempdir(parent=tempdir())
+
+Create a temporary directory in the `parent` directory and return its path.
+"""
+mktempdir(parent)
+
+
+"""
+    mktemp(f::Function, parent=tempdir())
+
+Apply the function `f` to the result of `mktemp(parent)` and remove the temporary file upon completion.
+"""
 function mktemp(fn::Function, parent=tempdir())
     (tmp_path, tmp_io) = mktemp(parent)
     try
@@ -280,6 +374,12 @@ function mktemp(fn::Function, parent=tempdir())
     end
 end
 
+"""
+    mktempdir(f::Function, parent=tempdir())
+
+Apply the function `f` to the result of `mktempdir(parent)` and remove the temporary
+directory upon completion.
+"""
 function mktempdir(fn::Function, parent=tempdir())
     tmpdir = mktempdir(parent)
     try
@@ -293,6 +393,12 @@ immutable uv_dirent_t
     name::Ptr{UInt8}
     typ::Cint
 end
+
+"""
+    readdir(dir::AbstractString=".") -> Vector{String}
+
+Returns the files and directories in the directory `dir` (or the current working directory if not given).
+"""
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
@@ -321,10 +427,13 @@ readdir() = readdir(".")
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
 
-The walkdir method return an iterator that walks the directory tree of a directory. The iterator returns a tuple containing
-`(rootpath, dirs, files)`. The directory tree can be traversed top-down or bottom-up. If walkdir encounters a SystemError
-it will raise the error. A custom error handling function can be provided through `onerror` keyword argument, the function
-is called with a SystemError as argument.
+The `walkdir` method returns an iterator that walks the directory tree of a directory.
+The iterator returns a tuple containing `(rootpath, dirs, files)`.
+The directory tree can be traversed top-down or bottom-up.
+If `walkdir` encounters a [`SystemError`](:obj:`SystemError`)
+it will rethrow the error by default.
+A custom error handling function can be provided through `onerror` keyword argument.
+`onerror` is called with a `SystemError` as argument.
 
     for (root, dirs, files) in walkdir(".")
         println("Directories in \$root")
@@ -424,7 +533,7 @@ if is_windows()
 end
 
 """
-    symlink(target, link)
+    symlink(target::AbstractString, link::AbstractString)
 
 Creates a symbolic link to `target` with the name `link`.
 
@@ -454,6 +563,11 @@ function symlink(p::AbstractString, np::AbstractString)
     uv_error("symlink",err)
 end
 
+"""
+    readlink(path::AbstractString) -> AbstractString
+
+Returns the target location a symbolic link `path` points to.
+"""
 function readlink(path::AbstractString)
     req = Libc.malloc(_sizeof_uv_fs)
     try
@@ -473,6 +587,13 @@ function readlink(path::AbstractString)
     end
 end
 
+"""
+    chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
+
+Change the permissions mode of `path` to `mode`. Only integer `mode`s (e.g. `0o777`) are
+currently supported. If `recursive=true` and the path is a directory all permissions in
+that directory will be recursively changed.
+"""
 function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     err = ccall(:jl_fs_chmod, Int32, (Cstring, Cint), path, mode)
     uv_error("chmod", err)
@@ -486,6 +607,12 @@ function chmod(path::AbstractString, mode::Integer; recursive::Bool=false)
     nothing
 end
 
+"""
+    chown(path::AbstractString, owner::Integer, group::Integer=-1)
+
+Change the owner and/or group of `path` to `owner` and/or `group`. If the value entered for `owner` or `group`
+is `-1` the corresponding ID will not change. Only integer `owner`s and `group`s are currently supported.
+"""
 function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
     uv_error("chown",err)

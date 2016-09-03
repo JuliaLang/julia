@@ -30,13 +30,10 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
     example (generic function with 1 method)
 
     julia> example()
-    6-element Array{StackFrame,1}:
+    11-element Array{StackFrame,1}:
       in example() at none:1
       in eval(::Module, ::Any) at boot.jl:234
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in eval(::Module, ::Any) at boot.jl:234
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in _start() at client.jl:355
+      ...
 
     julia> @noinline child() = stacktrace()
     child (generic function with 1 method)
@@ -48,7 +45,7 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
     grandparent (generic function with 1 method)
 
     julia> grandparent()
-    8-element Array{StackFrame,1}:
+    13-element Array{StackFrame,1}:
       in child() at none:1
       in parent() at none:1
       in grandparent() at none:1
@@ -124,7 +121,7 @@ helpful in many places, the most obvious application is in error handling and de
     example (generic function with 1 method)
 
     julia> example()
-    6-element Array{StackFrame,1}:
+    11-element Array{StackFrame,1}:
       in example() at none:4
       in eval(::Module, ::Any) at boot.jl:234
       ...
@@ -153,7 +150,7 @@ returns stack information for the context of the most recent exception:
     example (generic function with 1 method)
 
     julia> example()
-    7-element Array{StackFrame,1}:
+    12-element Array{StackFrame,1}:
       in bad_function() at none:1
       in example() at none:2
       ...
@@ -180,7 +177,7 @@ Notice that the stack trace now indicates the appropriate line number and the mi
 
     julia> grandparent()
     ERROR: Whoops!
-    8-element Array{StackFrame,1}:
+    13-element Array{StackFrame,1}:
       in child() at none:1
       in parent() at none:1
       in grandparent() at none:3
