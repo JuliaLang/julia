@@ -265,14 +265,17 @@ static DICompositeType *jl_value_dillvmt;
 static DIDerivedType *jl_pvalue_dillvmt;
 static DIDerivedType *jl_ppvalue_dillvmt;
 static DISubroutineType *jl_di_func_sig;
+static DISubroutineType *jl_di_func_null_sig;
 #else
 static DICompositeType jl_value_dillvmt;
 static DIDerivedType jl_pvalue_dillvmt;
 static DIDerivedType jl_ppvalue_dillvmt;
 #ifdef LLVM36
 DISubroutineType jl_di_func_sig;
+DISubroutineType jl_di_func_null_sig;
 #else
 DICompositeType jl_di_func_sig;
+DICompositeType jl_di_func_null_sig;
 #endif
 #endif
 
@@ -847,7 +850,7 @@ extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
     jl_finalize_module(m.release(), !toplevel);
 
     // if not inlineable, code won't be needed again
-    if (JL_DELETE_NON_INLINEABLE &&
+    if (JL_DELETE_NON_INLINEABLE && jl_options.debug_level <= 1 &&
         li->def && li->inferred && !li->inlineable &&
         li != li->def->lambda_template && !imaging_mode) {
         jl_set_lambda_code_null(li);
@@ -4078,6 +4081,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         //dbgFuncName = filename; // for testing, uncomment this line
         ctx.debug_enabled = !dbgFuncName.empty();
     }
+    if (jl_options.debug_level == 0)
+        ctx.debug_enabled = 0;
 
     if (ctx.debug_enabled) {
         // TODO: Fix when moving to new LLVM version
@@ -4098,7 +4103,10 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         DICompositeType subrty;
 #endif
 
-        if (!specsig) {
+        if (jl_options.debug_level <= 1) {
+            subrty = jl_di_func_null_sig;
+        }
+        else if (!specsig) {
             subrty = jl_di_func_sig;
         }
         else {
@@ -4152,12 +4160,13 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     }
     builder.SetCurrentDebugLocation(noDbg);
 
-    if (ctx.debug_enabled) {
+    if (ctx.debug_enabled && jl_options.debug_level >= 2) {
         const bool AlwaysPreserve = true;
         // Go over all arguments and local variables and initialize their debug information
-        for(i=0; i < nreq; i++) {
-            jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames,i);
-            if (argname == unused_sym) continue;
+        for (i = 0; i < nreq; i++) {
+            jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames, i);
+            if (argname == unused_sym)
+                continue;
             jl_varinfo_t &varinfo = ctx.slots[i];
 #ifdef LLVM38
             varinfo.dinfo = dbuilder.createParameterVariable(
@@ -4207,8 +4216,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 ctx.sret + nreq + 1);              // Argument number (1-based)
 #endif
         }
-        for(i=0; i < vinfoslen; i++) {
-            jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames,i);
+        for (i = 0; i < vinfoslen; i++) {
+            jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames, i);
             jl_varinfo_t &varinfo = ctx.slots[i];
             if (varinfo.isArgument || s == compiler_temp_sym || s == unused_sym)
                 continue;
@@ -4273,7 +4282,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // must be in the first basic block for the llvm mem2reg pass to work
 
     // get pointers for locals stored in the gc frame array (argTemp)
-    for(i=0; i < vinfoslen; i++) {
+    for (i = 0; i < vinfoslen; i++) {
         jl_sym_t *s = slot_symbol(i, &ctx);
         if (s == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.slots[i];
@@ -4374,7 +4383,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                     Value *argPtr = builder.CreateGEP(argArray, ConstantInt::get(T_size, i-1));
                     theArg = mark_julia_type(builder.CreateLoad(argPtr), true, vi.value.typ, &ctx, /*needsgcroot*/false);
 #ifdef LLVM36
-                    if (ctx.debug_enabled && !vi.memloc && !vi.value.V) {
+                    if (ctx.debug_enabled && vi.dinfo && !vi.memloc && !vi.value.V) {
                         SmallVector<uint64_t, 8> addr;
                         addr.push_back(llvm::dwarf::DW_OP_deref);
                         addr.push_back(llvm::dwarf::DW_OP_plus);
@@ -4404,7 +4413,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                     // keep track of original (possibly boxed) value to avoid re-boxing or moving
                     vi.value = theArg;
 #ifdef LLVM36
-                    if (specsig && theArg.V && ctx.debug_enabled) {
+                    if (specsig && theArg.V && ctx.debug_enabled && vi.dinfo) {
                         SmallVector<uint64_t, 8> addr;
                         if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt && theArg.ispointer())
                             addr.push_back(llvm::dwarf::DW_OP_deref);
@@ -4588,7 +4597,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                                                  inl_name,
                                                  new_file,
                                                  0,
-                                                 jl_di_func_sig,
+                                                 jl_di_func_null_sig,
                                                  false,
                                                  true,
                                                  0,
@@ -4599,7 +4608,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 #ifdef LLVM37
                     inlinedAt = cur_prop.loc;
 #else
-                    inlinedAt = cur_proc.loc.getAsMDNode(jl_LLVMContext);
+                    inlinedAt = cur_prop.loc.getAsMDNode(jl_LLVMContext);
 #endif
                     cur_prop.loc = DebugLoc::get(inlined_func_lineno,
                                                  0, SP, inlinedAt);
@@ -5086,12 +5095,18 @@ static void init_julia_llvm_env(Module *m)
 #ifdef LLVM38
     jl_di_func_sig = dbuilder.createSubroutineType(
         dbuilder.getOrCreateTypeArray(diargs));
+    jl_di_func_null_sig = dbuilder.createSubroutineType(
+        dbuilder.getOrCreateTypeArray(None));
 #elif defined(LLVM36)
     jl_di_func_sig = dbuilder.createSubroutineType(julia_h,
         dbuilder.getOrCreateTypeArray(diargs));
+    jl_di_func_null_sig = dbuilder.createSubroutineType(julia_h,
+        dbuilder.getOrCreateTypeArray(None));
 #else
     jl_di_func_sig = dbuilder.createSubroutineType(julia_h,
         dbuilder.getOrCreateArray(diargs));
+    jl_di_func_null_sig = dbuilder.createSubroutineType(julia_h,
+        dbuilder.getOrCreateArray(ArrayRef<Value*>()));
 #endif
 
     T_pjlvalue = PointerType::get(T_jlvalue, 0);

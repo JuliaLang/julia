@@ -1637,6 +1637,7 @@ typedef struct {
     int8_t code_coverage;
     int8_t malloc_log;
     int8_t opt_level;
+    int8_t debug_level;
     int8_t check_bounds;
     int8_t depwarn;
     int8_t can_inline;
