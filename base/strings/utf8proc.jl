@@ -187,7 +187,7 @@ isgraphemebreak(c1::Char, c2::Char) =
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
-isgraphemebreak(c1::Char, c2::Char, state::Ref{Int32}) =
+isgraphemebreak!(state::Ref{Int32}, c1::Char, c2::Char) =
     ccall(:utf8proc_grapheme_break_stateful, Bool, (UInt32, UInt32, Ref{Int32}), c1, c2, state)
 
 immutable GraphemeIterator{S<:AbstractString}
@@ -202,7 +202,7 @@ function length(g::GraphemeIterator)
     n = 0
     state = Ref{Int32}(0)
     for c in g.s
-        n += isgraphemebreak(c0, c, state)
+        n += isgraphemebreak!(state, c0, c)
         c0 = c
     end
     return n
@@ -218,7 +218,7 @@ function next(g::GraphemeIterator, i_)
     c0, k = next(s, i)
     while !done(s, k) # loop until next grapheme is s[i:j]
         c, ℓ = next(s, k)
-        isgraphemebreak(c0, c, state) && break
+        isgraphemebreak!(state, c0, c) && break
         j = k
         k = ℓ
         c0 = c
