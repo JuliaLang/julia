@@ -206,7 +206,25 @@ function _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:
     end
 end
 
+"""
+    set_zero_subnormals(yes::Bool) -> Bool
+
+If `yes` is `false`, subsequent floating-point operations follow rules for IEEE arithmetic
+on subnormal values ("denormals"). Otherwise, floating-point operations are permitted (but
+not required) to convert subnormal inputs or outputs to zero. Returns `true` unless
+`yes==true` but the hardware does not support zeroing of subnormal numbers.
+
+`set_zero_subnormals(true)` can speed up some computations on some hardware. However, it can
+break identities such as `(x-y==0) == (x==y)`.
+"""
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
+
+"""
+    get_zero_subnormals() -> Bool
+
+Returns `false` if operations on subnormal floating-point values ("denormals") obey rules
+for IEEE arithmetic, and `true` if they might be converted to zeros.
+"""
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
 end #module

@@ -50,7 +50,7 @@ Getting Around
 
    Determine whether Julia is running an interactive session.
 
-.. function:: whos([io,] [Module,] [pattern::Regex])
+.. function:: whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
 
    .. Docstring generated from Julia source
 
@@ -64,7 +64,7 @@ Getting Around
 
    Compute the amount of memory used by all unique objects reachable from the argument. Keyword argument ``exclude`` specifies a type of objects to exclude from the traversal.
 
-.. function:: edit(path::AbstractString, [line])
+.. function:: edit(path::AbstractString, line::Integer=0)
 
    .. Docstring generated from Julia source
 
@@ -82,7 +82,7 @@ Getting Around
 
    Evaluates the arguments to the function or macro call, determines their types, and calls the ``edit`` function on the resulting expression.
 
-.. function:: less(file::AbstractString, [line])
+.. function:: less(file::AbstractString, [line::Integer])
 
    .. Docstring generated from Julia source
 
@@ -124,7 +124,7 @@ Getting Around
 
    This function is part of the implementation of ``using`` / ``import``\ , if a module is not already defined in ``Main``\ . It can also be called directly to force reloading a module, regardless of whether it has been loaded before (for example, when interactively developing libraries).
 
-   Loads a source files, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``\ ). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
+   Loads a source file, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``\ ). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
 
    When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ . ``require`` is case-sensitive on all platforms, including those with case-insensitive filesystems like macOS and Windows.
 
@@ -132,7 +132,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Creates a precompiled cache file for module (see help for ``require``\ ) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``\ , which defaults to ``~/.julia/lib/VERSION``\ . See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
+   Creates a :ref:`man-modules-initialization-precompilation` for a module and all of its dependencies. This can be used to reduce package load times. Cache files are stored in ``LOAD_CACHE_PATH[1]``\ , which defaults to ``~/.julia/lib/VERSION``\ . See :ref:`Module initialization and precompilation <man-modules-initialization-precompilation>` for important notes.
 
 .. function:: __precompile__(isprecompilable::Bool=true)
 
@@ -150,7 +150,7 @@ Getting Around
 
    Evaluate the contents of a source file in the current context. During including, a task-local include path is set to the directory containing the file. Nested calls to ``include`` will search relative to that path. All paths refer to files on node 1 when running in parallel, and files will be fetched from node 1. This function is typically used to load source interactively, or to combine files in packages that are broken into multiple source files.
 
-.. function:: include_string(code::AbstractString, [filename])
+.. function:: include_string(code::AbstractString, filename::AbstractString="string")
 
    .. Docstring generated from Julia source
 
@@ -198,7 +198,7 @@ Getting Around
 
    If ``types`` is specified, returns an array of methods whose types match.
 
-.. function:: methodswith(typ[, module or function][, showparents])
+.. function:: methodswith(typ[, module or function][, showparents::Bool=false])
 
    .. Docstring generated from Julia source
 
@@ -214,7 +214,7 @@ Getting Around
 
    Show an expression and result, returning the result.
 
-.. function:: versioninfo([verbose::Bool])
+.. function:: versioninfo(io::IO=STDOUT, verbose::Bool=false)
 
    .. Docstring generated from Julia source
 
@@ -299,7 +299,7 @@ All Objects
 
    Construct a tuple of the given objects.
 
-.. function:: ntuple(f::Function, n)
+.. function:: ntuple(f::Function, n::Integer)
 
    .. Docstring generated from Julia source
 
@@ -370,7 +370,7 @@ All Objects
 
        julia> convert(Int, 3.5)
        ERROR: InexactError()
-        in convert(::Type{Int64}, ::Float64) at ./int.jl:239
+        in convert(::Type{Int64}, ::Float64) at ./int.jl:330
         ...
 
    If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return the closest value to ``x`` representable by ``T``\ .
@@ -463,6 +463,11 @@ Types
 
    Return the supertype of DataType ``T``\ .
 
+   .. doctest::
+
+       julia> supertype(Int32)
+       Signed
+
 .. function:: issubtype(type1, type2)
 
    .. Docstring generated from Julia source
@@ -480,6 +485,15 @@ Types
    .. Docstring generated from Julia source
 
    Return a list of immediate subtypes of DataType ``T``\ . Note that all currently loaded subtypes are included, including those not visible in the current module.
+
+   .. doctest::
+
+       julia> subtypes(Integer)
+       4-element Array{Any,1}:
+        BigInt
+        Bool
+        Signed
+        Unsigned
 
 .. function:: typemin(T)
 
@@ -545,7 +559,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   Specifies what type should be used by ``promote`` when given values of types ``type1`` and ``type2``\ . This function should not be called directly, but should have definitions added to it for new types as appropriate.
+   Specifies what type should be used by :func:`promote` when given values of types ``type1`` and ``type2``\ . This function should not be called directly, but should have definitions added to it for new types as appropriate.
 
 .. function:: getfield(value, name::Symbol)
 
@@ -720,11 +734,11 @@ Syntax
 
    Evaluate an expression and return the value.
 
-.. function:: evalfile(path::AbstractString)
+.. function:: evalfile(path::AbstractString, args::Vector{String}=String[])
 
    .. Docstring generated from Julia source
 
-   Load the file using ``include``\ , evaluate all expressions, and return the value of the last one.
+   Load the file using :func:`include`\ , evaluate all expressions, and return the value of the last one.
 
 .. function:: esc(e::ANY)
 
@@ -743,6 +757,12 @@ Syntax
    .. Docstring generated from Julia source
 
    Generates a gensym symbol for a variable. For example, ``@gensym x y`` is transformed into ``x = gensym("x"); y = gensym("y")``\ .
+
+.. function:: @polly
+
+   .. Docstring generated from Julia source
+
+   Tells the compiler to apply the polyhedral optimizer Polly to a function.
 
 .. function:: parse(str, start; greedy=true, raise=true)
 
@@ -780,7 +800,7 @@ Nullables
 System
 ------
 
-.. function:: run(command)
+.. function:: run(command, args...)
 
    .. Docstring generated from Julia source
 
@@ -790,7 +810,7 @@ System
 
    .. Docstring generated from Julia source
 
-   Run a command object asynchronously, returning the resulting ``Process`` object.
+   Run a command object asynchronously, returning the resulting :obj:`Process` object.
 
 .. data:: DevNull
 
@@ -876,7 +896,7 @@ System
 
        Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 
-.. function:: setenv(command, env; dir=working_dir)
+.. function:: setenv(command::Cmd, env; dir="")
 
    .. Docstring generated from Julia source
 
@@ -1098,7 +1118,7 @@ Errors
 
    .. Docstring generated from Julia source
 
-   Throw an ``AssertionError`` if ``cond`` is ``false``\ . Also available as the macro ``@assert expr``\ .
+   Throw an :obj:`AssertionError` if ``cond`` is ``false``\ . Also available as the macro ``@assert expr``\ .
 
 .. function:: @assert cond [text]
 
@@ -1188,7 +1208,7 @@ Errors
 
    .. Docstring generated from Julia source
 
-   An attempted access to a ``Nullable`` with no defined value.
+   An attempted access to a :obj:`Nullable` with no defined value.
 
 .. function:: OutOfMemoryError()
 
@@ -1307,11 +1327,24 @@ Reflection
 
    Get the name of a ``Module`` as a ``Symbol``\ .
 
+   .. doctest::
+
+       julia> module_name(Base.LinAlg)
+       :LinAlg
+
 .. function:: module_parent(m::Module) -> Module
 
    .. Docstring generated from Julia source
 
    Get a module's enclosing ``Module``\ . ``Main`` is its own parent, as is ``LastMain`` after ``workspace()``\ .
+
+   .. doctest::
+
+       julia> module_parent(Main)
+       Main
+
+       julia> module_parent(Base.LinAlg.BLAS)
+       Base.LinAlg
 
 .. function:: current_module() -> Module
 
@@ -1323,9 +1356,17 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   Get the fully-qualified name of a module as a tuple of symbols. For example, ``fullname(Base.Pkg)`` gives ``(:Base,:Pkg)``\ , and ``fullname(Main)`` gives ``()``\ .
+   Get the fully-qualified name of a module as a tuple of symbols. For example,
 
-.. function:: names(x::Module[, all=false[, imported=false]])
+   .. doctest::
+
+       julia> fullname(Base.Pkg)
+       (:Base,:Pkg)
+
+       julia> fullname(Main)
+       ()
+
+.. function:: names(x::Module, all::Bool=false, imported::Bool=false)
 
    .. Docstring generated from Julia source
 
@@ -1343,11 +1384,26 @@ Reflection
 
    Get an array of the fields of a ``DataType``\ .
 
-.. function:: fieldname(x::DataType, i)
+   .. doctest::
+
+       julia> fieldnames(Hermitian)
+       2-element Array{Symbol,1}:
+        :data
+        :uplo
+
+.. function:: fieldname(x::DataType, i::Integer)
 
    .. Docstring generated from Julia source
 
    Get the name of field ``i`` of a ``DataType``\ .
+
+   .. doctest::
+
+       julia> fieldname(SparseMatrixCSC,1)
+       :m
+
+       julia> fieldname(SparseMatrixCSC,5)
+       :nzval
 
 .. function:: Base.datatype_module(t::DataType) -> Module
 
@@ -1365,7 +1421,7 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   Determine whether a global is declared ``const`` in a given ``Module``\ . The default ``Module`` argument is ``current_module()``\ .
+   Determine whether a global is declared ``const`` in a given ``Module``\ . The default ``Module`` argument is :func:`current_module`\ .
 
 .. function:: Base.function_name(f::Function) -> Symbol
 
@@ -1428,7 +1484,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Takes the expression ``x`` and returns an equivalent expression in lowered form.
+   Takes the expression ``x`` and returns an equivalent expression in lowered form. See also :func:`code_lowered`\ .
 
 .. function:: code_lowered(f, types)
 
@@ -1454,7 +1510,7 @@ Internals
 
    Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_typed` on the resulting expression.
 
-.. function:: code_warntype([io], f, types)
+.. function:: code_warntype([io::IO], f, types)
 
    .. Docstring generated from Julia source
 

@@ -4,7 +4,8 @@
 """
     NTuple{N, T}
 
-A compact way of representing the type for a tuple of length `N` where all elements are of type `T`."""
+A compact way of representing the type for a tuple of length `N` where all elements are of type `T`.
+"""
 NTuple
 
 ## indexing ##
@@ -69,6 +70,12 @@ end
 
 ## mapping ##
 
+"""
+    ntuple(f::Function, n::Integer)
+
+Create a tuple of length `n`, computing each element as `f(i)`,
+where `i` is the index of the element.
+"""
 ntuple(f::Function, n::Integer) =
     n <= 0 ? () :
     n == 1 ? (f(1),) :

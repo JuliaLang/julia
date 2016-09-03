@@ -161,6 +161,26 @@ function fill!{T<:Union{Integer,AbstractFloat}}(a::Array{T}, x)
     return a
 end
 
+
+"""
+    fill(x, dims)
+
+Create an array filled with the value `x`. For example, `fill(1.0, (5,5))` returns a 5×5
+array of floats, with each element initialized to `1.0`.
+
+```jldoctest
+julia> fill(1.0, (5,5))
+5×5 Array{Float64,2}:
+ 1.0  1.0  1.0  1.0  1.0
+ 1.0  1.0  1.0  1.0  1.0
+ 1.0  1.0  1.0  1.0  1.0
+ 1.0  1.0  1.0  1.0  1.0
+ 1.0  1.0  1.0  1.0  1.0
+```
+
+If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
+dims)` will return an array filled with the result of evaluating `Foo()` once.
+"""
 fill(v, dims::Dims)       = fill!(Array{typeof(v)}(dims), v)
 fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
 
@@ -185,6 +205,12 @@ function eye(T::Type, m::Integer, n::Integer)
     end
     return a
 end
+
+"""
+    eye(m, n)
+
+`m`-by-`n` identity matrix.
+"""
 eye(m::Integer, n::Integer) = eye(Float64, m, n)
 eye(T::Type, n::Integer) = eye(T, n, n)
 """
@@ -269,6 +295,18 @@ _similar_for(c, T, itr, isz) = similar(c, T)
 Return an `Array` of all items in a collection or iterator. For associative collections, returns
 `Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the `HasShape()`
 trait, the result will have the same shape and number of dimensions as the argument.
+
+```jldoctest
+julia> collect(1:2:13)
+7-element Array{Int64,1}:
+  1
+  3
+  5
+  7
+  9
+ 11
+ 13
+```
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
 
@@ -495,6 +533,19 @@ function append!{T}(a::Array{T,1}, items::AbstractVector)
     return a
 end
 
+"""
+    prepend!(a::Vector, items) -> collection
+
+Insert the elements of `items` to the beginning of `a`.
+
+```jldoctest
+julia> prepend!([3],[1,2])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
+"""
 function prepend!{T}(a::Array{T,1}, items::AbstractVector)
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
@@ -506,6 +557,35 @@ function prepend!{T}(a::Array{T,1}, items::AbstractVector)
     return a
 end
 
+
+"""
+    resize!(a::Vector, n::Integer) -> Vector
+
+Resize `a` to contain `n` elements. If `n` is smaller than the current collection
+length, the first `n` elements will be retained. If `n` is larger, the new elements are not
+guaranteed to be initialized.
+
+```jldoctest
+julia> resize!([6, 5, 4, 3, 2, 1], 3)
+3-element Array{Int64,1}:
+ 6
+ 5
+ 4
+```
+
+```julia
+julia> resize!([6, 5, 4, 3, 2, 1], 8)
+8-element Array{Int64,1}:
+ 6
+ 5
+ 4
+ 3
+ 2
+ 1
+ 0
+ 0
+```
+"""
 function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
@@ -533,6 +613,22 @@ function pop!(a::Vector)
     return item
 end
 
+"""
+    unshift!(collection, items...) -> collection
+
+Insert one or more `items` at the beginning of `collection`.
+
+```jldoctest
+  julia> unshift!([1, 2, 3, 4], 5, 6)
+  6-element Array{Int64,1}:
+   5
+   6
+   1
+   2
+   3
+   4
+```
+"""
 function unshift!{T}(a::Array{T,1}, item)
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, UInt), a, 1)
@@ -549,6 +645,23 @@ function shift!(a::Vector)
     return item
 end
 
+"""
+    insert!(a::Vector, index::Integer, item)
+
+Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
+the resulting `a`.
+
+```jldoctest
+julia> insert!([6, 5, 4, 2, 1], 4, 3)
+6-element Array{Int64,1}:
+ 6
+ 5
+ 4
+ 3
+ 2
+ 1
+```
+"""
 function insert!{T}(a::Array{T,1}, i::Integer, item)
     # Throw convert error before changing the shape of the array
     _item = convert(T, item)
@@ -597,7 +710,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:611
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:724
  ...
 ```
 """
@@ -632,6 +745,54 @@ end
 
 const _default_splice = []
 
+"""
+    splice!(a::Vector, index::Integer, [replacement]) -> item
+
+Remove the item at the given index, and return the removed item.
+Subsequent items are shifted left to fill the resulting gap.
+If specified, replacement values from an ordered
+collection will be spliced in place of the removed item.
+
+```jldoctest
+julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
+2
+
+julia> A
+5-element Array{Int64,1}:
+ 6
+ 5
+ 4
+ 3
+ 1
+
+julia> splice!(A, 5, -1)
+1
+
+julia> A
+5-element Array{Int64,1}:
+  6
+  5
+  4
+  3
+ -1
+
+julia> splice!(A, 1, [-1, -2, -3])
+6
+
+julia> A
+7-element Array{Int64,1}:
+ -1
+ -2
+ -3
+  5
+  4
+  3
+ -1
+```
+
+To insert `replacement` before an index `n` without removing any items, use
+`splice!(collection, n:n-1, replacement)`.
+"""
 function splice!(a::Vector, i::Integer, ins=_default_splice)
     v = a[i]
     m = length(ins)
@@ -650,6 +811,34 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
     return v
 end
 
+"""
+    splice!(a::Vector, range, [replacement]) -> items
+
+Remove items in the specified index range, and return a collection containing
+the removed items.
+Subsequent items are shifted left to fill the resulting gap.
+If specified, replacement values from an ordered collection will be spliced in
+place of the removed items.
+
+To insert `replacement` before an index `n` without removing any items, use
+`splice!(collection, n:n-1, replacement)`.
+
+```jldoctest
+julia> splice!(A, 4:3, 2)
+0-element Array{Int64,1}
+
+julia> A
+8-element Array{Int64,1}:
+ -1
+ -2
+ -3
+  2
+  5
+  4
+  3
+ -1
+```
+"""
 function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
     v = a[r]
     m = length(ins)

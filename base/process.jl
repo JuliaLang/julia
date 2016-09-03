@@ -215,6 +215,17 @@ byteenv(env::Void) = nothing
 byteenv{T<:AbstractString}(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) =
     String[cstr(k*"="*string(v)) for (k,v) in env]
 
+"""
+    setenv(command::Cmd, env; dir="")
+
+Set environment variables to use when running the given `command`. `env` is either a
+dictionary mapping strings to strings, an array of strings of the form `"var=val"`, or zero
+or more `"var"=>val` pair arguments. In order to modify (rather than replace) the existing
+environment, create `env` by `copy(ENV)` and then setting `env["var"]=val` as desired, or
+use `withenv`.
+
+The `dir` keyword argument can be used to specify a working directory for the command.
+"""
 setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
 setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") =
     setenv(cmd, env; dir=dir)
@@ -238,6 +249,22 @@ redir_err(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirec
 redir_out_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
 redir_err_append(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
 
+"""
+    pipeline(command; stdin, stdout, stderr, append=false)
+
+Redirect I/O to or from the given `command`. Keyword arguments specify which of the
+command's streams should be redirected. `append` controls whether file output appends to the
+file. This is a more general version of the 2-argument `pipeline` function.
+`pipeline(from, to)` is equivalent to `pipeline(from, stdout=to)` when `from` is a command,
+and to `pipeline(to, stdin=from)` when `from` is another kind of data source.
+
+**Examples**:
+
+```julia
+run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))
+run(pipeline(`update`, stdout="log.txt", append=true))
+```
+"""
 function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
     if append && stdout === nothing && stderr === nothing
         error("append set to true, but no output redirections specified")
@@ -257,6 +284,24 @@ end
 pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout=dest)
 pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(cmd, stdin=src)
 
+"""
+    pipeline(from, to, ...)
+
+Create a pipeline from a data source to a destination. The source and destination can be
+commands, I/O streams, strings, or results of other `pipeline` calls. At least one argument
+must be a command. Strings refer to filenames. When called with more than two arguments,
+they are chained together from left to right. For example `pipeline(a,b,c)` is equivalent to
+`pipeline(pipeline(a,b),c)`. This provides a more concise way to specify multi-stage
+pipelines.
+
+**Examples**:
+
+```julia
+run(pipeline(`ls`, `grep xyz`))
+run(pipeline(`ls`, "out.txt"))
+run(pipeline("out.txt", `grep xyz`))
+```
+"""
 pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 
 type Process <: AbstractPipe
@@ -517,6 +562,15 @@ end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
 # return a Process object to read-to/write-from the pipeline
+"""
+    open(command, mode::AbstractString="r", stdio=DevNull)
+
+Start running `command` asynchronously, and return a tuple `(stream,process)`.  If `mode` is
+`"r"`, then `stream` reads from the process's standard output and `stdio` optionally
+specifies the process's standard input stream.  If `mode` is `"w"`, then `stream` writes to
+the process's standard input and `stdio` optionally specifies the process's standard output
+stream.
+"""
 function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=DevNull)
     if mode == "r"
         in = other
@@ -534,6 +588,13 @@ function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=D
     return (io, processes)
 end
 
+"""
+    open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
+
+Similar to `open(command, mode, stdio)`, but calls `f(stream)` on the resulting read or
+write stream, then closes the stream and waits for the process to complete.  Returns the
+value returned by `f`.
+"""
 function open(f::Function, cmds::AbstractCmd, args...)
     io, P = open(cmds, args...)
     ret = try
@@ -549,6 +610,13 @@ function open(f::Function, cmds::AbstractCmd, args...)
 end
 
 # TODO: deprecate this
+
+"""
+    readandwrite(command)
+
+Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the
+output stream and input stream of the process, and the process object itself.
+"""
 function readandwrite(cmds::AbstractCmd)
     in = Pipe()
     out, processes = open(cmds, "r", in)
@@ -572,6 +640,12 @@ function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::Redirectable=
     end
 end
 
+"""
+    run(command, args...)
+
+Run a command object, constructed with backticks. Throws an error if anything goes wrong,
+including the process exiting with a non-zero status.
+"""
 function run(cmds::AbstractCmd, args...)
     ps = spawn(cmds, spawn_opts_inherit(args...)...)
     success(ps) ? nothing : pipeline_error(ps)
@@ -594,6 +668,13 @@ function success(x::Process)
 end
 success(procs::Vector{Process}) = mapreduce(success, &, procs)
 success(procs::ProcessChain) = success(procs.processes)
+
+"""
+    success(command)
+
+Run a command object, constructed with backticks, and tell whether it was successful (exited
+with a code of 0). An exception is raised if the process cannot be started.
+"""
 success(cmd::AbstractCmd) = success(spawn(cmd))
 
 function pipeline_error(proc::Process)
@@ -620,6 +701,12 @@ function pipeline_error(procs::ProcessChain)
 end
 
 _jl_kill(p::Process, signum::Integer) = ccall(:uv_process_kill, Int32, (Ptr{Void},Int32), p.handle, signum)
+
+"""
+    kill(p::Process, signum=SIGTERM)
+
+Send a signal to a process. The default is to terminate the process.
+"""
 function kill(p::Process, signum::Integer)
     if process_running(p)
         @assert p.handle != C_NULL
@@ -637,10 +724,21 @@ function _contains_newline(bufptr::Ptr{Void}, len::Int32)
 end
 
 ## process status ##
+
+"""
+    process_running(p::Process)
+
+Determine whether a process is currently running.
+"""
 process_running(s::Process) = s.exitcode == typemin(fieldtype(Process, :exitcode))
 process_running(s::Vector{Process}) = any(process_running, s)
 process_running(s::ProcessChain) = process_running(s.processes)
 
+"""
+    process_exited(p::Process)
+
+Determine whether a process has exited.
+"""
 process_exited(s::Process) = !process_running(s)
 process_exited(s::Vector{Process}) = all(process_exited, s)
 process_exited(s::ProcessChain) = process_exited(s.processes)

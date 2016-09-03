@@ -33,10 +33,27 @@ promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
 
 widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
 
+"""
+    real(z)
+
+Return the real part of the complex number `z`.
+"""
 real(z::Complex) = z.re
+
+"""
+    imag(z)
+
+Return the imaginary part of the complex number `z`.
+"""
 imag(z::Complex) = z.im
 real(x::Real) = x
 imag(x::Real) = zero(x)
+
+"""
+    reim(z)
+
+Return both the real and imaginary parts of the complex number `z`.
+"""
 reim(z) = (real(z), imag(z))
 
 real{T<:Real}(::Type{T}) = T
@@ -115,6 +132,11 @@ end
 
 ## generic functions of complex numbers ##
 
+"""
+    conj(z)
+
+Compute the complex conjugate of a complex number `z`.
+"""
 conj(z::Complex) = Complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
@@ -334,12 +356,23 @@ sqrt(z::Complex) = sqrt(float(z))
 
 # compute exp(im*theta)
 cis(theta::Real) = Complex(cos(theta),sin(theta))
+
+"""
+    cis(z)
+
+Return ``\\exp(iz)``.
+"""
 function cis(z::Complex)
     v = exp(-imag(z))
     Complex(v*cos(real(z)), v*sin(real(z)))
 end
 @vectorize_1arg Number cis
 
+"""
+    angle(z)
+
+Compute the phase angle in radians of a complex number `z`.
+"""
 angle(z::Complex) = atan2(imag(z), real(z))
 
 function log{T<:AbstractFloat}(z::Complex{T})

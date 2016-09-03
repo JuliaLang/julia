@@ -111,12 +111,30 @@ range{T}(a::T, len::Integer) =
 # this is for non-numeric ranges where step can be quite different
 colon{A<:Real,C<:Real}(a::A, b, c::C) = colon(convert(promote_type(A,C),a), b, convert(promote_type(A,C),c))
 
+"""
+    colon(start, [step], stop)
+
+Called by `:` syntax for constructing ranges.
+"""
 colon{T<:Real}(start::T, step, stop::T) = StepRange(start, step, stop)
+
+"""
+    :(start, [step], stop)
+
+Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1, and `a:s:b`
+is similar but uses a step size of `s`. These syntaxes call the function `colon`. The colon
+is also used in indexing to select whole dimensions.
+"""
 colon{T<:Real}(start::T, step::T, stop::T) = StepRange(start, step, stop)
 colon{T<:Real}(start::T, step::Real, stop::T) = StepRange(promote(start, step, stop)...)
 
 colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 
+"""
+    range(start, [step], length)
+
+Construct a range by length, given a starting value and optional step (defaults to 1).
+"""
 range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
 
 ## floating point ranges
@@ -250,6 +268,18 @@ function linspace{T<:AbstractFloat}(start::T, stop::T, len::Real)
     T_len == len || throw(InexactError())
     linspace(start, stop, T_len)
 end
+
+"""
+    linspace(start::Real, stop::Real, n::Real=50)
+
+Construct a range of `n` linearly spaced elements from `start` to `stop`.
+
+```jldoctest
+julia> linspace(1.3,2.9,9)
+9-element LinSpace{Float64}:
+ 1.3,1.5,1.7,1.9,2.1,2.3,2.5,2.7,2.9
+```
+"""
 linspace(start::Real, stop::Real, len::Real=50) =
     linspace(promote(AbstractFloat(start), AbstractFloat(stop))..., len)
 
@@ -320,6 +350,21 @@ function print_range(io::IO, r::Range,
     end
 end
 
+"""
+    logspace(start::Real, stop::Real, n::Integer=50)
+
+Construct a vector of `n` logarithmically spaced numbers from `10^start` to `10^stop`.
+
+```jldoctest
+julia> logspace(1.,10.,5)
+5-element Array{Float64,1}:
+   10.0
+ 1778.28
+    3.16228e5
+    5.62341e7
+    1.0e10
+```
+"""
 logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
 ## interface implementations

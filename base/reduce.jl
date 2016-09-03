@@ -52,8 +52,20 @@ function mapfoldl_impl(f, op, v0, itr, i)
     end
 end
 
+"""
+    mapfoldl(f, op, v0, itr)
+
+Like [`mapreduce`](:func:`mapreduce`), but with guaranteed left associativity. `v0` will be
+used exactly once.
+"""
 mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
 
+"""
+    mapfoldl(f, op, itr)
+
+Like `mapfoldl(f, op, v0, itr)`, but using the first element of `itr` as `v0`. In general,
+this cannot be used with empty collections (see `reduce(op, itr)`).
+"""
 function mapfoldl(f, op, itr)
     i = start(itr)
     if done(itr, i)
@@ -64,7 +76,20 @@ function mapfoldl(f, op, itr)
     mapfoldl_impl(f, op, v0, itr, i)
 end
 
+"""
+    foldl(op, v0, itr)
+
+Like [`reduce`](:func:`reduce`), but with guaranteed left associativity. `v0` will be used
+exactly once.
+"""
 foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
+
+"""
+    foldl(op, itr)
+
+Like `foldl(op, v0, itr)`, but using the first element of `itr` as `v0`. In general, this
+cannot be used with empty collections (see `reduce(op, itr)`).
+"""
 foldl(op, itr) = mapfoldl(identity, op, itr)
 
 ## foldr & mapfoldr
@@ -85,10 +110,36 @@ function mapfoldr_impl(f, op, v0, itr, i::Integer)
     end
 end
 
+"""
+    mapfoldr(f, op, v0, itr)
+
+Like [`mapreduce`](:func:`mapreduce`), but with guaranteed right associativity. `v0` will be
+used exactly once.
+"""
 mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
+
+"""
+    mapfoldr(f, op, itr)
+
+Like `mapfoldr(f, op, v0, itr)`, but using the first element of `itr` as `v0`. In general,
+this cannot be used with empty collections (see `reduce(op, itr)`).
+"""
 mapfoldr(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, f(itr[i]), itr, i-1))
 
+"""
+    foldr(op, v0, itr)
+
+Like [`reduce`](:func:`reduce`), but with guaranteed right associativity. `v0` will be used
+exactly once.
+"""
 foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
+
+"""
+    foldr(op, itr)
+
+Like `foldr(op, v0, itr)`, but using the last element of `itr` as `v0`. In general, this
+cannot be used with empty collections (see `reduce(op, itr)`).
+"""
 foldr(op, itr) = mapfoldr(identity, op, itr)
 
 ## reduce & mapreduce
@@ -113,7 +164,35 @@ function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer
     end
 end
 
+"""
+    mapreduce(f, op, itr)
+
+Like `mapreduce(f, op, v0, itr)`. In general, this cannot be used with empty collections
+(see `reduce(op, itr)`).
+"""
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
+
+"""
+    mapreduce(f, op, v0, itr)
+
+Apply function `f` to each element in `itr`, and then reduce the result using the binary
+function `op`. `v0` must be a neutral element for `op` that will be returned for empty
+collections. It is unspecified whether `v0` is used for non-empty collections.
+
+[`mapreduce`](:func:`mapreduce`) is functionally equivalent to calling `reduce(op, v0,
+map(f, itr))`, but will in general execute faster since no intermediate collection needs to
+be created. See documentation for [`reduce`](:func:`reduce`) and [`map`](:func:`map`).
+
+```jldoctest
+julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
+14
+```
+
+The associativity of the reduction is implementation-dependent. Additionally, some
+implementations may reuse the return value of `f` for elements that appear multiple times in
+`itr`. Use [`mapfoldl`](:func:`mapfoldl`) or [`mapfoldr`](:func:`mapfoldr`) instead for
+guaranteed left or right associativity and invocation of `f` for every value.
+"""
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
 
 # Note: sum_seq usually uses four or more accumulators after partial
@@ -169,7 +248,35 @@ _mapreduce{T}(f, op, ::LinearSlow, A::AbstractArray{T}) = mapfoldl(f, op, A)
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 mapreduce(f, op, a::Number) = f(a)
 
+"""
+    reduce(op, v0, itr)
+
+Reduce the given collection `ìtr` with the given binary operator `op`. `v0` must be a
+neutral element for `op` that will be returned for empty collections. It is unspecified
+whether `v0` is used for non-empty collections.
+
+Reductions for certain commonly-used operators have special implementations which should be
+used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`, `any(itr)`,
+`all(itr)`.
+
+The associativity of the reduction is implementation dependent. This means that you can't
+use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
+should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](:func:`foldl`) or
+[`foldr`](:func:`foldr`) instead for guaranteed left or right associativity.
+
+Some operations accumulate error, and parallelism will also be easier if the reduction can
+be executed in groups. Future versions of Julia might change the algorithm. Note that the
+elements are not reordered if you use an ordered collection.
+"""
 reduce(op, v0, itr) = mapreduce(identity, op, v0, itr)
+
+"""
+    reduce(op, itr)
+
+Like `reduce(op, v0, itr)`. This cannot be used with empty collections, except for some
+special cases (e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can
+determine the neutral element of `op`.
+"""
 reduce(op, itr) = mapreduce(identity, op, itr)
 reduce(op, a::Number) = a
 
@@ -225,14 +332,45 @@ mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
 
 ## sum
 
+"""
+    sum(f, itr)
+
+Sum the results of calling function `f` on each element of `itr`.
+"""
 sum(f::Callable, a) = mapreduce(f, +, a)
+
+"""
+    sum(itr)
+
+Returns the sum of all elements in a collection.
+"""
 sum(a) = mapreduce(identity, +, a)
 sum(a::AbstractArray{Bool}) = countnz(a)
+
+"""
+    sumabs(itr)
+
+Sum absolute values of all elements in a collection. This is equivalent to `sum(abs(itr))` but faster.
+"""
 sumabs(a) = mapreduce(abs, +, a)
+
+"""
+    sumabs2(itr)
+
+Sum squared absolute values of all elements in a collection.
+This is equivalent to `sum(abs2(itr))` but faster.
+"""
 sumabs2(a) = mapreduce(abs2, +, a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
+
+"""
+    sum_kbn(A)
+
+Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated
+summation algorithm for additional accuracy.
+"""
 function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
     c = r_promote(+, zero(T)::T)
     if isempty(A)
@@ -257,6 +395,12 @@ end
 ## prod
 
 prod(f::Callable, a) = mapreduce(f, *, a)
+
+"""
+    prod(itr)
+
+Returns the product of all elements of a collection.
+"""
 prod(a) = mapreduce(identity, *, a)
 
 ## maximum & minimum
@@ -422,6 +566,18 @@ end
     any(itr) -> Bool
 
 Test whether any elements of a boolean collection are `true`.
+
+```jldoctest
+julia> a = [true,false,false,true]
+4-element Array{Bool,1}:
+  true
+ false
+ false
+  true
+
+julia> any(a)
+true
+```
 """
 any(itr) = any(identity, itr)
 
@@ -429,6 +585,18 @@ any(itr) = any(identity, itr)
     all(itr) -> Bool
 
 Test whether all elements of a boolean collection are `true`.
+
+```jldoctest
+julia> a = [true,false,false,true]
+4-element Array{Bool,1}:
+  true
+ false
+ false
+  true
+
+julia> all(a)
+false
+```
 """
 all(itr) = all(identity, itr)
 
@@ -478,6 +646,31 @@ all(f::typeof(identity), itr) =
 
 ## in & contains
 
+"""
+    in(item, collection) -> Bool
+    ∈(item,collection) -> Bool
+    ∋(collection,item) -> Bool
+    ∉(item,collection) -> Bool
+    ∌(collection,item) -> Bool
+
+Determine whether an item is in the given collection, in the sense that it is `==` to one of
+the values generated by iterating over the collection. Some collections need a slightly
+different definition; for example [`Set`](:obj:`Set`)s check whether the item
+[`isequal`](:func:`isequal`) to one of the elements. [`Dict`](:obj:`Dict`)s look for
+`(key,value)` pairs, and the key is compared using [`isequal`](:func:`isequal`). To test for
+the presence of a key in a dictionary, use [`haskey`](:func:`haskey`) or `k in keys(dict)`.
+
+```jldoctest
+julia> a = 1:3:20
+1:3:19
+
+julia> 4 in a
+true
+
+julia> 5 in a
+false
+```
+"""
 in(x, itr) = any(Predicate(y -> y == x), itr)
 
 const ∈ = in
@@ -517,6 +710,6 @@ end
     countnz(A)
 
 Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
-For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
+For sparse matrices, one should usually use [`nnz`](:func:`nnz`), which returns the number of stored values.
 """
 countnz(a) = count(x -> x != 0, a)

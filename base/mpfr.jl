@@ -42,6 +42,25 @@ const DEFAULT_PRECISION = [256]
 
 # Basic type and initialization definitions
 
+"""
+    BigFloat(x)
+
+Create an arbitrary precision floating point number. `x` may be an `Integer`, a `Float64` or
+a `BigInt`. The usual mathematical operators are defined for this type, and results are
+promoted to a `BigFloat`.
+
+Note that because decimal literals are converted to floating point numbers when parsed,
+`BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
+constants from strings via [`parse`](:func:`parse`), or using the `big` string literal.
+
+```jldoctest
+julia> BigFloat(2.1)
+2.100000000000000088817841970012523233890533447265625000000000000000000000000000
+
+julia> big"2.1"
+2.099999999999999999999999999999999999999999999999999999999999999999999999999986
+```
+"""
 type BigFloat <: AbstractFloat
     prec::Clong
     sign::Cint
@@ -685,6 +704,11 @@ function precision(x::BigFloat)  # precision of an object of type BigFloat
     return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ptr{BigFloat},), &x)
 end
 
+"""
+    precision(BigFloat)
+
+Get the precision (in bits) currently used for `BigFloat` arithmetic.
+"""
 precision(::Type{BigFloat}) = DEFAULT_PRECISION[end]  # precision of the type BigFloat itself
 
 """
