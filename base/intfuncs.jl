@@ -115,6 +115,8 @@ function power_by_squaring(x_, p::Integer)
     elseif p == 2
         return x*x
     elseif p < 0
+        x == 1 && return copy(x)
+        x == -1 && return iseven(p) ? one(x) : copy(x)
         throw(DomainError())
     end
     t = trailing_zeros(p) + 1
@@ -135,7 +137,7 @@ function power_by_squaring(x_, p::Integer)
 end
 power_by_squaring(x::Bool, p::Unsigned) = ((p==0) | x)
 function power_by_squaring(x::Bool, p::Integer)
-    p < 0 && throw(DomainError())
+    p < 0 && !x && throw(DomainError())
     return (p==0) | x
 end
 
