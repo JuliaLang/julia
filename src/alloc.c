@@ -211,15 +211,36 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
     }
 }
 
+// TODO inefficient and ugly
+int value_isdefined(jl_datatype_t *st, char *v) {
+    for (int i = 0; i < jl_datatype_nfields(st); i++) {
+        size_t offs = jl_field_offset(st,i);
+        if (jl_field_isptr(st, i)) {
+            assert(st->ninitialized > i);
+            return *(jl_value_t**)(v + offs) != NULL;
+        }
+        if (jl_field_hasptr(st, i)) {
+            assert(st->ninitialized > i);
+            return value_isdefined((jl_datatype_t*)jl_field_type(st, i),
+                                   v + offs);
+        }
+    }
+    assert(0);
+    return 0;
+}
+
 JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st,i);
     if (jl_field_isptr(st,i)) {
         return *(jl_value_t**)((char*)v + offs) != NULL;
+    } else if (jl_field_hasptr(st, i)) {
+        return value_isdefined(jl_field_type(st, i), (char*)v + offs);
     }
     return 1;
 }
+
 
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 {

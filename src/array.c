@@ -498,8 +498,13 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 {
     if (a->flags.ptrarray)
         return ((jl_value_t**)jl_array_data(a))[i] != NULL;
+    else if (a->flags.hasptr)
+        return value_isdefined(jl_tparam0(jl_typeof(a)),
+                               &((char*)a->data)[i*a->elsize]);
     return 1;
 }
+
+int value_isdefined(jl_datatype_t *st, char *v);
 
 int jl_array_isdefined(jl_value_t **args0, int nargs)
 {
@@ -533,9 +538,7 @@ int jl_array_isdefined(jl_value_t **args0, int nargs)
     if (i >= stride)
         return 0;
 
-    if (a->flags.ptrarray)
-        return ((jl_value_t**)jl_array_data(a))[i] != NULL;
-    return 1;
+    return jl_array_isassigned(a, i);
 }
 
 JL_DLLEXPORT void jl_arrayset_nothrow(jl_array_t *a, jl_value_t *rhs, size_t i)
