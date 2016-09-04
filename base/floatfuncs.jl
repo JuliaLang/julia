@@ -6,13 +6,11 @@ copysign(x::Float64, y::Float64) = box(Float64,copysign_float(unbox(Float64,x),u
 copysign(x::Float32, y::Float32) = box(Float32,copysign_float(unbox(Float32,x),unbox(Float32,y)))
 copysign(x::Float32, y::Real) = copysign(x, Float32(y))
 copysign(x::Float64, y::Real) = copysign(x, Float64(y))
-@vectorize_2arg Real copysign
 
 flipsign(x::Float64, y::Float64) = box(Float64,xor_int(unbox(Float64,x),and_int(unbox(Float64,y),0x8000000000000000)))
 flipsign(x::Float32, y::Float32) = box(Float32,xor_int(unbox(Float32,x),and_int(unbox(Float32,y),0x80000000)))
 flipsign(x::Float32, y::Real) = flipsign(x, Float32(y))
 flipsign(x::Float64, y::Real) = flipsign(x, Float64(y))
-@vectorize_2arg Real flipsign
 
 signbit(x::Float64) = signbit(reinterpret(Int64,x))
 signbit(x::Float32) = signbit(reinterpret(Int32,x))
@@ -39,14 +37,6 @@ function hex2num(s::AbstractString)
     end
     return box(Float64,unbox(UInt64,parse(UInt64,s,16)))
 end
-
-@vectorize_1arg Number abs
-@vectorize_1arg Number abs2
-@vectorize_1arg Number angle
-
-@vectorize_1arg Number isnan
-@vectorize_1arg Number isinf
-@vectorize_1arg Number isfinite
 
 """
     round([T,] x, [digits, [base]], [r::RoundingMode])
@@ -107,7 +97,6 @@ julia> round(pi, 3, 2)
     ```
 """
 round(T::Type, x)
-
 round(x::Real, ::RoundingMode{:ToZero}) = trunc(x)
 round(x::Real, ::RoundingMode{:Up}) = ceil(x)
 round(x::Real, ::RoundingMode{:Down}) = floor(x)
@@ -122,11 +111,6 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
     ifelse(x==y,y,copysign(floor(2*x-y),x))
 end
 round{T<:Integer}(::Type{T}, x::AbstractFloat, r::RoundingMode) = trunc(T,round(x,r))
-
-@vectorize_1arg Real trunc
-@vectorize_1arg Real floor
-@vectorize_1arg Real ceil
-@vectorize_1arg Real round
 
 for f in (:trunc,:floor,:ceil,:round)
     @eval begin

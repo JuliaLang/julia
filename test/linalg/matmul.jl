@@ -260,7 +260,7 @@ let AA = [1+2im 3+4im; 5+6im 7+8im], BB = [2+7im 4+1im; 3+8im 6+5im]
     for Atype = ["Array", "SubArray"],  Btype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : view(AA, 1:2, 1:2)
         B = Btype == "Array" ? BB : view(BB, 1:2, 1:2)
-        @test vecdot(A,B) == dot(vec(A),vec(B)) == vecdot_(A,B) == vecdot(float(A),float(B))
+        @test vecdot(A,B) == dot(vec(A),vec(B)) == vecdot_(A,B) == vecdot(float.(A),float.(B))
         @test vecdot(Int[], Int[]) == 0 == vecdot_(Int[], Int[])
         @test_throws MethodError vecdot(Any[], Any[])
         @test_throws MethodError vecdot_(Any[], Any[])

@@ -1707,12 +1707,12 @@ let ≈(x,y) = x==y && typeof(x)==typeof(y)
         for n in [0,3,255,256]
             r = (1:n)-div(n,2)
             y = t[x/4 for x in r]
-            @test trunc(y) ≈ t[div(i,4) for i in r]
-            @test floor(y) ≈ t[i>>2 for i in r]
-            @test ceil(y)  ≈ t[(i+3)>>2 for i in r]
-            @test round(y) ≈ t[(i+1+isodd(i>>2))>>2 for i in r]
-            @test round(y,RoundNearestTiesAway) ≈ t[(i+1+(i>=0))>>2 for i in r]
-            @test round(y,RoundNearestTiesUp) ≈ t[(i+2)>>2 for i in r]
+            @test trunc.(y) ≈ t[div(i,4) for i in r]
+            @test floor.(y) ≈ t[i>>2 for i in r]
+            @test ceil.(y)  ≈ t[(i+3)>>2 for i in r]
+            @test round.(y) ≈ t[(i+1+isodd(i>>2))>>2 for i in r]
+            @test broadcast(x -> round(x, RoundNearestTiesAway), y) ≈ t[(i+1+(i>=0))>>2 for i in r]
+            @test broadcast(x -> round(x, RoundNearestTiesUp), y) ≈ t[(i+2)>>2 for i in r]
         end
     end
 end

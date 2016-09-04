@@ -559,8 +559,8 @@ let x = spv_x1, x2 = x2 = spv_x2
     @test exact_equal(-x, SparseVector(8, [2, 5, 6], [-1.25, 0.75, -3.5]))
 
     # abs and abs2
-    @test exact_equal(abs(x), SparseVector(8, [2, 5, 6], abs([1.25, -0.75, 3.5])))
-    @test exact_equal(abs2(x), SparseVector(8, [2, 5, 6], abs2([1.25, -0.75, 3.5])))
+    @test exact_equal(abs(x), SparseVector(8, [2, 5, 6], abs.([1.25, -0.75, 3.5])))
+    @test exact_equal(abs2(x), SparseVector(8, [2, 5, 6], abs2.([1.25, -0.75, 3.5])))
 
     # plus and minus
     xa = SparseVector(8, [1,2,5,6,7], [3.25,5.25,-0.75,-2.0,-6.0])
@@ -626,7 +626,7 @@ function check_nz2z_z2z{T}(f::Function, x::SparseVector{T}, xf::Vector{T})
     isa(r, AbstractSparseVector) || error("$f(x) is not a sparse vector.")
     eltype(r) == R || error("$f(x) results in eltype = $(eltype(r)), expect $R")
     all(r.nzval .!= 0) || error("$f(x) contains zeros in nzval.")
-    full(r) == f(xf) || error("Incorrect results found in $f(x).")
+    full(r) == f.(xf) || error("Incorrect results found in $f(x).")
 end
 
 for f in [floor, ceil, trunc, round]
@@ -647,7 +647,7 @@ function check_z2nz{T}(f::Function, x::SparseVector{T}, xf::Vector{T})
     r = f(x)
     isa(r, Vector) || error("$f(x) is not a dense vector.")
     eltype(r) == R || error("$f(x) results in eltype = $(eltype(r)), expect $R")
-    r == f(xf) || error("Incorrect results found in $f(x).")
+    r == f.(xf) || error("Incorrect results found in $f(x).")
 end
 
 for f in [exp, exp2, exp10, log, log2, log10,

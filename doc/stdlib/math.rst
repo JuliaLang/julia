@@ -1060,13 +1060,13 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Return the minimum of the arguments. Operates elementwise over arrays.
+   Return the minimum of the arguments. See also the :func:`minimum` function to take the minimum element from a collection.
 
 .. function:: max(x, y, ...)
 
    .. Docstring generated from Julia source
 
-   Return the maximum of the arguments. Operates elementwise over arrays.
+   Return the maximum of the arguments. See also the :func:`maximum` function to take the maximum element from a collection.
 
 .. function:: minmax(x, y)
 

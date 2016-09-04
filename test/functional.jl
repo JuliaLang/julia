@@ -7,7 +7,7 @@
 # TODO: @test map!() much more thoroughly
 let a = [1.0, 2.0]
     map!(sin, a)
-    @test isequal(a, sin([1.0, 2.0]))
+    @test isequal(a, sin.([1.0, 2.0]))
 end
 # map -- ranges.jl
 @test isequal(map(sqrt, 1:5), [sqrt(i) for i in 1:5])

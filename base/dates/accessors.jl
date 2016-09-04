@@ -59,21 +59,6 @@ yearmonth(dt::TimeType) = yearmonth(days(dt))
 monthday(dt::TimeType) = monthday(days(dt))
 yearmonthday(dt::TimeType) = yearmonthday(days(dt))
 
-@vectorize_1arg TimeType year
-@vectorize_1arg TimeType month
-@vectorize_1arg TimeType day
-@vectorize_1arg TimeType week
-@vectorize_1arg DateTime hour
-@vectorize_1arg DateTime minute
-@vectorize_1arg DateTime second
-@vectorize_1arg DateTime millisecond
-
-@vectorize_1arg TimeType dayofmonth
-@vectorize_1arg TimeType yearmonth
-@vectorize_1arg TimeType monthday
-@vectorize_1arg TimeType yearmonthday
-
-
 # Documentation for exported accessors
 for func in (:year, :month)
     name = string(func)

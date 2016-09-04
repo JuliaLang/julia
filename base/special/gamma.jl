@@ -9,7 +9,6 @@ gamma(x::Float32) = nan_dom_err(ccall((:tgammaf,libm),  Float32, (Float32,), x),
 Compute the gamma function of `x`.
 """
 gamma(x::Real) = gamma(float(x))
-@vectorize_1arg Number gamma
 
 function lgamma_r(x::Float64)
     signp = Array{Int32}(1)
@@ -31,7 +30,6 @@ lgamma_r(x::Number) = lgamma(x), 1 # lgamma does not take abs for non-real x
 Compute the logarithmic factorial of `x`
 """
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
-@vectorize_1arg Number lfact
 
 const clg_coeff = [76.18009172947146,
                    -86.50532032941677,
@@ -446,12 +444,9 @@ zeta(s::Number, z::Number) = zeta(f64(s), f64(z))
 for f in (:digamma, :trigamma)
     @eval begin
         $f(z::Number) = $f(f64(z))
-        @vectorize_1arg Number $f
     end
 end
 polygamma(m::Integer, z::Number) = polygamma(m, f64(z))
-@vectorize_2arg Number polygamma
-@vectorize_2arg Number zeta
 
 # Inverse digamma function:
 # Implementation of fixed point algorithm described in
@@ -486,7 +481,6 @@ invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
 Compute the inverse digamma function of `x`.
 """
 invdigamma(x::Real) = invdigamma(Float64(x))
-@vectorize_1arg Real invdigamma
 
 function beta(x::Number, w::Number)
     yx, sx = lgamma_r(x)
@@ -495,8 +489,6 @@ function beta(x::Number, w::Number)
     return exp(yx + yw - yxw) * (sx*sw*sxw)
 end
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
-@vectorize_2arg Number beta
-@vectorize_2arg Number lbeta
 
 # Riemann zeta function; algorithm is based on specializing the Hurwitz
 # zeta function above for z==1.
@@ -548,7 +540,6 @@ end
 zeta(x::Integer) = zeta(Float64(x))
 zeta(x::Real)    = oftype(float(x),zeta(Float64(x)))
 zeta(z::Complex) = oftype(float(z),zeta(Complex128(z)))
-@vectorize_1arg Number zeta
 
 function eta(z::Union{Float64,Complex{Float64}})
     δz = 1 - z
@@ -567,4 +558,3 @@ end
 eta(x::Integer) = eta(Float64(x))
 eta(x::Real)    = oftype(float(x),eta(Float64(x)))
 eta(z::Complex) = oftype(float(z),eta(Complex128(z)))
-@vectorize_1arg Number eta

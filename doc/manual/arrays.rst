@@ -474,56 +474,14 @@ operators ``/`` and ``\`` operate elementwise when the denominator is a scalar.
 Note that comparisons such as ``==`` operate on whole arrays, giving a single
 boolean answer. Use dot operators for elementwise comparisons.
 
-The following built-in functions are also vectorized, whereby the functions act
-elementwise::
+To enable convenient vectorization of mathematical and other operations, Julia provides
+the compact syntax ``f.(args...)``, e.g. ``sin.(x)`` or ``min.(x,y)``, for elementwise
+operations over arrays or mixtures of arrays and scalars (a :func:`broadcast` operation).
+See :ref:`man-dot-vectorizing`.
 
-    abs abs2 angle cbrt
-    airy airyai airyaiprime airybi airybiprime airyprime
-    acos acosh asin asinh atan atan2 atanh
-    acsc acsch asec asech acot acoth
-    cos  cospi cosh  sin  sinpi sinh  tan  tanh  sinc  cosc
-    csc  csch  sec  sech  cot  coth
-    acosd asind atand asecd acscd acotd
-    cosd  sind  tand  secd  cscd  cotd
-    besselh besseli besselj besselj0 besselj1 besselk bessely bessely0 bessely1
-    exp  erf  erfc  erfinv erfcinv exp2  expm1
-    beta dawson digamma erfcx erfi
-    exponent eta zeta gamma
-    hankelh1 hankelh2
-     ceil  floor  round  trunc
-    isfinite isinf isnan
-    lbeta lfact lgamma
-    log log10 log1p log2
-    copysign max min significand
-    sqrt hypot
-
-Note that there is a difference between :func:`min` and :func:`max`, which operate
-elementwise over multiple array arguments, and :func:`minimum` and :func:`maximum`, which
-find the smallest and largest values within an array.
-
-Julia provides the :func:`@vectorize_1arg` and :func:`@vectorize_2arg`
-macros to automatically vectorize any function of one or two arguments
-respectively.  Each of these takes two arguments, namely the ``Type`` of
-argument (which is usually chosen to be the most general possible) and
-the name of the function to vectorize. Here is a simple example:
-
-.. doctest::
-
-    julia> square(x) = x^2
-    square (generic function with 1 method)
-
-    julia> @vectorize_1arg Number square
-    square (generic function with 2 methods)
-
-    julia> methods(square)
-    # 2 methods for generic function "square":
-    square{T<:Number}(x::AbstractArray{T,N<:Any}) at operators.jl:918
-    square(x) at none:1
-
-    julia> square([1 2 4; 5 6 7])
-    2×3 Array{Int64,2}:
-      1   4  16
-     25  36  49
+Note that there is a difference between ``max.(a,b)``, which ``broadcast``\ s :func:`max`
+elementwise over ``a`` and ``b``, and ``maximum(a)``, which finds the largest value within
+``a``. The same statements hold for ``min.(a,b)`` and ``minimum(a)``.
 
 .. _man-broadcasting:
 

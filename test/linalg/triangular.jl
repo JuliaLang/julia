@@ -144,7 +144,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # real
         @test full(real(A1)) == real(full(A1))
         @test full(imag(A1)) == imag(full(A1))
-        @test full(abs(A1)) == abs(full(A1))
+        @test full(abs.(A1)) == abs.(full(A1))
 
         # Unary operations
         @test full(-A1) == -full(A1)
@@ -426,7 +426,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         debug && println("Test backward error [JIN 5705]")
         for i = 1:size(b, 2)
-            @test norm(abs(b[:,i] - Atri*x[:,i]), Inf) <= γ * norm(Atri, Inf) * norm(x[:,i], Inf)
+            @test norm(abs.(b[:,i] - Atri*x[:,i]), Inf) <= γ * norm(Atri, Inf) * norm(x[:,i], Inf)
         end
 
         debug && println("Solve lower triangular system")
@@ -455,7 +455,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         debug && println("Test backward error [JIN 5705]")
         for i = 1:size(b, 2)
-            @test norm(abs(b[:,i] - Atri*x[:,i]), Inf) <= γ * norm(Atri, Inf) * norm(x[:,i], Inf)
+            @test norm(abs.(b[:,i] - Atri*x[:,i]), Inf) <= γ * norm(Atri, Inf) * norm(x[:,i], Inf)
         end
     end
 end

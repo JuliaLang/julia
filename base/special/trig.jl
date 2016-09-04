@@ -284,8 +284,6 @@ function cospi{T}(z::Complex{T})
         Complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
     end
 end
-@vectorize_1arg Number sinpi
-@vectorize_1arg Number cospi
 
 """
     sinc(x)
@@ -296,7 +294,6 @@ sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
 sinc{T<:Integer}(x::Complex{T}) = sinc(float(x))
 sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
-@vectorize_1arg Number sinc
 
 """
     cosc(x)
@@ -308,7 +305,6 @@ cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
 cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
 cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
-@vectorize_1arg Number cosc
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
@@ -385,7 +381,6 @@ function sind(x::Real)
         return sin_kernel(y)
     end
 end
-@vectorize_1arg Real sind
 
 function cosd(x::Real)
     if isinf(x)
@@ -412,10 +407,8 @@ function cosd(x::Real)
         return cos_kernel(y)
     end
 end
-@vectorize_1arg Real cosd
 
 tand(x::Real) = sind(x) / cosd(x)
-@vectorize_1arg Real tand
 
 for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
     name = string(fd)
@@ -434,6 +427,5 @@ for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand,
             $($name)(x)
 
         Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
-        @vectorize_1arg Real $fd
     end
 end
