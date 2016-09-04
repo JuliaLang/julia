@@ -4668,11 +4668,16 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // step 12. Do codegen in control flow order
     std::vector<std::pair<int,BasicBlock*>> workstack;
     int cursor = 0;
+    // Whether we are doing codegen in statement order.
+    // We need to update debug location if this is false even if
+    // `loc_changed` is false.
+    bool linear_codegen = false;
     auto find_next_stmt = [&] (int seq_next) {
         // `seq_next` is the next statement we want to emit
         // i.e. if it exists, it's the next one following control flow and
         // should be emitted into the current insert point.
         if (seq_next >= 0 && (unsigned)seq_next < stmtslen) {
+            linear_codegen = (seq_next - cursor) == 1;
             cursor = seq_next;
             return;
         }
@@ -4680,10 +4685,12 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             builder.CreateUnreachable();
         if (workstack.empty()) {
             cursor = -1;
+            linear_codegen = false;
             return;
         }
         auto &item = workstack.back();
         builder.SetInsertPoint(item.second);
+        linear_codegen = (item.first - cursor) == 1;
         cursor = item.first;
         workstack.pop_back();
     };
@@ -4755,16 +4762,14 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             builder.SetCurrentDebugLocation(topdebugloc);
         coverageVisitLine(filename, toplineno);
     }
-    stmtprops[0].loc_changed = true;
     while (cursor != -1) {
         auto &props = stmtprops[cursor];
-        if (props.loc_changed) {
-            if (ctx.debug_enabled)
-                builder.SetCurrentDebugLocation(props.loc);
-            // Disable coverage for pop_loc, it doesn't start a new expression
-            if (do_coverage(props.in_user_code) && !props.is_poploc) {
-                coverageVisitLine(props.file, props.line);
-            }
+        if ((props.loc_changed || !linear_codegen) && ctx.debug_enabled)
+            builder.SetCurrentDebugLocation(props.loc);
+        // Disable coverage for pop_loc, it doesn't start a new expression
+        if (props.loc_changed && do_coverage(props.in_user_code) &&
+            !props.is_poploc) {
+            coverageVisitLine(props.file, props.line);
         }
         ctx.is_inbounds = props.is_inbounds;
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
