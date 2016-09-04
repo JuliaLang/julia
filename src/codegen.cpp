@@ -4041,12 +4041,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     ctx.f = f;
 
     // step 5. set up debug info context and create first basic block
-    bool in_user_code = !jl_is_submodule(ctx.module, jl_base_module) &&
-                        !jl_is_submodule(ctx.module, jl_core_module);
-    bool do_coverage = jl_options.code_coverage == JL_LOG_ALL ||
-        (jl_options.code_coverage == JL_LOG_USER && in_user_code);
-    bool do_malloc_log = jl_options.malloc_log  == JL_LOG_ALL ||
-        (jl_options.malloc_log    == JL_LOG_USER && in_user_code);
+    int coverage_mode = jl_options.code_coverage;
+    int malloc_log_mode = jl_options.malloc_log;
     StringRef filename = "<missing>";
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
@@ -4076,8 +4072,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     ctx.debug_enabled = true;
     if (dbgFuncName.empty()) {
         // special value: if function name is empty, disable debug info
-        do_coverage = false;
-        do_malloc_log = false;
+        coverage_mode = JL_LOG_NONE;
+        malloc_log_mode = JL_LOG_NONE;
         //dbgFuncName = filename; // for testing, uncomment this line
         ctx.debug_enabled = !dbgFuncName.empty();
     }
@@ -4486,12 +4482,17 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // step 11. Compute properties for each statements
     //     This needs to be computed by iterating in the IR order
     //     instead of control flow order.
+    auto in_user_mod = [] (jl_module_t *mod) {
+        return (!jl_is_submodule(mod, jl_base_module) &&
+                !jl_is_submodule(mod, jl_core_module));
+    };
 #ifdef LLVM37
     struct DbgState {
         DebugLoc loc;
         DISubprogram *sp;
         StringRef file;
         ssize_t line;
+        bool in_user_code;
     };
 #else
     struct DbgState {
@@ -4508,6 +4509,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         bool is_inbounds;
         bool loc_changed;
         bool is_poploc;
+        bool in_user_code;
     };
     std::vector<StmtProp> stmtprops(stmtslen);
     std::vector<DbgState> DI_stack;
@@ -4520,7 +4522,12 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             inbounds |= inbounds_stack[sz - 2];
         return inbounds;
     };
-    StmtProp cur_prop{topdebugloc, filename, toplineno, false, true, false};
+    StmtProp cur_prop{topdebugloc, filename, toplineno,
+            false, true, false, false};
+    if (coverage_mode != JL_LOG_NONE || malloc_log_mode) {
+        cur_prop.in_user_code = (!jl_is_submodule(ctx.module, jl_base_module) &&
+                                 !jl_is_submodule(ctx.module, jl_core_module));
+    }
     for (i = 0; i < stmtslen; i++) {
         cur_prop.loc_changed = false;
         cur_prop.is_poploc = false;
@@ -4574,7 +4581,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 if (ctx.debug_enabled)
                     new_file = dbuilder.createFile(new_filename, ".");
                 DI_stack.push_back({cur_prop.loc, SP,
-                            cur_prop.file, cur_prop.line});
+                            cur_prop.file, cur_prop.line,
+                            cur_prop.in_user_code});
                 const char *inl_name = "";
                 int inlined_func_lineno = 0;
                 if (jl_array_len(expr->args) > 2) {
@@ -4586,6 +4594,10 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                             inlined_func_lineno = jl_unbox_int32(arg);
                         else if (jl_is_int64(arg))
                             inlined_func_lineno = jl_unbox_int64(arg);
+                        else if (jl_is_module(arg)) {
+                            jl_module_t *mod = (jl_module_t*)arg;
+                            cur_prop.in_user_code = in_user_mod(mod);
+                        }
                     }
                 }
                 else {
@@ -4624,6 +4636,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 cur_prop.loc = DI.loc;
                 cur_prop.file = DI.file;
                 cur_prop.line = DI.line;
+                cur_prop.in_user_code = DI.in_user_code;
                 DI_stack.pop_back();
                 cur_prop.loc_changed = true;
             }
@@ -4721,10 +4734,23 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         return bb;
     };
 
+    auto do_coverage = [&] (bool in_user_code) {
+        return (coverage_mode == JL_LOG_ALL ||
+                (coverage_mode == JL_LOG_USER && in_user_code));
+    };
+    auto do_malloc_log = [&] (bool in_user_code) {
+        return (malloc_log_mode == JL_LOG_ALL ||
+                (malloc_log_mode == JL_LOG_USER && in_user_code));
+    };
+
     // If the first expresion changes the line number, we need to visit
     // the start of the function. This can happen when the first line is
     // a inlined function call.
-    if (stmtprops[0].loc_changed && do_coverage) {
+    if (stmtprops[0].loc_changed && coverage_mode != JL_LOG_NONE &&
+        do_coverage(in_user_mod(ctx.module))) {
+        // Compute `in_user_code` using `ctx.module` instead of using
+        // `stmtprops[0].in_user_code` since the code property is for the first
+        // statement, which might have been a push_loc.
         if (ctx.debug_enabled)
             builder.SetCurrentDebugLocation(topdebugloc);
         coverageVisitLine(filename, toplineno);
@@ -4736,7 +4762,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             if (ctx.debug_enabled)
                 builder.SetCurrentDebugLocation(props.loc);
             // Disable coverage for pop_loc, it doesn't start a new expression
-            if (do_coverage && !props.is_poploc) {
+            if (do_coverage(props.in_user_code) && !props.is_poploc) {
                 coverageVisitLine(props.file, props.line);
             }
         }
@@ -4772,7 +4798,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             else { // undef return type
                 retval = NULL;
             }
-            if (do_malloc_log && props.line != -1)
+            if (do_malloc_log(props.in_user_code) && props.line != -1)
                 mallocVisitLine(props.file, props.line);
             if (type_is_ghost(retty) || ctx.sret)
                 builder.CreateRetVoid();
@@ -4791,7 +4817,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             jl_value_t *cond = args[0];
             int lname = jl_unbox_long(args[1]);
             Value *isfalse = emit_condition(cond, "if", &ctx);
-            if (do_malloc_log && props.line != -1)
+            if (do_malloc_log(props.in_user_code) && props.line != -1)
                 mallocVisitLine(props.file, props.line);
             BasicBlock *ifso = BasicBlock::Create(jl_LLVMContext, "if", f);
             BasicBlock *ifnot = handle_label(lname, false);
@@ -4833,7 +4859,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         }
         else {
             emit_stmtpos(stmt, &ctx);
-            if (do_malloc_log && props.line != -1) {
+            if (do_malloc_log(props.in_user_code) && props.line != -1) {
                 mallocVisitLine(props.file, props.line);
             }
         }
