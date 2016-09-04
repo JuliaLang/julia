@@ -519,12 +519,14 @@ static void *signal_listener(void *arg)
 #  endif
 #endif
         if (sig == SIGINT) {
-            if (exit_on_sigint) {
+            if (jl_ignore_sigint()) {
+                continue;
+            }
+            else if (exit_on_sigint) {
                 critical = 1;
             }
             else {
-                if (!jl_ignore_sigint())
-                    jl_try_deliver_sigint();
+                jl_try_deliver_sigint();
                 continue;
             }
         }
@@ -600,6 +602,9 @@ static void *signal_listener(void *arg)
 
 void restore_signals(void)
 {
+    sigemptyset(&jl_sigint_sset);
+    sigaddset(&jl_sigint_sset, SIGINT);
+
     sigset_t sset;
     jl_sigsetset(&sset);
     sigprocmask(SIG_SETMASK, &sset, 0);
@@ -625,6 +630,11 @@ void fpe_handler(int sig, siginfo_t *info, void *context)
     jl_throw_in_ctx(ptls, jl_diverror_exception, context);
 }
 
+void sigint_handler(int sig)
+{
+    jl_sigint_passed = 1;
+}
+
 void jl_install_default_signal_handlers(void)
 {
     struct sigaction actf;
@@ -633,6 +643,14 @@ void jl_install_default_signal_handlers(void)
     actf.sa_sigaction = fpe_handler;
     actf.sa_flags = SA_SIGINFO;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
+    struct sigaction actint;
+    memset(&actint, 0, sizeof(struct sigaction));
+    sigemptyset(&actint.sa_mask);
+    actint.sa_handler = sigint_handler;
+    actint.sa_flags = 0;
+    if (sigaction(SIGINT, &actint, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
