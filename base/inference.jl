@@ -2741,8 +2741,18 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         else
             linfo.def.line
         end
-        unshift!(stmts, Expr(:meta, :push_loc, linfo.def.file,
-                             linfo.def.name, line))
+        # Check if we are switching module, which is necessary to catch user
+        # code inlined into `Base` with `--code-coverage=user`.
+        # Assume we are inlining directly into `enclosing` instead of another
+        # function inlined in it
+        mod = linfo.def.module
+        if mod === sv.mod
+            unshift!(stmts, Expr(:meta, :push_loc, linfo.def.file,
+                                 linfo.def.name, line))
+        else
+            unshift!(stmts, Expr(:meta, :push_loc, linfo.def.file,
+                                 linfo.def.name, line, mod))
+        end
         push!(stmts, Expr(:meta, :pop_loc))
     elseif !isempty(stmts)
         if all(inlining_ignore, stmts)
