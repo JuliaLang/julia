@@ -603,7 +603,7 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
     end
     if istril(A)
         if istriu(A)
-            maxabsA = maximum(abs(diag(A)))
+            maxabsA = maximum(abs.(diag(A)))
             B = zeros(Tout, n, m)
             for i = 1:min(m, n)
                 if abs(A[i,i]) > tol*maxabsA
@@ -621,7 +621,7 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
     Sinv        = zeros(Stype, length(SVD.S))
     index       = SVD.S .> tol*maximum(SVD.S)
     Sinv[index] = one(Stype) ./ SVD.S[index]
-    Sinv[find(!isfinite(Sinv))] = zero(Stype)
+    Sinv[find(!isfinite.(Sinv))] = zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
 function pinv{T}(A::StridedMatrix{T})

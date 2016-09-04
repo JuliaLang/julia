@@ -444,7 +444,7 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Compute the maximum value of an array over the given dimensions.
+   Compute the maximum value of an array over the given dimensions. See also the :func:`max` function to take the maximum of two or more arguments, which can be applied elementwise to arrays via ``max.(a,b)``\ .
 
 .. function:: maximum!(r, A)
 
@@ -470,7 +470,7 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Compute the minimum value of an array over the given dimensions.
+   Compute the minimum value of an array over the given dimensions. See also the :func:`min` function to take the minimum of two or more arguments, which can be applied elementwise to arrays via ``min.(a,b)``\ .
 
 .. function:: minimum!(r, A)
 

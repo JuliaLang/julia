@@ -366,7 +366,6 @@ function cis(z::Complex)
     v = exp(-imag(z))
     Complex(v*cos(real(z)), v*sin(real(z)))
 end
-@vectorize_1arg Number cis
 
 """
     angle(z)
@@ -807,8 +806,6 @@ function round{T<:AbstractFloat, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::Ro
 end
 round(z::Complex) = Complex(round(real(z)), round(imag(z)))
 
-@vectorize_1arg Complex round
-
 function round(z::Complex, digits::Integer, base::Integer=10)
     Complex(round(real(z), digits, base),
             round(imag(z), digits, base))
@@ -816,7 +813,6 @@ end
 
 float{T<:AbstractFloat}(z::Complex{T}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
-@vectorize_1arg Complex float
 
 big{T<:AbstractFloat}(z::Complex{T}) = Complex{BigFloat}(z)
 big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)

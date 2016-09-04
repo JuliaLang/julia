@@ -349,10 +349,10 @@ e = eye(5)
 a = [e[:,1], e[:,2], e[:,3], e[:,4], e[:,5]]
 a1 = zeros(5)
 c = [ones(Complex{Float64}, 5),
-     exp(-2*pi*im*(0:4)/5),
-     exp(-4*pi*im*(0:4)/5),
-     exp(-6*pi*im*(0:4)/5),
-     exp(-8*pi*im*(0:4)/5)]
+     exp.(-2*pi*im*(0:4)/5),
+     exp.(-4*pi*im*(0:4)/5),
+     exp.(-6*pi*im*(0:4)/5),
+     exp.(-8*pi*im*(0:4)/5)]
 for s = -5:5
     for i = 1:5
         thisa = OffsetArray(a[i], (s,))

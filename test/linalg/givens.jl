@@ -44,7 +44,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         G, _ = givens(one(elty),zero(elty),11,12)
         @test_throws DimensionMismatch A_mul_B!(G, A)
         @test_throws DimensionMismatch A_mul_Bc!(A,G)
-        @test abs(A) ≈ abs(hessfact(Ac)[:H])
+        @test abs.(A) ≈ abs.(hessfact(Ac)[:H])
         @test norm(R*eye(elty, 10)) ≈ one(elty)
 
         G, _ = givens(one(elty),zero(elty),9,10)

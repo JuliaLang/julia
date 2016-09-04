@@ -196,11 +196,11 @@ end
 TAA = rand(2,2)
 TAA = (TAA + TAA.')/2.
 STAA = Symmetric(TAA)
-@test full(atanh(STAA)) == atanh(TAA)
-@test full(asinh(STAA)) == asinh(TAA)
-@test full(acosh(STAA+Symmetric(ones(TAA)))) == acosh(TAA+ones(TAA))
-@test full(acsch(STAA+Symmetric(ones(TAA)))) == acsch(TAA+ones(TAA))
-@test full(acoth(STAA+Symmetric(ones(TAA)))) == acoth(TAA+ones(TAA))
+@test full(atanh.(STAA)) == atanh.(TAA)
+@test full(asinh.(STAA)) == asinh.(TAA)
+@test full(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
+@test full(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
+@test full(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
 
 # check exp2(::Integer) matches exp2(::Float)
 for ii in -2048:2048
@@ -220,8 +220,8 @@ end
 
 for T in (Int, Float64, BigFloat)
     @test deg2rad(T(180)) ≈ 1pi
-    @test deg2rad(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
-    @test rad2deg([pi/T(4), pi/T(3)]) ≈ [45, 60]
+    @test deg2rad.(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
+    @test rad2deg.([pi/T(4), pi/T(3)]) ≈ [45, 60]
     @test rad2deg(T(1)*pi) ≈ 180
     @test rad2deg(T(1)) ≈ rad2deg(true)
     @test deg2rad(T(1)) ≈ deg2rad(true)
@@ -543,9 +543,9 @@ end
 
 # gamma, lgamma (complex argument)
 if Base.Math.libm == "libopenlibm"
-    @test gamma(Float64[1:25;]) == gamma(1:25)
+    @test gamma.(Float64[1:25;]) == gamma.(1:25)
 else
-    @test gamma(Float64[1:25;]) ≈ gamma(1:25)
+    @test gamma.(Float64[1:25;]) ≈ gamma.(1:25)
 end
 for elty in (Float32, Float64)
     @test gamma(convert(elty,1/2)) ≈ convert(elty,sqrt(π))
@@ -737,8 +737,11 @@ c = 3
 @test 1e-9 > errc(zeta(-3 + 99.69im), 10332.6267578711852982128675093428012860119184786399673520976+13212.8641740351391796168658602382583730208014957452167440726im)
 @test 1e-13 > errc(zeta(2 + 99.69im, 1.3), 0.41617652544777996034143623540420694985469543821307918291931-0.74199610821536326325073784018327392143031681111201859489991im)
 
-for z in (1.234, 1.234 + 5.678im, [1.234, 5.678])
+for z in (1.234, 1.234 + 5.678im)
     @test cis(z) ≈ exp(im*z)
+end
+let z = [1.234, 5.678]
+    @test cis.(z) ≈ exp.(im*z)
 end
 
 # modf
@@ -815,9 +818,9 @@ binary_math_functions = [
 for f in binary_math_functions
     x = y = 2
     v = [f(x,y)]
-    @test f([x],y) == v
-    @test f(x,[y]) == v
-    @test f([x],[y]) == v
+    @test f.([x],y) == v
+    @test f.(x,[y]) == v
+    @test f.([x],[y]) == v
 end
 
 # #3024, #12822

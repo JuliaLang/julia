@@ -180,16 +180,16 @@ end
 # Vectorized accessors
 a = Dates.Date(2014,1,1)
 dr = [a,a,a,a,a,a,a,a,a,a]
-@test Dates.year(dr) == repmat([2014],10)
-@test Dates.month(dr) == repmat([1],10)
-@test Dates.day(dr) == repmat([1],10)
+@test Dates.year.(dr) == repmat([2014],10)
+@test Dates.month.(dr) == repmat([1],10)
+@test Dates.day.(dr) == repmat([1],10)
 
 a = Dates.DateTime(2014,1,1)
 dr = [a,a,a,a,a,a,a,a,a,a]
-@test Dates.year(dr) == repmat([2014],10)
-@test Dates.month(dr) == repmat([1],10)
-@test Dates.day(dr) == repmat([1],10)
-@test Dates.hour(dr) == repmat([0],10)
-@test Dates.minute(dr) == repmat([0],10)
-@test Dates.second(dr) == repmat([0],10)
-@test Dates.millisecond(dr) == repmat([0],10)
+@test Dates.year.(dr) == repmat([2014],10)
+@test Dates.month.(dr) == repmat([1],10)
+@test Dates.day.(dr) == repmat([1],10)
+@test Dates.hour.(dr) == repmat([0],10)
+@test Dates.minute.(dr) == repmat([0],10)
+@test Dates.second.(dr) == repmat([0],10)
+@test Dates.millisecond.(dr) == repmat([0],10)

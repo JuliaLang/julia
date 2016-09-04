@@ -97,12 +97,6 @@ function daysofweekinmonth(dt::TimeType)
            (d in THIRTYONE) ? 5 : 4
 end
 
-@vectorize_1arg TimeType dayname
-@vectorize_1arg TimeType dayabbr
-@vectorize_1arg TimeType dayofweek
-@vectorize_1arg TimeType dayofweekofmonth
-@vectorize_1arg TimeType daysofweekinmonth
-
 ### Months
 const January,February,March,April,May,June = 1,2,3,4,5,6
 const July,August,September,October,November,December = 7,8,9,10,11,12
@@ -139,10 +133,6 @@ Returns the number of days in the month of `dt`. Value will be 28, 29, 30, or 31
 """
 daysinmonth(dt::TimeType) = ((y,m) = yearmonth(dt); return daysinmonth(y,m))
 
-@vectorize_1arg TimeType monthname
-@vectorize_1arg TimeType monthabbr
-@vectorize_1arg TimeType daysinmonth
-
 ### Years
 """
     isleapyear(dt::TimeType) -> Bool
@@ -159,10 +149,6 @@ Returns the day of the year for `dt` with January 1st being day 1.
 dayofyear(dt::TimeType) = ((y,m,d) = yearmonthday(dt); return dayofyear(y,m,d))
 
 daysinyear(dt::TimeType) = 365 + isleapyear(dt)
-
-@vectorize_1arg TimeType isleapyear
-@vectorize_1arg TimeType dayofyear
-@vectorize_1arg TimeType daysinyear
 
 ### Quarters
 """
@@ -182,6 +168,3 @@ const QUARTERDAYS = [0,90,181,273]
 Returns the day of the current quarter of `dt`. Range of value is 1:92.
 """
 dayofquarter(dt::TimeType) = dayofyear(dt) - QUARTERDAYS[quarterofyear(dt)]
-
-@vectorize_1arg TimeType quarterofyear
-@vectorize_1arg TimeType dayofquarter

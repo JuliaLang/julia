@@ -218,14 +218,16 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
 """
     max(x, y, ...)
 
-Return the maximum of the arguments. Operates elementwise over arrays.
+Return the maximum of the arguments. See also the [`maximum`](:func:`maximum`) function
+to take the maximum element from a collection.
 """
 max(x,y) = ifelse(y < x, x, y)
 
 """
     min(x, y, ...)
 
-Return the minimum of the arguments. Operates elementwise over arrays.
+Return the minimum of the arguments. See also the [`minimum`](:func:`minimum`) function
+to take the minimum element from a collection.
 """
 min(x,y) = ifelse(y < x, y, x)
 
@@ -912,25 +914,6 @@ for f in (:+, :-)
         $f(r1::Union{FloatRange, OrdinalRange, LinSpace},
            r2::Union{FloatRange, OrdinalRange, LinSpace}) =
                $f(promote(r1, r2)...)
-    end
-end
-
-# vectorization
-
-macro vectorize_1arg(S,f)
-    S = esc(S); f = esc(f); T = esc(:T)
-    quote
-        ($f){$T<:$S}(x::AbstractArray{$T}) = [ ($f)(elem) for elem in x ]
-    end
-end
-
-macro vectorize_2arg(S,f)
-    S = esc(S); f = esc(f); T1 = esc(:T1); T2 = esc(:T2)
-    quote
-        ($f){$T1<:$S, $T2<:$S}(x::($T1), y::AbstractArray{$T2}) = [ ($f)(x, z) for z in y ]
-        ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::($T2)) = [ ($f)(z, y) for z in x ]
-        ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::AbstractArray{$T2}) =
-            [ ($f)(xx, yy) for (xx, yy) in zip(x, y) ]
     end
 end
 

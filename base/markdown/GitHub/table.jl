@@ -78,7 +78,7 @@ end
 mapmap(f, xss) = map(xs->map(f, xs), xss)
 
 colwidths(rows; len = length, min = 0) =
-    reduce(max, [min; convert(Vector{Vector{Int}}, mapmap(len, rows))])
+    reduce((x,y) -> max.(x,y), [min; convert(Vector{Vector{Int}}, mapmap(len, rows))])
 
 padding(width, twidth, a) =
     a == :l ? (0, twidth - width) :

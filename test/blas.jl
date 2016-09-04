@@ -69,7 +69,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
         #iamax
         if elty <: Real
             x = convert(Vector{elty}, randn(n))
-            @test BLAS.iamax(x) == indmax(abs(x))
+            @test BLAS.iamax(x) == indmax(abs.(x))
         else
             z = convert(Vector{elty}, complex(randn(n),randn(n)))
             @test BLAS.iamax(z) == indmax(map(x -> abs(real(x)) + abs(imag(x)), z))
@@ -103,10 +103,10 @@ for elty in [Float32, Float64, Complex64, Complex128]
         b = view(a,2:2:n,1)
         @test BLAS.nrm2(b) ≈ norm(b)
         if elty <: Real
-            @test BLAS.asum(b) ≈ sum(abs(b))
-            @test BLAS.iamax(b) ≈ indmax(abs(b))
+            @test BLAS.asum(b) ≈ sum(abs.(b))
+            @test BLAS.iamax(b) ≈ indmax(abs.(b))
         else
-            @test BLAS.asum(b) ≈ sum(abs(real(b))) + sum(abs(imag(b)))
+            @test BLAS.asum(b) ≈ sum(abs.(real(b))) + sum(abs.(imag(b)))
             @test BLAS.iamax(b) == indmax(map(x -> abs(real(x)) + abs(imag(x)), b))
         end
 

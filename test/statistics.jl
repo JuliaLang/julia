@@ -141,8 +141,8 @@ X = [2 3 1 -1; 7 4 5 -4]
 @test std((1,2,3); mean=0) ≈ sqrt(7.0)
 @test std((1,2,3); mean=0, corrected=false) ≈ sqrt(14.0/3)
 
-@test std([1 2 3 4 5; 6 7 8 9 10], 2) ≈ sqrt([2.5 2.5]')
-@test std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ sqrt([2.0 2.0]')
+@test std([1 2 3 4 5; 6 7 8 9 10], 2) ≈ sqrt.([2.5 2.5]')
+@test std([1 2 3 4 5; 6 7 8 9 10], 2; corrected=false) ≈ sqrt.([2.0 2.0]')
 
 A = Complex128[exp(i*im) for i in 1:10^4]
 @test varm(A,0.) ≈ sum(map(abs2,A))/(length(A)-1)

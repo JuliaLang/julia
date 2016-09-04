@@ -49,10 +49,10 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test transpose(T) == Tridiagonal(du, d, dl)
     @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
 
-    @test abs(T) == Tridiagonal(abs(dl),abs(d),abs(du))
+    @test abs.(T) == Tridiagonal(abs.(dl),abs.(d),abs.(du))
     @test real(T) == Tridiagonal(real(dl),real(d),real(du))
     @test imag(T) == Tridiagonal(imag(dl),imag(d),imag(du))
-    @test abs(Ts) == SymTridiagonal(abs(d),abs(dl))
+    @test abs.(Ts) == SymTridiagonal(abs.(d),abs.(dl))
     @test real(Ts) == SymTridiagonal(real(d),real(dl))
     @test imag(Ts) == SymTridiagonal(imag(d),imag(dl))
 
@@ -135,7 +135,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         @inferred eig(Ts, 1.0, 2.0)
         D, Vecs = eig(Fs)
         @test DT ≈ D
-        @test abs(VT'Vecs) ≈ eye(elty, n)
+        @test abs.(VT'Vecs) ≈ eye(elty, n)
         @test eigvecs(Ts) == eigvecs(Fs)
         #call to LAPACK.stein here
         Test.test_approx_eq_modphase(eigvecs(Ts,eigvals(Ts)),eigvecs(Fs))
