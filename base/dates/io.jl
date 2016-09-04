@@ -270,9 +270,9 @@ Construct a `Date` object by parsing a `dt` date string following the pattern gi
 Date(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = Date(dt,DateFormat(format,locale))
 
 """
-    Date(dt::AbstractString, df::DateFormat) -> Date
+    Date(dt::AbstractString, df::AbstractDateFormat) -> Date
 
-Parse a date from a date string `dt` using a `DateFormat` object `df`.
+Parse a date from a date string `dt` using format `df`.
 """
 Date(dt::AbstractString,df::DateFormat) = Date(parse(dt,df)...)
 Date(str::AbstractString) = Date(str,ISODateFormat)
