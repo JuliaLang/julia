@@ -582,6 +582,10 @@ end
 
 export @compat, @inline, @noinline
 
+if VERSION < v"0.4.0-dev+656"
+    include("nullable.jl")
+end
+
 if VERSION < v"0.4.0-dev+3864"
     function tryparse(T::Type{Float32}, s)
         r = Array(T,1)
