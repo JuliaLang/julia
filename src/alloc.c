@@ -233,10 +233,14 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st,i);
+    char *fld = (char*)v + offs;
     if (jl_field_isptr(st,i)) {
-        return *(jl_value_t**)((char*)v + offs) != NULL;
+        return *(jl_value_t**)fld != NULL;
     } else if (jl_field_hasptr(st, i)) {
-        return value_isdefined(jl_field_type(st, i), (char*)v + offs);
+        jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(st, i);
+        assert(ft->first_init_ptr >= 0);
+        char *first_ptr = fld + ft->first_init_ptr;
+        return *(jl_value_t**)first_ptr != NULL;
     }
     return 1;
 }
@@ -894,6 +898,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->haswildcard = 0;
     t->isleaftype = 1;
     t->boxed = 0;
+    t->first_init_ptr = -1;
     t->layout = NULL;
     return t;
 }
@@ -1025,9 +1030,12 @@ void jl_compute_field_offsets(jl_datatype_t *st)
            st == jl_simplevector_type ||
            nfields != 0);
 
+    int32_t first_init_ptr = -1; // offset in bytes or -1
+    int ptrfree = 1;
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
+        int32_t field_first_init_ptr = -1;
         if (jl_is_unboxed(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
             fsz = jl_datatype_size(ty);
             // Should never happen
@@ -1038,6 +1046,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             desc[i].hasptr = !((jl_datatype_t*)ty)->layout->pointerfree;
             if (((jl_datatype_t*)ty)->layout->haspadding)
                 haspadding = 1;
+            if (((jl_datatype_t*)ty)->first_init_ptr >= 0)
+                field_first_init_ptr = ((jl_datatype_t*)ty)->first_init_ptr;
         }
         else {
             fsz = sizeof(void*);
@@ -1046,6 +1056,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             al = fsz;
             desc[i].isptr = 1;
             desc[i].hasptr = 0;
+            if (i < st->ninitialized)
+                field_first_init_ptr = 0;
         }
         if (al != 0) {
             size_t alsz = LLT_ALIGN(sz, al);
@@ -1059,10 +1071,19 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         lastty = ty;
         desc[i].offset = sz;
         desc[i].size = fsz;
+        if (first_init_ptr < 0 && field_first_init_ptr >= 0)
+            first_init_ptr = sz + field_first_init_ptr;
         if (__unlikely(max_offset - sz < fsz))
             jl_throw(jl_overflow_exception);
+        if (desc[i].isptr | desc[i].hasptr)
+            ptrfree = 0;
         sz += fsz;
     }
+    st->first_init_ptr = first_init_ptr;
+    // if there are no pointer field that we know for sure are non null
+    // we can't represent #undef with this layout, so fall back to boxing
+    if (st->first_init_ptr < 0 && !ptrfree)
+        st->boxed = 1;
     if (homogeneous && lastty!=NULL && jl_is_tuple_type(st)) {
         // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
         unsigned al = jl_special_vector_alignment(nfields, lastty);
@@ -1124,6 +1145,7 @@ jl_datatype_t* jl_new_datatype_(jl_sym_t* name, jl_datatype_t *super, jl_svec_t 
     t->mutabl = mutabl;
     t->ninitialized = ninitialized;
     t->boxed = boxed;
+    t->first_init_ptr = -1;
     t->instance = NULL;
     t->struct_decl = NULL;
     t->ditype = NULL;

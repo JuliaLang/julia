@@ -382,6 +382,7 @@ typedef struct _jl_datatype_t {
     int8_t isleaftype;
     //
     int8_t boxed; // if true, we box instances of this even if they are immutable
+    int32_t first_init_ptr; // offset in bytes or -1
 } jl_datatype_t;
 
 typedef struct {
