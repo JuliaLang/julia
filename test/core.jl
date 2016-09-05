@@ -4430,6 +4430,27 @@ f17147(::Tuple) = 1
 f17147{N}(::Vararg{Tuple,N}) = 2
 @test f17147((), ()) == 2
 
+module TestUndefRefErrors14147
+
+using Base.Test
+# Test different kinds of UndefRefError
+call_fptr(p) = ccall(p, Int, ())
+return_int_function() = 100
+@test call_fptr(cfunction(return_int_function, Int, Tuple{})) == 100
+@test_throws UndefRefError call_fptr(C_NULL)
+
+type TypeWithUndefField
+    a
+    TypeWithUndefField() = new()
+end
+copy_undef_field(a, b) = (a.a = b.a)
+get_undef_field(a) = a.a
+@test_throws UndefRefError copy_undef_field(TypeWithUndefField(),
+                                            TypeWithUndefField())
+@test_throws UndefRefError get_undef_field(TypeWithUndefField())
+
+end
+
 # issue #17449, argument evaluation order
 @noinline f17449(x, y) = nothing
 @noinline function g17449(r)
