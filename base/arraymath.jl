@@ -479,6 +479,6 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
     end
 
     @eval function ($f){T}(v::AbstractVector{T})
-        return ($f!)(similar(v), v)
+        return ($f!)(similar(v, r_promote_type($op, T)), v)
     end
 end

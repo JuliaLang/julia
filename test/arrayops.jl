@@ -1693,6 +1693,8 @@ end
 @test_throws BoundsError cumsum!([0,0], 1:4)
 @test cumsum(Any[]) == Any[] && isa(cumsum(Any[]), Vector{Any})
 @test cumsum(Any[1, 2.3]) == [1, 3.3]
+@test cumsum([true,true,true]) == [1,2,3]
+@test cumsum(0x00:0xff)[end] === 0x00007f80
 
 #issue #18336
 @test cumsum([-0.0, -0.0])[1] === cumsum([-0.0, -0.0])[2] === -0.0
