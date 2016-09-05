@@ -1689,6 +1689,15 @@ end
 @test cumsum([1 2; 3 4], 2) == [1 3; 3 7]
 @test cumsum([1 2; 3 4], 3) == [1 2; 3 4]
 
+# issue #18363
+@test_throws BoundsError cumsum!([0,0], 1:4)
+@test cumsum(Any[]) == Any[] && isa(cumsum(Any[]), Vector{Any})
+@test cumsum(Any[1, 2.3]) == [1, 3.3]
+
+#issue #18336
+@test cumsum([-0.0, -0.0])[1] === cumsum([-0.0, -0.0])[2] === -0.0
+@test cumprod(-0.0im + (0:0))[1] === Complex(0.0, -0.0)
+
 module TestNLoops15895
 
 using Base.Cartesian
