@@ -198,4 +198,21 @@ end
 
 @test isempty(detect_ambiguities(Ambig17648))
 
+module Ambig8
+using Base: DimsInteger, Indices
+g18307{T<:Integer}(::Union{Indices,Dims}, I::AbstractVector{T}...) = 1
+g18307(::DimsInteger) = 2
+g18307(::DimsInteger, I::Integer...) = 3
+end
+try
+    # want this to be a test_throws MethodError, but currently it's not (see #18307)
+    Ambig8.g18307((1,))
+catch err
+    if isa(err, MethodError)
+        error("Test correctly returned a MethodError, please change to @test_throws MethodError")
+    else
+        rethrow(err)
+    end
+end
+
 nothing
