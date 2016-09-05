@@ -7,6 +7,11 @@ using Base.Meta
 """Get just the function part of a function declaration."""
 withincurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
+if VERSION < v"0.4.0-dev+2254"
+    immutable Val{T} end
+    export Val
+end
+
 if VERSION < v"0.4.0-dev+1419"
     export UInt, UInt8, UInt16, UInt32, UInt64, UInt128
     const UInt = Uint
@@ -431,6 +436,143 @@ end
 
 istopsymbol(ex, mod, sym) = ex in (sym, Expr(:(.), mod, Expr(:quote, sym)))
 
+if VERSION < v"0.5.0-dev+4002"
+    typealias Array0D{T} Array{T,0}
+    @inline broadcast_getindex(arg, idx) = arg[(idx - 1) % length(arg) + 1]
+    # Optimize for single element
+    @inline broadcast_getindex(arg::Number, idx) = arg
+    @inline broadcast_getindex(arg::Array0D, idx) = arg[1]
+
+    # If we know from syntax level that we don't need wrapping
+    @inline broadcast_getindex_naive(arg, idx) = arg[idx]
+    @inline broadcast_getindex_naive(arg::Number, idx) = arg
+    @inline broadcast_getindex_naive(arg::Array0D, idx) = arg[1]
+
+    # For vararg support
+    @inline getindex_vararg(idx) = ()
+    @inline getindex_vararg(idx, arg1) = (broadcast_getindex(arg1, idx),)
+    @inline getindex_vararg(idx, arg1, arg2) =
+        (broadcast_getindex(arg1, idx), broadcast_getindex(arg2, idx))
+    @inline getindex_vararg(idx, arg1, arg2, arg3, args...) =
+        (broadcast_getindex(arg1, idx), broadcast_getindex(arg2, idx),
+         broadcast_getindex(arg3, idx), getindex_vararg(idx, args...)...)
+
+    @inline getindex_naive_vararg(idx) = ()
+    @inline getindex_naive_vararg(idx, arg1) =
+        (broadcast_getindex_naive(arg1, idx),)
+    @inline getindex_naive_vararg(idx, arg1, arg2) =
+        (broadcast_getindex_naive(arg1, idx),
+         broadcast_getindex_naive(arg2, idx))
+    @inline getindex_naive_vararg(idx, arg1, arg2, arg3, args...) =
+        (broadcast_getindex_naive(arg1, idx),
+         broadcast_getindex_naive(arg2, idx),
+         broadcast_getindex_naive(arg3, idx),
+         getindex_naive_vararg(idx, args...)...)
+
+    # Decide if the result should be scalar or array
+    # `size() === ()` is not good enough since broadcasting on
+    # a scalar should return a scalar where as broadcasting on a 0-dim
+    # array should return a 0-dim array.
+    @inline should_return_array(::Val{true}, args...) = Val{true}()
+    @inline should_return_array(::Val{false}) = Val{false}()
+    @inline should_return_array(::Val{false}, arg1) = Val{false}()
+    @inline should_return_array(::Val{false}, arg1::AbstractArray) = Val{true}()
+    @inline should_return_array(::Val{false}, arg1::AbstractArray,
+                                arg2::AbstractArray) = Val{true}()
+    @inline should_return_array(::Val{false}, arg1,
+                                arg2::AbstractArray) = Val{true}()
+    @inline should_return_array(::Val{false}, arg1::AbstractArray,
+                                arg2) = Val{true}()
+    @inline should_return_array(::Val{false}, arg1, arg2) = Val{false}()
+    @inline should_return_array(::Val{false}, arg1, arg2, args...) =
+        should_return_array(should_return_array(Val{false}(), arg1, arg2),
+                            args...)
+
+    @inline broadcast_return(res1d, shp, ret_ary::Val{false}) = res1d[1]
+    @inline broadcast_return(res1d, shp, ret_ary::Val{true}) = reshape(res1d, shp)
+
+    @inline need_full_getindex(shp) = false
+    @inline need_full_getindex(shp, arg1::Number) = false
+    @inline need_full_getindex(shp, arg1::Array0D) = false
+    @inline need_full_getindex(shp, arg1) = shp != size(arg1)
+    @inline need_full_getindex(shp, arg1, arg2) =
+        need_full_getindex(shp, arg1) || need_full_getindex(shp, arg2)
+    @inline need_full_getindex(shp, arg1, arg2, arg3, args...) =
+        need_full_getindex(shp, arg1, arg2) || need_full_getindex(shp, arg3) ||
+        need_full_getindex(shp, args...)
+
+    function rewrite_broadcast(f, args)
+        nargs = length(args)
+        # This actually allows multiple splatting...,
+        # which is now allowed on master.
+        # The previous version that simply calls broadcast so removing that
+        # will be breaking. Oh, well....
+        is_vararg = Bool[isexpr(args[i], :...) for i in 1:nargs]
+        names = [gensym("broadcast") for i in 1:nargs]
+        new_args = [is_vararg[i] ? Expr(:..., names[i]) : names[i]
+                    for i in 1:nargs]
+        # Optimize for common case where we know the index doesn't need
+        # any wrapping
+        naive_getidx_for = function (i, idxvar)
+            if is_vararg[i]
+                Expr(:..., :($Compat.getindex_naive_vararg($idxvar,
+                                                           $(names[i])...)))
+            else
+                :($Compat.broadcast_getindex_naive($(names[i]), $idxvar))
+            end
+        end
+        always_naive = nargs == 1 && !is_vararg[1]
+        getidx_for = if always_naive
+            naive_getidx_for
+        else
+            function (i, idxvar)
+                if is_vararg[i]
+                    Expr(:..., :($Compat.getindex_vararg($idxvar,
+                                                         $(names[i])...)))
+                else
+                    :($Compat.broadcast_getindex($(names[i]), $idxvar))
+                end
+            end
+        end
+        @gensym allidx
+        @gensym newshape
+        @gensym res1d
+        @gensym idx
+        @gensym ret_ary
+
+        res1d_expr = quote
+            $res1d = [$f($([naive_getidx_for(i, idx) for i in 1:nargs]...))
+                      for $idx in $allidx]
+        end
+        if !always_naive
+            res1d_expr = quote
+                if $Compat.need_full_getindex($newshape, $(new_args...))
+                    $res1d = [$f($([getidx_for(i, idx) for i in 1:nargs]...))
+                              for $idx in $allidx]
+                else
+                    $res1d_expr
+                end
+            end
+        end
+
+        return quote
+            # The `local` makes sure type inference can infer the type even
+            # in global scope as long as the input is type stable
+            local $(names...)
+            $([:($(names[i]) = $(is_vararg[i] ? args[i].args[1] : args[i]))
+               for i in 1:nargs]...)
+            local $newshape = $(Base.Broadcast).broadcast_shape($(new_args...))
+            # `eachindex` is not generic enough
+            local $allidx = 1:prod($newshape)
+            local $ret_ary = $Compat.should_return_array(Val{false}(),
+                                                         $(new_args...))
+            local $res1d
+            $res1d_expr
+            $Compat.broadcast_return($res1d, $newshape, $ret_ary)
+        end
+    end
+end
+
 function _compat(ex::Expr)
     if ex.head === :call
         f = ex.args[1]
@@ -549,11 +691,12 @@ function _compat(ex::Expr)
             return Expr(ex.head, _compat(ex.args[1]), QuoteNode(ex.args[2].args[1].args[1]))
         elseif isexpr(ex.args[2], :tuple)
             # f.(arg1, arg2...) -> broadcast(f, arg1, arg2...)
-            return Expr(:call, :broadcast, _compat(ex.args[1]), map(_compat, ex.args[2].args)...)
+            return rewrite_broadcast(_compat(ex.args[1]),
+                                     map(_compat, ex.args[2].args))
         elseif !isa(ex.args[2], QuoteNode) &&
                !(isexpr(ex.args[2], :quote) && isa(ex.args[2].args[1], Symbol))
             # f.(arg) -> broadcast(f, arg)
-            return Expr(:call, :broadcast, _compat(ex.args[1]), _compat(ex.args[2]))
+            return rewrite_broadcast(_compat(ex.args[1]), [_compat(ex.args[2])])
         end
     elseif ex.head === :import
         if VERSION < v"0.5.0-dev+4340" && length(ex.args) == 2 && ex.args[1] === :Base && ex.args[2] === :show
@@ -666,11 +809,6 @@ if VERSION < v"0.4.0-dev+4502"
     keytype{K,V}(::Associative{K,V}) = K
     valtype{K,V}(::Associative{K,V}) = V
     export keytype, valtype
-end
-
-if VERSION < v"0.4.0-dev+2254"
-    immutable Val{T} end
-    export Val
 end
 
 if VERSION < v"0.4.0-dev+2840"
