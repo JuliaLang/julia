@@ -258,7 +258,7 @@ the [`DateFormat`](@ref) object. Similar to
 similarly formatted date strings with a pre-created `DateFormat` object.
 """
 DateTime(dt::AbstractString,df::DateFormat) = DateTime(parse(dt,df)...)
-DateTime(str::AbstractString) = DateTime(str,ISODateTimeFormat)
+DateTime(dt::AbstractString) = DateTime(dt,ISODateTimeFormat)
 
 """
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
