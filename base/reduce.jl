@@ -33,6 +33,12 @@ r_promote(::typeof(min), x::WidenReduceResult) = r_promote(scalarmin, x)
 r_promote(::typeof(max), x) = r_promote(scalarmax, x)
 r_promote(::typeof(min), x) = r_promote(scalarmin, x)
 
+# like r_promote but acting on types T rather than on values x
+r_promote_type(op, T::Type) = T
+r_promote_type{T<:WidenReduceResult}(::typeof(+), ::Type{T}) = widen(T)
+r_promote_type{T<:WidenReduceResult}(::typeof(*), ::Type{T}) = widen(T)
+r_promote_type{T<:Number}(::typeof(+), ::Type{T}) = typeof(zero(T)+zero(T))
+r_promote_type{T<:Number}(::typeof(*), ::Type{T}) = typeof(one(T)*one(T))
 
 ## foldl && mapfoldl
 

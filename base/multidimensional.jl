@@ -527,7 +527,7 @@ julia> cumsum(a,2)
  4  9  15
 ```
 """
-cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A), A, axis)
+cumsum{T}(A::AbstractArray{T}, axis::Integer=1) =  cumsum!(similar(A, Base.r_promote_type(+, T)), A, axis)
 cumsum!(B, A::AbstractArray) = cumsum!(B, A, 1)
 """
     cumprod(A, dim=1)
