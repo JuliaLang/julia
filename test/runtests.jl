@@ -1115,7 +1115,7 @@ for (Fun, func) in [(:AndFun,              :&),
                     (:DotMulFun,           :.*),
                     (:RDivFun,             :/),
                     (:DotRDivFun,          :./),
-                    (:LDivFun,             :\),
+                    (:LDivFun,             :\ ),
                     (:IDivFun,             :div),
                     (:DotIDivFun,          @compat(Symbol(".÷"))),
                     (:ModFun,              :mod),
@@ -1383,3 +1383,20 @@ let filename = tempname()
 end
 
 @test @__DIR__() == dirname(@__FILE__)
+
+# PR #17302
+# To be removed when 0.5/0.6 support is dropped.
+f17302(a::Number) = a
+f17302(a::Number, b::Number) = a + b
+Compat.@dep_vectorize_1arg Real f17302
+Compat.@dep_vectorize_2arg Real f17302
+@test_throws MethodError f17302([1im])
+@test_throws MethodError f17302([1im], [1im])
+mktemp() do fname, f
+    redirect_stderr(f) do
+        @test f17302([1.0]) == [1.0]
+        @test f17302(1.0, [1]) == [2.0]
+        @test f17302([1.0], 1) == [2.0]
+        @test f17302([1.0], [1]) == [2.0]
+    end
+end
