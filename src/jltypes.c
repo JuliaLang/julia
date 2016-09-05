@@ -1242,6 +1242,7 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
         return ub;
     }
     jl_value_t *res = (jl_value_t*)jl_new_typevar(underscore_sym, lb, ub);
+    ((jl_tvar_t*)res)->bound = a->bound & b->bound;
     JL_GC_POP();
     return res;
 }
