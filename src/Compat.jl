@@ -793,6 +793,14 @@ if VERSION < v"0.4.0-dev+6578"
     export ≈, ≉
 end
 
+# Use as Compat.Linspace to get improved linspace in both 0.3 and 0.4
+if VERSION < v"0.4.0-dev+6110"
+    include("linspace.jl")
+    const linspace = LazyLinSpace.linspace
+else
+    const linspace = Base.linspace
+end
+
 if VERSION < v"0.4.0-dev+436"
     export UDPSocket
     const UDPSocket = UdpSocket
