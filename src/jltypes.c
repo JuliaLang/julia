@@ -3843,7 +3843,7 @@ void jl_init_types(void)
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(15,
+                        jl_svec(16,
                                 jl_symbol("name"),
                                 jl_symbol("module"),
                                 jl_symbol("file"),
@@ -3852,6 +3852,7 @@ void jl_init_types(void)
                                 jl_symbol("tvars"),
                                 jl_symbol("ambig"),
                                 jl_symbol("specializations"),
+                                jl_symbol("tfunc"),
                                 jl_symbol("lambda_template"),
                                 jl_symbol("roots"),
                                 jl_symbol("invokes"),
@@ -3859,7 +3860,7 @@ void jl_init_types(void)
                                 jl_symbol("isstaged"),
                                 jl_symbol("needs_sparam_vals_ducttape"),
                                 jl_symbol("")),
-                        jl_svec(15,
+                        jl_svec(16,
                                 jl_sym_type,
                                 jl_module_type,
                                 jl_sym_type,
@@ -3867,6 +3868,7 @@ void jl_init_types(void)
                                 jl_type_type,
                                 jl_any_type,
                                 jl_any_type, // Union{Array, Void}
+                                jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_array_any_type,
@@ -3932,7 +3934,7 @@ void jl_init_types(void)
                                 jl_any_type, jl_any_type),
                         0, 1, 7);
     jl_svecset(jl_lambda_info_type->types, 9, jl_lambda_info_type);
-    jl_svecset(jl_method_type->types, 8, jl_lambda_info_type);
+    jl_svecset(jl_method_type->types, 9, jl_lambda_info_type);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),

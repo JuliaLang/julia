@@ -118,10 +118,11 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 /// ----- Insertion logic for special entries ----- ///
 
 // get or create the LambdaInfo for a specialization
-JL_DLLEXPORT jl_lambda_info_t *jl_specializations_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams)
+static jl_lambda_info_t *typemap_get_linfo_(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams,
+                                            union jl_typemap_t *ptm)
 {
     JL_LOCK(&m->writelock);
-    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->specializations, type, NULL, 1, /*subtype*/0, /*offs*/0);
+    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(*ptm, type, NULL, 1, /*subtype*/0, /*offs*/0);
     if (sf && jl_is_lambda_info(sf->func.value) && ((jl_lambda_info_t*)sf->func.value)->code != jl_nothing) {
         JL_UNLOCK(&m->writelock);
         return (jl_lambda_info_t*)sf->func.value;
@@ -129,15 +130,41 @@ JL_DLLEXPORT jl_lambda_info_t *jl_specializations_get_linfo(jl_method_t *m, jl_t
     jl_lambda_info_t *li = jl_get_specialized(m, type, sparams, 1);
     JL_GC_PUSH1(&li);
     // TODO: fuse lookup and insert steps
-    jl_typemap_insert(&m->specializations, (jl_value_t*)m, type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &tfunc_cache, NULL);
+    jl_typemap_insert(ptm, (jl_value_t*)m, type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &tfunc_cache, NULL);
     JL_UNLOCK(&m->writelock);
     JL_GC_POP();
     return li;
 }
 
+JL_DLLEXPORT jl_lambda_info_t *jl_specializations_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams)
+{
+    return typemap_get_linfo_(m, type, sparams, &m->specializations);
+}
+
+JL_DLLEXPORT jl_lambda_info_t *jl_tfunc_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams)
+{
+    return typemap_get_linfo_(m, type, sparams, &m->tfunc);
+}
+
+JL_DLLEXPORT void jl_tfunc_clear_linfo(jl_method_t *m, jl_tupletype_t *type)
+{
+    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->tfunc, type, NULL, 1, /*subtype*/0, /*offs*/0);
+    if (sf && jl_is_lambda_info(sf->func.value)) {
+        sf->func.value = ((jl_lambda_info_t*)sf->func.value)->rettype;
+    }
+}
+
 JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_tupletype_t *type)
 {
     jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->specializations, type, NULL, 2, /*subtype*/0, /*offs*/0);
+    if (!sf)
+        return jl_nothing;
+    return sf->func.value;
+}
+
+JL_DLLEXPORT jl_value_t *jl_tfunc_lookup(jl_method_t *m, jl_tupletype_t *type)
+{
+    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->tfunc, type, NULL, 2, /*subtype*/0, /*offs*/0);
     if (!sf)
         return jl_nothing;
     return sf->func.value;

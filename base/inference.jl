@@ -1450,29 +1450,43 @@ coverage_enabled() = (JLOptions().code_coverage != 0)
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool, optimize::Bool, cached::Bool, caller)
     local code = nothing
     local frame = nothing
+    local really_dont_need_tree = false
     if isa(caller, LambdaInfo)
         code = caller
     elseif cached
         # check cached specializations
         # for an existing result stored there
-        if !is(method.specializations, nothing)
+        if method.specializations !== nothing
             code = ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
-            if isa(code, Void)
-                # something completely new
-            elseif isa(code, LambdaInfo)
-                # something existing
-                if code.inferred && !(needtree && code.code === nothing)
+        end
+        if code === nothing && !needtree && ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any),
+                                                  atypes, method.sig, method)==0 && !isleaftype(atypes)
+            really_dont_need_tree = true
+            retty = ccall(:jl_tfunc_lookup, Any, (Any, Any), method, atypes)
+            if isa(retty, Type)
+                return (nothing, retty, true)
+            elseif isa(retty, LambdaInfo)
+                code = retty
+                if code.inferred
                     return (code, code.rettype, true)
                 end
-            else
-                # sometimes just a return type is stored here. if a full AST
-                # is not needed, we can return it.
-                typeassert(code, Type)
-                if !needtree
-                    return (nothing, code, true)
-                end
-                code = nothing
             end
+        end
+        if code === nothing
+            # something completely new
+        elseif isa(code, LambdaInfo)
+            # something existing
+            if code.inferred && !(needtree && code.code === nothing)
+                return (code, code.rettype, true)
+            end
+        else
+            # sometimes just a return type is stored here. if a full AST
+            # is not needed, we can return it.
+            typeassert(code, Type)
+            if !needtree
+                return (nothing, code, true)
+            end
+            code = nothing
         end
     end
 
@@ -1527,6 +1541,8 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         catch
             return (nothing, Any, false)
         end
+    elseif really_dont_need_tree #!needtree && !isleaftype(atypes)
+        linfo = ccall(:jl_tfunc_get_linfo, Ref{LambdaInfo}, (Any, Any, Any), method, atypes, sparams)
     else
         linfo = specialize_method(method, atypes, sparams, cached)
     end
@@ -1975,9 +1991,11 @@ function finish(me::InferenceState)
             compressedtree = ccall(:jl_compress_ast, Any, (Any,Any), me.linfo, me.linfo.code)
             me.linfo.code = compressedtree
         end
-    else
-        ccall(:jl_set_lambda_code_null, Void, (Any,), me.linfo)
-        me.linfo.inlineable = false
+    elseif !isleaftype(me.linfo.specTypes)
+        ccall(:jl_tfunc_clear_linfo, Void, (Any, Any), me.linfo.def, me.linfo.specTypes)
+    #else
+    #    ccall(:jl_set_lambda_code_null, Void, (Any,), me.linfo)
+    #    me.linfo.inlineable = false
     end
 
     me.linfo.inferred = true

@@ -213,6 +213,8 @@ typedef struct _jl_method_t {
 
     // table of all argument types for which we've inferred or compiled this code
     union jl_typemap_t specializations;
+    // table mapping argument types to return types, for which we don't have code
+    union jl_typemap_t tfunc;
 
     // the AST template (or, for isstaged, code for the generator)
     struct _jl_lambda_info_t *lambda_template;

@@ -614,6 +614,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     jl_method_t *m =
         (jl_method_t*)jl_gc_alloc(ptls, sizeof(jl_method_t), jl_method_type);
     m->specializations.unknown = jl_nothing;
+    m->tfunc.unknown = jl_nothing;
     m->sig = NULL;
     m->tvars = NULL;
     m->ambig = jl_nothing;
