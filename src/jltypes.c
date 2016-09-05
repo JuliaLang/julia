@@ -2298,6 +2298,12 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             jl_gc_wb(ndt, ndt->instance);
         }
     }
+
+    if (istuple)
+        ndt->ninitialized = ntp;
+    else
+        ndt->ninitialized = dt->ninitialized;
+
     if (ftypes == NULL || dt->super == NULL) {
         // in the process of creating this type definition:
         // need to instantiate the super and types fields later
@@ -2324,10 +2330,6 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             assert(ndt->name->names == jl_emptysvec);
         }
     }
-    if (istuple)
-        ndt->ninitialized = ntp;
-    else
-        ndt->ninitialized = dt->ninitialized;
 
     if (cacheable) {
         jl_cache_type_(ndt);
