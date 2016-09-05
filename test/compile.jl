@@ -16,6 +16,10 @@ function redirected_stderr(expected)
     return t
 end
 
+# this environment variable would affect some error messages being tested below
+# so we disable it for the tests below
+withenv( "JULIA_DEBUG_LOADING" => nothing ) do
+
 olderr = STDERR
 dir = mktempdir()
 dir2 = mktempdir()
@@ -158,7 +162,7 @@ try
           end
           """)
 
-    t = redirected_stderr("ERROR: LoadError: __precompile__(false) is not allowed in files that are being precompiled\n in __precompile__")
+    t = redirected_stderr("ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\n in __precompile__")
     try
         Base.compilecache("Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
@@ -225,11 +229,7 @@ try
     @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
 
-    t = redirected_stderr("""
-                          WARNING: Deserialization checks failed while attempting to load cache from $(joinpath(dir2, "FooBar1.ji")).
-                          WARNING: Module FooBar uuid did not match cache file.
-                          WARNING: replacing module FooBar1.
-                          """)
+    t = redirected_stderr("WARNING: replacing module FooBar1.")
     try
         reload("FooBar1")
     finally
@@ -331,3 +331,5 @@ let module_name = string("a",randstring())
     deleteat!(LOAD_PATH,1)
     rm(file_name)
 end
+
+end # !withenv
