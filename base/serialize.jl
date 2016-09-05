@@ -213,7 +213,7 @@ function serialize(s::AbstractSerializer, a::Array)
         serialize_array_data(s.io, a)
     else
         for i in eachindex(a)
-            if isdefined(a, i)
+            if isassigned(a, i)
                 serialize(s, a[i])
             else
                 writetag(s.io, UNDEFREF_TAG)

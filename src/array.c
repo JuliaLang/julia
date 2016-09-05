@@ -491,6 +491,14 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 int jl_array_isdefined(jl_value_t **args0, int nargs)
 {
     assert(jl_is_array(args0[0]));
+    jl_value_t **depwarn_args;
+    JL_GC_PUSHARGS(depwarn_args, 3);
+    depwarn_args[0] = jl_get_global(jl_base_module, jl_symbol("depwarn"));
+    depwarn_args[1] = jl_cstr_to_string("isdefined(a::Array, i::Int) is deprecated, use isassigned(a, i) instead");
+    depwarn_args[2] = (jl_value_t*) jl_symbol("isdefined");
+    jl_apply(depwarn_args, 3);
+    JL_GC_POP();
+
     jl_array_t *a = (jl_array_t*)args0[0];
     jl_value_t **args = &args0[1];
     size_t nidxs = nargs-1;
