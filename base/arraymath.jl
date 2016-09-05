@@ -446,9 +446,6 @@ ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
 transpose(x::AbstractVector) = [ transpose(v) for i=of_indices(x, OneTo(1)), v in x ]
 ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(v) for i=of_indices(x, OneTo(1)), v in x ]
 
-_cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
-_cumsum_type(v) = typeof(v[1]+v[1])
-
 for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
                        (:cumprod, :cumprod!, :cumprod_pairwise!, :*) )
     # in-place cumsum of c = s+v[range(i1,n)], using pairwise summation
@@ -472,12 +469,16 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
     @eval function ($f!)(result::AbstractVector, v::AbstractVector)
         n = length(v)
         if n == 0; return result; end
-        ($fp)(v, result, $(op==:+ ? :(zero(first(v))) : :(one(first(v)))), first(indices(v,1)), n)
+        li = linearindices(v)
+        li != linearindices(result) && throw(BoundsError())
+        i1 = first(li)
+        @inbounds result[i1] = v1 = v[i1]
+        n == 1 && return result
+        ($fp)(v, result, v1, i1+1, n-1)
         return result
     end
 
-    @eval function ($f)(v::AbstractVector)
-        c = $(op===:+ ? (:(similar(v,_cumsum_type(v)))) : (:(similar(v))))
-        return ($f!)(c, v)
+    @eval function ($f){T}(v::AbstractVector{T})
+        return ($f!)(similar(v), v)
     end
 end
