@@ -595,6 +595,8 @@ show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 
 =={T<:Range}(r::T, s::T) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 ==(r::OrdinalRange, s::OrdinalRange) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+==(r::AbstractUnitRange, s::AbstractUnitRange) = (first(r) == first(s)) & (last(r) == last(s))
+==(r::OneTo, s::OneTo) = last(r) == last(s)
 =={T<:LinSpace}(r::T, s::T) = (first(r) == first(s)) & (length(r) == length(s)) & (last(r) == last(s))
 
 function ==(r::Range, s::Range)
