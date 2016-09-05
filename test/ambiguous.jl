@@ -186,4 +186,17 @@ immutable T end
 end
 @test length(detect_ambiguities(Ambig7)) == 1
 
+module Ambig17648
+immutable MyArray{T,N} <: AbstractArray{T,N}
+    data::Array{T,N}
+end
+
+foo{T,N}(::Type{Array{T,N}}, A::MyArray{T,N}) = A.data
+foo{T<:AbstractFloat,N}(::Type{Array{T,N}}, A::MyArray{T,N}) = A.data
+foo{S<:AbstractFloat,N,T<:AbstractFloat}(::Type{Array{S,N}}, A::AbstractArray{T,N}) = copy!(Array{S}(size(A)), A)
+foo{S<:AbstractFloat,N,T<:AbstractFloat}(::Type{Array{S,N}}, A::MyArray{T,N}) = copy!(Array{S}(size(A)), A.data)
+end
+
+@test isempty(detect_ambiguities(Ambig17648))
+
 nothing
