@@ -23,6 +23,7 @@ macro _propagate_inbounds_meta()
     Expr(:meta, :inline, :propagate_inbounds)
 end
 
+convert(::Type{Any}, x::ANY) = x
 convert{T}(::Type{T}, x::T) = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
