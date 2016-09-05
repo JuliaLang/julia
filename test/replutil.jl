@@ -257,7 +257,7 @@ immutable TypeWithIntParam{T <: Integer} end
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test contains(err_str, "Try sqrt(complex(x)).")
-    err_str = @except_strbt 1^(-1) DomainError
+    err_str = @except_strbt 2^(-1) DomainError
     @test contains(err_str, "Cannot raise an integer x to a negative power -n")
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
