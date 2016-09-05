@@ -66,7 +66,7 @@ const SLOT_RULE = SlotRule(Array{Type}(256))
 
 getindex(collection::SlotRule, key::Char) = collection.rules[Int(key)]
 setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(key)] = value
-keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el) && c.rules[el] != Void, eachindex(c.rules)))
+keys(c::SlotRule) = map(Char, filter(el -> isassigned(c.rules, el) && c.rules[el] != Void, eachindex(c.rules)))
 
 SLOT_RULE['y'] = Year
 SLOT_RULE['Y'] = Year

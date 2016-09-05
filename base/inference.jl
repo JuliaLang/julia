@@ -694,7 +694,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
     end
     if isa(f, IntrinsicFunction)
         iidx = Int(reinterpret(Int32, f::IntrinsicFunction))+1
-        if !isdefined(t_ifunc, iidx)
+        if !isassigned(t_ifunc, iidx)
             # unknown/unhandled intrinsic (most fall in this category since most return an unboxed value)
             return Any
         end
