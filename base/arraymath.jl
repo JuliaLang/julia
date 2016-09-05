@@ -467,10 +467,10 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
     end
 
     @eval function ($f!)(result::AbstractVector, v::AbstractVector)
-        n = length(v)
-        if n == 0; return result; end
         li = linearindices(v)
         li != linearindices(result) && throw(BoundsError())
+        n = length(li)
+        if n == 0; return result; end
         i1 = first(li)
         @inbounds result[i1] = v1 = v[i1]
         n == 1 && return result
