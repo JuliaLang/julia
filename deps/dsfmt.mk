@@ -36,7 +36,8 @@ endif
 	echo 1 > $@
 
 define DSFMT_INSTALL
-	mkdir -p $2/$$(build_includedir) $2/$$(build_libdir)
+	mkdir -p $2/$$(build_includedir)
+	mkdir -p $2/$$(build_shlibdir)
 	cp $1/dSFMT.h $2/$$(build_includedir)
 	cp $1/libdSFMT.$$(SHLIB_EXT) $2/$$(build_shlibdir)
 endef
