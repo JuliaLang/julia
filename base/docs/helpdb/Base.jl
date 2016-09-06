@@ -4966,7 +4966,7 @@ Sys.get_process_title
 """
     readcsv(source, [T::Type]; options...)
 
-Equivalent to `readdlm` with `delim` set to comma.
+Equivalent to `readdlm` with `delim` set to comma, and type optionally defined by `T`.
 """
 readcsv
 
