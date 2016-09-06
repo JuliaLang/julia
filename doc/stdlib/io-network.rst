@@ -654,7 +654,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``readdlm`` with ``delim`` set to comma.
+   Equivalent to ``readdlm`` with ``delim`` set to comma, and type optionally defined by ``T``\ .
 
 .. function:: writecsv(filename, A; opts)
 
