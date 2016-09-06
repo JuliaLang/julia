@@ -2365,15 +2365,6 @@ in the requested `mime` format and simply returns `x`.
 reprmime
 
 """
-    @__FILE__ -> AbstractString
-
-`@__FILE__` expands to a string with the absolute file path of the file containing the
-macro. Returns `nothing` if run from a REPL or an empty string if evaluated by
-`julia -e <expr>`. Alternatively see [`PROGRAM_FILE`](:data:`PROGRAM_FILE`).
-"""
-:@__FILE__
-
-"""
     !(x)
 
 Boolean not.

@@ -11,6 +11,9 @@ thefname = "the fname!//\\&\1*"
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
+@test isdir(@__DIR__)
+@test @__DIR__() == dirname(@__FILE__)
+
 # Issue #5789 and PR #13542:
 let true_filename = "cAsEtEsT.jl", lowered_filename="casetest.jl"
     touch(true_filename)
