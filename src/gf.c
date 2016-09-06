@@ -31,11 +31,10 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_lambda_info_t *meth, jl_value_t **args, ui
 
 /// ----- Handling for Julia callbacks ----- ///
 
-int in_pure_callback;
-
 JL_DLLEXPORT int8_t jl_is_in_pure_context(void)
 {
-    return in_pure_callback;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return ptls->in_pure_callback;
 }
 
 JL_DLLEXPORT void jl_trace_method(jl_method_t *m)
@@ -83,14 +82,14 @@ JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tr
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    int last_in = in_pure_callback;
+    int last_in = ptls->in_pure_callback;
     JL_TRY {
-        in_pure_callback = 1;
+        ptls->in_pure_callback = 1;
         callback(tracee);
-        in_pure_callback = last_in;
+        ptls->in_pure_callback = last_in;
     }
     JL_CATCH {
-        in_pure_callback = last_in;
+        ptls->in_pure_callback = last_in;
         jl_printf(JL_STDERR, "WARNING: tracer callback function threw an error:\n");
         jl_static_show(JL_STDERR, ptls->exception_in_transit);
         jl_printf(JL_STDERR, "\n");

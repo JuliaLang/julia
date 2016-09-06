@@ -400,8 +400,8 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     }
     if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
-    if (in_pure_callback)
-        jl_error("task switch not allowed from inside staged function");
+    if (ptls->in_pure_callback)
+        jl_error("task switch not allowed from inside staged nor pure functions");
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
     ptls->task_arg_in_transit = arg;
