@@ -648,4 +648,3 @@ Language tooling improvements
 [#17546]: https://github.com/JuliaLang/julia/issues/17546
 [#17668]: https://github.com/JuliaLang/julia/issues/17668
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
-[#18364]: https://github.com/JuliaLang/julia/issues/18364
