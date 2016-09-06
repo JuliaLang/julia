@@ -6,11 +6,6 @@ else ifeq ($(USE_SYSTEM_LAPACK), 0)
 $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured: | $(build_prefix)/manifest/lapack
 endif
 
-ifneq ($(PATCHELF),patchelf)
-# this is actually required by the stage-arpack target, but there's no easy way to hook into that
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled: | $(build_prefix)/manifest/patchelf
-endif
-
 ARPACK_FFLAGS := $(USE_BLAS_FFLAGS)
 ARPACK_CFLAGS :=
 
@@ -81,11 +76,6 @@ define ARPACK_INSTALL
 	$(call MAKE_INSTALL,$1,$2,$3)
 ifeq ($(OS), WINNT)
 	mv $2/$$(build_shlibdir)/libarpack-2.dll $2/$$(build_shlibdir)/libarpack.$$(SHLIB_EXT)
-endif
-ifeq ($(OS), Linux)
-	for filename in $2/$$(build_shlibdir)/libarpack.so* ; do \
-		[ -L $$$$filename ] || $$(PATCHELF_BIN) --set-rpath '$$$$ORIGIN' $$$$filename ;\
-	done
 endif
 endef
 
