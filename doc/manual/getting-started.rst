@@ -137,7 +137,8 @@ those available for the ``perl`` and ``ruby`` programs:
 
      --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation
      -C, --cpu-target <target> Limit usage of cpu features up to <target>
-     -O, --optimize={0,1,2,3}  Set the optimization level (default 2 if unspecified or 3 if specified as -O)
+     -O, --optimize={0,1,2,3}  Set the optimization level (default is 2 if unspecified or 3 if specified as -O)
+     -g, -g <level>            Enable / Set the level of debug info generation (default is 1 if unspecified or 2 if specified as -g)
      --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
      --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
      --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)

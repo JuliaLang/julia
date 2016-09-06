@@ -68,7 +68,7 @@ Print help message
 Start up with the given system image file
 
 .TP
--precompiled={yes|no}
+--precompiled={yes|no}
 Use precompiled code from system image if available
 
 .TP
@@ -120,16 +120,28 @@ Enable or disable color text
 Load or save history
 
 .TP
- --compile={yes|no|all}
+--compile={yes|no|all}
 Enable or disable compiler, or request exhaustive compilation
 
 .TP
--C, --cpu-target <target>
+-C, --cpu-target=<target>
 Limit usage of cpu features up to <target>
 
 .TP
 -O, --optimize
 Run time-intensive code optimizations
+
+.TP
+-O <n>, --optimize=<n>
+Set the optimization level to <n>
+
+.TP
+-g
+Enable generation of full debug info
+
+.TP
+-g <n>
+Set the level of debug info generation to <n>
 
 .TP
 --inline={yes|no}
@@ -149,19 +161,19 @@ or adhere to declarations in source code
 Enable or disable syntax and method deprecation warnings ('error' turns warnings into errors)
 
 .TP
- --output-o name
+--output-o <name>
 Generate an object file (including system image data)
 
 .TP
---output-ji name
+--output-ji <name>
 Generate a system image data file (.ji)
 
 .TP
---output-bc name
+--output-bc <name>
 Generate LLVM bitcode (.bc)
 
 .TP
- --output-incremental=no
+--output-incremental={yes|no}
 Generate an incremental output file (rather than complete)
 
 .TP
