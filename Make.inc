@@ -523,7 +523,7 @@ LDFLAGS += $(SANITIZE_LDFLAGS)
 #DEPS_CXXFLAGS += $(SANITIZE_OPTS)
 endif
 
-TAR=`which gtar 2>/dev/null || which tar 2>/dev/null`
+TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
 TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
@@ -1004,9 +1004,8 @@ endif
 
 # ATLAS
 
-# ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
-# or installed to usr/lib/libatlas from some another source (built as
-# a shared library, for your platform, single threaded)
+# ATLAS must have been previously  installed to usr/lib/libatlas
+# (built as a shared library, for your platform, single threaded)
 USE_ATLAS := 0
 ATLAS_LIBDIR := $(build_libdir)
 #or ATLAS_LIBDIR := /path/to/system/atlas/lib

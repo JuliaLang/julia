@@ -1,5 +1,12 @@
 ## ARPACK ##
-ARPACK_FFLAGS := $(GFORTBLAS_FFLAGS)
+
+ifeq ($(USE_SYSTEM_BLAS), 0)
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured: | $(build_prefix)/manifest/openblas
+else ifeq ($(USE_SYSTEM_LAPACK), 0)
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured: | $(build_prefix)/manifest/lapack
+endif
+
+ARPACK_FFLAGS := $(USE_BLAS_FFLAGS)
 ARPACK_CFLAGS :=
 
 ifeq ($(USE_BLAS64), 1)
@@ -23,13 +30,6 @@ endif
 endif
 endif
 
-ifeq ($(OS),WINNT)
-ARPACK_OBJ_SOURCE := $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/.libs/libarpack-2.$(SHLIB_EXT)
-else
-ARPACK_OBJ_SOURCE := $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/.libs/libarpack.$(SHLIB_EXT)
-endif
-ARPACK_OBJ_TARGET := $(build_shlibdir)/libarpack.$(SHLIB_EXT)
-
 ARPACK_MFLAGS := F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
 ARPACK_FLAGS := --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" \
@@ -43,66 +43,62 @@ $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCDIR)/srccache
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://raw.githubusercontent.com/opencollab/arpack-ng/$(ARPACK_VER)/TESTS/testA.mtx
 	touch -c $@
-$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz
+
+$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) zxf $<
-	touch -c $@
+	touch -c $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure # old target
+	echo 1 > $@
 
-ifeq ($(USE_ATLAS), 1)
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(ATLAS_OBJ_TARGET)
-endif
-
-ifeq ($(USE_SYSTEM_BLAS), 0)
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(OPENBLAS_OBJ_TARGET)
-else ifeq ($(USE_SYSTEM_LAPACK), 0)
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_TARGET)
-endif
-
-$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure
+$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/arpack-tests-blasint.patch
 	echo 1 > $@
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied
+
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$< $(CONFIGURE_COMMON) $(ARPACK_FLAGS)
-	touch -c $@
-$(ARPACK_OBJ_SOURCE): $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status
+	$(dir $<)/configure $(CONFIGURE_COMMON) $(ARPACK_FLAGS)
+	echo 1 > $@
+
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured
 	$(MAKE) -C $(dir $<) $(ARPACK_MFLAGS)
-	touch -c $@
-$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx $(ARPACK_OBJ_SOURCE)
+	echo 1 > $@
+
+$(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-checked: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled
 	$(JLCHECKSUM) $<
 	cp $< $(dir $@)/TESTS/testA.mtx
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) check $(ARPACK_MFLAGS)
 endif
 	echo 1 > $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(build_shlibdir)
-	$(call make-install,arpack-ng-$(ARPACK_VER),$(ARPACK_MFLAGS))
+
+define ARPACK_INSTALL
+	$(call MAKE_INSTALL,$1,$2,$3)
 ifeq ($(OS), WINNT)
-	mv $(build_shlibdir)/libarpack-2.dll $@
+	mv $2/$$(build_shlibdir)/libarpack-2.dll $2/$$(build_shlibdir)/libarpack.$$(SHLIB_EXT)
 endif
-	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(build_shlibdir)/libarpack.$(SHLIB_EXT)
-ifeq ($(OS), Linux)
-	for filename in $(build_shlibdir)/libarpack.so* ; do \
-		[ -L $$filename ] || $(PATCHELF_BIN) --set-rpath '$$ORIGIN' $$filename ;\
-	done
-endif
-	touch -c $@
-ifneq ($(PATCHELF),patchelf)
-$(ARPACK_OBJ_TARGET): $(PATCHELF)
-endif
+endef
+
+$(eval $(call staged-install, \
+	arpack,arpack-ng-$(ARPACK_VER), \
+	ARPACK_INSTALL,$(ARPACK_MFLAGS),, \
+	$$(INSTALL_NAME_CMD)libarpack.$$(SHLIB_EXT) $$(build_shlibdir)/libarpack.$$(SHLIB_EXT)))
 
 clean-arpack:
+	-rm $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/arpack-ng-$(ARPACK_VER) clean
-	-rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
+
 distclean-arpack:
 	-rm -rf $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz \
 		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER) \
 		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx \
 		$(BUILDDIR)/arpack-ng-$(ARPACK_VER)
 
+
 get-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx
-configure-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status
-compile-arpack: $(ARPACK_OBJ_SOURCE)
-check-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/checked
-install-arpack: $(ARPACK_OBJ_TARGET)
+extract-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted
+configure-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-configured
+compile-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-compiled
+# XXX: bug_1315 ARPACK tests fail stochastically
+fastcheck-arpack: #check-arpack
+check-arpack: $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/build-checked
