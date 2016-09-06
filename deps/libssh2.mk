@@ -2,10 +2,11 @@
 
 LIBSSH2_GIT_URL := git://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
-$(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,build/libssh2.$(SHLIB_EXT),$(SRCDIR)/srccache))
+$(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCDIR)/srccache))
 
-LIBSSH2_OBJ_SOURCE := $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/src/libssh2.$(SHLIB_EXT)
-LIBSSH2_OBJ_TARGET := $(build_shlibdir)/libssh2.$(SHLIB_EXT)
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
+endif
 
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
 		-DCMAKE_BUILD_TYPE=Release
@@ -23,47 +24,43 @@ ifeq ($(OS),Linux)
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-mbedtls.patch-applied: | $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/CMakeLists.txt
+$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-mbedtls.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted
 	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-mbedtls.patch
 	echo 1 > $@
-$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: | $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/CMakeLists.txt
+
+$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted
 	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
 	echo 1 > $@
 
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile: $(MBEDTLS_OBJ_TARGET)
-endif
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/CMakeLists.txt $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-mbedtls.patch-applied $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-mbedtls.patch-applied $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
-	touch -c $@
+	echo 1 > $@
 
-$(LIBSSH2_OBJ_SOURCE): $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
 	$(MAKE) -C $(dir $<) libssh2
-	touch -c $@
+	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/checked: $(LIBSSH2_OBJ_SOURCE)
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) test
 endif
 	echo 1 > $@
 
-$(LIBSSH2_OBJ_TARGET): $(LIBSSH2_OBJ_SOURCE) | $(build_shlibdir)
-ifeq ($(BUILD_OS),WINNT)
-	$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) install
-else
-	$(call make-install,$(LIBSSH2_SRC_DIR),)
-endif
-	$(INSTALL_NAME_CMD)libssh2.$(SHLIB_EXT) $@
-	touch -c $(LIBSSH2_OBJ_TARGET)
+$(eval $(call staged-install, \
+	libssh2,$(LIBSSH2_SRC_DIR), \
+	MAKE_INSTALL,,, \
+	$$(INSTALL_NAME_CMD)libssh2.$$(SHLIB_EXT) $$(build_shlibdir)/libssh2.$$(SHLIB_EXT)))
 
 clean-libssh2:
+	-rm $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean
-	-rm -f $(LIBSSH2_OBJ_TARGET)
+
 
 get-libssh2: $(LIBSSH2_SRC_FILE)
-configure-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile
-compile-libssh2: $(LIBSSH2_OBJ_SOURCE)
-check-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/checked
-install-libssh2: $(LIBSSH2_OBJ_TARGET)
+extract-libssh2: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted
+configure-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
+compile-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
+fastcheck-libssh2: check-libssh2
+check-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked

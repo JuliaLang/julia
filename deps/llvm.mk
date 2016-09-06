@@ -1,4 +1,6 @@
 ## LLVM ##
+include $(SRCDIR)/llvm-ver.make
+
 LLVM_GIT_URL_BASE ?= http://llvm.org/git
 LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
 LLVM_GIT_URL_CLANG ?= $(LLVM_GIT_URL_BASE)/clang.git
@@ -43,12 +45,6 @@ LLVM_SRC_DIR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER)
 LLVM_BUILD_DIR:=$(BUILDDIR)/llvm-$(LLVM_VER)
 LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
 LLVM_LIB_FILE := libLLVMCodeGen.a
-ifeq ($(LLVM_USE_CMAKE),1)
-LLVM_OBJ_SOURCE := $(LLVM_BUILDDIR_withtype)/lib/$(LLVM_LIB_FILE)
-else
-LLVM_OBJ_SOURCE := $(LLVM_BUILDDIR_withtype)/$(LLVM_FLAVOR)/lib/$(LLVM_LIB_FILE)
-endif
-LLVM_OBJ_TARGET := $(build_libdir)/$(LLVM_LIB_FILE)
 
 ifeq ($(LLVM_VER), 3.3)
 LLVM_TAR_EXT:=$(LLVM_VER).src.tar.gz
@@ -258,7 +254,7 @@ $(LLVM_LLDB_TAR): | $(SRCDIR)/srccache
 endif
 ifeq ($(BUILD_LLDB),1)
 $(LLVM_SRC_DIR)/tools/lldb:
-$(LLVM_SRC_DIR).extracted: $(LLVM_SRC_DIR)/tools/lldb
+$(LLVM_SRC_DIR)/source-extracted: $(LLVM_SRC_DIR)/tools/lldb
 endif
 
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
@@ -278,13 +274,13 @@ ifeq ($(USEICC),1)
 LIBCXX_EXTRA_FLAGS := -Bstatic -lirc -Bdynamic
 endif
 
-$(LLVM_SRC_DIR)/projects/libcxx: $(LLVM_LIBCXX_TAR) | $(LLVM_SRC_DIR).extracted
+$(LLVM_SRC_DIR)/projects/libcxx: $(LLVM_LIBCXX_TAR) | $(LLVM_SRC_DIR)/source-extracted
 	([ ! -d $@ ] && \
 	git clone $(LLVM_GIT_URL_LIBCXX) $@  ) || \
 	(cd $@  && \
 	git pull --ff-only)
 $(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD
-$(LLVM_SRC_DIR)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR) | $(LLVM_SRC_DIR).extracted
+$(LLVM_SRC_DIR)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR) | $(LLVM_SRC_DIR)/source-extracted
 	([ ! -d $@ ] && \
 	git clone $(LLVM_GIT_URL_LIBCXXABI) $@ ) || \
 	(cd $@ && \
@@ -320,7 +316,7 @@ LIBCXX_DEPENDENCY := $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.
 get-llvm: get-libcxx get-libcxxabi
 endif
 
-$(LLVM_SRC_DIR).extracted: | $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
+$(LLVM_SRC_DIR)/source-extracted: | $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
 endif
@@ -403,20 +399,20 @@ endif # LLVM_GIT_VER_POLLY
 endif # USE_POLLY
 endif # LLVM_VER
 	# touch some extra files to ensure bisect works pretty well
+	touch -c $(LLVM_SRC_DIR).extracted
 	touch -c $(LLVM_SRC_DIR)/configure
 	touch -c $(LLVM_SRC_DIR)/CMakeLists.txt
 	echo 1 > $@
 
 # Apply version-specific LLVM patches
-LLVM_PATCH_PREV:=
-LLVM_PATCH_LIST:=
+LLVM_PATCH_PREV :=
 define LLVM_PATCH
-$$(LLVM_SRC_DIR)/$1.patch-applied: | $$(LLVM_SRC_DIR).extracted $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
+$$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
 	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
-LLVM_PATCH_LIST += $$(LLVM_PATCH_PREV)
 endef
+
 ifeq ($(LLVM_VER),3.3)
 $(eval $(call LLVM_PATCH,llvm-3.3))
 $(eval $(call LLVM_PATCH,instcombine-llvm-3.3))
@@ -469,42 +465,43 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 $(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
 endif
 endif
+$(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 
 ifeq ($(LLVM_USE_CMAKE),1)
 
-$(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR).extracted $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+$(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE)
-	touch -c $@
+	echo 1 > $@
 
-$(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/CMakeCache.txt | $(llvm_python_workaround)
+$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
 		  $(CMAKE) --build .)
-	touch -c $@
+	echo 1 > $@
 
 else
 
-$(LLVM_BUILDDIR_withtype)/config.status: $(LLVM_SRC_DIR).extracted $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+$(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(LLVM_SRC_DIR)/configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS)
-	touch -c $@
+	echo 1 > $@
 
-$(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/config.status | $(llvm_python_workaround)
+$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
 		$(MAKE) $(LLVM_MFLAGS) $(MAKE_COMMON)
-	touch -c $@
+	echo 1 > $@
 
 endif # LLVM_USE_CMAKE
 
-$(LLVM_BUILDDIR_withtype)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
+$(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
@@ -513,43 +510,41 @@ ifeq ($(OS),$(BUILD_OS))
 		  $(MAKE) $(LLVM_MFLAGS) check)
 endif
 	echo 1 > $@
-$(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
-ifeq ($(LLVM_USE_CMAKE),1)
-	$(call staged-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
-	                      cd $(BUILDDIR)/llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) &&\
-	                      $(CMAKE) -DCMAKE_INSTALL_PREFIX="$(call MAKE_DESTDIR,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE))$(build_prefix)" -P cmake_install.cmake)
-else
-	$(call   make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
-	                      $(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
-endif # LLVM_USE_CMAKE
-	touch -c $@
 
-reinstall-llvm:
-	-rm $(LLVM_OBJ_TARGET)
-	$(MAKE) -f $(SRCDIR)/Makefile -s install-llvm
+$(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
+
+ifeq ($(LLVM_USE_CMAKE),1)
+CMAKE_INSTALL_LLVM = \
+	cd $1 && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$2" -P cmake_install.cmake
+$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
+	CMAKE_INSTALL_LLVM,,,))
+else
+$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
+	MAKE_INSTALL,$$(LLVM_MFLAGS) PATH="$$(llvm_python_workaround):$$$$PATH",,))
+endif # LLVM_USE_CMAKE
 
 clean-llvm:
+	-rm $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
-	-rm -f $(build_depsbindir)/llvm-config
+
 distclean-llvm:
 	-rm -rf $(LLVM_TAR) $(LLVM_CLANG_TAR) \
 		$(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR) \
-		$(LLVM_SRC_DIR) $(LLVM_SRC_DIR).extracted $(LLVM_BUILDDIR_withtype)
+		$(LLVM_SRC_DIR) $(LLVM_BUILDDIR_withtype)
+
 
 ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
 else
-get-llvm: $(LLVM_SRC_DIR).extracted
+get-llvm: $(LLVM_SRC_DIR)/source-extracted
 endif
-ifeq ($(LLVM_USE_CMAKE),1)
-configure-llvm: $(LLVM_BUILDDIR_withtype)/CMakeCache.txt
-else
-configure-llvm: $(LLVM_BUILDDIR_withtype)/config.status
-endif
-compile-llvm: $(LLVM_OBJ_SOURCE)
-check-llvm: $(LLVM_BUILDDIR_withtype)/checked
-install-llvm: $(LLVM_OBJ_TARGET)
+extract-llvm: $(LLVM_SRC_DIR)/source-extracted
+configure-llvm: $(LLVM_BUILDDIR_withtype)/build-configured
+compile-llvm: $(LLVM_BUILDDIR_withtype)/build-compiled
+fastcheck-llvm: #none
+check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
+
 
 ifeq ($(LLVM_VER),svn)
 update-llvm:

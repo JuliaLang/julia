@@ -1,28 +1,33 @@
 ## objconv ##
 
-OBJCONV_SOURCE := $(BUILDDIR)/objconv/objconv
-OBJCONV_TARGET := $(build_depsbindir)/objconv
-
 $(SRCDIR)/srccache/objconv.zip: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
-$(BUILDDIR)/objconv/config.status: $(SRCDIR)/srccache/objconv.zip
+
+$(BUILDDIR)/objconv/source-extracted: $(SRCDIR)/srccache/objconv.zip
 	-rm -r $(dir $@)
 	mkdir -p $(BUILDDIR)
 	unzip -d $(dir $@) $<
 	cd $(dir $@) && unzip source.zip
 	echo 1 > $@
-$(OBJCONV_SOURCE): $(BUILDDIR)/objconv/config.status
+
+$(BUILDDIR)/objconv/build-compiled: $(BUILDDIR)/objconv/source-extracted
 	cd $(dir $<) && $(CXX) -o objconv -O2 *.cpp
-$(OBJCONV_TARGET): $(OBJCONV_SOURCE) | $(build_depsbindir)
-	cp -f $< $@
+	echo 1 > $@
+
+$(eval $(call staged-install, \
+	objconv,objconv, \
+	BINFILE_INSTALL,$$(BUILDDIR)/objconv/objconv,,))
 
 clean-objconv:
-	-rm -f $(OBJCONV_TARGET)
+	-rm $(BUILDDIR)/objconv/build-compiled $(build_depsbindir)/objconv
+
 distclean-objconv:
 	-rm -rf $(SRCDIR)/srccache/objconv.zip $(BUILDDIR)/objconv
 
+
 get-objconv: $(SRCDIR)/srccache/objconv.zip
-configure-objconv: $(BUILDDIR)/objconv/config.status
-compile-objconv: $(OBJCONV_SOURCE)
+extract-objconv: $(BUILDDIR)/objconv/source-extracted
+configure-objconv: extract-objconv
+compile-objconv: $(BUILDDIR)/objconv/build-compiled
+fastcheck-objconv: check-objconv
 check-objconv: compile-objconv
-install-objconv: $(OBJCONV_TARGET)
