@@ -73,8 +73,7 @@ $(eval $(call staged-install, \
 
 
 clean-mbedtls:
-	-rm -f $(build_prefix)/manifest/mbedtls \
-		$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-configured \
+	-rm $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-configured \
 		$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/mbedtls-$(MBEDTLS_VER) clean
 

@@ -129,10 +129,18 @@ endef
 define staged-install
 stage-$(strip $1): $$(build_staging)/$2.tgz
 install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
-uninstall-$(strip $1): | $$(build_staging)/$2.tgz
+uninstall-$(strip $1):
 	-rm $$(build_prefix)/manifest/$(strip $1)
 	-cd $$(build_prefix) && rm -dv -- $$$$($(TAR) tzf $$(build_staging)/$2.tgz --exclude './$$$$')
+
+ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tgz ] && echo exists ))
+# clean depends on uninstall only if the staged file exists
 distclean-$(strip $1) clean-$(strip $1): uninstall-$(strip $1)
+else
+# uninstall depends on staging only if the staged file doesn't exist
+# otherwise, uninstall doesn't actually want the file to be updated first
+uninstall-$(strip $1): | $$(build_staging)/$2.tgz
+endif
 
 reinstall-$(strip $1):
 	+$$(MAKE) uninstall-$(strip $1)
