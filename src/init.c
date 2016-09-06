@@ -55,44 +55,6 @@ JL_DLLEXPORT const char* __asan_default_options() {
 }
 #endif
 
-static const char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
-
-jl_options_t jl_options = { 0,    // quiet
-                            NULL, // julia_home
-                            NULL, // julia_bin
-                            NULL, // eval
-                            NULL, // print
-                            NULL, // postboot
-                            NULL, // load
-                            &system_image_path[1], // image_file
-                            NULL, // cpu_taget ("native", "core2", etc...)
-                            0,    // nprocs
-                            NULL, // machinefile
-                            0,    // isinteractive
-                            0,    // color
-                            JL_OPTIONS_HISTORYFILE_ON, // historyfile
-                            0,    // startupfile
-                            JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
-                            0,    // code_coverage
-                            0,    // malloc_log
-                            2,    // opt_level
-                            JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            1,    // depwarn
-                            1,    // can_inline
-                            JL_OPTIONS_POLLY_ON, // polly
-                            JL_OPTIONS_FAST_MATH_DEFAULT,
-                            0,    // worker
-                            JL_OPTIONS_HANDLE_SIGNALS_ON,
-                            JL_OPTIONS_USE_PRECOMPILED_YES,
-                            JL_OPTIONS_USE_COMPILECACHE_YES,
-                            NULL, // bindto
-                            NULL, // outputbc
-                            NULL, // outputo
-                            NULL, // outputji
-                            0, // incremental
-                            0 // image_file_specified
-};
-
 int jl_boot_file_loaded = 0;
 size_t jl_page_size;
 
