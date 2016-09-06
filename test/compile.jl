@@ -198,6 +198,11 @@ try
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
+    relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
+    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !is_windows() # `..` is not a symlink on Windows
+    mkdir(joinpath(dir, "subfolder"))
+    @test !Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji"))
+
     @eval using FooBar
     fb_uuid = Base.module_uuid(Main.FooBar)
     sleep(2); touch(FooBar_file)
