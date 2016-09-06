@@ -515,7 +515,7 @@ $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
 ifeq ($(LLVM_USE_CMAKE),1)
 CMAKE_INSTALL_LLVM = \
-	cd $1 && $(CMAKE) -DCMAKE_INSTALL_PREFIX="$2" -P cmake_install.cmake
+	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 $(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
 	CMAKE_INSTALL_LLVM,,,))
 else

@@ -82,7 +82,7 @@ $(build_prefix)/manifest/osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/bu
 	echo $(OSXUNWIND_VER) > $(build_prefix)/manifest/osxunwind
 
 clean-osxunwind:
-	-rm $(build_prefix)/manifest/libuv $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled
+	-rm $(build_prefix)/manifest/osxunwind $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled
 	-rm -r $(build_libdir)/libosxunwind.a $(build_shlibdir)/libosxunwind.$(SHLIB_EXT) \
 		$(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
 	-$(MAKE) -C $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER) clean $(OSXUNWIND_FLAGS)
