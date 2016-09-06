@@ -24,10 +24,6 @@ This section lists changes that do not have deprecation warnings.
   * Keyword arguments are processed left-to-right: if the same keyword is specified more than
     once, the rightmost occurrence takes precedence ([#17785]).
 
-  * The `cumsum` and `cumprod` functions now use the same type promotion as `sum` and `prod`,
-    and in particular their numeric result types are now widened to at least 32 bits;
-    you can use `cumsum!` or `cumprod!` to specify a different type ([#18364]).
-
 Library improvements
 --------------------
 
