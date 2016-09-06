@@ -381,9 +381,9 @@ mechanism with the following promotion rules::
 The first rule says that promoting a rational number with any other integer
 type promotes to a rational type whose numerator/denominator type is the
 result of promotion of its numerator/denominator type with the other integer
-type. The third rule applies the same logic to two different types of rational
+type. The second rule applies the same logic to two different types of rational
 numbers, resulting in a rational of the promotion of their respective
-numerator/denominator types. The fourth and final rule dictates that promoting
+numerator/denominator types. The third and final rule dictates that promoting
 a rational with a float results in the same type as promoting the
 numerator/denominator type with the float.
 
