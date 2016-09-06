@@ -170,7 +170,8 @@ function show(io::IO, f::Function)
 end
 
 function show(io::IO, x::Core.IntrinsicFunction)
-    print(io, "(intrinsic function #", box(Int32, unbox(Core.IntrinsicFunction, x)), ")")
+    name = ccall(:jl_intrinsic_name, Cstring, (Core.IntrinsicFunction,), x)
+    print(io, unsafe_string(name))
 end
 
 function show(io::IO, x::Union)
