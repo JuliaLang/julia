@@ -504,6 +504,13 @@ glotest()
 @test glob_x == 88
 @test loc_x == 10
 
+# runtime intrinsics
+
+let f = Any[Core.Intrinsics.add_int, Core.Intrinsics.sub_int]
+    @test f[1](1, 1) == 2
+    @test f[2](1, 1) == 0
+end
+
 # issue #7234
 begin
     glob_x2 = 24

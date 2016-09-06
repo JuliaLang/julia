@@ -2050,7 +2050,13 @@ static void jl_save_system_image_to_stream(ios_t *f)
     jl_serialize_value(&s, jl_main_module);
     jl_serialize_value(&s, jl_top_module);
     jl_serialize_value(&s, jl_typeinf_func);
+
+    // deserialize method tables of builtin types
     jl_serialize_value(&s, jl_type_type->name->mt);
+    jl_serialize_value(&s, jl_intrinsic_type->name->mt);
+    jl_serialize_value(&s, jl_sym_type->name->mt);
+    jl_serialize_value(&s, jl_array_type->name->mt);
+    jl_serialize_value(&s, jl_module_type->name->mt);
 
     jl_prune_type_cache(jl_tuple_typename->cache);
     jl_prune_type_cache(jl_tuple_typename->linearcache);
@@ -2146,10 +2152,17 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_main_module = (jl_module_t*)jl_deserialize_value(&s, NULL);
     jl_top_module = (jl_module_t*)jl_deserialize_value(&s, NULL);
     jl_internal_main_module = jl_main_module;
+
     jl_typeinf_func = (jl_function_t*)jl_deserialize_value(&s, NULL);
     jl_type_type_mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
-    jl_type_type->name->mt = jl_typector_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
-        jl_type_type_mt;
+    jl_type_type->name->mt = jl_type_type_mt;
+    jl_typector_type->name->mt = jl_type_type_mt;
+    jl_uniontype_type->name->mt = jl_type_type_mt;
+    jl_datatype_type->name->mt = jl_type_type_mt;
+    jl_intrinsic_type->name->mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
+    jl_sym_type->name->mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
+    jl_array_type->name->mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
+    jl_module_type->name->mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
 
     intptr_t i;
     for(i=0; i < builtin_types.len; i++) {

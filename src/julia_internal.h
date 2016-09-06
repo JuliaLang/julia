@@ -269,7 +269,7 @@ int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
 jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
 void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
-jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr);
+void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr);
 STATIC_INLINE int jl_is_type(jl_value_t *v)
 {
     jl_value_t *t = jl_typeof(v);
@@ -528,7 +528,7 @@ extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
 
 // -- Runtime intrinsics -- //
-const char *jl_intrinsic_name(int f);
+JL_DLLEXPORT const char *jl_intrinsic_name(int f);
 
 JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align);

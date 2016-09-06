@@ -1124,7 +1124,7 @@ jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
 
 static void add_builtin_func(const char *name, jl_fptr_t fptr)
 {
-    add_builtin(name, jl_mk_builtin_func(name, fptr));
+    jl_mk_builtin_func(NULL, name, fptr);
 }
 
 void jl_init_primitives(void)
