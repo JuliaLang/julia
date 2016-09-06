@@ -450,7 +450,7 @@
 
    .. doctest::
 
-       julia> a = string("March")
+       julia> a = "March"
        "March"
 
        julia> chop(a)
