@@ -446,6 +446,15 @@ ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
 transpose(x::AbstractVector) = [ transpose(v) for i=of_indices(x, OneTo(1)), v in x ]
 ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(v) for i=of_indices(x, OneTo(1)), v in x ]
 
+# see discussion in #18364 ... we try not to widen type of the resulting array
+# from cumsum or cumprod, but in some cases (+, Bool) we may not have a choice.
+rcum_promote_type{T<:Number}(op, ::Type{T}) = promote_op(op, T)
+rcum_promote_type{T}(op, ::Type{T}) = T
+
+# handle sums of Vector{Bool} and similar.   it would be nice to handle
+# any AbstractArray here, but it's not clear how that would be possible
+rcum_promote_type{T,N}(op, ::Type{Array{T,N}}) = Array{rcum_promote_type(op,T), N}
+
 for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
                        (:cumprod, :cumprod!, :cumprod_pairwise!, :*) )
     # in-place cumsum of c = s+v[range(i1,n)], using pairwise summation
@@ -479,6 +488,6 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
     end
 
     @eval function ($f){T}(v::AbstractVector{T})
-        return ($f!)(similar(v, r_promote_type($op, T)), v)
+        return ($f!)(similar(v, rcum_promote_type($op, T)), v)
     end
 end
