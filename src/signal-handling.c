@@ -53,12 +53,32 @@ static int jl_check_force_sigint(void)
     return 0;
 }
 
-// Force sigint requires pressing `Ctrl-C` repeatedly.
-// Ignore sigint for a short time after that to avoid rethrowing sigint too
-// quickly again. (Code that has this issue is inherently racy but this is
-// an interactive feature anyway.)
+#ifndef _OS_WINDOWS_
+// Not thread local, should only be accessed by the signal handler thread.
+static volatile int jl_sigint_passed = 0;
+static sigset_t jl_sigint_sset;
+#endif
+
 static int jl_ignore_sigint(void)
 {
+    // On Unix, we get the SIGINT before the debugger which makes it very
+    // hard to interrupt a running process in the debugger with `Ctrl-C`.
+    // Manually raise a `SIGINT` on current thread with the signal temporarily
+    // unblocked and use it's behavior to decide if we need to handle the signal.
+#ifndef _OS_WINDOWS_
+    jl_sigint_passed = 0;
+    pthread_sigmask(SIG_UNBLOCK, &jl_sigint_sset, NULL);
+    // This can swallow an external `SIGINT` but it's not an issue
+    // since we don't deliver the same number of signals anyway.
+    pthread_kill(pthread_self(), SIGINT);
+    pthread_sigmask(SIG_BLOCK, &jl_sigint_sset, NULL);
+    if (!jl_sigint_passed)
+        return 1;
+#endif
+    // Force sigint requires pressing `Ctrl-C` repeatedly.
+    // Ignore sigint for a short time after that to avoid rethrowing sigint too
+    // quickly again. (Code that has this issue is inherently racy but this is
+    // an interactive feature anyway.)
     return jl_disable_sigint_time && jl_disable_sigint_time > uv_hrtime();
 }
 
