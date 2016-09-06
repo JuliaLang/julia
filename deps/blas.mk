@@ -84,7 +84,7 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/
 	echo 1 > $@
 
 define OPENBLAS_INSTALL
-    $(call SHLIBFILE_INSTALL,$1,$2,$3)
+	$(call SHLIBFILE_INSTALL,$1,$2,$3)
 ifeq ($$(OS), Linux)
 	ln -sf libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT) $2/$$(build_libdir)/libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT).0
 endif
