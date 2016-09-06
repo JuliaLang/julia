@@ -64,7 +64,7 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 Remove the last character from `s`.
 
 ```jldoctest
-julia> a = string("March")
+julia> a = "March"
 "March"
 
 julia> chop(a)
