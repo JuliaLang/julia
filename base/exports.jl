@@ -1328,6 +1328,7 @@ export
 # Macros
     # parser internal
     @__FILE__,
+    @__DIR__,
     @int128_str,
     @uint128_str,
     @big_str,

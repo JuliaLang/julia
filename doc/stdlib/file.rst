@@ -355,6 +355,12 @@
 
    ``@__FILE__`` expands to a string with the absolute file path of the file containing the macro. Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``\ . Alternatively see :data:`PROGRAM_FILE`\ .
 
+.. function:: @__DIR__ -> AbstractString
+
+   .. Docstring generated from Julia source
+
+   ``@__DIR__`` expands to a string with the directory part of the absolute path of the file containing the macro. Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``\ .
+
 .. function:: @__LINE__ -> Int
 
    .. Docstring generated from Julia source
