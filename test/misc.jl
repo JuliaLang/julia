@@ -446,7 +446,9 @@ if is_windows()
         addr = addr-(UInt64(addr)%4096)
         const PAGE_EXECUTE_READWRITE = 0x40
         oldPerm = Ref{UInt32}()
-        err = ccall(:VirtualProtect,stdcall,Cint,(Ptr{Void}, Csize_t, UInt32, Ptr{UInt32}), addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
-        err == 0 && error(Libc.GetLastError())
+        err18083 = ccall(:VirtualProtect,stdcall,Cint,
+            (Ptr{Void}, Csize_t, UInt32, Ptr{UInt32}),
+            addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
+        err18083 == 0 && error(Libc.GetLastError())
     end
 end
