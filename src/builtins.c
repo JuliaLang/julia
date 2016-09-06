@@ -582,7 +582,7 @@ jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_w
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for these modules **\n\n");
         }
     }
-    if (in_pure_callback && !delay_warn)
+    if (ptls->in_pure_callback && !delay_warn)
         jl_error("eval cannot be used in a generated function");
     JL_TRY {
         jl_warn_on_eval = delay_warn && (jl_warn_on_eval || m != last_m); // compute whether a warning was suppressed
