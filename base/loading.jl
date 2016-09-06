@@ -749,7 +749,7 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
 
         # now check if this file is fresh relative to its source files
-        if files[1][1] != modpath
+        if !samefile(files[1][1], modpath)
             DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it is for file $(files[1][1])) not file $modpath.")
             return true # cache file was compiled from a different path
         end
