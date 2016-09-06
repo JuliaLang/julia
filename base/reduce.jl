@@ -711,5 +711,16 @@ end
 
 Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
 For sparse matrices, one should usually use [`nnz`](:func:`nnz`), which returns the number of stored values.
+
+```jldoctest
+julia> A = [1 2 4; 0 0 1; 1 1 0]
+3×3 Array{Int64,2}:
+ 1  2  4
+ 0  0  1
+ 1  1  0
+
+julia> countnz(A)
+6
+```
 """
 countnz(a) = count(x -> x != 0, a)

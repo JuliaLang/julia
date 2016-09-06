@@ -539,6 +539,18 @@ ones(t,dims)
     ones(A)
 
 Create an array of all ones with the same element type and shape as `A`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> ones(A)
+2×2 Array{Int64,2}:
+ 1  1
+ 1  1
+```
 """
 ones(A)
 
@@ -546,6 +558,31 @@ ones(A)
     reshape(A, dims)
 
 Create an array with the same data as the given array, but with different dimensions.
+```jldoctest
+julia> A = collect(1:16)
+16-element Array{Int64,1}:
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+
+julia> reshape(A, (2, 8))
+2×8 Array{Int64,2}:
+ 1  3  5  7   9  11  13  15
+ 2  4  6  8  10  12  14  16
+ ```
 """
 reshape
 
@@ -2868,6 +2905,18 @@ zeros(t,dims)
     zeros(A)
 
 Create an array of all zeros with the same element type and shape as `A`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> zeros(A)
+2×2 Array{Int64,2}:
+ 0  0
+ 0  0
+```
 """
 zeros(A)
 

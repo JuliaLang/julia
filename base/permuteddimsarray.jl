@@ -49,6 +49,28 @@ _genperm(out, I) = out
 Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
 `ndims(A)`. This is a generalization of transpose for multi-dimensional arrays. Transpose is
 equivalent to `permutedims(A, [2,1])`.
+
+```jldoctest
+julia> A = reshape(collect(1:8), (2,2,2))
+2×2×2 Array{Int64,3}:
+[:, :, 1] =
+ 1  3
+ 2  4
+<BLANKLINE>
+[:, :, 2] =
+ 5  7
+ 6  8
+
+julia> permutedims(A, [3, 2, 1])
+2×2×2 Array{Int64,3}:
+[:, :, 1] =
+ 1  3
+ 5  7
+<BLANKLINE>
+[:, :, 2] =
+ 2  4
+ 6  8
+```
 """
 function Base.permutedims{T,N}(A::AbstractArray{T,N}, perm)
     dest = similar(A, genperm(indices(A), perm))
