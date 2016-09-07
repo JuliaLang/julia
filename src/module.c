@@ -486,7 +486,7 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
         else
             jl_printf(JL_STDERR, "%s is deprecated", jl_symbol_name(b->name));
         jl_value_t *v = b->value;
-        if (v && (jl_is_type(v)/* || (jl_is_function(v) && jl_is_gf(v))*/)) {
+        if (v && (jl_is_type(v) || jl_is_module(v)/* || (jl_is_function(v) && jl_is_gf(v))*/)) {
             jl_printf(JL_STDERR, ", use ");
             jl_static_show(JL_STDERR, v);
             jl_printf(JL_STDERR, " instead");
