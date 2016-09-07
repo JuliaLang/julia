@@ -4530,6 +4530,24 @@ end
 # variable name in the error is tested above in `TestSSA16244`
 @test_throws UndefVarError f18385(false)
 
+# Another similar issue, make sure newvar nodes are created for the fields
+# variables too.
+function f18386(a, b, second_pass)
+    s = 0
+    firstpass = true
+    for i in 1:2
+        if firstpass
+            x = (a, b)
+            firstpass = !second_pass
+        end
+        s += x[1]
+    end
+    s
+end
+@test f18386(1, 2, false) === 2
+# variable name in the error is tested above in `TestSSA16244`
+@test_throws UndefVarError f18386(1, 2, true)
+
 # issue #18173
 function f18173()
     identity(()->successflag)

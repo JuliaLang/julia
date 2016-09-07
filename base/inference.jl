@@ -3640,6 +3640,10 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                 end
             else
                 vals = Vector{Any}(nv)
+                local new_slots::Vector{Int}
+                if !is_ssa
+                    new_slots = Vector{Int}(nv)
+                end
                 for j=1:nv
                     tupelt = tup[j+1]
                     # If `!is_ssa` we have to create new variables for each
@@ -3656,7 +3660,9 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                             var = var::Slot
                             tmpv = add_slot!(linfo, elty, false,
                                              linfo.slotnames[var.id])
-                            linfo.slotflags[tmpv.id] |= Slot_UsedUndef
+                            slot_id = tmpv.id
+                            new_slots[j] = slot_id
+                            linfo.slotflags[slot_id] |= Slot_UsedUndef
                         end
                         tmp = Expr(:(=), tmpv, tupelt)
                         insert!(body, i+n_ins, tmp)
@@ -3665,7 +3671,10 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                     end
                 end
                 replace_getfield!(linfo, bexpr, var, vals, field_names, sv)
-                if isa(var, Slot) && is_ssa
+                if !is_ssa
+                    i += replace_newvar_node!(body, (var::Slot).id,
+                                              new_slots, i)
+                elseif isa(var, Slot)
                     # occurs_outside_getfield might have allowed
                     # void use of the slot, we need to delete them too
                     i -= delete_void_use!(body, var::Slot, i)
@@ -3679,6 +3688,30 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
             i += 1
         end
     end
+end
+
+# Return the number of expressions added before `i0`
+function replace_newvar_node!(body, orig, new_slots, i0)
+    nvars = length(new_slots)
+    nvars == 0 && return 0
+    narg = length(body)
+    i = 1
+    nins = 0
+    newvars = [NewvarNode(SlotNumber(id)) for id in new_slots]
+    while i <= narg
+        a = body[i]
+        if isa(a, NewvarNode) && (a::NewvarNode).slot.id == orig
+            splice!(body, i, newvars)
+            if i - nins < i0
+                nins += nvars - 1
+            end
+            narg += nvars - 1
+            i += nvars
+        else
+            i += 1
+        end
+    end
+    return nins
 end
 
 # Return the number of expressions deleted before `i0`
