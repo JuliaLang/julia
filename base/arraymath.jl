@@ -477,7 +477,7 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
 
     @eval function ($f!)(result::AbstractVector, v::AbstractVector)
         li = linearindices(v)
-        li != linearindices(result) && throw(BoundsError())
+        li != linearindices(result) && throw(DimensionMismatch("input and output array sizes and indices must match"))
         n = length(li)
         if n == 0; return result; end
         i1 = first(li)
