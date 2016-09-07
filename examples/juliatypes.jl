@@ -250,9 +250,10 @@ issub(a::UnionT, b::UnionT, env) = a === b || issub_union(a, b, env, true, env.R
 issub(a::UnionT, b::Ty, env) = b===AnyT || issub_union(b, a, env, false, env.Lunions)
 issub(a::Ty, b::UnionT, env) =
     a===BottomT || a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
-# take apart unions before handling vars
-issub(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
-issub(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
+
+# handle vars before unions
+issub(a::UnionT, b::Var, env) = var_gt(b, a, env)
+issub(a::Var, b::UnionT, env) = var_lt(a, b, env)
 
 function issub(a::TagT, b::TagT, env)
     env.outer = false
@@ -313,12 +314,17 @@ function issub(a::Var, b::Var, env)
     end
 end
 
+# issub, but taking apart unions before handling vars
+issub_ufirst(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
+issub_ufirst(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
+issub_ufirst(a, b, env) = issub(a, b, env)
+
 function var_lt(b::Var, a::Union{Ty,Var}, env)
     env.outer = false
     bb = env.vars[b]
     #println("$b($(bb.lb),$(bb.ub)) <: $a")
-    !bb.right && return issub(bb.ub, a, env)  # check ∀b . b<:a
-    !issub(bb.lb, a, env) && return false
+    !bb.right && return issub_ufirst(bb.ub, a, env)  # check ∀b . b<:a
+    !issub_ufirst(bb.lb, a, env) && return false
     # for contravariance we would need to compute a meet here, but
     # because of invariance bb.ub ⊓ a == a here always. however for this
     # to work we need to compute issub(left,right) before issub(right,left),
@@ -331,8 +337,8 @@ function var_gt(b::Var, a::Union{Ty,Var}, env)
     env.outer = false
     bb = env.vars[b]
     #println("$b($(bb.lb),$(bb.ub)) >: $a")
-    !bb.right && return issub(a, bb.lb, env)  # check ∀b . b>:a
-    !issub(a, bb.ub, env) && return false
+    !bb.right && return issub_ufirst(a, bb.lb, env)  # check ∀b . b>:a
+    !issub_ufirst(a, bb.ub, env) && return false
     bb.lb = join(bb.lb, a)
     return true
 end
@@ -384,6 +390,12 @@ macro UnionAll(var, expr)
         else
             error("invalid bounds in UnionAll")
         end
+    elseif isa(var,Expr) && var.head === :(<:)
+        v = var.args[1]
+        ub = esc(var.args[2])
+    elseif isa(var,Expr) && var.head === :(>:)
+        v = var.args[1]
+        lb = esc(var.args[2])
     elseif !isa(var,Symbol)
         error("invalid variable in UnionAll")
     else
@@ -768,6 +780,13 @@ function test_5()
     # these tests require renaming in issub_unionall
     @test  issub((@UnionAll T<:B tupletype(Ty(Int8), T, inst(RefT,Ty(Int8)))), B)
     @test !issub((@UnionAll T<:B tupletype(Ty(Int8), T, inst(RefT,T))),        B)
+
+    # the `convert(Type{T},T)` pattern, where T is a Union
+    # required changing priority of unions and vars
+    @test issub(tupletype(inst(ArrayT,u,1),Ty(Int)),
+                @UnionAll T tupletype(inst(ArrayT,T,1), T))
+    @test issub(tupletype(inst(ArrayT,u,1),Ty(Int)),
+                @UnionAll T @UnionAll S<:T tupletype(inst(ArrayT,T,1), S))
 end
 
 # tricky type variable lower bounds
