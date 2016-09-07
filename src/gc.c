@@ -1874,6 +1874,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full)
 
 JL_DLLEXPORT void jl_gc_collect(int full)
 {
+    char dummy;
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_gc_disable_counter) {
         gc_num.deferred_alloc += (gc_num.allocd + gc_num.interval);
@@ -1891,6 +1892,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         return;
     }
+    ptls->stack_lo = &dummy;
     // no-op for non-threading
     jl_gc_wait_for_the_world();
 
