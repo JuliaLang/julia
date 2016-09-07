@@ -4519,6 +4519,17 @@ ptr18236_2 = cfunction(identity, VecElement{NTuple{2,Int8}},
                                       $v18236_2)
 @test f18236_2(ptr18236_2) === v18236_2
 
+# issue #18385
+function f18385(g)
+    if g
+        a = (1, 2)
+    end
+    return a[1]
+end
+@test f18385(true) === 1
+# variable name in the error is tested above in `TestSSA16244`
+@test_throws UndefVarError f18385(false)
+
 # issue #18173
 function f18173()
     identity(()->successflag)
