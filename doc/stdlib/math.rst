@@ -1485,7 +1485,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the logarithm of the absolute value of :func:`gamma` for :obj:`Real` ``x``\ , while for :obj:`Complex` ``x`` it computes the logarithm of ``gamma(x)``\ .
+   Compute the logarithm of the absolute value of :func:`gamma` for :obj:`Real` ``x``\ , while for :obj:`Complex` ``x`` it computes the principal branch cut of the logarithm of ``gamma(x)`` (defined for negative ``real(x)`` by analytic continuation from positive ``real(x)``\ ).
 
 .. function:: lfact(x)
 

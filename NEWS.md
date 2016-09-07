@@ -24,6 +24,10 @@ This section lists changes that do not have deprecation warnings.
   * Keyword arguments are processed left-to-right: if the same keyword is specified more than
     once, the rightmost occurrence takes precedence ([#17785]).
 
+  * The `lgamma(z)` function now uses a different (more standard) branch cut
+    for `real(z) < 0`, which differs from `log(gamma(z))` by multiples of 2π
+    in the imaginary part ([#18330]).
+
 Library improvements
 --------------------
 
@@ -648,3 +652,4 @@ Language tooling improvements
 [#17546]: https://github.com/JuliaLang/julia/issues/17546
 [#17668]: https://github.com/JuliaLang/julia/issues/17668
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
+[#18330]: https://github.com/JuliaLang/julia/issues/18330
