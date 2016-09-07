@@ -187,7 +187,7 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
     fptr.jlcall_api = meth->jlcall_api;
     if (fptr.jlcall_api == 2)
         return meth->inferred;
-    if (__unlikely(fptr.fptr == NULL)) {
+    if (__unlikely(fptr.fptr == NULL || fptr.jlcall_api == 0)) {
         // first see if it likely needs to be compiled
         void *F = meth->functionObjectsDecls.functionObject;
         if (!F) // ask codegen to try to turn it into llvm code
@@ -197,7 +197,7 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
         // if it hasn't been inferred, try using the unspecialized meth cache instead
         if (!meth->inferred) {
             fptr.fptr = meth->unspecialized_ducttape;
-            fptr.jlcall_api = 0;
+            fptr.jlcall_api = 1;
             if (!fptr.fptr) {
                 if (meth->def && !meth->def->isstaged && meth->def->unspecialized) {
                     fptr.fptr = meth->def->unspecialized->fptr;
@@ -207,19 +207,19 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
                 }
             }
         }
-        if (!fptr.fptr) {
+        if (!fptr.fptr || fptr.jlcall_api == 0) {
             // ask codegen to make the fptr
             fptr = jl_generate_fptr(meth, F);
             if (fptr.jlcall_api == 2)
                 return meth->inferred;
         }
     }
-    if (fptr.jlcall_api == 0)
-        return fptr.fptr0(args[0], &args[1], nargs-1);
-    else if (fptr.jlcall_api == 1)
-        return fptr.fptr1(meth->sparam_vals, args[0], &args[1], nargs-1);
+    if (fptr.jlcall_api == 1)
+        return fptr.fptr1(args[0], &args[1], nargs-1);
     else if (fptr.jlcall_api == 3)
-        return fptr.fptr3(meth, &args[0], nargs, meth->sparam_vals);
+        return fptr.fptr3(meth->sparam_vals, args[0], &args[1], nargs-1);
+    else if (fptr.jlcall_api == 4)
+        return fptr.fptr4(meth, &args[0], nargs, meth->sparam_vals);
     else
         abort();
 }
@@ -450,6 +450,7 @@ static inline void jl_set_gc_and_wait(void)
 void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 int32_t jl_assign_functionID(/*llvm::Function*/void *function);
+int32_t jl_jlcall_api(/*llvm::Function*/const void *function);
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);

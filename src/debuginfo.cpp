@@ -258,8 +258,8 @@ public:
             linfo_in_flight.erase(linfo_it);
             if (!linfo->fptr && linfo->functionObjectsDecls.functionObject &&
                     ((Function*)linfo->functionObjectsDecls.functionObject)->getName().equals(sName)) {
-                int jlcall_api = (F.getFunctionType() == jl_func_sig ? 0 : 1);
-                if (linfo->inferred || jlcall_api != 0) {
+                int jlcall_api = jl_jlcall_api(&F);
+                if (linfo->inferred || jlcall_api != 1) {
                     linfo->jlcall_api = jlcall_api;
                     linfo->fptr = (jl_fptr_t)(uintptr_t)Code;
                 }
@@ -494,8 +494,8 @@ public:
                 linfo_in_flight.erase(linfo_it);
                 Function *F = (Function*)linfo->functionObjectsDecls.functionObject;
                 if (!linfo->fptr && F && F->getName().equals(sName)) {
-                    int jlcall_api = (F->getFunctionType() == jl_func_sig ? 0 : 1);
-                    if (linfo->inferred || jlcall_api != 0) {
+                    int jlcall_api = jl_jlcall_api(F);
+                    if (linfo->inferred || jlcall_api != 1) {
                         linfo->jlcall_api = jlcall_api;
                         linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
                     }
@@ -577,8 +577,8 @@ public:
                 linfo_in_flight.erase(linfo_it);
                 Function *F = (Function*)linfo->functionObjectsDecls.functionObject;
                 if (!linfo->fptr && F && F->getName().equals(sName)) {
-                    int jlcall_api = (F->getFunctionType() == jl_func_sig ? 0 : 1);
-                    if (linfo->inferred || jlcall_api != 0) {
+                    int jlcall_api = jl_jlcall_api(F);
+                    if (linfo->inferred || jlcall_api != 1) {
                         linfo->jlcall_api = jlcall_api;
                         linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
                     }

@@ -203,7 +203,7 @@ static Type *T_jlvalue;
 static Type *T_pjlvalue;
 static Type *T_ppjlvalue;
 static Type *jl_parray_llvmt;
-FunctionType *jl_func_sig;
+static FunctionType *jl_func_sig;
 static FunctionType *jl_func_sig_sparams;
 static Type *T_pvoidfunc;
 
@@ -278,6 +278,18 @@ DICompositeType jl_di_func_sig;
 DICompositeType jl_di_func_null_sig;
 #endif
 #endif
+
+
+extern "C"
+int32_t jl_jlcall_api(const void *function)
+{
+    // give the function an index in the constant lookup table
+    if (function == NULL)
+        return 0;
+    Function *F = (Function*)function;
+    return (F->getFunctionType() == jl_func_sig ? 1 : 3);
+}
+
 
 // constants
 static Value *V_null;
@@ -1010,33 +1022,33 @@ jl_generic_fptr_t jl_generate_fptr(jl_lambda_info_t *li, void *_F)
     jl_generic_fptr_t fptr;
     fptr.fptr = li->fptr;
     fptr.jlcall_api = li->jlcall_api;
-    if (fptr.fptr) {
+    if (fptr.fptr && fptr.jlcall_api) {
         return fptr;
     }
     fptr.fptr = li->unspecialized_ducttape;
-    fptr.jlcall_api = 0;
+    fptr.jlcall_api = 1;
     if (!li->inferred && fptr.fptr) {
         return fptr;
     }
     JL_LOCK(&codegen_lock);
     fptr.fptr = li->fptr;
     fptr.jlcall_api = li->jlcall_api;
-    if (fptr.fptr) {
+    if (fptr.fptr && fptr.jlcall_api) {
         JL_UNLOCK(&codegen_lock);
         return fptr;
     }
     assert(F);
     assert(!li->inCompile);
     fptr.fptr = (jl_fptr_t)getAddressForFunction(F);
-    fptr.jlcall_api = (F->getFunctionType() == jl_func_sig ? 0 : 1);
+    fptr.jlcall_api = jl_jlcall_api(F);
     assert(fptr.fptr != NULL);
     // decide if the fptr should be cached somewhere also
     if (li->functionObjectsDecls.functionObject == F) {
         if (li->fptr) {
             // don't change fptr as that leads to race conditions
-            // with the update to jlcall_api
+            // with the (not) simultaneous update to jlcall_api
         }
-        else if (li->inferred || fptr.jlcall_api != 0) {
+        else if (li->inferred || fptr.jlcall_api != 1) {
             li->jlcall_api = fptr.jlcall_api;
             li->fptr = fptr.fptr;
         }
@@ -1048,7 +1060,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_lambda_info_t *li, void *_F)
         jl_lambda_info_t *unspec = li->def->unspecialized;
         if (unspec->fptr) {
             // don't change fptr as that leads to race conditions
-            // with the update to jlcall_api
+            // with the (not) simultaneous update to jlcall_api
         }
         else if (unspec->functionObjectsDecls.functionObject == F) {
             unspec->jlcall_api = fptr.jlcall_api;
@@ -2799,8 +2811,8 @@ static jl_cgval_t emit_invoke(jl_expr_t *ex, jl_codectx_t *ctx)
             return mark_julia_const(li->inferred);
         }
         if (decls.functionObject) {
-            int jlcall_api = ((Function*)decls.functionObject)->getFunctionType() == jl_func_sig ? 0 : 1;
-            if (jlcall_api == 0) {
+            int jlcall_api = jl_jlcall_api(decls.functionObject);
+            if (jlcall_api == 1) {
                 jl_cgval_t fval = emit_expr(args[1], ctx);
                 jl_cgval_t result = emit_call_function_object(li, fval, decls, &args[1], nargs - 1, (jl_value_t*)ex, ctx);
                 if (result.typ == jl_bottom_type)
@@ -3450,7 +3462,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (lam) {
         name = jl_symbol_name(lam->def->name);
         jl_llvm_functions_t decls = jl_compile_linfo(lam, NULL);
-        if (decls.functionObject == NULL || lam->jlcall_api != 0) {
+        if (decls.functionObject == NULL || lam->jlcall_api != 1) {
             lam = NULL; // TODO: use emit_invoke framework to dispatch these
         }
         else {
@@ -5055,7 +5067,7 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specs
             add_named_global(f, fptr);
         }
         else {
-            if (lam->jlcall_api != 0) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since can't be used right now)
+            if (lam->jlcall_api != 1) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since can't be used right now)
                 assert(lam->fptr == NULL);
                 lam->fptr = fptr;
             }

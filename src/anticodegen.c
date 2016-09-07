@@ -47,5 +47,5 @@ jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t
 void jl_generate_fptr(jl_lambda_info_t *li)
 {
     li->fptr = (jl_fptr_t)&jl_interpret_call;
-    li->jlcall_api = 3;
+    li->jlcall_api = 4;
 }

@@ -1,7 +1,5 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
-extern FunctionType *jl_func_sig;
-
 #if defined(LLVM38) && !defined(LLVM37)
 #  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 void notifyObjectLoaded(RTDyldMemoryManager *memmgr,
