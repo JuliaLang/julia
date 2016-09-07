@@ -1609,7 +1609,12 @@ _div(ind, d::Integer) = div(ind, d), 1, d
 _div(ind, r::AbstractUnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
 
 # Vectorized forms
-function sub2ind{N,T<:Integer}(inds::Union{Dims{N},Indices{N}}, I::AbstractVector{T}...)
+function sub2ind{T<:Integer}(inds::Indices{1}, I1::AbstractVector{T}, I::AbstractVector{T}...)
+    throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
+end
+sub2ind{T<:Integer}(inds::Tuple{OneTo}, I1::AbstractVector{T}, I::AbstractVector{T}...) = _sub2ind_vecs(inds, I1, I...)
+sub2ind{T<:Integer}(inds::Union{DimsInteger,Indices}, I1::AbstractVector{T}, I::AbstractVector{T}...) = _sub2ind_vecs(inds, I1, I...)
+function _sub2ind_vecs(inds, I::AbstractVector...)
     I1 = I[1]
     Iinds = indices1(I1)
     for j = 2:length(I)
@@ -1633,7 +1638,7 @@ sub2ind_vec(inds, i, I) = (@_inline_meta; _sub2ind_vec(inds, (), i, I...))
 _sub2ind_vec(inds, out, i, I1, I...) = (@_inline_meta; _sub2ind_vec(inds, (out..., I1[i]), i, I...))
 _sub2ind_vec(inds, out, i) = (@_inline_meta; sub2ind(inds, out...))
 
-function ind2sub{N,T<:Integer}(inds::Union{Dims{N},Indices{N}}, ind::AbstractVector{T})
+function ind2sub{N,T<:Integer}(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{T})
     M = length(ind)
     t = ntuple(n->similar(ind),Val{N})
     for (i,idx) in enumerate(ind)  # FIXME: change to eachindexvalue
