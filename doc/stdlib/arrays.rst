@@ -1760,16 +1760,34 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Return the inverse permutation of ``v``\ .
+   Return the inverse permutation of ``v``\ . If ``B = A[v]``\ , then ``A = B[invperm(v)]``\ .
 
    .. doctest::
 
-       julia> invperm([2; 4; 3; 1])
+       julia> v = [2; 4; 3; 1];
+
+       julia> invperm(v)
        4-element Array{Int64,1}:
         4
         1
         3
         2
+
+       julia> A = ['a','b','c','d'];
+
+       julia> B = A[v]
+       4-element Array{Char,1}:
+        'b'
+        'd'
+        'c'
+        'a'
+
+       julia> B[invperm(v)]
+       4-element Array{Char,1}:
+        'a'
+        'b'
+        'c'
+        'd'
 
 .. function:: isperm(v) -> Bool
 
