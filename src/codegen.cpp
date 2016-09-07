@@ -2603,6 +2603,11 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
                     Value *idx = emit_array_nd_index(ary, args[1], nd, &args[3], nargs-2, ctx);
                     bool isboxed = !jl_array_store_unboxed(ety);
+                    bool needs_wb = isboxed;
+                    if (!isboxed) {
+                        assert(jl_is_datatype(ety));
+                        needs_wb = !((jl_datatype_t*)ety)->layout->pointerfree;
+                    }
                     if (!isboxed && ((jl_datatype_t*)ety)->size == 0) {
                         // no-op, but emit expr for possible effects
                         assert(jl_is_datatype(ety));
@@ -2611,7 +2616,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     else {
                         jl_cgval_t v = emit_expr(args[2], ctx);
                         PHINode *data_owner = NULL; // owner object against which the write barrier must check
-                        if (isboxed) { // if not boxed we don't need a write barrier
+                        if (needs_wb) { // if not boxed we don't need a write barrier
                             assert(ary.isboxed);
                             Value *aryv = boxed(ary, ctx);
                             Value *flags = emit_arrayflags(ary, ctx);

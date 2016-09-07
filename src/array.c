@@ -548,8 +548,10 @@ JL_DLLEXPORT void jl_arrayset_nothrow(jl_array_t *a, jl_value_t *rhs, size_t i)
     assert(i < jl_array_len(a));
     if (!a->flags.ptrarray) {
         assert(rhs);
-        //TODO multiwb
         jl_assign_bits(&((char*)a->data)[i*a->elsize], rhs);
+        if (a->flags.hasptr) {
+            jl_gc_multi_wb(jl_array_owner(a), rhs);
+        }
     }
     else {
         ((jl_value_t**)a->data)[i] = rhs;
