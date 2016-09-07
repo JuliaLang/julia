@@ -169,7 +169,7 @@ example,
     ?r""
 
 will bring up docs for the relevant function, macro or string macro
-respectively. In `Juno <http://junolab.org>`_ using ``Ctrl-D`` will
+respectively. In `Juno <http://junolab.org>`_ using ``Ctrl-J, Ctrl-D`` will
 bring up documentation for the object under the cursor.
 
 Functions & Methods
