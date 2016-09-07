@@ -42,7 +42,7 @@ function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
     names = readdir("METADATA")
     # Not a git repo so just bail on using cache
     if in(".git", names)
-        pkg, usecache = LibGit2.with(LibGit2.GitRepo("METADATA")) do repo
+        pkgs, usecache = LibGit2.with(LibGit2.GitRepo("METADATA")) do repo
             LibGit2.with(LibGit2.head(repo)) do head
                 sha = Base.LibGit2.Oid(head)
                 # Only use cache if nothing funky is going on.
@@ -62,7 +62,7 @@ function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
                 end
             end
         end
-        usecache && return pkg
+        usecache && return pkgs
     end
     return available(names)
 end
