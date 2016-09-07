@@ -349,15 +349,17 @@ typedef struct {
 
 typedef struct {
     uint32_t nfields;
+    uint32_t npointers; // number of pointers (including inlined ones)
     uint32_t alignment : 28;  // strictest alignment over all fields
     uint32_t haspadding : 1;  // has internal undefined bytes
     uint32_t pointerfree : 1; // has any julia gc pointers
     uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
     // union {
-    //     jl_fielddesc8_t field8[];
-    //     jl_fielddesc16_t field16[];
-    //     jl_fielddesc32_t field32[];
+    //     jl_fielddesc8_t field8[nfields];
+    //     jl_fielddesc16_t field16[nfields];
+    //     jl_fielddesc32_t field32[nfields];
     // };
+    // uint32_t pointers[npointers];
 } jl_datatype_layout_t;
 
 typedef struct _jl_datatype_t {
@@ -658,6 +660,24 @@ STATIC_INLINE void jl_gc_wb(void *parent, void *ptr)
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
+STATIC_INLINE uint32_t *jl_dt_layout_pointers(jl_datatype_layout_t*);
+
+STATIC_INLINE void jl_gc_multi_wb(void *parent, void *ptr) {
+    if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
+        return;
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
+    jl_datatype_layout_t *ly = (jl_datatype_layout_t*)dt->layout;
+    uint32_t npointers = ly->npointers;
+    uint32_t *pointers = jl_dt_layout_pointers(ly);
+    for (size_t i = 0; i < npointers; i++) {
+        void *ptrf = *(void**)((char*)ptr + pointers[i]);
+        if ((jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
+            jl_gc_queue_root((jl_value_t*)parent);
+            return;
+        }
+    }
+}
+
 STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
     // if ptr is old
@@ -783,6 +803,19 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s)
 #define jl_symbol_name(s) jl_symbol_name_(s)
 
 #define jl_dt_layout_fields(d) ((const char*)(d) + sizeof(jl_datatype_layout_t))
+
+STATIC_INLINE uint32_t *jl_dt_layout_pointers(jl_datatype_layout_t *l)
+{
+    if (l->fielddesc_type == 0)
+        return (uint32_t*)(jl_dt_layout_fields(l) +
+                           sizeof(jl_fielddesc8_t)*l->nfields);
+    if (l->fielddesc_type == 1)
+        return (uint32_t*)(jl_dt_layout_fields(l) +
+                           sizeof(jl_fielddesc16_t)*l->nfields);
+    if (l->fielddesc_type == 2)
+        return (uint32_t*)(jl_dt_layout_fields(l) +
+                           sizeof(jl_fielddesc32_t)*l->nfields);
+}
 
 #define DEFINE_FIELD_ACCESSORS(f)                                             \
     static inline uint32_t jl_field_##f(jl_datatype_t *st, int i)             \

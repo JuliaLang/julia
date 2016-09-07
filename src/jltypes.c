@@ -3793,7 +3793,14 @@ void jl_init_types(void)
                         jl_emptysvec, jl_emptysvec, 0, 1, 0);
     jl_array_typename = jl_array_type->name;
     jl_array_type->ninitialized = 0;
-    static const jl_datatype_layout_t _jl_array_layout = { 0, sizeof(void*), 0, 0, 0 };
+    static const jl_datatype_layout_t _jl_array_layout =
+        {
+            .nfields = 0,
+            .npointers = 0,
+            .alignment = sizeof(void*),
+            .haspadding = 0,
+            .pointerfree = 0,
+            .fielddesc_type = 0 };
     jl_array_type->layout = &_jl_array_layout;
 
     jl_array_any_type =

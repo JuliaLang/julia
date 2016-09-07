@@ -498,13 +498,15 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 {
     if (a->flags.ptrarray)
         return ((jl_value_t**)jl_array_data(a))[i] != NULL;
-    else if (a->flags.hasptr)
-        return value_isdefined(jl_tparam0(jl_typeof(a)),
-                               &((char*)a->data)[i*a->elsize]);
+    else if (a->flags.hasptr) {
+        jl_datatype_t *eltype = jl_tparam0(jl_typeof(a));
+        assert(eltype->first_init_ptr >= 0);
+        jl_value_t **slot =
+            (jl_value_t**)(&((char*)a->data)[i*a->elsize] + eltype->first_init_ptr);
+        return *slot != NULL;
+    }
     return 1;
 }
-
-int value_isdefined(jl_datatype_t *st, char *v);
 
 int jl_array_isdefined(jl_value_t **args0, int nargs)
 {
@@ -546,6 +548,7 @@ JL_DLLEXPORT void jl_arrayset_nothrow(jl_array_t *a, jl_value_t *rhs, size_t i)
     assert(i < jl_array_len(a));
     if (!a->flags.ptrarray) {
         assert(rhs);
+        //TODO multiwb
         jl_assign_bits(&((char*)a->data)[i*a->elsize], rhs);
     }
     else {

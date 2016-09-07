@@ -877,11 +877,23 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
     Value *addr = builder.CreateGEP(data, idx_0based);
     if (!isboxed) {
         emit_unbox(elty, rhs, jltype, addr);
-        //TODO multi wb
+        assert(jl_is_datatype(jltype));
+        jl_datatype_layout_t *ly = (jl_datatype_layout_t*)((jl_datatype_t*)jltype)->layout;
+        uint32_t npointers = ly->npointers;
+        if (npointers > 0 && !rhs.constant && parent) {
+            assert(rhs.ispointer());
+            uint32_t *pointers = jl_dt_layout_pointers(ly);
+            Value **pointersV = (Value**)alloca(npointers * sizeof(Value*));
+            Value *rhs_i8 = emit_bitcast(rhs.V, T_pint8);
+            for (size_t i = 0; i < npointers; i++) {
+                pointersV[i] = builder.CreateLoad(emit_bitcast(builder.CreateGEP(rhs_i8, ConstantInt::get(T_size, pointers[i])), T_ppjlvalue));
+            }
+            emit_write_barrier(ctx, parent, ArrayRef<Value*>(pointersV, npointers));
+        }
         return;
     }
     r = boxed(rhs, ctx, root_box);
-    if (parent != NULL) emit_write_barrier(ctx, parent, r);
+    if (parent) emit_write_barrier(ctx, parent, r);
     Instruction *store = builder.CreateAlignedStore(r, addr, isboxed ? alignment : julia_alignment(r, jltype, alignment));
     if (tbaa)
         tbaa_decorate(tbaa, store);
@@ -971,7 +983,14 @@ type_of_constant:
 
 static Value *data_pointer(const jl_cgval_t &x, jl_codectx_t *ctx, Type *astype = T_ppjlvalue)
 {
-    Value *data = x.constant ? boxed(x, ctx) : x.V;
+    Value *data;
+    if (x.constant) {
+        data = boxed(x, ctx);
+    }
+    else {
+        assert(x.ispointer());
+        data = x.V;
+    }
     if (data->getType() != astype)
         data = emit_bitcast(data, astype);
     return data;
@@ -1076,10 +1095,11 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
     }
     else if (strct.ispointer()) { // something stack allocated
         Value *addr;
-        if (jl_is_vecelement_type((jl_value_t*)jt))
+        if (jl_is_vecelement_type((jl_value_t*)jt)) {
             // VecElement types are unwrapped in LLVM.
             addr = strct.V;
-        else
+            assert(0);
+        } else
             addr = builder.CreateConstInBoundsGEP2_32(
                 LLVM37_param(julia_type_to_llvm(strct.typ))
                 strct.V, 0, idx);
@@ -1597,14 +1617,17 @@ static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size,
     return emit_allocobj(ctx, static_size, literal_pointer_val(v.typ));
 }
 
-// if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
+{
+    emit_write_barrier(ctx, parent, ArrayRef<Value*>(ptr));
+}
+
+static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, ArrayRef<Value*> ptrs)
 {
     Value *parenttag = emit_bitcast(emit_typeptr_addr(parent), T_psize);
     Value *parent_type = tbaa_decorate(tbaa_tag, builder.CreateLoad(parenttag));
     Value *parent_bits = builder.CreateAnd(parent_type, 3);
 
-    // the branch hint does not seem to make it to the generated code
     Value *parent_old_marked = builder.CreateICmpEQ(parent_bits,
                                                     ConstantInt::get(T_size, 3));
 
@@ -1614,9 +1637,20 @@ static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
     builder.CreateCondBr(parent_old_marked, barrier_may_trigger, cont);
 
     builder.SetInsertPoint(barrier_may_trigger);
-    Value *ptr_mark_bit = builder.CreateAnd(tbaa_decorate(tbaa_tag, builder.CreateLoad(emit_bitcast(emit_typeptr_addr(ptr), T_psize))), 1);
-    Value *ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bit, ConstantInt::get(T_size, 0));
-    builder.CreateCondBr(ptr_not_marked, barrier_trigger, cont);
+    Value *any_ptr_young = NULL;
+
+    for (size_t i = 0; i < ptrs.size(); i++) {
+        Value *ptr = ptrs[i];
+        Value *ptr_mark_bit = builder.CreateAnd(tbaa_decorate(tbaa_tag, builder.CreateLoad(emit_bitcast(emit_typeptr_addr(ptr), T_psize))), 1);
+        Value *ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bit, ConstantInt::get(T_size, 0));
+        if (!any_ptr_young) {
+            any_ptr_young = ptr_not_marked;
+        }
+        else {
+            any_ptr_young = builder.CreateOr(any_ptr_young, ptr_not_marked);
+        }
+    }
+    builder.CreateCondBr(any_ptr_young, barrier_trigger, cont);
     builder.SetInsertPoint(barrier_trigger);
     builder.CreateCall(prepare_call(queuerootfun), emit_bitcast(parent, T_pjlvalue));
     builder.CreateBr(cont);

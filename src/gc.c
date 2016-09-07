@@ -1356,18 +1356,16 @@ static inline int scan_datatype(jl_ptls_t ptls, jl_datatype_t *dt, char *v, int 
     int refyoung = 0;
     int nf = (int)jl_datatype_nfields(dt);
     jl_datatype_t **types = jl_svec_data(dt->types);
-    for(int i=0; i < nf; i++) {
-        if (jl_field_isptr(dt, i)) {
-            *nptr++;
-            jl_value_t **slot = (jl_value_t**)(v + jl_field_offset(dt, i));
-            jl_value_t *fld = *slot;
-            if (fld) {
-                verify_parent2("object", v, slot, "field(%d)", i);
-                refyoung |= gc_push_root(ptls, fld, d);
-            }
-        } else if(jl_field_hasptr(dt, i)) {
-            refyoung |= scan_datatype(ptls, types[i], v + jl_field_offset(dt, i),
-                                      d, nptr);
+    jl_datatype_layout_t *layout = dt->layout;
+    uint32_t npointers = layout->npointers;
+    uint32_t *pointers = jl_dt_layout_pointers(layout);
+    for (size_t i = 0; i < npointers; i++) {
+        *nptr++;
+        jl_value_t **slot = (jl_value_t**)(v + pointers[i]);
+        jl_value_t *fld = *slot;
+        if (fld) {
+            verify_parent2("object", v, slot, "field(%d)", i);
+            refyoung |= gc_push_root(ptls, fld, d);
         }
     }
     return refyoung;

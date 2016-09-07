@@ -724,6 +724,7 @@ static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
 // --- utilities ---
 
 static void emit_write_barrier(jl_codectx_t*, Value*, Value*);
+static void emit_write_barrier(jl_codectx_t*, Value*, ArrayRef<Value*>);
 
 #include "cgutils.cpp"
 

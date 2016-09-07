@@ -165,6 +165,7 @@ object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 immutable DataTypeLayout
     nfields::UInt32
+    npointers::UInt32
     alignment::UInt32
     # alignment : 28;
     # haspadding : 1;

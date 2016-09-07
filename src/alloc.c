@@ -208,25 +208,8 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
     }
     else {
         jl_assign_bits((char*)v + offs, rhs);
+        jl_gc_multi_wb(v, rhs);
     }
-}
-
-// TODO inefficient and ugly
-int value_isdefined(jl_datatype_t *st, char *v) {
-    for (int i = 0; i < jl_datatype_nfields(st); i++) {
-        size_t offs = jl_field_offset(st,i);
-        if (jl_field_isptr(st, i)) {
-            assert(st->ninitialized > i);
-            return *(jl_value_t**)(v + offs) != NULL;
-        }
-        if (jl_field_hasptr(st, i)) {
-            assert(st->ninitialized > i);
-            return value_isdefined((jl_datatype_t*)jl_field_type(st, i),
-                                   v + offs);
-        }
-    }
-    assert(0);
-    return 0;
 }
 
 JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
@@ -906,7 +889,9 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
                                            uint32_t alignment,
                                            int haspadding,
-                                           jl_fielddesc32_t desc[])
+                                           jl_fielddesc32_t desc[],
+                                           uint32_t npointers,
+                                           uint32_t *pointers)
 {
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
@@ -934,8 +919,9 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     // allocate a new descriptor
     uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
     jl_datatype_layout_t *flddesc =
-        (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) + nfields * fielddesc_size);
+        (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) + nfields * fielddesc_size + npointers * sizeof(uint32_t));
     flddesc->nfields = nfields;
+    flddesc->npointers = npointers;
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
     flddesc->fielddesc_type = fielddesc_type;
@@ -968,6 +954,8 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             ptrfree = 0;
     }
     flddesc->pointerfree = ptrfree;
+    uint32_t *desc_pointers = jl_dt_layout_pointers(flddesc);
+    memcpy(desc_pointers, pointers, sizeof(uint32_t)*npointers);
     return flddesc;
 }
 
@@ -1032,6 +1020,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
     int32_t first_init_ptr = -1; // offset in bytes or -1
     int ptrfree = 1;
+    uint32_t npointers = 0;
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
@@ -1041,11 +1030,13 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             // Should never happen
             if (__unlikely(fsz > max_size))
                 jl_throw(jl_overflow_exception);
-            al = ((jl_datatype_t*)ty)->layout->alignment;
+            jl_datatype_layout_t *field_layout = ((jl_datatype_t*)ty)->layout;
+            al = field_layout->alignment;
             desc[i].isptr = 0;
-            desc[i].hasptr = !((jl_datatype_t*)ty)->layout->pointerfree;
+            desc[i].hasptr = !field_layout->pointerfree;
             if (((jl_datatype_t*)ty)->layout->haspadding)
                 haspadding = 1;
+            npointers += field_layout->npointers;
             if (((jl_datatype_t*)ty)->first_init_ptr >= 0)
                 field_first_init_ptr = ((jl_datatype_t*)ty)->first_init_ptr;
         }
@@ -1058,6 +1049,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             desc[i].hasptr = 0;
             if (i < st->ninitialized)
                 field_first_init_ptr = 0;
+            npointers += 1;
         }
         if (al != 0) {
             size_t alsz = LLT_ALIGN(sz, al);
@@ -1080,6 +1072,20 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         sz += fsz;
     }
     st->first_init_ptr = first_init_ptr;
+
+    uint32_t *pointers = (uint32_t*)alloca(npointers*sizeof(uint32_t));
+    size_t ptr_i = 0;
+    for (size_t i = 0; i < nfields; i++) {
+        if (desc[i].isptr)
+            pointers[ptr_i++] = desc[i].offset;
+        else if(desc[i].hasptr) {
+            jl_datatype_layout_t *fl = ((jl_datatype_t*)jl_field_type(st, i))->layout;
+            uint32_t *f_ptrs = jl_dt_layout_pointers(fl);
+            for (size_t j = 0; j < fl->npointers; j++)
+                pointers[ptr_i++] = desc[i].offset + f_ptrs[j];
+        }
+    }
+
     // if there are no pointer field that we know for sure are non null
     // we can't represent #undef with this layout, so fall back to boxing
     if (st->first_init_ptr < 0 && !ptrfree)
@@ -1094,7 +1100,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     st->size = LLT_ALIGN(sz, alignm);
     if (st->size > sz)
         haspadding = 1;
-    st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
+    st->layout = jl_get_layout(nfields, alignm, haspadding, desc, npointers, pointers);
 }
 
 extern int jl_boot_file_loaded;
@@ -1181,7 +1187,15 @@ jl_datatype_t* jl_new_datatype_(jl_sym_t* name, jl_datatype_t *super, jl_svec_t 
     else {
         t->uid = jl_assign_type_uid();
         if (t->types != NULL && t->isleaftype) {
-            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 1, 0};
+            static const jl_datatype_layout_t singleton_layout =
+                {
+                    .nfields = 0,
+                    .npointers = 0,
+                    .alignment = 1,
+                    .haspadding = 0,
+                    .pointerfree = 1,
+                    .fielddesc_type = 0
+                };
             if (fnames == jl_emptysvec)
                 t->layout = &singleton_layout;
             else
@@ -1202,7 +1216,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
     bt->size = nbytes;
-    bt->layout = jl_get_layout(0, alignm, 0, NULL);
+    bt->layout = jl_get_layout(0, alignm, 0, NULL, 0, NULL);
     return bt;
 }
 
