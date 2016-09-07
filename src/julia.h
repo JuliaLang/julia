@@ -193,9 +193,10 @@ typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_lambda_info_t*, jl_value_t**, 
 typedef struct {
     union {
         jl_fptr_t fptr;
-        jl_fptr_t fptr0;
-        jl_fptr_sparam_t fptr1;
-        jl_fptr_linfo_t fptr3;
+        jl_fptr_t fptr1;
+        // constant fptr2;
+        jl_fptr_sparam_t fptr3;
+        jl_fptr_linfo_t fptr4;
     };
     uint8_t jlcall_api;
 } jl_generic_fptr_t;
@@ -278,7 +279,7 @@ typedef struct _jl_lambda_info_t {
     uint8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
     uint8_t compile_traced; // if set will notify callback if this linfo is compiled
     jl_fptr_t fptr; // jlcall entry point with api specified by jlcall_api
-    jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = 0
+    jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = 1
 
     // On the old JIT, handles to all Functions generated for this linfo
     // For the new JITs, handles to declarations in the shadow module

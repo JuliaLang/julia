@@ -452,13 +452,13 @@ static void jl_update_all_fptrs(void)
 
 // --- serialize ---
 
-static void jl_serialize_fptr(jl_serializer_state *s, void *fptr)
+static uint16_t jl_fptr_id(void *fptr)
 {
     void **pbp = ptrhash_bp(&fptr_to_id, fptr);
     if (*pbp == HT_NOTFOUND || fptr == NULL)
-        write_uint16(s->s, 1);
+        return 1;
     else
-        write_uint16(s->s, *(intptr_t*)pbp);
+        return *(intptr_t*)pbp;
 }
 
 static int module_in_worklist(jl_module_t *mod)
@@ -925,12 +925,24 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_serialize_value(s, li->rettype);
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         jl_serialize_value(s, (jl_value_t*)li->def);
-        jl_serialize_fptr(s, (void*)(uintptr_t)li->fptr);
-        // save functionObject pointers
-        write_int8(s->s, li->jlcall_api);
-        if (li->jlcall_api != 2) {
+        uint16_t id = jl_fptr_id((void*)(uintptr_t)li->fptr);
+        if (li->jlcall_api == 2) {
+            write_int8(s->s, 2);
+        }
+        else if (id >= 2) {
+            write_int8(s->s, -li->jlcall_api);
+            write_uint16(s->s, id);
+        }
+        else if (li->functionObjectsDecls.functionObject) {
+            int jlcall_api = jl_jlcall_api(li->functionObjectsDecls.functionObject);
+            assert(jlcall_api);
+            // save functionObject pointers
+            write_int8(s->s, jlcall_api);
             write_int32(s->s, jl_assign_functionID(li->functionObjectsDecls.functionObject));
             write_int32(s->s, jl_assign_functionID(li->functionObjectsDecls.specFunctionObject));
+        }
+        else {
+            write_int8(s->s, 0);
         }
     }
     else if (jl_typeis(v, jl_module_type)) {
@@ -1588,18 +1600,26 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
         if (li->def)
             jl_gc_wb(li, li->def);
-        li->fptr = NULL;
         li->functionObjectsDecls.functionObject = NULL;
         li->functionObjectsDecls.specFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
-        li->fptr = jl_deserialize_fptr(s);
-        li->jlcall_api = read_int8(s->s);
-        if (li->jlcall_api != 2) {
+        int8_t jlcall_api = read_int8(s->s);
+        if (jlcall_api == 2 || jlcall_api == 0) {
+            li->fptr = NULL;
+            li->jlcall_api = jlcall_api;
+        }
+        else if (jlcall_api < 0) {
+            li->fptr = jl_deserialize_fptr(s);
+            li->jlcall_api = -jlcall_api;
+        }
+        else {
             int32_t cfunc_llvm, func_llvm;
             func_llvm = read_int32(s->s);
             cfunc_llvm = read_int32(s->s);
             jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
+            li->fptr = NULL;
+            li->jlcall_api = jlcall_api;
         }
         li->compile_traced = 0;
         return (jl_value_t*)li;

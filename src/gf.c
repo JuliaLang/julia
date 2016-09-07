@@ -164,6 +164,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
     }
     jl_lambda_info_t *li = jl_new_lambda_info_uninit();
     li->fptr = fptr;
+    li->jlcall_api = 1;
     li->specTypes = jl_anytuple_type;
 
     li->def = jl_new_method_uninit();
@@ -229,7 +230,8 @@ JL_DLLEXPORT void jl_set_lambda_rettype(jl_lambda_info_t *li, jl_value_t *rettyp
     jl_gc_wb(li, rettype);
     li->inferred = inferred;
     jl_gc_wb(li, inferred);
-    li->jlcall_api = (const_api == jl_true ? 2 : 0);
+    if (const_api == jl_true)
+        li->jlcall_api = 2;
 }
 
 static int jl_is_uninferred(jl_lambda_info_t *li)
@@ -1248,7 +1250,6 @@ static jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
 
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous);
 
-// TODO: setting jlcall_api needs store ordering WRT fptr and inferred
 jl_llvm_functions_t jl_compile_for_dispatch(jl_lambda_info_t *li)
 {
     if (li->jlcall_api == 2)
