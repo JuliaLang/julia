@@ -154,10 +154,14 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t 
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void);
 static jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw);
-jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
+void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
 {
     jl_sym_t *sname = jl_symbol(name);
-    jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
+    if (dt == NULL) {
+        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
+        jl_set_const(jl_core_module, sname, f);
+        dt = (jl_datatype_t*)jl_typeof(f);
+    }
     jl_lambda_info_t *li = jl_new_lambda_info_uninit();
     li->fptr = fptr;
     li->code = jl_nothing;
@@ -168,14 +172,13 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
 
     li->def = jl_new_method_uninit();
     li->def->name = sname;
-    // li->def->module will be set to jl_core_module by init.c
+    li->def->module = jl_core_module;
     li->def->lambda_template = li;
     li->def->sig = jl_anytuple_type;
     li->def->tvars = jl_emptysvec;
 
-    jl_methtable_t *mt = jl_gf_mtable(f);
+    jl_methtable_t *mt = dt->name->mt;
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &lambda_cache, NULL);
-    return f;
 }
 
 /*

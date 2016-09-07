@@ -5616,29 +5616,29 @@ static void init_julia_llvm_env(Module *m)
     gcroot_func =
         Function::Create(FunctionType::get(T_ppjlvalue, false),
                      Function::ExternalLinkage,
-                     "julia.gc_root_decl", m);
+                     "julia.gc_root_decl");
     add_named_global(gcroot_func, (void*)NULL, /*dllimport*/false);
 
     gckill_func =
         Function::Create(FunctionType::get(T_void, ArrayRef<Type*>(T_ppjlvalue), false),
                      Function::ExternalLinkage,
-                     "julia.gc_root_kill", m);
+                     "julia.gc_root_kill");
     add_named_global(gckill_func, (void*)NULL, /*dllimport*/false);
 
     jlcall_frame_func =
         Function::Create(FunctionType::get(T_ppjlvalue, ArrayRef<Type*>(T_int32), false),
                      Function::ExternalLinkage,
-                     "julia.jlcall_frame_decl", m);
+                     "julia.jlcall_frame_decl");
     add_named_global(jlcall_frame_func, (void*)NULL, /*dllimport*/false);
 
     gcroot_flush_func = Function::Create(FunctionType::get(T_void, false),
                                          Function::ExternalLinkage,
-                                         "julia.gcroot_flush", m);
+                                         "julia.gcroot_flush");
     add_named_global(gcroot_flush_func, (void*)NULL, /*dllimport*/false);
 
     except_enter_func = Function::Create(FunctionType::get(T_int32, false),
                                          Function::ExternalLinkage,
-                                         "julia.except_enter", m);
+                                         "julia.except_enter");
     except_enter_func->addFnAttr(Attribute::ReturnsTwice);
     add_named_global(except_enter_func, (void*)NULL, /*dllimport*/false);
 

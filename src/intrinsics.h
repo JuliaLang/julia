@@ -101,13 +101,14 @@
     ADD_I(pointerset, 4) \
     /* c interface */ \
     ALIAS(ccall, ccall) \
-    ALIAS(cglobal, cglobal) \
+    ADD_I(cglobal, 2) \
     ALIAS(llvmcall, llvmcall) \
     /* object access */ \
     ADD_I(arraylen, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(fptoui_auto, 1) \
-    ADD_HIDDEN(fptosi_auto, 1)
+    ADD_HIDDEN(fptosi_auto, 1) \
+    ADD_HIDDEN(cglobal_auto, 1)
 
 enum intrinsic {
 #define ADD_I(func, nargs) func,
@@ -124,7 +125,7 @@ enum intrinsic {
 #ifdef __cplusplus
 extern "C"
 #endif
-const char *jl_intrinsic_name(int f)
+JL_DLLEXPORT const char *jl_intrinsic_name(int f)
 {
     switch ((enum intrinsic)f) {
     default: return "invalid";
@@ -152,21 +153,25 @@ extern "C"
 JL_CALLABLE(jl_f_intrinsic_call)
 {
     JL_NARGSV(intrinsic_call, 1);
-    JL_TYPECHK(intrinsic_call, intrinsic, args[0]);
-    enum intrinsic f = (enum intrinsic)*(uint32_t*)jl_data_ptr(args[0]);
+    JL_TYPECHK(intrinsic_call, intrinsic, F);
+    enum intrinsic f = (enum intrinsic)*(uint32_t*)jl_data_ptr(F);
     if (f == fptoui && nargs == 1)
         f = fptoui_auto;
     if (f == fptosi && nargs == 1)
         f = fptosi_auto;
+    if (f == cglobal && nargs == 1)
+        f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
-    JL_NARGS(intrinsic_call, 1 + fargs, 1 + fargs);
+    if (!fargs)
+        jl_error("this intrinsic must be compiled to be called");
+    JL_NARGS(intrinsic_call, fargs, fargs);
     switch (fargs) {
         case 1:
-            return ((intrinsic_call_1_arg)runtime_fp[f])(args[1]);
+            return ((intrinsic_call_1_arg)runtime_fp[f])(args[0]);
         case 2:
-            return ((intrinsic_call_2_arg)runtime_fp[f])(args[1], args[2]);
+            return ((intrinsic_call_2_arg)runtime_fp[f])(args[0], args[1]);
         case 3:
-            return ((intrinsic_call_3_arg)runtime_fp[f])(args[1], args[2], args[3]);
+            return ((intrinsic_call_3_arg)runtime_fp[f])(args[0], args[1], args[2]);
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
@@ -191,21 +196,34 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
 #ifdef __cplusplus
 extern "C"
 #endif
-void jl_init_intrinsic_functions()
+void jl_init_intrinsic_properties(void)
 {
-    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
-    inm->parent = jl_core_module;
-    jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
-
-#define ADD_I(name, nargs) add_intrinsic(inm, #name, name); add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
-#define ADD_HIDDEN(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
-#define ALIAS(alias, base) add_intrinsic(inm, #alias, alias); add_intrinsic_properties(alias, intrinsic_nargs[base], runtime_fp[base]);
+#define ADD_I(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
+#define ADD_HIDDEN ADD_I
+#define ALIAS(alias, base) add_intrinsic_properties(alias, intrinsic_nargs[base], runtime_fp[base]);
     ADD_HIDDEN(reinterpret, 2);
     INTRINSICS
 #undef ADD_I
 #undef ADD_HIDDEN
 #undef ALIAS
 
-    jl_set_const(inm, jl_symbol("intrinsic_call"),
-                 jl_mk_builtin_func("intrinsic_call", jl_f_intrinsic_call));
+}
+
+#ifdef __cplusplus
+extern "C"
+#endif
+void jl_init_intrinsic_functions(void)
+{
+    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
+    inm->parent = jl_core_module;
+    jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
+    jl_mk_builtin_func(jl_intrinsic_type, "IntrinsicFunction", jl_f_intrinsic_call);
+
+#define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
+#define ADD_HIDDEN(name, nargs)
+#define ALIAS ADD_I
+    INTRINSICS
+#undef ADD_I
+#undef ADD_HIDDEN
+#undef ALIAS
 }
