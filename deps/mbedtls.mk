@@ -52,6 +52,7 @@ endif
 
 ifeq ($(OS),WINNT)
 define MBEDTLS_INSTALL
+	mkdir -p $2/$$(build_shlibdir)
 	cp $1/library/libmbedcrypto.$$(SHLIB_EXT) $2/$$(build_shlibdir)
 	cp $1/library/libmbedx509.$$(SHLIB_EXT) $2/$$(build_shlibdir)
 	cp $1/library/libmbedtls.$$(SHLIB_EXT) $2/$$(build_shlibdir)
