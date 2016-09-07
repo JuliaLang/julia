@@ -558,6 +558,7 @@ ones(A)
     reshape(A, dims)
 
 Create an array with the same data as the given array, but with different dimensions.
+
 ```jldoctest
 julia> A = collect(1:16)
 16-element Array{Int64,1}:

@@ -418,7 +418,9 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array with the same data as the given array, but with different dimensions. ```jldoctest julia> A = collect(1:16) 16-element Array{Int64,1}:   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16
+   Create an array with the same data as the given array, but with different dimensions.
+
+   ```jldoctest julia> A = collect(1:16) 16-element Array{Int64,1}:   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16
 
    julia> reshape(A, (2, 8)) 2×8 Array{Int64,2}:  1  3  5  7   9  11  13  15  2  4  6  8  10  12  14  16  ```
 
