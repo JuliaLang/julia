@@ -142,8 +142,8 @@ function convert(::Type{Float16}, val::Float32)
     # getting truncated anyway so "rounding" it might not matter
     nextbit = (f >> (sh-1)) & 1
     if nextbit != 0
-        if h&1 == 1 ||  # round halfway to even
-            (f & ((1<<(sh-1))-1)) != 0  # check lower bits
+        # Round halfway to even or check lower bits
+        if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
             h += 1
         end
     end
