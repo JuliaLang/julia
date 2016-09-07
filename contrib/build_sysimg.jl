@@ -43,7 +43,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
         userimg_path = abspath(userimg_path)
     end
 
-    # Enter base/ and setup some useful paths
+    # Enter base and setup some useful paths
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
         julia = joinpath(JULIA_HOME, debug ? "julia-debug" : "julia")
@@ -71,18 +71,18 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
         try
             # Start by building inference0.{ji,o}
             inference0_path = joinpath(dirname(sysimg_path), "inference0")
-            info("Building inference0.o...")
+            info("Building inference0.o")
             println("$julia -C $cpu_target --output-ji $inference0_path.ji --output-o $inference0_path.o coreimg.jl")
             run(`$julia -C $cpu_target --output-ji $inference0_path.ji --output-o $inference0_path.o coreimg.jl`)
 
             # Bootstrap off off that to create inference.{ji,o}
             inference_path = joinpath(dirname(sysimg_path), "inference")
-            info("Building inference.o...")
+            info("Building inference.o")
             println("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
             run(`$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl`)
 
             # Bootstrap off off that to create sys.{ji,o}
-            info("Building sys.o...")
+            info("Building sys.o")
             println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
@@ -161,9 +161,15 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
         push!(FLAGS, "-lssp")
     end
 
+    sysimg_file = "$sysimg_path.$(Libdl.dlext)"
     info("Linking sys.$(Libdl.dlext)")
-    run(`$cc $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)
-
+    if is_windows() && isfile(sysimg_file)
+        mv(sysimg_file, "$sysimg_file.old"; remove_destination=true)
+        run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
+        run(`rm "$sysimg_path.$(Libdl.dlext).old"`)
+    else
+        run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
+    end
     info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
 end
 
