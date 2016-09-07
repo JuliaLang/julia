@@ -623,6 +623,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0);
     jl_init_serializer();
+    jl_init_intrinsic_properties();
 
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));

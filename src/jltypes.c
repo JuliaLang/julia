@@ -3948,7 +3948,7 @@ void jl_init_types(void)
         jl_type_type->name->mt;
 
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
-                                        jl_any_type, jl_emptysvec, 32);
+                                        jl_builtin_type, jl_emptysvec, 32);
 
     tv = jl_svec1(tvar("T"));
     jl_ref_type =
