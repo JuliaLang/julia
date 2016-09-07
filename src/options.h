@@ -34,7 +34,7 @@
 // with MEMDEBUG, every object is allocated explicitly with malloc, and
 // filled with 0xbb before being freed. this helps tools like valgrind
 // catch invalid accesses.
-#define MEMDEBUG
+//#define MEMDEBUG
 
 // with MEMFENCE, the object pool headers are verified during sweep
 // to help detect corruption due to fence-post write errors
