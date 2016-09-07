@@ -3370,8 +3370,11 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                 vals = Vector{Any}(nv)
                 for j=1:nv
                     tupelt = tup[j+1]
-                    if (isa(tupelt,Number) || isa(tupelt,AbstractString) ||
-                        isa(tupelt,QuoteNode) || isa(tupelt, SSAValue))
+                    # If `!is_ssa` we have to create new variables for each
+                    # (used) fields in order to preserve the undef check.
+                    if is_ssa && (isa(tupelt,Number) ||
+                                  isa(tupelt,AbstractString) ||
+                                  isa(tupelt,QuoteNode) || isa(tupelt, SSAValue))
                         vals[j] = tupelt
                     else
                         elty = exprtype(tupelt, linfo)
