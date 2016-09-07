@@ -3,12 +3,12 @@ import Base.tryparse
 
 function DateTime(str::AbstractString,::FastDateFormat{:ISODateTime})
     nd = tryparse(DateTime, str)
-    isnull(nd) && throw(ParseError("Invalid DateTime string"))
+    isnull(nd) && throw(ArgumentError("Invalid DateTime string"))
     get(nd)
 end
 function Date(str::AbstractString,::FastDateFormat{:ISODate})
     nd = tryparse(Date, str)
-    isnull(nd) && throw(ParseError("Invalid Date string"))
+    isnull(nd) && throw(ArgumentError("Invalid Date string"))
     get(nd)
 end
 
@@ -49,11 +49,14 @@ end
 
 @inline function tryparsenext(::Type{Date},str,i)
     R = Nullable{Date}
+    dm = dd = 1
     dy, i = @chk1 tryparsenext_base10(str,i,10)
     c,  i = @chk1 tryparsenext_char(str,i,'-')
-    dm, i = @chk1 tryparsenext_base10(str,i,2)
-    c,  i = @chk1 tryparsenext_char(str,i,'-')
-    dd, i = @chk1 tryparsenext_base10(str,i,2)
+    dm, i = @chk1 tryparsenext_base10(str,i,2) done
+    c,  i = @chk1 tryparsenext_char(str,i,'-') done
+    dd, i = @chk1 tryparsenext_base10(str,i,2) done
+
+    @label done
     d = Date(dy,dm,dd)
     return R(d), i
 
@@ -64,29 +67,23 @@ end
 
 @inline function tryparsenext(::Type{DateTime},str,i)
     R = Nullable{DateTime}
+    dm = dd = 1
+    th = tm = ts = tms = 0
     dy, i = @chk1 tryparsenext_base10(str,i,10)
     c,  i = @chk1 tryparsenext_char(str,i,'-')
-    dm, i = @chk1 tryparsenext_base10(str,i,2)
-    c,  i = @chk1 tryparsenext_char(str,i,'-')
-    dd, i = @chk1 tryparsenext_base10(str,i,2)
+    dm, i = @chk1 tryparsenext_base10(str,i,2) done
+    c,  i = @chk1 tryparsenext_char(str,i,'-') done
+    dd, i = @chk1 tryparsenext_base10(str,i,2) done
+    c,  i = @chk1 tryparsenext_char(str,i,'T') done
+    th, i = @chk1 tryparsenext_base10(str,i,2) done
+    c,  i = @chk1 tryparsenext_char(str,i,':') done
+    tm, i = @chk1 tryparsenext_base10(str,i,2) done
+    c,  i = @chk1 tryparsenext_char(str,i,':') done
+    ts, i = @chk1 tryparsenext_base10(str,i,2) done
+    c,  i = @chk1 tryparsenext_char(str,i,'.') done
+    tms,i = @chk1 tryparsenext_base10_frac(str,i,3) done
 
-    nc, i = tryparsenext_char(str,i,'T')
-    if isnull(nc)
-        d = DateTime(dy,dm,dd)
-        return R(d), i
-    end
-    th, i = @chk1 tryparsenext_base10(str,i,2)
-    c,  i = @chk1 tryparsenext_char(str,i,':')
-    tm, i = @chk1 tryparsenext_base10(str,i,2)
-    c,  i = @chk1 tryparsenext_char(str,i,':')
-    ts, i = @chk1 tryparsenext_base10(str,i,2)
-
-    nc, i = tryparsenext_char(str,i,'.')
-    if isnull(nc)
-        d = DateTime(dy,dm,dd,th,tm,ts)
-        return R(d), i
-    end
-    tms,i = @chk1 tryparsenext_base10_frac(str,i,3)
+    @label done
     d = DateTime(dy,dm,dd,th,tm,ts,tms)
     return R(d), i
 
@@ -122,14 +119,16 @@ end
 @inline function tryparsenext_base10_frac(str,i,maxdig)
     R = Nullable{Int}
     r,i = @chk1 tryparsenext_base10_digit(str,i)
-    local j
     for j = 2:maxdig
-        d,i = @chk1 tryparsenext_base10_digit(str,i) done
+        nd,i = tryparsenext_base10_digit(str,i)
+        if isnull(nd)
+            for k = j:maxdig
+                r *= 10
+            end
+            break
+        end
+        d = get(nd)
         r = 10*r + d
-    end
-    @label done
-    for k = j+1:maxdig
-        r *= 10
     end
     return R(r), i
 
