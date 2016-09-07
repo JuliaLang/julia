@@ -494,7 +494,23 @@ function source_dir()
     p === nothing ? p : dirname(p)
 end
 
+"""
+    @__FILE__ -> AbstractString
+
+`@__FILE__` expands to a string with the absolute file path of the file containing the
+macro. Returns `nothing` if run from a REPL or an empty string if evaluated by
+`julia -e <expr>`. Alternatively see [`PROGRAM_FILE`](:data:`PROGRAM_FILE`).
+"""
 macro __FILE__() source_path() end
+
+"""
+    @__DIR__ -> AbstractString
+
+`@__DIR__` expands to a string with the directory part of the absolute path of the file
+containing the macro. Returns `nothing` if run from a REPL or an empty string if
+evaluated by `julia -e <expr>`.
+"""
+macro __DIR__() source_dir() end
 
 """
     include(path::AbstractString)

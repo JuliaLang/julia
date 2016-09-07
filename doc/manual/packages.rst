@@ -771,6 +771,16 @@ testing service, and an ``appveyor.yml`` file for using `AppVeyor <https://www.a
 the Travis and AppVeyor websites for your package repository, but once you've done that, it will already have working tests.
 Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
 
+Loading Static Non-Julia Files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If your package code needs to load static files which are not Julia code, e.g. an external library or data files, and are
+located within the package directory, use the ``@__DIR__`` macro to determine the directory of the current source file.
+For example if ``FooBar/src/FooBar.jl`` needs to load ``FooBar/data/foo.csv``, use the following code::
+
+    datapath = joinpath(@__DIR__, "..", "data")
+    foo = readcsv(joinpath(datapath, "foo.csv"))
+
 Making Your Package Available
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
