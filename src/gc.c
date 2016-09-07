@@ -1823,7 +1823,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full)
         gc_num.interval = default_collect_interval / 2;
         sweep_full = gc_sweep_always_full;
     }
-    sweep_full = 1;
+
     if (sweep_full)
         perm_scanned_bytes = 0;
     scanned_bytes = 0;

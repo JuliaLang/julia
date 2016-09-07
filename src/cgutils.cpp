@@ -878,11 +878,11 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
     if (!isboxed) {
         emit_unbox(elty, rhs, jltype, addr);
         assert(jl_is_datatype(jltype));
-        jl_datatype_layout_t *ly = (jl_datatype_layout_t*)((jl_datatype_t*)jltype)->layout;
+        const jl_datatype_layout_t *ly = ((jl_datatype_t*)jltype)->layout;
         uint32_t npointers = ly->npointers;
         if (npointers > 0 && !rhs.constant && parent) {
             assert(rhs.ispointer());
-            uint32_t *pointers = jl_dt_layout_pointers(ly);
+            const uint32_t *pointers = jl_dt_layout_pointers(ly);
             Value **pointersV = (Value**)alloca(npointers * sizeof(Value*));
             Value *rhs_i8 = emit_bitcast(rhs.V, T_pint8);
             for (size_t i = 0; i < npointers; i++) {
