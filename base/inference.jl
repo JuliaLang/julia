@@ -1477,51 +1477,50 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
     local frame = nothing
     if isa(caller, LambdaInfo)
         code = caller
-    elseif cached
+    elseif cached && !is(method.specializations, nothing)
         # check cached specializations
         # for an existing result stored there
-        if !is(method.specializations, nothing)
-            code = ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
-            if isa(code, Void)
-                # something completely new
-            elseif isa(code, LambdaInfo)
-                # something existing
-                if isdefined(code, :inferred)
-                    if code.jlcall_api == 2
-                        if needtree
-                            tree = ccall(:jl_new_source_info_uninit, Ref{SourceInfo}, ())
-                            tree.code = Any[ Expr(:return, QuoteNode(code.inferred)) ]
-                            tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
-                            tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
-                            tree.slottypes = nothing
-                            tree.ssavaluetypes = 0
-                            tree.inferred = true
-                            tree.pure = true
-                            tree.inlineable = true
-                        else
-                            tree = Const(code.inferred)
-                        end
-                        return (tree, code.rettype, true)
-                    elseif isa(code.inferred, SourceInfo)
-                        if code.inferred.inferred
-                            return (code.inferred, code.rettype, true)
-                        end
-                    elseif !needtree
-                        return (nothing, code.rettype, true)
-                    else
-                        cached = false # don't need to save the new result
-                    end
-                end
-            else
-                # sometimes just a return type is stored here. if a full AST
-                # is not needed, we can return it.
-                typeassert(code, Type)
-                if !needtree
-                    return (nothing, code, true)
-                end
-                cached = false # don't need to save the new result
-                code = nothing
+        code = ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
+        if isa(code, Void)
+            # something completely new
+        elseif isa(code, LambdaInfo)
+            # something existing
+        else
+            # sometimes just a return type is stored here. if a full AST
+            # is not needed, we can return it.
+            typeassert(code, Type)
+            if !needtree
+                return (nothing, code, true)
             end
+            cached = false # don't need to save the new result
+            code = nothing
+        end
+    end
+
+    if isa(code, LambdaInfo) && isdefined(code, :inferred)
+        if code.jlcall_api == 2
+            if needtree
+                tree = ccall(:jl_new_source_info_uninit, Ref{SourceInfo}, ())
+                tree.code = Any[ Expr(:return, QuoteNode(code.inferred)) ]
+                tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
+                tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
+                tree.slottypes = nothing
+                tree.ssavaluetypes = 0
+                tree.inferred = true
+                tree.pure = true
+                tree.inlineable = true
+            else
+                tree = Const(code.inferred)
+            end
+            return (tree, code.rettype, true)
+        elseif isa(code.inferred, SourceInfo)
+            if code.inferred.inferred
+                return (code.inferred, code.rettype, true)
+            end
+        elseif !needtree
+            return (nothing, code.rettype, true)
+        else
+            cached = false # don't need to save the new result
         end
     end
 

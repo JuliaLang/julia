@@ -1204,50 +1204,6 @@ jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t
     return sf;
 }
 
-static jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
-{
-    // one unspecialized version of a function can be shared among all cached specializations
-    jl_method_t *def = method->def;
-    if (def->needs_sparam_vals_ducttape == 2) {
-        if (def->isstaged) {
-            def->needs_sparam_vals_ducttape = 1;
-        }
-        else {
-            // determine if this needs an unspec version compiled for each
-            // sparam, or whether they can be shared
-            // TODO: remove this once runtime intrinsics are hooked up
-            int needs_sparam_vals_ducttape = 0;
-            if (method->sparam_vals != jl_emptysvec) {
-                jl_array_t *code = (jl_array_t*)def->source->code;
-                JL_GC_PUSH1(&code);
-                if (!jl_typeis(code, jl_array_any_type))
-                    code = jl_uncompress_ast(def, code);
-                size_t i, l = jl_array_len(code);
-                for (i = 0; i < l; i++) {
-                    if (jl_has_intrinsics(method, jl_array_ptr_ref(code, i), def->module)) {
-                        needs_sparam_vals_ducttape = 1;
-                        break;
-                    }
-                }
-                JL_GC_POP();
-            }
-            def->needs_sparam_vals_ducttape = needs_sparam_vals_ducttape;
-        }
-    }
-    if (def->needs_sparam_vals_ducttape) {
-        return method;
-    }
-    if (def->unspecialized == NULL) {
-        JL_LOCK(&def->writelock);
-        if (def->unspecialized == NULL) {
-            def->unspecialized = jl_get_specialized(def, def->sig, jl_emptysvec);
-            jl_gc_wb(def, def->unspecialized);
-        }
-        JL_UNLOCK(&def->writelock);
-    }
-    return def->unspecialized;
-}
-
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous);
 
 jl_llvm_functions_t jl_compile_for_dispatch(jl_lambda_info_t *li)
@@ -1286,7 +1242,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_lambda_info_t *li)
         return decls;
 
     jl_source_info_t *src = NULL;
-    if (li->def && jl_is_uninferred(li) && !li->inInference && !li->inCompile &&
+    if (li->def && jl_is_uninferred(li) && !li->inInference &&
              jl_symbol_name(li->def->name)[0] != '@') {
         // don't bother with typeinf on macros or toplevel thunks
         // but try to infer everything else
@@ -1296,14 +1252,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_lambda_info_t *li)
     decls = li->functionObjectsDecls;
     if (decls.functionObject != NULL || li->jlcall_api == 2)
         return decls;
-    decls = jl_compile_linfo(li, src);
-    if (decls.functionObject == NULL || li->inCompile) {
-        li = jl_get_unspecialized(li); // create the unspecialized version to cache the result
-        src = li->def->isstaged ? jl_code_for_staged(li) : li->def->source;
-        decls = jl_compile_linfo(li, src);
-        assert(decls.functionObject);
-    }
-    return decls;
+    return jl_compile_linfo(li, src);
 }
 
 // compile-time method lookup
