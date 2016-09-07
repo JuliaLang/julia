@@ -145,16 +145,6 @@ finalize(o::ANY) = ccall(:jl_finalize_th, Void, (Ptr{Void}, Any,),
 gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Cint,), full)
 gc_enable(on::Bool) = ccall(:jl_gc_enable, Cint, (Cint,), on)!=0
 
-# used by interpolating quote and some other things in the front end
-function vector_any(xs::ANY...)
-    n = length(xs)
-    a = Array{Any}(n)
-    @inbounds for i = 1:n
-        arrayset(a,xs[i],i)
-    end
-    a
-end
-
 immutable Nullable{T}
     isnull::Bool
     value::T
