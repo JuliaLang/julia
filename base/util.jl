@@ -355,6 +355,12 @@ warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
 warn(err::Exception; prefix="ERROR: ", kw...) =
     warn(STDERR, err, prefix=prefix; kw...)
 
+info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
+    info(io, sprint(buf->showerror(buf, err)), prefix=prefix; kw...)
+
+info(err::Exception; prefix="ERROR: ", kw...) =
+    info(STDERR, err, prefix=prefix; kw...)
+
 function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
