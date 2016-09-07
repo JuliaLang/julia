@@ -59,6 +59,9 @@ namespace llvm {
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/ADT/StringSet.h>
+#include <llvm/ADT/SmallSet.h>
 
 using namespace llvm;
 
@@ -743,61 +746,118 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
 // to finalizing a function, look up its name in the `module_for_fname` map of unfinalized functions
 // and merge it, plus any other modules it depends upon, into `collector`
 // then add `collector` to the execution engine
-//
-// in the old JIT, functions are finalized by adding them to the shadow module
-// (which aliases the engine module), so this is unneeded
-#ifdef USE_MCJIT
 static StringMap<Module*> module_for_fname;
+static void jl_merge_recursive(Module *m, Module *collector);
+
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+static void jl_add_to_ee(std::unique_ptr<Module> m)
+{
+#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_) && defined(LLVM35)
+    // Add special values used by debuginfo to build the UnwindData table registration for Win64
+    ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
+    (new GlobalVariable(*m, atype,
+        false, GlobalVariable::InternalLinkage,
+        ConstantAggregateZero::get(atype), "__UnwindData"))->setSection(".text");
+    (new GlobalVariable(*m, atype,
+        false, GlobalVariable::InternalLinkage,
+        ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
+#endif
+    assert(jl_ExecutionEngine);
+#if defined(LLVM36)
+    jl_ExecutionEngine->addModule(std::move(m));
+#else
+    jl_ExecutionEngine->addModule(m.release());
+#endif
+}
+
+void jl_finalize_function(Function *F)
+{
+    std::unique_ptr<Module> m(module_for_fname.lookup(F->getName()));
+    if (m) {
+        jl_merge_recursive(m.get(), m.get());
+        jl_add_to_ee(std::move(m));
+    }
+}
+#else
+static bool jl_try_finalize(Module *m)
+{
+    for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
+        Function *F = &*I;
+        if (F->isDeclaration() && !isIntrinsicFunction(F)) {
+            if (!jl_can_finalize_function(F))
+                return false;
+        }
+    }
+    jl_merge_recursive(m, shadow_output);
+    jl_merge_module(shadow_output, std::unique_ptr<Module>(m));
+    return true;
+}
+#endif
+
 static void jl_finalize_function(const std::string &F, Module *collector)
 {
     std::unique_ptr<Module> m(module_for_fname.lookup(F));
     if (m) {
-        // probably not many unresolved declarations, but be sure iterate over their Names,
-        // since the declarations may get destroyed by the jl_merge_module call.
-        // this is also why we copy the Name string, rather than save a StringRef
-        SmallVector<std::string, 8> to_finalize;
-        for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
-            Function *F = &*I;
-            if (!F->isDeclaration()) {
-                module_for_fname.erase(F->getName());
-            }
-            else if (!isIntrinsicFunction(F)) {
-                to_finalize.push_back(F->getName().str());
-            }
-        }
-
-        for (const auto F : to_finalize) {
-            jl_finalize_function(F, collector ? collector : m.get());
-        }
-
-        if (collector) {
-            jl_merge_module(collector, std::move(m));
-        }
-        else {
-#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_) && defined(LLVM35)
-            // Add special values used by debuginfo to build the UnwindData table registration for Win64
-            ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
-            (new GlobalVariable(*m, atype,
-                false, GlobalVariable::InternalLinkage,
-                ConstantAggregateZero::get(atype), "__UnwindData"))->setSection(".text");
-            (new GlobalVariable(*m, atype,
-                false, GlobalVariable::InternalLinkage,
-                ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
-#endif
-            assert(jl_ExecutionEngine);
-#if defined(LLVM36)
-            jl_ExecutionEngine->addModule(std::move(m));
-#else
-            jl_ExecutionEngine->addModule(m.release());
-#endif
-        }
+        jl_merge_recursive(m.get(), collector);
+        jl_merge_module(collector, std::move(m));
     }
 }
-void jl_finalize_function(Function *F, Module *collector)
+
+static void jl_merge_recursive(Module *m, Module *collector)
 {
-    jl_finalize_function(F->getName().str(), collector);
+    // probably not many unresolved declarations, but be sure to iterate over their Names,
+    // since the declarations may get destroyed by the jl_merge_module call.
+    // this is also why we copy the Name string, rather than save a StringRef
+    SmallVector<std::string, 8> to_finalize;
+    for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
+        Function *F = &*I;
+        if (!F->isDeclaration()) {
+            module_for_fname.erase(F->getName());
+        }
+        else if (!isIntrinsicFunction(F)) {
+            to_finalize.push_back(F->getName().str());
+        }
+    }
+
+    for (const auto F : to_finalize) {
+        jl_finalize_function(F, collector);
+    }
 }
+
+// see if any of the functions needed by F are still WIP
+static StringSet<> incomplete_fname;
+static bool jl_can_finalize_function(StringRef F, SmallSet<Module*, 16> &known)
+{
+    if (incomplete_fname.find(F) != incomplete_fname.end())
+        return false;
+    Module *M = module_for_fname.lookup(F);
+#ifdef LLVM35
+    if (M && known.insert(M).second)
+#else
+    if (M && known.insert(M))
 #endif
+    {
+        for (Module::iterator I = M->begin(), E = M->end(); I != E; ++I) {
+            Function *F = &*I;
+            if (F->isDeclaration() && !isIntrinsicFunction(F)) {
+                if (!jl_can_finalize_function(F->getName(), known))
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+bool jl_can_finalize_function(Function *F)
+{
+    SmallSet<Module*, 16> known;
+    return jl_can_finalize_function(F->getName(), known);
+}
+
+// let the JIT know this function is a WIP
+void jl_init_function(Function *F)
+{
+    incomplete_fname.insert(F->getName());
+}
 
 // this takes ownership of a module after code emission is complete
 // and will add it to the execution engine when required (by jl_finalize_function)
@@ -806,20 +866,30 @@ void jl_finalize_module(Module *m, bool shadow)
 #if !defined(USE_ORCJIT)
     jl_globalPM->run(*m);
 #endif
-#ifdef USE_MCJIT
     // record the function names that are part of this Module
     // so it can be added to the JIT when needed
     for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
         Function *F = &*I;
-        if (!F->isDeclaration())
+        if (!F->isDeclaration()) {
+            bool known = incomplete_fname.erase(F->getName());
+            (void)known; // TODO: assert(known); // llvmcall gets this wrong
             module_for_fname[F->getName()] = m;
+        }
     }
-#endif
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
     // in the newer JITs, the shadow module is separate from the execution module
     if (shadow)
-#endif
         jl_add_to_shadow(m);
+#else
+    bool changes = jl_try_finalize(m);
+    while (changes) {
+        // this definitely isn't the most efficient, but it's only for the old LLVM 3.3 JIT
+        changes = false;
+        for (StringMap<Module*>::iterator MI = module_for_fname.begin(), ME = module_for_fname.end(); MI != ME; ++MI) {
+            changes |= jl_try_finalize(MI->second);
+        }
+    }
+#endif
 }
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine
@@ -942,10 +1012,9 @@ void* jl_get_global(GlobalVariable *gv)
 }
 
 // clones the contents of the module `m` to the shadow_output collector
-// in the old JIT, this is equivalent to also adding it to the execution engine
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
 void jl_add_to_shadow(Module *m)
 {
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
 #ifndef KEEP_BODIES
     if (!imaging_mode)
         return;
@@ -959,12 +1028,9 @@ void jl_add_to_shadow(Module *m)
             addComdat(F);
         }
     }
-#else
-    // on the old jit, the shadow_module is the same as the execution engine_module
-    std::unique_ptr<Module> clone(m);
-#endif
     jl_merge_module(shadow_output, std::move(clone));
 }
+#endif
 
 #ifdef HAVE_CPUID
 extern "C" {

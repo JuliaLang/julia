@@ -416,7 +416,6 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(void)
     li->functionObjectsDecls.specFunctionObject = NULL;
     li->specTypes = NULL;
     li->inInference = 0;
-    li->inCompile = 0;
     li->def = NULL;
     return li;
 }

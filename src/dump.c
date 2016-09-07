@@ -1603,7 +1603,6 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         li->functionObjectsDecls.functionObject = NULL;
         li->functionObjectsDecls.specFunctionObject = NULL;
         li->inInference = 0;
-        li->inCompile = 0;
         int8_t jlcall_api = read_int8(s->s);
         if (jlcall_api == 2 || jlcall_api == 0) {
             li->fptr = NULL;
