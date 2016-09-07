@@ -836,7 +836,7 @@ Mathematical Functions
        0.5
 
    .. note::
-      In the case where ``b`` is a power of 2 or 10, ``log2`` or ``log10`` should be used, as these will typically be faster and more accurate. For example
+      If ``b`` is a power of 2 or 10, ``log2`` or ``log10`` should be used, as these will typically be faster and more accurate. For example,
 
       .. doctest::
 
