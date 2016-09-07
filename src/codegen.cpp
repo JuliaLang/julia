@@ -3532,11 +3532,17 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     // infer it first, if necessary
     if (lam) {
         name = jl_symbol_name(lam->def->name);
-        jl_llvm_functions_t decls = jl_compile_linfo(lam, NULL);
-        if (decls.functionObject == NULL || lam->jlcall_api != 1) {
-            lam = NULL; // TODO: use emit_invoke framework to dispatch these
+        jl_source_info_t *src = NULL;
+        if (!lam->inferred) // TODO: this isn't ideal to be unconditionally calling type inference from here
+            src = jl_type_infer(lam, 0);
+        jl_compile_linfo(lam, src);
+        if (lam->jlcall_api != 2) {
+            if (lam->functionObjectsDecls.functionObject == NULL ||
+                    jl_jlcall_api(lam->functionObjectsDecls.functionObject) != 1) {
+                lam = NULL; // TODO: use emit_invoke framework to dispatch these
+            }
         }
-        else {
+        if (lam) {
             astrt = lam->rettype;
             if (astrt != (jl_value_t*)jl_bottom_type &&
                 jl_type_intersection(astrt, declrt) == jl_bottom_type) {
