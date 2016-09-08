@@ -541,4 +541,23 @@ temp_pkg_dir() do
         @test ret === nothing && out == ""
         @test contains(err, nothingtodomsg)
     end
+
+    # issue #18239
+    let package = "Example"
+        Pkg.free(package)
+        Pkg.rm(package)  # Remove package if installed
+
+        metadata_dir = Pkg.dir("METADATA")
+        const old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
+
+        # Reset METADATA to the second to last update of Example.jl
+        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
+            LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
+        end
+
+        Pkg.add(package)
+        msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
+            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
+        @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
+    end
 end
