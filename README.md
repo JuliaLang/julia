@@ -128,6 +128,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Compat.@blasfunc` makes functionality of `Base.LinAlg.BLAS.@blasfunc` available on older Julia versions
 
+* `@__DIR__` has been added [#18380](https://github.com/JuliaLang/julia/pull/18380)
+
 ## Other changes
 
 * `remotecall`, `remotecall_fetch`, `remotecall_wait`, and `remote_do` have the function to be executed remotely as the first argument in Julia 0.5. Loading `Compat` defines the same methods in older versions of Julia. [#13338](https://github.com/JuliaLang/julia/pull/13338)

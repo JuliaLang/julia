@@ -1463,4 +1463,9 @@ if VERSION < v"0.6.0-dev.374"
     end
 end
 
+if VERSION < v"0.6.0-dev.528"
+    macro __DIR__() Base.source_dir() end
+    export @__DIR__
+end
+
 end # module

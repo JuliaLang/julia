@@ -1381,3 +1381,5 @@ let filename = tempname()
     @test contains(ret, "WARNING: hello")
     rm(filename)
 end
+
+@test @__DIR__() == dirname(@__FILE__)
