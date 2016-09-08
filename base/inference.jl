@@ -1908,8 +1908,9 @@ function finish(me::InferenceState)
     end
     type_annotate!(me.linfo, me.stmt_types, me, me.nargs)
 
-    # run optimization passes on fulltree
+    do_coverage = coverage_enabled()
     force_noinline = false
+    # run optimization passes on fulltree
     if me.optimize
         # This pass is required for the AST to be valid in codegen
         # if any `SSAValue` is created by type inference. Ref issue #6068
@@ -1923,7 +1924,7 @@ function finish(me::InferenceState)
         getfield_elim_pass!(me.linfo, me)
         # Clean up for `alloc_elim_pass!` and `getfield_elim_pass!`
         void_use_elim_pass!(me.linfo, me)
-        meta_elim_pass!(me.linfo, me.linfo.code::Array{Any,1})
+        meta_elim_pass!(me.linfo, me.linfo.code::Array{Any,1}, do_coverage)
         # Pop metadata before label reindexing
         force_noinline = popmeta!(me.linfo.code::Array{Any,1}, :noinline)[1]
         reindex_labels!(me.linfo, me)
@@ -1933,8 +1934,11 @@ function finish(me::InferenceState)
     ispure = me.linfo.pure
     ccall(:jl_set_lambda_rettype, Void, (Any, Any), me.linfo, widenconst(me.bestguess))
 
-    if (isa(me.bestguess,Const) && me.bestguess.val !== nothing) ||
-        (isType(me.bestguess) && !has_typevars(me.bestguess.parameters[1],true))
+    # Do not emit `jlcall_api == 2` if coverage is enabled so that we don't
+    # need to add coverage support to the `jl_call_method_internal` fast path
+    if !do_coverage &&
+        ((isa(me.bestguess,Const) && me.bestguess.val !== nothing) ||
+         (isType(me.bestguess) && !has_typevars(me.bestguess.parameters[1],true)))
         if !ispure && length(me.linfo.code) < 10
             ispure = true
             for stmt in me.linfo.code
@@ -2724,18 +2728,48 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         end
     end
 
-    if !isempty(stmts)
-        if all(stmt -> (isa(stmt, Expr) && is_meta_expr(stmt::Expr)) || isa(stmt, LineNumberNode) || stmt === nothing,
-               stmts)
+    do_coverage = coverage_enabled()
+    inlining_ignore = function (stmt::ANY)
+        isa(stmt, Expr) && return is_meta_expr(stmt::Expr)
+        isa(stmt, LineNumberNode) && return true
+        stmt === nothing && return true
+        return false
+    end
+    if do_coverage
+        line = if !isempty(stmts) && isa(stmts[1], LineNumberNode)
+            (shift!(stmts)::LineNumberNode).line
+        else
+            linfo.def.line
+        end
+        # Check if we are switching module, which is necessary to catch user
+        # code inlined into `Base` with `--code-coverage=user`.
+        # Assume we are inlining directly into `enclosing` instead of another
+        # function inlined in it
+        mod = linfo.def.module
+        if mod === sv.mod
+            unshift!(stmts, Expr(:meta, :push_loc, linfo.def.file,
+                                 linfo.def.name, line))
+        else
+            unshift!(stmts, Expr(:meta, :push_loc, linfo.def.file,
+                                 linfo.def.name, line, mod))
+        end
+        push!(stmts, Expr(:meta, :pop_loc))
+    elseif !isempty(stmts)
+        if all(inlining_ignore, stmts)
             empty!(stmts)
         else
-            local line::Int = linfo.def.line
-            if isa(stmts[1], LineNumberNode)
-                line = shift!(stmts).line
+            line = if isa(stmts[1], LineNumberNode)
+                (shift!(stmts)::LineNumberNode).line
+            else
+                linfo.def.line
             end
-            unshift!(stmts, Expr(:meta, :push_loc, linfo.def.file, linfo.def.name, line))
-            isa(stmts[end], LineNumberNode) && pop!(stmts)
-            push!(stmts, Expr(:meta, :pop_loc))
+            unshift!(stmts, Expr(:meta, :push_loc, linfo.def.file,
+                                 linfo.def.name, line))
+            if isa(stmts[end], LineNumberNode)
+                stmts[end] = Expr(:meta, :pop_loc)
+            else
+                push!(stmts, Expr(:meta, :pop_loc))
+            end
         end
     end
     if !isempty(stmts) && !propagate_inbounds
@@ -3227,7 +3261,7 @@ function void_use_elim_pass!(linfo::LambdaInfo, sv)
     return
 end
 
-function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1})
+function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1}, do_coverage)
     # 1. Remove place holders
     #
     # 2. If coverage is off, remove line number nodes that don't mark any
@@ -3267,7 +3301,6 @@ function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1})
     #    `Expr(:boundscheck)` (e.g. when they don't enclose any non-meta
     #    expressions). Those are a little harder to detect and are hopefully
     #    not too common.
-    do_coverage = coverage_enabled()
     check_bounds = JLOptions().check_bounds
 
     inbounds_stack = linfo.propagate_inbounds ? Bool[] : [false]
