@@ -79,6 +79,9 @@ Keyword arguments:
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
          directory (as found by `pwd()`)
 
+ * `enable_threaded_blas`: if `true` then  BLAS will run on multiple threads in added
+                           processes. Default is `false`.
+
 * `exename`: name of the `julia` executable. Defaults to `"\$JULIA_HOME/julia"` or
              `"\$JULIA_HOME/julia-debug"` as the case may be.
 
@@ -210,6 +213,8 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     wconfig.exename = exename
     wconfig.count = cnt
     wconfig.max_parallel = params[:max_parallel]
+    wconfig.enable_threaded_blas = params[:enable_threaded_blas]
+
 
     push!(launched, wconfig)
     notify(launch_ntfy)
@@ -299,7 +304,8 @@ addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
 Launches workers using the in-built `LocalManager` which only launches workers on the
 local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4
 processes on the local machine. If `restrict` is `true`, binding is restricted to
-`127.0.0.1`.
+`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, and
+`enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
 """
 function addprocs(np::Integer; restrict=true, kwargs...)
     check_addprocs_args(kwargs)
@@ -321,6 +327,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io
+        wconfig.enable_threaded_blas = params[:enable_threaded_blas]
         push!(launched, wconfig)
     end
 

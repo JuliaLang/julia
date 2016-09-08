@@ -90,6 +90,7 @@ immutable JoinPGRPMsg <: AbstractMsg
     other_workers::Array
     topology::Symbol
     worker_pool
+    enable_threaded_blas::Bool
 end
 immutable JoinCompleteMsg <: AbstractMsg
     cpu_cores::Int
@@ -186,6 +187,9 @@ type WorkerConfig
     ident::Nullable{Any}      # Worker as identified by the Cluster Manager.
     # List of other worker idents this worker must connect with. Used with topology T_CUSTOM.
     connect_idents::Nullable{Array}
+
+    # Run multithreaded blas on worker
+    enable_threaded_blas::Nullable{Bool}
 
     function WorkerConfig()
         wc = new()
@@ -1456,6 +1460,10 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     register_worker(LPROC)
     topology(msg.topology)
 
+    if !msg.enable_threaded_blas
+        disable_threaded_libs()
+    end
+
     wait_tasks = Task[]
     for (connect_at, rpid) in msg.other_workers
         wconfig = WorkerConfig()
@@ -1615,7 +1623,6 @@ function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClus
     # transports will need to call this function with their own manager.
     global cluster_manager
     cluster_manager = manager
-    disable_threaded_libs()
 
     # Since our pid has yet to be set, ensure no RemoteChannel / Future  have been created or addprocs() called.
     assert(nprocs() <= 1)
@@ -1664,11 +1671,6 @@ end
 function addprocs_locked(manager::ClusterManager; kwargs...)
     params = merge(default_addprocs_params(), AnyDict(kwargs))
     topology(Symbol(params[:topology]))
-
-    # some libs by default start as many threads as cores which leads to
-    # inefficient use of cores in a multi-process model.
-    # Should be a keyword arg?
-    disable_threaded_libs()
 
     # References to launched workers, filled when each worker is fully initialized and
     # has connected to all nodes.
@@ -1726,7 +1728,8 @@ default_addprocs_params() = AnyDict(
     :topology => :all_to_all,
     :dir      => pwd(),
     :exename  => joinpath(JULIA_HOME,julia_exename()),
-    :exeflags => ``)
+    :exeflags => ``,
+    :enable_threaded_blas => false)
 
 
 function setup_launched_worker(manager, wconfig, launched_q)
@@ -1759,7 +1762,7 @@ function launch_n_additional_processes(manager, frompid, fromconfig, cnt, launch
             (bind_addr, port) = address
 
             wconfig = WorkerConfig()
-            for x in [:host, :tunnel, :sshflags, :exeflags, :exename]
+            for x in [:host, :tunnel, :sshflags, :exeflags, :exename, :enable_threaded_blas]
                 setfield!(wconfig, x, getfield(fromconfig, x))
             end
             wconfig.bind_addr = bind_addr
@@ -1841,7 +1844,8 @@ function create_worker(manager, wconfig)
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id) : ((), x.id, true), join_list)
     send_connection_hdr(w, true)
-    send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), JoinPGRPMsg(w.id, all_locs, PGRP.topology, default_worker_pool()))
+    join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, default_worker_pool(), get(wconfig.enable_threaded_blas, false))
+    send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
     @schedule manage(w.manager, w.id, w.config, :register)
     wait(rr_ntfy_join)
