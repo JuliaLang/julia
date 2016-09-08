@@ -144,6 +144,7 @@ end
 for T in (Complex64, Complex128, Complex{BigFloat})
     half = (1+1im)/T(2)
     third = (1-1im)/T(3)
+    println("$T")
 
     # some of these functions promote their result to double
     # precision, but we want to check equality at precision T
@@ -153,6 +154,7 @@ for T in (Complex64, Complex128, Complex{BigFloat})
               :acos, :acosh, :asin, :asinh, :atan, :atanh, :cis, :cos,
               :cosh, :exp10, :exp2, :exp, :expm1, :log10, :log1p,
               :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
+
         @test isapprox((@eval @fastmath $f($half)), (@eval $f($half)), rtol=rtol)
         @test isapprox((@eval @fastmath $f($third)), (@eval $f($third)), rtol=rtol)
     end
