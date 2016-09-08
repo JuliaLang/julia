@@ -57,7 +57,7 @@ macro grab_outputs(ex)
     end
 end
 
-for branch in (Pkg.META_BRANCH, Pkg.DEVEL_META_BRANCH)
+for branch in (Pkg.META_BRANCH,) # Pkg.DEVEL_META_BRANCH)
 # Test basic operations: adding or removing a package, status, free
 # Also test for the existence of REQUIRE and META_BRANCH
 temp_pkg_dir(branch) do
