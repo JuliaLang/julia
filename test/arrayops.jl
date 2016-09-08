@@ -1689,6 +1689,18 @@ end
 @test cumsum([1 2; 3 4], 2) == [1 3; 3 7]
 @test cumsum([1 2; 3 4], 3) == [1 2; 3 4]
 
+# issue #18363
+@test_throws DimensionMismatch cumsum!([0,0], 1:4)
+@test cumsum(Any[])::Vector{Any} == Any[]
+@test cumsum(Any[1, 2.3])::Vector{Any} == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
+@test cumsum([true,true,true]) == [1,2,3]
+@test cumsum(0x00:0xff)[end] === 0x80 # overflow
+@test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]
+
+#issue #18336
+@test cumsum([-0.0, -0.0])[1] === cumsum([-0.0, -0.0])[2] === -0.0
+@test cumprod(-0.0im + (0:0))[1] === Complex(0.0, -0.0)
+
 module TestNLoops15895
 
 using Base.Cartesian

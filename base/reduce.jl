@@ -15,24 +15,21 @@ end
 typealias CommonReduceResult Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
 typealias WidenReduceResult Union{SmallSigned, SmallUnsigned, Float16}
 
-# r_promote: promote x to the type of reduce(op, [x])
-r_promote(op, x::WidenReduceResult) = widen(x)
-r_promote(op, x) = x
-r_promote(::typeof(+), x::WidenReduceResult) = widen(x)
-r_promote(::typeof(*), x::WidenReduceResult) = widen(x)
-r_promote(::typeof(+), x::Number) = oftype(x + zero(x), x)
-r_promote(::typeof(*), x::Number) = oftype(x * one(x), x)
-r_promote(::typeof(+), x) = x
-r_promote(::typeof(*), x) = x
-r_promote(::typeof(scalarmax), x::WidenReduceResult) = x
-r_promote(::typeof(scalarmin), x::WidenReduceResult) = x
-r_promote(::typeof(scalarmax), x) = x
-r_promote(::typeof(scalarmin), x) = x
-r_promote(::typeof(max), x::WidenReduceResult) = r_promote(scalarmax, x)
-r_promote(::typeof(min), x::WidenReduceResult) = r_promote(scalarmin, x)
-r_promote(::typeof(max), x) = r_promote(scalarmax, x)
-r_promote(::typeof(min), x) = r_promote(scalarmin, x)
+# r_promote_type: promote T to the type of reduce(op, ::Array{T})
+# (some "extra" methods are required here to avoid ambiguity warnings)
+r_promote_type{T}(op, ::Type{T}) = T
+r_promote_type{T<:WidenReduceResult}(op, ::Type{T}) = widen(T)
+r_promote_type{T<:WidenReduceResult}(::typeof(+), ::Type{T}) = widen(T)
+r_promote_type{T<:WidenReduceResult}(::typeof(*), ::Type{T}) = widen(T)
+r_promote_type{T<:Number}(::typeof(+), ::Type{T}) = typeof(zero(T)+zero(T))
+r_promote_type{T<:Number}(::typeof(*), ::Type{T}) = typeof(one(T)*one(T))
+r_promote_type{T<:WidenReduceResult}(::typeof(scalarmax), ::Type{T}) = T
+r_promote_type{T<:WidenReduceResult}(::typeof(scalarmin), ::Type{T}) = T
+r_promote_type{T<:WidenReduceResult}(::typeof(max), ::Type{T}) = T
+r_promote_type{T<:WidenReduceResult}(::typeof(min), ::Type{T}) = T
 
+# r_promote: promote x to the type of reduce(op, [x])
+r_promote{T}(op, x::T) = convert(r_promote_type(op, T), x)
 
 ## foldl && mapfoldl
 

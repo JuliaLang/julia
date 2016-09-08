@@ -353,7 +353,7 @@ function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector
         end
     end
 
-    colptr = cumsum(cols)
+    colptr = cumsum!(similar(cols), cols)
 
     # Allow up to 20% slack
     if ndups > 0.2*L
