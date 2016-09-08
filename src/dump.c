@@ -1591,7 +1591,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
             if (external) {
                 jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)li->specTypes);
                 jl_methtable_t *mt = ftype->name->mt;
-                li = jl_method_lookup_by_type(mt, li->specTypes, 1, 0, 0);
+                li = jl_method_lookup_by_type(mt, li->specTypes, 0, 0, 0);
                 assert(li);
                 backref_list.items[pos] = li;
                 // if it can be inferred but isn't, encourage codegen to infer it
@@ -2456,7 +2456,7 @@ static void jl_recache_types(void)
             jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
             jl_methtable_t *mt = ftype->name->mt;
             jl_set_typeof(li, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
-            li = jl_method_lookup_by_type(mt, argtypes, 1, 0, 0);
+            li = jl_method_lookup_by_type(mt, argtypes, 0, 0, 0);
             assert(li);
             // if it can be inferred but isn't, encourage codegen to infer it
             if (inferred && !li->inferred) {
