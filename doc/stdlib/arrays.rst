@@ -284,7 +284,14 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
+   Create an array of all zeros of specified type. The type defaults to ``Float64`` if not specified.
+
+   .. doctest::
+
+       julia> zeros(Int8, 2, 3)
+       2×3 Array{Int8,2}:
+        0  0  0
+        0  0  0
 
 .. function:: zeros(A)
 
@@ -309,6 +316,13 @@ Constructors
    .. Docstring generated from Julia source
 
    Create an array of all ones of specified type. The type defaults to ``Float64`` if not specified.
+
+   .. doctest::
+
+       julia> ones(Complex128, 2, 3)
+       2×3 Array{Complex{Float64},2}:
+        1.0+0.0im  1.0+0.0im  1.0+0.0im
+        1.0+0.0im  1.0+0.0im  1.0+0.0im
 
 .. function:: ones(A)
 
@@ -420,9 +434,31 @@ Constructors
 
    Create an array with the same data as the given array, but with different dimensions.
 
-   ```jldoctest julia> A = collect(1:16) 16-element Array{Int64,1}:   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16
+   .. doctest::
 
-   julia> reshape(A, (2, 8)) 2×8 Array{Int64,2}:  1  3  5  7   9  11  13  15  2  4  6  8  10  12  14  16  ```
+       julia> A = collect(1:16)
+       16-element Array{Int64,1}:
+         1
+         2
+         3
+         4
+         5
+         6
+         7
+         8
+         9
+        10
+        11
+        12
+        13
+        14
+        15
+        16
+
+       julia> reshape(A, (2, 8))
+       2×8 Array{Int64,2}:
+        1  3  5  7   9  11  13  15
+        2  4  6  8  10  12  14  16
 
 .. function:: similar(array, [element_type=eltype(array)], [dims=size(array)])
 
@@ -1760,7 +1796,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Return the inverse permutation of ``v``\ . If ``B = A[v]``\ , then ``A = B[invperm(v)]``\ .
+   Return the inverse permutation of ``v``\ . If ``B = A[v]``\ , then ``A == B[invperm(v)]``\ .
 
    .. doctest::
 

@@ -64,12 +64,26 @@ Mathematical Operators
 
    Element-wise addition operator.
 
+   .. doctest::
+
+       julia> [1 2 3] .+ [1 2 4]
+       1×3 Array{Int64,2}:
+        2  4  7
+
 .. _.-:
 .. function:: .-(x, y)
 
    .. Docstring generated from Julia source
 
    Element-wise subtraction operator.
+
+   .. doctest::
+
+       julia> [4; 5; 6] .- [1; 2; 4]
+       3-element Array{Int64,1}:
+        3
+        3
+        2
 
 .. _.*:
 .. function:: .*(x, y)
@@ -78,12 +92,24 @@ Mathematical Operators
 
    Element-wise multiplication operator.
 
+   .. doctest::
+
+       julia> [1 2 3] .* [1 2 3]
+       1×3 Array{Int64,2}:
+        1  4  9
+
 .. _./:
 .. function:: ./(x, y)
 
    .. Docstring generated from Julia source
 
    Element-wise right division operator.
+
+   .. doctest::
+
+       julia> [1 2 3] ./ [1 2 3]
+       1×3 Array{Float64,2}:
+        1.0  1.0  1.0
 
 .. _.\\:
 .. function:: .\\(x, y)
@@ -98,6 +124,12 @@ Mathematical Operators
    .. Docstring generated from Julia source
 
    Element-wise exponentiation operator.
+
+   .. doctest::
+
+       julia> [1 2 3] .^ [1 2 3]
+       1×3 Array{Int64,2}:
+        1  4  27
 
 .. function:: fma(x, y, z)
 
@@ -425,6 +457,12 @@ Mathematical Operators
 
    Element-wise equality comparison operator.
 
+   .. doctest::
+
+       julia> [1 2 3] .== [1 2 4]
+       1×3 BitArray{2}:
+        true  true  false
+
 .. _.!=:
 .. function:: .!=(x, y)
               .≠(x,y)
@@ -439,6 +477,14 @@ Mathematical Operators
    .. Docstring generated from Julia source
 
    Element-wise less-than comparison operator.
+
+   .. doctest::
+
+       julia> [1; 2; 3] .< [2; 1; 4]
+       3-element BitArray{1}:
+         true
+        false
+         true
 
 .. _.<=:
 .. function:: .<=(x, y)
@@ -476,6 +522,17 @@ Mathematical Operators
 
    Bitwise not.
 
+   .. doctest::
+
+       julia> ~4
+       -5
+
+       julia> ~10
+       -11
+
+       julia> ~true
+       false
+
 .. _&:
 .. function:: &(x, y)
 
@@ -483,12 +540,28 @@ Mathematical Operators
 
    Bitwise and.
 
+   .. doctest::
+
+       julia> 4 & 10
+       0
+
+       julia> 4 & 12
+       4
+
 .. _|:
 .. function:: |(x, y)
 
    .. Docstring generated from Julia source
 
    Bitwise or.
+
+   .. doctest::
+
+       julia> 4 | 10
+       14
+
+       julia> 4 | 1
+       5
 
 .. _$:
 .. function:: $(x, y)
@@ -503,6 +576,18 @@ Mathematical Operators
    .. Docstring generated from Julia source
 
    Boolean not.
+
+   .. doctest::
+
+       julia> !true
+       false
+
+       julia> !false
+       true
+
+       julia> ![true false true]
+       1×3 Array{Bool,2}:
+        false  true  false
 
 .. _&&:
 .. function:: x && y
@@ -841,11 +926,27 @@ Mathematical Functions
 
    Compute the logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
 
+   .. doctest::
+
+       julia> log2(4)
+       2.0
+
+       julia> log2(10)
+       3.321928094887362
+
 .. function:: log10(x)
 
    .. Docstring generated from Julia source
 
    Compute the logarithm of ``x`` to base 10. Throws :obj:`DomainError` for negative ``Real`` arguments.
+
+   .. doctest::
+
+       julia> log10(100)
+       2.0
+
+       julia> log10(2)
+       0.3010299956639812
 
 .. function:: log1p(x)
 
@@ -883,6 +984,14 @@ Mathematical Functions
    .. Docstring generated from Julia source
 
    Compute :math:`10^x`\ .
+
+   .. doctest::
+
+       julia> exp10(2)
+       100.0
+
+       julia> exp10(0.2)
+       1.5848931924611136
 
 .. function:: ldexp(x, n)
 
@@ -1197,7 +1306,15 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Return ``x`` such that it has the same sign as ``y``
+   Return ``x`` such that it has the same sign as ``y``\ .
+
+   .. doctest::
+
+       julia> copysign(1, -2)
+       -1
+
+       julia> copysign(-1, 2)
+       1
 
 .. function:: sign(x)
 
@@ -1210,6 +1327,20 @@ Mathematical Functions
    .. Docstring generated from Julia source
 
    Returns ``true`` if the value of the sign of ``x`` is negative, otherwise ``false``\ .
+
+   .. doctest::
+
+       julia> signbit(-4)
+       true
+
+       julia> signbit(5)
+       false
+
+       julia> signbit(5.5)
+       false
+
+       julia> signbit(-4.1)
+       true
 
 .. function:: flipsign(x, y)
 
