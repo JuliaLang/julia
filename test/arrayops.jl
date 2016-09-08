@@ -1690,7 +1690,7 @@ end
 @test cumsum([1 2; 3 4], 3) == [1 2; 3 4]
 
 # issue #18363
-@test_throws BoundsError cumsum!([0,0], 1:4)
+@test_throws DimensionMismatch cumsum!([0,0], 1:4)
 @test cumsum(Any[])::Vector{Any} == Any[]
 @test cumsum(Any[1, 2.3])::Vector{Any} == [1, 3.3] == cumsum(Real[1, 2.3])::Vector{Real}
 @test cumsum([true,true,true]) == [1,2,3]
