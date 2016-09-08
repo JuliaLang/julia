@@ -2,11 +2,23 @@
 
 using Base.Test
 
-function redirected_stderr()
+function redirected_stderr(expected)
     rd, wr = redirect_stderr()
-    @async readstring(rd) # make sure the kernel isn't being forced to buffer the output
-    nothing
+    t = @async begin
+        read = readstring(rd) # also makes sure the kernel isn't being forced to buffer the output
+        if !contains(read, expected)
+            @show expected
+            @show read
+            @test false
+        end
+        nothing
+    end
+    return t
 end
+
+# this environment variable would affect some error messages being tested below
+# so we disable it for the tests below
+withenv( "JULIA_DEBUG_LOADING" => nothing ) do
 
 olderr = STDERR
 dir = mktempdir()
@@ -74,6 +86,9 @@ try
               (::Type{Vector{NominalValue{T, R}}}){T, R}() = 3
               (::Type{Vector{NominalValue{T, T}}}){T}() = 4
               (::Type{Vector{NominalValue{Int, Int}}})() = 5
+
+              #const some_method = @which Base.include("string") // FIXME: support for serializing a direct reference to an external Method not implemented
+              const some_linfo = @code_typed Base.include("string")
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -86,12 +101,14 @@ try
 
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
+    t = redirected_stderr("WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition ")
     try
-        redirected_stderr()
-        @test nothing !== Base._require_from_serialized(myid(), Foo_module, #=broadcast-load=#false)
+        @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
     finally
+        close(STDERR)
         redirect_stderr(olderr)
     end
+    wait(t)
 
     let Foo = eval(Main, Foo_module)
         @test Foo.foo(17) == 18
@@ -101,10 +118,14 @@ try
         @test stringmime("text/plain", Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test stringmime("text/plain", Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
-        deps = Base.cache_dependencies(cachefile)
-        @test sort(deps[1]) == map(s -> (s, Base.module_uuid(eval(s))),
-                                   [:Base,:Core,:Main])
-        @test map(x -> x[1], sort(deps[2])) == [Foo_file,joinpath(dir,"bar.jl"),joinpath(dir,"foo.jl")]
+        modules, deps = Base.parse_cache_header(cachefile)
+        @test modules == Dict(Foo_module => Base.module_uuid(Foo))
+        @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
+
+        modules, deps1 = Base.cache_dependencies(cachefile)
+        @test sort(modules) == map(s -> (s, Base.module_uuid(eval(s))),
+                                   [:Base, :Core, :Main])
+        @test deps == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
         @test nothing(0x01, 0x4000, 0x30031234) == 52
@@ -129,6 +150,8 @@ try
                 Val{3},
                 Val{nothing}},
             0:25)
+
+        @test Foo.some_linfo === @code_typed Base.include("string")
     end
 
     Baz_file = joinpath(dir, "Baz.jl")
@@ -139,17 +162,28 @@ try
           end
           """)
 
+    t = redirected_stderr("ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\n in __precompile__")
     try
-        redirected_stderr()
         Base.compilecache("Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
     catch exc
+        close(STDERR)
         redirect_stderr(olderr)
         isa(exc, ErrorException) || rethrow(exc)
         !isempty(search(exc.msg, "__precompile__(false)")) && rethrow(exc)
     end
+    wait(t)
 
     # Issue #12720
+    FooBar1_file = joinpath(dir, "FooBar1.jl")
+    write(FooBar1_file,
+          """
+          __precompile__(true)
+          module FooBar1
+              using FooBar
+          end
+          """)
+    sleep(2) # give FooBar and FooBar1 different timestamps, in reverse order too
     FooBar_file = joinpath(dir, "FooBar.jl")
     write(FooBar_file,
           """
@@ -159,17 +193,60 @@ try
           """)
 
     Base.compilecache("FooBar")
-    sleep(2)
     @test isfile(joinpath(dir, "FooBar.ji"))
+    @test !Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @test !isdefined(Main, :FooBar)
+    @test !isdefined(Main, :FooBar1)
 
-    touch(FooBar_file)
+    @eval using FooBar
+    fb_uuid = Base.module_uuid(Main.FooBar)
+    sleep(2); touch(FooBar_file)
     insert!(Base.LOAD_CACHE_PATH, 1, dir2)
-    Base.recompile_stale(:FooBar, joinpath(dir, "FooBar.ji"))
-    sleep(2)
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @eval using FooBar1
+    @test !isfile(joinpath(dir2, "FooBar.ji"))
+    @test !isfile(joinpath(dir, "FooBar1.ji"))
+    @test isfile(joinpath(dir2, "FooBar1.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
+    @test fb_uuid == Base.module_uuid(Main.FooBar)
+    fb_uuid1 = Base.module_uuid(Main.FooBar1)
+    @test fb_uuid != fb_uuid1
+
+    t = redirected_stderr("WARNING: replacing module FooBar.")
+    try
+        reload("FooBar")
+    finally
+        close(STDERR)
+        redirect_stderr(olderr)
+    end
+    wait(t)
+    @test fb_uuid != Base.module_uuid(Main.FooBar)
+    @test fb_uuid1 == Base.module_uuid(Main.FooBar1)
+    fb_uuid = Base.module_uuid(Main.FooBar)
     @test isfile(joinpath(dir2, "FooBar.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
 
+    t = redirected_stderr("WARNING: replacing module FooBar1.")
+    try
+        reload("FooBar1")
+    finally
+        close(STDERR)
+        redirect_stderr(olderr)
+    end
+    wait(t)
+    @test fb_uuid == Base.module_uuid(Main.FooBar)
+    @test fb_uuid1 != Base.module_uuid(Main.FooBar1)
+
+    @test isfile(joinpath(dir2, "FooBar.ji"))
+    @test isfile(joinpath(dir2, "FooBar1.ji"))
+    @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
+    @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
+    @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
+
+    # test behavior of precompile modules that throw errors
     write(FooBar_file,
           """
           __precompile__(true)
@@ -177,18 +254,20 @@ try
           error("break me")
           end
           """)
-
+    t = redirected_stderr("ERROR: LoadError: break me\n in error")
     try
-        redirected_stderr()
         Base.require(:FooBar)
         error("\"LoadError: break me\" test failed")
     catch exc
+        close(STDERR)
         redirect_stderr(olderr)
         isa(exc, ErrorException) || rethrow(exc)
         !isempty(search(exc.msg, "ERROR: LoadError: break me")) && rethrow(exc)
     end
+    wait(t)
 finally
     if STDERR != olderr
+        close(STDERR)
         redirect_stderr(olderr)
     end
     splice!(Base.LOAD_CACHE_PATH, 1:2)
@@ -244,7 +323,7 @@ end
 let module_name = string("a",randstring())
     insert!(LOAD_PATH, 1, pwd())
     file_name = string(module_name, ".jl")
-    touch(file_name)
+    sleep(2); touch(file_name)
     code = """module $(module_name)\nend\n"""
     write(file_name, code)
     reload(module_name)
@@ -252,3 +331,5 @@ let module_name = string("a",randstring())
     deleteat!(LOAD_PATH,1)
     rm(file_name)
 end
+
+end # !withenv

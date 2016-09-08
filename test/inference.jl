@@ -275,14 +275,6 @@ let f(x) = (x===nothing) ? 1 : 1.0
     @test Base.return_types(f, (Void,)) == Any[Int]
 end
 
-# Issue #17811
-let I = Integer[]
-    I = abs(I)
-    @test typeof(I) == Array{Any,1}
-    push!(I, 1)
-    @test I == Any[1]
-end
-
 # issue #16530
 type Foo16530a{dim}
     c::Vector{NTuple{dim, Float64}}
@@ -337,3 +329,10 @@ let tri = Triple18015(1, 2, 3)
     setabc18015!(tri, b18015(tri), c18015(tri), a18015(tri))
     @test tri.a === 2 && tri.b === 3 && tri.c === 1
 end
+
+# issue #18222
+f18222{T<:AbstractFloat}(::Union{T, Int}) = false
+f18222(x) = true
+g18222(x) = f18222(x)
+@test f18222(1) == g18222(1) == true
+@test f18222(1.0) == g18222(1.0) == false

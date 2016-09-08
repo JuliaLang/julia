@@ -141,13 +141,18 @@ static intptr_t init_shared_map()
 static void *alloc_shared_page(size_t size, size_t *id, bool exec)
 {
     assert(size % jl_page_size == 0);
-    auto file_mode = exec ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE;
+    DWORD file_mode = exec ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE;
     HANDLE hdl = CreateFileMapping(INVALID_HANDLE_VALUE, NULL,
                                    file_mode, 0, size, NULL);
     *id = (size_t)hdl;
-    auto map_mode = FILE_MAP_READ | (exec ? FILE_MAP_EXECUTE : 0);
+    // We set the maximum permissions for this to the maximum for this file, and then
+    // VirtualProtect, such that the debugger can still access these
+    // pages and set breakpoints if it wants to.
+    DWORD map_mode = FILE_MAP_ALL_ACCESS | (exec ? FILE_MAP_EXECUTE : 0);
     void *addr = MapViewOfFile(hdl, map_mode, 0, 0, size);
     assert(addr && "Cannot map RO view");
+    DWORD protect_mode = exec ? PAGE_EXECUTE_READ : PAGE_READONLY;
+    VirtualProtect(addr, size, protect_mode, &file_mode);
     return addr;
 }
 #else // _OS_WINDOWS_

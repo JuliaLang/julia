@@ -226,6 +226,9 @@ end
 
 ## Conversions ##
 
+convert{T}(::Type{Vector}, x::AbstractVector{T}) = convert(Vector{T}, x)
+convert{T}(::Type{Matrix}, x::AbstractMatrix{T}) = convert(Matrix{T}, x)
+
 convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 
@@ -594,7 +597,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:611
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:614
  ...
 ```
 """

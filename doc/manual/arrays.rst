@@ -517,7 +517,7 @@ the name of the function to vectorize. Here is a simple example:
 
     julia> methods(square)
     # 2 methods for generic function "square":
-    square{T<:Number}(x::AbstractArray{T,N<:Any}) at operators.jl:550
+    square{T<:Number}(x::AbstractArray{T,N<:Any}) at operators.jl:555
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])
@@ -566,7 +566,7 @@ function elementwise:
      1.71056  0.847604
      1.73659  0.873631
 
-Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a :func:`broadcast!` function to specify an explicit destination, and :func:`broadcast_getindex` and :func:`broadcast_setindex!` that broadcast the indices before indexing.   Moreover, ``f.(args...)`` is equivalent to ``broadcast(f, args...)``, providing a convenient syntax to broadcast any function (:ref:`man-dot-vectorizing`:).
+Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a :func:`broadcast!` function to specify an explicit destination, and :func:`broadcast_getindex` and :func:`broadcast_setindex!` that broadcast the indices before indexing.   Moreover, ``f.(args...)`` is equivalent to ``broadcast(f, args...)``, providing a convenient syntax to broadcast any function (:ref:`man-dot-vectorizing`).
 
 Implementation
 --------------

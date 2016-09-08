@@ -2042,15 +2042,9 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, undefs, pass)
 end
 
 function expr_cannot_delete(ex::Expr)
-    # This alone should be enough for any sane use of
-    # `Expr(:inbounds)` and `Expr(:boundscheck)`. However, it is still possible
-    # to have these embeded in other expressions (e.g. `return @inbounds ...`)
-    # so we check recursively if there's a matching expression
-    (ex.head === :inbounds || ex.head === :boundscheck) && return true
-    for arg in ex.args
-        isa(arg, Expr) && expr_cannot_delete(arg::Expr) && return true
-    end
-    return false
+    head = ex.head
+    return (head === :inbounds || head === :boundscheck || head === :meta ||
+            head === :line)
 end
 
 # annotate types of all symbols in AST
@@ -2081,7 +2075,8 @@ function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, nargs)
                 record_slot_type!(id, widenconst(states[i+1][id].typ), linfo.slottypes)
             end
         elseif optimize
-            if isa(expr, Expr) && expr_cannot_delete(expr::Expr)
+            if ((isa(expr, Expr) && expr_cannot_delete(expr::Expr)) ||
+                isa(expr, LineNumberNode))
                 i += 1
                 continue
             end
@@ -2524,6 +2519,30 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         return invoke_NF()
     end
 
+    na = method.lambda_template.nargs
+    # check for vararg function
+    isva = false
+    if na > 0 && method.lambda_template.isva
+        @assert length(argexprs) >= na-1
+        # construct tuple-forming expression for argument tail
+        vararg = mk_tuplecall(argexprs[na:end], sv)
+        argexprs = Any[argexprs[1:(na-1)]..., vararg]
+        isva = true
+    elseif na != length(argexprs)
+        # we have a method match only because an earlier
+        # inference step shortened our call args list, even
+        # though we have too many arguments to actually
+        # call this function
+        return NF
+    end
+
+    @assert na == length(argexprs)
+
+    for i = 1:length(methsp)
+        si = methsp[i]
+        isa(si, TypeVar) && return NF
+    end
+
     (linfo, ty, inferred) = typeinf(method, metharg, methsp, false)
     if linfo === nothing || !inferred
         return invoke_NF()
@@ -2540,36 +2559,13 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         return invoke_NF()
     end
 
-    na = linfo.nargs
-    # check for vararg function
-    isva = false
-    if na > 0 && linfo.isva
-        @assert length(argexprs) >= na-1
-        # construct tuple-forming expression for argument tail
-        vararg = mk_tuplecall(argexprs[na:end], sv)
-        argexprs = Any[argexprs[1:(na-1)]..., vararg]
-        isva = true
-    elseif na != length(argexprs)
-        # we have a method match only because an earlier
-        # inference step shortened our call args list, even
-        # though we have too many arguments to actually
-        # call this function
-        return NF
-    end
-
-    @assert na == length(argexprs)
-
     spvals = Any[]
     for i = 1:length(methsp)
-        si = methsp[i]
-        if isa(si, TypeVar)
-            return NF
-        end
-        push!(spvals, si)
+        push!(spvals, methsp[i])
     end
-    for i=1:length(spvals)
+    for i = 1:length(spvals)
         si = spvals[i]
-        if isa(si,Symbol) || isa(si,SSAValue) || isa(si,Slot)
+        if isa(si, Symbol) || isa(si, SSAValue) || isa(si, Slot)
             spvals[i] = QuoteNode(si)
         end
     end

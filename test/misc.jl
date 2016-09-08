@@ -435,3 +435,20 @@ let creds = Base.LibGit2.CachedCredentials()
     securezero!(creds)
     @test LibGit2.get_creds!(creds, "foo", nothing).pass == "\0\0\0"
 end
+
+# Test that we can VirtualProtect jitted code to writable
+if is_windows()
+    @noinline function WeVirtualProtectThisToRWX(x, y)
+        x+y
+    end
+
+    let addr = cfunction(WeVirtualProtectThisToRWX, UInt64, (UInt64, UInt64))
+        addr = addr-(UInt64(addr)%4096)
+        const PAGE_EXECUTE_READWRITE = 0x40
+        oldPerm = Ref{UInt32}()
+        err18083 = ccall(:VirtualProtect,stdcall,Cint,
+            (Ptr{Void}, Csize_t, UInt32, Ptr{UInt32}),
+            addr, 4096, PAGE_EXECUTE_READWRITE, oldPerm)
+        err18083 == 0 && error(Libc.GetLastError())
+    end
+end

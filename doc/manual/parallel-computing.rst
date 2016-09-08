@@ -1056,7 +1056,7 @@ Julia supports parallel loops using the :obj:`Threads.@threads` macro. This macr
 of a ``for`` loop to indicate to Julia that the loop is a multi-threaded region. ::
 
     Threads.@threads for i = 1:10
-        a[i] = threadid()
+        a[i] = Threads.threadid()
     end
 
 The iteration space is split amongst the threads, after which each thread writes its thread ID to its assigned locations.::

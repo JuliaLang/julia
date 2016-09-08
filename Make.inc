@@ -4,6 +4,10 @@
 ##   It is generally preferable to change these options, for
 ##   your local machine, in a file named `Make.user` in the toplevel
 ##   and build directories
+##
+## For developers, take care to not insert comments on the same line as
+## variable declarations. The spaces between the variable value and the
+## comment will be included in the value.
 
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
@@ -58,7 +62,8 @@ USE_INTEL_JITEVENTS ?= 0
 USEICC  ?= 0
 USEIFC  ?= 0
 
-JULIA_THREADS := 1 # Enable threading with one thread
+# Enable threading with one thread
+JULIA_THREADS := 1
 
 ifeq ($(USE_MKL), 1)
 $(warning "The julia make variable USE_MKL has been renamed to USE_INTEL_MKL")
@@ -427,12 +432,16 @@ endif
 
 ifeq ($(USECCACHE), 1)
 # expand CC and CXX at declaration time because we will redefine them
-CC_ARG   := $(CC)         # Expand CC and CXX here already because we want
-CXX_ARG  := $(CXX)        # the original definition and not the ccache version.
-CC_FULL  := ccache $(CC)  # Expand CC and CXX here already to avoid recursive
-CXX_FULL := ccache $(CXX) # referencing.
-CC       := $(CC_FULL)    # Add an extra indirection to make CC/CXX non-simple
-CXX      := $(CXX_FULL)   # vars (because of how -m$(BINARY) is added later on).
+# Expand CC and CXX here already because we want the original definition and not the ccache version.
+CC_ARG   := $(CC)
+CXX_ARG  := $(CXX)
+# Expand CC and CXX here already to avoid recursive referencing.
+CC_FULL  := ccache $(CC)
+CXX_FULL := ccache $(CXX)
+# Add an extra indirection to make CC/CXX non-simple vars
+# (because of how -m$(BINARY) is added later on).
+CC       := $(CC_FULL)
+CXX      := $(CXX_FULL)
 CC_BASE  := ccache
 CXX_BASE := ccache
 ifeq ($(USECLANG),1)
@@ -598,29 +607,6 @@ $(error Pre-SSE2 CPU targets not supported. To create a generic 32-bit x86 binar
 pass 'MARCH=pentium4'.)
 endif
 
-ifneq ($(MARCH),)
-CC += -march=$(MARCH)
-CXX += -march=$(MARCH)
-FC += -march=$(MARCH)
-JULIA_CPU_TARGET ?= $(MARCH)
-ifeq ($(OS),Darwin)
-# on Darwin, the standalone `as` program doesn't know
-# how to handle AVX instructions, but it does know how
-# to dispatch to the clang assembler (if we ask it to)
-ifeq ($(USECLANG),1)
-CC += -integrated-as
-CXX += -integrated-as
-else
-CC += -Wa,-q
-CXX += -Wa,-q
-endif
-FC += -Wa,-q
-AS += -q
-endif
-endif
-
-JULIA_CPU_TARGET ?= native
-
 # We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
 ifeq ($(ARCH),amd64)
 override ARCH := x86_64
@@ -649,13 +635,19 @@ else
 ISX86:=0
 endif
 
-# If we are running on powerpc64 or ppc64, set certain options automatically
-ifneq (,$(filter $(ARCH), powerpc64 ppc64le))
+# If we are running on powerpc64le or ppc64le, set certain options automatically
+ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
 override LLVM_VER:=3.8.1
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=POWER8
+# GCC doesn't do -march= on ppc64le
+override MARCH=
+endif
 
+# If we are running on powerpc64 or ppc64, fail out dramatically
+ifneq (,$(filter $(ARCH), powerpc64 ppc64))
+$(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
 endif
 
 # If we are running on ARM, set certain options automatically
@@ -667,8 +659,31 @@ override USE_BLAS64:=0
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=ARMV7
 override USE_SYSTEM_LIBM:=1
-
 endif
+
+# Set MARCH-specific flags
+ifneq ($(MARCH),)
+CC += -march=$(MARCH)
+CXX += -march=$(MARCH)
+FC += -march=$(MARCH)
+JULIA_CPU_TARGET ?= $(MARCH)
+ifeq ($(OS),Darwin)
+# on Darwin, the standalone `as` program doesn't know
+# how to handle AVX instructions, but it does know how
+# to dispatch to the clang assembler (if we ask it to)
+ifeq ($(USECLANG),1)
+CC += -integrated-as
+CXX += -integrated-as
+else
+CC += -Wa,-q
+CXX += -Wa,-q
+endif
+FC += -Wa,-q
+AS += -q
+endif
+endif
+
+JULIA_CPU_TARGET ?= native
 
 # Set some ARCH-specific flags
 ifneq ($(USEICC),1)

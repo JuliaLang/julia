@@ -388,6 +388,11 @@ d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 @test [d[k] for k in keys(d)] == [d[k] for k in eachindex(d)] ==
       [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
 
+# generators, similar
+d = Dict(:a=>"a")
+@test @inferred(map(identity, d)) == d
+@test @inferred(map(p->p.first=>p.second[1], d)) == Dict(:a=>'a')
+@test_throws ArgumentError map(p->p.second, d)
 
 # Issue 12451
 @test_throws ArgumentError Dict(0)
@@ -550,3 +555,6 @@ let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9
         end
     end
 end
+
+# #18213
+Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a deprecation

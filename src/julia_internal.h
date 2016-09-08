@@ -240,6 +240,7 @@ void jl_set_gs_ctr(uint32_t ctr);
 
 void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args);
 void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...);
 
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
@@ -311,7 +312,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr);
 
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
-                                           int cache, int inexact);
+                                           int cache, int inexact, int allow_exec);
 jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
 
@@ -427,6 +428,7 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
 int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
+JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp, int allow_exec);
 
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);
