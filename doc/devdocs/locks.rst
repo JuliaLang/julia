@@ -1,4 +1,4 @@
-.. currentmodule:: Base
+.. _devdocs-locks:
 
 ****************************************************
 Proper maintenance and care of multi-threading locks
