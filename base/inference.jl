@@ -1417,7 +1417,7 @@ end
 # create a specialized LambdaInfo from a method
 function specialize_method(method::Method, types::ANY, sp::SimpleVector, cached)
     if cached
-        return ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any), method, types, sp)
+        return ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any, Cint), method, types, sp, true)
     else
         return ccall(:jl_get_specialized, Ref{LambdaInfo}, (Any, Any, Any), method, types, sp)
     end
