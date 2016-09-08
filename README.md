@@ -130,6 +130,17 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@__DIR__` has been added [#18380](https://github.com/JuliaLang/julia/pull/18380)
 
+* `@vectorize_1arg` and `@vectorize_2arg` are deprecated on Julia 0.6 in favor
+  of the broadcast syntax [#17302](https://github.com/JuliaLang/julia/pull/17302).
+  `Compat.@dep_vectorize_1arg` and `Compat.@dep_vectorize_2arg` are provided
+  so that packages can still provide the deprecated definitions
+  without causing a depwarn in the package itself before all the users
+  are upgraded.
+
+  Packages are expected to use this until all users of the deprecated
+  vectorized function have migrated. These macros will be dropped when
+  the support for `0.6` is dropped from `Compat`.
+
 ## Other changes
 
 * `remotecall`, `remotecall_fetch`, `remotecall_wait`, and `remote_do` have the function to be executed remotely as the first argument in Julia 0.5. Loading `Compat` defines the same methods in older versions of Julia. [#13338](https://github.com/JuliaLang/julia/pull/13338)

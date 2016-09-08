@@ -1115,7 +1115,7 @@ for (Fun, func) in [(:AndFun,              :&),
                     (:DotMulFun,           :.*),
                     (:RDivFun,             :/),
                     (:DotRDivFun,          :./),
-                    (:LDivFun,             :\),
+                    (:LDivFun,             :\ ),
                     (:IDivFun,             :div),
                     (:DotIDivFun,          @compat(Symbol(".÷"))),
                     (:ModFun,              :mod),
@@ -1182,6 +1182,36 @@ let x = rand(3), y = rand(3)
     @test @compat(sin.(cos.(x))) == map(x -> sin(cos(x)), x)
     @test @compat(atan2.(sin.(y),x)) == broadcast(atan2,map(sin,y),x)
 end
+let x0 = Array(Float64), v, v0
+    x0[1] = rand()
+    v0 = @compat sin.(x0)
+    @test isa(v0, Array{Float64,0})
+    v = @compat sin.(x0[1])
+    @test isa(v, Float64)
+    @test v == v0[1] == sin(x0[1])
+end
+let x = rand(2, 2), v
+    v = @compat sin.(x)
+    @test isa(v, Array{Float64,2})
+    @test v == [sin(x[1, 1]) sin(x[1, 2]);
+                sin(x[2, 1]) sin(x[2, 2])]
+end
+let x1 = [1, 2, 3], x2 = ([3, 4, 5],), v
+    v = @compat atan2.(x1, x2...)
+    @test isa(v, Vector{Float64})
+    @test v == [atan2(1, 3), atan2(2, 4), atan2(3, 5)]
+end
+# Do the following in global scope to make sure inference is able to handle it
+@test @compat(sin.([1, 2])) == [sin(1), sin(2)]
+@test isa(@compat(sin.([1, 2])), Vector{Float64})
+@test @compat(atan2.(1, [2, 3])) == [atan2(1, 2), atan2(1, 3)]
+@test isa(@compat(atan2.(1, [2, 3])), Vector{Float64})
+@test @compat(atan2.([1, 2], [2, 3])) == [atan2(1, 2), atan2(2, 3)]
+@test isa(@compat(atan2.([1, 2], [2, 3])), Vector{Float64})
+# And make sure it is actually inferrable
+f15032(a) = @compat sin.(a)
+@inferred f15032([1, 2, 3])
+@inferred f15032([1.0, 2.0, 3.0])
 
 if VERSION ≥ v"0.4.0-dev+3732"
     @test Symbol("foo") === :foo
@@ -1383,3 +1413,20 @@ let filename = tempname()
 end
 
 @test @__DIR__() == dirname(@__FILE__)
+
+# PR #17302
+# To be removed when 0.5/0.6 support is dropped.
+f17302(a::Number) = a
+f17302(a::Number, b::Number) = a + b
+Compat.@dep_vectorize_1arg Real f17302
+Compat.@dep_vectorize_2arg Real f17302
+@test_throws MethodError f17302([1im])
+@test_throws MethodError f17302([1im], [1im])
+mktemp() do fname, f
+    redirect_stderr(f) do
+        @test f17302([1.0]) == [1.0]
+        @test f17302(1.0, [1]) == [2.0]
+        @test f17302([1.0], 1) == [2.0]
+        @test f17302([1.0], [1]) == [2.0]
+    end
+end
