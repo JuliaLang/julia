@@ -374,8 +374,11 @@ function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::Range)
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
 end
 checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == indices1(I)
-# Note that this method breaks the output dimensions are equal to the sum of
-# the dimensions of the indices" dictum; see #18271 for details.
+# Logical indexing is an exception to the "output dimensionality is the sum of
+# the dimensionality of the indices" rule; `A[A.<0]` always returns a vector,
+# regardless of the dimensionalities of `A and `A.<0`. This method goes one step
+# further and ignores singleton dimensions for logical mask indices. While a
+# little strange, it enables idioms like `A[:, sum(A, 1) .< 0]`. Ref #18271.
 function checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool})
     # Ensure that there's no more than one non-singleton dimension and that it
     # matches the source array's index. Note that there's an ambiguity at length
