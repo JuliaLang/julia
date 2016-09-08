@@ -3,7 +3,7 @@
 
 # Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
 # userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
-# unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
+# unless force is set to true.  Allow targeting of a CPU architecture via cpu_target.
 function default_sysimg_path(debug=false)
     if is_unix()
         splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
@@ -33,7 +33,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     sysimg = Libdl.dlopen_e("sys")
     if sysimg != C_NULL
         if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Libdl.dlext)")
-            info("System image already loaded at $(Libdl.dlpath(sysimg)), set force to override")
+            info("System image already loaded at $(Libdl.dlpath(sysimg)), set force=true to override")
             return
         end
     end
@@ -69,19 +69,13 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             cp(userimg_path, "userimg.jl")
         end
         try
-            # Start by building inference0.{ji,o}
-            inference0_path = joinpath(dirname(sysimg_path), "inference0")
-            info("Building inference0.o")
-            println("$julia -C $cpu_target --output-ji $inference0_path.ji --output-o $inference0_path.o coreimg.jl")
-            run(`$julia -C $cpu_target --output-ji $inference0_path.ji --output-o $inference0_path.o coreimg.jl`)
-
-            # Bootstrap off off that to create inference.{ji,o}
+            # Start by building inference.{ji,o}
             inference_path = joinpath(dirname(sysimg_path), "inference")
             info("Building inference.o")
             println("$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl")
             run(`$julia -C $cpu_target --output-ji $inference_path.ji --output-o $inference_path.o coreimg.jl`)
 
-            # Bootstrap off off that to create sys.{ji,o}
+            # Bootstrap off of that to create sys.{ji,o}
             info("Building sys.o")
             println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
@@ -163,10 +157,10 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
 
     sysimg_file = "$sysimg_path.$(Libdl.dlext)"
     info("Linking sys.$(Libdl.dlext)")
+    # Windows has difficulties overwriting a file in use so we first rename it
     if is_windows() && isfile(sysimg_file)
         mv(sysimg_file, "$sysimg_file.old"; remove_destination=true)
         run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
-        run(`rm "$sysimg_path.$(Libdl.dlext).old"`)
     else
         run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
     end
@@ -174,7 +168,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
 end
 
 # When running this file as a script, try to do so with default values.  If arguments are passed
-# in, use them as the arguments to build_sysimg above
+# in, use them as the arguments to build_sysimg above.
 #
 # Also check whether we are running `genstdlib.jl`, in which case we don't want to build a
 # system image and instead only need `build_sysimg`'s docstring to be available.
