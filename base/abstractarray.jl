@@ -243,9 +243,9 @@ linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
 
 # The overall hierarchy is
 #     `checkbounds(A, I...)` ->
-#         `checkbounds(Bool, A, I...)` -> either of:
-#             - `checkbounds_logical(Bool, A, I)` when `I` is a single logical array
-#             - `checkbounds_indices(Bool, IA, I)` otherwise (uses `checkindex`)
+#         `checkbounds(Bool, A, I...)` ->
+#             `checkbounds_indices(Bool, IA, I)`, which recursively calls
+#                 `checkindex` for each dimension
 #
 # See the "boundscheck" devdocs for more information.
 #
@@ -269,9 +269,10 @@ function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
     checkbounds_indices(Bool, indices(A), I)
 end
-function checkbounds(::Type{Bool}, A::AbstractArray, I::AbstractArray{Bool})
+# As a special extension, allow using logical arrays that match the source array exactly
+function checkbounds{_,N}(::Type{Bool}, A::AbstractArray{_,N}, I::AbstractArray{Bool,N})
     @_inline_meta
-    checkbounds_logical(Bool, A, I)
+    indices(A) == indices(I)
 end
 
 """
@@ -323,35 +324,6 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     checkindex(Bool, OneTo(trailingsize(IA)), I[1])  # linear indexing
 end
 
-"""
-    checkbounds_logical(Bool, A, I::AbstractArray{Bool})
-
-Return `true` if the logical array `I` is consistent with the indices
-of `A`. `I` and `A` should have the same size and compatible indices.
-"""
-function checkbounds_logical(::Type{Bool}, A::AbstractArray, I::AbstractArray{Bool})
-    indices(A) == indices(I)
-end
-function checkbounds_logical(::Type{Bool}, A::AbstractArray, I::AbstractVector{Bool})
-    length(A) == length(I)
-end
-function checkbounds_logical(::Type{Bool}, A::AbstractVector, I::AbstractArray{Bool})
-    length(A) == length(I)
-end
-function checkbounds_logical(::Type{Bool}, A::AbstractVector, I::AbstractVector{Bool})
-    indices(A) == indices(I)
-end
-
-"""
-    checkbounds_logical(A, I::AbstractArray{Bool})
-
-Throw an error if the logical array `I` is inconsistent with the indices of `A`.
-"""
-function checkbounds_logical(A, I::AbstractVector{Bool})
-    checkbounds_logical(Bool, A, I) || throw_boundserror(A, I)
-    nothing
-end
-
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 
 # check along a single dimension
@@ -370,7 +342,19 @@ function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::Range)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
 end
-checkindex{N}(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool,N}) = N == 1 && indx == indices1(I)
+checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == indices1(I)
+# Logical indexing is an exception to the "output dimensionality is the sum of
+# the dimensionality of the indices" rule; `A[A.<0]` always returns a vector,
+# regardless of the dimensionalities of `A and `A.<0`. This method goes one step
+# further and ignores singleton dimensions for logical mask indices. While a
+# little strange, it enables idioms like `A[:, sum(A, 1) .< 0]`. Ref #18271.
+function checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool})
+    # Ensure that there's no more than one non-singleton dimension and that it
+    # matches the source array's index. Note that there's an ambiguity at length
+    # 1, since we cannot tell which dimension should be the non-singleton one.
+    @_inline_meta
+    length(indx) == prod(map(length, indices(I))) && any(x->x==indx, indices(I))
+end
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray)
     @_inline_meta
     b = true
