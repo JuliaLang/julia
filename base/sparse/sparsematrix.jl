@@ -30,6 +30,17 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
     nnz(A)
 
 Returns the number of stored (filled) elements in a sparse array.
+
+```jldoctest
+julia> A = speye(3)
+3×3 sparse matrix with 3 Float64 nonzero entries:
+        [1, 1]  =  1.0
+        [2, 2]  =  1.0
+        [3, 3]  =  1.0
+
+julia> nnz(A)
+3
+```
 """
 nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
@@ -42,6 +53,20 @@ includes zeros that are explicitly stored in the sparse array. The returned
 vector points directly to the internal nonzero storage of `A`, and any
 modifications to the returned vector will mutate `A` as well. See
 [`rowvals`](:func:`rowvals`) and [`nzrange`](:func:`nzrange`).
+
+```jldoctest
+julia> A = speye(3)
+3×3 sparse matrix with 3 Float64 nonzero entries:
+        [1, 1]  =  1.0
+        [2, 2]  =  1.0
+        [3, 3]  =  1.0
+
+julia> nonzeros(A)
+3-element Array{Float64,1}:
+ 1.0
+ 1.0
+ 1.0
+```
 """
 nonzeros(S::SparseMatrixCSC) = S.nzval
 
@@ -52,11 +77,25 @@ Return a vector of the row indices of `A`. Any modifications to the returned
 vector will mutate `A` as well. Providing access to how the row indices are
 stored internally can be useful in conjunction with iterating over structural
 nonzero values. See also [`nonzeros`](:func:`nonzeros`) and [`nzrange`](:func:`nzrange`).
+
+```jldoctest
+julia> A = speye(3)
+3×3 sparse matrix with 3 Float64 nonzero entries:
+        [1, 1]  =  1.0
+        [2, 2]  =  1.0
+        [3, 3]  =  1.0
+
+julia> rowvals(A)
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
 """
 rowvals(S::SparseMatrixCSC) = S.rowval
 
 """
-    nzrange(A::SparseMatrixCSC, col)
+    nzrange(A::SparseMatrixCSC, col::Integer)
 
 Return the range of indices to the structural nonzero values of a sparse matrix
 column. In conjunction with [`nonzeros`](:func:`nonzeros`) and
@@ -292,6 +331,20 @@ full(S::SparseMatrixCSC) = convert(Array, S)
     full(S)
 
 Convert a sparse matrix or vector `S` into a dense matrix or vector.
+
+```jldoctest
+julia> A = speye(3)
+3×3 sparse matrix with 3 Float64 nonzero entries:
+        [1, 1]  =  1.0
+        [2, 2]  =  1.0
+        [3, 3]  =  1.0
+
+julia> full(A)
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+```
 """
 full
 
@@ -310,6 +363,20 @@ vec(S::SparseMatrixCSC) = S[:]
     sparse(A)
 
 Convert an AbstractMatrix `A` into a sparse matrix.
+
+```jldoctest
+julia> A = eye(3)
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+
+julia> sparse(A)
+3×3 sparse matrix with 3 Float64 nonzero entries:
+        [1, 1]  =  1.0
+        [2, 2]  =  1.0
+        [3, 3]  =  1.0
+```
 """
 sparse{Tv}(A::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
 
@@ -377,6 +444,20 @@ elements of `J` must satisfy `1 <= J[k] <= n`. Numerical zeros in (`I`, `J`, `V`
 retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](:func:`dropzeros!`).
 
 For additional documentation and an expert driver, see `Base.SparseArrays.sparse!`.
+
+```jldoctest
+julia> Is = [1; 2; 3];
+
+julia> Js = [1; 2; 3];
+
+julia> Vs = [1; 2; 3];
+
+julia> sparse(Is, Js, Vs)
+3×3 sparse matrix with 3 Int64 nonzero entries:
+        [1, 1]  =  1
+        [2, 2]  =  2
+        [3, 3]  =  3
+```
 """
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv}, m::Integer, n::Integer, combine)
     coolen = length(I)
@@ -423,7 +504,8 @@ end
         csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
         [csccolptr::Vector{Ti}], [cscrowval::Vector{Ti}, cscnzval::Vector{Tv}] )
 
-Parent of and expert driver for `sparse`; see `sparse` for basic usage. This method
+Parent of and expert driver for [`sparse`](:func:`sparse`);
+see [`sparse`](:func:`sparse`) for basic usage. This method
 allows the user to provide preallocated storage for `sparse`'s intermediate objects and
 result as described below. This capability enables more efficient successive construction
 of `SparseMatrixCSC`s from coordinate representations, and also enables extraction of an
