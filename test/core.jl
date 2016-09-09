@@ -4555,6 +4555,12 @@ end
 # variable name in the error is tested above in `TestSSA16244`
 @test_throws UndefVarError f18386(1, 2, true)
 
+Base.@propagate_inbounds function f18412(a)
+    @inbounds b = a[1]
+    return b
+end
+@test f18412([1]) == 1
+
 # issue #18173
 function f18173()
     identity(()->successflag)
