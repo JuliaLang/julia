@@ -3312,7 +3312,7 @@ function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1}, do_coverage)
     # The clearing needs to be propagated up during pop
     # This is not pushed to if the push is already eliminated
     # Also shared for `Expr(:boundscheck)` and `Expr(:inbounds)`
-    bounds_push_pos_stack = [0]
+    bounds_push_pos_stack = [0] # always non-empty
     # Number of boundscheck pushes in a eliminated boundscheck block
     void_boundscheck_depth = 0
     is_inbounds = check_bounds == 2
@@ -3320,9 +3320,9 @@ function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1}, do_coverage)
 
     # Position of the last line number node without any non-meta expressions
     # in between.
-    prev_dbg_stack = [0]
+    prev_dbg_stack = [0] # always non-empty
     # Whether there's any non-meta exprs after the enclosing `push_loc`
-    push_loc_pos_stack = [0]
+    push_loc_pos_stack = [0] # always non-empty
 
     for i in 1:length(code)
         ex = code[i]
@@ -3363,6 +3363,7 @@ function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1}, do_coverage)
                 if !(args[1] === :pop)
                     void_boundscheck_depth += 1
                 elseif void_boundscheck_depth == 0
+                    # There must have been a push
                     pop!(bounds_elim_stack)
                     enabled = true
                 else
@@ -3412,7 +3413,7 @@ function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1}, do_coverage)
             end
             arg1 = args[1]
             if arg1 === true
-                if inbounds_stack[end]
+                if !isempty(inbounds_stack) && inbounds_stack[end]
                     code[i] = nothing
                     push!(bounds_elim_stack, true)
                 else
@@ -3423,6 +3424,8 @@ function meta_elim_pass!(linfo::LambdaInfo, code::Array{Any,1}, do_coverage)
                 push!(inbounds_stack, true)
             elseif arg1 === false
                 if is_inbounds
+                    # There must have been a `true` on the stack so
+                    # `inbounds_stack` must not be empty
                     if !inbounds_stack[end]
                         is_inbounds = false
                     end
