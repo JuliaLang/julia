@@ -336,3 +336,30 @@ f18222(x) = true
 g18222(x) = f18222(x)
 @test f18222(1) == g18222(1) == true
 @test f18222(1.0) == g18222(1.0) == false
+
+# issue #18399
+# TODO: this test is rather brittle
+type TSlow18399{T}
+    x::T
+end
+function hvcat18399(as)
+    cb = ri->as[ri]
+    g = Base.Generator(cb, 1)
+    return g.f(1)
+end
+function cat_t18399(X...)
+    for i = 2:1
+        X[i]
+        d->i
+    end
+end
+C18399 = TSlow18399{Int}(1)
+GB18399 = TSlow18399{Int}(1)
+function test18399(C)
+    B = GB18399::Union{TSlow18399{Int},TSlow18399{Any}}
+    cat_t18399()
+    cat_t18399(B, B, B)
+    hvcat18399((C,))
+    return hvcat18399(((2, 3),))
+end
+@test test18399(C18399) == (2, 3)
