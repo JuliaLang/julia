@@ -245,7 +245,7 @@ begin
                                                    :shell => shell_mode,
                                                    :help  => help_mode))
 
-    REPL.hist_from_file(hp, IOBuffer(fakehistory))
+    REPL.hist_from_file(hp, IOBuffer(fakehistory), "fakehistorypath")
     REPL.history_reset_state(hp)
 
     histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
