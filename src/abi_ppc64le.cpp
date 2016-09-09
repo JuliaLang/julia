@@ -97,7 +97,7 @@ bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
-    if (dt->size > 16 && isHFA(dt, &ty0, &hva) > 8)
+    if (jl_datatype_size(dt) > 16 && isHFA(dt, &ty0, &hva) > 8)
         return true;
     return false;
 }
@@ -106,14 +106,14 @@ void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
-    if (dt->size > 64 && isHFA(dt, &ty0, &hva) > 8)
+    if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8)
         *byRef = true;
 }
 
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
 {
     // Arguments are either scalar or passed by value
-    size_t size = dt->size;
+    size_t size = jl_datatype_size(dt);
     // don't need to change bitstypes
     if (!jl_datatype_nfields(dt))
         return NULL;
