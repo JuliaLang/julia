@@ -777,57 +777,68 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
         return Any
     end
     for (m::SimpleVector) in x
-        sig = m[1]
+        sig = m[1]::DataType
         method = m[3]::Method
+        sparams = m[2]::SimpleVector
+        recomputesvec = false
 
         # limit argument type tuple growth
         lsig = length(m[3].sig.parameters)
         ls = length(sig.parameters)
+        td = type_depth(sig)
         # look at the existing edges to detect growing argument lists
+        mightlimitlength = ls > lsig + 1
+        mightlimitdepth = td > 2
+
         limitlength = false
-        for (callee, _) in sv.edges
-            callee = callee::InferenceState
-            if method === callee.linfo.def && ls > length(callee.linfo.specTypes.parameters)
-                limitlength = true
-                break
+        if mightlimitlength
+            for (callee, _) in sv.edges
+                callee = callee::InferenceState
+                if method === callee.linfo.def && ls > length(callee.linfo.specTypes.parameters)
+                    limitlength = true
+                    break
+                end
             end
         end
 
         # limit argument type size growth
-        # TODO: FIXME: this heuristic depends on non-local state making type-inference unpredictable
-        for infstate in active
-            infstate === nothing && continue
-            infstate = infstate::InferenceState
-            if isdefined(infstate.linfo, :def) && method === infstate.linfo.def
-                td = type_depth(sig)
-                if ls > length(infstate.linfo.specTypes.parameters)
-                    limitlength = true
-                end
-                if td > type_depth(infstate.linfo.specTypes)
-                    # impose limit if we recur and the argument types grow beyond MAX_TYPE_DEPTH
-                    if td > MAX_TYPE_DEPTH
-                        sig = limit_type_depth(sig, 0, true, [])
-                        break
-                    else
-                        p1, p2 = sig.parameters, infstate.linfo.specTypes.parameters
-                        if length(p2) == ls
-                            limitdepth = false
-                            newsig = Array{Any}(ls)
-                            for i = 1:ls
-                                if p1[i] <: Function && type_depth(p1[i]) > type_depth(p2[i]) &&
-                                    isa(p1[i],DataType)
-                                    # if a Function argument is growing (e.g. nested closures)
-                                    # then widen to the outermost function type. without this
-                                    # inference fails to terminate on do_quadgk.
-                                    newsig[i] = p1[i].name.primary
-                                    limitdepth  = true
-                                else
-                                    newsig[i] = limit_type_depth(p1[i], 1, true, [])
+        if mightlimitlength || mightlimitdepth
+            # TODO: FIXME: this heuristic depends on non-local state making type-inference unpredictable
+            for infstate in active
+                infstate === nothing && continue
+                infstate = infstate::InferenceState
+                if isdefined(infstate.linfo, :def) && method === infstate.linfo.def
+                    if mightlimitlength && ls > length(infstate.linfo.specTypes.parameters)
+                        limitlength = true
+                    end
+                    if mightlimitdepth && td > type_depth(infstate.linfo.specTypes)
+                        # impose limit if we recur and the argument types grow beyond MAX_TYPE_DEPTH
+                        if td > MAX_TYPE_DEPTH
+                            sig = limit_type_depth(sig, 0, true, [])
+                            recomputesvec = true
+                            break
+                        else
+                            p1, p2 = sig.parameters, infstate.linfo.specTypes.parameters
+                            if length(p2) == ls
+                                limitdepth = false
+                                newsig = Array{Any}(ls)
+                                for i = 1:ls
+                                    if p1[i] <: Function && type_depth(p1[i]) > type_depth(p2[i]) &&
+                                        isa(p1[i],DataType)
+                                        # if a Function argument is growing (e.g. nested closures)
+                                        # then widen to the outermost function type. without this
+                                        # inference fails to terminate on do_quadgk.
+                                        newsig[i] = p1[i].name.primary
+                                        limitdepth  = true
+                                    else
+                                        newsig[i] = limit_type_depth(p1[i], 1, true, [])
+                                    end
                                 end
-                            end
-                            if limitdepth
-                                sig = Tuple{newsig...}
-                                break
+                                if limitdepth
+                                    sig = Tuple{newsig...}
+                                    recomputesvec = true
+                                    break
+                                end
                             end
                         end
                     end
@@ -844,26 +855,37 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
         # limit length based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments
         # instead of the default (MAX_TUPLETYPE_LEN)
-        if limitlength && ls > lsig + 1
+        if limitlength
             if !istopfunction(tm, f, :promote_typeof)
-                fst = sig.parameters[lsig+1]
+                fst = sig.parameters[lsig + 1]
                 allsame = true
                 # allow specializing on longer arglists if all the trailing
                 # arguments are the same, since there is no exponential
                 # blowup in this case.
-                for i = lsig+2:ls
+                for i = (lsig + 2):ls
                     if sig.parameters[i] != fst
                         allsame = false
                         break
                     end
                 end
                 if !allsame
-                    sig = limit_tuple_type_n(sig, lsig+1)
+                    sig = limit_tuple_type_n(sig, lsig + 1)
+                    recomputesvec = true
                 end
             end
         end
-        #print(m,"\n")
-        (_tree, rt) = typeinf_edge(method, sig, m[2], sv)
+
+        # if sig changed, may need to recompute the sparams environment
+        if recomputesvec && !isempty(sparams)
+            recomputed = ccall(:jl_type_intersection_env, Ref{SimpleVector}, (Any, Any, Any), sig, method.sig, method.tvars)
+            if !isa(recomputed[1], DataType) # probably Union{}
+                rettype = Any
+                break
+            end
+            sig = recomputed[1]::DataType
+            sparams = recomputed[2]::SimpleVector
+        end
+        (_tree, rt) = typeinf_edge(method, sig, sparams, sv)
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
             break
