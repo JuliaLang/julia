@@ -90,7 +90,7 @@ try
               let some_method = @which Base.include("string")
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
-                      ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any),
+                      ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any),
                           some_method, Tuple{typeof(Base.include), String}, Core.svec())
               end
           end
@@ -156,9 +156,9 @@ try
             0:25)
         some_method = @which Base.include("string")
         some_linfo =
-                ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any),
+                ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any),
                     some_method, Tuple{typeof(Base.include), String}, Core.svec())
-        @test Foo.some_linfo::Core.LambdaInfo === some_linfo
+        @test Foo.some_linfo::Core.MethodInstance === some_linfo
     end
 
     Baz_file = joinpath(dir, "Baz.jl")

@@ -29,7 +29,7 @@ const TAGS = Any[
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
     LineNumberNode, Slot, LabelNode, GotoNode,
-    QuoteNode, Core.SourceInfo, TypeVar, Core.Box, LambdaInfo,
+    QuoteNode, CodeInfo, TypeVar, Core.Box, Core.MethodInstance,
     Module, #=UndefRefTag=#Symbol, Task, String, Float16,
     SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef,
 
@@ -81,7 +81,7 @@ const BACKREF_TAG = Int32(sertag(SimpleVector)+1)
 const EXPR_TAG = sertag(Expr)
 const LONGEXPR_TAG = Int32(sertag(Expr)+3)
 const MODULE_TAG = sertag(Module)
-const LAMBDAINFO_TAG = sertag(LambdaInfo)
+const METHODINSTANCE_TAG = sertag(Core.MethodInstance)
 const METHOD_TAG = sertag(Method)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
@@ -348,10 +348,10 @@ function serialize(s::AbstractSerializer, meth::Method)
     nothing
 end
 
-function serialize(s::AbstractSerializer, linfo::LambdaInfo)
+function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
-    isdefined(linfo, :def) && error("can only serialize toplevel LambdaInfo objects")
-    writetag(s.io, LAMBDAINFO_TAG)
+    isdefined(linfo, :def) && error("can only serialize toplevel MethodInstance objects")
+    writetag(s.io, METHODINSTANCE_TAG)
     serialize(s, linfo.inferred)
     serialize(s, linfo.sparam_vals)
     serialize(s, linfo.rettype)
@@ -623,7 +623,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     isstaged = deserialize(s)::Bool
-    template = deserialize(s)::Core.SourceInfo
+    template = deserialize(s)::CodeInfo
     if makenew
         meth.module = mod
         meth.name = name
@@ -638,7 +638,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.isva = isva
         # TODO: compress template
         if isstaged
-            linfo = ccall(:jl_new_lambda_info_uninit, Ref{LambdaInfo}, ())
+            linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple
             linfo.inferred = template
             meth.unspecialized = linfo
@@ -650,10 +650,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     return meth
 end
 
-function deserialize(s::AbstractSerializer, ::Type{LambdaInfo})
-    linfo = ccall(:jl_new_lambda_info_uninit, Ref{LambdaInfo}, (Ptr{Void},), C_NULL)
+function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
+    linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Void},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.inferred = deserialize(s)::Core.SourceInfo
+    linfo.inferred = deserialize(s)::CodeInfo
     linfo.sparam_vals = deserialize(s)::SimpleVector
     linfo.rettype = deserialize(s)
     linfo.specTypes = deserialize(s)

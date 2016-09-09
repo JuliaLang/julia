@@ -42,8 +42,8 @@ jl_datatype_t *jl_method_type;
 jl_datatype_t *jl_methtable_type;
 jl_datatype_t *jl_typemap_entry_type;
 jl_datatype_t *jl_typemap_level_type;
-jl_datatype_t *jl_lambda_info_type;
-jl_datatype_t *jl_source_info_type;
+jl_datatype_t *jl_method_instance_type;
+jl_datatype_t *jl_code_info_type;
 jl_datatype_t *jl_module_type;
 jl_datatype_t *jl_errorexception_type=NULL;
 jl_datatype_t *jl_argumenterror_type;
@@ -331,9 +331,9 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module)
     return expr;
 }
 
-// copy a :lambda Expr into its SourceInfo representation,
+// copy a :lambda Expr into its CodeInfo representation,
 // including popping of known meta nodes
-static void jl_source_info_set_ast(jl_source_info_t *li, jl_expr_t *ast)
+static void jl_code_info_set_ast(jl_code_info_t *li, jl_expr_t *ast)
 {
     assert(jl_is_expr(ast));
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ast, 2);
@@ -399,12 +399,12 @@ static void jl_source_info_set_ast(jl_source_info_t *li, jl_expr_t *ast)
     }
 }
 
-JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(void)
+JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_lambda_info_t *li =
-        (jl_lambda_info_t*)jl_gc_alloc(ptls, sizeof(jl_lambda_info_t),
-                                       jl_lambda_info_type);
+    jl_method_instance_t *li =
+        (jl_method_instance_t*)jl_gc_alloc(ptls, sizeof(jl_method_instance_t),
+                                       jl_method_instance_type);
     li->inferred = NULL;
     li->rettype = (jl_value_t*)jl_any_type;
     li->sparam_vals = jl_emptysvec;
@@ -420,12 +420,12 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(void)
     return li;
 }
 
-JL_DLLEXPORT jl_source_info_t *jl_new_source_info_uninit(void)
+JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_source_info_t *src =
-        (jl_source_info_t*)jl_gc_alloc(ptls, sizeof(jl_source_info_t),
-                                       jl_source_info_type);
+    jl_code_info_t *src =
+        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
+                                       jl_code_info_type);
     src->code = NULL;
     src->slotnames = NULL;
     src->slotflags = NULL;
@@ -438,25 +438,25 @@ JL_DLLEXPORT jl_source_info_t *jl_new_source_info_uninit(void)
     return src;
 }
 
-jl_source_info_t *jl_new_source_info_from_ast(jl_expr_t *ast)
+jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast)
 {
-    jl_source_info_t *src = NULL;
+    jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
-    src = jl_new_source_info_uninit();
-    jl_source_info_set_ast(src, ast);
+    src = jl_new_code_info_uninit();
+    jl_code_info_set_ast(src, ast);
     JL_GC_POP();
     return src;
 }
 
 // invoke (compiling if necessary) the jlcall function pointer for a method template
-STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_lambda_info_t *generator,
+STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_method_instance_t *generator,
                                          jl_value_t **args, uint32_t nargs)
 {
     jl_generic_fptr_t fptr;
     fptr.fptr = generator->fptr;
     fptr.jlcall_api = generator->jlcall_api;
     if (__unlikely(fptr.fptr == NULL || fptr.jlcall_api == 0)) {
-        void *F = jl_compile_linfo(generator, (jl_source_info_t*)generator->inferred).functionObject;
+        void *F = jl_compile_linfo(generator, (jl_code_info_t*)generator->inferred).functionObject;
         fptr = jl_generate_fptr(generator, F);
     }
     assert(jl_svec_len(generator->def->sparam_syms) == jl_svec_len(sparam_vals));
@@ -468,9 +468,9 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_lambda_info_
         abort(); // shouldn't have inferred any other calling convention
 }
 
-// return a newly allocated SourceInfo for the function signature
+// return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
-JL_DLLEXPORT jl_source_info_t *jl_code_for_staged(jl_lambda_info_t *linfo)
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
     JL_TIMING(STAGED_FUNCTION);
     jl_tupletype_t *tt = linfo->specTypes;
@@ -479,10 +479,10 @@ JL_DLLEXPORT jl_source_info_t *jl_code_for_staged(jl_lambda_info_t *linfo)
     jl_expr_t *ex = NULL;
     jl_value_t *linenum = NULL;
     jl_svec_t *sparam_vals = env;
-    jl_lambda_info_t *generator = linfo->def->unspecialized;
+    jl_method_instance_t *generator = linfo->def->unspecialized;
     assert(linfo != generator);
     assert(linfo->def->isstaged);
-    jl_source_info_t *func = NULL;
+    jl_code_info_t *func = NULL;
     JL_GC_PUSH4(&ex, &linenum, &sparam_vals, &func);
     jl_ptls_t ptls = jl_get_ptls_states();
     int last_in = ptls->in_pure_callback;
@@ -495,7 +495,7 @@ JL_DLLEXPORT jl_source_info_t *jl_code_for_staged(jl_lambda_info_t *linfo)
         jl_array_t *argnames = jl_alloc_vec_any(nargs);
         jl_array_ptr_set(ex->args, 0, argnames);
         for (i = 0; i < nargs; i++)
-            jl_array_ptr_set(argnames, i, jl_array_ptr_ref(((jl_source_info_t*)generator->inferred)->slotnames, i));
+            jl_array_ptr_set(argnames, i, jl_array_ptr_ref(((jl_code_info_t*)generator->inferred)->slotnames, i));
 
         jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
         jl_array_ptr_set(ex->args, 1, scopeblock);
@@ -523,8 +523,8 @@ JL_DLLEXPORT jl_source_info_t *jl_code_for_staged(jl_lambda_info_t *linfo)
         }
 
         // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
-        func = (jl_source_info_t*)jl_toplevel_eval_in_warn(linfo->def->module, (jl_value_t*)ex, 1);
-        assert(jl_is_source_info(func));
+        func = (jl_code_info_t*)jl_toplevel_eval_in_warn(linfo->def->module, (jl_value_t*)ex, 1);
+        assert(jl_is_code_info(func));
 
         jl_array_t *stmts = (jl_array_t*)func->code;
         for (i = 0, l = jl_array_len(stmts); i < l; i++) {
@@ -540,28 +540,28 @@ JL_DLLEXPORT jl_source_info_t *jl_code_for_staged(jl_lambda_info_t *linfo)
     return func;
 }
 
-JL_DLLEXPORT jl_source_info_t *jl_copy_source_info(jl_source_info_t *src)
+JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_source_info_t *newsrc =
-        (jl_source_info_t*)jl_gc_alloc(ptls, sizeof(jl_source_info_t),
-                                       jl_source_info_type);
+    jl_code_info_t *newsrc =
+        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
+                                       jl_code_info_type);
     *newsrc = *src;
     return newsrc;
 }
 
 // return a new lambda-info that has some extra static parameters merged in
-jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp)
+jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp)
 {
     assert(jl_svec_len(m->sparam_syms) == jl_svec_len(sp) || sp == jl_emptysvec);
-    jl_lambda_info_t *new_linfo = jl_new_lambda_info_uninit();
+    jl_method_instance_t *new_linfo = jl_new_method_instance_uninit();
     new_linfo->def = m;
     new_linfo->specTypes = types;
     new_linfo->sparam_vals = sp;
     return new_linfo;
 }
 
-JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_source_info_t *src)
+JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
 {
     uint8_t j;
     uint8_t called = 0;
@@ -596,7 +596,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_source_info_t *src)
         jl_array_ptr_set(copy, i, st);
     }
     copy = jl_compress_ast(m, copy);
-    m->source = jl_copy_source_info(src);
+    m->source = jl_copy_code_info(src);
     jl_gc_wb(m, m->source);
     m->source->code = copy;
     JL_GC_POP();
@@ -630,7 +630,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     return m;
 }
 
-jl_method_t *jl_new_method(jl_source_info_t *definition,
+jl_method_t *jl_new_method(jl_code_info_t *definition,
                            jl_sym_t *name,
                            jl_tupletype_t *sig,
                            size_t nargs,

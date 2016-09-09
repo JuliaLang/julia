@@ -106,7 +106,7 @@ variable assignments:
    julia> expand( :(f() = 1) )
    :(begin
            $(Expr(:method, :f))
-           $(Expr(:method, :f, :((Core.svec)((Core.apply_type)(Tuple,(Core.Typeof)(f)),(Core.svec)())), Toplevel LambdaInfo thunk, false))
+           $(Expr(:method, :f, :((Core.svec)((Core.apply_type)(Tuple,(Core.Typeof)(f)),(Core.svec)())), Toplevel MethodInstance thunk, false))
            return f
        end)
 

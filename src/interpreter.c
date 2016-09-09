@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 typedef struct {
-    jl_source_info_t *src;
+    jl_code_info_t *src;
     jl_module_t *module;
     jl_value_t **locals;
     jl_svec_t *sparam_vals;
@@ -33,7 +33,7 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 }
 
 JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
-                                                       jl_source_info_t *src,
+                                                       jl_code_info_t *src,
                                                        jl_svec_t *sparam_vals)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -80,8 +80,8 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     size_t i;
     for (i = 1; i < nargs; i++)
         argv[i - 1] = eval(args[i], s);
-    jl_lambda_info_t *meth = (jl_lambda_info_t*)args[0];
-    assert(jl_is_lambda_info(meth) && !meth->inInference);
+    jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
+    assert(jl_is_method_instance(meth) && !meth->inInference);
     jl_value_t *result = jl_call_method_internal(meth, argv, nargs - 1);
     JL_GC_POP();
     return result;
@@ -155,12 +155,12 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     jl_gc_wb(tt, tt->super);
 }
 
-static int jl_source_nslots(jl_source_info_t *src)
+static int jl_source_nslots(jl_code_info_t *src)
 {
     return jl_array_len(src->slotflags);
 }
 
-static int jl_source_nssavalues(jl_source_info_t *src)
+static int jl_source_nssavalues(jl_code_info_t *src)
 {
     return jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
 }
@@ -168,7 +168,7 @@ static int jl_source_nssavalues(jl_source_info_t *src)
 static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_source_info_t *src = s==NULL ? NULL : s->src;
+    jl_code_info_t *src = s==NULL ? NULL : s->src;
     if (jl_is_ssavalue(e)) {
         ssize_t id = ((jl_ssavalue_t*)e)->id;
         if (id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
@@ -266,7 +266,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], s);
         meth = eval(args[2], s);
-        jl_method_def((jl_svec_t*)atypes, (jl_source_info_t*)meth, args[3]);
+        jl_method_def((jl_svec_t*)atypes, (jl_code_info_t*)meth, args[3]);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -570,9 +570,9 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
     return NULL;
 }
 
-jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t nargs)
+jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
 {
-    jl_source_info_t *src = lam->inferred;
+    jl_code_info_t *src = lam->inferred;
     if (src == NULL)
         src = lam->def->source;
     jl_array_t *stmts = src->code;
@@ -597,7 +597,7 @@ jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t
     return r;
 }
 
-jl_value_t *jl_interpret_toplevel_thunk(jl_source_info_t *src)
+jl_value_t *jl_interpret_toplevel_thunk(jl_code_info_t *src)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_array_t *stmts = src->code;

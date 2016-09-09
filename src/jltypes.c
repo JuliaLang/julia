@@ -3851,8 +3851,8 @@ void jl_init_types(void)
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_methtable_type->types, 5, jl_module_type);
 
-    jl_source_info_type =
-        jl_new_datatype(jl_symbol("SourceInfo"),
+    jl_code_info_type =
+        jl_new_datatype(jl_symbol("CodeInfo"),
                         jl_any_type, jl_emptysvec,
                         jl_svec(9,
                                 jl_symbol("code"),
@@ -3908,8 +3908,8 @@ void jl_init_types(void)
                                 jl_any_type, // Union{Array, Void}
                                 jl_any_type,
                                 jl_simplevector_type,
-                                jl_source_info_type,
-                                jl_any_type, // jl_lambda_info_type
+                                jl_code_info_type,
+                                jl_any_type, // jl_method_instance_type
                                 jl_array_any_type,
                                 jl_any_type,
                                 jl_int32_type,
@@ -3919,8 +3919,8 @@ void jl_init_types(void)
                                 jl_bool_type),
                         0, 1, 9);
 
-    jl_lambda_info_type =
-        jl_new_datatype(jl_symbol("LambdaInfo"),
+    jl_method_instance_type =
+        jl_new_datatype(jl_symbol("MethodInstance"),
                         jl_any_type, jl_emptysvec,
                         jl_svec(12,
                                 jl_symbol("specTypes"),
@@ -4007,11 +4007,11 @@ void jl_init_types(void)
     jl_svecset(jl_methtable_type->types, 6, jl_int32_type); // DWORD
 #endif
     jl_svecset(jl_methtable_type->types, 7, jl_int32_type); // uint32_t
-    jl_svecset(jl_method_type->types, 10, jl_lambda_info_type);
-    jl_svecset(jl_lambda_info_type->types, 8, jl_voidpointer_type);
-    jl_svecset(jl_lambda_info_type->types, 9, jl_voidpointer_type);
-    jl_svecset(jl_lambda_info_type->types, 10, jl_voidpointer_type);
-    jl_svecset(jl_lambda_info_type->types, 11, jl_voidpointer_type);
+    jl_svecset(jl_method_type->types, 10, jl_method_instance_type);
+    jl_svecset(jl_method_instance_type->types, 8, jl_voidpointer_type);
+    jl_svecset(jl_method_instance_type->types, 9, jl_voidpointer_type);
+    jl_svecset(jl_method_instance_type->types, 10, jl_voidpointer_type);
+    jl_svecset(jl_method_instance_type->types, 11, jl_voidpointer_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
@@ -4024,7 +4024,7 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_gotonode_type);
     jl_compute_field_offsets(jl_quotenode_type);
     jl_compute_field_offsets(jl_module_type);
-    jl_compute_field_offsets(jl_lambda_info_type);
+    jl_compute_field_offsets(jl_method_instance_type);
     jl_compute_field_offsets(jl_typector_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_sym_type);

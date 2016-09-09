@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Core: SourceInfo
+using Core: CodeInfo
 
 typealias Callable Union{Function,DataType}
 

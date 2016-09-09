@@ -86,7 +86,7 @@ struct FuncInfo {
     const Function *func;
     size_t lengthAdr;
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
-    jl_lambda_info_t *linfo;
+    jl_method_instance_t *linfo;
 };
 #else
 struct ObjectInfo {
@@ -105,7 +105,7 @@ struct ObjectInfo {
 // Maintain a mapping of unrealized function names -> linfo objects
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_lambda_info_t*> linfo_in_flight;
+static StringMap<jl_method_instance_t*> linfo_in_flight;
 static std::string mangle(const std::string &Name, const DataLayout &DL)
 {
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
@@ -119,7 +119,7 @@ static std::string mangle(const std::string &Name, const DataLayout &DL)
     return Name;
 #endif
 }
-void jl_add_linfo_in_flight(StringRef name, jl_lambda_info_t *linfo, const DataLayout &DL)
+void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const DataLayout &DL)
 {
     linfo_in_flight[mangle(name, DL)] = linfo;
 }
@@ -216,14 +216,14 @@ struct strrefcomp {
 #endif
 
 extern "C" tracer_cb jl_linfo_tracer;
-static std::vector<jl_lambda_info_t*> triggered_linfos;
+static std::vector<jl_method_instance_t*> triggered_linfos;
 void jl_callback_triggered_linfos(void)
 {
     if (triggered_linfos.empty())
         return;
     if (jl_linfo_tracer) {
-        std::vector<jl_lambda_info_t*> to_process(std::move(triggered_linfos));
-        for (jl_lambda_info_t *linfo : to_process)
+        std::vector<jl_method_instance_t*> to_process(std::move(triggered_linfos));
+        for (jl_method_instance_t *linfo : to_process)
             jl_call_tracer(jl_linfo_tracer, (jl_value_t*)linfo);
     }
 }
@@ -234,7 +234,7 @@ class JuliaJITEventListener: public JITEventListener
     std::map<size_t, FuncInfo, revcomp> info;
 #else
     std::map<size_t, ObjectInfo, revcomp> objectmap;
-    std::map<size_t, std::pair<size_t, jl_lambda_info_t *>, revcomp> linfomap;
+    std::map<size_t, std::pair<size_t, jl_method_instance_t *>, revcomp> linfomap;
 #endif
 
 public:
@@ -251,8 +251,8 @@ public:
         int8_t gc_state = jl_gc_safe_enter(ptls);
         uv_rwlock_wrlock(&threadsafe);
         StringRef sName = F.getName();
-        StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
-        jl_lambda_info_t *linfo = NULL;
+        StringMap<jl_method_instance_t*>::iterator linfo_it = linfo_in_flight.find(sName);
+        jl_method_instance_t *linfo = NULL;
         if (linfo_it != linfo_in_flight.end()) {
             linfo = linfo_it->second;
             linfo_in_flight.erase(linfo_it);
@@ -285,7 +285,7 @@ public:
 #endif // ifndef USE_MCJIT
 
 #ifdef USE_MCJIT
-    jl_lambda_info_t *lookupLinfo(size_t pointer)
+    jl_method_instance_t *lookupLinfo(size_t pointer)
     {
         auto linfo = linfomap.lower_bound(pointer);
         if (linfo != linfomap.end() && pointer < linfo->first + linfo->second.first)
@@ -485,8 +485,8 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
-            jl_lambda_info_t *linfo = NULL;
+            StringMap<jl_method_instance_t*>::iterator linfo_it = linfo_in_flight.find(sName);
+            jl_method_instance_t *linfo = NULL;
             if (linfo_it != linfo_in_flight.end()) {
                 linfo = linfo_it->second;
                 if (linfo->compile_traced)
@@ -570,8 +570,8 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
-            jl_lambda_info_t *linfo = NULL;
+            StringMap<jl_method_instance_t*>::iterator linfo_it = linfo_in_flight.find(sName);
+            jl_method_instance_t *linfo = NULL;
             if (linfo_it != linfo_in_flight.end()) {
                 linfo = linfo_it->second;
                 linfo_in_flight.erase(linfo_it);
@@ -963,9 +963,9 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
 
 static uint64_t jl_sysimage_base;
 static void **sysimg_fvars;
-static jl_lambda_info_t **sysimg_fvars_linfo;
+static jl_method_instance_t **sysimg_fvars_linfo;
 static size_t sysimg_fvars_n;
-extern "C" void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambda_info_t **linfos, size_t n)
+extern "C" void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_method_instance_t **linfos, size_t n)
 {
     jl_sysimage_base = (uintptr_t)sysimage_base;
     sysimg_fvars = fptrs;
@@ -1563,12 +1563,12 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
 }
 
-extern "C" jl_lambda_info_t *jl_gdblookuplinfo(void *p)
+extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p)
 {
 #ifndef USE_MCJIT
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound((size_t)p);
-    jl_lambda_info_t *li = NULL;
+    jl_method_instance_t *li = NULL;
     if (it != info.end() && (uintptr_t)(*it).first + (*it).second.lengthAdr >= (uintptr_t)p)
         li = (*it).second.linfo;
     uv_rwlock_rdunlock(&threadsafe);

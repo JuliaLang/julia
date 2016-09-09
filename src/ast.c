@@ -141,7 +141,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     jl_ptls_t ptls = jl_get_ptls_states();
     if (nargs < 1)
         argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
-    jl_lambda_info_t *mfunc = NULL;
+    jl_method_instance_t *mfunc = NULL;
     jl_value_t **margs;
     // Reserve one more slot for the result
     JL_GC_PUSHARGS(margs, nargs + 1);
@@ -515,7 +515,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             e = cdr_(e);
         }
         if (sym == lambda_sym)
-            ex = (jl_value_t*)jl_new_source_info_from_ast((jl_expr_t*)ex);
+            ex = (jl_value_t*)jl_new_code_info_from_ast((jl_expr_t*)ex);
         JL_GC_POP();
         if (sym == list_sym)
             return (jl_value_t*)((jl_expr_t*)ex)->args;
@@ -813,12 +813,12 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 }
 
 // wrap expr in a thunk AST
-jl_source_info_t *jl_wrap_expr(jl_value_t *expr)
+jl_code_info_t *jl_wrap_expr(jl_value_t *expr)
 {
     // `(lambda () (() () () ()) ,expr)
     jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
     jl_value_t *mt = jl_an_empty_vec_any;
-    jl_source_info_t *src = NULL;
+    jl_code_info_t *src = NULL;
     JL_GC_PUSH4(&le, &vi, &bo, &src);
     le = jl_exprn(lambda_sym, 3);
     jl_array_ptr_set(le->args, 0, mt);
@@ -836,7 +836,7 @@ jl_source_info_t *jl_wrap_expr(jl_value_t *expr)
         expr = (jl_value_t*)bo;
     }
     jl_array_ptr_set(le->args, 2, expr);
-    src = jl_new_source_info_from_ast(le);
+    src = jl_new_code_info_from_ast(le);
     JL_GC_POP();
     return src;
 }

@@ -34,11 +34,11 @@ The following data types exist in lowered form:
     Both types have an integer-valued ``id`` field giving the slot index.
     Most slots have the same type at all uses, and so are represented with
     ``SlotNumber``. The types of these slots are found in the ``slottypes``
-    field of their ``LambdaInfo`` object.
+    field of their ``MethodInstance`` object.
     Slots that require per-use type annotations are represented with
     ``TypedSlot``, which has a ``typ`` field.
 
-``SourceInfo``
+``CodeInfo``
     wraps the IR of a method.
 
 ``LineNumberNode``
@@ -78,7 +78,7 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
     ``args[2:end]`` are the arguments.
 
 ``invoke``
-    function call (static dispatch). ``args[1]`` is the LambdaInfo to call,
+    function call (static dispatch). ``args[1]`` is the MethodInstance to call,
     ``args[2:end]`` are the arguments (including the function that is being called, at ``args[2]``).
 
 ``static_parameter``
@@ -121,7 +121,7 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
     ``SimpleVector`` of type variables corresponding to the method's static
     parameters.
 
-    ``args[3]`` - a ``SourceInfo`` of the method itself. For "out of scope"
+    ``args[3]`` - a ``CodeInfo`` of the method itself. For "out of scope"
     method definitions (adding a method to a function that also has methods defined
     in different scopes) this is an expression that evaluates to a ``:lambda``
     expression.
@@ -194,7 +194,7 @@ A unique'd container describing the shared metadata for a single (unspecialized)
 
 ``ambig`` - Cache of other methods that may be ambiguous with this one
 
-``specializations`` - Cache of all LambdaInfo ever created for this Method,
+``specializations`` - Cache of all MethodInstance ever created for this Method,
     used to ensure uniqueness. Uniqueness is required for efficiency,
     especially for incremental precompile and tracking of method invalidation.
 
@@ -206,21 +206,21 @@ A unique'd container describing the shared metadata for a single (unspecialized)
 ``nargs``, ``isva``, ``called``, ``isstaged`` - Descriptive bit-fields for the source code of this Method.
 
 
-LambdaInfo
-~~~~~~~~~~
+MethodInstance
+~~~~~~~~~~~~~~
 
 A unique'd container describing a single callable signature for a Method.
 See especially :ref:`devdocs-locks` for important details on how to modify these fields safely.
 
-``specTypes`` - The primary key for this LambdaInfo.
+``specTypes`` - The primary key for this MethodInstance.
     Uniqueness is guaranteed through a ``def.specializations`` lookup.
 
 ``def`` - The ``Method`` that this function describes a specialization of.
     Or ``#undef``, if this is a top-level Lambda that is not part of a Method.
 
 ``sparam_vals`` - The values of the static parameters in specTypes
-    indexed by ``def.sparam_syms``. For the ``LambdaInfo`` at ``Method.unspecialized``,
-    this is the empty ``SimpleVector``. But for a runtime ``LambdaInfo`` from the ``MethodTable`` cache,
+    indexed by ``def.sparam_syms``. For the ``MethodInstance`` at ``Method.unspecialized``,
+    this is the empty ``SimpleVector``. But for a runtime ``MethodInstance`` from the ``MethodTable`` cache,
     this will always be defined and indexable.
 
 ``rettype`` - The inferred return type for the ``specFunctionObject`` field,
@@ -239,8 +239,8 @@ See especially :ref:`devdocs-locks` for important details on how to modify these
     - 2 - constant (stored in ``inferred``)
 
 
-SourceInfo
-~~~~~~~~~~
+CodeInfo
+~~~~~~~~
 
 A temporary container for holding lowered source code.
 

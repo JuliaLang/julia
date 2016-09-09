@@ -59,15 +59,19 @@
 #    name::Symbol
 #end
 
-#type LambdaInfo
-#    ast::Expr
-#    sparams::Tuple
-#    tfunc
-#    name::Symbol
-#    inferred
-#    file::Symbol
-#    line::Int
-#    module::Module
+#type Method
+#end
+
+#type MethodInstance
+#end
+
+#type CodeInfo
+#end
+
+#type TypeMapLevel
+#end
+
+#type TypeMapEntry
 #end
 
 #abstract Ref{T}
@@ -119,7 +123,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Function, LambdaInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
+    Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
     Module, Symbol, Task, Array, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
