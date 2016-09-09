@@ -1302,11 +1302,11 @@ Mathematical Functions
 
    Squared absolute value of ``x``\ .
 
-.. function:: copysign(x, y)
+.. function:: copysign(x, y) -> z
 
    .. Docstring generated from Julia source
 
-   Return ``x`` such that it has the same sign as ``y``\ .
+   Return ``z`` which has the magnitude of ``x`` and the same sign as ``y``\ .
 
    .. doctest::
 

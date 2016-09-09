@@ -1035,9 +1035,9 @@ Remove each element of `iterable` from set `s` in-place.
 setdiff!
 
 """
-    copysign(x, y)
+    copysign(x, y) -> z
 
-Return `x` such that it has the same sign as `y`.
+Return `z` which has the magnitude of `x` and the same sign as `y`.
 
 ```jldoctest
 julia> copysign(1, -2)
