@@ -1104,6 +1104,9 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         fieldval.gcroot = strct.gcroot;
         return fieldval;
     }
+    else if (isa<UndefValue>(strct.V)) {
+        return jl_cgval_t();
+    }
     else {
         if (strct.V->getType()->isVectorTy()) {
             fldv = builder.CreateExtractElement(strct.V, ConstantInt::get(T_int32, idx));

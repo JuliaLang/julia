@@ -1159,6 +1159,16 @@ JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
     return ti;
 }
 
+JL_DLLEXPORT jl_svec_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t *tvars)
+{
+    jl_svec_t *env = jl_emptysvec;
+    JL_GC_PUSH1(&env);
+    jl_value_t *ti = jl_type_intersection_matching(a, b, &env, tvars);
+    jl_svec_t *pair = jl_svec2(ti, env);
+    JL_GC_POP();
+    return pair;
+}
+
 /*
   constraint satisfaction algorithm:
   - keep lists of equality constraints and subtype constraints
