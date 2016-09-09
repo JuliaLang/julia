@@ -33,6 +33,11 @@ $(SRCDIR)/srccache/fftw-$(FFTW_VER)/source-extracted: $(SRCDIR)/srccache/fftw-$(
 	touch -c $(SRCDIR)/srccache/fftw-$(FFTW_VER)/configure # old target
 	echo 1 > $@
 
+$(SRCDIR)/srccache/fftw-$(FFTW_VER)/fftw-win32-intrin-h.patch-applied: $(SRCDIR)/srccache/fftw-$(FFTW_VER)/source-extracted
+	cd $(SRCDIR)/srccache/fftw-$(FFTW_VER) && patch -p1 -f < $(SRCDIR)/patches/fftw-win32-intrin-h.patch
+	echo 1 > $@
+$(BUILDDIR)/fftw-$(FFTW_VER)-%/build-configured: $(SRCDIR)/srccache/fftw-$(FFTW_VER)/fftw-win32-intrin-h.patch-applied
+
 $(BUILDDIR)/fftw-$(FFTW_VER)-%/build-configured: $(SRCDIR)/srccache/fftw-$(FFTW_VER)/source-extracted
 	mkdir -p $(dir $@)
 	@# try to configure with avx support. if that fails, try again without it
