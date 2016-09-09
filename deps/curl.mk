@@ -19,6 +19,11 @@ $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted: $(SRCDIR)/srccache/curl-$(
 	touch -c $(SRCDIR)/srccache/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
+$(SRCDIR)/srccache/curl-$(CURL_VER)/curl-mbedtls_md4.patch-applied: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted
+	cd $(SRCDIR)/srccache/curl-$(CURL_VER) && patch -p1 -f < $(SRCDIR)/patches/curl-mbedtls_md4.patch
+	echo 1 > $@
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCDIR)/srccache/curl-$(CURL_VER)/curl-mbedtls_md4.patch-applied
+
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
