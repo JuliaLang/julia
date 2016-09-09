@@ -56,7 +56,7 @@ function _deepcopy_array_t(x::ANY, T, stackdict::ObjectIdDict)
     dest = similar(x)
     stackdict[x] = dest
     for i=1:length(x)
-        if isdefined(x,i)
+        if isassigned(x,i)
             arrayset(dest, deepcopy_internal(x[i], stackdict), i)
         end
     end

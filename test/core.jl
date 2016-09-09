@@ -594,15 +594,6 @@ end
 
 let
     local a
-    a = Vector{Any}(2)
-    @test !isdefined(a,1) && !isdefined(a,2)
-    a[1] = 1
-    @test isdefined(a,1) && !isdefined(a,2)
-    a = Array{Float64}(1)
-    @test isdefined(a,1)
-    @test isdefined(a)
-    @test !isdefined(a,2)
-
     a = UndefField()
     @test !isdefined(a, :field)
     @test !isdefined(a, :foo)
@@ -3754,9 +3745,9 @@ end
 
 let ary = Vector{Any}(10)
     check_undef_and_fill(ary, rng) = for i in rng
-        @test !isdefined(ary, i)
+        @test !isassigned(ary, i)
         ary[i] = (Float64(i), i) # some non-cached content
-        @test isdefined(ary, i)
+        @test isassigned(ary, i)
     end
     # Check if the memory is initially zerod and fill it with value
     # to check if these values are not reused later.
@@ -3819,7 +3810,7 @@ let ary = Vector{Any}(10)
         len = length(ary)
         ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
         for i in (len + 1):(len + 10)
-            @test !isdefined(ary, i)
+            @test !isassigned(ary, i)
         end
     end
 
@@ -3827,7 +3818,7 @@ let ary = Vector{Any}(10)
     ary[:] = 1:length(ary)
     ccall(:jl_array_grow_at, Void, (Any, Csize_t, Csize_t), ary, 50, 10)
     for i in 51:60
-        @test !isdefined(ary, i)
+        @test !isassigned(ary, i)
     end
 end
 

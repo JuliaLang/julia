@@ -107,10 +107,10 @@ let
     Base.rehash!(s)
     @test length(k) == length(s.dict.keys)
     for i in 1:length(k)
-        if isdefined(k, i)
+        if isassigned(k, i)
             @test k[i] == s.dict.keys[i]
         else
-            @test !isdefined(s.dict.keys, i)
+            @test !isassigned(s.dict.keys, i)
         end
     end
     s == Set(["a", "b", "c"])

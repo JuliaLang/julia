@@ -440,13 +440,13 @@ function visit(f, mc::TypeMapLevel)
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
         for i in 1:length(e)
-            isdefined(e, i) && visit(f, e[i])
+            isassigned(e, i) && visit(f, e[i])
         end
     end
     if mc.arg1 !== nothing
         e = mc.arg1::Vector{Any}
         for i in 1:length(e)
-            isdefined(e, i) && visit(f, e[i])
+            isassigned(e, i) && visit(f, e[i])
         end
     end
     mc.list !== nothing && visit(f, mc.list)
