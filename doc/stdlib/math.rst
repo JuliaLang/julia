@@ -66,9 +66,21 @@ Mathematical Operators
 
    .. doctest::
 
-       julia> [1 2 3] .+ [1 2 4]
-       1×3 Array{Int64,2}:
-        2  4  7
+       julia> A = [1 2; 3 4];
+
+       julia> B = [5 6; 7 8];
+
+       julia> C = [A, B]
+       2-element Array{Array{Int64,2},1}:
+        [1 2; 3 4]
+        [5 6; 7 8]
+
+       julia> C .+ [[1; 2] [3; 4]]
+       2×2 Array{Array{Int64,2},2}:
+        [2 3; 4 5]   [4 5; 6 7]
+        [7 8; 9 10]  [9 10; 11 12]
+
+   See also :func:`broadcast`\ .
 
 .. _.-:
 .. function:: .-(x, y)
