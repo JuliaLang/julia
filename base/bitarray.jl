@@ -385,6 +385,13 @@ end
     falses(dims)
 
 Create a `BitArray` with all values set to `false`.
+
+```jldoctest
+julia> falses(2,3)
+2×3 BitArray{2}:
+ false  false  false
+ false  false  false
+```
 """
 falses(dims::Dims) = fill!(BitArray(dims), false)
 falses(dims::Integer...) = falses(map(Int,dims))
@@ -392,6 +399,18 @@ falses(dims::Integer...) = falses(map(Int,dims))
     falses(A)
 
 Create a `BitArray` with all values set to `false` of the same shape as `A`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> falses(A)
+2×2 BitArray{2}:
+ false  false
+ false  false
+```
 """
 falses(A::AbstractArray) = falses(size(A))
 
@@ -399,6 +418,13 @@ falses(A::AbstractArray) = falses(size(A))
     trues(dims)
 
 Create a `BitArray` with all values set to `true`.
+
+```jldoctest
+julia> trues(2,3)
+2×3 BitArray{2}:
+ true  true  true
+ true  true  true
+```
 """
 trues(dims::Dims) = fill!(BitArray(dims), true)
 trues(dims::Integer...) = trues(map(Int,dims))
@@ -406,6 +432,18 @@ trues(dims::Integer...) = trues(map(Int,dims))
     trues(A)
 
 Create a `BitArray` with all values set to `true` of the same shape as `A`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> trues(A)
+2×2 BitArray{2}:
+ true  true
+ true  true
+```
 """
 trues(A::AbstractArray) = trues(size(A))
 

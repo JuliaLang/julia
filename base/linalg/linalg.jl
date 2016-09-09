@@ -189,11 +189,21 @@ end
 """
     LinAlg.checksquare(A)
 
-Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
+Check that a matrix is square, then return its common dimension.
+For multiple arguments, return a vector.
+
+```jldoctest
+julia> A = ones(4,4); B = zeros(5,5);
+
+julia> LinAlg.checksquare(A, B)
+2-element Array{Int64,1}:
+ 4
+ 5
+```
 """
 function checksquare(A)
     m,n = size(A)
-    m == n || throw(DimensionMismatch("matrix is not square"))
+    m == n || throw(DimensionMismatch("matrix is not square: dimensions are $(size(A))"))
     m
 end
 

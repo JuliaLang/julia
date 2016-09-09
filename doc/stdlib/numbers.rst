@@ -76,6 +76,14 @@ Data Formats
 
    A string giving the literal bit representation of a number.
 
+   .. doctest::
+
+       julia> bits(4)
+       "0000000000000000000000000000000000000000000000000000000000000100"
+
+       julia> bits(2.2)
+       "0100000000000001100110011001100110011001100110011001100110011010"
+
 .. function:: parse(type, str, [base])
 
    .. Docstring generated from Julia source

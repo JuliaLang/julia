@@ -147,6 +147,17 @@ Basic functions
 
    Counts the number of nonzero values in array ``A`` (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use :func:`nnz`\ , which returns the number of stored values.
 
+   .. doctest::
+
+       julia> A = [1 2 4; 0 0 1; 1 1 0]
+       3×3 Array{Int64,2}:
+        1  2  4
+        0  0  1
+        1  1  0
+
+       julia> countnz(A)
+       6
+
 .. function:: conj!(A)
 
    .. Docstring generated from Julia source
@@ -245,6 +256,15 @@ Basic functions
 
    Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
 
+   .. doctest::
+
+       julia> A = ones(4,4); B = zeros(5,5);
+
+       julia> LinAlg.checksquare(A, B)
+       2-element Array{Int64,1}:
+        4
+        5
+
 Constructors
 ------------
 
@@ -264,7 +284,14 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array of all zeros of specified type. The type defaults to Float64 if not specified.
+   Create an array of all zeros of specified type. The type defaults to ``Float64`` if not specified.
+
+   .. doctest::
+
+       julia> zeros(Int8, 2, 3)
+       2×3 Array{Int8,2}:
+        0  0  0
+        0  0  0
 
 .. function:: zeros(A)
 
@@ -272,11 +299,30 @@ Constructors
 
    Create an array of all zeros with the same element type and shape as ``A``\ .
 
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> zeros(A)
+       2×2 Array{Int64,2}:
+        0  0
+        0  0
+
 .. function:: ones(type, dims)
 
    .. Docstring generated from Julia source
 
    Create an array of all ones of specified type. The type defaults to ``Float64`` if not specified.
+
+   .. doctest::
+
+       julia> ones(Complex128, 2, 3)
+       2×3 Array{Complex{Float64},2}:
+        1.0+0.0im  1.0+0.0im  1.0+0.0im
+        1.0+0.0im  1.0+0.0im  1.0+0.0im
 
 .. function:: ones(A)
 
@@ -284,11 +330,30 @@ Constructors
 
    Create an array of all ones with the same element type and shape as ``A``\ .
 
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> ones(A)
+       2×2 Array{Int64,2}:
+        1  1
+        1  1
+
 .. function:: trues(dims)
 
    .. Docstring generated from Julia source
 
    Create a ``BitArray`` with all values set to ``true``\ .
+
+   .. doctest::
+
+       julia> trues(2,3)
+       2×3 BitArray{2}:
+        true  true  true
+        true  true  true
 
 .. function:: trues(A)
 
@@ -296,17 +361,48 @@ Constructors
 
    Create a ``BitArray`` with all values set to ``true`` of the same shape as ``A``\ .
 
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> trues(A)
+       2×2 BitArray{2}:
+        true  true
+        true  true
+
 .. function:: falses(dims)
 
    .. Docstring generated from Julia source
 
    Create a ``BitArray`` with all values set to ``false``\ .
 
+   .. doctest::
+
+       julia> falses(2,3)
+       2×3 BitArray{2}:
+        false  false  false
+        false  false  false
+
 .. function:: falses(A)
 
    .. Docstring generated from Julia source
 
    Create a ``BitArray`` with all values set to ``false`` of the same shape as ``A``\ .
+
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> falses(A)
+       2×2 BitArray{2}:
+        false  false
+        false  false
 
 .. function:: fill(x, dims)
 
@@ -337,6 +433,32 @@ Constructors
    .. Docstring generated from Julia source
 
    Create an array with the same data as the given array, but with different dimensions.
+
+   .. doctest::
+
+       julia> A = collect(1:16)
+       16-element Array{Int64,1}:
+         1
+         2
+         3
+         4
+         5
+         6
+         7
+         8
+         9
+        10
+        11
+        12
+        13
+        14
+        15
+        16
+
+       julia> reshape(A, (2, 8))
+       2×8 Array{Int64,2}:
+        1  3  5  7   9  11  13  15
+        2  4  6  8  10  12  14  16
 
 .. function:: similar(array, [element_type=eltype(array)], [dims=size(array)])
 
@@ -1151,11 +1273,55 @@ Indexing, Assignment, and Concatenation
 
    Permute the dimensions of array ``A``\ . ``perm`` is a vector specifying a permutation of length ``ndims(A)``\ . This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permutedims(A, [2,1])``\ .
 
+   .. doctest::
+
+       julia> A = reshape(collect(1:8), (2,2,2))
+       2×2×2 Array{Int64,3}:
+       [:, :, 1] =
+        1  3
+        2  4
+       <BLANKLINE>
+       [:, :, 2] =
+        5  7
+        6  8
+
+       julia> permutedims(A, [3, 2, 1])
+       2×2×2 Array{Int64,3}:
+       [:, :, 1] =
+        1  3
+        5  7
+       <BLANKLINE>
+       [:, :, 2] =
+        2  4
+        6  8
+
 .. function:: ipermutedims(A, perm)
 
    .. Docstring generated from Julia source
 
    Like :func:`permutedims`\ , except the inverse of the given permutation is applied.
+
+   .. doctest::
+
+       julia> A = reshape(collect(1:8), (2,2,2))
+       2×2×2 Array{Int64,3}:
+       [:, :, 1] =
+        1  3
+        2  4
+       <BLANKLINE>
+       [:, :, 2] =
+        5  7
+        6  8
+
+       julia> ipermutedims(A, [3, 2, 1])
+       2×2×2 Array{Int64,3}:
+       [:, :, 1] =
+        1  3
+        5  7
+       <BLANKLINE>
+       [:, :, 2] =
+        2  4
+        6  8
 
 .. function:: permutedims!(dest, src, perm)
 
@@ -1630,13 +1796,48 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Return the inverse permutation of ``v``
+   Return the inverse permutation of ``v``\ . If ``B = A[v]``\ , then ``A == B[invperm(v)]``\ .
+
+   .. doctest::
+
+       julia> v = [2; 4; 3; 1];
+
+       julia> invperm(v)
+       4-element Array{Int64,1}:
+        4
+        1
+        3
+        2
+
+       julia> A = ['a','b','c','d'];
+
+       julia> B = A[v]
+       4-element Array{Char,1}:
+        'b'
+        'd'
+        'c'
+        'a'
+
+       julia> B[invperm(v)]
+       4-element Array{Char,1}:
+        'a'
+        'b'
+        'c'
+        'd'
 
 .. function:: isperm(v) -> Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``v`` is a valid permutation.
+
+   .. doctest::
+
+       julia> isperm([1; 2])
+       true
+
+       julia> isperm([1; 3])
+       false
 
 .. function:: permute!(v, p)
 
@@ -1834,6 +2035,20 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    For additional documentation and an expert driver, see ``Base.SparseArrays.sparse!``\ .
 
+   .. doctest::
+
+       julia> Is = [1; 2; 3];
+
+       julia> Js = [1; 2; 3];
+
+       julia> Vs = [1; 2; 3];
+
+       julia> sparse(Is, Js, Vs)
+       3×3 sparse matrix with 3 Int64 nonzero entries:
+               [1, 1]  =  1
+               [2, 2]  =  2
+               [3, 3]  =  3
+
 .. function:: sparsevec(I, V, [m, combine])
 
    .. Docstring generated from Julia source
@@ -1858,6 +2073,20 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Convert an AbstractMatrix ``A`` into a sparse matrix.
 
+   .. doctest::
+
+       julia> A = eye(3)
+       3×3 Array{Float64,2}:
+        1.0  0.0  0.0
+        0.0  1.0  0.0
+        0.0  0.0  1.0
+
+       julia> sparse(A)
+       3×3 sparse matrix with 3 Float64 nonzero entries:
+               [1, 1]  =  1.0
+               [2, 2]  =  1.0
+               [3, 3]  =  1.0
+
 .. function:: sparsevec(A)
 
    .. Docstring generated from Julia source
@@ -1870,11 +2099,36 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Convert a sparse matrix or vector ``S`` into a dense matrix or vector.
 
+   .. doctest::
+
+       julia> A = speye(3)
+       3×3 sparse matrix with 3 Float64 nonzero entries:
+               [1, 1]  =  1.0
+               [2, 2]  =  1.0
+               [3, 3]  =  1.0
+
+       julia> full(A)
+       3×3 Array{Float64,2}:
+        1.0  0.0  0.0
+        0.0  1.0  0.0
+        0.0  0.0  1.0
+
 .. function:: nnz(A)
 
    .. Docstring generated from Julia source
 
    Returns the number of stored (filled) elements in a sparse array.
+
+   .. doctest::
+
+       julia> A = speye(3)
+       3×3 sparse matrix with 3 Float64 nonzero entries:
+               [1, 1]  =  1.0
+               [2, 2]  =  1.0
+               [3, 3]  =  1.0
+
+       julia> nnz(A)
+       3
 
 .. function:: spzeros([type,]m[,n])
 
@@ -1973,13 +2227,41 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Return a vector of the structural nonzero values in sparse array ``A``\ . This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of ``A``\ , and any modifications to the returned vector will mutate ``A`` as well. See :func:`rowvals` and :func:`nzrange`\ .
 
+   .. doctest::
+
+       julia> A = speye(3)
+       3×3 sparse matrix with 3 Float64 nonzero entries:
+               [1, 1]  =  1.0
+               [2, 2]  =  1.0
+               [3, 3]  =  1.0
+
+       julia> nonzeros(A)
+       3-element Array{Float64,1}:
+        1.0
+        1.0
+        1.0
+
 .. function:: rowvals(A::SparseMatrixCSC)
 
    .. Docstring generated from Julia source
 
    Return a vector of the row indices of ``A``\ . Any modifications to the returned vector will mutate ``A`` as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also :func:`nonzeros` and :func:`nzrange`\ .
 
-.. function:: nzrange(A::SparseMatrixCSC, col)
+   .. doctest::
+
+       julia> A = speye(3)
+       3×3 sparse matrix with 3 Float64 nonzero entries:
+               [1, 1]  =  1.0
+               [2, 2]  =  1.0
+               [3, 3]  =  1.0
+
+       julia> rowvals(A)
+       3-element Array{Int64,1}:
+        1
+        2
+        3
+
+.. function:: nzrange(A::SparseMatrixCSC, col::Integer)
 
    .. Docstring generated from Julia source
 

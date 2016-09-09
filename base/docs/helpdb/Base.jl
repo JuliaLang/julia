@@ -77,6 +77,12 @@ isinteger
     ./(x, y)
 
 Element-wise right division operator.
+
+```jldoctest
+julia> [1 2 3] ./ [1 2 3]
+1×3 Array{Float64,2}:
+ 1.0  1.0  1.0
+```
 """
 Base.:(./)
 
@@ -141,6 +147,12 @@ promote_type
 ```
 
 Element-wise multiplication operator.
+
+```jldoctest
+julia> [1 2 3] .* [1 2 3]
+1×3 Array{Int64,2}:
+ 1  4  9
+```
 """
 Base.:(.*)
 
@@ -178,6 +190,14 @@ Nullable
     bits(n)
 
 A string giving the literal bit representation of a number.
+
+```jldoctest
+julia> bits(4)
+"0000000000000000000000000000000000000000000000000000000000000100"
+
+julia> bits(2.2)
+"0100000000000001100110011001100110011001100110011001100110011010"
+```
 """
 bits
 
@@ -269,6 +289,12 @@ unsafe_copy!(dest::Array, d, src::Array, so, N)
     .^(x, y)
 
 Element-wise exponentiation operator.
+
+```jldoctest
+julia> [1 2 3] .^ [1 2 3]
+1×3 Array{Int64,2}:
+ 1  4  27
+```
 """
 Base.:(.^)
 
@@ -532,6 +558,13 @@ fd
     ones(type, dims)
 
 Create an array of all ones of specified type. The type defaults to `Float64` if not specified.
+
+```jldoctest
+julia> ones(Complex128, 2, 3)
+2×3 Array{Complex{Float64},2}:
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+```
 """
 ones(t,dims)
 
@@ -539,6 +572,18 @@ ones(t,dims)
     ones(A)
 
 Create an array of all ones with the same element type and shape as `A`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> ones(A)
+2×2 Array{Int64,2}:
+ 1  1
+ 1  1
+```
 """
 ones(A)
 
@@ -546,6 +591,32 @@ ones(A)
     reshape(A, dims)
 
 Create an array with the same data as the given array, but with different dimensions.
+
+```jldoctest
+julia> A = collect(1:16)
+16-element Array{Int64,1}:
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+
+julia> reshape(A, (2, 8))
+2×8 Array{Int64,2}:
+ 1  3  5  7   9  11  13  15
+ 2  4  6  8  10  12  14  16
+```
 """
 reshape
 
@@ -706,6 +777,14 @@ eachmatch
 
 Compute the logarithm of `x` to base 10.
 Throws [`DomainError`](:obj:`DomainError`) for negative `Real` arguments.
+
+```jldoctest
+julia> log10(100)
+2.0
+
+julia> log10(2)
+0.3010299956639812
+```
 """
 log10
 
@@ -743,6 +822,14 @@ truncate
     exp10(x)
 
 Compute ``10^x``.
+
+```jldoctest
+julia> exp10(2)
+100.0
+
+julia> exp10(0.2)
+1.5848931924611136
+```
 """
 exp10
 
@@ -750,6 +837,14 @@ exp10
     &(x, y)
 
 Bitwise and.
+
+```jldoctest
+julia> 4 & 10
+0
+
+julia> 4 & 12
+4
+```
 """
 &
 
@@ -863,6 +958,14 @@ num
     .<(x, y)
 
 Element-wise less-than comparison operator.
+
+```jldoctest
+julia> [1; 2; 3] .< [2; 1; 4]
+3-element BitArray{1}:
+  true
+ false
+  true
+```
 """
 Base.:(.<)
 
@@ -932,9 +1035,17 @@ Remove each element of `iterable` from set `s` in-place.
 setdiff!
 
 """
-    copysign(x, y)
+    copysign(x, y) -> z
 
-Return `x` such that it has the same sign as `y`
+Return `z` which has the magnitude of `x` and the same sign as `y`.
+
+```jldoctest
+julia> copysign(1, -2)
+-1
+
+julia> copysign(-1, 2)
+1
+```
 """
 copysign
 
@@ -1250,6 +1361,14 @@ next
     log2(x)
 
 Compute the logarithm of `x` to base 2. Throws `DomainError` for negative `Real` arguments.
+
+```jldoctest
+julia> log2(4)
+2.0
+
+julia> log2(10)
+3.321928094887362
+```
 """
 log2
 
@@ -1389,6 +1508,17 @@ reinterpret
     ~(x)
 
 Bitwise not.
+
+```jldoctest
+julia> ~4
+-5
+
+julia> ~10
+-11
+
+julia> ~true
+false
+```
 """
 ~
 
@@ -2031,6 +2161,14 @@ minimum!
     .-(x, y)
 
 Element-wise subtraction operator.
+
+```jldoctest
+julia> [4; 5; 6] .- [1; 2; 4]
+3-element Array{Int64,1}:
+ 3
+ 3
+ 2
+```
 """
 Base.:(.-)
 
@@ -2362,6 +2500,18 @@ reprmime
     !(x)
 
 Boolean not.
+
+```jldoctest
+julia> !true
+false
+
+julia> !false
+true
+
+julia> ![true false true]
+1×3 Array{Bool,2}:
+ false  true  false
+```
 """
 Base.:(!)
 
@@ -2425,6 +2575,12 @@ NullException
     .==(x, y)
 
 Element-wise equality comparison operator.
+
+```jldoctest
+julia> [1 2 3] .== [1 2 4]
+1×3 BitArray{2}:
+ true  true  false
+```
 """
 Base.:(.==)
 
@@ -2845,7 +3001,14 @@ any(::AbstractArray,dims)
     zeros(type, dims)
 
 Create an array of all zeros of specified type.
-The type defaults to Float64 if not specified.
+The type defaults to `Float64` if not specified.
+
+```jldoctest
+julia> zeros(Int8, 2, 3)
+2×3 Array{Int8,2}:
+ 0  0  0
+ 0  0  0
+```
 """
 zeros(t,dims)
 
@@ -2853,6 +3016,18 @@ zeros(t,dims)
     zeros(A)
 
 Create an array of all zeros with the same element type and shape as `A`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> zeros(A)
+2×2 Array{Int64,2}:
+ 0  0
+ 0  0
+```
 """
 zeros(A)
 
@@ -2907,6 +3082,24 @@ midpoints
     .+(x, y)
 
 Element-wise addition operator.
+
+```jldoctest
+julia> A = [1 2; 3 4];
+
+julia> B = [5 6; 7 8];
+
+julia> C = [A, B]
+2-element Array{Array{Int64,2},1}:
+ [1 2; 3 4]
+ [5 6; 7 8]
+
+julia> C .+ [[1; 2] [3; 4]]
+2×2 Array{Array{Int64,2},2}:
+ [2 3; 4 5]   [4 5; 6 7]
+ [7 8; 9 10]  [9 10; 11 12]
+```
+
+See also [`broadcast`](:func:`broadcast`).
 """
 Base.:(.+)
 
@@ -2931,6 +3124,20 @@ float
     signbit(x)
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+
+```jldoctest
+julia> signbit(-4)
+true
+
+julia> signbit(5)
+false
+
+julia> signbit(5.5)
+false
+
+julia> signbit(-4.1)
+true
+```
 """
 signbit
 
@@ -3072,6 +3279,14 @@ Val
     |(x, y)
 
 Bitwise or.
+
+```jldoctest
+julia> 4 | 10
+14
+
+julia> 4 | 1
+5
+```
 """
 Base.:(|)
 

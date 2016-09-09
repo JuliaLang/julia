@@ -60,6 +60,14 @@ end
     isperm(v) -> Bool
 
 Returns `true` if `v` is a valid permutation.
+
+```jldoctest
+julia> isperm([1; 2])
+true
+
+julia> isperm([1; 3])
+false
+```
 """
 function isperm(A)
     n = length(A)
@@ -139,7 +147,35 @@ ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
 """
     invperm(v)
 
-Return the inverse permutation of `v`
+Return the inverse permutation of `v`.
+If `B = A[v]`, then `A == B[invperm(v)]`.
+
+```jldoctest
+julia> v = [2; 4; 3; 1];
+
+julia> invperm(v)
+4-element Array{Int64,1}:
+ 4
+ 1
+ 3
+ 2
+
+julia> A = ['a','b','c','d'];
+
+julia> B = A[v]
+4-element Array{Char,1}:
+ 'b'
+ 'd'
+ 'c'
+ 'a'
+
+julia> B[invperm(v)]
+4-element Array{Char,1}:
+ 'a'
+ 'b'
+ 'c'
+ 'd'
+```
 """
 function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
