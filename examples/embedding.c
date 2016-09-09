@@ -74,8 +74,15 @@ int main()
         // define julia function and call it
 
         jl_eval_string("my_func(x) = 2*x");
-
         jl_function_t *func = jl_get_function(jl_current_module, "my_func");
+        
+        // if "my_func" is in a file named "mymodule.jl",
+        // make sure to put it in a module with the same name as the file, i.e. "mymodule",
+        // then replace the above two statements with the three statements commented here below:
+        // jl_load("mymodule.jl");
+        // jl_value_t * mod = (jl_value_t*)jl_eval_string("mymodule");
+        // jl_function_t * func = jl_get_function((jl_module_t*)mod,"my_func");
+
         jl_value_t* arg = jl_box_float64(5.0);
         double ret = jl_unbox_float64(jl_call1(func, arg));
 
