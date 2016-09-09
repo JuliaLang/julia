@@ -335,14 +335,14 @@ REPLHistoryProvider(mode_mapping) =
     REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
-const invalid_history_message = """
-Invalid history file (~/.julia_history) format:
+invalid_history_message(path::String) = """
+Invalid history file ($path) format:
 If you have a history file left over from an older version of Julia,
 try renaming or deleting it.
 Invalid character: """
 
-const munged_history_message = """
-Invalid history file (~/.julia_history) format:
+munged_history_message(path::String) = """
+Invalid history file ($path) format:
 An editor may have converted tabs to spaces at line """
 
 function hist_getline(file)
@@ -354,7 +354,7 @@ function hist_getline(file)
     return ""
 end
 
-function hist_from_file(hp, file)
+function hist_from_file(hp, file, path)
     hp.history_file = file
     seek(file, 0)
     countlines = 0
@@ -364,7 +364,7 @@ function hist_from_file(hp, file)
         isempty(line) && break
         countlines += 1
         line[1] != '#' &&
-            error(invalid_history_message, repr(line[1]), " at line ", countlines)
+            error(invalid_history_message(path), repr(line[1]), " at line ", countlines)
         while !isempty(line)
             m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
             m === nothing && break
@@ -377,15 +377,15 @@ function hist_from_file(hp, file)
         isempty(line) && break
         # Make sure starts with tab
         line[1] == ' '  &&
-            error(munged_history_message, countlines)
+            error(munged_history_message(path), countlines)
         line[1] != '\t' &&
-            error(invalid_history_message, repr(line[1]), " at line ", countlines)
+            error(invalid_history_message(path), repr(line[1]), " at line ", countlines)
         lines = String[]
         while !isempty(line)
             push!(lines, chomp(line[2:end]))
             eof(file) && break
             ch = Char(Base.peek(file))
-            ch == ' '  && error(munged_history_message, countlines)
+            ch == ' '  && error(munged_history_message(path), countlines)
             ch != '\t' && break
             line = hist_getline(file)
             countlines += 1
@@ -771,9 +771,10 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                                               :help  => help_mode))
     if repl.history_file
         try
-            f = open(find_hist_file(), true, true, true, false, false)
+            hist_path = find_hist_file()
+            f = open(hist_path, true, true, true, false, false)
             finalizer(replc, replc->close(f))
-            hist_from_file(hp, f)
+            hist_from_file(hp, f, hist_path)
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
             println(outstream(repl))
