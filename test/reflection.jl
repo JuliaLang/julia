@@ -413,7 +413,7 @@ function test_typed_ast_printing(f::ANY, types::ANY, must_used_vars)
             end
         end
     end
-    # Make sure printing an AST outside SourceInfo still works.
+    # Make sure printing an AST outside CodeInfo still works.
     str = sprint(show, src.code)
     # Check that we are printing the slot numbers when we don't have the context
     # Use the variable names that we know should be present in the optimized AST
@@ -431,13 +431,13 @@ test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
 @test used_dup_var_tested15714
 @test used_unique_var_tested15714
 
-let li = typeof(getfield).name.mt.cache.func::LambdaInfo,
+let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
     lrepr = string(li),
     mrepr = string(li.def),
     lmime = stringmime("text/plain", li),
     mmime = stringmime("text/plain", li.def)
 
-    @test lrepr == lmime == "LambdaInfo for getfield(...)"
+    @test lrepr == lmime == "MethodInstance for getfield(...)"
     @test mrepr == mmime == "getfield(...)"
 end
 
@@ -445,7 +445,7 @@ end
 # Linfo Tracing test
 tracefoo(x, y) = x+y
 didtrace = false
-tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), LambdaInfo); global didtrace = true; nothing)
+tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Core.MethodInstance); global didtrace = true; nothing)
 ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, (Ptr{Void},)))
 meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Void, (Any,), meth)
@@ -541,8 +541,8 @@ end
 let
     a = @code_typed 1 + 1
     b = @code_lowered 1 + 1
-    @test isa(a, Pair{Core.SourceInfo, DataType})
-    @test isa(b, Core.SourceInfo)
+    @test isa(a, Pair{CodeInfo, DataType})
+    @test isa(b, CodeInfo)
     @test isa(a[1].code, Array{Any,1})
     @test isa(b.code, Array{Any,1})
 

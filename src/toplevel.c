@@ -267,7 +267,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
 // remove this once jl_has_intrinsics is deleted
 extern jl_value_t *jl_builtin_getfield;
 static jl_value_t *jl_static_eval(jl_value_t *ex, jl_module_t *mod,
-                                  jl_lambda_info_t *linfo, int sparams)
+                                  jl_method_instance_t *linfo, int sparams)
 {
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
@@ -281,7 +281,7 @@ static jl_value_t *jl_static_eval(jl_value_t *ex, jl_module_t *mod,
         return NULL;
     if (jl_is_quotenode(ex))
         return jl_fieldref(ex, 0);
-    if (jl_is_lambda_info(ex))
+    if (jl_is_method_instance(ex))
         return NULL;
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
@@ -324,7 +324,7 @@ static jl_value_t *jl_static_eval(jl_value_t *ex, jl_module_t *mod,
 }
 
 
-int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
+int jl_has_intrinsics(jl_method_instance_t *li, jl_value_t *v, jl_module_t *m)
 {
     if (!jl_is_expr(v)) return 0;
     jl_expr_t *e = (jl_expr_t*)v;
@@ -355,7 +355,7 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-static int jl_eval_with_compiler_p(jl_source_info_t *src, jl_array_t *body, int compileloops, jl_module_t *m)
+static int jl_eval_with_compiler_p(jl_code_info_t *src, jl_array_t *body, int compileloops, jl_module_t *m)
 {
     size_t i, maxlabl=0;
     // compile if there are backwards branches
@@ -505,9 +505,9 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == toplevel_sym);
 }
 
-static jl_lambda_info_t *jl_new_thunk(jl_source_info_t *src)
+static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src)
 {
-    jl_lambda_info_t *li = jl_new_lambda_info_uninit();
+    jl_method_instance_t *li = jl_new_method_instance_uninit();
     li->inferred = (jl_value_t*)src;
     li->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
     return li;
@@ -586,7 +586,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
 
     jl_value_t *thunk = NULL;
     jl_value_t *result;
-    jl_source_info_t *thk = NULL;
+    jl_code_info_t *thk = NULL;
     int ewc = 0;
     JL_GC_PUSH3(&thunk, &thk, &ex);
 
@@ -607,8 +607,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     }
 
     if (head == thunk_sym) {
-        thk = (jl_source_info_t*)jl_exprarg(ex,0);
-        assert(jl_is_source_info(thk));
+        thk = (jl_code_info_t*)jl_exprarg(ex,0);
+        assert(jl_is_code_info(thk));
         assert(jl_typeis(thk->code, jl_array_any_type));
         ewc = jl_eval_with_compiler_p(thk, (jl_array_t*)thk->code, fast, ptls->current_module);
     }
@@ -633,7 +633,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     }
 
     if (ewc) {
-        jl_lambda_info_t *li = jl_new_thunk(thk);
+        jl_method_instance_t *li = jl_new_thunk(thk);
         jl_type_infer(li, 0);
         jl_value_t *dummy_f_arg = NULL;
         result = jl_call_method_internal(li, &dummy_f_arg, 1);
@@ -708,7 +708,7 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
 void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
 {
-    jl_source_info_t *src = m->isstaged ? (jl_source_info_t*)m->unspecialized->inferred : m->source;
+    jl_code_info_t *src = m->isstaged ? (jl_code_info_t*)m->unspecialized->inferred : m->source;
     size_t nvars = jl_array_len(src->slotnames);
 
     size_t i, n = jl_svec_len(t);
@@ -798,7 +798,7 @@ jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
 
 extern tracer_cb jl_newmeth_tracer;
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
-                                jl_source_info_t *f,
+                                jl_code_info_t *f,
                                 jl_value_t *isstaged)
 {
     // argdata is svec(svec(types...), svec(typevars...))
@@ -817,14 +817,14 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     jl_tupletype_t *argtype = jl_apply_tuple_type(atypes);
     JL_GC_PUSH3(&f, &m, &argtype);
 
-    if (!jl_is_source_info(f)) {
+    if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
         // the result is that the closure variables get interpolated directly into the AST
-        f = jl_new_source_info_from_ast((jl_expr_t*)f);
+        f = jl_new_code_info_from_ast((jl_expr_t*)f);
     }
 
-    assert(jl_is_source_info(f));
+    assert(jl_is_code_info(f));
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtype);
     if (ftype == NULL ||
         !(jl_is_type_type((jl_value_t*)ftype) ||

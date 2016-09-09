@@ -103,7 +103,7 @@ typedef enum _DUMP_MODES {
     MODE_INVALID = 0,
 
     // jl_uncompress_ast
-    // compressing / decompressing an AST Expr in a LambdaInfo
+    // compressing / decompressing an AST Expr in a MethodInstance
     MODE_AST,
 
     // jl_restore_system_image
@@ -384,7 +384,7 @@ static void jl_deserialize_gv_others(jl_serializer_state *s)
 }
 
 static struct delayed_fptrs_t {
-    jl_lambda_info_t *li;
+    jl_method_instance_t *li;
     int32_t func;
     int32_t cfunc;
 } *delayed_fptrs = NULL;
@@ -392,7 +392,7 @@ static size_t delayed_fptrs_n = 0;
 static size_t delayed_fptrs_max = 0;
 static size_t sysimg_fvars_max = 0;
 
-static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
+static void jl_delayed_fptrs(jl_method_instance_t *li, int32_t func, int32_t cfunc)
 {
     // can't restore the fptrs until after the system image is fully restored,
     // since it will try to decompress the function AST to determine the argument types
@@ -416,7 +416,7 @@ static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
     }
 }
 
-void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambda_info_t **linfos, size_t n);
+void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_method_instance_t **linfos, size_t n);
 
 static void jl_update_all_fptrs(void)
 {
@@ -428,9 +428,9 @@ static void jl_update_all_fptrs(void)
     sysimg_gvars = NULL;
     sysimg_fvars = NULL;
     size_t i;
-    jl_lambda_info_t **linfos = (jl_lambda_info_t**)malloc(sizeof(jl_lambda_info_t*) * sysimg_fvars_max);
+    jl_method_instance_t **linfos = (jl_method_instance_t**)malloc(sizeof(jl_method_instance_t*) * sysimg_fvars_max);
     for (i = 0; i < delayed_fptrs_n; i++) {
-        jl_lambda_info_t *li = delayed_fptrs[i].li;
+        jl_method_instance_t *li = delayed_fptrs[i].li;
         int32_t func = delayed_fptrs[i].func - 1;
         if (func >= 0) {
             jl_fptr_to_llvm((jl_fptr_t)fvars[func], li, 0);
@@ -906,9 +906,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)m->invokes.unknown);
         write_int8(s->s, m->needs_sparam_vals_ducttape);
     }
-    else if (jl_is_lambda_info(v)) {
-        writetag(s->s, jl_lambda_info_type);
-        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+    else if (jl_is_method_instance(v)) {
+        writetag(s->s, jl_method_instance_type);
+        jl_method_instance_t *li = (jl_method_instance_t*)v;
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         if (s->mode == MODE_MODULE || s->mode == MODE_MODULE_POSTWORK) {
             int external = li->def && !module_in_worklist(li->def->module);
@@ -1544,10 +1544,10 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
         if (m->roots)
             jl_gc_wb(m, m->roots);
-        m->source = (jl_source_info_t*)jl_deserialize_value(s, (jl_value_t**)&m->source);
+        m->source = (jl_code_info_t*)jl_deserialize_value(s, (jl_value_t**)&m->source);
         if (m->source)
             jl_gc_wb(m, m->source);
-        m->unspecialized = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&m->unspecialized);
+        m->unspecialized = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&m->unspecialized);
         if (m->unspecialized)
             jl_gc_wb(m, m->unspecialized);
         m->invokes.unknown = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
@@ -1557,11 +1557,11 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         JL_MUTEX_INIT(&m->writelock);
         return (jl_value_t*)m;
     }
-    else if (vtag == (jl_value_t*)jl_lambda_info_type) {
-        jl_lambda_info_t *li =
-            (jl_lambda_info_t*)jl_gc_alloc(ptls, sizeof(jl_lambda_info_t),
-                                           jl_lambda_info_type);
-        memset(li, 0, sizeof(jl_lambda_info_t));
+    else if (vtag == (jl_value_t*)jl_method_instance_type) {
+        jl_method_instance_t *li =
+            (jl_method_instance_t*)jl_gc_alloc(ptls, sizeof(jl_method_instance_t),
+                                           jl_method_instance_type);
+        memset(li, 0, sizeof(jl_method_instance_t));
         uintptr_t pos = backref_list.len;
         if (usetable)
             arraylist_push(&backref_list, li);
@@ -2433,9 +2433,9 @@ static void jl_recache_types(void)
         int offs = (int)(intptr_t)flagref_list.items[i++];
         jl_value_t *v, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
         jl_datatype_t *dt, *t;
-        if (jl_is_lambda_info(o)) {
-            // lookup the real LambdaInfo based on the placeholder specTypes
-            jl_lambda_info_t *li = (jl_lambda_info_t*)o;
+        if (jl_is_method_instance(o)) {
+            // lookup the real MethodInstance based on the placeholder specTypes
+            jl_method_instance_t *li = (jl_method_instance_t*)o;
             jl_datatype_t *argtypes = jl_recache_type(li->specTypes, i, NULL);
             jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
             jl_methtable_t *mt = ftype->name->mt;
@@ -2608,7 +2608,7 @@ void jl_init_serializer(void)
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)SmallDataType_tag,
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
-                     jl_module_type, jl_tvar_type, jl_lambda_info_type, jl_method_type,
+                     jl_module_type, jl_tvar_type, jl_method_instance_type, jl_method_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
                      // everything above here represents a class of object rather than only a literal
 
@@ -2658,7 +2658,7 @@ void jl_init_serializer(void)
                      jl_type_type, jl_bottom_type, jl_ref_type, jl_pointer_type,
                      jl_vararg_type, jl_abstractarray_type,
                      jl_densearray_type, jl_void_type, jl_function_type,
-                     jl_typector_type, jl_typename_type, jl_builtin_type, jl_source_info_type,
+                     jl_typector_type, jl_typename_type, jl_builtin_type, jl_code_info_type,
                      jl_task_type, jl_uniontype_type, jl_typetype_type, jl_typetype_tvar,
                      jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_abstractslot_type,
                      jl_methtable_type, jl_typemap_level_type, jl_typemap_entry_type,
@@ -2671,7 +2671,7 @@ void jl_init_serializer(void)
                      jl_expr_type->name, jl_typename_type->name, jl_type_type->name,
                      jl_methtable_type->name, jl_typemap_level_type->name, jl_typemap_entry_type->name, jl_tvar_type->name,
                      jl_abstractarray_type->name, jl_vararg_type->name,
-                     jl_densearray_type->name, jl_void_type->name, jl_lambda_info_type->name, jl_method_type->name,
+                     jl_densearray_type->name, jl_void_type->name, jl_method_instance_type->name, jl_method_type->name,
                      jl_module_type->name, jl_function_type->name, jl_typedslot_type->name,
                      jl_abstractslot_type->name, jl_slotnumber_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,

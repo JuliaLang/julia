@@ -70,7 +70,7 @@ It's particularly helpful to back up to the ``jl_apply`` frame, from which you c
 
    (gdb) call jl_(args[0])
 
-Another useful frame is ``to_function(jl_lambda_info_t *li, bool cstyle)``. The ``jl_lambda_info_t*`` argument is a struct with a reference to the final AST sent into the compiler. However, the AST at this point will usually be compressed; to view the AST, call ``jl_uncompress_ast`` and then pass the result to ``jl_``::
+Another useful frame is ``to_function(jl_method_instance_t *li, bool cstyle)``. The ``jl_method_instance_t*`` argument is a struct with a reference to the final AST sent into the compiler. However, the AST at this point will usually be compressed; to view the AST, call ``jl_uncompress_ast`` and then pass the result to ``jl_``::
 
    #2  0x00007ffff7928bf7 in to_function (li=0x2812060, cstyle=false) at codegen.cpp:584
    584	        abort();

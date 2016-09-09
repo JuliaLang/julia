@@ -479,9 +479,9 @@ end
 isempty(mt::MethodTable) = (mt.defs === nothing)
 
 uncompressed_ast(m::Method) = uncompressed_ast(m, m.source)
-function uncompressed_ast(m::Method, s::SourceInfo)
+function uncompressed_ast(m::Method, s::CodeInfo)
     if isa(s.code, Array{UInt8,1})
-        s = ccall(:jl_copy_source_info, Ref{SourceInfo}, (Any,), s)
+        s = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), s)
         s.code = ccall(:jl_uncompress_ast, Array{Any,1}, (Any, Any), m, s.code)
     end
     return s
@@ -493,7 +493,7 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_me
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
-    # get the LambdaInfo for the method match
+    # get the MethodInstance for the method match
     meth = which(f, t)
     t = to_tuple_type(t)
     ft = isa(f, Type) ? Type{f} : typeof(f)
@@ -501,12 +501,12 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_me
     (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
                       tt, meth.sig, meth.tvars)::SimpleVector
     meth = func_for_method_checked(meth, tt)
-    linfo = ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any), meth, tt, env)
+    linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any), meth, tt, env)
     # get the code for it
     return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module)
 end
 
-function _dump_function(linfo::LambdaInfo, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
+function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
     if native
         llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool), linfo, wrapper)
     else
@@ -658,7 +658,7 @@ Get the name of a generic `Function` as a symbol, or `:anonymous`.
 """
 function_name(f::Function) = typeof(f).name.mt.name
 
-functionloc(m::LambdaInfo) = functionloc(m.def)
+functionloc(m::Core.MethodInstance) = functionloc(m.def)
 
 """
     functionloc(m::Method)

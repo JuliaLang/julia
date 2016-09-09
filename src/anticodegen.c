@@ -25,7 +25,7 @@ JL_DLLEXPORT void *jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, in
 JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(void *DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize) UNAVAILABLE
 
 void jl_init_codegen(void) { }
-void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig)
+void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int specsig)
 {
     if (!specsig)
         lam->fptr = fptr;
@@ -36,15 +36,15 @@ int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int no
     return 0;
 }
 
-void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambda_info_t **linfos, size_t n)
+void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_method_instance_t **linfos, size_t n)
 {
     (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
 }
 
-void jl_compile_linfo(jl_lambda_info_t *li) { }
+void jl_compile_linfo(jl_method_instance_t *li) { }
 
-jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t nargs);
-void jl_generate_fptr(jl_lambda_info_t *li)
+jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs);
+void jl_generate_fptr(jl_method_instance_t *li)
 {
     li->fptr = (jl_fptr_t)&jl_interpret_call;
     li->jlcall_api = 4;

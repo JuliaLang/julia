@@ -105,7 +105,7 @@ Module serializer : toplevel lock
 
 JIT & type-inference : codegen lock
 
-LambdaInfo updates : codegen lock
+MethodInstance updates : codegen lock
 
     - These fields are generally lazy initialized, using the test-and-test-and-set pattern.
 

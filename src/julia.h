@@ -168,7 +168,7 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
 }
 
 typedef struct _jl_datatype_t jl_tupletype_t;
-struct _jl_lambda_info_t;
+struct _jl_method_instance_t;
 
 // TypeMap is an implicitly defined type
 // that can consist of any of the following nodes:
@@ -188,7 +188,7 @@ union jl_typemap_t {
 // This defines the default ABI used by compiled julia functions.
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
-typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_lambda_info_t*, jl_value_t**, uint32_t, jl_svec_t*);
+typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
 typedef struct {
     union {
@@ -207,7 +207,7 @@ typedef struct _jl_llvm_functions_t {
 } jl_llvm_functions_t;
 
 // This type describes a single function body
-typedef struct _jl_source_info_t {
+typedef struct _jl_code_info_t {
     jl_array_t *code;  // compressed uint8 array, or Any array of statements
     jl_value_t *slottypes; // types of variable slots (or `nothing`)
     jl_value_t *ssavaluetypes;  // types of ssa values (or count of them)
@@ -217,7 +217,7 @@ typedef struct _jl_source_info_t {
     uint8_t inlineable;
     uint8_t propagate_inbounds;
     uint8_t pure;
-} jl_source_info_t;
+} jl_code_info_t;
 
 // This type describes a single method definition, and stores data
 // shared by the specializations of a function.
@@ -241,9 +241,9 @@ typedef struct _jl_method_t {
     // sparams are the symbols in the tvars vector
     jl_svec_t *sparam_syms;
     // the code AST template
-    jl_source_info_t *source; // null for builtins and staged functions
+    jl_code_info_t *source; // null for builtins and staged functions
     // unspecialized executable thunk (for isstaged, code for the generator), or null
-    struct _jl_lambda_info_t *unspecialized;
+    struct _jl_method_instance_t *unspecialized;
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
 
     // cache of specializations of this method for invoke(), i.e.
@@ -267,12 +267,12 @@ typedef struct _jl_method_t {
 } jl_method_t;
 
 // This type caches the data for a specType signature specialization of a Method
-typedef struct _jl_lambda_info_t {
+typedef struct _jl_method_instance_t {
     JL_DATA_TYPE
     jl_tupletype_t *specTypes;  // argument types this was specialized for
     jl_value_t *rettype; // return type for fptr
     jl_svec_t *sparam_vals; // the values for the tvars, indexed by def->sparam_syms
-    jl_value_t *inferred;  // inferred jl_source_info_t, or value of the function if jlcall_api == 2, or null
+    jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == 2, or null
     jl_method_t *def; // method this is specialized from, null if this is a toplevel thunk
     uint8_t inInference; // flags to tell if inference is running on this function
     uint8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
@@ -285,7 +285,7 @@ typedef struct _jl_lambda_info_t {
     // with the same name as the generated functions for this linfo, suitable
     // for referencing in LLVM IR
     jl_llvm_functions_t functionObjectsDecls;
-} jl_lambda_info_t;
+} jl_method_instance_t;
 
 // all values are callable as Functions
 typedef jl_value_t jl_function_t;
@@ -424,7 +424,7 @@ typedef struct _jl_typemap_entry_t {
     jl_svec_t *guardsigs;
     union {
         jl_value_t *value;
-        jl_lambda_info_t *linfo; // [nullable] for guard entries
+        jl_method_instance_t *linfo; // [nullable] for guard entries
         jl_method_t *method;
     } func;
     // memoized properties of sig:
@@ -498,8 +498,8 @@ extern JL_DLLEXPORT jl_datatype_t *jl_uniontype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_datatype_type;
 
 extern JL_DLLEXPORT jl_value_t *jl_bottom_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_lambda_info_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_source_info_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_method_instance_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_code_info_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_method_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_module_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_abstractarray_type;
@@ -856,8 +856,8 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typeis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
-#define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
-#define jl_is_source_info(v) jl_typeis(v,jl_source_info_type)
+#define jl_is_method_instance(v) jl_typeis(v,jl_method_instance_type)
+#define jl_is_code_info(v) jl_typeis(v,jl_code_info_type)
 #define jl_is_method(v)      jl_typeis(v,jl_method_type)
 #define jl_is_module(v)      jl_typeis(v,jl_module_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
@@ -1003,7 +1003,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
                                         uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
-JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(void);
+JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...);
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a);
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b);
@@ -1021,9 +1021,9 @@ JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp,
                                                  jl_value_t *bp_owner,
                                                  jl_binding_t *bnd);
-JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_source_info_t *f, jl_value_t *isstaged);
-JL_DLLEXPORT jl_source_info_t *jl_code_for_staged(jl_lambda_info_t *linfo);
-JL_DLLEXPORT jl_source_info_t *jl_copy_source_info(jl_source_info_t *src);
+JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_code_info_t *f, jl_value_t *isstaged);
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
+JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_typename_t *tn);
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x);
@@ -1340,10 +1340,10 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 // tracing
 JL_DLLEXPORT void jl_trace_method(jl_method_t *m);
 JL_DLLEXPORT void jl_untrace_method(jl_method_t *m);
-JL_DLLEXPORT void jl_trace_linfo(jl_lambda_info_t *linfo);
-JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *linfo);
-JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tracee));
-JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_lambda_info_t *tracee));
+JL_DLLEXPORT void jl_trace_linfo(jl_method_instance_t *linfo);
+JL_DLLEXPORT void jl_untrace_linfo(jl_method_instance_t *linfo);
+JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_method_instance_t *tracee));
+JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_method_instance_t *tracee));
 JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *tracee));
 
 // AST access
@@ -1368,7 +1368,7 @@ STATIC_INLINE int jl_vinfo_usedundef(uint8_t vi)
 // calling into julia ---------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs);
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs);
 
 STATIC_INLINE
 jl_value_t *jl_apply(jl_value_t **args, uint32_t nargs)

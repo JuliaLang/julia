@@ -4067,7 +4067,7 @@ function count_expr_push(ex::Expr, head::Symbol, counter)
     return false
 end
 
-function metadata_matches(ast::Core.SourceInfo)
+function metadata_matches(ast::CodeInfo)
     inbounds_cnt = Ref(0)
     boundscheck_cnt = Ref(0)
     for ex in ast.code::Array{Any,1}

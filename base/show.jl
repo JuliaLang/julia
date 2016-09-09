@@ -272,7 +272,7 @@ function show(io::IO, m::Module)
     end
 end
 
-function sourceinfo_slotnames(src::SourceInfo)
+function sourceinfo_slotnames(src::CodeInfo)
     slotnames = src.slotnames
     isa(slotnames, Array) || return String[]
     names = Dict{String,Int}()
@@ -292,23 +292,23 @@ function sourceinfo_slotnames(src::SourceInfo)
     return printnames
 end
 
-function show(io::IO, l::LambdaInfo)
+function show(io::IO, l::Core.MethodInstance)
     if isdefined(l, :def)
         if l.def.isstaged && l === l.def.unspecialized
-            print(io, "LambdaInfo generator for ")
+            print(io, "MethodInstance generator for ")
             show(io, l.def)
         else
-            print(io, "LambdaInfo for ")
+            print(io, "MethodInstance for ")
             show_lambda_types(io, l)
         end
     else
-        print(io, "Toplevel LambdaInfo thunk")
+        print(io, "Toplevel MethodInstance thunk")
     end
 end
 
-function show(io::IO, src::SourceInfo)
+function show(io::IO, src::CodeInfo)
     # Fix slot names and types in function body
-    print(io, "SourceInfo(")
+    print(io, "CodeInfo(")
     if isa(src.code, Array{Any,1})
         lambda_io = IOContext(io, :SOURCEINFO => src)
         if src.slotnames !== nothing
@@ -611,8 +611,8 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     typ = isa(ex,TypedSlot) ? ex.typ : Any
     slotid = ex.id
     src = get(io, :SOURCEINFO, false)
-    if isa(src, SourceInfo)
-        slottypes = (src::SourceInfo).slottypes
+    if isa(src, CodeInfo)
+        slottypes = (src::CodeInfo).slottypes
         if isa(slottypes, Array) && slotid <= length(slottypes::Array)
             slottype = slottypes[slotid]
             # The Slot in assignment can somehow have an Any type
@@ -1026,7 +1026,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     nothing
 end
 
-function show_lambda_types(io::IO, li::LambdaInfo)
+function show_lambda_types(io::IO, li::Core.MethodInstance)
     # print a method signature tuple for a lambda definition
     if li.specTypes === Tuple
         print(io, li.def.name, "(...)")

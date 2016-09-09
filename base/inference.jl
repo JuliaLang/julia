@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, SourceInfo
+import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance
 
 #### parameters limiting potentially-infinite types ####
 const MAX_TYPEUNION_LEN = 3
@@ -48,8 +48,8 @@ type InferenceState
     currpc::LineNum
 
     # info on the state of inference and the linfo
-    linfo::LambdaInfo # used here for the tuple (specTypes, env, Method)
-    src::SourceInfo
+    linfo::MethodInstance # used here for the tuple (specTypes, env, Method)
+    src::CodeInfo
     nargs::Int
     stmt_types::Vector{Any}
     # return type
@@ -78,8 +78,8 @@ type InferenceState
     cached::Bool
     inferred::Bool
 
-    # src is assumed to be a newly-allocated SourceInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(linfo::LambdaInfo, src::SourceInfo, optimize::Bool, inlining::Bool, cached::Bool)
+    # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
+    function InferenceState(linfo::MethodInstance, src::CodeInfo, optimize::Bool, inlining::Bool, cached::Bool)
         code = src.code::Array{Any,1}
         nl = label_counter(code) + 1
         toplevel = !isdefined(linfo, :def)
@@ -168,10 +168,10 @@ type InferenceState
     end
 end
 
-# create copies of the SourceInfo definition, and any fields that type-inference might modify
+# create copies of the CodeInfo definition, and any fields that type-inference might modify
 # TODO: post-inference see if we can swap back to the original arrays
-function get_source(li::LambdaInfo)
-    src = ccall(:jl_copy_source_info, Ref{SourceInfo}, (Any,), li.def.source)
+function get_source(li::MethodInstance)
+    src = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), li.def.source)
     if isa(src.code, Array{UInt8,1})
         src.code = ccall(:jl_uncompress_ast, Any, (Any, Any), li.def, src.code)
     else
@@ -182,8 +182,8 @@ function get_source(li::LambdaInfo)
     return src
 end
 
-function get_staged(li::LambdaInfo)
-    src = ccall(:jl_code_for_staged, Any, (Any,), li)::SourceInfo
+function get_staged(li::MethodInstance)
+    src = ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
     if isa(src.code, Array{UInt8,1})
         src.code = ccall(:jl_uncompress_ast, Any, (Any, Any), li.def, src.code)
     end
@@ -1236,7 +1236,7 @@ function abstract_eval_global(M::Module, s::Symbol)
     return Any
 end
 
-function abstract_eval_ssavalue(s::SSAValue, src::SourceInfo)
+function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     typ = src.ssavaluetypes[s.id + 1]
     if typ === NF
         return Bottom
@@ -1463,19 +1463,19 @@ function newvar!(sv::InferenceState, typ::ANY)
     return SSAValue(id)
 end
 
-# create a specialized LambdaInfo from a method
+# create a specialized MethodInstance from a method
 function get_linfo(method::Method, types::ANY, sp::SimpleVector)
-    return ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any), method, types, sp)
+    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, types, sp)
 end
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 coverage_enabled() = (JLOptions().code_coverage != 0)
 
-#### entry points for inferring a LambdaInfo given a type signature ####
+#### entry points for inferring a MethodInstance given a type signature ####
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool, optimize::Bool, cached::Bool, caller)
     local code = nothing
     local frame = nothing
-    if isa(caller, LambdaInfo)
+    if isa(caller, MethodInstance)
         code = caller
     elseif cached && !is(method.specializations, nothing)
         # check cached specializations
@@ -1483,7 +1483,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         code = ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
         if isa(code, Void)
             # something completely new
-        elseif isa(code, LambdaInfo)
+        elseif isa(code, MethodInstance)
             # something existing
         else
             # sometimes just a return type is stored here. if a full AST
@@ -1497,10 +1497,10 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         end
     end
 
-    if isa(code, LambdaInfo) && isdefined(code, :inferred)
+    if isa(code, MethodInstance) && isdefined(code, :inferred)
         if code.jlcall_api == 2
             if needtree
-                tree = ccall(:jl_new_source_info_uninit, Ref{SourceInfo}, ())
+                tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                 tree.code = Any[ Expr(:return, QuoteNode(code.inferred)) ]
                 tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
                 tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
@@ -1513,7 +1513,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
                 tree = Const(code.inferred)
             end
             return (tree, code.rettype, true)
-        elseif isa(code.inferred, SourceInfo)
+        elseif isa(code.inferred, CodeInfo)
             if code.inferred.inferred
                 return (code.inferred, code.rettype, true)
             end
@@ -1557,7 +1557,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         end
     end
 
-    if isa(code, LambdaInfo)
+    if isa(code, MethodInstance)
         # reuse the existing code object
         linfo = code
         @assert typeseq(linfo.specTypes, atypes)
@@ -1602,7 +1602,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
             src = get_source(linfo)
         end
         linfo.inInference = true
-        frame = InferenceState(linfo::LambdaInfo, src, optimize, inlining_enabled(), cached)
+        frame = InferenceState(linfo::MethodInstance, src, optimize, inlining_enabled(), cached)
     end
     frame = frame::InferenceState
 
@@ -1640,10 +1640,10 @@ end
 function typeinf_uncached(method::Method, atypes::ANY, sparams::SimpleVector, optimize::Bool)
     return typeinf_edge(method, atypes, sparams, true, optimize, false, nothing)
 end
-function typeinf_ext(linfo::LambdaInfo)
+function typeinf_ext(linfo::MethodInstance)
     if isdefined(linfo, :def)
         # method lambda - infer this specialization via the method cache
-        if isdefined(linfo, :inferred) && isa(linfo.inferred, SourceInfo)
+        if isdefined(linfo, :inferred) && isa(linfo.inferred, CodeInfo)
             return linfo.inferred
         end
         (code, typ, inferred) = typeinf_edge(linfo.def, linfo.specTypes, linfo.sparam_vals, true, true, true, linfo)
@@ -1891,7 +1891,7 @@ end
 
 #### finalize and record the result of running type inference ####
 
-function isinlineable(m::Method, src::SourceInfo)
+function isinlineable(m::Method, src::CodeInfo)
     inlineable = false
     cost = 1000
     if m.module === _topmod(m.module)
@@ -1914,7 +1914,7 @@ function isinlineable(m::Method, src::SourceInfo)
 end
 
 # inference completed on `me`
-# update the LambdaInfo and notify the edges
+# update the MethodInstance and notify the edges
 function finish(me::InferenceState)
     for (i,_) in me.edges
         @assert (i::InferenceState).fixedpoint
@@ -2152,7 +2152,7 @@ function _widen_all_consts(x::Expr)
     end
     return x
 end
-function widen_all_consts!(src::SourceInfo)
+function widen_all_consts!(src::CodeInfo)
     for i = 1:length(src.ssavaluetypes)
         src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
     end
@@ -2217,7 +2217,7 @@ function occurs_more(e::ANY, pred, n)
     return 0
 end
 
-function exprtype(x::ANY, src::SourceInfo, mod::Module)
+function exprtype(x::ANY, src::CodeInfo, mod::Module)
     if isa(x, Expr)
         return (x::Expr).typ
     elseif isa(x, SlotNumber)
@@ -2261,7 +2261,7 @@ function is_pure_builtin(f::ANY)
     return false
 end
 
-function statement_effect_free(e::ANY, src::SourceInfo, mod::Module)
+function statement_effect_free(e::ANY, src::CodeInfo, mod::Module)
     if isa(e, Expr)
         if e.head === :(=)
             return !isa(e.args[1], GlobalRef) && effect_free(e.args[2], src, mod, false)
@@ -2277,7 +2277,7 @@ end
 # detect some important side-effect-free calls (allow_volatile=true)
 # and some affect-free calls (allow_volatile=false) -- affect_free means the call
 # cannot be affected by previous calls, except assignment nodes
-function effect_free(e::ANY, src::SourceInfo, mod::Module, allow_volatile::Bool)
+function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
     if isa(e, GlobalRef)
         return (isdefined(e.mod, e.name) && (allow_volatile || isconst(e.mod, e.name)))
     elseif isa(e, Symbol)
@@ -2426,7 +2426,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             local spec_hit = nothing
             local spec_miss = nothing
             local error_label = nothing
-            local linfo_var = add_slot!(sv.src, LambdaInfo, false)
+            local linfo_var = add_slot!(sv.src, MethodInstance, false)
             local ex = copy(e)
             local stmts = []
             local arg_hoisted = false
@@ -2586,7 +2586,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     if isa(src, Const)
         # in this case function can be inlined to a constant
         return inline_as_constant(src.val, argexprs, sv)
-    elseif !isa(src, SourceInfo) || !src.inlineable
+    elseif !isa(src, CodeInfo) || !src.inlineable
         return invoke_NF()
     end
     ast = src.code
@@ -3099,7 +3099,7 @@ end
 
 const compiler_temp_sym = Symbol("#temp#")
 
-function add_slot!(src::SourceInfo, typ::ANY, is_sa::Bool, name::Symbol=compiler_temp_sym)
+function add_slot!(src::CodeInfo, typ::ANY, is_sa::Bool, name::Symbol=compiler_temp_sym)
     id = length(src.slotnames) + 1
     push!(src.slotnames, name)
     push!(src.slottypes, typ)
@@ -3107,7 +3107,7 @@ function add_slot!(src::SourceInfo, typ::ANY, is_sa::Bool, name::Symbol=compiler
     return SlotNumber(id)
 end
 
-function is_known_call(e::Expr, func::ANY, src::SourceInfo, mod::Module)
+function is_known_call(e::Expr, func::ANY, src::CodeInfo, mod::Module)
     if e.head !== :call
         return false
     end
@@ -3115,7 +3115,7 @@ function is_known_call(e::Expr, func::ANY, src::SourceInfo, mod::Module)
     return isa(f, Const) && f.val === func
 end
 
-function is_known_call_p(e::Expr, pred::ANY, src::SourceInfo, mod::Module)
+function is_known_call_p(e::Expr, pred::ANY, src::CodeInfo, mod::Module)
     if e.head !== :call
         return false
     end
@@ -3123,14 +3123,14 @@ function is_known_call_p(e::Expr, pred::ANY, src::SourceInfo, mod::Module)
     return isa(f, Const) && pred(f.val)
 end
 
-function delete_var!(src::SourceInfo, id, T)
+function delete_var!(src::CodeInfo, id, T)
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
                  isa(x.args[1],T) && x.args[1].id == id),
             src.code)
     return src
 end
 
-function slot_replace!(src::SourceInfo, id, rhs, T)
+function slot_replace!(src::CodeInfo, id, rhs, T)
     for i = 1:length(src.code)
         src.code[i] = _slot_replace!(src.code[i], id, rhs, T)
     end
@@ -3157,7 +3157,7 @@ is_argument(nargs::Int, v::Slot) = v.id <= nargs
 # remove all single-assigned vars v in "v = x" where x is an argument.
 # "sa" is the result of find_sa_vars
 # T: Slot or SSAValue
-function remove_redundant_temp_vars(src::SourceInfo, nargs::Int, sa, T)
+function remove_redundant_temp_vars(src::CodeInfo, nargs::Int, sa, T)
     flags = src.slotflags
     ssavalue_types = src.ssavaluetypes
     bexpr = Expr(:block)
@@ -3185,7 +3185,7 @@ function remove_redundant_temp_vars(src::SourceInfo, nargs::Int, sa, T)
 end
 
 # compute set of slots assigned once
-function find_sa_vars(src::SourceInfo, nargs::Int)
+function find_sa_vars(src::CodeInfo, nargs::Int)
     body = src.code
     av = ObjectIdDict()
     av2 = ObjectIdDict()

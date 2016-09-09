@@ -1187,8 +1187,8 @@ void jl_init_primitives(void)
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
-    add_builtin("LambdaInfo", (jl_value_t*)jl_lambda_info_type);
-    add_builtin("SourceInfo", (jl_value_t*)jl_source_info_type);
+    add_builtin("MethodInstance", (jl_value_t*)jl_method_instance_type);
+    add_builtin("CodeInfo", (jl_value_t*)jl_code_info_type);
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
@@ -1260,8 +1260,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
         n += jl_printf(out, ".%s(...)", jl_symbol_name(m->name));
     }
-    else if (vt == jl_lambda_info_type) {
-        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+    else if (vt == jl_method_instance_type) {
+        jl_method_instance_t *li = (jl_method_instance_t*)v;
         if (li->def) {
             n += jl_static_show_x(out, (jl_value_t*)li->def->module, depth);
             if (li->specTypes) {
