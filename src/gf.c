@@ -1593,12 +1593,25 @@ static void _compile_all_deq(jl_array_t *found)
         else
             linfo = jl_specializations_get_linfo(m, ml->sig, jl_emptysvec, 1);
 
-        if (linfo->jlcall_api == 2)
+        if (linfo->jlcall_api == 2) {
+            if (linfo != templ) {
+                templ->jlcall_api = 2;
+                templ->constval = linfo->constval;
+            }
             continue;
+        }
 
         // infer this function now, if necessary
         if (!linfo->inferred || linfo->code == jl_nothing)
             jl_type_infer(linfo, 1);
+
+        if (linfo->jlcall_api == 2) {
+            if (linfo != templ) {
+                templ->jlcall_api = 2;
+                templ->constval = linfo->constval;
+            }
+            continue;
+        }
 
         // keep track of whether all possible signatures have been cached (and thus whether it can skip trying to compile the template function)
         // this is necessary because many intrinsics try to call static_eval and thus are not compilable unspecialized
