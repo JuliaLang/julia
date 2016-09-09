@@ -86,10 +86,10 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd\n")
-        readuntil(stdout_read, homedir()[max(1,end-39):end])
+        readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
-        @test pwd() == homedir()
+        @test pwd() == realpath(homedir())
     end
     cd(origpwd)
 
