@@ -1647,4 +1647,14 @@ macro dep_vectorize_2arg(S, f)
     end
 end
 
+if VERSION < v"0.5.0-dev+4677"
+    using Base.LinAlg: HermOrSym
+    Base.chol(A::HermOrSym) = Base.LinAlg.chol!(A.uplo == 'U' ? copy(A.data) : A.data')
+    Base.cholfact(A::HermOrSym) = cholfact(A.data, Symbol(A.uplo))
+    Base.cholfact!(A::HermOrSym) = cholfact!(A.data, Symbol(A.uplo))
+
+    Base.cholfact(A::HermOrSym, T::Type) = cholfact(A.data, Symbol(A.uplo), T)
+    Base.cholfact!(A::HermOrSym, T::Type) = cholfact!(A.data, Symbol(A.uplo), T)
+end
+
 end # module

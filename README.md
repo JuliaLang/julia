@@ -163,6 +163,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `OS_NAME` is now `Sys.KERNEL`. OS information available as `is_apple`, `is_bsd`, `is_linux`, `is_unix`, and `is_windows`. [16219](https://github.com/JuliaLang/julia/pull/16219)
 
+* `cholfact`, `cholfact!`, and `chol` require that input is either `Hermitian`, `Symmetric`
+or that the elements are perfectly symmetric or Hermitian on 0.5. Compat now defines methods
+for `HermOrSym` such that using the new methods are backward compatible.
+
 ## New types
 
 Currently, no new exported types are introduced by Compat.

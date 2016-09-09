@@ -303,11 +303,11 @@ for x in [:RTLD_LOCAL,:RTLD_GLOBAL,:find_library,:dlsym,:RTLD_LAZY,:RTLD_NODELET
 end
 
 # Test unsafe_convert
-type A; end
+type Au_c; end
 x = "abc"
 @test @compat String(unsafe_string(Compat.unsafe_convert(Ptr{UInt8}, x))) == x
-Compat.unsafe_convert(::Ptr{A}, x) = x
-@test Compat.unsafe_convert(pointer([A()]), 1) == 1
+Compat.unsafe_convert(::Ptr{Au_c}, x) = x
+@test Compat.unsafe_convert(pointer([Au_c()]), 1) == 1
 
 # Test Ptr{T}(0)
 @test @compat(Ptr{Int}(0)) == C_NULL
@@ -1429,4 +1429,29 @@ mktemp() do fname, f
         @test f17302([1.0], 1) == [2.0]
         @test f17302([1.0], [1]) == [2.0]
     end
+end
+
+# 0.5.0-dev+4677
+for A in (Hermitian(randn(5,5) + 10I),
+          Symmetric(randn(5,5) + 10I),
+          Symmetric(randn(5,5) + 10I, :L))
+    F = cholfact(A)
+    @test F[:U]'F[:U]  ≈ A
+    @test F[:L]*F[:L]' ≈ A
+
+    Ac = copy(A)
+    F = cholfact!(Ac)
+    @test F[:U]'F[:U]  ≈ A
+    @test F[:L]*F[:L]' ≈ A
+
+    @test istriu(chol(A))
+    @test chol(A) ≈ F[:U]
+
+    F = cholfact(A, Val{true})
+    @test F[:U]'F[:U]  ≈ A[F[:p], F[:p]]
+    @test F[:L]*F[:L]' ≈ A[F[:p], F[:p]]
+    Ac = copy(A)
+    F = cholfact!(Ac, Val{true})
+    @test F[:U]'F[:U]  ≈ A[F[:p], F[:p]]
+    @test F[:L]*F[:L]' ≈ A[F[:p], F[:p]]
 end
