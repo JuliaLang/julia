@@ -41,7 +41,7 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
         return NULL;
     Type *lltype;
     // Check size first since it's cheaper.
-    switch (dt->size) {
+    switch (jl_datatype_size(dt)) {
     case 2:
         lltype = T_float16;
         break;
@@ -88,7 +88,7 @@ static size_t isLegalHA(jl_datatype_t *dt, Type *&base)
     if (jl_is_structtype(dt)) {
         // Fast path checks before descending the type hierarchy
         // (4 x 128b vector == 64B max size)
-        if (dt->size > 64 || !dt->layout->pointerfree || dt->layout->haspadding)
+        if (jl_datatype_size(dt) > 64 || !dt->layout->pointerfree || dt->layout->haspadding)
             return 0;
 
         base = NULL;
@@ -175,7 +175,7 @@ static void classify_return_arg(jl_datatype_t *dt, bool *reg,
     //   64-bit containerized vectors) is returned in r0 and r1.
     // - A word-sized Fundamental Data Type (eg., int, float) is returned in r0.
     // NOTE: assuming "fundamental type" == jl_is_bitstype, might need exact def
-    if (jl_is_bitstype(dt) && dt->size <= 8) {
+    if (jl_is_bitstype(dt) && jl_datatype_size(dt) <= 8) {
         *reg = true;
         return;
     }
@@ -196,7 +196,7 @@ static void classify_return_arg(jl_datatype_t *dt, bool *reg,
     //   an address passed as an extra argument when the function was called
     //   (§5.5, rule A.4). The memory to be used for the result may be modified
     //   at any point during the function call.
-    if (dt->size <= 4)
+    if (jl_datatype_size(dt) <= 4)
         *reg = true;
     else
         *onstack = true;
@@ -237,7 +237,7 @@ static void classify_arg(jl_datatype_t *dt, bool *reg,
         return;
 
     // Handle fundamental types
-    if (jl_is_bitstype(dt) && dt->size <= 8) {
+    if (jl_is_bitstype(dt) && jl_datatype_size(dt) <= 8) {
         *reg = true;
         return;
     }
@@ -283,7 +283,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
         align = 8;
 
     Type *T = Type::getIntNTy(jl_LLVMContext, align*8);
-    return ArrayType::get(T, (dt->size + align - 1) / align);
+    return ArrayType::get(T, (jl_datatype_size(dt) + align - 1) / align);
 }
 
 }

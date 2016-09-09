@@ -207,7 +207,8 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
     if (is_native_simd_type(dt))
         return NULL;
 
-    int size = jl_datatype_size(dt);
+    size_t size = jl_datatype_size(dt);
+    size_t nbits = jl_datatype_nbits(dt);
     if (size > 16 || size == 0)
         return NULL;
 
@@ -221,7 +222,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
             if (size >= 8)
                 types[0] = T_int64;
             else
-                types[0] = Type::getIntNTy(jl_LLVMContext, size*8);
+                types[0] = Type::getIntNTy(jl_LLVMContext, nbits);
             break;
         case Sse:
             if (size <= 4)
@@ -237,7 +238,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
             return types[0];
         case Integer:
             assert(size > 8);
-            types[1] = Type::getIntNTy(jl_LLVMContext, (size-8)*8);
+            types[1] = Type::getIntNTy(jl_LLVMContext, (nbits-64));
             return StructType::get(jl_LLVMContext,ArrayRef<Type*>(&types[0],2));
         case Sse:
             if (size <= 12)

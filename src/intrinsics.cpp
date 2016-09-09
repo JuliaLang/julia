@@ -370,7 +370,7 @@ static Value *auto_unbox(const jl_cgval_t &v, jl_codectx_t *ctx)
     Type *to = julia_type_to_llvm(v.typ, &isboxed);
     if (to == NULL || isboxed) {
         // might be some sort of incomplete (but valid) Ptr{T} type, for example
-        unsigned int nb = jl_datatype_size(bt)*8;
+        unsigned int nb = jl_datatype_nbits(bt);
         to = IntegerType::get(jl_LLVMContext, nb);
     }
     if (type_is_ghost(to)) {
@@ -405,7 +405,7 @@ static Type *staticeval_bitstype(jl_value_t *bt)
     bool isboxed;
     Type *to = julia_type_to_llvm(bt, &isboxed);
     if (to == NULL || isboxed) {
-        unsigned int nb = jl_datatype_size(bt)*8;
+        unsigned int nb = jl_datatype_nbits(bt);
         to = IntegerType::get(jl_LLVMContext, nb);
     }
     assert(!to->isAggregateType()); // expecting a bits type
@@ -416,7 +416,7 @@ static Type *staticeval_bitstype(jl_value_t *bt)
 static int get_bitstype_nbits(jl_value_t *bt)
 {
     assert(jl_is_bitstype(bt));
-    return jl_datatype_size(bt)*8;
+    return jl_datatype_nbits(bt);
 }
 
 // put a bits type tag on some value (despite the name, this doesn't necessarily actually "box" the value however)
@@ -845,7 +845,7 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
             val = emit_expr(x, ctx);
         assert(val.isboxed);
         assert(jl_is_datatype(ety));
-        uint64_t size = ((jl_datatype_t*)ety)->size;
+        uint64_t size = jl_datatype_size(ety);
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
         prepare_call(builder.CreateMemCpy(builder.CreateGEP(emit_bitcast(thePtr, T_pint8), im1),
