@@ -351,7 +351,7 @@ jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name,
 static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)ty)->size, ty);
+    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
     intrinsic_1_t op = select_intrinsic_1(osize2, (const intrinsic_1_t*)voidlist);
     op(osize * host_char_bit, pa, jl_data_ptr(newv));
     return newv;
@@ -360,7 +360,7 @@ static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsig
 static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)ty)->size, ty);
+    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
     intrinsic_u1_t op = select_intrinsic_u1(osize2, (const intrinsic_u1_t*)voidlist);
     unsigned cnt = op(osize * host_char_bit, pa);
     // TODO: the following memset/memcpy assumes little-endian
@@ -399,7 +399,7 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     unsigned osize = jl_datatype_size(ty);
     if (check_op && check_op(isize, osize, pa))
         jl_throw(jl_inexact_exception);
-    jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)ty)->size, ty);
+    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
     op(aty == (jl_value_t*)jl_bool_type ? 1 : isize * host_char_bit, pa,
             osize * host_char_bit, jl_data_ptr(newv));
     if (ty == (jl_value_t*)jl_bool_type)
@@ -566,7 +566,7 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
 static inline jl_value_t *jl_intrinsiclambda_2(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)ty)->size, ty);
+    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
     intrinsic_2_t op = select_intrinsic_2(sz2, (const intrinsic_2_t*)voidlist);
     op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
     if (ty == (jl_value_t*)jl_bool_type)
@@ -584,7 +584,7 @@ static inline jl_value_t *jl_intrinsiclambda_cmp(jl_value_t *ty, void *pa, void 
 static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *newv = jl_gc_alloc(ptls, ((jl_datatype_t*)ty)->size, ty);
+    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
     if (ovflw)

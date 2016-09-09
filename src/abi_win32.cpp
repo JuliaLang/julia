@@ -44,7 +44,7 @@ bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
     // Use sret if the size of the argument is not one of 1, 2, 4, 8 bytes
     // This covers the special case of Complex64
-    size_t size = dt->size;
+    size_t size = jl_datatype_size(dt);
     if (size == 1 || size == 2 || size == 4 || size == 8)
         return false;
     return true;
@@ -62,7 +62,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
     // rewrite integer sized (non-sret) struct to the corresponding integer
     if (!dt->layout->nfields)
         return NULL;
-    return Type::getIntNTy(jl_LLVMContext, dt->size * 8);
+    return Type::getIntNTy(jl_LLVMContext, jl_datatype_nbits(dt));
 }
 
 bool need_private_copy(jl_value_t *ty, bool byRef)
