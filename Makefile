@@ -549,16 +549,12 @@ clean: | $(CLEAN_TARGETS)
 
 cleanall: clean
 	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
-	-rm -fr $(build_shlibdir)
-ifeq ($(OS),WINNT)
-	-rm -rf $(build_prefix)/lib
-endif
 	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
+	-rm -fr $(build_prefix) $(build_staging)
 
 distcleanall: cleanall
 	@-$(MAKE) -C $(BUILDROOT)/deps distcleanall
 	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
-	-rm -fr $(build_prefix) $(build_staging)
 
 .PHONY: default debug release check-whitespace release-candidate \
 	julia-debug julia-release julia-deps \
