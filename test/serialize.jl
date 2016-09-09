@@ -220,8 +220,8 @@ create_serialization_stream() do s # small 1d array
     @test deserialize(s) == arr4
 
     result = deserialize(s)
-    @test !isdefined(result,1)
-    @test !isdefined(result,3)
+    @test !isassigned(result,1)
+    @test !isassigned(result,3)
     @test result[2].v == arr5[2].v
 end
 

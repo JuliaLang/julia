@@ -350,13 +350,10 @@ All Objects
 .. function:: isdefined([m::Module,] s::Symbol)
               isdefined(object, s::Symbol)
               isdefined(object, index::Int)
-              isdefined(a::Array, index::Int)
 
    .. Docstring generated from Julia source
 
-   Tests whether an assignable location is defined. The arguments can be a module and a symbol, a composite object and field name (as a symbol) or index, or an ``Array`` and index. With a single symbol argument, tests whether a global variable with that name is defined in ``current_module()``\ .
-
-   Note: For ``AbstractArray``\ s other than ``Array``\ , ``isdefined`` tests whether the given field index is defined, not the given array index. To test whether an array index is defined, use :func:`isassigned`\ .
+   Tests whether an assignable location is defined. The arguments can be a module and a symbol or a composite object and field name (as a symbol) or index. With a single symbol argument, tests whether a global variable with that name is defined in ``current_module()``\ .
 
 .. function:: convert(T, x)
 

@@ -1130,7 +1130,7 @@ dump(io::IO, x::Union,  n::Int, indent) = print(io, x)
 function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
     for i in i0:i1
         print(io, indent, "  ", i, ": ")
-        if !isdefined(x,i)
+        if !isassigned(x,i)
             print(io, undef_ref_str)
         else
             dump(io, x[i], n - 1, string(indent, "  "))
