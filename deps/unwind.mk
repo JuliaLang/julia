@@ -30,10 +30,6 @@ endif
 
 define LIBUNWIND_INSTALL
 	$(call MAKE_INSTALL,$1,$2,$3)
-ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
-	@# workaround for configure script bug
-	mv $2/$$(build_prefix)/lib64/libunwind*.a $2/$$(build_libdir)
-  endif
 endef
 $(eval $(call staged-install, \
 	unwind,libunwind-$(UNWIND_VER), \
