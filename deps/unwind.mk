@@ -27,10 +27,6 @@ endif
 #todo: libunwind tests are known to fail, so they aren't run
 $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
 	$(call make-install,libunwind-$(UNWIND_VER),)
-ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
-	@# workaround for configure script bug
-	mv $(build_prefix)/lib64/libunwind*.a $(build_libdir)
-endif
 	touch $@
 
 clean-unwind:
