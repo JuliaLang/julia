@@ -28,12 +28,9 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-define LIBUNWIND_INSTALL
-	$(call MAKE_INSTALL,$1,$2,$3)
-endef
 $(eval $(call staged-install, \
 	unwind,libunwind-$(UNWIND_VER), \
-	LIBUNWIND_INSTALL,,,))
+	MAKE_INSTALL,,,))
 
 clean-unwind:
 	-rm $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
