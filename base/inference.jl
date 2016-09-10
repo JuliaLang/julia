@@ -2715,22 +2715,23 @@ function countunionsplit(atypes::Vector{Any})
     return nu
 end
 
-function invoke_NF(e::Expr, atypes::Vector{Any}, sv::InferenceState,
-                   atype_unlimited::ANY)
+function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY)
     # converts a :call to :invoke
-    local nu = countunionsplit(atypes)
+    nu = countunionsplit(atypes)
     nu > sv.params.MAX_UNION_SPLITTING && return NF
 
     if nu > 1
-        local spec_hit = nothing
-        local spec_miss = nothing
-        local error_label = nothing
-        local linfo_var = add_slot!(sv.src, MethodInstance, false)
-        local ex = copy(e)
-        local stmts = []
-        local arg_hoisted = false
-        for i = length(atypes):-1:1; local i
-            local ti = atypes[i]
+        spec_hit = nothing
+        spec_miss = nothing
+        error_label = nothing
+        linfo_var = add_slot!(sv.src, MethodInstance, false)
+        ex = Expr(:call)
+        ex.args = copy(argexprs)
+        ex.typ = etype
+        stmts = []
+        arg_hoisted = false
+        for i = length(atypes):-1:1
+            ti = atypes[i]
             if arg_hoisted || isa(ti, Union)
                 aei = ex.args[i]
                 if !effect_free(aei, sv.src, sv.mod, false)
@@ -2816,9 +2817,11 @@ function invoke_NF(e::Expr, atypes::Vector{Any}, sv::InferenceState,
         local cache_linfo = ccall(:jl_get_spec_lambda, Any, (Any, UInt), atype_unlimited, sv.params.world)
         cache_linfo === nothing && return NF
         add_backedge(cache_linfo, sv)
-        e.head = :invoke
-        unshift!(e.args, cache_linfo)
-        return e
+        unshift!(argexprs, cache_linfo)
+        ex = Expr(:invoke)
+        ex.args = argexprs
+        ex.typ = etype
+        return ex
     end
     return NF
 end
@@ -2835,14 +2838,14 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         # typeassert(x::S, T) => x, when S<:T
         if isType(atypes[3]) && isleaftype(atypes[3]) &&
             atypes[2] ⊑ atypes[3].parameters[1]
-            return (e.args[2],())
+            return (argexprs[2],())
         end
     end
     if length(atypes)==3 && f === unbox
         at3 = widenconst(atypes[3])
         if isa(at3,DataType) && !at3.mutable && at3.layout != C_NULL && datatype_pointerfree(at3)
             # remove redundant unbox
-            return (e.args[3],())
+            return (argexprs[3],())
         end
     end
     topmod = _topmod(sv)
@@ -2879,7 +2882,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     local atype_unlimited = argtypes_to_type(atypes)
     if !sv.params.inlining
-        return invoke_NF(e, atypes, sv, atype_unlimited)
+        return invoke_NF(argexprs, e.typ, atypes, sv, atype_unlimited)
     end
 
     if length(atype_unlimited.parameters) - 1 > sv.params.MAX_TUPLETYPE_LEN
@@ -2891,7 +2894,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     max_valid = UInt[typemax(UInt)]
     meth = _methods_by_ftype(atype, 1, sv.params.world, min_valid, max_valid)
     if meth === false || length(meth) != 1
-        return invoke_NF(e, atypes, sv, atype_unlimited)
+        return invoke_NF(argexprs, e.typ, atypes, sv, atype_unlimited)
     end
     meth = meth[1]::SimpleVector
     metharg = meth[1]::Type
@@ -2908,9 +2911,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     methsig = method.sig
     if !(atype <: metharg)
-        return invoke_NF(e, atypes, sv, atype_unlimited)
+        return invoke_NF(argexprs, e.typ, atypes, sv, atype_unlimited)
     end
 
+    argexprs0 = argexprs
     na = method.nargs
     # check for vararg function
     isva = false
@@ -2955,7 +2959,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     # see if the method has been previously inferred (and cached)
     linfo = code_for_method(method, metharg, methsp, sv.params.world, !force_infer) # Union{Void, MethodInstance}
-    isa(linfo, MethodInstance) || return invoke_NF(e, atypes, sv, atype_unlimited)
+    isa(linfo, MethodInstance) || return invoke_NF(argexprs0, e.typ, atypes, sv, atype_unlimited)
     linfo = linfo::MethodInstance
     if linfo.jlcall_api == 2
         # in this case function can be inlined to a constant
@@ -3020,11 +3024,11 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     # check that the code is inlineable
-    isa(src, CodeInfo) || return invoke_NF(e, atypes, sv, atype_unlimited)
+    isa(src, CodeInfo) || return invoke_NF(argexprs0, e.typ, atypes, sv, atype_unlimited)
     src = src::CodeInfo
     ast = src.code
     if !src.inferred || !src.inlineable
-        return invoke_NF(e, atypes, sv, atype_unlimited)
+        return invoke_NF(argexprs0, e.typ, atypes, sv, atype_unlimited)
     end
 
     # create the backedge
