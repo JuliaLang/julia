@@ -10,11 +10,6 @@ include $(JULIAHOME)/Make.inc
 # third-party code).
 VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
-#file name of make binary-dist result
-ifeq ($(JULIA_BINARYDIST_TARNAME),)
-	JULIA_BINARYDIST_TARNAME := julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
-endif
-
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
@@ -472,10 +467,10 @@ endif
 
 	# compress nsis installer and combine with 7zip self-extracting header
 	cd $(BUILDROOT) && $(JULIAHOME)/dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
-	cd $(BUILDROOT) && cat $(JULIAHOME)/contrib/windows/7zS.sfx $(JULIAHOME)/contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
+	cd $(BUILDROOT) && cat $(JULIAHOME)/contrib/windows/7zS.sfx $(JULIAHOME)/contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "$(JULIA_BINARYDIST_FILENAME).exe"
 	-rm -f $(BUILDROOT)/julia-installer.exe
 else
-	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_TARNAME).tar.gz julia-$(JULIA_COMMIT)
+	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
 endif
 	rm -fr $(BUILDROOT)/julia-$(JULIA_COMMIT)
 

@@ -12,7 +12,7 @@ JULIA_VERSION_OPT_COMMIT:=$(shell [ $$(git describe --tags --exact-match 2>/dev/
 JULIA_VERSION_MAJOR_MINOR:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+')
 JULIA_VERSION_MAJOR_MINOR_PATCH:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+.[0-9]\+')
 
-DMG_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT).dmg
+DMG_NAME:=$(JULIA_BINARYDIST_FILENAME).dmg
 APP_NAME:=Julia-$(JULIA_VERSION_MAJOR_MINOR).app
 VOL_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT)
 

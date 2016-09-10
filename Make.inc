@@ -692,6 +692,32 @@ ifneq (,$(filter $(ARCH), powerpc64 ppc64))
 $(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
 endif
 
+# File name of make binary-dist result
+ifeq ($(JULIA_BINARYDIST_FILENAME),)
+DIST_OS:=$(OS)
+ifeq (WINNT,$(OS))
+DIST_OS:=win
+endif
+ifeq (Linux,$(OS))
+DIST_OS:=linux
+endif
+ifeq (Darwin,$(OS))
+DIST_OS:=mac
+endif
+DIST_ARCH:=$(ARCH)
+ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
+DIST_ARCH:=ppc64le
+endif
+ifeq (1,$(ISX86))
+DIST_ARCH:=$(BINARY)
+endif
+ifneq (,$(findstring arm,$(ARCH)))
+DIST_ARCH:=arm
+endif
+
+JULIA_BINARYDIST_FILENAME := julia-$(JULIA_COMMIT)-$(DIST_OS)$(DIST_ARCH)
+endif
+
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
