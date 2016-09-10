@@ -553,6 +553,9 @@ function test_cat(::Type{TestAbstractArray})
     # check for # of columns mismatch b/w rows
     @test_throws ArgumentError hvcat((3, 2), 1, 2, 3, 4, 5, 6)
     @test_throws ArgumentError Base.typed_hvcat(Int, (3, 2), 1, 2, 3, 4, 5, 6)
+
+    # 18395
+    @test isa(Any["a" 5; 2//3 1.0][2,1], Rational{Int})
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
