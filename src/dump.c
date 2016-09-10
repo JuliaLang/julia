@@ -1477,8 +1477,16 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         }
         else {
             jl_value_t **data = (jl_value_t**)jl_array_data(a);
-            for(i=0; i < jl_array_len(a); i++) {
-                jl_arrayset_nothrow(a, jl_deserialize_value(s, NULL), i);
+            if (a->flags.ptrarray) {
+                for(i=0; i < jl_array_len(a); i++) {
+                    data[i] = jl_deserialize_value(s, &data[i]);
+                    if (data[i]) jl_gc_wb(a, data[i]);
+                }
+            }
+            else {
+                for(i=0; i < jl_array_len(a); i++) {
+                    jl_arrayset_nothrow(a, jl_deserialize_value(s, NULL), i);
+                }
             }
         }
         return (jl_value_t*)a;
