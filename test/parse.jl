@@ -768,12 +768,18 @@ end
 end
 
 f1_exprs = get_expr_list(@code_typed f1(1))
-@test count_meta_loc(f1_exprs) == 0
-@test Meta.isexpr(f1_exprs[end], :return)
-
 f2_exprs = get_expr_list(@code_typed f2(1))
-@test count_meta_loc(f2_exprs) == 1
+
+@test Meta.isexpr(f1_exprs[end], :return)
 @test is_pop_loc(f2_exprs[end - 1])
 @test Meta.isexpr(f2_exprs[end], :return)
+
+if Base.JLOptions().code_coverage != 0 && Base.JLOptions().can_inline != 0
+    @test count_meta_loc(f1_exprs) == 1
+    @test count_meta_loc(f2_exprs) == 2
+else
+    @test count_meta_loc(f1_exprs) == 0
+    @test count_meta_loc(f2_exprs) == 1
+end
 
 end
