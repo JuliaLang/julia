@@ -966,7 +966,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
             write_int32(s->s, (int32_t)*(int32_t*)data);
         }
         else {
-            if (v == t->instance) {
+            if (jl_is_datatype_singleton(t)) {//v == t->instance) {
                 if (s->mode == MODE_MODULE && !type_in_worklist(t)) {
                     // also flag this in the backref table as special
                     // if it might not be unique (is external)

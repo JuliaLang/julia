@@ -1242,12 +1242,10 @@ NOINLINE static int gc_mark_module(jl_ptls_t ptls, jl_module_t *m, int d)
     return refyoung;
 }
 
-static void gc_mark_stack(jl_ptls_t ptls, jl_ptls_t owner_ptls,
-                          jl_value_t *ta, jl_gcframe_t *s,
+static void gc_mark_stack(jl_ptls_t ptls, jl_value_t *ta, jl_gcframe_t *s,
+                          char *stackhi, char *stacklo,
                           intptr_t offset, int d)
 {
-    char *stackhi = owner_ptls->stack_hi,
-         *stacklo = owner_ptls->stack_lo;
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
         jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
@@ -1301,17 +1299,25 @@ static void gc_mark_task_stack(jl_ptls_t ptls, jl_task_t *ta, int d)
         }
 #endif
     }
+    char *stackhi = ptls2->stack_hi;
     if (ta == ptls2->current_task) {
-        gc_mark_stack(ptls, ptls2, (jl_value_t*)ta, ptls2->pgcstack, 0, d);
+        char *stacklo = ptls2->stack_lo;
+        gc_mark_stack(ptls, (jl_value_t*)ta, ptls2->pgcstack,
+                      stackhi, stacklo,
+                      0, d);
     }
     else if (stkbuf) {
         intptr_t offset;
 #ifdef COPY_STACKS
+        char *stacklo = stackhi - ta->ssize;
         offset = (char *)ta->stkbuf - ((char *)ptls2->stackbase - ta->ssize);
 #else
+        char *stacklo = ptls2->stack_lo;
         offset = 0;
 #endif
-        gc_mark_stack(ptls, ptls2, (jl_value_t*)ta, ta->gcstack, offset, d);
+        gc_mark_stack(ptls, (jl_value_t*)ta, ta->gcstack,
+                      stackhi, stacklo,
+                      offset, d);
     }
 }
 
