@@ -84,7 +84,7 @@ else
 endif
 ifeq ($$(OS),Linux)
 	@# If we're on linux, copy over libssl and libcrypto for libgit2
-	-LIBGIT_LIBS=$$$$(ldd "$$@" | tail -n +2 | awk '{print $$$$(NF-1)}'); \
+	-LIBGIT_LIBS=$$$$(ldd "$1/libgit2.$$(SHLIB_EXT)" | tail -n +2 | awk '{print $$$$(NF-1)}'); \
 	for LIB in libssl libcrypto; do \
 		LIB_PATH=$$$$(echo "$$$$LIBGIT_LIBS" | grep "$$$$LIB"); \
 		echo "LIB_PATH for $$$$LIB: $$$$LIB_PATH"; \
