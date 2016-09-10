@@ -81,7 +81,7 @@ istextmime(m::AbstractString) = istextmime(MIME(m))
 reprmime(m::AbstractString, x) = reprmime(MIME(m), x)
 stringmime(m::AbstractString, x) = stringmime(MIME(m), x)
 
-for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/markdown", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
+for mime in ["application/atom+xml", "application/ecmascript", "application/javascript", "application/julia", "application/json", "application/postscript", "application/rdf+xml", "application/rss+xml", "application/x-latex", "application/xhtml+xml", "application/xml", "application/xml-dtd", "image/svg+xml", "model/vrml", "model/x3d+vrml", "model/x3d+xml", "text/calendar", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/latex", "text/markdown", "text/n3", "text/plain", "text/richtext", "text/sgml", "text/tab-separated-values", "text/vcard", "text/vnd.graphviz", "text/x-setext", "text/x-vcalendar", "text/x-vcard", "text/xml"]
     @eval @textmime $mime
 end
 
