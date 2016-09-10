@@ -1425,7 +1425,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as...)
     rs = Array{Any,1}(nbr)
     a = 1
     for i = 1:nbr
-        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
         a += rows[i]
     end
     T[rs...;]
