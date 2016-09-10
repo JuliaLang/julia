@@ -1038,9 +1038,9 @@ An indexing operation into an array, `a`, tried to access an out-of-bounds eleme
 BoundsError
 
 """
-    invoke(f, (types...), args...)
+    invoke(f, types <: Tuple, args...)
 
-Invoke a method for the given generic function matching the specified types (as a tuple), on
+Invoke a method for the given generic function matching the specified types, on
 the specified arguments. The arguments must be compatible with the specified types. This
 allows invoking a method other than the most specific matching method, which is useful when
 the behavior of a more general definition is explicitly needed (often as part of the
