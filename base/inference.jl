@@ -2715,6 +2715,114 @@ function countunionsplit(atypes::Vector{Any})
     return nu
 end
 
+function invoke_NF(e::Expr, atypes::Vector{Any}, sv::InferenceState,
+                   atype_unlimited::ANY)
+    # converts a :call to :invoke
+    local nu = countunionsplit(atypes)
+    nu > sv.params.MAX_UNION_SPLITTING && return NF
+
+    if nu > 1
+        local spec_hit = nothing
+        local spec_miss = nothing
+        local error_label = nothing
+        local linfo_var = add_slot!(sv.src, MethodInstance, false)
+        local ex = copy(e)
+        local stmts = []
+        local arg_hoisted = false
+        for i = length(atypes):-1:1; local i
+            local ti = atypes[i]
+            if arg_hoisted || isa(ti, Union)
+                aei = ex.args[i]
+                if !effect_free(aei, sv.src, sv.mod, false)
+                    arg_hoisted = true
+                    newvar = newvar!(sv, ti)
+                    unshift!(stmts, :($newvar = $aei))
+                    ex.args[i] = newvar
+                end
+            end
+        end
+        function splitunion(atypes::Vector{Any}, i::Int)
+            if i == 0
+                local sig = argtypes_to_type(atypes)
+                local li = ccall(:jl_get_spec_lambda, Any, (Any, UInt), sig, sv.params.world)
+                li === nothing && return false
+                add_backedge(li, sv)
+                local stmt = []
+                push!(stmt, Expr(:(=), linfo_var, li))
+                spec_hit === nothing && (spec_hit = genlabel(sv))
+                push!(stmt, GotoNode(spec_hit.label))
+                return stmt
+            else
+                local ti = atypes[i]
+                if isa(ti, Union)
+                    local all = true
+                    local stmts = []
+                    local aei = ex.args[i]
+                    for ty in (ti::Union).types
+                        local ty
+                        atypes[i] = ty
+                        local match = splitunion(atypes, i - 1)
+                        if match !== false
+                            after = genlabel(sv)
+                            unshift!(match, Expr(:gotoifnot, Expr(:call, GlobalRef(Core, :isa), aei, ty), after.label))
+                            append!(stmts, match)
+                            push!(stmts, after)
+                        else
+                            all = false
+                        end
+                    end
+                    if UNION_SPLIT_MISMATCH_ERROR && all
+                        error_label === nothing && (error_label = genlabel(sv))
+                        push!(stmts, GotoNode(error_label.label))
+                    else
+                        spec_miss === nothing && (spec_miss = genlabel(sv))
+                        push!(stmts, GotoNode(spec_miss.label))
+                    end
+                    atypes[i] = ti
+                    return isempty(stmts) ? false : stmts
+                else
+                    return splitunion(atypes, i - 1)
+                end
+            end
+        end
+        local match = splitunion(atypes, length(atypes))
+        if match !== false && spec_hit !== nothing
+            append!(stmts, match)
+            if error_label !== nothing
+                push!(stmts, error_label)
+                push!(stmts, Expr(:call, GlobalRef(_topmod(sv.mod), :error), "fatal error in type inference (type bound)"))
+            end
+            local ret_var, merge
+            if spec_miss !== nothing
+                ret_var = add_slot!(sv.src, widenconst(ex.typ), false)
+                merge = genlabel(sv)
+                push!(stmts, spec_miss)
+                push!(stmts, Expr(:(=), ret_var, ex))
+                push!(stmts, GotoNode(merge.label))
+            else
+                ret_var = newvar!(sv, ex.typ)
+            end
+            push!(stmts, spec_hit)
+            ex = copy(ex)
+            ex.head = :invoke
+            unshift!(ex.args, linfo_var)
+            push!(stmts, Expr(:(=), ret_var, ex))
+            if spec_miss !== nothing
+                push!(stmts, merge)
+            end
+            return (ret_var, stmts)
+        end
+    else
+        local cache_linfo = ccall(:jl_get_spec_lambda, Any, (Any, UInt), atype_unlimited, sv.params.world)
+        cache_linfo === nothing && return NF
+        add_backedge(cache_linfo, sv)
+        e.head = :invoke
+        unshift!(e.args, cache_linfo)
+        return e
+    end
+    return NF
+end
+
 # inline functions whose bodies are "inline_worthy"
 # where the function body doesn't contain any argument more than once.
 # static parameters are ok if all the static parameter values are leaf types,
@@ -2770,113 +2878,8 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     local atype_unlimited = argtypes_to_type(atypes)
-    function invoke_NF()
-        # converts a :call to :invoke
-        local nu = countunionsplit(atypes)
-        nu > sv.params.MAX_UNION_SPLITTING && return NF
-
-        if nu > 1
-            local spec_hit = nothing
-            local spec_miss = nothing
-            local error_label = nothing
-            local linfo_var = add_slot!(sv.src, MethodInstance, false)
-            local ex = copy(e)
-            local stmts = []
-            local arg_hoisted = false
-            for i = length(atypes):-1:1; local i
-                local ti = atypes[i]
-                if arg_hoisted || isa(ti, Union)
-                    aei = ex.args[i]
-                    if !effect_free(aei, sv.src, sv.mod, false)
-                        arg_hoisted = true
-                        newvar = newvar!(sv, ti)
-                        insert!(stmts, 1, Expr(:(=), newvar, aei))
-                        ex.args[i] = newvar
-                    end
-                end
-            end
-            function splitunion(atypes::Vector{Any}, i::Int)
-                if i == 0
-                    local sig = argtypes_to_type(atypes)
-                    local li = ccall(:jl_get_spec_lambda, Any, (Any, UInt), sig, sv.params.world)
-                    li === nothing && return false
-                    add_backedge(li, sv)
-                    local stmt = []
-                    push!(stmt, Expr(:(=), linfo_var, li))
-                    spec_hit === nothing && (spec_hit = genlabel(sv))
-                    push!(stmt, GotoNode(spec_hit.label))
-                    return stmt
-                else
-                    local ti = atypes[i]
-                    if isa(ti, Union)
-                        local all = true
-                        local stmts = []
-                        local aei = ex.args[i]
-                        for ty in (ti::Union).types; local ty
-                            atypes[i] = ty
-                            local match = splitunion(atypes, i - 1)
-                            if match !== false
-                                after = genlabel(sv)
-                                unshift!(match, Expr(:gotoifnot, Expr(:call, GlobalRef(Core, :isa), aei, ty), after.label))
-                                append!(stmts, match)
-                                push!(stmts, after)
-                            else
-                                all = false
-                            end
-                        end
-                        if UNION_SPLIT_MISMATCH_ERROR && all
-                            error_label === nothing && (error_label = genlabel(sv))
-                            push!(stmts, GotoNode(error_label.label))
-                        else
-                            spec_miss === nothing && (spec_miss = genlabel(sv))
-                            push!(stmts, GotoNode(spec_miss.label))
-                        end
-                        atypes[i] = ti
-                        return isempty(stmts) ? false : stmts
-                    else
-                        return splitunion(atypes, i - 1)
-                    end
-                end
-            end
-            local match = splitunion(atypes, length(atypes))
-            if match !== false && spec_hit !== nothing
-                append!(stmts, match)
-                if error_label !== nothing
-                    push!(stmts, error_label)
-                    push!(stmts, Expr(:call, GlobalRef(_topmod(sv.mod), :error), "fatal error in type inference (type bound)"))
-                end
-                local ret_var, merge
-                if spec_miss !== nothing
-                    ret_var = add_slot!(sv.src, widenconst(ex.typ), false)
-                    merge = genlabel(sv)
-                    push!(stmts, spec_miss)
-                    push!(stmts, Expr(:(=), ret_var, ex))
-                    push!(stmts, GotoNode(merge.label))
-                else
-                    ret_var = newvar!(sv, ex.typ)
-                end
-                push!(stmts, spec_hit)
-                ex = copy(ex)
-                ex.head = :invoke
-                unshift!(ex.args, linfo_var)
-                push!(stmts, Expr(:(=), ret_var, ex))
-                if spec_miss !== nothing
-                    push!(stmts, merge)
-                end
-                return (ret_var, stmts)
-            end
-        else
-            local cache_linfo = ccall(:jl_get_spec_lambda, Any, (Any, UInt), atype_unlimited, sv.params.world)
-            cache_linfo === nothing && return NF
-            add_backedge(cache_linfo, sv)
-            e.head = :invoke
-            unshift!(e.args, cache_linfo)
-            return e
-        end
-        return NF
-    end
     if !sv.params.inlining
-        return invoke_NF()
+        return invoke_NF(e, atypes, sv, atype_unlimited)
     end
 
     if length(atype_unlimited.parameters) - 1 > sv.params.MAX_TUPLETYPE_LEN
@@ -2888,7 +2891,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     max_valid = UInt[typemax(UInt)]
     meth = _methods_by_ftype(atype, 1, sv.params.world, min_valid, max_valid)
     if meth === false || length(meth) != 1
-        return invoke_NF()
+        return invoke_NF(e, atypes, sv, atype_unlimited)
     end
     meth = meth[1]::SimpleVector
     metharg = meth[1]::Type
@@ -2905,7 +2908,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     methsig = method.sig
     if !(atype <: metharg)
-        return invoke_NF()
+        return invoke_NF(e, atypes, sv, atype_unlimited)
     end
 
     na = method.nargs
@@ -2952,7 +2955,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     # see if the method has been previously inferred (and cached)
     linfo = code_for_method(method, metharg, methsp, sv.params.world, !force_infer) # Union{Void, MethodInstance}
-    isa(linfo, MethodInstance) || return invoke_NF()
+    isa(linfo, MethodInstance) || return invoke_NF(e, atypes, sv, atype_unlimited)
     linfo = linfo::MethodInstance
     if linfo.jlcall_api == 2
         # in this case function can be inlined to a constant
@@ -3017,11 +3020,11 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     # check that the code is inlineable
-    isa(src, CodeInfo) || return invoke_NF()
+    isa(src, CodeInfo) || return invoke_NF(e, atypes, sv, atype_unlimited)
     src = src::CodeInfo
     ast = src.code
     if !src.inferred || !src.inlineable
-        return invoke_NF()
+        return invoke_NF(e, atypes, sv, atype_unlimited)
     end
 
     # create the backedge
