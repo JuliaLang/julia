@@ -1056,8 +1056,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         if (al)
             alignm = al;
     }
-    st->size = LLT_ALIGN(sz, alignm);
-    if (st->size > sz)
+    // TODO(vchuravy): Fix this properly
+    st->size = 8*LLT_ALIGN(sz, alignm);
+    if (jl_datatype_size(st) > sz)
         haspadding = 1;
     st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
 }
@@ -1156,7 +1157,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
     uint32_t alignm = next_power_of_two(nbytes);
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
-    bt->size = nbytes;
+    bt->size = nbits;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
     return bt;
 }

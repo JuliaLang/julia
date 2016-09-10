@@ -453,7 +453,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     }
 
     Type *llvmt = staticeval_bitstype(bt);
-    int nb = jl_datatype_size(bt);
+    int nb = jl_datatype_nbits(bt);
 
     // Examine the second argument //
     bool isboxed;
@@ -461,7 +461,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
 
     if (!jl_is_datatype(v.typ)
         || !jl_is_bitstype(v.typ)
-        || jl_datatype_size(v.typ) != nb) {
+        || jl_datatype_nbits(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(v, ctx);
         if (!(jl_is_bitstype(v.typ) || jl_is_vec_type(v.typ))) {
             if (isboxed) {
@@ -473,7 +473,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
                 return jl_cgval_t();
             }
         }
-        if (jl_datatype_size(v.typ) != nb) {
+        if (jl_datatype_nbits(v.typ) != nb) {
             if (isboxed) {
                 Value *size = emit_datatype_size(typ);
                 error_unless(builder.CreateICmpEQ(size, ConstantInt::get(T_int32, nb)),
