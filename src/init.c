@@ -44,6 +44,7 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #else
 #include <sys/resource.h>
 #include <unistd.h>
+#include <dlfcn.h>
 #endif
 
 #ifdef JL_ASAN_ENABLED
@@ -451,52 +452,81 @@ static char *abspath(const char *in)
 }
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
-{   // this function resolves the paths in jl_options to absolute file locations as needed
-    // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and output file paths
-    // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
+{   // This function resolves the paths in jl_options to absolute file locations as needed
+    // and it replaces the pointers to `julia_home`, `julia_bin`, `julia_lib`, `image_file`,
+    // and output file paths.
+    // It may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX.
     //
     // note: if you care about lost memory, you should call the appropriate `free()` function
     // on the original pointer for each `char*` you've inserted into `jl_options`, after
     // calling `julia_init()`
     char *free_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
+
+    // set julia_bin
     if (uv_exepath(free_path, &path_size)) {
         jl_error("fatal error: unexpected error while retrieving exepath");
     }
     if (path_size >= PATH_MAX) {
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
-    jl_options.julia_bin = (char*)malloc(path_size+1);
-    memcpy((char*)jl_options.julia_bin, free_path, path_size);
-    ((char*)jl_options.julia_bin)[path_size] = '\0';
+    jl_options.julia_bin = abspath(free_path);
+
+    // set julia_lib
+#ifdef _OS_WINDOWS_
+    HMODULE hModule = NULL;
+    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                           (LPCTSTR)jl_resolve_sysimg_location,
+                           &hModule)) {
+        jl_error("fatal error: unexpected error while retrieving library handle");
+    }
+    path_size = GetModuleFileNameA(hModule, free_path, PATH_MAX);
+    if(GetLastError() != ERROR_SUCCESS) {
+        jl_error("fatal error: unexpected error while retrieving libpath");
+    }
+#else // POSIX
+    Dl_info ifo;
+    if(!dladdr((void*)jl_resolve_sysimg_location, &ifo)) {
+        jl_error("fatal error: unexpected error while retrieving libpath");
+    }
+    strncpy(free_path, ifo.dli_fname, PATH_MAX);
+    path_size = strlen(ifo.dli_fname);
+#endif
+    if (path_size >= PATH_MAX) {
+        jl_error("fatal error: jl_options.julia_lib path too long");
+    }
+    jl_options.julia_lib = abspath(free_path);
+
+    // set julia_home
     if (!jl_options.julia_home) {
         jl_options.julia_home = getenv("JULIA_HOME");
         if (!jl_options.julia_home) {
-            jl_options.julia_home = dirname(free_path);
+            strncpy(free_path, jl_options.julia_lib, PATH_MAX);
+            free_path = dirname(dirname(free_path));
+            if (strlen(free_path)+4 >= PATH_MAX) {
+                jl_error("fatal error: jl_options.julia_home path too long");
+            }
+            strcat(free_path, PATHSEPSTRING "bin");
+            jl_options.julia_home = free_path;
         }
     }
-    if (jl_options.julia_home)
-        jl_options.julia_home = abspath(jl_options.julia_home);
-    free(free_path);
-    free_path = NULL;
+    jl_options.julia_home = abspath(jl_options.julia_home);
+
+    // set image_file
     if (jl_options.image_file) {
         if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_HOME
-            free_path = (char*)malloc(PATH_MAX);
-            int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
-                             jl_options.julia_home, jl_options.image_file);
-            if (n >= PATH_MAX || n < 0) {
+            path_size = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
+                                 jl_options.julia_home, jl_options.image_file);
+            if (path_size >= PATH_MAX || path_size < 0) {
                 jl_error("fatal error: jl_options.image_file path too long");
             }
             jl_options.image_file = free_path;
         }
-        if (jl_options.image_file)
-            jl_options.image_file = abspath(jl_options.image_file);
-        if (free_path) {
-            free(free_path);
-            free_path = NULL;
-        }
+        jl_options.image_file = abspath(jl_options.image_file);
     }
+
+    // set output file paths
     if (jl_options.outputo)
         jl_options.outputo = abspath(jl_options.outputo);
     if (jl_options.outputji)
@@ -507,6 +537,9 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.machinefile = abspath(jl_options.machinefile);
     if (jl_options.load)
         jl_options.load = abspath(jl_options.load);
+
+    free(free_path);
+    free_path = NULL;
 }
 
 static void jl_set_io_wait(int v)

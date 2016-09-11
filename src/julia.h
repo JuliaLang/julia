@@ -1633,6 +1633,7 @@ typedef struct {
     int8_t quiet;
     const char *julia_home;
     const char *julia_bin;
+    const char *julia_lib;
     const char *eval;
     const char *print;
     const char *postboot;
