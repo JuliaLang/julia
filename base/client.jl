@@ -36,7 +36,7 @@ text_colors
 
 have_color = false
 default_color_warn = :red
-default_color_info = :blue
+default_color_info = :cyan
 if is_windows()
     default_color_input = :normal
     default_color_answer = :normal
