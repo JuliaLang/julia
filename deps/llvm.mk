@@ -84,7 +84,7 @@ LLVM_FLAGS += --disable-profiling --enable-static $(LLVM_TARGET_FLAGS)
 LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
-LLVM_MFLAGS := PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_depsbindir) PROJ_includedir=$(build_includedir) DestSharedLibDir=$(build_shlibdir)
+LLVM_MFLAGS := PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_depsbindir) PROJ_includedir=$(build_includedir)
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
@@ -514,14 +514,15 @@ endif
 $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
 ifeq ($(LLVM_USE_CMAKE),1)
-CMAKE_INSTALL_LLVM = \
+LLVM_INSTALL = \
 	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
-$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
-	CMAKE_INSTALL_LLVM,,,))
 else
-$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
-	MAKE_INSTALL,$$(LLVM_MFLAGS) PATH="$$(llvm_python_workaround):$$$$PATH",,))
+LLVM_INSTALL = \
+	$(call MAKE_INSTALL,$1,$2,$3 $$(LLVM_MFLAGS) PATH="$$(llvm_python_workaround):$$$$PATH" DestSharedLibDir="$2$$(build_shlibdir)")
 endif # LLVM_USE_CMAKE
+
+$(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
+	LLVM_INSTALL,,,))
 
 clean-llvm:
 	-rm $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
