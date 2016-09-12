@@ -2670,6 +2670,8 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t clenr,
             if (jl_is_vararg_type(pe)) pe = jl_tparam0(pe);
         }
 
+        if (invariant && jl_is_typevar(pe) && !((jl_tvar_t*)pe)->bound && !jl_is_typevar(ce))
+            break;
         if (!jl_subtype_le(ce, pe, ta, invariant))
             break;
 
