@@ -924,7 +924,6 @@ for f in (
         :erfinc, :erfcinv, # base/special/erf.jl
         :trunc, :floor, :ceil, :round, # base/floatfuncs.jl
         :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
-        :unix2datetime, :rata2datetime, :julian2datetime, # base/dates/conversions.jl
         :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
         )
     @eval @dep_vectorize_1arg Real $f
@@ -932,6 +931,12 @@ end
 # base/complex.jl
 @dep_vectorize_1arg Complex round
 @dep_vectorize_1arg Complex float
+# base/dates/*.jl
+for f in (
+        :unix2datetime, :rata2datetime, :julian2datetime, # base/dates/conversions.jl
+        )
+    eval(Dates, :(Base.@dep_vectorize_1arg Real $f))
+end
 for f in (
         # base/dates/accessors.jl
         :year, :month, :day, :week, :dayofmonth, :yearmonth, :monthday, :yearmonthday,
@@ -944,15 +949,15 @@ for f in (
         :daysofweekinmonth, :monthname, :monthabbr, :daysinmonth,
         :isleapyear, :dayofyear, :daysinyear, :quarterofyear, :dayofquarter,
     )
-    @eval @dep_vectorize_1arg Dates.TimeType $f
+    eval(Dates, :(Base.@dep_vectorize_1arg Dates.TimeType $f))
 end
 for f in (
     :hour, :minute, :second, :millisecond, # base/dates/accessors.jl
     :Date, :datetime2unix, :datetime2rata, :datetime2julian, # base/dates/conversions.jl
     )
-    @eval @dep_vectorize_1arg Dates.DateTime $f
+    eval(Dates, :(Base.@dep_vectorize_1arg Dates.DateTime $f))
 end
-@dep_vectorize_1arg Dates.Date Datetime # base/dates/conversions.jl
+eval(Dates, :(Base.@dep_vectorize_1arg Dates.Date Datetime)) # base/dates/conversions.jl
 
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
