@@ -347,9 +347,12 @@ function gen_call_with_extracted_types(fcn, ex0)
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
             # remove keyword args, but call the kwfunc
             args = filter(a->!(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
-            return :($(fcn)(Core.kwfunc($(esc(args[1]))),
-                            Tuple{Vector{Any}, typeof($(esc(args[1]))),
-                                  $(typesof)($(map(esc, args[2:end])...)).parameters...}))
+            return quote
+                local arg1 = $(esc(args[1]))
+                $(fcn)(Core.kwfunc(arg1),
+                       Tuple{Vector{Any}, Core.Typeof(arg1),
+                             $(typesof)($(map(esc, args[2:end])...)).parameters...})
+            end
         elseif ex0.head == :call
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...))

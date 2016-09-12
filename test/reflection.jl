@@ -553,3 +553,18 @@ let
     @test length(a) == 0
     @test length(b) == 0
 end
+
+type A18434
+end
+(::Type{A18434})(x; y=1) = 1
+
+global counter18434 = 0
+function get_A18434()
+    global counter18434
+    counter18434 += 1
+    return A18434
+end
+@which get_A18434()(1; y=2)
+@test counter18434 == 1
+@which get_A18434()(1, y=2)
+@test counter18434 == 2
