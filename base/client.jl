@@ -35,7 +35,7 @@ Available colors are: $available_text_colors_docstring.
 text_colors
 
 have_color = false
-default_color_warn = :red
+default_color_warn = :yellow
 default_color_info = :cyan
 if is_windows()
     default_color_input = :normal
