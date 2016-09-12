@@ -932,9 +932,7 @@ end
 @dep_vectorize_1arg Complex round
 @dep_vectorize_1arg Complex float
 # base/dates/*.jl
-for f in (
-        :unix2datetime, :rata2datetime, :julian2datetime, # base/dates/conversions.jl
-        )
+for f in (:unix2datetime, :rata2datetime, :julian2datetime)  # base/dates/conversions.jl
     eval(Dates, :(Base.@dep_vectorize_1arg Real $f))
 end
 for f in (
