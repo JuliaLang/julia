@@ -18,13 +18,14 @@ const unsigned int host_char_bit = 8;
 JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(reinterpret, datatype, ty);
-    if (!jl_is_leaf_type(ty) || !jl_is_bitstype(ty))
+    if (!jl_is_leaf_type(ty) || !(jl_is_bitstype(ty) || jl_is_vec_type(ty)))
         jl_error("reinterpret: target type not a leaf bitstype");
-    if (!jl_is_bitstype(jl_typeof(v)))
+    jl_value_t* dt = jl_typeof(v);
+    if (!(jl_is_bitstype(dt) || jl_is_vec_type(dt)))
         jl_error("reinterpret: value not a bitstype");
-    if (jl_datatype_size(jl_typeof(v)) != jl_datatype_size(ty))
+    if (jl_datatype_size(dt) != jl_datatype_size(ty))
         jl_error("reinterpret: argument size does not match size of target type");
-    if (ty == jl_typeof(v))
+    if (ty == dt)
         return v;
     if (ty == (jl_value_t*)jl_bool_type)
         return *(uint8_t*)jl_data_ptr(v) & 1 ? jl_true : jl_false;

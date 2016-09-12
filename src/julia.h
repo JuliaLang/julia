@@ -953,6 +953,27 @@ STATIC_INLINE int jl_is_vecelement_type(jl_value_t* t)
             ((jl_datatype_t*)(t))->name == jl_vecelement_typename);
 }
 
+STATIC_INLINE int jl_is_vec_type(jl_value_t* t)
+{
+    if (!jl_is_tuple_type(t))
+        return 0;
+
+    jl_value_t* ft0 = jl_field_type(t, 0);
+    if (!jl_is_vecelement_type(ft0))
+        return 0;
+
+    if (!jl_is_bitstype(jl_field_type(ft0, 0)))
+        return 0;
+
+    size_t nf = jl_datatype_nfields(t);
+    for (size_t i = 1; i < nf; ++i)
+        if (jl_field_type(t, i) != ft0)
+            // Not homogeneous
+            return 0;
+
+    return 1;
+}
+
 STATIC_INLINE int jl_is_type_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&

@@ -105,7 +105,7 @@ static Value *FP(Value *v)
 // convert float type to same-size int type
 static Type *JL_INTT(Type *t)
 {
-    if (t->isIntegerTy())
+    if (t->isIntegerTy() || t->isVectorTy())
         return t;
     if (t->isPointerTy())
         return T_size;
@@ -360,7 +360,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
 static Value *auto_unbox(const jl_cgval_t &v, jl_codectx_t *ctx)
 {
     jl_value_t *bt = v.typ;
-    if (!jl_is_bitstype(bt)) {
+    if (!(jl_is_bitstype(bt) || jl_is_vec_type(bt))) {
         // This can be reached with a direct invalid call to an Intrinsic, such as:
         //   Intrinsics.neg_int("")
         emit_error("auto_unbox: unable to determine argument type", ctx);
@@ -392,7 +392,7 @@ static jl_value_t *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_c
     jl_value_t *bt = NULL;
     if (jl_is_type_type(bt_value.typ))
         bt = jl_tparam0(bt_value.typ);
-    if (!bt || !jl_is_bitstype(bt)) {
+    if (!(bt && (jl_is_bitstype(bt) || jl_is_vec_type(bt)))) {
         emit_error("expected bits type as first argument", ctx);
         return NULL;
     }
@@ -401,7 +401,7 @@ static jl_value_t *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_c
 
 static Type *staticeval_bitstype(jl_value_t *bt)
 {
-    assert(jl_is_bitstype(bt));
+    assert(jl_is_bitstype(bt) || jl_is_vec_type(bt));
     bool isboxed;
     Type *to = julia_type_to_llvm(bt, &isboxed);
     if (to == NULL || isboxed) {
@@ -429,7 +429,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     if (jl_is_type_type(bt_value.typ))
         bt = jl_tparam0(bt_value.typ);
 
-    if (!bt || !jl_is_bitstype(bt)) {
+    if (!(bt && (jl_is_bitstype(bt) || jl_is_vec_type(bt)))) {
         // it's easier to throw a good error from C than llvm
         Value *arg1 = boxed(bt_value, ctx);
         Value *arg2 = boxed(v, ctx);
@@ -454,7 +454,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         || !jl_is_bitstype(v.typ)
         || jl_datatype_size(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(v, ctx);
-        if (!jl_is_bitstype(v.typ)) {
+        if (!(jl_is_bitstype(v.typ) || jl_is_vec_type(v.typ))) {
             if (isboxed) {
                 Value *isbits = emit_datatype_isbitstype(typ);
                 error_unless(isbits, "reinterpret: expected bitstype value for second argument", ctx);
