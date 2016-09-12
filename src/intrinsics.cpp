@@ -969,6 +969,18 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             r = builder.CreateCall3(func, x, y, z);
 #endif
         }
+        else if (nargs == 4) {
+            Value *x = boxed(emit_expr(args[1], ctx), ctx);
+            Value *y = boxed(emit_expr(args[2], ctx), ctx);
+            Value *z = boxed(emit_expr(args[3], ctx), ctx);
+            Value *w = boxed(emit_expr(args[4], ctx), ctx);
+
+#ifdef LLVM37
+            r = builder.CreateCall(func, {x, y, z, w});
+#else
+            r = builder.CreateCall4(func, x, y, z, w);
+#endif
+        }
         else {
             assert(0);
         }
