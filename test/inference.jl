@@ -364,3 +364,7 @@ function test18399(C)
     return hvcat18399(((2, 3),))
 end
 @test test18399(C18399) == (2, 3)
+
+# issue #18450
+f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
+@test f18450() == Tuple{Vararg{Int}}
