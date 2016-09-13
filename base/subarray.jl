@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-typealias NonSliceIndex Union{Colon, AbstractArray}
-typealias ViewIndex Union{Real, NonSliceIndex}
 abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
+typealias NonSliceIndex Union{Colon, AbstractArray}
+typealias ViewIndex Union{Real, AbstractCartesianIndex, NonSliceIndex}
+typealias ScalarIndex Union{Real, AbstractCartesianIndex}
 
 # L is true if the view itself supports fast linear indexing
 immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
@@ -28,19 +29,20 @@ function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, dims::NTuple{N})
     SubArray{eltype(P), N, P, I, true}(parent, indexes, compute_offset1(parent, stride1, indexes), stride1)
 end
 
-check_parent_index_match{T,N}(parent::AbstractArray{T,N}, indexes::NTuple{N}) = nothing
-check_parent_index_match(parent, indexes) = throw(ArgumentError("number of indices ($(length(indexes))) must match the parent dimensionality ($(ndims(parent)))"))
+check_parent_index_match(parent, indexes) = check_parent_index_match(parent, index_ndims(indexes...))
+check_parent_index_match{T,N}(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) = nothing
+check_parent_index_match{N}(parent, ::NTuple{N, Bool}) = throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
 # This computes the linear indexing compatability for a given tuple of indices
 viewindexing() = LinearFast()
 # Leading scalar indexes simply increase the stride
-viewindexing(I::Tuple{Real, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
+viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # Colons may begin a section which may be followed by any number of Colons
 viewindexing(I::Tuple{Colon, Colon, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # A UnitRange can follow Colons, but only if all other indices are scalar
-viewindexing(I::Tuple{Colon, UnitRange, Vararg{Real}}) = LinearFast()
+viewindexing(I::Tuple{Colon, UnitRange, Vararg{ScalarIndex}}) = LinearFast()
 # In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{Union{Range, Colon}, Vararg{Real}}) = LinearFast()
+viewindexing(I::Tuple{Union{Range, Colon}, Vararg{ScalarIndex}}) = LinearFast()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = LinearSlow()
 # Of course, all other array types are slow
@@ -58,29 +60,36 @@ parent(a::AbstractArray) = a
 parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 
 ## SubArray creation
-# Drops singleton dimensions (those indexed with a scalar)
-function view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
+# We always assume that the dimensionality of the parent matches the number of
+# indices that end up getting passed to it, so we store the parent as a
+# ReshapedArray view if necessary. The trouble is that `CartesianIndex`s make
+# the computation of the number of effective indices non-trivial. At this point
+# in the bootstrap, we don't have the required tools to do the computation,
+# so we just define `view` for non-CartesianIndex types here. The hard part is
+# done in multidimensional.jl after CartesianIndex gets defined properly.
+_maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val{1})
+_maybe_reshape_parent{_,N}(A::AbstractArray{_,N}, ::NTuple{N, Bool}) = A
+_maybe_reshape_parent{N}(A::AbstractArray, ::NTuple{N, Bool}) = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
+function view(A::AbstractArray, I::ViewIndex...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)
-    unsafe_view(A, I...)
-end
-function view(A::AbstractArray, i::ViewIndex)
-    @_inline_meta
-    @boundscheck checkbounds(A, i)
-    unsafe_view(reshape(A, Val{1}), i)
-end
-function view{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    unsafe_view(reshape(A, Val{N}), I...)
+    unsafe_view(_maybe_reshape_parent(A, index_ndims(I...)), I...)
 end
 
-function unsafe_view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
+function unsafe_view(A::AbstractArray, I::ViewIndex...)
     @_inline_meta
     J = to_indexes(I...)
     SubArray(A, J, map(unsafe_length, index_shape(A, J...)))
 end
-function unsafe_view{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
+# Reindexing by CartesianIndex is hard, so flatten them out first
+unsafe_view(V::SubArray, I::ViewIndex...) = unsafe_view(V, IteratorsMD.flatten(I)...)
+unsafe_view(V::SubArray, I::Union{Real, NonSliceIndex}...) = (@_inline_meta; _maybe_reindex(V, to_indexes(I...)))
+# Reindexing by an array of cartesian indices is disastrously hard. So we punt.
+_maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
+_maybe_reindex{C<:AbstractCartesianIndex}(V, I, ::Tuple{AbstractArray{C}, Vararg{Any}}) =
+    (@_inline_meta; SubArray(V, I, map(unsafe_length, index_shape(V, I...))))
+_maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@_inline_meta; _maybe_reindex(V, I, tail(A)))
+function _maybe_reindex(V, I, ::Tuple{})
     @_inline_meta
     idxs = reindex(V, V.indexes, to_indexes(I...))
     SubArray(V.parent, idxs, map(unsafe_length, (index_shape(V.parent, idxs...))))
@@ -95,12 +104,11 @@ end
 # * Parent index is scalar -> that dimension was dropped, so skip the sub-index and use the index as is
 
 typealias AbstractZeroDimArray{T} AbstractArray{T, 0}
-typealias DroppedScalar Union{Real, AbstractCartesianIndex}
 
 reindex(V, ::Tuple{}, ::Tuple{}) = ()
 
 # Skip dropped scalars, so simply peel them off the parent indices and continue
-reindex(V, idxs::Tuple{DroppedScalar, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) =
+reindex(V, idxs::Tuple{ScalarIndex, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) =
     (@_propagate_inbounds_meta; (idxs[1], reindex(V, tail(idxs), subidxs)...))
 
 # Colons simply pass their subindexes straight through
@@ -197,10 +205,15 @@ stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end
 compute_stride1{N}(parent::AbstractArray, I::NTuple{N}) =
     compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val{N}), I)
 compute_stride1(s, inds, I::Tuple{}) = s
-compute_stride1(s, inds, I::Tuple{DroppedScalar, Vararg{Any}}) =
+compute_stride1(s, inds, I::Tuple{Real, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
 compute_stride1(s, inds, I::Tuple{Range, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Colon, Vararg{Any}}) = s
+function compute_stride1{N}(s, inds, I::Tuple{AbstractCartesianIndex{N}, Vararg{Any}})
+    @_inline_meta
+    h, t = IteratorsMD.split(inds, Val{N})
+    compute_stride1(s*prod(map(unsafe_length, h)), t, tail(I))
+end
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
 
 iscontiguous(A::SubArray) = iscontiguous(typeof(A))
@@ -287,6 +300,11 @@ function _indices_sub(S::SubArray, pinds, i1::AbstractArray, I...)
     @_inline_meta
     (unsafe_indices(i1)..., _indices_sub(S, tail(pinds), I...)...)
 end
+function _indices_sub{N}(S::SubArray, pinds, ::AbstractCartesianIndex{N}, I...)
+    @_inline_meta
+    _indices_sub(S, IteratorsMD.split(pinds, Val{N})[2], I...)
+end
+# _indices_sub for arrays of CartesianIndex is defined in multidimensional.jl
 
 ## Compatability
 # deprecate?
