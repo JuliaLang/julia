@@ -572,25 +572,41 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
 
 jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
 {
-    jl_code_info_t *src = lam->inferred;
-    if (src == NULL)
-        src = lam->def->source;
+    if (lam->jlcall_api == 2)
+        return lam->inferred;
+    jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
+    if (src == NULL || !jl_is_code_info(src)) {
+        if (lam->def->isstaged) {
+            src = jl_code_for_staged(lam);
+            lam->inferred = (jl_value_t*)src;
+            jl_gc_wb(lam, src);
+        }
+        else {
+            src = lam->def->source;
+        }
+    }
     jl_array_t *stmts = src->code;
-    // XXX: need to uncompress stmts
+    if (!jl_typeis(stmts, jl_array_any_type)) {
+        stmts = jl_uncompress_ast(lam->def, stmts);
+        src->code = stmts;
+        jl_gc_wb(src, stmts);
+    }
     assert(jl_typeis(stmts, jl_array_any_type));
     jl_value_t **locals;
-    JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src));
+    JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src) + 2);
+    locals[0] = (jl_value_t*)src;
+    locals[1] = (jl_value_t*)stmts;
     interpreter_state s;
     s.src = src;
     s.module = lam->def->module;
-    s.locals = locals;
+    s.locals = locals + 2;
     s.sparam_vals = lam->sparam_vals;
     size_t i;
     for (i = 0; i < lam->def->nargs; i++) {
         if (lam->def->isva && i == lam->def->nargs - 1)
-            locals[i] = jl_f_tuple(NULL, &args[i], nargs - i);
+            s.locals[i] = jl_f_tuple(NULL, &args[i], nargs - i);
         else
-            locals[i] = args[i];
+            s.locals[i] = args[i];
     }
     jl_value_t *r = eval_body(stmts, &s, 0, 0);
     JL_GC_POP();
