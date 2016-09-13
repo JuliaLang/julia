@@ -88,6 +88,9 @@ unsafe_view(V::SubArray, I::Union{Real, NonSliceIndex}...) = (@_inline_meta; _ma
 _maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
 _maybe_reindex{C<:AbstractCartesianIndex}(V, I, ::Tuple{AbstractArray{C}, Vararg{Any}}) =
     (@_inline_meta; SubArray(V, I, map(unsafe_length, index_shape(V, I...))))
+# But allow arrays of CartesianIndex{1}; they behave just like arrays of Ints
+_maybe_reindex{C<:AbstractCartesianIndex{1}}(V, I, A::Tuple{AbstractArray{C}, Vararg{Any}}) =
+    (@_inline_meta; _maybe_reindex(V, I, tail(A)))
 _maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@_inline_meta; _maybe_reindex(V, I, tail(A)))
 function _maybe_reindex(V, I, ::Tuple{})
     @_inline_meta
