@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, size, start, done, next, last, in, getindex, setindex!, linearindexing, min, max, zero, one, isless, eachindex, ndims, iteratorsize
+import Base: eltype, length, size, start, done, next, last, in, getindex, setindex!, linearindexing, min, max, zero, one, isless, eachindex, ndims, iteratorsize, to_index
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index
 using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
@@ -130,6 +130,8 @@ length(iter::CartesianRange) = prod(size(iter))
 
 last(iter::CartesianRange) = iter.stop
 
+to_index(c::CartesianIndex) = c
+
 @inline function in{I<:CartesianIndex}(i::I, r::CartesianRange{I})
     _in(true, i.I, r.start.I, r.stop.I)
 end
@@ -163,6 +165,12 @@ end  # IteratorsMD
 
 using .IteratorsMD
 
+## Support for SubArray with arrays of CartesianIndex
+function _indices_sub{N}(S::SubArray, pinds, i1::AbstractArray{CartesianIndex{N}}, I...)
+    @_inline_meta
+    (unsafe_indices(i1)..., _indices_sub(S, IteratorsMD.split(pinds, Val{N})[2], I...)...)
+end
+
 ## Bounds-checking with CartesianIndex
 @inline checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple{CartesianIndex,Vararg{Any}}) =
     checkbounds_indices(Bool, (), (I[1].I..., tail(I)...))
@@ -193,7 +201,7 @@ function checkindex{N}(::Type{Bool}, inds::Tuple, I::AbstractArray{CartesianInde
     b
 end
 
-# combined dimensionality of all indices, including CartesianIndex and
+# combined count of all indices, including CartesianIndex and
 # AbstractArray{CartesianIndex}
 # rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
 @inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
@@ -235,8 +243,10 @@ index_shape(A::AbstractArray,  I::Colon)    = (linearindices(A),)
     inds1, indstail = IteratorsMD.split(inds, Val{1})
     (inds1..., index_shape_dim(indstail, i, I...)...)
 end
-@inline index_shape_dim(inds,  ::Real...)             = ()
-@inline index_shape_dim(inds,  ::Real, I...)          = index_shape_dim(safe_tail(inds), I...)
+@inline index_shape_dim(inds,    ::Real...)             = ()
+@inline index_shape_dim(inds,    ::Real, I...)          = index_shape_dim(safe_tail(inds), I...)
+@inline index_shape_dim{N}(inds, ::CartesianIndex{N}, I...) =
+    index_shape_dim(IteratorsMD.split(inds, Val{N})[2], I...)
 @inline index_shape_dim(inds, i::AbstractArray, I...) =
     (indices(i)..., index_shape_dim(safe_tail(inds), I...)...)
 @inline index_shape_dim(inds, i::AbstractArray{Bool}, I...) =
