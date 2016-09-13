@@ -26,7 +26,7 @@ zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
 
 istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
-issymmetric(::UniformScaling) = true
+issym(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
 
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
