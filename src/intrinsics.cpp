@@ -91,6 +91,12 @@ static Type *FT(Type *t)
 {
     if (t->isFloatingPointTy())
         return t;
+    if (auto vt = dyn_cast<VectorType>(t)) {
+        if (vt->getElementType()->isFloatingPointTy())
+            return t;
+        Type *et = FTnbits(vt->getElementType()->getPrimitiveSizeInBits());
+        return VectorType::get(et, vt->getNumElements());
+    }
     return FTnbits(t->getPrimitiveSizeInBits());
 }
 
@@ -99,6 +105,9 @@ static Value *FP(Value *v)
 {
     if (v->getType()->isFloatingPointTy())
         return v;
+    if (auto vt = dyn_cast<VectorType>(v->getType()))
+        if (vt->getElementType()->isFloatingPointTy())
+            return v;
     return emit_bitcast(v, FT(v->getType()));
 }
 

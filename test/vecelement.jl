@@ -77,4 +77,4 @@ end
 @test Intrinsics.zext_int(Vec{4, UInt16}, Vec((0x00, 0x01, 0xff, 0xf0))) == Vec((0x0000, 0x0001, 0x00ff, 0x00f0))
 @test Intrinsics.sext_int(Vec{4, UInt16}, Vec((0x00, 0x01, 0xff, 0xf0))) == Vec((0x0000, 0x0001, 0xffff, 0xfff0))
 @test Intrinsics.add_int(Vec((1,2,3,4)), Vec((1,2,3,4))) == Vec((2,4,6,8))
-# @test Intrinsics.mul_float(Vec((1.0, 2.0, 1.0, 2.0)), Vec((0.5, 0.5, 1.5, 1.5))) == Vec((0.5, 1.0, 1.5, 3.0))
+@test Intrinsics.mul_float(Vec((1.0, 2.0, 1.0, 2.0)), Vec((0.5, 0.5, 1.5, 1.5))) == Vec((0.5, 1.0, 1.5, 3.0))
