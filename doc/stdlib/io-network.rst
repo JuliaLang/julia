@@ -782,7 +782,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the representation of ``x`` in the requested ``mime`` type, as written by ``show`` (throwing a ``MethodError`` if no appropriate ``show`` is available). An ``AbstractString`` is returned for MIME types with textual representations (such as ``"text/html"`` or ``"application/postscript"``\ ), whereas binary data is returned as ``Vector{UInt8}``\ . (The function ``istextmime(mime)`` returns whether or not Julia treats a given ``mime`` type as text.)
 
-   As a special case, if ``x`` is an ``AbstractString`` (for textual MIME types) or a ``Vector{UInt8}`` (for binary MIME types), the ``reprmime`` function assumes that ``x`` is already in the requested ``mime`` format and simply returns ``x``\ .
+   As a special case, if ``x`` is an ``AbstractString`` (for textual MIME types) or a ``Vector{UInt8}`` (for binary MIME types), the ``reprmime`` function assumes that ``x`` is already in the requested ``mime`` format and simply returns ``x``\ . This special case does not apply to the ``"text/plain"`` MIME type. This is useful so that raw data can be passed to ``display(m::MIME, x)``\ .
 
 .. function:: stringmime(mime, x)
 
