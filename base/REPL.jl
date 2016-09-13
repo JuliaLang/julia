@@ -111,8 +111,10 @@ function ip_matches_func(ip, func::Symbol)
 end
 
 function display_error(io::IO, er, bt)
-    Base.with_output_color(:red, io) do io
-        print(io, "ERROR: ")
+    Base.with_output_color(:light_red, io) do io
+        Base.with_output_color(:bold, io) do io
+            print(io, "ERROR: ")
+        end
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
         if eval_ind != 0
@@ -281,7 +283,7 @@ LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               julia_green,
                                               Base.input_color(),
                                               Base.answer_color(),
-                                              Base.text_colors[:red],
+                                              Base.text_colors[:light_red],
                                               Base.text_colors[:yellow],
                                               false, false, false, envcolors)
 

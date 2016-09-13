@@ -68,7 +68,7 @@ type Fail <: Result
     value
 end
 function Base.show(io::IO, t::Fail)
-    print_with_color(:red, io, "Test Failed\n")
+    print_with_color(:light_red, io, "Test Failed\n")
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -100,7 +100,7 @@ type Error <: Result
     backtrace
 end
 function Base.show(io::IO, t::Error)
-    print_with_color(:red, io, "Error During Test\n")
+    print_with_color(:light_red, io, "Error During Test\n")
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -476,10 +476,10 @@ function finish(ts::DefaultTestSet)
         print_with_color(:green, lpad("Pass",pass_width," "), "  ")
     end
     if fail_width > 0
-        print_with_color(:red, lpad("Fail",fail_width," "), "  ")
+        print_with_color(:light_red, lpad("Fail",fail_width," "), "  ")
     end
     if error_width > 0
-        print_with_color(:red, lpad("Error",error_width," "), "  ")
+        print_with_color(:light_red, lpad("Error",error_width," "), "  ")
     end
     if broken_width > 0
         print_with_color(:yellow, lpad("Broken",broken_width," "), "  ")
@@ -562,7 +562,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nf = fails + c_fails
     if nf > 0
-        print_with_color(:red, lpad(string(nf), fail_width, " "), "  ")
+        print_with_color(:light_red, lpad(string(nf), fail_width, " "), "  ")
     elseif fail_width > 0
         # No fails at this level, but some at another level
         print(lpad(" ", fail_width), "  ")
@@ -570,7 +570,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     ne = errors + c_errors
     if ne > 0
-        print_with_color(:red, lpad(string(ne), error_width, " "), "  ")
+        print_with_color(:light_red, lpad(string(ne), error_width, " "), "  ")
     elseif error_width > 0
         # No errors at this level, but some at another level
         print(lpad(" ", error_width), "  ")

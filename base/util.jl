@@ -304,7 +304,7 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
     have_color && print(buf, get(text_colors, color, color_normal))
     try f(buf, args...)
     finally
-        have_color && print(buf, get(disable_text_style, color, "\033[0m"))
+        have_color && print(buf, get(disable_text_style, color, text_colors[:default]))
         print(io, takebuf_string(buf))
     end
 end
@@ -328,6 +328,14 @@ println_with_color(color::Union{Int, Symbol}, msg::AbstractString...) =
 
 ## warnings and messages ##
 
+function bold_if_havecolor(str)
+    io = IOBuffer()
+    with_output_color(:bold, io) do io
+        print(io, str)
+    end
+    return takebuf_string(io)
+end
+
 """
     info(msg...; prefix="INFO: ")
 
@@ -344,10 +352,10 @@ julia> info("hello world"; prefix="MY INFO: ")
 MY INFO: hello world
 ```
 """
-function info(io::IO, msg...; prefix="INFO: ")
+function info(io::IO, msg...; prefix= bold_if_havecolor("INFO: "))
     println_with_color(info_color(), io, prefix, chomp(string(msg...)))
 end
-info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
+info(msg...; prefix=bold_if_havecolor("INFO: ")) = info(STDERR, msg..., prefix=prefix)
 
 # print a warning only once
 
@@ -357,7 +365,7 @@ warn_once(io::IO, msg...) = warn(io, msg..., once=true)
 warn_once(msg...) = warn(STDERR, msg..., once=true)
 
 function warn(io::IO, msg...;
-              prefix="WARNING: ", once=false, key=nothing, bt=nothing,
+              prefix=bold_if_havecolor("WARNING: "), once=false, key=nothing, bt=nothing,
               filename=nothing, lineno::Int=0)
     str = chomp(string(msg...))
     if once
@@ -385,16 +393,16 @@ Display a warning. Argument `msg` is a string describing the warning to be displ
 """
 warn(msg...; kw...) = warn(STDERR, msg...; kw...)
 
-warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
+warn(io::IO, err::Exception; prefix=bold_if_havecolor("ERROR: "), kw...) =
     warn(io, sprint(buf->showerror(buf, err)), prefix=prefix; kw...)
 
-warn(err::Exception; prefix="ERROR: ", kw...) =
+warn(err::Exception; prefix=bold_if_havecolor("ERROR: "), kw...) =
     warn(STDERR, err, prefix=prefix; kw...)
 
-info(io::IO, err::Exception; prefix="ERROR: ", kw...) =
+info(io::IO, err::Exception; prefix=bold_if_havecolor("ERROR: "), kw...) =
     info(io, sprint(buf->showerror(buf, err)), prefix=prefix; kw...)
 
-info(err::Exception; prefix="ERROR: ", kw...) =
+info(err::Exception; prefix=bold_if_havecolor("ERROR: "), kw...) =
     info(STDERR, err, prefix=prefix; kw...)
 
 function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))

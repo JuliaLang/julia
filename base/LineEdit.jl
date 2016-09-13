@@ -626,6 +626,7 @@ default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
 function write_prompt(terminal, p::Prompt)
+    write(terminal, Base.text_colors[:bold])
     prefix = isa(p.prompt_prefix,Function) ? p.prompt_prefix() : p.prompt_prefix
     suffix = isa(p.prompt_suffix,Function) ? p.prompt_suffix() : p.prompt_suffix
     write(terminal, prefix)

@@ -527,7 +527,7 @@ function show_expr_type(io::IO, ty, emph)
     end
 end
 
-emphasize(io, str::AbstractString) = have_color ? print_with_color(:red, io, str) : print(io, uppercase(str))
+emphasize(io, str::AbstractString) = have_color ? print_with_color(:light_red, io, str) : print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io," # line ",line,':')
 show_linenumber(io::IO, line, file) = print(io," # ", file,", line ",line,':')
