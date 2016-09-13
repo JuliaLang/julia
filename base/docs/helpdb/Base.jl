@@ -3264,13 +3264,6 @@ processes completed successfully.
 exit
 
 """
-    istextmime(m::MIME)
-
-Determine whether a MIME type is text data.
-"""
-istextmime
-
-"""
     skipchars(stream, predicate; linecomment::Char)
 
 Advance the stream until before the first character for which `predicate` returns `false`.

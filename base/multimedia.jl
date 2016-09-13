@@ -45,7 +45,7 @@ MIME types are assumed to be binary data except for a set of types known to be
 text data (possibly Unicode). `mimetypetype(m)` returns `Multimedia.IsText` or
 `Multimedia.IsBytes` for text or binary data respectively.
 """
-mimetypetype{M}(::MIME{M}) =
+Base.@pure mimetypetype{M}(::MIME{M}) =
     startswith(string(M), "text/") ? IsText() : IsBytes()
 
 """
@@ -102,6 +102,11 @@ macro textmime(mime)
     end
 end
 
+"""
+    istextmime(m::MIME)
+
+Determine whether a MIME type is text data.
+"""
 istextmime(m::MIME) = isa(mimetypetype(m), IsText)
 
 # it is convenient to accept strings instead of ::MIME
