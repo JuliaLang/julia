@@ -315,8 +315,8 @@ for (Fun, func) in [(:IdFun, :identity),
         (::Type{typeof($(func))})() = $(func)
     end
 end
-@deprecate_binding CentralizedAbs2Fun typeof(centralizedabs2fun(0)).name.primary
-(::Type{typeof(centralizedabs2fun(0)).name.primary})(m::Number) = centralizedabs2fun(m)
+@deprecate_binding CentralizedAbs2Fun typeof(centralizedabs2fun(0)).name.wrapper
+(::Type{typeof(centralizedabs2fun(0)).name.wrapper})(m::Number) = centralizedabs2fun(m)
 @deprecate specialized_unary(f::Function) f
 @deprecate specialized_binary(f::Function) f
 @deprecate specialized_bitwise_unary(f::Function) f
