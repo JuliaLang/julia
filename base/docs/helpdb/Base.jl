@@ -485,6 +485,15 @@ julia> sizeof(Float32)
 julia> sizeof(Complex128)
 16
 ```
+
+If `T` is not a bitstype, an error is thrown.
+
+```jldoctest
+julia> sizeof(Base.LinAlg.LU)
+ERROR: argument is an abstract type; size is indeterminate
+ in sizeof(::Type{T}) at ./essentials.jl:89
+ ...
+```
 """
 sizeof(::Type)
 
@@ -1584,6 +1593,10 @@ For example,
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
 1.0f-44
+
+julia> reinterpret(Float32, UInt32[1 2 3 4 5])
+1×5 Array{Float32,2}:
+ 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45
 ```
 """
 reinterpret
@@ -2452,6 +2465,18 @@ countlines
 Element-wise left division operator.
 
 ```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> A .\ [1 2]
+2×2 Array{Float64,2}:
+ 1.0       1.0
+ 0.333333  0.5
+```
+
+```jldoctest
 julia> A = [1 0; 0 -1];
 
 julia> B = [0 1; 1 0];
@@ -2666,7 +2691,6 @@ julia> length([1; 2; 3; 4])
 ```
 """
 length(collection)
-bkfact
 
 """
     searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])

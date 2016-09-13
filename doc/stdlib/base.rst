@@ -547,6 +547,15 @@ Types
        julia> sizeof(Complex128)
        16
 
+   If ``T`` is not a bitstype, an error is thrown.
+
+   .. doctest::
+
+       julia> sizeof(Base.LinAlg.LU)
+       ERROR: argument is an abstract type; size is indeterminate
+        in sizeof(::Type{T}) at ./essentials.jl:89
+        ...
+
 .. function:: eps(T)
 
    .. Docstring generated from Julia source

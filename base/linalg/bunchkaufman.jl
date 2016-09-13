@@ -60,7 +60,7 @@ end
 Compute the Bunch-Kaufman [^Bunch1977] factorization of a real symmetric or complex Hermitian
 matrix `A` and return a `BunchKaufman` object.
 `uplo` indicates which triangle of matrix `A` to reference.
-If `symmetric` is `true`, `A` is assumed to be real symmetric. If `symmetric` is `false`,
+If `symmetric` is `true`, `A` is assumed to be symmetric. If `symmetric` is `false`,
 `A` is assumed to be complex Hermitian. If `rook` is `true`, rook pivoting is used. If
 `rook` is false, rook pivoting is not used.
 The following functions are available for

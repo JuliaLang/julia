@@ -531,6 +531,10 @@ Constructors
        julia> reinterpret(Float32, UInt32(7))
        1.0f-44
 
+       julia> reinterpret(Float32, UInt32[1 2 3 4 5])
+       1×5 Array{Float32,2}:
+        1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45
+
 .. function:: eye([T::Type=Float64,] n::Integer)
 
    .. Docstring generated from Julia source

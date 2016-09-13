@@ -218,11 +218,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigfact`` will use a method specialized for matrices known to be Hermitian. Note that ``Hupper`` will not be equal to ``Hlower`` unless ``A`` is itself Hermitian (e.g. if ``A == A'``\ ).
 
-.. function:: lu(A) -> L, U, p
+.. function:: lu(A, pivot=Val{true}) -> L, U, p
 
    .. Docstring generated from Julia source
 
-   Compute the LU factorization of ``A``\ , such that ``A[p,:] = L*U``\ . See also :func:`lufact`\ .
+   Compute the LU factorization of ``A``\ , such that ``A[p,:] = L*U``\ . By default, pivoting is used. This can be overridden by passing ``Val{false}`` for the second argument.
+
+   See also :func:`lufact`\ .
 
 .. function:: lufact(A [,pivot=Val{true}]) -> F::LU
 
@@ -586,7 +588,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. ``uplo`` indicates which triangle of matrix ``A`` to reference. If ``symmetric`` is ``true``\ , ``A`` is assumed to be real symmetric. If ``symmetric`` is ``false``\ , ``A`` is assumed to be complex Hermitian. If ``rook`` is ``true``\ , rook pivoting is used. If ``rook`` is false, rook pivoting is not used. The following functions are available for ``BunchKaufman`` objects: :func:`size`\ , ``\``\ , :func:`inv`\ , :func:`issymmetric`\ , :func:`ishermitian`\ .
+   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. ``uplo`` indicates which triangle of matrix ``A`` to reference. If ``symmetric`` is ``true``\ , ``A`` is assumed to be symmetric. If ``symmetric`` is ``false``\ , ``A`` is assumed to be complex Hermitian. If ``rook`` is ``true``\ , rook pivoting is used. If ``rook`` is false, rook pivoting is not used. The following functions are available for ``BunchKaufman`` objects: :func:`size`\ , ``\``\ , :func:`inv`\ , :func:`issymmetric`\ , :func:`ishermitian`\ .
 
    .. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url <http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_\ .
 

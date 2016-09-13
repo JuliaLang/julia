@@ -143,9 +143,12 @@ lufact(F::LU) = F
 lu(x::Number) = (one(x), x, 1)
 
 """
-    lu(A) -> L, U, p
+    lu(A, pivot=Val{true}) -> L, U, p
 
 Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
+By default, pivoting is used. This can be overridden by passing
+`Val{false}` for the second argument.
+
 See also [`lufact`](:func:`lufact`).
 """
 function lu(A::AbstractMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
