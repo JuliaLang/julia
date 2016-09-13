@@ -207,10 +207,15 @@ index_ndims() = ()
 
 # Recursively compute the lengths of a list of indices, without dropping scalars
 # These need to be inlined for more than 3 indexes
+# Trailing CartesianIndex{0}s and arrays thereof are strange when used as
+# trailing indexes -- they behave as though they were never there for the
+# purposes of generalized linear indexing.
+typealias CI0 Union{CartesianIndex{0}, AbstractArray{CartesianIndex{0}}}
 index_lengths(A::AbstractArray, I::Colon) = (length(A),)
 @inline index_lengths(A::AbstractArray, I...) = index_lengths_dim(A, 1, I...)
 index_lengths_dim(A, dim) = ()
 index_lengths_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
+index_lengths_dim(A, dim, ::Colon, i::CI0, I::CI0...) = (trailingsize(A, dim), index_lengths_dim(A, dim+1, i, I...)...)
 @inline index_lengths_dim(A, dim, ::Colon, i, I...) = (_length(indices(A, dim)), index_lengths_dim(A, dim+1, i, I...)...)
 @inline index_lengths_dim(A, dim, ::Real, I...) = (1, index_lengths_dim(A, dim+1, I...)...)
 @inline index_lengths_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (1, index_lengths_dim(A, dim+N, I...)...)
@@ -224,6 +229,8 @@ index_shape(A::AbstractArray,  I::Colon)    = (linearindices(A),)
 @inline index_shape(A::AbstractArray, I...) = index_shape_dim(indices(A), I...)
 @inline index_shape_dim(inds::Tuple{Any}, ::Colon)          = inds
 @inline index_shape_dim(inds,             ::Colon)          = (OneTo(trailingsize(inds)),)
+@inline index_shape_dim(inds,             ::Colon, i::CI0, I::CI0...) =
+    (OneTo(trailingsize(inds)), index_shape_dim((), i, I...)...)
 @inline function index_shape_dim(inds,    ::Colon, i, I...)
     inds1, indstail = IteratorsMD.split(inds, Val{1})
     (inds1..., index_shape_dim(indstail, i, I...)...)
@@ -247,6 +254,7 @@ end
 @inline decolon_dim(inds)  = ()
 @inline decolon_dim(inds::Tuple{Any}, ::Colon)       = inds
 @inline decolon_dim(inds,             ::Colon)       = (OneTo(trailingsize(inds)),)
+@inline decolon_dim(inds,             ::Colon, i::CI0, I::CI0...) = (OneTo(trailingsize(inds)), i, I...)
 @inline function decolon_dim(inds,    ::Colon, I...)
     inds1, indstail = IteratorsMD.split(inds, Val{1})
     (maybe_oneto(inds1...), decolon_dim(indstail, I...)...)
