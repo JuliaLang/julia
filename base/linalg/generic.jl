@@ -420,7 +420,7 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
-@inline vecnorm(x::Number, p::Real=2) = p == 0 ? real(x==0 ? zero(x) : one(x)) : abs(x)
+@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : one(abs(x))) : abs(x)
 
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
