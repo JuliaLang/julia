@@ -1009,4 +1009,15 @@ export @vectorize_1arg, @vectorize_2arg
 @deprecate abs(M::SymTridiagonal) abs.(M)
 @deprecate abs(x::AbstractSparseVector) abs.(x)
 
+# Deprecate @textmime into the Multimedia module, #18441
+eval(Multimedia, :(macro textmime(mime)
+    Base.depwarn(string("`@textmime mime` is deprecated; use ",
+        "`Base.Multimedia.mimetypetype(::MIME{mime}) = ",
+        "Base.Multimedia.IsText` instead."), :textmime)
+    quote
+        Base.Multimedia.mimetypetype(::MIME{$(Meta.quot(Symbol(mime)))}) =
+            Base.Multimedia.IsText()
+    end
+end))
+
 # End deprecations scheduled for 0.6

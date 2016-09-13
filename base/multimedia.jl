@@ -92,16 +92,6 @@ stringmime(::IsText, m::MIME, x) = reprmime(m, x)
 stringmime(::IsBytes, m::MIME, x) = base64encode(verbose_show, m, x)
 stringmime(::IsBytes, m::MIME, x::Vector{UInt8}) = base64encode(write, x)
 
-macro textmime(mime)
-    Base.depwarn(string("`@textmime mime` is deprecated; use ",
-        "`Base.Multimedia.mimetypetype(::MIME{mime}) = ",
-        "Base.Multimedia.IsText` instead."))
-    quote
-        Base.Multimedia.mimetypetype(::MIME{$(Symbol(mime))}) =
-            Base.Multimedia.IsText()
-    end
-end
-
 """
     istextmime(m::MIME)
 
