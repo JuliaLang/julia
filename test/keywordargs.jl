@@ -227,3 +227,10 @@ let opts = (:a=>3, :b=>4)
     @test g17785(; opts..., a=5, b=6) == (5, 6)
     @test g17785(; b=0, opts..., a=5) == (5, 4)
 end
+
+# pr #18396, kwargs before Base is defined
+eval(Core.Inference, quote
+    f18396(;kwargs...) = g18396(;kwargs...)
+    g18396(;x=1,y=2) = x+y
+end)
+@test Core.Inference.f18396() == 3
