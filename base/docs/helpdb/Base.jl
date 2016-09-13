@@ -30,6 +30,18 @@ read!
     empty!(collection) -> collection
 
 Remove all elements from a `collection`.
+
+```jldoctest
+julia> A = Dict("a" => 1, "b" => 2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> empty!(A);
+
+julia> A
+Dict{String,Int64} with 0 entries
+```
 """
 empty!
 
@@ -69,7 +81,15 @@ Base.:(//)
 """
     isinteger(x) -> Bool
 
-Test whether `x` or all its elements are numerically equal to some integer
+Test whether `x` or all its elements are numerically equal to some integer.
+
+```jldoctest
+julia> isinteger(4.0)
+true
+
+julia> isinteger([1; 2; 5.5])
+false
+```
 """
 isinteger
 
@@ -215,6 +235,27 @@ getindex(::Type, elements...)
 Returns a subset of array `A` as specified by `inds`, where each `ind` may be an
 `Int`, a `Range`, or a `Vector`. See the manual section on
 [array indexing](:ref:`array indexing <man-array-indexing>`) for details.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> getindex(A, 1)
+1
+
+julia> getindex(A, [2, 1])
+2-element Array{Int64,1}:
+ 3
+ 1
+
+julia> getindex(A, 2:4)
+3-element Array{Int64,1}:
+ 3
+ 2
+ 4
+```
 """
 getindex(::AbstractArray, inds...)
 
@@ -223,6 +264,16 @@ getindex(::AbstractArray, inds...)
 
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
+
+```jldoctest
+julia> A = Dict("a" => 1, "b" => 2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> getindex(A, "a")
+1
+```
 """
 getindex(collection, key...)
 
@@ -426,6 +477,14 @@ filter!
     sizeof(T)
 
 Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
+
+```jldoctest
+julia> sizeof(Float32)
+4
+
+julia> sizeof(Complex128)
+16
+```
 """
 sizeof(::Type)
 
@@ -450,6 +509,14 @@ ReadOnlyMemoryError
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
 accomplished by calling [`endof`](:func:`endof`) to get the last index. Returns the end
 point of a [`Range`](:obj:`Range`) even if it is empty.
+
+```jldoctest
+julia> last(1:2:10)
+9
+
+julia> last([1; 2; 3; 4])
+4
+```
 """
 last
 
@@ -1021,13 +1088,6 @@ Seek a stream relative to the current position.
 skip
 
 """
-    lu(A) -> L, U, p
-
-Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
-"""
-lu
-
-"""
     setdiff!(s, iterable)
 
 Remove each element of `iterable` from set `s` in-place.
@@ -1115,6 +1175,22 @@ maximum!
     prod(A, dims)
 
 Multiply elements of an array over the given dimensions.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> prod(A, 1)
+1×2 Array{Int64,2}:
+ 3  8
+
+julia> prod(A, 2)
+2×1 Array{Int64,2}:
+  2
+ 12
+```
 """
 prod(A, dims)
 
@@ -1134,13 +1210,6 @@ log1p
 Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
 """
 flipsign
-
-"""
-    lbeta(x, y)
-
-Natural logarithm of the absolute value of the beta function ``\\log(|\\operatorname{B}(x,y)|)``.
-"""
-lbeta
 
 """
     randstring([rng,] len=8)
@@ -1199,6 +1268,22 @@ serialize
     sum(A, dims)
 
 Sum elements of an array over the given dimensions.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> sum(A, 1)
+1×2 Array{Int64,2}:
+ 4  6
+
+julia> sum(A, 2)
+2×1 Array{Int64,2}:
+ 3
+ 7
+```
 """
 sum(A, dims)
 
@@ -1459,14 +1544,6 @@ floating point number. If the string does not contain a valid number, an error i
 parse(T::Type, str, base=Int)
 
 """
-    bkfact!(A) -> BunchKaufman
-
-`bkfact!` is the same as [`bkfact`](:func:`bkfact`), but saves space by overwriting the
-input `A`, instead of creating a copy.
-"""
-bkfact!
-
-"""
     ^(x, y)
 
 Exponentiation operator.
@@ -1497,10 +1574,17 @@ selectperm
 """
     reinterpret(type, A)
 
-Change the type-interpretation of a block of memory. For example,
-`reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-`Float32`. For arrays, this constructs an array with the same binary data as the given
+Change the type-interpretation of a block of memory.
+For arrays, this constructs an array with the same binary data as the given
 array, but with the specified element type.
+For example,
+`reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
+`Float32`.
+
+```jldoctest
+julia> reinterpret(Float32, UInt32(7))
+1.0f-44
+```
 """
 reinterpret
 
@@ -1625,13 +1709,6 @@ Compute a type that contains both `T` and `S`.
 typejoin
 
 """
-    beta(x, y)
-
-Euler integral of the first kind ``\\operatorname{B}(x,y) = \\Gamma(x)\\Gamma(y)/\\Gamma(x+y)``.
-"""
-beta
-
-"""
     sin(x)
 
 Compute sine of `x`, where `x` is in radians.
@@ -1666,6 +1743,22 @@ asinh
 Compute the minimum value of an array over the given dimensions. See also the
 [`min(a,b)`](:func:`min`) function to take the minimum of two or more arguments,
 which can be applied elementwise to arrays via `min.(a,b)`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> minimum(A, 1)
+1×2 Array{Int64,2}:
+ 1  2
+
+julia> minimum(A, 2)
+2×1 Array{Int64,2}:
+ 1
+ 3
+```
 """
 minimum(A,dims)
 
@@ -1710,16 +1803,6 @@ end
 ```
 """
 get
-
-"""
-    lufact!(A) -> LU
-
-`lufact!` is the same as [`lufact`](:func:`lufact`), but saves space by overwriting the
-input `A`, instead of creating a copy. An `InexactError` exception is thrown if the
-factorisation produces a number not representable by the element type of `A`, e.g. for
-integer types.
-"""
-lufact!
 
 """
     Mmap.sync!(array)
@@ -1798,13 +1881,6 @@ shift!
 Run a command object asynchronously, returning the resulting [`Process`](:obj:`Process`) object.
 """
 spawn
-
-"""
-    eta(x)
-
-Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-1)^{n-1}/n^{s}``.
-"""
-eta
 
 """
     isdefined([m::Module,] s::Symbol)
@@ -1911,6 +1987,22 @@ typemax
     all(A, dims)
 
 Test whether all values along the given dimensions of an array are `true`.
+
+```jldoctest
+julia> A = [true false; true true]
+2×2 Array{Bool,2}:
+ true  false
+ true   true
+
+julia> all(A, 1)
+1×2 Array{Bool,2}:
+ true  false
+
+julia> all(A, 2)
+2×1 Array{Bool,2}:
+ false
+  true
+```
 """
 all(A::AbstractArray, dims)
 
@@ -2114,14 +2206,6 @@ program, in the same manner as C.
 unsafe_store!
 
 """
-    hessfact!(A)
-
-`hessfact!` is the same as [`hessfact`](:func:`hessfact`), but saves space by overwriting
-the input `A`, instead of creating a copy.
-"""
-hessfact!
-
-"""
     readcsv(source, [T::Type]; options...)
 
 Equivalent to `readdlm` with `delim` set to comma, and type optionally defined by `T`.
@@ -2280,6 +2364,14 @@ Array
     isreal(x) -> Bool
 
 Test whether `x` or all its elements are numerically equal to some real number.
+
+```jldoctest
+julia> isreal(5.)
+true
+
+julia> isreal([4.; complex(0,1)])
+false
+```
 """
 isreal
 
@@ -2288,6 +2380,14 @@ isreal
 
 Return `true` if and only if all values of `type1` are also of `type2`. Can also be written
 using the `<:` infix operator as `type1 <: type2`.
+
+```jldoctest
+julia> issubtype(Int8, Int32)
+false
+
+julia> issubtype(Int8, Integer)
+true
+```
 """
 issubtype(type1, type2)
 
@@ -2350,6 +2450,33 @@ countlines
     .\\(x, y)
 
 Element-wise left division operator.
+
+```jldoctest
+julia> A = [1 0; 0 -1];
+
+julia> B = [0 1; 1 0];
+
+julia> C = [A, B]
+2-element Array{Array{Int64,2},1}:
+ [1 0; 0 -1]
+ [0 1; 1 0]
+
+julia> x = [1; 0];
+
+julia> y = [0; 1];
+
+julia> D = [x, y]
+2-element Array{Array{Int64,1},1}:
+ [1,0]
+ [0,1]
+
+julia> C .\\ D
+2-element Array{Array{Float64,1},1}:
+ [1.0,-0.0]
+ [1.0,0.0]
+```
+
+See also [`broadcast`](:func:`broadcast`).
 """
 Base.:(.\)(x,y)
 
@@ -2455,6 +2582,14 @@ deserialize
 
 Get the first element of an iterable collection. Returns the start point of a
 [`Range`](:obj:`Range`) even if it is empty.
+
+```jldoctest
+julia> first(2:2:10)
+2
+
+julia> first([1; 2; 3; 4])
+1
+```
 """
 first
 
@@ -2518,21 +2653,19 @@ Base.:(!)
 """
     length(collection) -> Integer
 
-For ordered, indexable collections, the maximum index `i` for which `getindex(collection, i)`
-is valid. For unordered collections, the number of elements.
+For ordered, indexable collections, returns the maximum index `i` for which `getindex(collection, i)`
+is valid.
+For unordered collections, returns the number of elements.
+
+```jldoctest
+julia> length(1:5)
+5
+
+julia> length([1; 2; 3; 4])
+4
+```
 """
 length(collection)
-
-"""
-    bkfact(A) -> BunchKaufman
-
-Compute the Bunch-Kaufman [^Bunch1977] factorization of a real symmetric or complex Hermitian
-matrix `A` and return a `BunchKaufman` object. The following functions are available for
-`BunchKaufman` objects: [`size`](:func:`size`), `\\`, [`inv`](:func:`inv`), [`issymmetric`](:func:`issymmetric`), [`ishermitian`](:func:`ishermitian`).
-
-[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0).
-
-"""
 bkfact
 
 """
@@ -3037,13 +3170,6 @@ zeros(A)
 Create a `Symbol` by concatenating the string representations of the arguments together.
 """
 Symbol
-
-"""
-    zeta(s)
-
-Riemann zeta function ``\\zeta(s)``.
-"""
-zeta(s)
 
 """
     isvalid(value) -> Bool

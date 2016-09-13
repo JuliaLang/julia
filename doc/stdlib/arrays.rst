@@ -524,7 +524,12 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, UInt32(7))`` interprets the 4 bytes corresponding to ``UInt32(7)`` as a ``Float32``\ . For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
+   Change the type-interpretation of a block of memory. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type. For example, ``reinterpret(Float32, UInt32(7))`` interprets the 4 bytes corresponding to ``UInt32(7)`` as a ``Float32``\ .
+
+   .. doctest::
+
+       julia> reinterpret(Float32, UInt32(7))
+       1.0f-44
 
 .. function:: eye([T::Type=Float64,] n::Integer)
 
@@ -655,6 +660,27 @@ Indexing, Assignment, and Concatenation
    .. Docstring generated from Julia source
 
    Returns a subset of array ``A`` as specified by ``inds``\ , where each ``ind`` may be an ``Int``\ , a ``Range``\ , or a ``Vector``\ . See the manual section on :ref:`array indexing <man-array-indexing>` for details.
+
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> getindex(A, 1)
+       1
+
+       julia> getindex(A, [2, 1])
+       2-element Array{Int64,1}:
+        3
+        1
+
+       julia> getindex(A, 2:4)
+       3-element Array{Int64,1}:
+        3
+        2
+        4
 
 .. function:: view(A, inds...)
 
