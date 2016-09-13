@@ -1324,6 +1324,7 @@ export
 
 # nullable types
     isnull,
+    unsafe_get,
 
 # Macros
     # parser internal

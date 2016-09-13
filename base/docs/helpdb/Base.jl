@@ -1467,13 +1467,6 @@ julia> log2(10)
 log2
 
 """
-    isnull(x)
-
-Is the `Nullable` object `x` null, i.e. missing a value?
-"""
-isnull
-
-"""
     abs2(x)
 
 Squared absolute value of `x`.

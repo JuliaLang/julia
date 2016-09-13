@@ -161,13 +161,49 @@ for T in types
     @test get(x3, zero(T)) === one(T)
 end
 
-# isnull(x::Nullable)
 for T in types
+    # unsafe_get(x::Nullable)
+    x1 = Nullable{T}()
+    x2 = Nullable(zero(T))
+    x3 = Nullable(one(T))
+    a = rand(T)
+    x4 = Nullable(a)
+
+    @test isa(unsafe_get(x1), T)
+    @test unsafe_get(x2) === zero(T)
+    @test unsafe_get(x3) === one(T)
+    @test unsafe_get(x4) === a
+
+    # unsafe_get(x)
+    x2 = zero(T)
+    x3 = one(T)
+    x4 = rand(T)
+
+    @test unsafe_get(x2) === zero(T)
+    @test unsafe_get(x3) === one(T)
+    @test unsafe_get(x4) === x4
+end
+
+@test_throws UndefRefError unsafe_get(Nullable())
+@test_throws UndefRefError unsafe_get(Nullable{String}())
+@test_throws UndefRefError unsafe_get(Nullable{Array}())
+
+for T in types
+    # isnull(x::Nullable)
     x1 = Nullable{T}()
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
 
     @test isnull(x1) === true
+    @test isnull(x2) === false
+    @test isnull(x3) === false
+
+    # isnull(x)
+    x1 = zero(T)
+    x2 = one(T)
+    x3 = rand(T)
+
+    @test isnull(x1) === false
     @test isnull(x2) === false
     @test isnull(x3) === false
 end

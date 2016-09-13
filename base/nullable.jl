@@ -61,6 +61,68 @@ end
 
 get(x::Nullable) = isnull(x) ? throw(NullException()) : x.value
 
+"""
+    unsafe_get(x)
+
+Return the value of `x` for [`Nullable`](:obj:`Nullable`) `x`; return `x` for
+all other `x`.
+
+This method does not check whether or not `x` is null before attempting to
+access the value of `x` for `x::Nullable` (hence "unsafe").
+
+```jldoctest
+julia> x = Nullable(1)
+Nullable{Int64}(1)
+
+julia> unsafe_get(x)
+1
+
+julia> x = Nullable{String}()
+Nullable{String}()
+
+julia> unsafe_get(x)
+ERROR: UndefRefError: access to undefined reference
+ in unsafe_get(::Nullable{String}) at ./REPL[4]:1
+
+julia> x = 1
+1
+
+julia> unsafe_get(x)
+1
+```
+"""
+unsafe_get(x::Nullable) = x.value
+unsafe_get(x) = x
+
+"""
+    isnull(x)
+
+Return whether or not `x` is null for [`Nullable`](:obj:`Nullable`) `x`; return
+`false` for all other `x`.
+
+```jldoctest
+julia> x = Nullable(1, false)
+Nullable{Int64}(1)
+
+julia> isnull(x)
+false
+
+julia> x = Nullable(1, true)
+Nullable{Int64}()
+
+julia> isnull(x)
+true
+
+julia> x = 1
+1
+
+julia> isnull(x)
+false
+```
+"""
+isnull(x::Nullable) = x.isnull
+isnull(x) = false
+
 isnull(x::Nullable) = !x.hasvalue
 
 ## Operators
