@@ -16,10 +16,14 @@ const text_colors = AnyDict(
     :bold    => "\033[1m",
 )
 
+for i in 0:256
+    text_colors[i] = "\033[1m\033[38;5;$(i)m"
+end
+
 # Create a docstring with an automatically generated list
 # of colors.
 const possible_formatting_symbols = [:normal, :bold]
-available_text_colors = collect(keys(text_colors))
+available_text_colors = collect(filter(x -> !isa(x, Integer), keys(text_colors)))
 available_text_colors = cat(1,
     sort(intersect(available_text_colors, possible_formatting_symbols), rev=true),
     sort(setdiff(  available_text_colors, possible_formatting_symbols)))
@@ -30,7 +34,7 @@ const available_text_colors_docstring =
 
 """Dictionary of color codes for the terminal.
 
-Available colors are: $available_text_colors_docstring.
+Available colors are: $available_text_colors_docstring as well as the integers 0 to 256 inclusive.
 """
 text_colors
 
@@ -47,8 +51,10 @@ end
 color_normal = text_colors[:normal]
 
 function repl_color(key, default)
-    c = Symbol(get(ENV, key, ""))
-    haskey(text_colors, c) ? c : default
+    env_str = get(ENV, key, "")
+    c = tryparse(Int, env_str)
+    c_conv = isnull(c) ? Symbol(env_str) : get(c)
+    haskey(text_colors, c_conv) ? c_conv : default
 end
 
 warn_color()   = repl_color("JULIA_WARN_COLOR", default_color_warn)

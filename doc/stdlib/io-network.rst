@@ -502,13 +502,13 @@ Text I/O
 
    Print (using :func:`print`\ ) ``xs`` followed by a newline. If ``io`` is not supplied, prints to :obj:`STDOUT`\ .
 
-.. function:: print_with_color(color::Symbol, [io], strings...)
+.. function:: print_with_color(color::Union{Symbol, Int}, [io], strings...)
 
    .. Docstring generated from Julia source
 
    Print strings in a color specified as a symbol.
 
-   ``color`` may take any of the values ``:normal``\ , ``:bold``\ , ``:black``\ , ``:blue``\ , ``:cyan``\ , ``:green``\ , ``:magenta``\ , ``:red``\ , ``:white``\ , or  ``:yellow``\ .
+   ``color`` may take any of the values ``:normal``\ , ``:bold``\ , ``:black``\ , ``:blue``\ , ``:cyan``\ , ``:green``\ , ``:magenta``\ , ``:red``\ , ``:white``\ , or  ``:yellow`` or an integer between 0 and 256 inclusive. Note that not all terminals support 256 colors.
 
 .. function:: info(msg...; prefix="INFO: ")
 

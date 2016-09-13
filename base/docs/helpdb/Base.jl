@@ -2967,15 +2967,6 @@ Return `true` if `A` is a subset of or equal to `S`.
 issubset
 
 """
-    print_with_color(color::Symbol, [io], strings...)
-
-Print strings in a color specified as a symbol.
-
-`color` may take any of the values $(Base.available_text_colors_docstring).
-"""
-print_with_color
-
-"""
     stringmime(mime, x)
 
 Returns an `AbstractString` containing the representation of `x` in the requested `mime`
