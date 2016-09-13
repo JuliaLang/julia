@@ -292,7 +292,7 @@ prompt you can add something like the following to your ``juliarc.jl`` file::
     Base.active_repl.prompt_color = Base.text_colors[:cyan]
 
 The available color keys in ``Base.text_colors`` are ``:black``, ``:red``, ``:green``, ``:yellow``,
-``:blue``, ``:magenta``, ``:cyan``, ``:white``, ``:normal``, and ``:bold`` as well as the integers 0 to 256 for terminals with 256 color support. Similarly, you can
+``:blue``, ``:magenta``, ``:cyan``, ``:white``, ``:normal``, and ``:bold`` as well as the integers 0 to 255 for terminals with 256 color support. Similarly, you can
 change the colors for the help and shell prompts and input and answer text by setting the
 appropriate member of ``Base.active_repl`` (respectively, ``help_color``, ``shell_color``,
 ``input_color``, and ``answer_color``). For the latter two, be sure that the ``envcolors`` member

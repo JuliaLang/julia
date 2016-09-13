@@ -316,7 +316,7 @@ end
 Print strings in a color specified as a symbol.
 
 `color` may take any of the values $(Base.available_text_colors_docstring)
-or an integer between 0 and 256 inclusive. Note that not all terminals support 256 colors.
+or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
 """
 print_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...) =
     with_output_color(print, color, io, msg...)

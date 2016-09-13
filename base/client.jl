@@ -16,7 +16,7 @@ const text_colors = AnyDict(
     :bold    => "\033[1m",
 )
 
-for i in 0:256
+for i in 0:255
     text_colors[i] = "\033[1m\033[38;5;$(i)m"
 end
 
@@ -34,7 +34,7 @@ const available_text_colors_docstring =
 
 """Dictionary of color codes for the terminal.
 
-Available colors are: $available_text_colors_docstring as well as the integers 0 to 256 inclusive.
+Available colors are: $available_text_colors_docstring as well as the integers 0 to 255 inclusive.
 """
 text_colors
 
