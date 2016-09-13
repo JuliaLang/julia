@@ -136,6 +136,15 @@ function qmult{Tv<:VTypes}(method::Integer, QR::Factorization{Tv}, X::Dense{Tv})
     d
 end
 
+
+"""
+    qrfact(A) -> SPQR.Factorization
+
+Compute the `QR` factorization of a sparse matrix `A`. A fill-reducing permutation is used.
+The main application of this type is to solve least squares problems with `\\`. The function
+calls the C library SPQR and a few additional functions from the library are wrapped but not
+exported.
+"""
 qrfact(A::SparseMatrixCSC, ::Type{Val{true}}) = factorize(ORDERING_DEFAULT, DEFAULT_TOL, Sparse(A, 0))
 qrfact(A::SparseMatrixCSC) = qrfact(A, Val{true})
 

@@ -1264,6 +1264,8 @@ factorization `F`. `A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`
 or `Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
+See also [`cholfact`](:func:`cholfact`).
+
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
@@ -1304,7 +1306,8 @@ Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used.
 `F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
-but also the methods `diag`, `det`, `logdet` are defined for `F`.
+but also the methods [`diag`](:func:`diag`), [`det`](:func:`det`), and
+[`logdet`](:func:`logdet`) are defined for `F`.
 You can also extract individual factors from `F`, using `F[:L]`.
 However, since pivoting is on by default, the factorization is internally
 represented as `A == P'*L*L'*P` with a permutation matrix `P`;
@@ -1313,7 +1316,7 @@ To include the effects of permutation,
 it's typically preferable to extact "combined" factors like `PtL = F[:PtL]`
 (the equivalent of `P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`).
 
-Setting optional `shift` keyword argument computes the factorization of
+Setting the optional `shift` keyword argument computes the factorization of
 `A+shift*I` instead of `A`. If the `perm` argument is nonempty,
 it should be a permutation of `1:size(A,1)` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
@@ -1359,6 +1362,8 @@ Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F
 `Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
+See also [`ldltfact`](:func:`ldltfact`).
+
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
     doubles or complex doubles. Input matrices not of those element types will
@@ -1399,8 +1404,9 @@ Compute the ``LDL'`` factorization of a sparse matrix `A`.
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used. `F = ldltfact(A)` is most frequently
 used to solve systems of equations `A*x = b` with `F\\b`. The returned
-factorization object `F` also supports the methods `diag`,
-`det`, and `logdet`. You can extract individual factors from `F` using `F[:L]`.
+factorization object `F` also supports the methods [`diag`](:func:`diag`),
+[`det`](:func:`det`), and [`logdet`](:func:`logdet`).
+You can extract individual factors from `F` using `F[:L]`.
 However, since pivoting is on by default, the factorization is internally
 represented as `A == P'*L*D*L'*P` with a permutation matrix `P`;
 using just `L` without accounting for `P` will give incorrect answers.
@@ -1409,7 +1415,7 @@ To include the effects of permutation, it is typically preferable to extact
 `P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`).
 The complete list of supported factors is `:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP`.
 
-Setting optional `shift` keyword argument computes the factorization of
+Setting the optional `shift` keyword argument computes the factorization of
 `A+shift*I` instead of `A`. If the `perm` argument is nonempty,
 it should be a permutation of `1:size(A,1)` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
