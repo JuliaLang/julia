@@ -594,7 +594,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ``bkfact!`` is the same as :func:`bkfact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. ``uplo``
+   ``bkfact!`` is the same as :func:`bkfact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
 
 .. function:: eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 

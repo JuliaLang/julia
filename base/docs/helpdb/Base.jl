@@ -2385,7 +2385,7 @@ using the `<:` infix operator as `type1 <: type2`.
 julia> issubtype(Int8, Int32)
 false
 
-julia> issubtype(Int8, Integer)
+julia> Int8 <: Integer
 true
 ```
 """

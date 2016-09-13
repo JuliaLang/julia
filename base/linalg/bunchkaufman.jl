@@ -20,7 +20,7 @@ BunchKaufman{T}(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetr
     bkfact!(A, uplo::Symbol=:U, symmetric::Bool=issymmetric(A), rook::Bool=false) -> BunchKaufman
 
 `bkfact!` is the same as [`bkfact`](:func:`bkfact`), but saves space by overwriting the
-input `A`, instead of creating a copy. `uplo`
+input `A`, instead of creating a copy.
 """
 function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol = :U,
     symmetric::Bool = issymmetric(A), rook::Bool = false)

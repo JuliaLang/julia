@@ -479,7 +479,7 @@ Types
        julia> issubtype(Int8, Int32)
        false
 
-       julia> issubtype(Int8, Integer)
+       julia> Int8 <: Integer
        true
 
 .. function:: <:(T1, T2)
