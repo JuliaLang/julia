@@ -16,7 +16,7 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "worlds",
-        "keywordargs", "numbers",
+        "keywordargs", "numbers", "subtype",
         "printf", "char", "strings", "triplequote", "unicode",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
