@@ -1313,7 +1313,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
         n += jl_printf(out, "%s", jl_symbol_name(dv->name->name));
         if (dv->parameters && (jl_value_t*)dv != dv->name->wrapper &&
-            !jl_types_equal((jl_value_t*)dv, (jl_value_t*)jl_tuple_type)) {
+            (jl_has_free_typevars(v) ||
+             !jl_types_equal((jl_value_t*)dv, (jl_value_t*)jl_tuple_type))) {
             size_t j, tlen = jl_nparams(dv);
             if (tlen > 0) {
                 n += jl_printf(out, "{");
@@ -1391,17 +1392,34 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "}");
     }
     else if (vt == jl_unionall_type) {
-        n += jl_static_show_x(out, ((jl_unionall_t*)v)->body, depth);
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        n += jl_static_show_x(out, ua->body, depth);
         n += jl_printf(out, " where ");
-        n += jl_static_show_x(out, (jl_value_t*)((jl_unionall_t*)v)->var, depth);
+        n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev);
     }
     else if (vt == jl_tvar_type) {
-        if (((jl_tvar_t*)v)->lb != jl_bottom_type) {
-            n += jl_static_show(out, ((jl_tvar_t*)v)->lb);
+        jl_tvar_t *var = (jl_tvar_t*)v;
+        struct recur_list *p = depth;
+        int showbounds = 1;
+        while (showbounds && p) {
+            if (jl_is_unionall(p->v) && ((jl_unionall_t*)p->v)->var == var)
+                showbounds = 0;
+            p = p->prev;
+        }
+        jl_value_t *lb = var->lb, *ub = var->ub;
+        if (showbounds && lb != jl_bottom_type) {
+            if (jl_is_unionall(lb)) n += jl_printf(out, "(");
+            n += jl_static_show_x(out, lb, depth);
+            if (jl_is_unionall(lb)) n += jl_printf(out, ")");
             n += jl_printf(out, "<:");
         }
-        n += jl_printf(out, "%s<:", jl_symbol_name(((jl_tvar_t*)v)->name));
-        n += jl_static_show(out, ((jl_tvar_t*)v)->ub);
+        n += jl_printf(out, "%s", jl_symbol_name(var->name));
+        if (showbounds && ub != (jl_value_t*)jl_any_type) {
+            n += jl_printf(out, "<:");
+            if (jl_is_unionall(ub)) n += jl_printf(out, "(");
+            n += jl_static_show_x(out, ub, depth);
+            if (jl_is_unionall(ub)) n += jl_printf(out, ")");
+        }
     }
     else if (vt == jl_module_type) {
         jl_module_t *m = (jl_module_t*)v;
@@ -1604,6 +1622,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
         n += jl_static_show(s, ftype);
         n += jl_printf(s, ")");
     }
+    // TODO: better way to show method parameters
     type = jl_unwrap_unionall(type);
     size_t tl = jl_nparams(type);
     n += jl_printf(s, "(");
