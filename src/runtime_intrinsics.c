@@ -324,9 +324,9 @@ jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name,
 {
     jl_value_t *aty = jl_typeof(a);
     if (!(jl_is_bitstype(aty) || jl_is_vec_type(aty)))
-        jl_errorf("%s: value is not a bitstype", name);
+        jl_errorf("%s: value is not a bitstype or a vector type", name);
     if (!(jl_is_bitstype(ty) || jl_is_vec_type(ty)))
-        jl_errorf("%s: type is not a bitstype", name);
+        jl_errorf("%s: type is not a bitstype or a vector type", name);
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(aty);
     unsigned isize2 = next_power_of_two(isize);
@@ -344,10 +344,16 @@ jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name,
         memset((char*)pa2 + isize, getsign(pa, isize), osize2 - isize);
         pa = pa2;
     }
-    jl_value_t *newv = lambda1(ty, pa, osize, osize2, list);
-    if (ty == (jl_value_t*)jl_bool_type)
-        return *(uint8_t*)jl_data_ptr(newv) & 1 ? jl_true : jl_false;
-    return newv;
+    if (jl_is_bitstype(aty) && jl_is_bitstype(ty)) {
+        jl_value_t *newv = lambda1(ty, pa, osize, osize2, list);
+        if (ty == (jl_value_t*)jl_bool_type)
+            return *(uint8_t*)jl_data_ptr(newv) & 1 ? jl_true : jl_false;
+        return newv;
+    } else if (jl_is_vec_type(aty) && jl_is_vec_type(ty)) {
+        jl_errorf("%s: intrinsic is not implemented for vector types", name);
+    } else {
+        jl_errorf("%s: intrinsic is not implemented for mixed vector types and bitstype", name);
+    }
 }
 
 static inline jl_value_t *jl_intrinsiclambda_ty1(jl_value_t *ty, void *pa, unsigned osize, unsigned osize2, const void *voidlist)
@@ -393,20 +399,26 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *aty = jl_typeof(a);
     if (!(jl_is_bitstype(aty) || jl_is_vec_type(aty)))
-        jl_errorf("%s: value is not a bitstype", name);
-    if (!(jl_is_bitstype(ty) || jl_is_vec_type(aty)))
-        jl_errorf("%s: type is not a bitstype", name);
+        jl_errorf("%s: value is not a bitstype or vector type", name);
+    if (!(jl_is_bitstype(ty) || jl_is_vec_type(ty)))
+        jl_errorf("%s: type is not a bitstype or vector type", name);
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
-    if (check_op && check_op(isize, osize, pa))
-        jl_throw(jl_inexact_exception);
-    jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
-    op(aty == (jl_value_t*)jl_bool_type ? 1 : isize * host_char_bit, pa,
-            osize * host_char_bit, jl_data_ptr(newv));
-    if (ty == (jl_value_t*)jl_bool_type)
-        return *(uint8_t*)jl_data_ptr(newv) & 1 ? jl_true : jl_false;
-    return newv;
+    if (jl_is_bitstype(aty) && jl_is_bitstype(ty)) {
+        if (check_op && check_op(isize, osize, pa))
+            jl_throw(jl_inexact_exception);
+        jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
+        op(aty == (jl_value_t*)jl_bool_type ? 1 : isize * host_char_bit, pa,
+                osize * host_char_bit, jl_data_ptr(newv));
+        if (ty == (jl_value_t*)jl_bool_type)
+            return *(uint8_t*)jl_data_ptr(newv) & 1 ? jl_true : jl_false;
+        return newv;
+    } else if (jl_is_vec_type(aty) && jl_is_vec_type(ty)) {
+        jl_errorf("%s: intrinsic is not implemented for vector types", name);
+    } else {
+        jl_errorf("%s: intrinsic is not implemented for mixed vector types and bitstype", name);
+    }
 }
 
 // floating point
@@ -433,25 +445,31 @@ static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const c
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *aty = jl_typeof(a);
     if (!(jl_is_bitstype(aty) || jl_is_vec_type(aty)))
-        jl_errorf("%s: value is not a bitstype", name);
+        jl_errorf("%s: value is not a bitstype or a vector type", name);
     if (!(jl_is_bitstype(ty) || jl_is_vec_type(ty)))
-        jl_errorf("%s: type is not a bitstype", name);
+        jl_errorf("%s: type is not a bitstype or a vector type", name);
     unsigned sz2 = jl_datatype_size(ty);
     jl_value_t *newv = jl_gc_alloc(ptls, sz2, ty);
     void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);
     unsigned sz = jl_datatype_size(aty);
-    switch (sz) {
-    /* choose the right size c-type operation based on the input */
-    case 4:
-        floatop(sz2 * host_char_bit, pa, pr);
-        break;
-    case 8:
-        doubleop(sz2 * host_char_bit, pa, pr);
-        break;
-    default:
-        jl_errorf("%s: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64", name);
+    if (jl_is_bitstype(aty) && jl_is_bitstype(ty)) {
+        switch (sz) {
+        /* choose the right size c-type operation based on the input */
+        case 4:
+            floatop(sz2 * host_char_bit, pa, pr);
+            break;
+        case 8:
+            doubleop(sz2 * host_char_bit, pa, pr);
+            break;
+        default:
+            jl_errorf("%s: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64", name);
+        }
+        return newv;
+    } else if (jl_is_vec_type(aty) && jl_is_vec_type(ty)) {
+        jl_errorf("%s: intrinsic is not implemented for vector types", name);
+    } else {
+        jl_errorf("%s: intrinsic is not implemented for mixed vector types and bitstype", name);
     }
-    return newv;
 }
 
 // binary operator generator //
@@ -539,31 +557,37 @@ jl_value_t *jl_iintrinsic_2(jl_value_t *a, jl_value_t *b, const char *name,
     if (tyb != ty) {
         if (!cvtb)
             jl_errorf("%s: types of a and b must match", name);
-        if (!jl_is_bitstype(tyb))
-            jl_errorf("%s: b is not a bitstypes", name);
+        if (!(jl_is_bitstype(tyb) || jl_is_vec_type(tyb)))
+            jl_errorf("%s: b is not a bitstypes or a vector type", name);
     }
-    if (!jl_is_bitstype(ty))
-        jl_errorf("%s: a is not a bitstypes", name);
+    if (!(jl_is_bitstype(ty) || jl_is_vec_type(ty)))
+        jl_errorf("%s: a is not a bitstypes or a vector type", name);
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b);
     unsigned sz = jl_datatype_size(ty);
     unsigned sz2 = next_power_of_two(sz);
     unsigned szb = jl_datatype_size(tyb);
-    if (sz2 > sz) {
-        /* round type up to the appropriate c-type and set/clear the unused bits */
-        void *pa2 = alloca(sz2);
-        memcpy(pa2, pa, sz);
-        memset((char*)pa2 + sz, getsign(pa, sz), sz2 - sz);
-        pa = pa2;
+    if (jl_is_bitstype(tyb) && jl_is_bitstype(ty)) {
+        if (sz2 > sz) {
+            /* round type up to the appropriate c-type and set/clear the unused bits */
+            void *pa2 = alloca(sz2);
+            memcpy(pa2, pa, sz);
+            memset((char*)pa2 + sz, getsign(pa, sz), sz2 - sz);
+            pa = pa2;
+        }
+        if (sz2 > szb) {
+            /* round type up to the appropriate c-type and set/clear/truncate the unused bits */
+            void *pb2 = alloca(sz2);
+            memcpy(pb2, pb, szb);
+            memset((char*)pb2 + szb, getsign(pb, sz), sz2 - szb);
+            pb = pb2;
+        }
+        jl_value_t *newv = lambda2(ty, pa, pb, sz, sz2, list);
+        return newv;
+    } else if (jl_is_vec_type(tyb) && jl_is_vec_type(ty)) {
+        jl_errorf("%s: intrinsic is not implemented for vector types", name);
+    } else {
+        jl_errorf("%s: intrinsic is not implemented for mixed vector types and bitstype", name);
     }
-    if (sz2 > szb) {
-        /* round type up to the appropriate c-type and set/clear/truncate the unused bits */
-        void *pb2 = alloca(sz2);
-        memcpy(pb2, pb, szb);
-        memset((char*)pb2 + szb, getsign(pb, sz), sz2 - szb);
-        pb = pb2;
-    }
-    jl_value_t *newv = lambda2(ty, pa, pb, sz, sz2, list);
-    return newv;
 }
 
 static inline jl_value_t *jl_intrinsiclambda_2(jl_value_t *ty, void *pa, void *pb, unsigned sz, unsigned sz2, const void *voidlist)
@@ -891,7 +915,7 @@ un_fintrinsic_withtype(checked_fptoui, checked_fptoui)
 JL_DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
 {
     jl_value_t *ty = jl_typeof(a);
-    if (!(jl_is_bitstype(ty) || jl_is_vec_type(ty)))
+    if (!jl_is_bitstype(ty))
         jl_error("check_top_bit: value is not a bitstype");
     if (signbitbyte(jl_data_ptr(a), jl_datatype_size(ty)))
         jl_throw(jl_inexact_exception);
