@@ -255,8 +255,8 @@ let a = SparseVector(8, [2, 5, 6], Int32[12, 35, 72])
     @test exact_equal(au, SparseVector(8, [2, 5, 6], UInt32[12, 35, 72]))
 
     # float
-    af = float(a)
-    @test float(af) == af
+    af = float.(a)
+    @test float.(af) == af
     @test isa(af, SparseVector{Float64,Int})
     @test exact_equal(af, SparseVector(8, [2, 5, 6], [12., 35., 72.]))
     @test sparsevec(transpose(transpose(af))) == af

@@ -813,6 +813,7 @@ end
 
 float{T<:AbstractFloat}(z::Complex{T}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
+broadcast{T<:AbstractFloat}(::typeof(float), A::AbstractArray{Complex{T}}) = A
 
 big{T<:AbstractFloat}(z::Complex{T}) = Complex{BigFloat}(z)
 big{T<:Integer}(z::Complex{T}) = Complex{BigInt}(z)

@@ -658,7 +658,7 @@ test_linspace_identity(linspace(1f0, 1f0, 1), linspace(-1f0, -1f0, 1))
 # PR 12200 and related
 for _r in (1:2:100, 1:100, 1f0:2f0:100f0, 1.0:2.0:100.0,
            linspace(1, 100, 10), linspace(1f0, 100f0, 10))
-    float_r = float(_r)
+    float_r = float.(_r)
     big_r = big(_r)
     @test typeof(big_r).name === typeof(_r).name
     if eltype(_r) <: AbstractFloat

@@ -470,12 +470,12 @@ for elty in (Float64, Complex{Float64})
     @test CHOLMOD.Sparse(CHOLMOD.Dense(A1Sparse)) == A1Sparse
 end
 
-Af = float([4 12 -16; 12 37 -43; -16 -43 98])
+Af = float.([4 12 -16; 12 37 -43; -16 -43 98])
 As = sparse(Af)
-Lf = float([2 0 0; 6 1 0; -8 5 3])
-LDf = float([4 0 0; 3 1 0; -4 5 9])  # D is stored along the diagonal
-L_f = float([1 0 0; 3 1 0; -4 5 1])  # L by itself in LDLt of Af
-D_f = float([4 0 0; 0 1 0; 0 0 9])
+Lf = float.([2 0 0; 6 1 0; -8 5 3])
+LDf = float.([4 0 0; 3 1 0; -4 5 9])  # D is stored along the diagonal
+L_f = float.([1 0 0; 3 1 0; -4 5 1])  # L by itself in LDLt of Af
+D_f = float.([4 0 0; 0 1 0; 0 0 9])
 
 # cholfact, no permutation
 Fs = cholfact(As, perm=[1:3;])

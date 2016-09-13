@@ -156,7 +156,7 @@ lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}
     "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
     "sparse floating point LU using UMFPACK or lufact(full(A)) for generic ",
     "dense LU.")))
-lufact(A::SparseMatrixCSC) = lufact(float(A))
+lufact(A::SparseMatrixCSC) = lufact(float.(A))
 
 
 size(F::UmfpackLU) = (F.m, F.n)

@@ -141,9 +141,9 @@ function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T}
     end
     return y[1:n]
 end
-conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = round(Int,conv(float(u), float(v)))
-conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{S}) = conv(float(u), v)
-conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{S}, v::StridedVector{T}) = conv(u, float(v))
+conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = round(Int,conv(float.(u), float.(v)))
+conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{S}) = conv(float.(u), v)
+conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{S}, v::StridedVector{T}) = conv(u, float.(v))
 
 """
     conv2(u,v,A)
@@ -184,8 +184,8 @@ function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
     end
     return C
 end
-conv2{T<:Integer}(A::StridedMatrix{T}, B::StridedMatrix{T}) = round(Int,conv2(float(A), float(B)))
-conv2{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) = round(Int,conv2(float(u), float(v), float(A)))
+conv2{T<:Integer}(A::StridedMatrix{T}, B::StridedMatrix{T}) = round(Int,conv2(float.(A), float.(B)))
+conv2{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) = round(Int,conv2(float.(u), float.(v), float.(A)))
 
 """
     xcorr(u,v)

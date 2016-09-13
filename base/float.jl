@@ -149,6 +149,12 @@ convert(::Type{AbstractFloat}, x::UInt32)  = convert(Float64, x)
 convert(::Type{AbstractFloat}, x::UInt64)  = convert(Float64, x) # LOSSY
 convert(::Type{AbstractFloat}, x::UInt128) = convert(Float64, x) # LOSSY
 
+"""
+    float(x)
+
+Convert a number or string to a `AbstractFloat` data type. For numeric data, the
+smallest suitable `AbstractFloat` type is used. Converts strings to `Float64`.
+"""
 float(x) = convert(AbstractFloat, x)
 
 # for constructing arrays
@@ -532,16 +538,17 @@ significand_mask(::Type{Float32}) = 0x007f_ffff
 
 ## Array operations on floating point numbers ##
 
-float{T<:AbstractFloat}(A::AbstractArray{T}) = A
-
-function float{T}(A::AbstractArray{T})
-    if !isleaftype(T)
-        error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
-    end
-    convert(AbstractArray{typeof(float(zero(T)))}, A)
+# float, broadcast over arrays
+broadcast{T<:AbstractFloat}(::typeof(float), A::AbstractArray{T}) = A
+broadcast(::typeof(float), r::UnitRange) = float(r.start):float(last(r))
+broadcast(::typeof(float), r::StepRange) = float(r.start):float(r.step):float(last(r))
+broadcast(::typeof(float), r::FloatRange) = FloatRange(float(r.start), float(r.step), r.len, float(r.divisor))
+function broadcast(::typeof(float), r::LinSpace)
+    float(r.len) == r.len || throw(ArgumentError(string(r, ": too long for ", float)))
+    LinSpace(float(r.start), float(r.stop), float(r.len), float(r.divisor))
 end
 
-for fn in (:float,:big)
+for fn in (:big,)
     @eval begin
         $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
         $fn(r::UnitRange) = $fn(r.start):$fn(last(r))

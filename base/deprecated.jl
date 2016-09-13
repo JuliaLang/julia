@@ -995,4 +995,16 @@ macro vectorize_2arg(S,f)
 end
 export @vectorize_1arg, @vectorize_2arg
 
+# Deprecate manually-vectorized float methods in favor of compact broadcast syntax
+@deprecate float(r::UnitRange) float.(r)
+@deprecate float(r::StepRange) float.(r)
+@deprecate float(r::FloatRange) float.(r)
+@deprecate float(r::LinSpace) float.(r)
+@deprecate float{T}(A::AbstractArray{T}) float.(A)
+@deprecate float{T<:AbstractFloat}(A::AbstractArray{T}) float.(A)
+@deprecate float{S<:AbstractString}(a::AbstractArray{S}) float.(a)
+@deprecate float(S::SparseMatrixCSC) float.(S)
+@deprecate float(x::AbstractSparseVector) float.(x)
+@deprecate float{Tv<:AbstractFloat}(x::AbstractSparseVector{Tv}) float.(x)
+
 # End deprecations scheduled for 0.6
