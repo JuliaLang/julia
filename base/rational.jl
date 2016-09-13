@@ -108,7 +108,7 @@ julia> typeof(num(a))
 BigInt
 ```
 """
-function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x))
+function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat, tol::Real)
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
@@ -123,7 +123,9 @@ function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x))
     r = x-a
     y = one(x)
 
-    nt, t, tt = tol, zero(tol), tol
+    tolx = oftype(x, tol)
+    nt, t, tt = tolx, zero(tolx), tolx
+    ia = np = nq = zero(T)
 
     # compute the successive convergents of the continued fraction
     #  np // nq = (p*a + pp) // (q*a + qq)
@@ -165,6 +167,7 @@ function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x))
         return p // q
     end
 end
+rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x)) = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 
 num(x::Integer) = x
