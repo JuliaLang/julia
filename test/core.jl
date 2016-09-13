@@ -478,6 +478,14 @@ function capt_before_def()
 end
 @test capt_before_def()() == 2
 
+function i18408()
+    local i
+    x->i
+end
+let f = i18408()
+    @test_throws UndefRefError f(0)
+end
+
 # variable scope, globals
 glob_x = 23
 function glotest()
