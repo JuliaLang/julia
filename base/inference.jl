@@ -100,7 +100,8 @@ type InferenceState
         s[1] = Any[ VarState(Bottom, true) for i = 1:nslots ]
 
         atypes = linfo.specTypes
-        la = toplevel ? 0 : linfo.def.nargs
+        nargs = toplevel ? 0 : linfo.def.nargs
+        la = nargs
         if la > 0
             if linfo.def.isva
                 if atypes === Tuple
@@ -156,7 +157,7 @@ type InferenceState
         inmodule = toplevel ? current_module() : linfo.def.module # toplevel thunks are inferred in the current module
         frame = new(
             sp, nl, inmodule, 0,
-            linfo, src, la, s, Union{}, W, n,
+            linfo, src, nargs, s, Union{}, W, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, ssavalue_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
