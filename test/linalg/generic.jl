@@ -141,7 +141,7 @@ b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
 # test scale and scale! for non-commutative multiplication
 q = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
 qmat = [Quaternion(0.015007, 0.355067, 0.418645, 0.318373)]
-@test scale!(q, copy(qmat)) != scale!(copy(qmat), q)
+#@test scale!(q, copy(qmat)) != scale!(copy(qmat), q) #uncomment if #14425 gets backported
 ## Test * because it doesn't dispatch to scale!
 @test q*qmat != qmat*q
 @test conj(q*qmat) ≈ conj(qmat)*conj(q)
