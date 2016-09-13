@@ -2632,22 +2632,6 @@ the current exception (if called within a `catch` block).
 rethrow
 
 """
-    reprmime(mime, x)
-
-Returns an `AbstractString` or `Vector{UInt8}` containing the representation of `x` in the
-requested `mime` type, as written by `show` (throwing a `MethodError` if no appropriate
-`show` is available). An `AbstractString` is returned for MIME types with textual
-representations (such as `"text/html"` or `"application/postscript"`), whereas binary data
-is returned as `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
-treats a given `mime` type as text.)
-
-As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
-`Vector{UInt8}` (for binary MIME types), the `reprmime` function assumes that `x` is already
-in the requested `mime` format and simply returns `x`.
-"""
-reprmime
-
-"""
     !(x)
 
 Boolean not.
@@ -3088,6 +3072,15 @@ Returns an `AbstractString` containing the representation of `x` in the requeste
 type. This is similar to [`reprmime`](:func:`reprmime`) except that binary data is base64-encoded as an ASCII string.
 """
 stringmime
+
+"""
+    print_with_color(color::Symbol, [io], strings...)
+
+Print strings in a color specified as a symbol.
+
+`color` may take any of the values $(Base.available_text_colors_docstring).
+"""
+print_with_color
 
 """
     zero(x)
