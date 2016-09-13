@@ -380,7 +380,7 @@ end
 # expressions like f.(3) should still call broadcast for f::Function,
 # and in general broadcast should work for scalar arguments, while
 # getfield is certainly not intended for the case of f::Function.
-broadcast(f::Function, i::Integer) = invoke(broadcast, (Function, Number), f, i)
+broadcast(f::Function, i::Integer) = f(i)
 
 #16167
 macro ccallable(def)
