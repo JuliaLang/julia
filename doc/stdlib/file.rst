@@ -412,6 +412,9 @@
 
    Convert a path to an absolute path by adding the current directory if necessary.
 
+   .. note::
+       The function calls ``abspath(p1, p2...)`` and ``abspath(joinpath(p1, p2...))`` are equivalent.
+
 .. function:: normpath(path::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
