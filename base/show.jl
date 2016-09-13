@@ -1357,15 +1357,16 @@ function print_matrix_vdots(io::IO, vdots::AbstractString,
 end
 
 """
-`print_matrix(io, X)` composes an entire matrix, taking into account the screen size.
-If X is too big, it will be nine-sliced with vertical, horizontal, or diagonal
-ellipsis inserted as appropriate.
-Optional parameters are screen size tuple sz such as (24,80),
-string pre prior to the matrix (e.g. opening bracket), which will cause
-a corresponding same-size indent on following rows,
-string post on the end of the last row of the matrix.
-Also options to use different ellipsis characters hdots,
-vdots, ddots. These are repeated every hmod or vmod elements.
+    print_matrix(io::IO, mat, pre, sep, post, hdots, vdots, ddots, hmod, vmod)
+
+Prints a matrix with limited output size. If `io` sets `:limit` to true,
+then only the corners of the matrix are printed, separated with vertical,
+horizontal, and diagonal ellipses as appropriate.
+Optional arguments are string pre (printed before the matrix, e.g. an opening bracket)
+which will cause a corresponding same-size indent on following rows, and
+string post (printed at the end of the last row of the matrix).
+Also options to use different ellipsis characters hdots, vdots, ddots.
+These are repeated every hmod or vmod elements.
 """
 function print_matrix(io::IO, X::AbstractVecOrMat,
                       pre::AbstractString = " ",  # pre-matrix string
