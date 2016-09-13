@@ -405,10 +405,9 @@ function (although it often is):
      3
 
     julia> baz(args...)
-    ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
+    ERROR: MethodError: `baz` has no method matching baz(::Int64, ::Int64, ::Int64)
     Closest candidates are:
       baz(::Any, ::Any)
-    ...
 
 As you can see, if the wrong number of elements are in the spliced
 container, then the function call will fail, just as it would if too
