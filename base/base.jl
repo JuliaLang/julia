@@ -146,9 +146,9 @@ gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Cint,), full)
 gc_enable(on::Bool) = ccall(:jl_gc_enable, Cint, (Cint,), on)!=0
 
 immutable Nullable{T}
-    isnull::Bool
+    hasvalue::Bool
     value::T
 
-    Nullable() = new(true)
-    Nullable(value::T, isnull::Bool=false) = new(isnull, value)
+    Nullable() = new(false)
+    Nullable(value::T, isnull::Bool=false) = new(!isnull, value)
 end

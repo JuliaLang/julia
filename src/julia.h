@@ -1737,12 +1737,12 @@ JL_DLLEXPORT const char *jl_git_commit(void);
 
 // nullable struct representations
 typedef struct {
-    uint8_t isnull;
+    uint8_t hasvalue;
     double value;
 } jl_nullable_float64_t;
 
 typedef struct {
-    uint8_t isnull;
+    uint8_t hasvalue;
     float value;
 } jl_nullable_float32_t;
 
