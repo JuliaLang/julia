@@ -1015,8 +1015,7 @@ eval(Multimedia, :(macro textmime(mime)
         "`Base.Multimedia.mimetypetype(::MIME{mime}) = ",
         "Base.Multimedia.IsText` instead."), :textmime)
     quote
-        Base.Multimedia.mimetypetype(::MIME{$(Meta.quot(Symbol(mime)))}) =
-            Base.Multimedia.IsText()
+        Base.Multimedia.istextmime(::MIME{$(Meta.quot(Symbol(mime)))}) = true
     end
 end))
 
