@@ -57,7 +57,7 @@ end
 """
     bkfact(A, uplo::Symbol=:U, symmetric::Bool=issymmetric(A), rook::Bool=false) -> BunchKaufman
 
-Compute the Bunch-Kaufman [^Bunch1977] factorization of a real symmetric or complex Hermitian
+Compute the Bunch-Kaufman [^Bunch1977] factorization of a symmetric or complex Hermitian
 matrix `A` and return a `BunchKaufman` object.
 `uplo` indicates which triangle of matrix `A` to reference.
 If `symmetric` is `true`, `A` is assumed to be symmetric. If `symmetric` is `false`,

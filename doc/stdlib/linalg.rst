@@ -570,7 +570,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. ``uplo`` indicates which triangle of matrix ``A`` to reference. If ``symmetric`` is ``true``\ , ``A`` is assumed to be symmetric. If ``symmetric`` is ``false``\ , ``A`` is assumed to be complex Hermitian. If ``rook`` is ``true``\ , rook pivoting is used. If ``rook`` is false, rook pivoting is not used. The following functions are available for ``BunchKaufman`` objects: :func:`size`\ , ``\``\ , :func:`inv`\ , :func:`issymmetric`\ , :func:`ishermitian`\ .
+   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. ``uplo`` indicates which triangle of matrix ``A`` to reference. If ``symmetric`` is ``true``\ , ``A`` is assumed to be symmetric. If ``symmetric`` is ``false``\ , ``A`` is assumed to be complex Hermitian. If ``rook`` is ``true``\ , rook pivoting is used. If ``rook`` is false, rook pivoting is not used. The following functions are available for ``BunchKaufman`` objects: :func:`size`\ , ``\``\ , :func:`inv`\ , :func:`issymmetric`\ , :func:`ishermitian`\ .
 
    .. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url <http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_\ .
 
