@@ -163,7 +163,7 @@ function _eigs(A, B;
     sym = issymmetric(A) && issymmetric(B) && !iscmplx
     nevmax=sym ? n-1 : n-2
     if nevmax <= 0
-        throw(ArgumentError("Input matrix A is too small. Use eigfact instead."))
+        throw(ArgumentError("input matrix A is too small. Use eigfact instead."))
     end
     if nev > nevmax
         warn("Adjusting nev from $nev to $nevmax")
