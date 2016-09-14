@@ -211,7 +211,7 @@ convert{Tnew,Told}(::Type{Bidiagonal{Tnew}}, A::Bidiagonal{Told}) = Bidiagonal(c
 # When asked to convert Bidiagonal{Told} to AbstractMatrix{Tnew}, preserve structure by converting to Bidiagonal{Tnew} <: AbstractMatrix{Tnew}
 convert{Tnew,Told}(::Type{AbstractMatrix{Tnew}}, A::Bidiagonal{Told}) = convert(Bidiagonal{Tnew}, A)
 
-big(B::Bidiagonal) = Bidiagonal(big(B.dv), big(B.ev), B.isupper)
+broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.isupper)
 
 similar{T}(B::Bidiagonal, ::Type{T}) = Bidiagonal{T}(similar(B.dv, T), similar(B.ev, T), B.isupper)
 

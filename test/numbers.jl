@@ -2624,8 +2624,8 @@ end
 for (d,B) in ((4//2+1im,Rational{BigInt}),(3.0+1im,BigFloat),(2+1im,BigInt))
     @test typeof(big(d)) == Complex{B}
     @test big(d) == d
-    @test typeof(big([d])) == Vector{Complex{B}}
-    @test big([d]) == [d]
+    @test typeof(big.([d])) == Vector{Complex{B}}
+    @test big.([d]) == [d]
 end
 
 # issue #12536
