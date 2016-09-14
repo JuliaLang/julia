@@ -271,8 +271,73 @@ end
 @inline broadcast_c(f, ::Type{Any}, a...) = f(a...)
 @inline broadcast_c(f, ::Type{Array}, As...) = broadcast_t(f, promote_eltype_op(f, As...), As...)
 
-@inline broadcast(f, As...) = broadcast_c(f, containertype(As...), As...)
+"""
+    broadcast(f, As...)
 
+Broadcasts the arrays, tuples and/or scalars `As` to a container of the
+appropriate type and dimensions. In this context, anything that is not a
+subtype of `AbstractArray` or `Tuple` is considered a scalar. The resulting
+container is stablished by the following rules:
+
+ - If all the arguments are scalars, it returns a scalar.
+ - If the arguments are tuples and zero or more scalars, it returns a tuple.
+ - If there is at least an array in the arguments, it returns an array
+   (and treats tuples as 1-dimensional arrays) expanding singleton dimensions.
+
+A special syntax exists for broadcasting: `f.(args...)` is equivalent to
+`broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
+single broadcast loop.
+
+```jldoctest
+julia> A = [1, 2, 3, 4, 5]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> B = [1 2; 3 4; 5 6; 7 8; 9 10]
+5×2 Array{Int64,2}:
+ 1   2
+ 3   4
+ 5   6
+ 7   8
+ 9  10
+
+julia> broadcast(+, A, B)
+5×2 Array{Int64,2}:
+  2   3
+  5   6
+  8   9
+ 11  12
+ 14  15
+
+julia> parse.(Int, ["1", "2"])
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> abs.((1, -2))
+(1,2)
+
+julia> broadcast(+, 1.0, (0, -2.0))
+(1.0,-1.0)
+
+julia> broadcast(+, 1.0, (0, -2.0), [1])
+2-element Array{Float64,1}:
+ 2.0
+ 0.0
+
+julia> string.(("one","two","three","four"), ": ", 1:4)
+4-element Array{String,1}:
+ "one: 1"
+ "two: 2"
+ "three: 3"
+ "four: 4"
+```
+"""
+@inline broadcast(f, As...) = broadcast_c(f, containertype(As...), As...)
 
 """
     bitbroadcast(f, As...)
