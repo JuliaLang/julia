@@ -33,20 +33,7 @@ mimewritable{mime}(::MIME{mime}, x) =
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
-abstract MIMETypeType
-
-immutable IsText <: MIMETypeType end
-immutable IsBytes <: MIMETypeType end
-
 verbose_show(io, m, x) = show(IOContext(io,limit=false), m, x)
-
-"""
-MIME types are assumed to be binary data except for a set of types known to be
-text data (possibly Unicode). `mimetypetype(m)` returns `Multimedia.IsText` or
-`Multimedia.IsBytes` for text or binary data respectively.
-"""
-Base.@pure mimetypetype{M}(::MIME{M}) =
-    startswith(string(M), "text/") ? IsText() : IsBytes()
 
 """
     reprmime(mime, x)
@@ -65,20 +52,20 @@ As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
 special case does not apply to the `"text/plain"` MIME type. This is useful so
 that raw data can be passed to `display(m::MIME, x)`.
 """
-reprmime(m::MIME, x) = reprmime(mimetypetype(m), m, x)
-reprmime(::IsText, m::MIME, x) = sprint(verbose_show, m, x)
+reprmime(m::MIME, x) = istextmime(m) ? _textreprmime(m, x) : _binreprmime(m, x)
 
 # strings are shown escaped for text/plain
-reprmime(::IsText, ::MIME, x::AbstractString) = x
-reprmime(::IsText, m::MIME"text/plain", x::AbstractString) =
+_textreprmime(m::MIME, x) = sprint(verbose_show, m, x)
+_textreprmime(::MIME, x::AbstractString) = x
+_textreprmime(m::MIME"text/plain", x::AbstractString) =
     sprint(verbose_show, m, x)
 
-function reprmime(::IsBytes, m::MIME, x)
+function _binreprmime(m::MIME, x)
     s = IOBuffer()
     verbose_show(s, m, x)
     takebuf_array(s)
 end
-reprmime(::IsBytes, m::MIME, x::Vector{UInt8}) = x
+_binreprmime(m::MIME, x::Vector{UInt8}) = x
 
 """
     stringmime(mime, x)
@@ -87,17 +74,18 @@ Returns an `AbstractString` containing the representation of `x` in the
 requested `mime` type. This is similar to [`reprmime`](:func:`reprmime`) except
 that binary data is base64-encoded as an ASCII string.
 """
-stringmime(m::MIME, x) = stringmime(mimetypetype(m), m, x)
-stringmime(::IsText, m::MIME, x) = reprmime(m, x)
-stringmime(::IsBytes, m::MIME, x) = base64encode(verbose_show, m, x)
-stringmime(::IsBytes, m::MIME, x::Vector{UInt8}) = base64encode(write, x)
+stringmime(m::MIME, x) = istextmime(m) ? reprmime(m, x) : _binstringmime(m, x)
+
+_binstringmime(m::MIME, x) = base64encode(verbose_show, m, x)
+_binstringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
 
 """
     istextmime(m::MIME)
 
-Determine whether a MIME type is text data.
+Determine whether a MIME type is text data. MIME types are assumed to be binary
+data except for a set of types known to be text data (possibly Unicode).
 """
-istextmime(m::MIME) = isa(mimetypetype(m), IsText)
+istextmime(m::MIME) = startswith(string(m), "text/")
 
 # it is convenient to accept strings instead of ::MIME
 istextmime(m::AbstractString) = istextmime(MIME(m))
@@ -105,12 +93,13 @@ reprmime(m::AbstractString, x) = reprmime(MIME(m), x)
 stringmime(m::AbstractString, x) = stringmime(MIME(m), x)
 
 for mime in ["application/atom+xml", "application/ecmascript",
-"application/javascript", "application/julia", "application/json",
-"application/postscript", "application/rdf+xml", "application/rss+xml",
-"application/x-latex", "application/xhtml+xml", "application/xml",
-"application/xml-dtd", "image/svg+xml", "model/vrml", "model/x3d+vrml",
-"model/x3d+xml"]
-    mimetypetype(::MIME{Symbol(mime)}) = IsText()
+             "application/javascript", "application/julia",
+             "application/json", "application/postscript",
+             "application/rdf+xml", "application/rss+xml",
+             "application/x-latex", "application/xhtml+xml", "application/xml",
+             "application/xml-dtd", "image/svg+xml", "model/vrml",
+             "model/x3d+vrml", "model/x3d+xml"]
+    istextmime(::MIME{Symbol(mime)}) = true
 end
 
 ###########################################################################
