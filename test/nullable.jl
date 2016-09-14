@@ -19,7 +19,7 @@ types = [
 # Nullable{T}() = new(true)
 for T in types
     x = Nullable{T}()
-    @test x.isnull === true
+    @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
     @test eltype(x) === T
@@ -28,13 +28,13 @@ end
 # Nullable{T}(value::T) = new(false, value)
 for T in types
     x = Nullable{T}(zero(T))
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
     x = Nullable{T}(one(T))
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === one(T)
     @test eltype(x) === T
@@ -43,13 +43,13 @@ end
 # Nullable{T}(value::T, isnull::Bool) = new(isnull, value)
 for T in types
     x = Nullable{T}(zero(T),false)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
     x = Nullable{T}(zero(T),true)
-    @test x.isnull === true
+    @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
     @test eltype(x) === T
@@ -64,13 +64,13 @@ end
 for T in types
     v = zero(T)
     x = Nullable(v)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === v
 
     v = one(T)
     x = Nullable(v)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === v
 end
