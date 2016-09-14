@@ -1011,9 +1011,9 @@ export @vectorize_1arg, @vectorize_2arg
 
 # Deprecate @textmime into the Multimedia module, #18441
 eval(Multimedia, :(macro textmime(mime)
-    Base.depwarn(string("`@textmime mime` is deprecated; use ",
-        "`Base.Multimedia.mimetypetype(::MIME{mime}) = ",
-        "Base.Multimedia.IsText` instead."), :textmime)
+    Base.depwarn(string("`@textmime \"mime\"` is deprecated; use ",
+        "`Base.Multimedia.istextmime(::MIME\"mime\") = true` instead"
+        ), :textmime)
     quote
         Base.Multimedia.istextmime(::MIME{$(Meta.quot(Symbol(mime)))}) = true
     end
