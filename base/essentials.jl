@@ -217,3 +217,13 @@ const (:) = Colon()
 # For passing constants through type inference
 immutable Val{T}
 end
+
+# used by interpolating quote and some other things in the front end
+function vector_any(xs::ANY...)
+    n = length(xs)
+    a = Array{Any}(n)
+    @inbounds for i = 1:n
+        Core.arrayset(a,xs[i],i)
+    end
+    a
+end
