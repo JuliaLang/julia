@@ -816,11 +816,25 @@ Syntax
 Nullables
 ---------
 
-.. function:: Nullable(x)
+.. function:: Nullable(x, isnull::Bool=false)
 
    .. Docstring generated from Julia source
 
    Wrap value ``x`` in an object of type ``Nullable``\ , which indicates whether a value is present. ``Nullable(x)`` yields a non-empty wrapper, and ``Nullable{T}()`` yields an empty instance of a wrapper that might contain a value of type ``T``\ .
+
+   .. doctest::
+
+       julia> Nullable()
+       Nullable{Union{}}()
+
+       julia> Nullable(2)
+       Nullable{Int64}(2)
+
+       julia> Nullable(0, true)
+       Nullable{Int64}()
+
+       julia> Nullable(0, false)
+       Nullable{Int64}(0)
 
 .. function:: get(x::Nullable[, y])
 
@@ -828,11 +842,25 @@ Nullables
 
    Attempt to access the value of ``x``\ . Returns the value if it is present; otherwise, returns ``y`` if provided, or throws a ``NullException`` if not.
 
-.. function:: isnull(x)
+.. function:: isnull(x::Nullable) -> Bool
 
    .. Docstring generated from Julia source
 
-   Is the ``Nullable`` object ``x`` null, i.e. missing a value?
+   Is the :obj:`Nullable` object ``x`` null, i.e. missing a value?
+
+   .. doctest::
+
+       julia> x = Nullable(1, false)
+       Nullable{Int64}(1)
+
+       julia> isnull(x)
+       false
+
+       julia> x = Nullable(1, true)
+       Nullable{Int64}()
+
+       julia> isnull(x)
+       true
 
 System
 ------
@@ -1125,7 +1153,7 @@ Errors
 
    .. Docstring generated from Julia source
 
-   Raise an ``ErrorException`` with the given message.
+   Raise an :obj:`ErrorException` with the given message.
 
 .. function:: throw(e)
 
@@ -1161,7 +1189,7 @@ Errors
 
    .. Docstring generated from Julia source
 
-   Throw an ``AssertionError`` if ``cond`` is ``false``\ . Preferred syntax for writing assertions. Message ``text`` is optionally displayed upon assertion failure.
+   Throw an :obj:`AssertionError` if ``cond`` is ``false``\ . Preferred syntax for writing assertions. Message ``text`` is optionally displayed upon assertion failure.
 
 .. function:: ArgumentError(msg)
 

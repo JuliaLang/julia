@@ -1476,13 +1476,13 @@ Indexing, Assignment, and Concatenation
        julia> checkindex(Bool,1:20,21)
        false
 
-.. function:: randsubseq(A, p) -> Vector
+.. function:: randsubseq(r::AbstractRNG=GLOBAL_RNG, A::AbstractArray, p::Real)
 
    .. Docstring generated from Julia source
 
    Return a vector consisting of a random subsequence of the given array ``A``\ , where each element of ``A`` is included (in order) with independent probability ``p``\ . (Complexity is linear in ``p*length(A)``\ , so this function is efficient even if ``p`` is small and ``A`` is large.) Technically, this process is known as "Bernoulli sampling" of ``A``\ .
 
-.. function:: randsubseq!(S, A, p)
+.. function:: randsubseq!(r::AbstractRNG=GLOBAL_RNG, S::AbstractArray, A::AbstractArray, p::Real)
 
    .. Docstring generated from Julia source
 
@@ -1845,7 +1845,7 @@ Array functions
 Combinatorics
 -------------
 
-.. function:: randperm([rng=GLOBAL_RNG,] n::Integer)
+.. function:: randperm(rng::AbstractRNG=GLOBAL_RNG, n::Integer)
 
    .. Docstring generated from Julia source
 
@@ -1912,19 +1912,19 @@ Combinatorics
 
    Like ``permute!``\ , but the inverse of the given permutation is applied.
 
-.. function:: randcycle([rng=GLOBAL_RNG,] n::Integer)
+.. function:: randcycle(rng::AbstractRNG=GLOBAL_RNG, n::Integer)
 
    .. Docstring generated from Julia source
 
    Construct a random cyclic permutation of length ``n``\ . The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
-.. function:: shuffle([rng=GLOBAL_RNG,] v)
+.. function:: shuffle(rng::AbstractRNG=GLOBAL_RNG, v::AbstractVector)
 
    .. Docstring generated from Julia source
 
    Return a randomly permuted copy of ``v``\ . The optional ``rng`` argument specifies a random number generator (see :ref:`Random Numbers <random-numbers>`\ ). To permute ``v`` in-place, see :func:`shuffle!`\ .  To obtain randomly permuted indices, see :func:`randperm`\ .
 
-.. function:: shuffle!([rng=GLOBAL_RNG,] v)
+.. function:: shuffle!(rng::AbstractRNG=GLOBAL_RNG, v::AbstractVector)
 
    .. Docstring generated from Julia source
 

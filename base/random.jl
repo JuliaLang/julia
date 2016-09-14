@@ -1192,7 +1192,7 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 """
-    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randn(rng::AbstractRNG=GLOBAL_RNG, T=Float64, [dims...])
 
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
@@ -1226,7 +1226,7 @@ function randn_unlikely(rng, idx, rabs, x)
 end
 
 """
-    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randexp(rng::AbstractRNG=GLOBAL_RNG, T=Float64, [dims...])
 
 Generate a random number of type `T` according to the exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
@@ -1254,7 +1254,7 @@ function randexp_unlikely(rng, idx, x)
 end
 
 """
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randn!(rng::AbstractRNG=GLOBAL_RNG, A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](:func:`rand`) function.
@@ -1262,7 +1262,7 @@ Also see the [`rand`](:func:`rand`) function.
 function randn! end
 
 """
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randexp!(rng::AbstractRNG=GLOBAL_RNG, A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution (with scale 1).
 """
@@ -1309,7 +1309,7 @@ immutable UUID
 end
 
 """
-    uuid1([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
+    uuid1(rng::AbstractRNG=GLOBAL_RNG) -> UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
@@ -1339,7 +1339,7 @@ function uuid1(rng::AbstractRNG=GLOBAL_RNG)
 end
 
 """
-    uuid4([rng::AbstractRNG=GLOBAL_RNG]) -> UUID
+    uuid4(rng::AbstractRNG=GLOBAL_RNG) -> UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
@@ -1407,6 +1407,13 @@ end
 # each element of A is included in S with independent probability p.
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
+
+"""
+    randsubseq!(r::AbstractRNG=GLOBAL_RNG, S::AbstractArray, A::AbstractArray, p::Real)
+
+Like [`randsubseq`](:func:`randsubseq`), but the results are stored in `S`
+(which is resized as needed).
+"""
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
@@ -1446,7 +1453,7 @@ randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RN
 randsubseq{T}(r::AbstractRNG, A::AbstractArray{T}, p::Real) = randsubseq!(r, T[], A, p)
 
 """
-    randsubseq(A, p) -> Vector
+    randsubseq(r::AbstractRNG=GLOBAL_RNG, A::AbstractArray, p::Real)
 
 Return a vector consisting of a random subsequence of the given array `A`, where each
 element of `A` is included (in order) with independent probability `p`. (Complexity is
@@ -1466,7 +1473,7 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 end
 
 """
-    shuffle!([rng=GLOBAL_RNG,] v)
+    shuffle!(rng::AbstractRNG=GLOBAL_RNG, v::AbstractVector)
 
 In-place version of [`shuffle`](:func:`shuffle`): randomly permute the array `v` in-place,
 optionally supplying the random-number generator `rng`.
@@ -1486,7 +1493,7 @@ end
 shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
 
 """
-    shuffle([rng=GLOBAL_RNG,] v)
+    shuffle(rng::AbstractRNG=GLOBAL_RNG, v::AbstractVector)
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
@@ -1497,7 +1504,7 @@ shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
 
 """
-    randperm([rng=GLOBAL_RNG,] n::Integer)
+    randperm(rng::AbstractRNG=GLOBAL_RNG, n::Integer)
 
 Construct a random permutation of length `n`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
@@ -1525,7 +1532,7 @@ end
 randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 """
-    randcycle([rng=GLOBAL_RNG,] n::Integer)
+    randcycle(rng::AbstractRNG=GLOBAL_RNG, n::Integer)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).

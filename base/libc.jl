@@ -203,6 +203,12 @@ end
 Converts a `TmStruct` struct to a number of seconds since the epoch.
 """
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
+
+"""
+    time()
+
+Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+"""
 time() = ccall(:jl_clock_now, Float64, ())
 
 ## process-related functions ##

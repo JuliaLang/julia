@@ -268,6 +268,13 @@ function takebuf_array(io::AbstractIOBuffer)
     end
     return data
 end
+
+"""
+    takebuf_array(b::IOBuffer)
+
+Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
+`IOBuffer` is reset to its initial state.
+"""
 function takebuf_array(io::IOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable

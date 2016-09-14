@@ -807,6 +807,34 @@ pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr
 # If the subtype hasn't defined the required method, it falls back to the
 # _getindex function again where an error is thrown to prevent stack overflows.
 
+"""
+    getindex(A, inds...)
+
+Returns a subset of array `A` as specified by `inds`, where each `ind` may be an
+`Int`, a `Range`, or a `Vector`. See the manual section on
+[array indexing](:ref:`array indexing <man-array-indexing>`) for details.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> getindex(A, 1)
+1
+
+julia> getindex(A, [2, 1])
+2-element Array{Int64,1}:
+ 3
+ 1
+
+julia> getindex(A, 2:4)
+3-element Array{Int64,1}:
+ 3
+ 2
+ 4
+```
+"""
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
     _getindex(linearindexing(A), A, I...)
