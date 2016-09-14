@@ -445,7 +445,7 @@ A few other points to be aware of:
    (this will be fixed in an upcoming release).
 
 5. It is usually best to avoid capturing references to instances of internal metadata objects such as
-   Method, LambdaInfo, MethodTable, TypeMapLevel, TypeMapEntry
+   Method, MethodInstance, MethodTable, TypeMapLevel, TypeMapEntry
    and fields of those objects, as this can confuse the serializer
    and may not lead to the outcome you desire.
    It is not necessarily an error to do this,

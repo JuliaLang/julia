@@ -65,7 +65,9 @@ GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
 void* jl_get_global(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
 void jl_add_to_shadow(Module *m);
-void jl_finalize_function(Function *F, Module *collector = NULL);
+void jl_init_function(Function *f);
+bool jl_can_finalize_function(Function *F);
+void jl_finalize_function(Function *F);
 void jl_finalize_module(Module *m, bool shadow);
 
 // Connect Modules via prototypes, each owned by module `M`

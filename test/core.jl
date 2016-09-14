@@ -4067,10 +4067,10 @@ function count_expr_push(ex::Expr, head::Symbol, counter)
     return false
 end
 
-function metadata_matches(ast::LambdaInfo)
+function metadata_matches(ast::CodeInfo)
     inbounds_cnt = Ref(0)
     boundscheck_cnt = Ref(0)
-    for ex in Base.uncompressed_ast(ast)
+    for ex in ast.code::Array{Any,1}
         if isa(ex, Expr)
             ex = ex::Expr
             count_expr_push(ex, :inbounds, inbounds_cnt)
@@ -4082,7 +4082,7 @@ function metadata_matches(ast::LambdaInfo)
 end
 
 function test_metadata_matches(f::ANY, tt::ANY)
-    metadata_matches(code_typed(f, tt)[1])
+    metadata_matches(code_typed(f, tt)[1][1])
 end
 
 function f1()
@@ -4558,3 +4558,15 @@ function f18173()
     successflag = false
 end
 @test f18173() == false
+
+let _true = Ref(true), f, g, h
+    @noinline f() = ccall((:time, "error_library_doesnt_exist\0"), Void, ()) # some expression that throws an error in codegen
+    @noinline g() = _true[] ? 0 : h()
+    @noinline h() = (g(); f())
+    @test_throws ErrorException @code_native h() # due to a failure to compile f()
+    @test g() == 0
+end
+
+fVararg(x) = Vararg{x}
+gVararg(a::fVararg(Int)) = length(a)
+@test gVararg(1,2,3,4,5) == 5

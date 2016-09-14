@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT jl_value_t *jl_invoke(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_invoke(jl_method_instance_t *meth, jl_value_t **args, uint32_t nargs)
 {
     return jl_call_method_internal(meth, args, nargs);
 }
@@ -49,20 +49,20 @@ JL_DLLEXPORT void jl_untrace_method(jl_method_t *m)
     m->traced = 0;
 }
 
-JL_DLLEXPORT void jl_trace_linfo(jl_lambda_info_t *linfo)
+JL_DLLEXPORT void jl_trace_linfo(jl_method_instance_t *linfo)
 {
-    assert(jl_is_lambda_info(linfo));
+    assert(jl_is_method_instance(linfo));
     linfo->compile_traced = 1;
 }
 
-JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *linfo)
+JL_DLLEXPORT void jl_untrace_linfo(jl_method_instance_t *linfo)
 {
-    assert(jl_is_lambda_info(linfo));
+    assert(jl_is_method_instance(linfo));
     linfo->compile_traced = 0;
 }
 
 static tracer_cb jl_method_tracer = NULL;
-JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_lambda_info_t *tracee))
+JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_method_instance_t *tracee))
 {
     jl_method_tracer = (tracer_cb)callback;
 }
@@ -74,7 +74,7 @@ JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *trace
 }
 
 tracer_cb jl_linfo_tracer = NULL;
-JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tracee))
+JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_method_instance_t *tracee))
 {
     jl_linfo_tracer = (tracer_cb)callback;
 }
@@ -103,7 +103,7 @@ const struct jl_typemap_info method_defs = {
     0, &jl_method_type
 };
 const struct jl_typemap_info lambda_cache = {
-    0, &jl_lambda_info_type
+    0, &jl_method_instance_type
 };
 const struct jl_typemap_info tfunc_cache = {
     1, &jl_any_type
@@ -116,16 +116,16 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 
 /// ----- Insertion logic for special entries ----- ///
 
-// get or create the LambdaInfo for a specialization
-JL_DLLEXPORT jl_lambda_info_t *jl_specializations_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams, int allow_exec)
+// get or create the MethodInstance for a specialization
+JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams)
 {
     JL_LOCK(&m->writelock);
-    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->specializations, type, NULL, 1, /*subtype*/0, /*offs*/0);
-    if (sf && jl_is_lambda_info(sf->func.value) && ((jl_lambda_info_t*)sf->func.value)->code != jl_nothing) {
+    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->specializations, type, NULL, 2, /*subtype*/0, /*offs*/0);
+    if (sf && jl_is_method_instance(sf->func.value)) {
         JL_UNLOCK(&m->writelock);
-        return (jl_lambda_info_t*)sf->func.value;
+        return (jl_method_instance_t*)sf->func.value;
     }
-    jl_lambda_info_t *li = jl_get_specialized(m, type, sparams, allow_exec);
+    jl_method_instance_t *li = jl_get_specialized(m, type, sparams);
     JL_GC_PUSH1(&li);
     // TODO: fuse lookup and insert steps
     jl_typemap_insert(&m->specializations, (jl_value_t*)m, type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &tfunc_cache, NULL);
@@ -150,7 +150,7 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t 
     return sf->func.value;
 }
 
-// ----- LambdaInfo specialization instantiation ----- //
+// ----- MethodInstance specialization instantiation ----- //
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void);
 static jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw);
@@ -162,44 +162,43 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
         jl_set_const(jl_core_module, sname, f);
         dt = (jl_datatype_t*)jl_typeof(f);
     }
-    jl_lambda_info_t *li = jl_new_lambda_info_uninit();
+    jl_method_instance_t *li = jl_new_method_instance_uninit();
     li->fptr = fptr;
-    li->code = jl_nothing;
-    li->slottypes = jl_nothing;
+    li->jlcall_api = 1;
     li->specTypes = jl_anytuple_type;
-    li->ssavaluetypes = jl_box_long(0);
-    jl_gc_wb(li, li->ssavaluetypes);
 
     li->def = jl_new_method_uninit();
     li->def->name = sname;
     li->def->module = jl_core_module;
-    li->def->lambda_template = li;
+    li->def->isva = 1;
+    li->def->nargs = 2;
     li->def->sig = jl_anytuple_type;
     li->def->tvars = jl_emptysvec;
+    li->def->sparam_syms = jl_emptysvec;
 
     jl_methtable_t *mt = dt->name->mt;
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &lambda_cache, NULL);
 }
 
-/*
-  run type inference on lambda "li" for given argument types.
-  if "li" has been inferred before but the IR was deleted, returns a
-  new LambdaInfo with the IR reconstituted.
-*/
-jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force)
+// run type inference on lambda "li" for given argument types.
+// returns the inferred source, and may cache the result in li
+// if inference doesn't occur (or can't finish), returns NULL instead
+jl_code_info_t *jl_type_infer(jl_method_instance_t *li, int force)
 {
     JL_TIMING(INFERENCE);
+    if (jl_typeinf_func == NULL)
+        return NULL;
 #ifdef ENABLE_INFERENCE
-    JL_LOCK(&codegen_lock); // use codegen lock to synchronize type-inference
     jl_module_t *mod = NULL;
     if (li->def != NULL)
         mod = li->def->module;
     static int inInference = 0;
     int lastIn = inInference;
+    jl_code_info_t *src = NULL;
     inInference = 1;
-    if (jl_typeinf_func != NULL && (force ||
+    if (force ||
         (mod != jl_gf_mtable(jl_typeinf_func)->module &&
-        (mod != jl_core_module || !lastIn)))) { // avoid any potential recursion in calling jl_typeinf_func on itself
+         (mod != jl_core_module || !lastIn))) { // avoid any potential recursion in calling jl_typeinf_func on itself
         assert(li->inInference == 0);
         jl_value_t *fargs[2];
         fargs[0] = (jl_value_t*)jl_typeinf_func;
@@ -209,41 +208,44 @@ jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force)
         jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
         jl_printf(JL_STDERR, "\n");
 #endif
-        li = (jl_lambda_info_t*)jl_apply(fargs, 2);
+        src = (jl_code_info_t *)jl_apply(fargs, 2);
+        if (src == (void*)jl_nothing)
+            src = NULL;
         assert(li->def || li->inInference == 0); // if this is toplevel expr, make sure inference finished
     }
     inInference = lastIn;
-    JL_UNLOCK(&codegen_lock); // Might GC (li might be rooted?)
 #endif
-    return li;
+    return src;
 }
 
-JL_DLLEXPORT void jl_set_lambda_rettype(jl_lambda_info_t *li, jl_value_t *rettype)
+JL_DLLEXPORT void jl_set_lambda_rettype(jl_method_instance_t *li, jl_value_t *rettype, jl_value_t *const_api, jl_value_t *inferred)
 {
     // changing rettype changes the llvm signature,
     // so clear all of the llvm state at the same time
     assert(li->inInference);
     assert(!li->inferred || li->functionObjectsDecls.functionObject == NULL); // protect against some double-infer dataflow mistakes
-    assert(li->jlcall_api != 2); // protect against some double-infer dataflow mistakes
-    li->rettype = rettype;
-    jl_gc_wb(li, rettype);
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
-    li->constval = NULL;
+    li->rettype = rettype;
+    jl_gc_wb(li, rettype);
+    li->inferred = inferred;
+    jl_gc_wb(li, inferred);
+    if (const_api == jl_true)
+        li->jlcall_api = 2;
 }
 
-JL_DLLEXPORT void jl_set_lambda_code_null(jl_lambda_info_t *li)
+static int jl_is_uninferred(jl_method_instance_t *li)
 {
-    li->code = jl_nothing;
-    li->ssavaluetypes = jl_box_long(jl_array_len(li->ssavaluetypes));
-    jl_gc_wb(li, li->ssavaluetypes);
-    li->slotflags = NULL;
-    li->slotnames = NULL;
+    if (!li->inferred)
+        return 1;
+    if (jl_is_code_info(li->inferred) && !((jl_code_info_t*)li->inferred)->inferred)
+        return 1;
+    return 0;
 }
 
 static int get_spec_unspec_list(jl_typemap_entry_t *l, void *closure)
 {
-    if (jl_is_lambda_info(l->func.value) && !l->func.linfo->inferred)
+    if (jl_is_method_instance(l->func.value) && jl_is_uninferred(l->func.linfo))
         jl_array_ptr_1d_push((jl_array_t*)closure, l->func.value);
     return 1;
 }
@@ -297,8 +299,8 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
     jl_reset_mt_caches(jl_main_module, unspec);
     size_t i, l;
     for (i = 0, l = jl_array_len(unspec); i < l; i++) {
-        jl_lambda_info_t *li = (jl_lambda_info_t*)jl_array_ptr_ref(unspec, i);
-        if (!li->inferred)
+        jl_method_instance_t *li = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
+        if (jl_is_uninferred(li))
             jl_type_infer(li, 1);
     }
     JL_GC_POP();
@@ -607,7 +609,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
     return 1;
 }
 
-static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
+static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
                                       jl_tupletype_t *type, // the specialized type signature for type lambda
                                       jl_tupletype_t *tt, // the original tupletype of the signature
                                       jl_typemap_entry_t *m,
@@ -620,7 +622,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     jl_value_t *temp = NULL;
     jl_value_t *temp2 = NULL;
     jl_value_t *temp3 = NULL;
-    jl_lambda_info_t *newmeth = NULL;
+    jl_method_instance_t *newmeth = NULL;
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH5(&temp, &temp2, &temp3, &newmeth, &newparams);
 
@@ -758,7 +760,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     }
 
     // here we infer types and specialize the method
-    newmeth = jl_specializations_get_linfo(definition, type, sparams, allow_exec);
+    newmeth = jl_specializations_get_linfo(definition, type, sparams);
 
     if (cache_with_orig) {
         // if there is a need to cache with one of the original signatures,
@@ -804,7 +806,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     return newmeth;
 }
 
-static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, int cache, int inexact, int allow_exec)
+static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, int cache, int inexact, int allow_exec)
 {
     // caller must hold the mt->writelock
     jl_typemap_entry_t *entry = NULL;
@@ -825,9 +827,9 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
         return NULL;
     }
     sig = join_tsig(tt, entry->sig);
-    jl_lambda_info_t *nf;
+    jl_method_instance_t *nf;
     if (!cache) {
-        nf = jl_specializations_get_linfo(m, sig, env, allow_exec);
+        nf = jl_get_specialized(m, sig, env); // TODO: should be jl_specializations_get_linfo
     }
     else {
         nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, entry, env, allow_exec);
@@ -1143,7 +1145,7 @@ jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs)
     return tt;
 }
 
-jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
+jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                            int cache, int inexact, int allow_exec)
 {
     jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->cache, types, NULL, 0, 1, jl_cachearg_offset(mt));
@@ -1157,7 +1159,7 @@ jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *t
     }
     if (jl_is_leaf_type((jl_value_t*)types))
         cache = 1;
-    jl_lambda_info_t *sf = jl_mt_assoc_by_type(mt, types, cache, inexact, allow_exec);
+    jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, types, cache, inexact, allow_exec);
     if (cache) {
         JL_UNLOCK(&mt->writelock);
     }
@@ -1174,7 +1176,7 @@ JL_DLLEXPORT int jl_method_exists(jl_methtable_t *mt, jl_tupletype_t *types)
     return jl_method_lookup_by_type(mt, types, 0, 0, 1) != NULL;
 }
 
-jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache)
+jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache)
 {
     jl_typemap_entry_t *entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt));
     if (entry)
@@ -1187,7 +1189,7 @@ jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t
         return entry->func.linfo;
     }
     jl_tupletype_t *tt = arg_type_tuple(args, nargs);
-    jl_lambda_info_t *sf = NULL;
+    jl_method_instance_t *sf = NULL;
     JL_GC_PUSH2(&tt, &sf);
     sf = jl_mt_assoc_by_type(mt, tt, cache, 0, 1);
     if (cache) {
@@ -1202,70 +1204,31 @@ jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t
     return sf;
 }
 
-static jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
-{
-    // one unspecialized version of a function can be shared among all cached specializations
-    jl_method_t *def = method->def;
-    if (method->unspecialized_ducttape != NULL)
-        return method->unspecialized_ducttape;
-    if (method->sparam_syms != jl_emptysvec) {
-        JL_LOCK(&def->writelock);
-        if (method->unspecialized_ducttape != NULL) {
-            JL_UNLOCK(&def->writelock);
-            return method->unspecialized_ducttape;
-        }
-        if (def->needs_sparam_vals_ducttape == 2) {
-            jl_array_t *code = (jl_array_t*)def->lambda_template->code;
-            JL_GC_PUSH1(&code);
-            if (!jl_typeis(code, jl_array_any_type))
-                code = jl_uncompress_ast(def->lambda_template, code);
-            size_t i, l = jl_array_len(code);
-            def->needs_sparam_vals_ducttape = 0;
-            for (i = 0; i < l; i++) {
-                if (jl_has_intrinsics(method, jl_array_ptr_ref(code, i), def->module)) {
-                    def->needs_sparam_vals_ducttape = 1;
-                    break;
-                }
-            }
-            JL_GC_POP();
-        }
-        if (def->needs_sparam_vals_ducttape) {
-            method->unspecialized_ducttape = jl_get_specialized(def, method->specTypes, method->sparam_vals, 1);
-            jl_gc_wb(method, method->unspecialized_ducttape);
-            method->unspecialized_ducttape->unspecialized_ducttape = method->unspecialized_ducttape;
-        }
-        JL_UNLOCK(&def->writelock);
-        if (method->unspecialized_ducttape != NULL)
-            return method->unspecialized_ducttape;
-    }
-    return def->lambda_template;
-}
-
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous);
 
-jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
+jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t *li)
 {
     if (li->jlcall_api == 2)
-        return li;
+        return li->functionObjectsDecls;
     if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF ||
             jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the template method definition
         jl_method_t *def = li->def;
-        if (def && !def->isstaged) {
-            if (def->lambda_template->jlcall_api == 2) {
+        if (def && !def->isstaged && def->unspecialized) {
+            if (def->unspecialized->jlcall_api == 2) {
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;
+                li->inferred = def->unspecialized->inferred;
                 li->jlcall_api = 2;
-                li->constval = def->lambda_template->constval;
-                jl_gc_wb(li, li->constval);
-                return li;
+                jl_gc_wb(li, li->inferred);
+                return li->functionObjectsDecls;
             }
-            if (def->lambda_template->fptr) {
+            if (def->unspecialized->fptr) {
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;
-                li->fptr = def->lambda_template->fptr;
-                li->jlcall_api = def->lambda_template->jlcall_api;
-                return li;
+                li->jlcall_api = def->unspecialized->jlcall_api;
+                li->fptr = def->unspecialized->fptr;
+                return li->functionObjectsDecls;
             }
         }
         if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
@@ -1274,52 +1237,26 @@ jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
             jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
         }
     }
-    if (li->functionObjectsDecls.functionObject != NULL)
-        return li;
-    if (li->def) {
-        JL_LOCK(&codegen_lock);
-        JL_LOCK(&li->def->writelock);
-        if (li->functionObjectsDecls.functionObject != NULL) {
-            JL_UNLOCK(&li->def->writelock);
-            JL_UNLOCK(&codegen_lock);
-            return li;
-        }
-        if (li->inInference || li->inCompile) {
-            // if inference is running on this function, get a copy
-            // of the function to be compiled without inference and run.
-            assert(li->def != NULL);
-            li = jl_get_unspecialized(li);
-        }
-        else if (li->jlcall_api != 2) {
-            if (li->code == jl_nothing ||
-                (!li->inferred && li->def != NULL && jl_symbol_name(li->def->name)[0] != '@')) {
-                    // don't bother with typeinf on macros or toplevel thunks
-                    jl_type_infer(li, 0);
-            }
-            if (li->functionObjectsDecls.functionObject == NULL && li->jlcall_api != 2) {
-                if (li->inInference || li->inCompile || li->code == jl_nothing) {
-                    // if inference is running on this function, get a copy
-                    // of the function to be compiled without inference and run.
-                    assert(li->def != NULL);
-                    li = jl_get_unspecialized(li);
-                }
-            }
-        }
+    jl_llvm_functions_t decls = li->functionObjectsDecls;
+    if (decls.functionObject != NULL || li->jlcall_api == 2)
+        return decls;
+
+    jl_code_info_t *src = NULL;
+    if (li->def && jl_is_uninferred(li) && !li->inInference &&
+             jl_symbol_name(li->def->name)[0] != '@') {
+        // don't bother with typeinf on macros or toplevel thunks
+        // but try to infer everything else
+        src = jl_type_infer(li, 0);
     }
-    assert(!li->inInference && !li->inCompile &&
-           (li->code != jl_nothing || li->jlcall_api == 2));
-    if (li->functionObjectsDecls.functionObject == NULL) { // check again, because jl_type_infer may have compiled it
-        jl_compile_linfo(li);
-    }
-    if (li->def) {
-        JL_UNLOCK(&li->def->writelock);
-        JL_UNLOCK(&codegen_lock);
-    }
-    return li;
+    // check again, because jl_type_infer may have compiled it
+    decls = li->functionObjectsDecls;
+    if (decls.functionObject != NULL || li->jlcall_api == 2)
+        return decls;
+    return jl_compile_linfo(li, src);
 }
 
 // compile-time method lookup
-jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
+jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types)
 {
     JL_TIMING(METHOD_LOOKUP_COMPILE);
     assert(jl_nparams(types) > 0);
@@ -1343,17 +1280,12 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
     }
 
     jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;
-    jl_lambda_info_t *sf = NULL;
     // most of the time sf is rooted in mt, but if the method is staged it may
     // not be the case
+    // TODO: the above should be false, but better safe than sorry?
+    jl_method_instance_t *sf = jl_method_lookup_by_type(mt, types, 1, 1, 1);
     JL_GC_PUSH1(&sf);
-    JL_TRY {
-        sf = jl_method_lookup_by_type(mt, types, 1, 1, 1);
-    } JL_CATCH {
-        sf = NULL;
-    }
-    if (sf == NULL || sf->code == NULL ||
-            jl_has_call_ambiguities(types, sf->def)) {
+    if (sf != NULL && jl_has_call_ambiguities(types, sf->def)) {
         sf = NULL;
     }
     JL_GC_POP();
@@ -1362,25 +1294,20 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
 
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 {
-    jl_lambda_info_t *li = jl_get_specialization1(types);
+    jl_method_instance_t *li = jl_get_specialization1(types);
     if (li == NULL)
         return 0;
-    if (li->functionObjectsDecls.functionObject == NULL && li->jlcall_api != 2) {
-        assert(!li->inCompile);
-        if (li->inInference)
-            return 0;
-        if (li->code == jl_nothing || !li->inferred)
-            jl_type_infer(li, 0);
-        if (li->inInference || li->code == jl_nothing)
-            return 0;
-        jl_compile_linfo(li);
-    }
+    jl_code_info_t *src = NULL;
+    if (jl_is_uninferred(li))
+        src = jl_type_infer(li, 0);
+    if (li->jlcall_api != 2)
+        jl_compile_linfo(li, src);
     return 1;
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_spec_lambda(jl_tupletype_t *types)
 {
-    jl_lambda_info_t *li = jl_get_specialization1(types);
+    jl_method_instance_t *li = jl_get_specialization1(types);
     return li ? (jl_value_t*)li : jl_nothing;
 }
 
@@ -1581,61 +1508,41 @@ static void _compile_all_deq(jl_array_t *found)
 {
     int found_i, found_l = jl_array_len(found);
     jl_printf(JL_STDERR, "found %d uncompiled methods for compile-all\n", (int)found_l);
-    jl_lambda_info_t *linfo = NULL;
-    JL_GC_PUSH1(&linfo);
+    jl_method_instance_t *linfo = NULL;
+    jl_code_info_t *src = NULL;
+    JL_GC_PUSH2(&linfo, &src);
     for (found_i = 0; found_i < found_l; found_i++) {
         if (found_i % (1 + found_l / 300) == 0 || found_i == found_l - 1) // show 300 progress steps, to show progress without overwhelming log files
             jl_printf(JL_STDERR, " %d / %d\r", found_i + 1, found_l);
         jl_typemap_entry_t *ml = (jl_typemap_entry_t*)jl_array_ptr_ref(found, found_i);
         jl_method_t *m = ml->func.method;
-        jl_lambda_info_t *templ = m->lambda_template;
-        // type infer a copy of the template, to avoid modifying the template code itself
-        if (m->isstaged)
-            linfo = templ;
-        else
-            linfo = jl_specializations_get_linfo(m, ml->sig, jl_emptysvec, 1);
-
-        if (linfo->jlcall_api == 2) {
-            if (linfo != templ) {
-                templ->jlcall_api = 2;
-                templ->constval = linfo->constval;
-            }
-            continue;
+        jl_method_instance_t *linfo = m->unspecialized;
+        if (!linfo) {
+            // XXX: use computed env rather than empty svec
+            linfo = jl_specializations_get_linfo(m, ml->sig, jl_emptysvec);
+            m->unspecialized = linfo;
+            jl_gc_wb(m, linfo);
         }
 
         // infer this function now, if necessary
-        if (!linfo->inferred || linfo->code == jl_nothing)
-            jl_type_infer(linfo, 1);
-
-        if (linfo->jlcall_api == 2) {
-            if (linfo != templ) {
-                templ->jlcall_api = 2;
-                templ->constval = linfo->constval;
-            }
+        if (linfo->jlcall_api == 2)
             continue;
-        }
+        src = jl_type_infer(linfo, 1);
+        if (linfo->jlcall_api == 2)
+            continue;
 
         // keep track of whether all possible signatures have been cached (and thus whether it can skip trying to compile the template function)
         // this is necessary because many intrinsics try to call static_eval and thus are not compilable unspecialized
         int complete = _compile_all_union(ml->sig, ml->tvars);
         if (complete) {
-            if (templ->fptr == NULL)
+            if (linfo->fptr == NULL && linfo->functionObjectsDecls.functionObject == NULL)
                 // indicate that this method doesn't need to be compiled, because it was fully covered above
-                templ->fptr = (jl_fptr_t)(uintptr_t)-1;
+                // TODO: do this some other way
+                linfo->fptr = (jl_fptr_t)(uintptr_t)-1;
         }
         else {
-            jl_compile_linfo(linfo);
-            assert(linfo->functionObjectsDecls.functionObject != NULL || linfo->jlcall_api == 2);
-            if (linfo != templ) {
-                // copy the function pointer back to the lambda_template
-                templ->functionObjectsDecls = linfo->functionObjectsDecls;
-                templ->jlcall_api = linfo->jlcall_api;
-                templ->constval = linfo->constval;
-                if (templ->constval) jl_gc_wb(templ, templ->constval);
-                templ->rettype = linfo->rettype;
-                jl_gc_wb(templ, templ->rettype);
-                templ->fptr = NULL;
-            }
+            jl_compile_linfo(linfo, src);
+            assert(linfo->functionObjectsDecls.functionObject != NULL);
         }
     }
     JL_GC_POP();
@@ -1647,9 +1554,10 @@ static int _compile_all_enq(jl_typemap_entry_t *ml, void *env)
     jl_array_t *found = (jl_array_t*)env;
     // method definition -- compile template field
     jl_method_t *m = ml->func.method;
-    if (m->lambda_template->functionObjectsDecls.functionObject == NULL &&
-        m->lambda_template->jlcall_api != 2 &&
-        m->lambda_template->fptr == NULL) {
+    if (!m->unspecialized ||
+            (m->unspecialized->functionObjectsDecls.functionObject == NULL &&
+             m->unspecialized->jlcall_api != 2 &&
+             m->unspecialized->fptr == NULL)) {
         // found a lambda that still needs to be compiled
         jl_array_ptr_1d_push(found, (jl_value_t*)ml);
     }
@@ -1659,7 +1567,7 @@ static int _compile_all_enq(jl_typemap_entry_t *ml, void *env)
 static void _compile_all_enq_module(jl_module_t *m, jl_array_t *found)
 {
     // scan through all types reachable from 'v' and
-    // record all jl_lambda_info_t objects and signatures in their method tables
+    // record all jl_method_instance_t objects and signatures in their method tables
     size_t i, sz = m->bindings.size;
     for(i=1; i < sz; i+=2) {
         if (m->bindings.table[i] != HT_NOTFOUND) {
@@ -1690,7 +1598,7 @@ static void _compile_all_enq_module(jl_module_t *m, jl_array_t *found)
 static void jl_compile_all_defs(void)
 {
     // this "found" array will contain
-    // TypeMapEntries for Methods and LambdaInfos that need to be compiled
+    // TypeMapEntries for Methods and MethodInstances that need to be compiled
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
     while (1) {
@@ -1706,7 +1614,7 @@ static void jl_compile_all_defs(void)
 
 static int _precompile_enq_tfunc(jl_typemap_entry_t *l, void *closure)
 {
-    if (jl_is_lambda_info(l->func.value) &&
+    if (jl_is_method_instance(l->func.value) &&
             l->func.linfo->functionObjectsDecls.functionObject == NULL &&
             l->func.linfo->jlcall_api != 2)
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
@@ -1908,7 +1816,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
         }
     }
 
-    jl_lambda_info_t *mfunc = NULL;
+    jl_method_instance_t *mfunc = NULL;
     if (entry) {
         mfunc = entry->func.linfo;
     }
@@ -1986,7 +1894,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
     // next look for or create a specialization of this definition.
 
     jl_method_t *method = entry->func.method;
-    jl_lambda_info_t *mfunc = NULL;
+    jl_method_instance_t *mfunc = NULL;
     jl_typemap_entry_t *tm = NULL;
     if (method->invokes.unknown != NULL)
         tm = jl_typemap_assoc_exact(method->invokes, args, nargs, jl_cachearg_offset(mt));

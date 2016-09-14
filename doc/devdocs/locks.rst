@@ -1,4 +1,4 @@
-.. currentmodule:: Base
+.. _devdocs-locks:
 
 ****************************************************
 Proper maintenance and care of multi-threading locks
@@ -48,21 +48,11 @@ The following is a level 3 lock, which can only acquire level 1 or level 2 locks
 
    * Method->writelock
 
-     but note that this is violated by staged functions!
-
 The following is a level 4 lock, which can only recurse to acquire level 1, 2, or 3 locks:
 
    * MethodTable->writelock
 
-     but note that this is violated by staged functions!
-
-The following is a proposed level 5 lock, which can only recurse to acquire locks at lower levels:
-
-   * staged
-
-       this theoretical lock would create a priority inversion from the `method->writelock` (level 3),
-       but only prohibiting running any staging function in parallel
-       (thus allowing temporary release of the MethodTable and Method locks)
+No Julia code may be called while holding a lock above this point.
 
 The following is a level 6 lock, which can only recurse to acquire locks at lower levels:
 
@@ -73,6 +63,8 @@ The following is an almost root lock (level end-1), meaning only the root look m
    * typeinf
 
        this one is perhaps one of the most tricky ones, since type-inference can be invoked from many points
+
+       currently the lock is merged with the codegen lock, since they call each other recursively
 
 The following is the root lock, meaning no other lock shall be held when trying to acquire it:
 
@@ -95,29 +87,6 @@ The following locks are broken:
 
     fix: create it
 
-* codegen
-
-    recursive (through ``static_eval``), but caller might also be holding locks (due to staged functions)
-
-    other issues?
-
-    fix: prohibit codegen while holding any other lock (possibly by checking ``ptls->current_task->locks.len != 0`` & explicitly check the locks that are OK to hold simultaneously)?
-
-* typeinf
-
-    not certain of whether there are issues here or what they are. staging functions, of course, are a source of deadlocks here.
-
-    fix: unknown
-
-* staged
-
-    possible solution to prevent staged functions from causing deadlock.
-
-    this theoretical lock would create a priority inversion such that the Method and MethodTable write locks could be released
-    by ensuring that no staging functions can run in parallel allow this level 5 lock to protect staged function conflicts (a level 3 operation)
-
-    fix: create it
-
 
 Shared Global Data Structures
 -----------------------------
@@ -134,10 +103,54 @@ Type application : typecache lock
 
 Module serializer : toplevel lock
 
-JIT : codegen lock
+JIT & type-inference : codegen lock
+
+MethodInstance updates : codegen lock
+
+    - These fields are generally lazy initialized, using the test-and-test-and-set pattern.
+
+    - These are set at construction and immutable:
+
+      + specTypes
+
+      + sparam_vals
+
+      + def
+
+    - These are set by ``jl_type_infer`` (while holding codegen lock):
+
+      + rettype
+
+      + inferred
+
+      + these can also be reset, see ``jl_set_lambda_rettype`` for that logic as it needs to keep ``functionObjectsDecls`` in sync
+
+    - ``inInference`` flag:
+
+      + optimization to quickly avoid recurring into ``jl_type_infer`` while it is already running
+
+      + actual state (of setting ``inferred``, then ``fptr``) is protected by codegen lock
+
+    - Function pointers (``jlcall_api`` and ``fptr``, ``unspecialized_ducttape``):
+
+      + these transition once, from ``NULL`` to a value, while the codegen lock is held
+
+    - Code-generator cache (the contents of ``functionObjectsDecls``):
+
+      + these can transition multiple times, but only while the codegen lock is held
+
+      + it is valid to use old version of this, or block for new versions of this,
+        so races are benign, as long as the code is careful not to reference other data in the method instance (such as ``rettype``)
+        and assume it is coordinated, unless also holding the codegen lock
+
+    - ``compile_traced`` flag:
+
+      + unknown
+
 
 LLVMContext : codegen lock
 
 Method : Method->writelock
+
     - roots array (serializer and codegen)
     - invoke / specializations / tfunc modifications

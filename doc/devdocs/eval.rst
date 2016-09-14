@@ -150,7 +150,7 @@ Codegen is the process of turning a Julia AST into native machine code.
 
 The JIT environment is initialized by an early call to `jl_init_codegen in codegen.cpp <https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp>`_.
 
-On demand, a Julia method is converted into a native function by the function :c:func:`emit_function(jl_lambda_info_t*) <emit_function>`.
+On demand, a Julia method is converted into a native function by the function :c:func:`emit_function(jl_method_instance_t*) <emit_function>`.
 (note, when using the MCJIT (in LLVM v3.4+), each function must be JIT into a new module.)
 This function recursively calls :c:func:`emit_expr` until the entire function has been emitted.
 

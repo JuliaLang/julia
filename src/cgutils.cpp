@@ -88,7 +88,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     if (jl_is_abstracttype(jt) || !jl_is_datatype(jt) || jl_is_array_type(jt) ||
         jt == (jl_value_t*)jl_sym_type || jt == (jl_value_t*)jl_module_type ||
         jt == (jl_value_t*)jl_simplevector_type || jt == (jl_value_t*)jl_datatype_type ||
-        jt == (jl_value_t*)jl_lambda_info_type)
+        jt == (jl_value_t*)jl_method_instance_type)
         return jl_pvalue_dillvmt;
     if (jl_is_typector(jt) || jl_is_typevar(jt))
         return jl_pvalue_dillvmt;
@@ -246,8 +246,8 @@ static Value *literal_pointer_val(jl_value_t *p)
         // functions are prefixed with a -
         return julia_gv("-", m->name, m->module, p);
     }
-    if (jl_is_lambda_info(p)) {
-        jl_lambda_info_t *linfo = (jl_lambda_info_t*)p;
+    if (jl_is_method_instance(p)) {
+        jl_method_instance_t *linfo = (jl_method_instance_t*)p;
         // Type-inferred functions are also prefixed with a -
         if (linfo->def)
             return julia_gv("-", linfo->def->name, linfo->def->module, p);
@@ -905,15 +905,15 @@ static inline jl_module_t *topmod(jl_codectx_t *ctx)
 static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
     if (jl_is_ssavalue(e)) {
-        if (jl_is_long(ctx->linfo->ssavaluetypes))
+        if (jl_is_long(ctx->source->ssavaluetypes))
             return (jl_value_t*)jl_any_type;
         int idx = ((jl_ssavalue_t*)e)->id;
-        assert(jl_is_array(ctx->linfo->ssavaluetypes));
-        jl_array_t *ssavalue_types = (jl_array_t*)ctx->linfo->ssavaluetypes;
+        assert(jl_is_array(ctx->source->ssavaluetypes));
+        jl_array_t *ssavalue_types = (jl_array_t*)ctx->source->ssavaluetypes;
         return jl_array_ptr_ref(ssavalue_types, idx);
     }
     if (jl_typeis(e, jl_slotnumber_type)) {
-        jl_array_t *slot_types = (jl_array_t*)ctx->linfo->slottypes;
+        jl_array_t *slot_types = (jl_array_t*)ctx->source->slottypes;
         if (!jl_is_array(slot_types))
             return (jl_value_t*)jl_any_type;
         return jl_array_ptr_ref(slot_types, jl_slot_number(e)-1);
@@ -1439,7 +1439,7 @@ static Value *call_with_unsigned(Function *ufunc, Value *v)
     return Call;
 }
 
-static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val);
+static void jl_add_method_root(jl_method_instance_t *li, jl_value_t *val);
 
 static Value *as_value(Type *t, const jl_cgval_t &v)
 {
@@ -1476,7 +1476,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         if (Constant *c = dyn_cast<Constant>(v)) {
             jl_value_t *s = static_constant_instance(c, jt);
             if (s) {
-                jl_add_linfo_root(ctx->linfo, s);
+                jl_add_method_root(ctx->linfo, s);
                 return literal_pointer_val(s);
             }
         }

@@ -251,6 +251,7 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
         Function *plt = Function::Create(functype,
                                          GlobalVariable::ExternalLinkage,
                                          fname, M);
+        jl_init_function(plt);
         plt->setAttributes(attrs);
         if (cc != CallingConv::C)
             plt->setCallingConv(cc);
@@ -628,7 +629,7 @@ static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failu
     if (constant || jl_is_ssavalue(ex))
         return constant;
     JL_TRY {
-        constant = jl_interpret_toplevel_expr_in(ctx->module, ex, ctx->linfo);
+        constant = jl_interpret_toplevel_expr_in(ctx->module, ex, ctx->source, ctx->linfo->sparam_vals);
     }
     JL_CATCH {
         if (compiletime)
@@ -1041,10 +1042,13 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         std::stringstream name;
         name << "jl_llvmcall" << llvmcallnumbering++;
         f->setName(name.str());
+        jl_init_function(f);
         f = cast<Function>(prepare_call(function_proto(f)));
     }
-    else
+    else {
+        jl_init_function(f);
         f->setLinkage(GlobalValue::LinkOnceODRLinkage);
+    }
 
     // the actual call
     builder.CreateCall(prepare_call(gcroot_flush_func));
