@@ -19,6 +19,15 @@ function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
+
+"""
+    lufact!(A, pivot=Val{true}) -> LU
+
+`lufact!` is the same as [`lufact`](:func:`lufact`), but saves space by overwriting the
+input `A`, instead of creating a copy. An [`InexactError`](:obj:`InexactError`)
+exception is thrown if the factorisation produces a number not representable by the
+element type of `A`, e.g. for integer types.
+"""
 lufact!(A::StridedMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = generic_lufact!(A, pivot)
 function generic_lufact!{T,Pivot}(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true})
     m, n = size(A)
@@ -132,6 +141,16 @@ lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(B
 lufact(F::LU) = F
 
 lu(x::Number) = (one(x), x, 1)
+
+"""
+    lu(A, pivot=Val{true}) -> L, U, p
+
+Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
+By default, pivoting is used. This can be overridden by passing
+`Val{false}` for the second argument.
+
+See also [`lufact`](:func:`lufact`).
+"""
 function lu(A::AbstractMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
     F = lufact(A, pivot)
     F[:L], F[:U], F[:p]

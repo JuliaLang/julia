@@ -535,16 +535,28 @@ invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
 """
     invdigamma(x)
 
-Compute the inverse digamma function of `x`.
+Compute the inverse [`digamma`](:func:`digamma`) function of `x`.
 """
 invdigamma(x::Real) = invdigamma(Float64(x))
 
+"""
+    beta(x, y)
+
+Euler integral of the first kind ``\\operatorname{B}(x,y) = \\Gamma(x)\\Gamma(y)/\\Gamma(x+y)``.
+"""
 function beta(x::Number, w::Number)
     yx, sx = lgamma_r(x)
     yw, sw = lgamma_r(w)
     yxw, sxw = lgamma_r(x+w)
     return exp(yx + yw - yxw) * (sx*sw*sxw)
 end
+
+"""
+    lbeta(x, y)
+
+Natural logarithm of the absolute value of the [`beta`](:func:`beta`)
+function ``\\log(|\\operatorname{B}(x,y)|)``.
+"""
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
 
 # Riemann zeta function; algorithm is based on specializing the Hurwitz
@@ -596,6 +608,12 @@ end
 
 zeta(x::Integer) = zeta(Float64(x))
 zeta(x::Real)    = oftype(float(x),zeta(Float64(x)))
+
+"""
+    zeta(s)
+
+Riemann zeta function ``\\zeta(s)``.
+"""
 zeta(z::Complex) = oftype(float(z),zeta(Complex128(z)))
 
 function eta(z::Union{Float64,Complex{Float64}})
@@ -614,4 +632,10 @@ function eta(z::Union{Float64,Complex{Float64}})
 end
 eta(x::Integer) = eta(Float64(x))
 eta(x::Real)    = oftype(float(x),eta(Float64(x)))
+
+"""
+    eta(x)
+
+Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-1)^{n-1}/n^{s}``.
+"""
 eta(z::Complex) = oftype(float(z),eta(Complex128(z)))

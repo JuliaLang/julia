@@ -130,6 +130,45 @@ Mathematical Operators
 
    Element-wise left division operator.
 
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> A . [1 2]
+       2×2 Array{Float64,2}:
+        1.0       1.0
+        0.333333  0.5
+
+   .. doctest::
+
+       julia> A = [1 0; 0 -1];
+
+       julia> B = [0 1; 1 0];
+
+       julia> C = [A, B]
+       2-element Array{Array{Int64,2},1}:
+        [1 0; 0 -1]
+        [0 1; 1 0]
+
+       julia> x = [1; 0];
+
+       julia> y = [0; 1];
+
+       julia> D = [x, y]
+       2-element Array{Array{Int64,1},1}:
+        [1,0]
+        [0,1]
+
+       julia> C .\ D
+       2-element Array{Array{Float64,1},1}:
+        [1.0,-0.0]
+        [1.0,0.0]
+
+   See also :func:`broadcast`\ .
+
 .. _.^:
 .. function:: .^(x, y)
 
@@ -1023,6 +1062,11 @@ Mathematical Functions
 
    Compute :math:`x \times 2^n`\ .
 
+   .. doctest::
+
+       julia> ldexp(5., 2)
+       20.0
+
 .. function:: modf(x)
 
    .. Docstring generated from Julia source
@@ -1646,7 +1690,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the inverse digamma function of ``x``\ .
+   Compute the inverse :func:`digamma` function of ``x``\ .
 
 .. function:: trigamma(x)
 
@@ -1822,7 +1866,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Natural logarithm of the absolute value of the beta function :math:`\log(|\operatorname{B}(x,y)|)`\ .
+   Natural logarithm of the absolute value of the :func:`beta` function :math:`\log(|\operatorname{B}(x,y)|)`\ .
 
 .. function:: eta(x)
 
@@ -1864,6 +1908,17 @@ Mathematical Functions
    .. Docstring generated from Julia source
 
    Evaluate the polynomial :math:`\sum_k c[k] z^{k-1}` for the coefficients ``c[1]``\ , ``c[2]``\ , ...; that is, the coefficients are given in ascending order by power of ``z``\ .  This macro expands to efficient inline code that uses either Horner's method or, for complex ``z``\ , a more efficient Goertzel-like algorithm.
+
+   .. doctest::
+
+       julia> @evalpoly(3, 1, 0, 1)
+       10
+
+       julia> @evalpoly(2, 1, 0, 1)
+       5
+
+       julia> @evalpoly(2, 1, 1, 1)
+       7
 
 Statistics
 ----------

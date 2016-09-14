@@ -247,11 +247,31 @@ General Collections
 
    Remove all elements from a ``collection``\ .
 
+   .. doctest::
+
+       julia> A = Dict("a" => 1, "b" => 2)
+       Dict{String,Int64} with 2 entries:
+         "b" => 2
+         "a" => 1
+
+       julia> empty!(A);
+
+       julia> A
+       Dict{String,Int64} with 0 entries
+
 .. function:: length(collection) -> Integer
 
    .. Docstring generated from Julia source
 
-   For ordered, indexable collections, the maximum index ``i`` for which ``getindex(collection, i)`` is valid. For unordered collections, the number of elements.
+   For ordered, indexable collections, returns the maximum index ``i`` for which ``getindex(collection, i)`` is valid. For unordered collections, returns the number of elements.
+
+   .. doctest::
+
+       julia> length(1:5)
+       5
+
+       julia> length([1; 2; 3; 4])
+       4
 
 .. function:: endof(collection) -> Integer
 
@@ -472,6 +492,22 @@ Iterable Collections
 
    Compute the minimum value of an array over the given dimensions. See also the :func:`min` function to take the minimum of two or more arguments, which can be applied elementwise to arrays via ``min.(a,b)``\ .
 
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> minimum(A, 1)
+       1×2 Array{Int64,2}:
+        1  2
+
+       julia> minimum(A, 2)
+       2×1 Array{Int64,2}:
+        1
+        3
+
 .. function:: minimum!(r, A)
 
    .. Docstring generated from Julia source
@@ -624,6 +660,22 @@ Iterable Collections
 
    Sum elements of an array over the given dimensions.
 
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> sum(A, 1)
+       1×2 Array{Int64,2}:
+        4  6
+
+       julia> sum(A, 2)
+       2×1 Array{Int64,2}:
+        3
+        7
+
 .. function:: sum!(r, A)
 
    .. Docstring generated from Julia source
@@ -684,6 +736,22 @@ Iterable Collections
 
    Multiply elements of an array over the given dimensions.
 
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> prod(A, 1)
+       1×2 Array{Int64,2}:
+        3  8
+
+       julia> prod(A, 2)
+       2×1 Array{Int64,2}:
+         2
+        12
+
 .. function:: prod!(r, A)
 
    .. Docstring generated from Julia source
@@ -743,6 +811,22 @@ Iterable Collections
    .. Docstring generated from Julia source
 
    Test whether all values along the given dimensions of an array are ``true``\ .
+
+   .. doctest::
+
+       julia> A = [true false; true true]
+       2×2 Array{Bool,2}:
+        true  false
+        true   true
+
+       julia> all(A, 1)
+       1×2 Array{Bool,2}:
+        true  false
+
+       julia> all(A, 2)
+       2×1 Array{Bool,2}:
+        false
+         true
 
 .. function:: all!(r, A)
 
@@ -881,11 +965,27 @@ Iterable Collections
 
    Get the first element of an iterable collection. Returns the start point of a :obj:`Range` even if it is empty.
 
+   .. doctest::
+
+       julia> first(2:2:10)
+       2
+
+       julia> first([1; 2; 3; 4])
+       1
+
 .. function:: last(coll)
 
    .. Docstring generated from Julia source
 
    Get the last element of an ordered collection, if it can be computed in O(1) time. This is accomplished by calling :func:`endof` to get the last index. Returns the end point of a :obj:`Range` even if it is empty.
+
+   .. doctest::
+
+       julia> last(1:2:10)
+       9
+
+       julia> last([1; 2; 3; 4])
+       4
 
 .. function:: step(r)
 
@@ -983,6 +1083,16 @@ Indexable Collections
    .. Docstring generated from Julia source
 
    Retrieve the value(s) stored at the given key or index within a collection. The syntax ``a[i,j,...]`` is converted by the compiler to ``getindex(a, i, j, ...)``\ .
+
+   .. doctest::
+
+       julia> A = Dict("a" => 1, "b" => 2)
+       Dict{String,Int64} with 2 entries:
+         "b" => 2
+         "a" => 1
+
+       julia> getindex(A, "a")
+       1
 
 .. function:: setindex!(collection, value, key...)
 

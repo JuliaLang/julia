@@ -349,13 +349,29 @@ General Number Functions and Constants
 
    .. Docstring generated from Julia source
 
-   Test whether ``x`` or all its elements are numerically equal to some integer
+   Test whether ``x`` or all its elements are numerically equal to some integer.
+
+   .. doctest::
+
+       julia> isinteger(4.0)
+       true
+
+       julia> isinteger([1; 2; 5.5])
+       false
 
 .. function:: isreal(x) -> Bool
 
    .. Docstring generated from Julia source
 
    Test whether ``x`` or all its elements are numerically equal to some real number.
+
+   .. doctest::
+
+       julia> isreal(5.)
+       true
+
+       julia> isreal([4.; complex(0,1)])
+       false
 
 .. function:: isimag(z) -> Bool
 
