@@ -291,11 +291,11 @@ function check_A_mul_B!_sizes(C, A, B)
     nB, mB = size(B)
     nC, mC = size(C)
     if !(nA == nC)
-        throw(DimensionMismatch("Sizes size(A)=$(size(A)) and size(C) = $(size(C)) must match at first entry."))
+        throw(DimensionMismatch("sizes size(A)=$(size(A)) and size(C) = $(size(C)) must match at first entry."))
     elseif !(mA == nB)
-        throw(DimensionMismatch("Second entry of size(A)=$(size(A)) and first entry of size(B) = $(size(B)) must match."))
+        throw(DimensionMismatch("second entry of size(A)=$(size(A)) and first entry of size(B) = $(size(B)) must match."))
     elseif !(mB == mC)
-        throw(DimensionMismatch("Sizes size(B)=$(size(B)) and size(C) = $(size(C)) must match at first second entry."))
+        throw(DimensionMismatch("sizes size(B)=$(size(B)) and size(C) = $(size(C)) must match at first second entry."))
     end
 end
 
@@ -550,6 +550,6 @@ _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
 function fill!(A::Union{Bidiagonal, Tridiagonal, SymTridiagonal} ,x)
     xT = convert(eltype(A), x)
     (xT == zero(eltype(A)) || _small_enough(A)) && return fillslots!(A, xT)
-    throw(ArgumentError("Array A of type $(typeof(A)) and size $(size(A)) can
+    throw(ArgumentError("array A of type $(typeof(A)) and size $(size(A)) can
     not be filled with x=$x, since some of its entries are constrained."))
 end
