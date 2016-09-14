@@ -304,6 +304,8 @@ function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC)
 end
 # convert'ing from other matrix types to SparseMatrixCSC (also see sparse())
 convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
+convert{Tv}(::Type{SparseMatrixCSC}, M::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, M)
+convert{Tv}(::Type{SparseMatrixCSC{Tv}}, M::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, M)
 function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::AbstractMatrix)
     (I, J, V) = findnz(M)
     eltypeTiI = convert(Vector{Ti}, I)
