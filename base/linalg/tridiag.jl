@@ -334,7 +334,7 @@ The lengths of `dl` and `du` must be one less than the length of `d`.
 function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
     n = length(d)
     if (length(dl) != n-1 || length(du) != n-1)
-        throw(ArgumentError("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: ($(length(dl)), $(length(d)), $(length(du))"))
+        throw(ArgumentError("cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: ($(length(dl)), $(length(d)), $(length(du))"))
     end
     Tridiagonal(dl, d, du, zeros(T,n-2))
 end
