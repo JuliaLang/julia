@@ -1393,4 +1393,20 @@ end
 @deprecate ceil{T<:Integer}(::Type{T}, x::AbstractArray) ceil.(T, x)
 @deprecate ceil(x::AbstractArray, digits::Integer, base::Integer = 10) ceil.(x, digits, base)
 
+# Deprecate manually vectorized `big` methods in favor of compact broadcast syntax
+@deprecate big(r::UnitRange) big.(r)
+@deprecate big(r::StepRange) big.(r)
+@deprecate big(r::FloatRange) big.(r)
+@deprecate big(r::LinSpace) big.(r)
+@deprecate big{T<:Integer,N}(x::AbstractArray{T,N}) big.(x)
+@deprecate big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) big.(x)
+@deprecate big(A::LowerTriangular) big.(A)
+@deprecate big(A::UpperTriangular) big.(A)
+@deprecate big(A::Base.LinAlg.UnitLowerTriangular) big.(A)
+@deprecate big(A::Base.LinAlg.UnitUpperTriangular) big.(A)
+@deprecate big(B::Bidiagonal) big.(B)
+@deprecate big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) big.(A)
+@deprecate big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) big.(A)
+@deprecate big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) big.(A)
+
 # End deprecations scheduled for 0.6
