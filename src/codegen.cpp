@@ -286,7 +286,7 @@ int32_t jl_jlcall_api(const void *function)
     // give the function an index in the constant lookup table
     if (function == NULL)
         return 0;
-    Function *F = (Function*)function;
+    const Function *F = (const Function*)function;
     return (F->getFunctionType() == jl_func_sig ? 1 : 3);
 }
 
