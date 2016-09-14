@@ -1313,7 +1313,7 @@ However, since pivoting is on by default, the factorization is internally
 represented as `A == P'*L*L'*P` with a permutation matrix `P`;
 using just `L` without accounting for `P` will give incorrect answers.
 To include the effects of permutation,
-it's typically preferable to extact "combined" factors like `PtL = F[:PtL]`
+it's typically preferable to extract "combined" factors like `PtL = F[:PtL]`
 (the equivalent of `P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`).
 
 Setting the optional `shift` keyword argument computes the factorization of
@@ -1410,7 +1410,7 @@ You can extract individual factors from `F` using `F[:L]`.
 However, since pivoting is on by default, the factorization is internally
 represented as `A == P'*L*D*L'*P` with a permutation matrix `P`;
 using just `L` without accounting for `P` will give incorrect answers.
-To include the effects of permutation, it is typically preferable to extact
+To include the effects of permutation, it is typically preferable to extract
 "combined" factors like `PtL = F[:PtL]` (the equivalent of
 `P'*L`) and `LtP = F[:UP]` (the equivalent of `L'*P`).
 The complete list of supported factors is `:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP`.
