@@ -474,6 +474,14 @@ Types
 
    Return ``true`` if and only if all values of ``type1`` are also of ``type2``\ . Can also be written using the ``<:`` infix operator as ``type1 <: type2``\ .
 
+   .. doctest::
+
+       julia> issubtype(Int8, Int32)
+       false
+
+       julia> Int8 <: Integer
+       true
+
 .. function:: <:(T1, T2)
 
    .. Docstring generated from Julia source
@@ -530,6 +538,23 @@ Types
    .. Docstring generated from Julia source
 
    Size, in bytes, of the canonical binary representation of the given DataType ``T``\ , if any.
+
+   .. doctest::
+
+       julia> sizeof(Float32)
+       4
+
+       julia> sizeof(Complex128)
+       16
+
+   If ``T`` is not a bitstype, an error is thrown.
+
+   .. doctest::
+
+       julia> sizeof(Base.LinAlg.LU)
+       ERROR: argument is an abstract type; size is indeterminate
+        in sizeof(::Type{T}) at ./essentials.jl:89
+        ...
 
 .. function:: eps(T)
 

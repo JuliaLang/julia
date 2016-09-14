@@ -218,11 +218,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigfact`` will use a method specialized for matrices known to be Hermitian. Note that ``Hupper`` will not be equal to ``Hlower`` unless ``A`` is itself Hermitian (e.g. if ``A == A'``\ ).
 
-.. function:: lu(A) -> L, U, p
+.. function:: lu(A, pivot=Val{true}) -> L, U, p
 
    .. Docstring generated from Julia source
 
-   Compute the LU factorization of ``A``\ , such that ``A[p,:] = L*U``\ .
+   Compute the LU factorization of ``A``\ , such that ``A[p,:] = L*U``\ . By default, pivoting is used. This can be overridden by passing ``Val{false}`` for the second argument.
+
+   See also :func:`lufact`\ .
 
 .. function:: lufact(A [,pivot=Val{true}]) -> F::LU
 
@@ -310,11 +312,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``lufact(A::SparseMatrixCSC)`` uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with ``Float64`` or ``Complex128`` elements, ``lufact`` converts ``A`` into a copy that is of type ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
-.. function:: lufact!(A) -> LU
+.. function:: lufact!(A, pivot=Val{true}) -> LU
 
    .. Docstring generated from Julia source
 
-   ``lufact!`` is the same as :func:`lufact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
+   ``lufact!`` is the same as :func:`lufact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An :obj:`InexactError` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
 
 .. function:: chol(A) -> U
 
@@ -582,15 +584,15 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Perform an LQ factorization of ``A`` such that ``A = L*Q``\ . The default is to compute a thin factorization. The LQ factorization is the QR factorization of ``A.'``\ . ``L`` is not extended with zeros if the full ``Q`` is requested.
 
-.. function:: bkfact(A) -> BunchKaufman
+.. function:: bkfact(A, uplo::Symbol=:U, symmetric::Bool=issymmetric(A), rook::Bool=false) -> BunchKaufman
 
    .. Docstring generated from Julia source
 
-   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. The following functions are available for ``BunchKaufman`` objects: :func:`size`\ , ``\``\ , :func:`inv`\ , :func:`issymmetric`\ , :func:`ishermitian`\ .
+   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. ``uplo`` indicates which triangle of matrix ``A`` to reference. If ``symmetric`` is ``true``\ , ``A`` is assumed to be symmetric. If ``symmetric`` is ``false``\ , ``A`` is assumed to be complex Hermitian. If ``rook`` is ``true``\ , rook pivoting is used. If ``rook`` is false, rook pivoting is not used. The following functions are available for ``BunchKaufman`` objects: :func:`size`\ , ``\``\ , :func:`inv`\ , :func:`issymmetric`\ , :func:`ishermitian`\ .
 
    .. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url <http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_\ .
 
-.. function:: bkfact!(A) -> BunchKaufman
+.. function:: bkfact!(A, uplo::Symbol=:U, symmetric::Bool=issymmetric(A), rook::Bool=false) -> BunchKaufman
 
    .. Docstring generated from Julia source
 
@@ -734,13 +736,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Same as :func:`eigfact`\ , but saves space by overwriting the input ``A`` (and ``B``\ ), instead of creating a copy.
 
-.. function:: hessfact(A)
+.. function:: hessfact(A) -> Hessenberg
 
    .. Docstring generated from Julia source
 
    Compute the Hessenberg decomposition of ``A`` and return a ``Hessenberg`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``\ . When ``Q`` is extracted, the resulting type is the ``HessenbergQ`` object, and may be converted to a regular matrix with :func:`full`\ .
 
-.. function:: hessfact!(A)
+.. function:: hessfact!(A) -> Hessenberg
 
    .. Docstring generated from Julia source
 
