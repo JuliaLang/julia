@@ -99,12 +99,17 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let li = expand(quote let x = 1 end end).args[1]::LambdaInfo,
-    sf = StackFrame(:a, :b, 3, li, false, false, 0),
+let src = expand(quote let x = 1 end end).args[1]::CodeInfo,
+    li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
+    sf
+
+    li.inferred = src
+    li.specTypes = Tuple{}
+    sf = StackFrame(:a, :b, 3, li, false, false, 0)
     repr = string(sf)
-    @test repr == " in Toplevel LambdaInfo thunk at b:3"
+    @test repr == " in Toplevel MethodInstance thunk at b:3"
 end
-let li = typeof(getfield).name.mt.cache.func::LambdaInfo,
+let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
     @test repr == " in getfield(...) at b:3"

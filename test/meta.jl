@@ -62,7 +62,7 @@ asts = code_lowered(dummy, Tuple{})
 ast = asts[1]
 
 body = Expr(:block)
-body.args = Base.uncompressed_ast(ast)
+body.args = ast.code
 
 @test popmeta!(body, :test) == (true, [42])
 @test popmeta!(body, :nonexistent) == (false, [])
@@ -110,7 +110,7 @@ asts = code_lowered(dummy_multi, Tuple{})
 ast = asts[1]
 
 body = Expr(:block)
-body.args = Base.uncompressed_ast(ast)
+body.args = ast.code
 
 @test popmeta!(body, :test) == (true, [40])
 @test popmeta!(body, :test) == (true, [41])
