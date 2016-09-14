@@ -34,8 +34,8 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
 
         big(A::$t) = $t(big(A.data))
 
-        real{T<:Real}(A::$t{T}) = A
-        real{T<:Complex}(A::$t{T}) = (B = real(A.data); $t(B))
+        broadcast{T<:Real}(::typeof(real), A::$t{T}) = A
+        broadcast{T<:Complex}(::typeof(real), A::$t{T}) = $t(real.(A.data))
         broadcast(::typeof(abs), A::$t) = $t(abs.(A.data))
     end
 end

@@ -71,14 +71,14 @@ end
 parent(D::Diagonal) = D.diag
 
 ishermitian{T<:Real}(D::Diagonal{T}) = true
-ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
+ishermitian(D::Diagonal) = all(D.diag .== real.(D.diag))
 issymmetric(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)
 
 factorize(D::Diagonal) = D
 
 abs(D::Diagonal) = Diagonal(abs(D.diag))
-real(D::Diagonal) = Diagonal(real(D.diag))
+broadcast(::typeof(real), D::Diagonal) = Diagonal(real.(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
 istriu(D::Diagonal) = true

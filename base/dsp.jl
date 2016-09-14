@@ -161,7 +161,7 @@ function conv2{T}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T})
     v = fft([v;zeros(T,n-length(v))])
     C = ifft(fft(B) .* (u * v.'))
     if T <: Real
-        return real(C)
+        return real.(C)
     end
     return C
 end
@@ -180,7 +180,7 @@ function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
     p = plan_fft(At)
     C = ifft((p*At).*(p*Bt))
     if T <: Real
-        return real(C)
+        return real.(C)
     end
     return C
 end

@@ -134,7 +134,7 @@ let
     v=reshape(v,(50,50)) # reshape to matrix
     v/=trace(v) # factor out arbitrary phase
     @test isapprox(vecnorm(imag(v)),0.) # it should be real
-    v=real(v)
+    v=real.(v)
     # @test isapprox(vecnorm(v-v')/2,0.) # it should be Hermitian
     # Since this fails sometimes (numerical precision error),this test is commented out
     v=(v+v')/2

@@ -12,7 +12,7 @@ SVD{T,Tr}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = SVD{T,Tr,t
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool=true)
     m,n = size(A)
     if m == 0 || n == 0
-        u,s,vt = (eye(T, m, thin ? n : m), real(zeros(T,0)), eye(T,n,n))
+        u,s,vt = (eye(T, m, thin ? n : m), real.(zeros(T,0)), eye(T,n,n)) # shuold real.(zeros(T,0)) be zeros(real(T),0)?
     else
         u,s,vt = LAPACK.gesdd!(thin ? 'S' : 'A', A)
     end

@@ -48,7 +48,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         if eltya <: BlasFloat
             svdz = svdfact!(ones(eltya,0,0))
             @test svdz[:U] ≈ eye(eltya,0,0)
-            @test svdz[:S] ≈ real(zeros(eltya,0))
+            @test svdz[:S] ≈ real.(zeros(eltya,0))
             @test svdz[:Vt] ≈ eye(eltya,0,0)
         end
 

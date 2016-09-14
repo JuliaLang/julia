@@ -10,18 +10,30 @@ tc(r1,r2) = false
 bitcheck(b::BitArray) = length(b.chunks) == 0 || (b.chunks[end] == b.chunks[end] & Base._msk_end(b))
 bitcheck(x) = true
 
-function check_bitop(ret_type, func, args...)
+function check_bitop_call(ret_type, func, args...)
     r1 = func(args...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...)
+    check_bitop_tests(ret_type, r1, r2)
+end
+function check_bitop_dotcall(ret_type, func, args...)
+    r1 = func.(args...)
+    r2 = func.(map(x->(isa(x, BitArray) ? Array(x) : x), args)...)
+    check_bitop_tests(ret_type, r1, r2)
+end
+function check_bitop_tests(ret_type, r1, r2)
     @test isa(r1, ret_type)
     @test tc(r1, r2)
     @test isequal(r1, convert(ret_type, r2))
     @test bitcheck(r1)
 end
-
 macro check_bit_operation(ex, ret_type)
-    @assert Meta.isexpr(ex, :call)
-    Expr(:call, :check_bitop, esc(ret_type), map(esc,ex.args)...)
+    if Meta.isexpr(ex, :call)
+        Expr(:call, :check_bitop_call, esc(ret_type), map(esc, ex.args)...)
+    elseif Meta.isexpr(ex, :.)
+        Expr(:call, :check_bitop_dotcall, esc(ret_type), esc(ex.args[1]), map(esc, ex.args[2].args)...)
+    else
+        throw(ArgumentError("first argument to @check_bit_operation must be an expression with head either :call or :. !"))
+    end
 end
 
 let t0 = time()
@@ -582,7 +594,7 @@ b1 = bitrand(n1, n2)
 @check_bit_operation (!)(b1)  BitMatrix
 @check_bit_operation (-)(b1)  Matrix{Int}
 @check_bit_operation sign(b1) BitMatrix
-@check_bit_operation real(b1) BitMatrix
+@check_bit_operation real.(b1) BitMatrix
 @check_bit_operation imag(b1) BitMatrix
 @check_bit_operation conj(b1) BitMatrix
 

@@ -30,7 +30,6 @@ end
 
 (-)(A::AbstractArray{Bool}) = reshape([ -A[i] for i in eachindex(A) ], size(A))
 
-real(A::AbstractArray) = reshape([ real(x) for x in A ], size(A))
 imag(A::AbstractArray) = reshape([ imag(x) for x in A ], size(A))
 
 function !(A::AbstractArray{Bool})

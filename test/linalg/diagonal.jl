@@ -27,7 +27,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test typeof(convert(Diagonal{Complex64},D)) == Diagonal{Complex64}
     @test typeof(convert(AbstractMatrix{Complex64},D))   == Diagonal{Complex64}
 
-    @test full(real(D)) == real(DM)
+    @test full(real.(D)) == real.(DM)
     @test full(abs.(D)) == abs.(DM)
     @test full(imag(D)) == imag(DM)
 

@@ -50,10 +50,10 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test ctranspose(T) == Tridiagonal(conj(du), conj(d), conj(dl))
 
     @test abs.(T) == Tridiagonal(abs.(dl),abs.(d),abs.(du))
-    @test real(T) == Tridiagonal(real(dl),real(d),real(du))
+    @test real.(T) == Tridiagonal(real.(dl),real.(d),real.(du))
     @test imag(T) == Tridiagonal(imag(dl),imag(d),imag(du))
     @test abs.(Ts) == SymTridiagonal(abs.(d),abs.(dl))
-    @test real(Ts) == SymTridiagonal(real(d),real(dl))
+    @test real.(Ts) == SymTridiagonal(real.(d),real.(dl))
     @test imag(Ts) == SymTridiagonal(imag(d),imag(dl))
 
     # test interconversion of Tridiagonal and SymTridiagonal

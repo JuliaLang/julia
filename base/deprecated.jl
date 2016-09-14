@@ -1000,4 +1000,7 @@ macro vectorize_2arg(S,f)
 end
 export @vectorize_1arg, @vectorize_2arg
 
+# Deprecate manually vectorized real methods in favor of compact broadcast syntax
+@deprecate real(A::AbstractArray) real.(A)
+
 # End deprecations scheduled for 0.6

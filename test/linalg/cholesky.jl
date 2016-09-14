@@ -114,7 +114,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test_throws Base.LinAlg.RankDeficientException Base.LinAlg.chkfullrank(cz)
         cpapd = cholfact(apd, :U, Val{true})
         @test rank(cpapd) == n
-        @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
+        @test all(diff(diag(real.(cpapd.factors))).<=0.) # diagonal should be non-increasing
         if isreal(apd)
             @test apd*inv(cpapd) ≈ eye(n)
         end

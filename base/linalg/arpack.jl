@@ -120,7 +120,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
     elseif which == "LR" || which == "LA" || which == "BE"
         dmap = real
     elseif which == "SR" || which == "SA"
-        dmap = x->-real(x)
+        dmap = x->-real.(x)
     elseif which == "LI"
         dmap = imag
     elseif which == "SI"

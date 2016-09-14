@@ -71,7 +71,8 @@ end
 similar{T}(S::SymTridiagonal, ::Type{T}) = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
 
 #Elementary operations
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :real, :imag)
+broadcast(::typeof(real), M::SymTridiagonal) = SymTridiagonal(real.(M.dv), real.(M.ev))
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
 for func in (:round, :trunc, :floor, :ceil)
@@ -388,7 +389,8 @@ end
 copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du), copy!(dest.du2, src.du2))
 
 #Elementary operations
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :real, :imag)
+broadcast(::typeof(real), M::Tridiagonal) = Tridiagonal(real.(M.dl), real.(M.d), real.(M.du), real.(M.du2))
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du), ($func)(M.du2))
     end
