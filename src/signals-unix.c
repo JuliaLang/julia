@@ -215,6 +215,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
+            write(2, "sig-unix:218       \n", 20);
             jl_throw_in_ctx(ptls, jl_interrupt_exception, context);
         }
         return;
@@ -359,6 +360,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
+            write(2, "sig-unix:363       \n", 20);
             jl_throw_in_ctx(ptls, jl_interrupt_exception, ctx);
         }
     }

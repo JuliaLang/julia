@@ -210,6 +210,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
+            write(2, "sig-mach:214       \n", 20);
             jl_throw_in_thread(tid, thread, jl_interrupt_exception);
         }
         return KERN_SUCCESS;
@@ -307,6 +308,7 @@ static void jl_try_deliver_sigint(void)
         if (force)
             jl_safe_printf("WARNING: Force throwing a SIGINT\n");
         jl_clear_force_sigint();
+        write(2, "sig-mach:311       \n", 20);
         jl_throw_in_thread(0, thread, jl_interrupt_exception);
     }
     else {
