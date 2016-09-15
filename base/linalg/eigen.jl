@@ -27,13 +27,8 @@ isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(A.values .>
 
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
-    n==0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    print("abcdefg")
-    """
-    so its somewhere here, need to find out where this eigfact! is located then I can fix it
-    """
-    issymmetric(A) && return eigfact!(Symmetric(A))
-    print("zzzzzzz")
+    n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
+    (issymmetric(A) && !((size(A) == (1, 1)) && isnan(A[1]))) && return eigfact!(Symmetric(A))
     A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
     all(WI .== 0.) && return Eigen(WR, VR)
     evec = zeros(Complex{T}, n, n)
