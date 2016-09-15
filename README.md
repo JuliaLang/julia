@@ -266,14 +266,15 @@ Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
 - **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
+- **[python]** (>=2.7)          - needed to build LLVM.
 - **[gfortran]**                — compiling and linking Fortran libraries
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
-- **[cmake]**                   — needed to build `libgit2`.
+- **[cmake]** (>= 3.1.2)        — needed to build `libgit2`.
 - **[openssl]**                 — needed for HTTPS support in `libgit2` on Linux, install via `apt-get install libssl-dev` or `yum install openssl-devel`.
-- **[pkg-config]**              - needed to build libgit2 correctly, especially for proxy support
+- **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
