@@ -2,7 +2,7 @@
 
 abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
 typealias NonSliceIndex Union{Colon, AbstractArray}
-typealias ViewIndex Union{Real, AbstractCartesianIndex, NonSliceIndex}
+typealias ViewIndex Union{Real, NonSliceIndex}
 typealias ScalarIndex Union{Real, AbstractCartesianIndex}
 
 # L is true if the view itself supports fast linear indexing
@@ -63,11 +63,8 @@ parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 ## SubArray creation
 # We always assume that the dimensionality of the parent matches the number of
 # indices that end up getting passed to it, so we store the parent as a
-# ReshapedArray view if necessary. The trouble is that `CartesianIndex`s make
-# the computation of the number of effective indices non-trivial. At this point
-# in the bootstrap, we don't have the required tools to do the computation,
-# so we just define `view` for non-CartesianIndex types here. The hard part is
-# done in multidimensional.jl after CartesianIndex gets defined properly.
+# ReshapedArray view if necessary. The trouble is that arrays of `CartesianIndex`
+# can make the number of effective indices not equal to length(I).
 _maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val{1})
 _maybe_reshape_parent{_,N}(A::AbstractArray{_,N}, ::NTuple{N, Bool}) = A
 _maybe_reshape_parent{N}(A::AbstractArray, ::NTuple{N, Bool}) = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
@@ -76,16 +73,21 @@ function view(A::AbstractArray, I::ViewIndex...)
     @boundscheck checkbounds(A, I...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(I...)), I...)
 end
+# But we can simply flatten scalar `CartesianIndex`s first to make life easier
+view(A::AbstractArray, I::Union{ViewIndex, AbstractCartesianIndex}...) = view(A, IteratorsMD.flatten(I)...)
 
 function unsafe_view(A::AbstractArray, I::ViewIndex...)
     @_inline_meta
     J = to_indexes(I...)
     SubArray(A, J, map(unsafe_length, index_shape(A, J...)))
 end
-# Reindexing by CartesianIndex is hard, so flatten them out first
-unsafe_view(V::SubArray, I::ViewIndex...) = unsafe_view(V, IteratorsMD.flatten(I)...)
-unsafe_view(V::SubArray, I::Union{Real, NonSliceIndex}...) = (@_inline_meta; _maybe_reindex(V, to_indexes(I...)))
-# Reindexing by an array of cartesian indices is disastrously hard. So we punt.
+# When we take the view of a view, it's often possible to "reindex" the parent
+# view's indices such that we can "pop" the parent view and keep just one layer
+# of indirection. But we can't always do this because arrays of `CartesianIndex`
+# might span multiple parent indices, making the reindex calculation very hard.
+# So we use _maybe_reindex to figure out if there are any arrays of
+# `CartesianIndex`, and if so, we punt and keep two layers of indirection.
+unsafe_view(V::SubArray, I::ViewIndex...) = (@_inline_meta; _maybe_reindex(V, to_indexes(I...)))
 _maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
 _maybe_reindex{C<:AbstractCartesianIndex}(V, I, ::Tuple{AbstractArray{C}, Vararg{Any}}) =
     (@_inline_meta; SubArray(V, I, map(unsafe_length, index_shape(V, I...))))
@@ -99,7 +101,7 @@ function _maybe_reindex(V, I, ::Tuple{})
     SubArray(V.parent, idxs, map(unsafe_length, (index_shape(V.parent, idxs...))))
 end
 
-# Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
+## Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
 #
 # Recursively look through the heads of the parent- and sub-indexes, considering
 # the following cases:
