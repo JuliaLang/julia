@@ -1,9 +1,0 @@
-#!/bin/sh
-
-ROOT="${0%/script}"
-osascript 2>&1>/dev/null <<EOF
-  tell application "Terminal"
-    do script ("exec '${ROOT}/julia/bin/julia'")
-    activate
-  end tell
-EOF
