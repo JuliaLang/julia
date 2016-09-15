@@ -880,15 +880,16 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
 end
 
 # use memcmp for == on bit integer types
-=={T<:BitInteger,N}(a::Array{T,N}, b::Array{T,N}) =
-    size(a) == size(b) &&
-    ccall(:memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a)) == 0
+function =={T<:BitInteger,N}(a::Array{T,N}, b::Array{T,N})
+    size(a) == size(b) && 0 == ccall(
+        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a))
+end
 
 # this is ~20% faster than the generic implementation above for very small arrays
 function =={T<:BitInteger}(a::Array{T,1}, b::Array{T,1})
     len = length(a)
-    len == length(b) && ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len) == 0
+    len == length(b) && 0 == ccall(
+        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
 end
 
 function reverse(A::AbstractVector, s=1, n=length(A))
