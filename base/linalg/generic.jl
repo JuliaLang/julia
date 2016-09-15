@@ -704,6 +704,12 @@ function issymmetric(A::AbstractMatrix)
     if indsm != indsn
         return false
     end
+    if indsm == Base.OneTo(1)
+        if isnan(A[1,1])
+            return false
+        end
+        return true
+    end
     for i = first(indsn):last(indsn)-1, j = (i+1):last(indsn)
         if A[i,j] != transpose(A[j,i])
             return false
