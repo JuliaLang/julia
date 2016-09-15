@@ -233,3 +233,9 @@ bin_val = hex2bytes("07bf")
 
 #non-hex characters
 @test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
+
+# take first characters from `String`
+@test take("Hello, World!", 5) == "Hello"
+@test take("Hello, World!", 100) == "Hello, World!"
+@test take("שלום לך עולם", 4) == "שלום"
+@test take("हैलो वर्ल्ड", 20) == "हैलो वर्ल्ड"
