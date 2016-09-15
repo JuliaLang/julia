@@ -14,6 +14,11 @@ New language features
 Language changes
 ----------------
 
+  * The default color for info messages has been changed from blue to cyan.
+    This can be changed back to the original color by setting the environment variable `JULIA_INFO_COLOR` to `"blue"`.
+    One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
+    For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
+
 Breaking changes
 ----------------
 
