@@ -156,13 +156,18 @@ end
 @test_throws MethodError length(drop(countfrom(1), 3))
 
 # double take
+# and take/drop canonicalization
 # -----------
 
 for xs in Any["abc", [1, 2, 3]]
-    @test take(take(xs, 2), 3) == take(xs, 2)
-    @test take(take(xs, 4), 2) == take(xs, 2)
-    @test drop(drop(xs, 1), 1) == drop(xs, 2)
+    @test take(take(xs, 2), 3) === take(xs, 2)
+    @test take(take(xs, 4), 2) === take(xs, 2)
+    @test drop(drop(xs, 1), 1) === drop(xs, 2)
+    @test take(drop(xs, 1), 1) === drop(take(xs, 2), 1)
+    @test take(drop(xs, 3), 0) === drop(take(xs, 2), 3)
     @test isempty(drop(drop(xs, 2), 2))
+    @test drop(take(drop(xs, 1), 2), 1) === take(drop(xs, 2), 1)
+    @test take(drop(take(xs, 3), 1), 1) === take(drop(xs, 1), 1)
 end
 
 # cycle
