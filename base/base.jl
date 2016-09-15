@@ -150,5 +150,5 @@ immutable Nullable{T}
     value::T
 
     Nullable() = new(false)
-    Nullable(value::T, isnull::Bool=false) = new(!isnull, value)
+    Nullable(value::T, hasvalue::Bool=true) = new(hasvalue, value)
 end
