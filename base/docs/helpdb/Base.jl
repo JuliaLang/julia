@@ -2522,15 +2522,6 @@ Get the system time in seconds since the epoch, with fairly high (typically, mic
 time()
 
 """
-    qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
-
-Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
-Also see `qrfact`. The default is to compute a thin factorization. Note that `R` is not
-extended with zeros when the full `Q` is requested.
-"""
-qr
-
-"""
     TextDisplay(stream)
 
 Returns a `TextDisplay <: Display`, which can display any object as the text/plain MIME type
@@ -2820,16 +2811,6 @@ retrieved by accessing `m.match` and the captured sequences can be retrieved by 
 match
 
 """
-    qrfact!(A [,pivot=Val{false}])
-
-`qrfact!` is the same as [`qrfact`](:func:`qrfact`) when `A` is a subtype of
-`StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
-An `InexactError` exception is thrown if the factorisation produces a number not
-representable by the element type of `A`, e.g. for integer types.
-"""
-qrfact!
-
-"""
     coth(x)
 
 Compute the hyperbolic cotangent of `x`.
@@ -3038,16 +3019,6 @@ offset `do`. Returns `dest`.
 copy!(dest,d,src,so,N)
 
 """
-    qrfact(A) -> SPQR.Factorization
-
-Compute the QR factorization of a sparse matrix `A`. A fill-reducing permutation is used.
-The main application of this type is to solve least squares problems with `\\`. The function
-calls the C library SPQR and a few additional functions from the library are wrapped but not
-exported.
-"""
-qrfact(A)
-
-"""
     +(x, y...)
 
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
@@ -3084,19 +3055,6 @@ signif
 Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
 """
 full(F)
-
-"""
-    full(QRCompactWYQ[, thin=true]) -> Matrix
-
-Converts an orthogonal or unitary matrix stored as a `QRCompactWYQ` object, i.e. in the
-compact WY format [^Bischof1987], to a dense matrix.
-
-Optionally takes a `thin` Boolean argument, which if `true` omits the columns that span the
-rows of `R` in the QR factorization that are zero. The resulting matrix is the `Q` in a thin
-QR factorization (sometimes called the reduced QR factorization). If `false`, returns a `Q`
-that spans all rows of `R` in its corresponding QR factorization.
-"""
-full(::LinAlg.QRCompactWYQ, ?)
 
 """
     throw(e)
