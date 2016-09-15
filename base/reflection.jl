@@ -488,7 +488,7 @@ function uncompressed_ast(m::Method, s::CodeInfo)
 end
 
 # Printing code representations in IR and assembly
-function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
+function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool, asmvariant=0)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -503,10 +503,10 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_me
     meth = func_for_method_checked(meth, tt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any), meth, tt, env)
     # get the code for it
-    return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module)
+    return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module, asmvariant)
 end
 
-function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
+function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool, asmvariant="att")
     if native
         llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool), linfo, wrapper)
     else
@@ -517,7 +517,8 @@ function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool,
     end
 
     if native
-        str = ccall(:jl_dump_function_asm, Ref{String}, (Ptr{Void}, Cint), llvmf, 0)
+        str = ccall(:jl_dump_function_asm, Ref{String},
+                    (Ptr{Void}, Cint, Cstring), llvmf, 0, asmvariant)
     else
         str = ccall(:jl_dump_function_ir, Ref{String},
                     (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
@@ -542,14 +543,14 @@ code_llvm(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types)
 code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
 
 """
-    code_native([io], f, types)
+    code_native([io], f, types, [asm_variant])
 
 Prints the native assembly instructions generated for running the method matching the given
-generic function and type signature to `io` which defaults to `STDOUT`.
+generic function and type signature to `io` which defaults to `STDOUT`.Switch assembly syntax using asm_variant:[att|intel].Output is AT&T syntax by default.
 """
-code_native(io::IO, f::ANY, types::ANY=Tuple) =
-    print(io, _dump_function(f, types, true, false, false, false))
-code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types)
+code_native(io::IO, f::ANY, types::ANY=Tuple, asmvariant="att") =
+    print(io, _dump_function(f, types, true, false, false, false, asmvariant))
+code_native(f::ANY, types::ANY=Tuple, asmvariant="att") = code_native(STDOUT, f, types, asmvariant)
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, types::ANY)

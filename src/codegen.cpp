@@ -1505,7 +1505,7 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
 
 // print a native disassembly for f (an LLVM function)
 extern "C" JL_DLLEXPORT
-const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
+const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_variant="att")
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     std::string code;
@@ -1559,10 +1559,11 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #endif
             object, objcontext,
 #if JL_LLVM_VERSION >= 30700
-            stream
+            stream,
 #else
-            fstream
+            fstream,
 #endif
+            asm_variant
             );
 
 #if JL_LLVM_VERSION < 30700

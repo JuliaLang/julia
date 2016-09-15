@@ -15,10 +15,11 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                           const object::ObjectFile *object,
                           llvm::DIContext *context,
 #if JL_LLVM_VERSION >= 30700
-                          raw_ostream &rstream
+                          raw_ostream &rstream,
 #else
-                          formatted_raw_ostream &stream
+                          formatted_raw_ostream &stream,
 #endif
+                          const char* asm_variant="att"
                           );
 
 // Declarations for debuginfo.cpp
