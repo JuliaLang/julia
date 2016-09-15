@@ -3,7 +3,7 @@
 immutable NullException <: Exception
 end
 
-Nullable{T}(value::T, isnull::Bool=false) = Nullable{T}(value, isnull)
+Nullable{T}(value::T, hasvalue::Bool=true) = Nullable{T}(value, hasvalue)
 Nullable() = Nullable{Union{}}()
 
 eltype{T}(::Type{Nullable{T}}) = T

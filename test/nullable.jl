@@ -40,15 +40,15 @@ for T in types
     @test eltype(x) === T
 end
 
-# Nullable{T}(value::T, isnull::Bool) = new(isnull, value)
+# Nullable{T}(value::T, hasvalue::Bool) = new(hasvalue, value)
 for T in types
-    x = Nullable{T}(zero(T),false)
+    x = Nullable{T}(zero(T), true)
     @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
-    x = Nullable{T}(zero(T),true)
+    x = Nullable{T}(zero(T), false)
     @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
@@ -276,9 +276,9 @@ for S in TestTypes, T in TestTypes
         @test isequal(Nullable(u), Nullable(u)) === true
         @test isequal(Nullable(v), Nullable(v)) === true
 
-        @test isequal(Nullable(u), Nullable(v, true)) === false
-        @test isequal(Nullable(u, true), Nullable(v)) === false
-        @test isequal(Nullable(u, true), Nullable(v, true)) === true
+        @test isequal(Nullable(u), Nullable(v, false)) === false
+        @test isequal(Nullable(u, false), Nullable(v)) === false
+        @test isequal(Nullable(u, false), Nullable(v, false)) === true
 
         @test isequal(Nullable(u), Nullable{T}()) === false
         @test isequal(Nullable{S}(), Nullable(v)) === false
@@ -296,9 +296,9 @@ for S in TestTypes, T in TestTypes
             @test isless(Nullable(u), Nullable(u)) === false
             @test isless(Nullable(v), Nullable(v)) === false
 
-            @test isless(Nullable(u), Nullable(v, true)) === true
-            @test isless(Nullable(u, true), Nullable(v)) === false
-            @test isless(Nullable(u, true), Nullable(v, true)) === false
+            @test isless(Nullable(u), Nullable(v, false)) === true
+            @test isless(Nullable(u, false), Nullable(v)) === false
+            @test isless(Nullable(u, false), Nullable(v, false)) === false
 
             @test isless(Nullable(u), Nullable{T}()) === true
             @test isless(Nullable{S}(), Nullable(v)) === false

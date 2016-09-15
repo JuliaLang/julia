@@ -3126,7 +3126,7 @@ f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 foo11904(x::Int) = x
 @inline function foo11904{S}(x::Nullable{S})
     if isbits(S)
-        Nullable(foo11904(x.value), isnull(x))
+        Nullable(foo11904(x.value), x.hasvalue)
     else
         throw_error()
     end
