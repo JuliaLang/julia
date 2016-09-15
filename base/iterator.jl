@@ -351,7 +351,8 @@ start(it::Take) = (it.n, start(it.xs))
 """
     take(s::String, n)
 
-Return a `SubString` with at most `n` of the first `Char`s contained in `s`.
+Return a `SubString` with at most `n` of the first characters of `s`.  A
+character is defined as a Unicode scalar value.
 """
 function take(s::String, n::Int)
     i = 1
