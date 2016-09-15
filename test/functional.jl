@@ -155,6 +155,16 @@ end
 @test Base.iteratorsize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
 
+# double take
+# -----------
+
+for xs in Any["abc", [1, 2, 3]]
+    @test take(take(xs, 2), 3) == take(xs, 2)
+    @test take(take(xs, 4), 2) == take(xs, 2)
+    @test drop(drop(xs, 1), 1) == drop(xs, 2)
+    @test isempty(drop(drop(xs, 2), 2))
+end
+
 # cycle
 # -----
 
