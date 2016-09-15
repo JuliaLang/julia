@@ -1273,7 +1273,8 @@ for a in (copy(reshape(1:60, 3, 4, 5)),
     @test a[:, :, CartesianIndex((1,))] == (@view a[:, :, CartesianIndex((1,))]) == a[:,:,1]
     @test a[CartesianIndex((1,)), [1,2], :] == (@view a[CartesianIndex((1,)), [1,2], :]) == a[1,[1,2],:]
     @test a[CartesianIndex((2,)), 3:4, :] == (@view a[CartesianIndex((2,)), 3:4, :]) == a[2,3:4,:]
-    @test a[[CartesianIndex(1,3),CartesianIndex(2,4)],3:3] == (@view a[[CartesianIndex(1,3),CartesianIndex(2,4)],3:3]) == reshape([a[1,3,3]; a[2,4,3]], 2, 1)
+    @test a[[CartesianIndex(1,3),CartesianIndex(2,4)],3:3] ==
+          (@view a[[CartesianIndex(1,3),CartesianIndex(2,4)],3:3]) == reshape([a[1,3,3]; a[2,4,3]], 2, 1)
 
     @test a[[CartesianIndex()], :, :, :] == (@view a[[CartesianIndex()], :, :, :]) == reshape(a, 1, 3, 4, 5)
     @test a[:, [CartesianIndex()], :, :] == (@view a[:, [CartesianIndex()], :, :]) == reshape(a, 3, 1, 4, 5)

@@ -31,7 +31,8 @@ end
 
 check_parent_index_match(parent, indexes) = check_parent_index_match(parent, index_ndims(indexes...))
 check_parent_index_match{T,N}(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) = nothing
-check_parent_index_match{N}(parent, ::NTuple{N, Bool}) = throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
+check_parent_index_match{N}(parent, ::NTuple{N, Bool}) =
+    throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
 # This computes the linear indexing compatability for a given tuple of indices
 viewindexing() = LinearFast()

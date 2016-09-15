@@ -3,7 +3,10 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, size, start, done, next, last, in, getindex, setindex!, linearindexing, min, max, zero, one, isless, eachindex, ndims, iteratorsize, to_index
+import Base: eltype, length, size, start, done, next, last, in, getindex,
+             setindex!, linearindexing, min, max, zero, one, isless, eachindex,
+             ndims, iteratorsize, to_index
+
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index
 using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
