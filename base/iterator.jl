@@ -392,6 +392,7 @@ julia> collect(drop(a,4))
 ```
 """
 drop(xs, n::Int) = Drop(xs, n)
+drop(xs::Take, n::Int) = Take(drop(xs.xs, n), max(0, xs.n - n))
 drop(xs::Drop, n::Int) = Drop(xs.xs, n + xs.n)
 
 eltype{I}(::Type{Drop{I}}) = eltype(I)
