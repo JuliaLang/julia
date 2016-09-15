@@ -462,11 +462,12 @@ public:
     virtual ~ROAllocator() {}
     virtual void finalize()
     {
-        if (exec) {
-            for (auto &alloc: allocations) {
-                sys::Memory::InvalidateInstructionCache(alloc.rt_addr,
-                                                        alloc.sz);
-            }
+        for (auto &alloc: allocations) {
+            // ensure the mapped pages are consistent
+            sys::Memory::InvalidateInstructionCache(alloc.wr_addr,
+                                                    alloc.sz);
+            sys::Memory::InvalidateInstructionCache(alloc.rt_addr,
+                                                    alloc.sz);
         }
         completed.clear();
         allocations.clear();
