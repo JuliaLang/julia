@@ -140,6 +140,12 @@ end
 @test length(take(countfrom(1),3)) == 3
 @test length(take(1:6,3)) == 3
 
+# take on arrays
+for itr in Any[[1:10;], [1 3 5 7 9; 2 4 6 8 10]]
+    @test take(itr, 5) == view(itr, 1:5)
+    @test take(itr, 15) == view(itr, 1:10)
+end
+
 # drop
 # ----
 
@@ -154,6 +160,14 @@ end
 @test length(drop(1:3,typemax(Int))) == 0
 @test Base.iteratorsize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
+
+# drop on arrays
+for itr in Any[[1:10;], [1 3 5 7 9; 2 4 6 8 10]]
+    @test drop(itr, 5) == view(itr, 6:10)
+    @test isempty(drop(itr, 15))
+    @test take(drop(itr, 3), 3) == view(itr, 4:6)
+    @test take(drop(itr, 3), 100) == view(itr, 4:10)
+end
 
 # cycle
 # -----
@@ -346,7 +360,7 @@ end
 @test Base.iteratorsize(Base.product(1:2))                        == Base.HasShape()
 @test Base.iteratorsize(Base.product(1:2, 1:2))                   == Base.HasShape()
 @test Base.iteratorsize(Base.product(take(1:2, 1), take(1:2, 1))) == Base.HasShape()
-@test Base.iteratorsize(Base.product(take(1:2, 2)))               == Base.HasLength()
+@test Base.iteratorsize(Base.product(take(1:2, 2)))               == Base.HasShape()
 @test Base.iteratorsize(Base.product([1 2; 3 4]))                 == Base.HasShape()
 
 # iteratoreltype trait business
