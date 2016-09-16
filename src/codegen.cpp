@@ -4643,22 +4643,17 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
         return (!jl_is_submodule(mod, jl_base_module) &&
                 !jl_is_submodule(mod, jl_core_module));
     };
-#ifdef LLVM37
     struct DbgState {
         DebugLoc loc;
+#ifdef LLVM37
         DISubprogram *sp;
+#else
+        DISubprogram sp;
+#endif
         StringRef file;
         ssize_t line;
         bool in_user_code;
     };
-#else
-    struct DbgState {
-        DebugLoc loc;
-        DISubprogram sp;
-        StringRef file;
-        ssize_t line;
-    };
-#endif
     struct StmtProp {
         DebugLoc loc;
         StringRef file;
@@ -4737,7 +4732,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
 #endif
                 if (ctx.debug_enabled)
                     new_file = dbuilder.createFile(new_filename, ".");
-                DI_stack.push_back({cur_prop.loc, SP,
+                DI_stack.push_back(DbgState{cur_prop.loc, SP,
                             cur_prop.file, cur_prop.line,
                             cur_prop.in_user_code});
                 const char *inl_name = "";
