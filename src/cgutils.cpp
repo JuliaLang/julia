@@ -26,7 +26,7 @@ static StringMap<GlobalVariable*> stringConstants;
 static Value *stringConstPtr(const std::string &txt)
 {
     StringRef ctxt(txt.c_str(), strlen(txt.c_str()) + 1);
-#ifdef LLVM36
+#if JL_LLVM_VERSION >= 30600
     StringMap<GlobalVariable*>::iterator pooledval =
         stringConstants.insert(std::pair<StringRef, GlobalVariable*>(ctxt, NULL)).first;
 #else
@@ -48,7 +48,7 @@ static Value *stringConstPtr(const std::string &txt)
                                                            (const unsigned char*)pooledtxt.data(),
                                                            pooledtxt.size())),
                                     ssno.str());
-#ifdef LLVM39
+#if JL_LLVM_VERSION >= 30900
             gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
 #else
             gv->setUnnamedAddr(true);
@@ -60,7 +60,7 @@ static Value *stringConstPtr(const std::string &txt)
         GlobalVariable *v = prepare_global(pooledval->second);
         Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
         Value *Args[] = { zero, zero };
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
         return builder.CreateInBoundsGEP(v->getValueType(), v, Args);
 #else
         return builder.CreateInBoundsGEP(v, Args);
@@ -76,7 +76,7 @@ static Value *stringConstPtr(const std::string &txt)
 
 // --- Debug info ---
 
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
 static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
 #else
 static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
@@ -95,9 +95,9 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     assert(jl_is_datatype(jt));
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (jdt->ditype != NULL) {
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
         DIType* t = (DIType*)jdt->ditype;
-#ifndef LLVM39
+#if JL_LLVM_VERSION < 30900
         // On LLVM 3.7 and 3.8, DICompositeType with a unique name
         // are ref'd by their unique name and needs to be explicitly
         // retained in order to be used in the module.
@@ -114,7 +114,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     }
     if (jl_is_bitstype(jt)) {
         uint64_t SizeInBits = 8*jdt->size;
-    #ifdef LLVM37
+    #if JL_LLVM_VERSION >= 30700
         llvm::DIType *t = dbuilder->createBasicType(
                 jl_symbol_name(jdt->name->name),
                 SizeInBits,
@@ -133,7 +133,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         return t;
     #endif
     }
-    #ifdef LLVM37
+    #if JL_LLVM_VERSION >= 30700
     else if (!jl_is_leaf_type(jt)) {
         jdt->ditype = jl_pvalue_dillvmt;
         return jl_pvalue_dillvmt;
@@ -422,7 +422,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
 #ifndef NDEBUG
             // If LLVM and Julia disagree about alignment, much trouble ensues, so check it!
             const DataLayout &DL =
-#ifdef LLVM36
+#if JL_LLVM_VERSION >= 30600
                 jl_ExecutionEngine->getDataLayout();
 #else
                 *jl_ExecutionEngine->getDataLayout();
@@ -644,7 +644,7 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 static void raise_exception(Value *exc, jl_codectx_t *ctx,
                             BasicBlock *contBB=nullptr)
 {
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     builder.CreateCall(prepare_call(jlthrow_func), { exc });
 #else
     builder.CreateCall(prepare_call(jlthrow_func), exc);
@@ -687,7 +687,7 @@ static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::st
 {
     Value *fname_val = stringConstPtr(ctx->funcName);
     Value *msg_val = stringConstPtr(msg);
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     builder.CreateCall(prepare_call(jltypeerror_func),
                        { fname_val, msg_val,
                          literal_pointer_val(type), boxed(x, ctx, false)}); // x is rooted by jl_type_error_rt
@@ -717,7 +717,7 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
         Value *vx = boxed(x, ctx);
         istype = builder.
             CreateICmpNE(
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
                 builder.CreateCall(prepare_call(jlsubtype_func), { vx, literal_pointer_val(type),
                                              ConstantInt::get(T_int32,1) }),
 #else
@@ -755,14 +755,14 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
         builder.CreateCondBr(ok, passBB, failBB);
         builder.SetInsertPoint(failBB);
         if (!ty) { // jl_value_t** tuple (e.g. the vararg)
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
             builder.CreateCall(prepare_call(jlvboundserror_func), { ainfo.V, len, i });
 #else
             builder.CreateCall3(prepare_call(jlvboundserror_func), ainfo.V, len, i);
 #endif
         }
         else if (ainfo.isboxed) { // jl_datatype_t or boxed jl_value_t
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
             builder.CreateCall(prepare_call(jlboundserror_func), { boxed(ainfo, ctx), i });
 #else
             builder.CreateCall2(prepare_call(jlboundserror_func), boxed(ainfo, ctx), i);
@@ -779,7 +779,7 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
                 builder.CreateStore(a, tempSpace);
                 a = tempSpace;
             }
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
             builder.CreateCall(prepare_call(jluboundserror_func), {
                                 builder.CreatePointerCast(a, T_pint8),
                                 literal_pointer_val(ty),
@@ -1009,7 +1009,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
         }
         else if (strct.isboxed) {
             idx = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
             Value *fld = builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(strct, ctx), idx });
 #else
             Value *fld = builder.CreateCall2(prepare_call(jlgetnthfieldchecked_func), boxed(strct, ctx), idx);
@@ -1158,7 +1158,7 @@ static Value *emit_arraylen_prim(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
     jl_value_t *ty = tinfo.typ;
 #ifdef STORE_ARRAY_LEN
     Value *addr = builder.CreateStructGEP(
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
                                           nullptr,
 #endif
                                           emit_bitcast(t,jl_parray_llvmt),
@@ -1198,7 +1198,7 @@ static Value *emit_arrayptr(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
 {
     Value *t = boxed(tinfo, ctx);
     Value *addr = builder.CreateStructGEP(
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
                                           nullptr,
 #endif
                                           emit_bitcast(t,jl_parray_llvmt),
@@ -1233,7 +1233,7 @@ static Value *emit_arrayflags(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
     int arrayflag_field = 1;
 #endif
     Value *addr = builder.CreateStructGEP(
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
                             nullptr,
 #endif
                             emit_bitcast(t, jl_parray_llvmt),
@@ -1322,7 +1322,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
         for(size_t k=0; k < nidxs; k++) {
             builder.CreateStore(idxs[k], builder.CreateGEP(tmp, ConstantInt::get(T_size, k)));
         }
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
         builder.CreateCall(prepare_call(jlboundserrorv_func), { a, tmp, ConstantInt::get(T_size, nidxs) });
 #else
         builder.CreateCall3(prepare_call(jlboundserrorv_func), a, tmp, ConstantInt::get(T_size, nidxs));
@@ -1801,7 +1801,7 @@ static void emit_signal_fence(void)
     builder.CreateCall(InlineAsm::get(FunctionType::get(T_void, false), "",
                                       "~{memory}", true));
 #else
-#  ifdef LLVM39
+#  if JL_LLVM_VERSION >= 30900
     builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
 #  else
     builder.CreateFence(SequentiallyConsistent, SingleThread);

@@ -168,13 +168,13 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
     else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, stringConstPtr(f_name), libptrgv });
 #else
     Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, stringConstPtr(f_name), libptrgv);
 #endif
     auto store = builder.CreateAlignedStore(llvmf, llvmgv, sizeof(void*));
-#  ifdef LLVM39
+#  if JL_LLVM_VERSION >= 30900
     store->setAtomic(AtomicOrdering::Release);
 #  else
     store->setAtomic(Release);
@@ -267,7 +267,7 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
         Value *ptr = runtime_sym_lookup(funcptype, f_lib, f_name, plt, libptrgv,
                                         llvmgv, runtime_lib);
         auto store = builder.CreateAlignedStore(builder.CreateBitCast(ptr, T_pvoidfunc), got, sizeof(void*));
-#  ifdef LLVM39
+#  if JL_LLVM_VERSION >= 30900
         store->setAtomic(AtomicOrdering::Release);
 #  else
         store->setAtomic(Release);
@@ -289,7 +289,7 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
         else {
             // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
             // Known failures includes vararg (not needed here) and sret.
-#if defined(LLVM37) && (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
+#if JL_LLVM_VERSION >= 30700 && (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
                         defined(_CPU_AARCH64_))
             ret->setTailCallKind(CallInst::TCK_MustTail);
 #endif
@@ -742,7 +742,7 @@ public:
             VMap[&*I] = &*(DestI++);        // Add mapping to VMap
         }
 
-    #ifdef LLVM36
+    #if JL_LLVM_VERSION >= 30600
         // Clone debug info - Not yet public API
         // llvm::CloneDebugInfoMetadata(NewF,F,VMap);
     #endif
@@ -781,9 +781,9 @@ public:
         return NewF;
     }
 
-#if defined(LLVM39)
+#if JL_LLVM_VERSION >= 30900
     virtual Value *materialize(Value *V) override
-#elif defined(LLVM38)
+#elif JL_LLVM_VERSION >= 30800
     virtual Value *materializeDeclFor(Value *V) override
 #else
     virtual Value *materializeValueFor (Value *V) override
@@ -980,7 +980,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
-#ifdef LLVM36
+#if JL_LLVM_VERSION >= 30600
         Module *m = NULL;
         bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
         if (!failed)
@@ -1014,7 +1014,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
 #endif
 
         //f->dump();
-        #ifndef LLVM35
+        #if JL_LLVM_VERSION < 30500
         if (verifyFunction(*f,PrintMessageAction)) {
         #else
         llvm::raw_fd_ostream out(1,false);
@@ -1125,7 +1125,7 @@ static std::string generate_func_sig(
         else if (use_sret(&abi, (jl_datatype_t*)rt)) {
             paramattrs.push_back(AttrBuilder());
             paramattrs[0].clear();
-#if !defined(_OS_WINDOWS_) || defined(LLVM35) // llvm used to use the old mingw ABI, skipping this marking works around that difference
+#if !defined(_OS_WINDOWS_) || JL_LLVM_VERSION >= 30500 // llvm used to use the old mingw ABI, skipping this marking works around that difference
             paramattrs[0].addAttribute(Attribute::StructRet);
 #endif
             paramattrs[0].addAttribute(Attribute::NoAlias);
@@ -1781,7 +1781,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         stacksave = CallInst::Create(Intrinsic::getDeclaration(jl_Module,
                                                                Intrinsic::stacksave));
         if (savespot) {
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
                 instList.insertAfter(savespot->getIterator(), (Instruction*)stacksave);
 #else
                 instList.insertAfter((Instruction*)savespot, (Instruction*)stacksave);
