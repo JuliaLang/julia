@@ -117,6 +117,12 @@ legacy::PassManager *jl_globalPM;
 PassManager *jl_globalPM;
 #endif
 
+#ifdef LLVM40
+#define DIFlagZero (DINode::FlagZero)
+#else
+#define DIFlagZero (0)
+#endif
+
 #ifndef LLVM35
 #define AddrSpaceCastInst BitCastInst
 #endif
@@ -4288,20 +4294,20 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
         #else
         SP = dbuilder.createFunction(CU,
         #endif
-                                    dbgFuncName,  // Name
-                                    f->getName(), // LinkageName
-                                    topfile,       // File
-                                    0,            // LineNo
-                                    subrty,       // Ty
-                                    false,        // isLocalToUnit
-                                    true,         // isDefinition
-                                    0,            // ScopeLine
-                                    0,            // Flags
-                                    true,         // isOptimized
+                                    dbgFuncName,      // Name
+                                    f->getName(),     // LinkageName
+                                    topfile,          // File
+                                    0,                // LineNo
+                                    subrty,           // Ty
+                                    false,            // isLocalToUnit
+                                    true,             // isDefinition
+                                    0,                // ScopeLine
+                                    DIFlagZero,       // Flags
+                                    true,             // isOptimized
         #ifdef LLVM38
-                                    nullptr);       // Template Parameters
+                                    nullptr);         // Template Parameters
         #else
-                                    f);             // Function
+                                    f);               // Function
         #endif
         topdebugloc = DebugLoc::get(toplineno, 0, SP, NULL);
         #ifdef LLVM38
@@ -4327,11 +4333,11 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                 jl_symbol_name(argname),            // Variable name
                 ctx.sret + i + 1,                   // Argument number (1-based)
                 topfile,                            // File
-                toplineno == -1 ? 0 : toplineno,  // Line
+                toplineno == -1 ? 0 : toplineno,    // Line
                 // Variable type
                 julia_type_to_di(varinfo.value.typ, &dbuilder, false),
-                AlwaysPreserve,                  // May be deleted if optimized out
-                0);                     // Flags (TODO: Do we need any)
+                AlwaysPreserve,                     // May be deleted if optimized out
+                DIFlagZero);                        // Flags (TODO: Do we need any)
 #else
             varinfo.dinfo = dbuilder.createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,    // Tag
@@ -4350,12 +4356,12 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
             ctx.slots[ctx.vaSlot].dinfo = dbuilder.createParameterVariable(
                 SP,                     // Scope (current function will be fill in later)
                 std::string(jl_symbol_name(slot_symbol(ctx.vaSlot, &ctx))) + "...",  // Variable name
-                ctx.sret + nreq + 1,               // Argument number (1-based)
-                topfile,                    // File
-                toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
+                ctx.sret + nreq + 1,             // Argument number (1-based)
+                topfile,                         // File
+                toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(ctx.slots[ctx.vaSlot].value.typ, &dbuilder, false),
                 AlwaysPreserve,                  // May be deleted if optimized out
-                0);                     // Flags (TODO: Do we need any)
+                DIFlagZero);                     // Flags (TODO: Do we need any)
 #else
             ctx.slots[ctx.vaSlot].dinfo = dbuilder.createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,   // Tag
@@ -4385,10 +4391,10 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                 topfile,                 // File
                 toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.value.typ, &dbuilder, false), // Variable type
-                AlwaysPreserve,                  // May be deleted if optimized out
-                0                       // Flags (TODO: Do we need any)
+                AlwaysPreserve,          // May be deleted if optimized out
+                DIFlagZero               // Flags (TODO: Do we need any)
 #ifndef LLVM38
-                ,0                      // Argument number (1-based)
+                ,0                       // Argument number (1-based)
 #endif
                 );
         }
@@ -4765,7 +4771,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                                                  false,
                                                  true,
                                                  0,
-                                                 0,
+                                                 DIFlagZero,
                                                  true,
                                                  nullptr);
                     MDNode *inlinedAt = NULL;
@@ -5234,7 +5240,7 @@ static void init_julia_llvm_env(Module *m)
         71, // At the time of this writing. Not sure if it's worth it to keep this in sync
         0 * 8, // sizeof(jl_value_t) * 8,
         __alignof__(void*) * 8, // __alignof__(jl_value_t) * 8,
-        0, // Flags
+        DIFlagZero, // Flags
 #ifdef LLVM37
         nullptr,    // Derived from
         nullptr);  // Elements - will be corrected later
