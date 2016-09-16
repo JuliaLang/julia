@@ -2866,7 +2866,12 @@ f(x) = yt(x)
                         (if (eqv? (string.char (string name) 0) #\@)
                             (error "macro definition not allowed inside a local scope"))))
              (if lam2
-                 (lambda-optimize-vars! lam2))
+		 (begin
+		   ;; mark all non-arguments as assigned, since locals that are never assigned
+		   ;; need to be handled the same as those that are (i.e., boxed).
+		   (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
+			     (list-tail (car (lam:vinfo lam2)) (length (lam:args lam2))))
+		   (lambda-optimize-vars! lam2)))
              (if (not local) ;; not a local function; will not be closure converted to a new type
                  (cond (short e)
                        ((null? cvs)
@@ -2992,6 +2997,8 @@ f(x) = yt(x)
                           '(null)
                           (convert-assignment name mk-closure fname lam interp)))))))
           ((lambda)  ;; should only happen inside (thunk ...)
+	   (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
+		     (car (lam:vinfo e)))
            `(lambda ,(cadr e)
               (,(clear-capture-bits (car (lam:vinfo e)))
                () ,@(cddr (lam:vinfo e)))
