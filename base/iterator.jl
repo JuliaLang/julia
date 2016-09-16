@@ -348,21 +348,6 @@ length(t::Take) = _min_length(t.xs, 1:t.n, iteratorsize(t.xs), HasLength())
 
 start(it::Take) = (it.n, start(it.xs))
 
-"""
-    take(s::String, n)
-
-Return a `SubString` with at most `n` of the first characters of `s`.  A
-character is defined as a Unicode scalar value.
-"""
-function take(s::String, n::Int)
-    i = 1
-    while n > 1 && i < endof(s.data)
-        n -= 1
-        i = nextind(s, i)
-    end
-    SubString(s, 1, i)
-end
-
 function next(it::Take, state)
     n, xs_state = state
     v, xs_state = next(it.xs, xs_state)
