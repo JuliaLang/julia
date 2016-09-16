@@ -11,13 +11,13 @@ using Base.Test
 # The "nodrop" variant does not drop any dimensions (not even trailing ones)
 function Agen_nodrop(A::AbstractArray, I...)
     irep = replace_colon(A, I)
-    _Agen(A, irep...)
+    _Agen(A, ensure_iterable(irep)...)
 end
 
 # This drops scalar dimensions
 function Agen_slice(A::AbstractArray, I...)
     irep = replace_colon(A, I)
-    B = _Agen(A, irep...)
+    B = _Agen(A, ensure_iterable(irep)...)
     sd = Int[]
     for i = 1:length(I)
         if isa(I[i], Real)
@@ -39,8 +39,12 @@ function replace_colon(A::AbstractArray, I)
     end
     d = length(I)
     Iout[d] = isa(I[d], Colon) ? (1:prod(size(A)[d:end])) : I[d]
-    Iout
+    (Iout...,)
 end
+
+ensure_iterable(::Tuple{}) = ()
+ensure_iterable(t::Tuple{Union{Number, CartesianIndex}, Vararg{Any}}) = ((t[1],), ensure_iterable(Base.tail(t))...)
+ensure_iterable(t::Tuple{Any, Vararg{Any}}) = (t[1], ensure_iterable(Base.tail(t))...)
 
 # To avoid getting confused by manipulations that are implemented for SubArrays,
 # it's good to copy the contents to an Array. This version protects against
@@ -290,7 +294,8 @@ if !testfull
                      (6,UInt(3):UInt(7),3:7),
                      (13:-2:1,:,:),
                      ([8,4,6,12,5,7],:,3:7),
-                     (6,6,[8,4,6,12,5,7]),
+                     (6,CartesianIndex.(6,[8,4,6,12,5,7])),
+                     (CartesianIndex(13,6),[8,4,6,12,5,7]),
                      (1,:,view(1:13,[9,12,4,13,1])),
                      (view(1:13,[9,12,4,13,1]),2:6,4),
                      ([1:5 2:6 3:7 4:8 5:9], :, 3),
