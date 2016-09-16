@@ -4823,7 +4823,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
     // Whether we are doing codegen in statement order.
     // We need to update debug location if this is false even if
     // `loc_changed` is false.
-    bool linear_codegen = false;
+    bool linear_codegen = true;
     auto find_next_stmt = [&] (int seq_next) {
         // `seq_next` is the next statement we want to emit
         // i.e. if it exists, it's the next one following control flow and
@@ -4902,18 +4902,11 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                 (malloc_log_mode == JL_LOG_USER && in_user_code));
     };
 
-    // If the first expresion changes the line number, we need to visit
-    // the start of the function. This can happen when the first line is
-    // a inlined function call.
-    if (stmtprops[0].loc_changed && coverage_mode != JL_LOG_NONE &&
-        do_coverage(in_user_mod(ctx.module))) {
-        // Compute `in_user_code` using `ctx.module` instead of using
-        // `stmtprops[0].in_user_code` since the code property is for the first
-        // statement, which might have been a push_loc.
-        if (ctx.debug_enabled)
-            builder.SetCurrentDebugLocation(topdebugloc);
+    // Handle the implicit first line number node.
+    if (ctx.debug_enabled)
+        builder.SetCurrentDebugLocation(topdebugloc);
+    if (coverage_mode != JL_LOG_NONE && do_coverage(in_user_mod(ctx.module)))
         coverageVisitLine(filename, toplineno);
-    }
     while (cursor != -1) {
         auto &props = stmtprops[cursor];
         if ((props.loc_changed || !linear_codegen) && ctx.debug_enabled)
