@@ -2576,7 +2576,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                         *ret = ghostValue(ety);
                     }
                     else {
-                        *ret = typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx, tbaa_arraybuf, 0, ary);
+                        *ret = typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx, tbaa_arraybuf, 0, ary, idx);
                     }
                     JL_GC_POP();
                     return true;
@@ -3507,14 +3507,14 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
                                literal_pointer_val(bnd));
         }
     }
-    else if (head == new_sym) {
+    else if (head == new_sym || head == stack_new_sym) {
         jl_value_t *ty = expr_type(args[0], ctx);
         size_t nargs = jl_array_len(ex->args);
         if (jl_is_type_type(ty) &&
             jl_is_datatype(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
             assert(nargs <= jl_datatype_nfields(jl_tparam0(ty))+1);
-            return emit_new_struct(jl_tparam0(ty),nargs,args,ctx);
+            return emit_new_struct(jl_tparam0(ty),nargs,args,ctx,head == stack_new_sym);
         }
         Value *typ = boxed(emit_expr(args[0], ctx), ctx);
         Value *val = emit_jlcall(jlnew_func, typ, &args[1], nargs-1, ctx);

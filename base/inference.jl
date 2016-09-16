@@ -1175,7 +1175,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         t = abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:null)
         t = Void
-    elseif is(e.head,:new)
+    elseif is(e.head,:new) || is(e.head,:stack_new)
         t = abstract_eval(e.args[1], vtypes, sv)
         if isType(t)
             t = t.parameters[1]
@@ -2316,7 +2316,7 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
             else
                 return false
             end
-        elseif head === :new
+        elseif head === :new || head === :stack_new
             if !allow_volatile
                 a = ea[1]
                 typ = widenconst(exprtype(a, src, mod))
@@ -3597,7 +3597,7 @@ function is_allocation(e::ANY, sv::InferenceState)
     isa(e, Expr) || return false
     if is_known_call(e, tuple, sv.src, sv.mod)
         return (length(e.args)-1,())
-    elseif e.head === :new
+    elseif e.head === :new || e.head === :stack_new
         typ = widenconst(exprtype(e, sv.src, sv.mod))
         if isleaftype(typ)
             @assert(isa(typ,DataType))

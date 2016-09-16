@@ -732,7 +732,7 @@ JL_CALLABLE(jl_f_getfield)
     }
     jl_value_t *fval = jl_get_nth_field(v, idx);
     if (fval == NULL)
-        jl_throw(jl_undefref_exception);
+        jl_undefref_error_int(v, idx);
     return fval;
 }
 

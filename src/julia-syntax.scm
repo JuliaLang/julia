@@ -3154,7 +3154,7 @@ f(x) = yt(x)
                   ((symbol? e) (emit e) #f)  ;; keep symbols for undefined-var checking
                   (else #f)))
           (case (car e)
-            ((call new)
+            ((call new stack_new)
              (let* ((ccall? (and (eq? (car e) 'call) (equal? (cadr e) '(core ccall))))
                     (args (if ccall?
                               ;; NOTE: 2nd and 3rd arguments of ccall must be left in place
@@ -3168,7 +3168,7 @@ f(x) = yt(x)
                     (callex (cons (car e) args)))
                (cond (tail (emit-return callex))
                      (value callex)
-                     ((eq? (car e) 'new) #f)
+                     ((or (eq? (car e) 'new) (eq? (car e) 'stack_new)) #f)
                      (else (emit callex)))))
             ((=)
              (let* ((rhs (compile (caddr e) break-labels #t #f))

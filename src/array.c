@@ -457,7 +457,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     jl_value_t *e = jl_arrayref_nothrow(a, i);
     if (e == NULL) {
-        jl_throw(jl_undefref_exception);
+        jl_undefref_error_int(a, i);
     }
     return e;
 }

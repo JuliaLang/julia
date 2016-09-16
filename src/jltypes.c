@@ -4102,6 +4102,7 @@ void jl_init_types(void)
     polly_sym = jl_symbol("polly");
     inline_sym = jl_symbol("inline");
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
+    stack_new_sym = jl_symbol("stack_new");
 
     tttvar = jl_new_typevar(jl_symbol("T"),
                                   (jl_value_t*)jl_bottom_type,

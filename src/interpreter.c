@@ -60,8 +60,8 @@ JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_
     assert(v);
     return v;
 }
-jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *tt, int cache, int inexact);
- jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous);
+
+jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous);
 
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
 {

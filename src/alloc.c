@@ -103,6 +103,7 @@ jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
 jl_sym_t *polly_sym; jl_sym_t *inline_sym;
 jl_sym_t *propagate_inbounds_sym;
+jl_sym_t *stack_new_sym;
 
 typedef struct {
     int64_t a;
