@@ -346,6 +346,7 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     @_inline_meta
     checkindex(Bool, OneTo(trailingsize(IA)), I[1])  # linear indexing
 end
+checkbounds_indices(::Type{Bool}, ::Tuple, ::Tuple{}) = true
 
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 
