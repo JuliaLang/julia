@@ -2,7 +2,9 @@
 
 using Base.Test
 
-if Sys.ARCH === :x86_64 || Sys.Arch === :i386
+ix86 = r"i[356]86"
+
+if Sys.ARCH === :x86_64 || ismatch(Sys.ARCH, ix86)
   let
     function linear_foo()
          x = 4
