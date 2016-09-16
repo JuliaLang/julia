@@ -242,6 +242,11 @@ cmp_tfunc = (x,y)->Bool
 
 isType(t::ANY) = isa(t,DataType) && is((t::DataType).name,Type.name)
 
+# true if Type is inlineable as constant
+isconstType(t::ANY,b::Bool) =
+    isType(t) && !has_typevars(t.parameters[1],b) &&
+    !issubtype(Tuple{Vararg}, t.parameters[1])  # work around inference bug #18450
+
 const IInf = typemax(Int) # integer infinity
 const n_ifunc = reinterpret(Int32,arraylen)+1
 const t_ifunc = Array{Tuple{Int,Int,Any},1}(n_ifunc)
@@ -990,7 +995,7 @@ end
 
 function pure_eval_call(f::ANY, argtypes::ANY, atype, vtypes, sv)
     for a in drop(argtypes,1)
-        if !(isa(a,Const) || (isType(a) && !has_typevars(a.parameters[1])))
+        if !(isa(a,Const) || isconstType(a,false))
             return false
         end
     end
@@ -1965,7 +1970,7 @@ function finish(me::InferenceState)
     # need to add coverage support to the `jl_call_method_internal` fast path
     if !do_coverage &&
         ((isa(me.bestguess,Const) && me.bestguess.val !== nothing) ||
-         (isType(me.bestguess) && !has_typevars(me.bestguess.parameters[1],true)))
+         isconstType(me.bestguess,true))
         if !ispure && length(me.src.code) < 10
             ispure = true
             for stmt in me.src.code
@@ -2388,7 +2393,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     topmod = _topmod(sv)
     # special-case inliners for known pure functions that compute types
     if sv.inlining
-        if isType(e.typ) && !has_typevars(e.typ.parameters[1],true)
+        if isconstType(e.typ,true)
             if (is(f, apply_type) || is(f, fieldtype) || is(f, typeof) ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :promote_type))
@@ -2539,14 +2544,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     methsp = meth[2]
     method = meth[3]::Method
     # check whether call can be inlined to just a quoted constant value
-    if isa(f, widenconst(ft)) && !method.isstaged && (method.source.pure || f === return_type) &&
-        (isType(e.typ) || isa(e.typ,Const))
-        if isType(e.typ)
-            if !has_typevars(e.typ.parameters[1])
-                return inline_as_constant(e.typ.parameters[1], argexprs, sv)
-            end
-        else
-            assert(isa(e.typ,Const))
+    if isa(f, widenconst(ft)) && !method.isstaged && (method.source.pure || f === return_type)
+        if isconstType(e.typ,false)
+            return inline_as_constant(e.typ.parameters[1], argexprs, sv)
+        elseif isa(e.typ,Const)
             return inline_as_constant(e.typ.val, argexprs, sv)
         end
     end
