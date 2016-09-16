@@ -8,15 +8,15 @@
 
 // analysis passes
 #include <llvm/Analysis/Passes.h>
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #endif
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #endif
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
 #include <llvm/IR/Verifier.h>
 #else
 #include <llvm/Analysis/Verifier.h>
@@ -31,7 +31,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Vectorize.h>
-#ifdef LLVM39
+#if JL_LLVM_VERSION >= 30900
 #include <llvm/Transforms/Scalar/GVN.h>
 #endif
 
@@ -40,7 +40,7 @@ namespace llvm {
 }
 
 #include <llvm/Bitcode/ReaderWriter.h>
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 #endif
 
@@ -50,7 +50,7 @@ namespace llvm {
 // target support
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/TargetRegistry.h>
-#ifndef LLVM37
+#if JL_LLVM_VERSION < 30700
 #include <llvm/Target/TargetLibraryInfo.h>
 #endif
 #include <llvm/IR/DataLayout.h>
@@ -96,7 +96,7 @@ void jl_init_jit(Type *T_pjlvalue_)
 // Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
 
 // this defines the set of optimization passes defined for Julia at various optimization levels
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
 void addOptimizationPasses(legacy::PassManager *PM)
 #else
 void addOptimizationPasses(PassManager *PM)
@@ -108,7 +108,7 @@ void addOptimizationPasses(PassManager *PM)
 #endif
 
 #if defined(JL_ASAN_ENABLED)
-#   if defined(LLVM37) && !defined(LLVM38)
+#   if JL_LLVM_VERSION >= 30700 && JL_LLVM_VERSION < 30800
     // LLVM 3.7 BUG: ASAN pass doesn't properly initialize its dependencies
     initializeTargetLibraryInfoWrapperPassPass(*PassRegistry::getPassRegistry());
 #   endif
@@ -121,18 +121,18 @@ void addOptimizationPasses(PassManager *PM)
         PM->add(createLowerPTLSPass(imaging_mode, tbaa_const));
         return;
     }
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     PM->add(createTargetTransformInfoWrapperPass(jl_TargetMachine->getTargetIRAnalysis()));
 #else
     jl_TargetMachine->addAnalysisPasses(*PM);
 #endif
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
     PM->add(createTypeBasedAAWrapperPass());
 #else
     PM->add(createTypeBasedAliasAnalysisPass());
 #endif
     if (jl_options.opt_level >= 3) {
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
         PM->add(createBasicAAWrapperPass());
 #else
         PM->add(createBasicAliasAnalysisPass());
@@ -189,12 +189,12 @@ void addOptimizationPasses(PassManager *PM)
 #endif
     PM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     PM->add(createLoopDeletionPass());         // Delete dead loops
-#if defined(LLVM35)
+#if JL_LLVM_VERSION >= 30500
     PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
 #else
     PM->add(createLoopUnrollPass());           // Unroll small loops
 #endif
-#if !defined(LLVM35) && !defined(INSTCOMBINE_BUG)
+#if JL_LLVM_VERSION < 30500 && !defined(INSTCOMBINE_BUG)
     PM->add(createLoopVectorizePass());        // Vectorize loops
 #endif
     //PM->add(createLoopStrengthReducePass());   // (jwb added)
@@ -226,7 +226,7 @@ void addOptimizationPasses(PassManager *PM)
     if (jl_options.opt_level >= 3)
         PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
 #endif
-#if defined(LLVM35)
+#if JL_LLVM_VERSION >= 30500
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
@@ -235,7 +235,7 @@ void addOptimizationPasses(PassManager *PM)
 
 #ifdef USE_ORCJIT
 
-#ifndef LLVM38
+#if JL_LLVM_VERSION < 30800
 void notifyObjectLoaded(RTDyldMemoryManager *memmgr,
                         llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT H);
 #endif
@@ -332,13 +332,13 @@ template <typename ObjSetT, typename LoadResult>
 void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
                 const LoadResult &LOS)
 {
-#ifndef LLVM38
+#if JL_LLVM_VERSION < 30800
     notifyObjectLoaded(JIT.MemMgr, H);
 #endif
     auto oit = Objects.begin();
     auto lit = LOS.begin();
     for (; oit != Objects.end(); ++oit, ++lit) {
-#ifdef LLVM39
+#if JL_LLVM_VERSION >= 30900
         const auto &Object = (*oit)->getBinary();
 #else
         auto &Object = *oit;
@@ -425,7 +425,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
 
                 if (!Obj) {
                     M.dump();
-#ifdef LLVM39
+#if JL_LLVM_VERSION >= 30900
                     std::string Buf;
                     raw_string_ostream OS(Buf);
                     logAllUnhandledErrors(Obj.takeError(), OS, "");
@@ -517,7 +517,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                         // Step 0: ObjectLinkingLayer has checked whether it is in the current module
                         // Step 1: See if it's something known to the ExecutionEngine
                         if (auto Sym = findSymbol(Name, true)) {
-#ifdef LLVM40
+#if JL_LLVM_VERSION >= 40000
                             // `findSymbol` already eagerly resolved the address
                             // return it directly.
                             return Sym;
@@ -625,7 +625,7 @@ ExecutionEngine *jl_ExecutionEngine;
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
 {
-#if defined(_OS_WINDOWS_) && defined(LLVM35)
+#if defined(_OS_WINDOWS_) && JL_LLVM_VERSION >= 30500
     if (imaging_mode && !G->isDeclaration()) {
         // Add comdat information to make MSVC link.exe happy
         // it's valid to emit this for ld.exe too,
@@ -731,7 +731,7 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
     NamedMDNode *sNMD = src->getNamedMetadata("llvm.dbg.cu");
     if (sNMD) {
         NamedMDNode *dNMD = dest->getOrInsertNamedMetadata("llvm.dbg.cu");
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
         for (NamedMDNode::op_iterator I = sNMD->op_begin(), E = sNMD->op_end(); I != E; ++I) {
             dNMD->addOperand(*I);
         }
@@ -752,7 +752,7 @@ static void jl_merge_recursive(Module *m, Module *collector);
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
 static void jl_add_to_ee(std::unique_ptr<Module> m)
 {
-#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_) && defined(LLVM35)
+#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_) && JL_LLVM_VERSION >= 30500
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
     ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
     (new GlobalVariable(*m, atype,
@@ -763,7 +763,7 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
         ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
 #endif
     assert(jl_ExecutionEngine);
-#if defined(LLVM36)
+#if JL_LLVM_VERSION >= 30600
     jl_ExecutionEngine->addModule(std::move(m));
 #else
     jl_ExecutionEngine->addModule(m.release());
@@ -831,7 +831,7 @@ static bool jl_can_finalize_function(StringRef F, SmallSet<Module*, 16> &known)
     if (incomplete_fname.find(F) != incomplete_fname.end())
         return false;
     Module *M = module_for_fname.lookup(F);
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
     if (M && known.insert(M).second)
 #else
     if (M && known.insert(M))
@@ -894,7 +894,7 @@ void jl_finalize_module(Module *m, bool shadow)
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine
 // (for values created locally or in the sysimage, jl_emit_and_add_to_shadow is generally preferable)
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
 void add_named_global(GlobalObject *gv, void *addr, bool dllimport)
 #else
 void add_named_global(GlobalValue *gv, void *addr, bool dllimport)
@@ -905,7 +905,7 @@ void add_named_global(GlobalValue *gv, void *addr, bool dllimport)
     // (global_proto will strip this from the JIT)
     if (dllimport && imaging_mode) {
         assert(gv->getLinkage() == GlobalValue::ExternalLinkage);
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
         // add the __declspec(dllimport) attribute
         gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
 #else
@@ -1118,19 +1118,19 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
     Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
     // make sure to emit the native object format, even if FORCE_ELF was set in codegen
 #if defined(_OS_WINDOWS_)
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
     TheTriple.setObjectFormat(Triple::COFF);
 #else
     TheTriple.setEnvironment(Triple::UnknownEnvironment);
 #endif
 #elif defined(_OS_DARWIN_)
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
     TheTriple.setObjectFormat(Triple::MachO);
 #else
     TheTriple.setEnvironment(Triple::MachO);
 #endif
 #endif
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
     std::unique_ptr<TargetMachine>
 #else
     OwningPtr<TargetMachine>
@@ -1142,7 +1142,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
         jl_TargetMachine->Options,
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         Reloc::PIC_,
-#elif defined(LLVM39)
+#elif JL_LLVM_VERSION >= 30900
         Optional<Reloc::Model>(),
 #else
         Reloc::Default,
@@ -1151,12 +1151,12 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
         CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
         ));
 
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     legacy::PassManager PM;
 #else
     PassManager PM;
 #endif
-#ifndef LLVM37
+#if JL_LLVM_VERSION < 30700
     PM.add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
 #else
     PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
@@ -1164,11 +1164,11 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
 
 
     // set up optimization passes
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     // No DataLayout pass needed anymore.
-#elif defined(LLVM36)
+#elif JL_LLVM_VERSION >= 30600
     PM.add(new DataLayoutPass());
-#elif defined(LLVM35)
+#elif JL_LLVM_VERSION >= 30500
     PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
 #else
     PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
@@ -1178,7 +1178,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
 
     std::unique_ptr<raw_fd_ostream> bc_OS;
     std::unique_ptr<raw_fd_ostream> obj_OS;
-#ifdef LLVM37 // 3.7 simplified formatted output; just use the raw stream alone
+#if JL_LLVM_VERSION >= 30700 // 3.7 simplified formatted output; just use the raw stream alone
     std::unique_ptr<raw_fd_ostream> &bc_FOS = bc_OS;
     std::unique_ptr<raw_fd_ostream> &obj_FOS = obj_OS;
 #else
@@ -1187,7 +1187,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
 #endif
 
     if (bc_fname) {
-#if defined(LLVM35)
+#if JL_LLVM_VERSION >= 30500
         // call output handler directly to avoid special case handling of `-` filename
         int FD;
         std::error_code EC = sys::fs::openFileForWrite(bc_fname, FD, sys::fs::F_None);
@@ -1202,7 +1202,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
         if (!err.empty())
             jl_safe_printf("%s\n", err.c_str());
         else {
-#ifndef LLVM37
+#if JL_LLVM_VERSION < 30700
             bc_FOS.reset(new formatted_raw_ostream(*bc_OS.get()));
 #endif
             PM.add(createBitcodeWriterPass(*bc_FOS.get()));     // Unroll small loops
@@ -1210,7 +1210,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
     }
 
     if (obj_fname) {
-#if defined(LLVM35)
+#if JL_LLVM_VERSION >= 30500
         // call output handler directly to avoid special case handling of `-` filename
         int FD;
         std::error_code EC = sys::fs::openFileForWrite(obj_fname, FD, sys::fs::F_None);
@@ -1225,7 +1225,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
         if (!err.empty())
             jl_safe_printf("%s\n", err.c_str());
         else {
-#ifndef LLVM37
+#if JL_LLVM_VERSION < 30700
             obj_FOS.reset(new formatted_raw_ostream(*obj_OS.get()));
 #endif
             if (TM->addPassesToEmitFile(PM, *obj_FOS.get(), TargetMachine::CGFT_ObjectFile, false)) {
@@ -1242,10 +1242,10 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
     Module *clone = CloneModule(shadow_output, VMap);
 #endif
 
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     // Reset the target triple to make sure it matches the new target machine
     clone->setTargetTriple(TM->getTargetTriple().str());
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
     clone->setDataLayout(TM->createDataLayout());
 #else
     clone->setDataLayout(TM->getDataLayout()->getStringRepresentation());

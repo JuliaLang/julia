@@ -434,7 +434,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         Value *arg1 = boxed(bt_value, ctx);
         Value *arg2 = boxed(v, ctx);
         Value *func = prepare_call(runtime_func[reinterpret]);
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
         Value *r = builder.CreateCall(func, {arg1, arg2});
 #else
         Value *r = builder.CreateCall2(func, arg1, arg2);
@@ -732,7 +732,7 @@ static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_value
     jl_cgval_t parg = emit_expr(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
     Value *alignarg = boxed(emit_expr(align, ctx), ctx);
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     Value *ret = builder.CreateCall(prepare_call(jlpref_func), { boxed(parg, ctx), iarg, alignarg });
 #else
     Value *ret = builder.CreateCall3(prepare_call(jlpref_func), boxed(parg, ctx), iarg, alignarg);
@@ -799,7 +799,7 @@ static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value
     Value *xarg = boxed(emit_expr(x, ctx), ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
     Value *alignarg = boxed(emit_expr(align, ctx), ctx);
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     builder.CreateCall(prepare_call(jlpset_func), { boxed(parg, ctx), xarg, iarg, alignarg });
 #else
     builder.CreateCall4(prepare_call(jlpset_func), boxed(parg, ctx), xarg, iarg, alignarg);
@@ -896,7 +896,7 @@ struct math_builder {
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
             FastMathFlags fmf;
             fmf.setUnsafeAlgebra();
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
             builder.setFastMathFlags(fmf);
 #else
             builder.SetFastMathFlags(fmf);
@@ -905,7 +905,7 @@ struct math_builder {
     }
     IRBuilder<>& operator()() const { return builder; }
     ~math_builder() {
-#ifdef LLVM38
+#if JL_LLVM_VERSION >= 30800
         builder.setFastMathFlags(old_fmf);
 #else
         builder.SetFastMathFlags(old_fmf);
@@ -944,7 +944,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *func = prepare_call(runtime_func[f]);
         if (nargs == 1) {
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
             r = builder.CreateCall(func, {x});
 #else
             r = builder.CreateCall(func, x);
@@ -953,7 +953,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         else if (nargs == 2) {
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
             Value *y = boxed(emit_expr(args[2], ctx), ctx);
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
             r = builder.CreateCall(func, {x, y});
 #else
             r = builder.CreateCall2(func, x, y);
@@ -963,7 +963,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
             Value *y = boxed(emit_expr(args[2], ctx), ctx);
             Value *z = boxed(emit_expr(args[3], ctx), ctx);
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
             r = builder.CreateCall(func, {x, y, z});
 #else
             r = builder.CreateCall3(func, x, y, z);
@@ -1166,7 +1166,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     Value *typemin;
     switch (f) {
     case neg_int:
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
      return builder.CreateNeg(JL_INT(x));
 #else
      return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
@@ -1183,7 +1183,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 // to implement this in LLVM 3.4, though there are two different idioms
 // that do the correct thing on LLVM <= 3.3 and >= 3.5 respectively.
 // See issue #7868
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
     case neg_float: return math_builder(ctx)().CreateFSub(ConstantFP::get(FT(t), -0.0), FP(x));
     case neg_float_fast: return math_builder(ctx, true)().CreateFNeg(FP(x));
 #else
@@ -1207,25 +1207,25 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
       assert(z->getType() == y->getType());
       Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
                                    ArrayRef<Type*>(x->getType()));
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
       return builder.CreateCall(fmaintr,{ FP(x), FP(y), FP(z) });
 #else
       return builder.CreateCall3(fmaintr, FP(x), FP(y), FP(z));
 #endif
     }
     case muladd_float:
-#ifdef LLVM34
+#if JL_LLVM_VERSION >= 30400
     {
       assert(y->getType() == x->getType());
       assert(z->getType() == y->getType());
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
       return builder.CreateCall
 #else
       return builder.CreateCall3
 #endif
         (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
                                    ArrayRef<Type*>(x->getType())),
-         #ifdef LLVM37
+         #if JL_LLVM_VERSION >= 30700
          {FP(x), FP(y), FP(z)}
          #else
          FP(x), FP(y), FP(z)
@@ -1259,7 +1259,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                     Intrinsic::smul_with_overflow :
                     Intrinsic::umul_with_overflow)))),
                 ArrayRef<Type*>(ix->getType()));
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
         Value *res = builder.CreateCall(intr,{ix, iy});
 #else
         Value *res = builder.CreateCall2(intr, ix, iy);
@@ -1413,7 +1413,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         Type *types[1] = {x->getType()};
         Value *ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
                                       ArrayRef<Type*>(types));
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
         return builder.CreateCall(ctlz, {x, ConstantInt::get(T_int1,0)});
 #else
         return builder.CreateCall2(ctlz, x, ConstantInt::get(T_int1,0));
@@ -1423,7 +1423,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         x = JL_INT(x);
         Type *types[1] = {x->getType()};
         Value *cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types));
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
         return builder.CreateCall(cttz, {x, ConstantInt::get(T_int1, 0)});
 #else
         return builder.CreateCall2(cttz, x, ConstantInt::get(T_int1, 0));
@@ -1433,7 +1433,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     case abs_float:
     {
         x = FP(x);
-#ifdef LLVM34
+#if JL_LLVM_VERSION >= 30400
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs,
                                                             ArrayRef<Type*>(x->getType())),
@@ -1521,11 +1521,11 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         x = FP(x);
         y = JL_INT(y);
         Type *tx = x->getType(); // TODO: LLVM expects this to be i32
-#ifdef LLVM36
+#if JL_LLVM_VERSION >= 30600
         Type *ts[1] = { tx };
         Value *powi = Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
             ArrayRef<Type*>(ts));
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
         return builder.CreateCall(powi, {x, y});
 #else
         return builder.CreateCall2(powi, x, y);

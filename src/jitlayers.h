@@ -25,7 +25,7 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #endif
 
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
 #include "llvm/IR/LegacyPassManager.h"
 extern legacy::PassManager *jl_globalPM;
 #else
@@ -33,7 +33,7 @@ extern legacy::PassManager *jl_globalPM;
 extern PassManager *jl_globalPM;
 #endif
 
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
 #include <llvm/Target/TargetMachine.h>
 #endif
 
@@ -54,7 +54,7 @@ extern size_t jltls_states_func_idx;
 
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
 void addOptimizationPasses(legacy::PassManager *PM);
 #else
 void addOptimizationPasses(PassManager *PM);
@@ -78,7 +78,7 @@ static inline GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
             G->isConstant(), GlobalVariable::ExternalLinkage,
             NULL, G->getName(),  G->getThreadLocalMode());
     proto->copyAttributesFrom(G);
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
     // DLLImport only needs to be set for the shadow module
     // it just gets annoying in the JIT
     proto->setDLLStorageClass(GlobalValue::DefaultStorageClass);
@@ -100,7 +100,7 @@ static inline Function *function_proto(Function *F, Module *M = NULL)
     // routine from `F`, since copying it and then resetting is more expensive
     // as well as introducing an extra use from this unowned function, which
     // can cause crashes in the LLVMContext's global destructor.
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     llvm::Constant *OldPersonalityFn = nullptr;
     if (F->hasPersonalityFn()) {
         OldPersonalityFn = F->getPersonalityFn();
@@ -112,12 +112,12 @@ static inline Function *function_proto(Function *F, Module *M = NULL)
      // as codegen may make decisions based on the presence of certain attributes
      NewF->copyAttributesFrom(F);
 
-#ifdef LLVM37
+#if JL_LLVM_VERSION >= 30700
     if (OldPersonalityFn)
         F->setPersonalityFn(OldPersonalityFn);
 #endif
 
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
     // DLLImport only needs to be set for the shadow module
     // it just gets annoying in the JIT
     NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
@@ -137,7 +137,7 @@ static inline GlobalVariable *prepare_global(GlobalVariable *G, Module *M)
     return cast<GlobalVariable>(local);
 }
 
-#ifdef LLVM35
+#if JL_LLVM_VERSION >= 30500
 void add_named_global(GlobalObject *gv, void *addr, bool dllimport);
 template<typename T>
 static inline void add_named_global(GlobalObject *gv, T *addr, bool dllimport = true)
@@ -154,7 +154,7 @@ static inline void add_named_global(GlobalValue *gv, T *addr, bool dllimport = t
 
 void jl_init_jit(Type *T_pjlvalue_);
 #ifdef USE_ORCJIT
-#ifdef LLVM40
+#if JL_LLVM_VERSION >= 40000
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
@@ -226,7 +226,7 @@ extern JuliaOJIT *jl_ExecutionEngine;
 #else
 extern ExecutionEngine *jl_ExecutionEngine;
 #endif
-#ifdef LLVM39
+#if JL_LLVM_VERSION >= 30900
 JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 #else
 JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
