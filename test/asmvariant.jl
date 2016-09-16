@@ -8,21 +8,23 @@ function linear_foo()
          y = 5
 end
 
-rgx = r"%"
-buf = IOBuffer()
-output=""
+let 
+  rgx = r"%"
+  buf = IOBuffer()
+  output=""
 
-code_native(buf,linear_foo,(),"att")
-output=takebuf_string(buf)
+  code_native(buf,linear_foo,(),"att")
+  output=takebuf_string(buf)
 
-@test ismatch(rgx,output)
+  @test ismatch(rgx,output)
 
-code_native(buf,linear_foo,(),"intel")
-output=takebuf_string(buf)
+  code_native(buf,linear_foo,(),"intel")
+  output=takebuf_string(buf)
 
-@test !(ismatch(rgx,output))
+  @test !(ismatch(rgx,output))
 
-code_native(buf,linear_foo,())
-output=takebuf_string(buf)
+  code_native(buf,linear_foo,())
+  output=takebuf_string(buf)
 
-@test ismatch(rgx, output)
+  @test ismatch(rgx, output)
+end
