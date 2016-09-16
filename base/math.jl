@@ -325,16 +325,15 @@ atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,
 atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
 
 max{T<:AbstractFloat}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
-                                    ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
+                                    ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
 
 
 min{T<:AbstractFloat}(x::T, y::T) = ifelse((y < x) | (signbit(y) > signbit(x)),
-                                    ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
+                                    ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
 
-minmax{T<:AbstractFloat}(x::T, y::T) = ifelse(isnan(x-y), ifelse(isnan(x), (y, y), (x, x)),
-                                       ifelse((y < x) | (signbit(y) > signbit(x)), (y, x),
-                                       ifelse((y > x) | (signbit(y) < signbit(x)), (x, y),
-                                       ifelse(x == x, (x, x), (y, y)))))
+minmax{T<:AbstractFloat}(x::T, y::T) =
+    ifelse(isnan(x) | isnan(y), ifelse(isnan(x), (x,x), (y,y)),
+           ifelse((y > x) | (signbit(x) > signbit(y)), (x,y), (y,x)))
 
 
 """
