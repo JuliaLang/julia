@@ -1162,18 +1162,28 @@ end
 @test pr8622() == [0,3,1,0]
 
 #6828 - size of specific dimensions
-a = Array{Float64}(10)
-@test size(a) == (10,)
-@test size(a, 1) == 10
-@test size(a,2,1) == (1,10)
-a = Array{Float64}(2,3)
-@test size(a) == (2,3)
-@test size(a,4,3,2,1) == (1,1,3,2)
-@test size(a,1,2) == (2,3)
-a = Array{Float64}(9,8,7,6,5,4,3,2,1)
-@test size(a,1,1) == (9,9)
-@test size(a,4) == 6
-@test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+let
+    a = Array{Float64}(10)
+    @test size(a) == (10,)
+    @test size(a, 1) == 10
+    @test size(a,2,1) == (1,10)
+    aa = Array{Float64}(2,3)
+    @test size(aa) == (2,3)
+    @test size(aa,4,3,2,1) == (1,1,3,2)
+    @test size(aa,1,2) == (2,3)
+    aaa = Array{Float64}(9,8,7,6,5,4,3,2,1)
+    @test size(aaa,1,1) == (9,9)
+    @test size(aaa,4) == 6
+    @test size(aaa,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+
+    #18459 Test Array{T, N} constructor
+    b = Array{Float64, 1}(10)
+    @test size(a) == size(b)
+    bb = Array{Float64, 2}(2,3)
+    @test size(aa) == size(bb)
+    bbb = Array{Float64, 9}(9,8,7,6,5,4,3,2,1)
+    @test size(aaa) == size(bbb)
+end
 
 # Cartesian
 function cartesian_foo()
@@ -1781,4 +1791,26 @@ let
     @test isa(hvcat((2,), densevec, densemat), Array)
     @test isa(cat((1,2), densemat, densevec), Array)
     @test isa(cat((1,2), densevec, densemat), Array)
+end
+
+# Test that type constructor Array{T, N}(d...) works (especially for N>3)
+let
+    a = Array{Float64}(10)
+    b = Array{Float64, 1}(10)
+    @test size(a) == (10,)
+    @test size(a, 1) == 10
+    @test size(a,2,1) == (1,10)
+    @test size(a) == size(b)
+    a = Array{Float64}(2,3)
+    b = Array{Float64, 2}(2,3)
+    @test size(a) == (2,3)
+    @test size(a,4,3,2,1) == (1,1,3,2)
+    @test size(a,1,2) == (2,3)
+    @test size(a) == size(b)
+    a = Array{Float64}(9,8,7,6,5,4,3,2,1)
+    b = Array{Float64, 9}(9,8,7,6,5,4,3,2,1)
+    @test size(a,1,1) == (9,9)
+    @test size(a,4) == 6
+    @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
+    @test size(a) == size(b)
 end
