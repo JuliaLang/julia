@@ -16,9 +16,9 @@ if Sys.ARCH === :x86_64 || Sys.Arch === :i386
     #test that the string output is at&t syntax by checking for occurrences of '%'s
     code_native(buf,linear_foo,(),:att)
     output=takebuf_string(buf)
-     
+
     @test ismatch(rgx,output)
-    
+
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf,linear_foo,(),:intel)
     output=takebuf_string(buf)
