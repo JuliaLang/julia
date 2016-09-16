@@ -682,6 +682,35 @@ static void null_pointer_check(Value *v, jl_codectx_t *ctx)
                            literal_pointer_val(jl_undefref_exception), ctx);
 }
 
+static void null_field_check(Value *v, const jl_cgval_t& object, Value *field_index, jl_codectx_t *ctx)
+{
+    BasicBlock *fail = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
+    BasicBlock *pass = BasicBlock::Create(jl_LLVMContext, "pass", ctx->f);
+    Value *cond = builder.CreateICmpNE(v, Constant::getNullValue(v->getType()));
+    builder.CreateCondBr(cond, pass, fail);
+    builder.SetInsertPoint(fail);
+    if (object.isboxed) {
+#ifdef LLVM37
+        // no need to root, it will be done by the callee
+        builder.CreateCall(prepare_call(jlundefreferror_func), { boxed(object,ctx,false), field_index });
+#else
+        builder.CreateCall3(prepare_call(jlundefreferror_func), boxed(object,ctx,false), field_index);
+#endif
+    } else {
+        assert(object.ispointer());
+        assert(!object.isghost);
+        Value *typ = literal_pointer_val(object.typ);
+        Value *data = builder.CreatePointerCast(object.V, T_pint8);
+#ifdef LLVM37
+        builder.CreateCall(prepare_call(jluundefreferror_func), { data, typ, field_index });
+#else
+        builder.CreateCall4(prepare_call(jluundefreferror_func), data, typ, field_index);
+#endif
+    }
+    builder.CreateUnreachable();
+    builder.SetInsertPoint(pass);
+}
+
 static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
                             jl_codectx_t *ctx)
 {
@@ -824,7 +853,8 @@ static LoadInst *build_load(Value *ptr, jl_value_t *jltype)
 static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false, bool needsroot = true);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
-                             jl_codectx_t *ctx, MDNode *tbaa, unsigned alignment = 0)
+                             jl_codectx_t *ctx, MDNode *tbaa, unsigned alignment = 0,
+                             const jl_cgval_t& container = jl_cgval_t()) // to throw undefref
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
@@ -853,7 +883,8 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
             elt = load;
         }
         if (isboxed) {
-            null_pointer_check(elt, ctx);
+            null_field_check(elt, container, idx_0based, ctx);
+            //null_pointer_check(elt, ctx);
         }
     //}
     return mark_julia_type(elt, isboxed, jltype, ctx);
@@ -1005,7 +1036,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
             Value *fld = tbaa_decorate(strct.tbaa, builder.CreateLoad(
                         builder.CreateGEP(data_pointer(strct, ctx), idx)));
             if ((unsigned)stt->ninitialized != nfields) // TODO ptrfree
-                null_pointer_check(fld, ctx);
+                null_field_check(fld, strct, idx, ctx);
             *ret = mark_julia_type(fld, true, jl_any_type, ctx, strct.gcroot || !strct.isimmutable);
             return true;
         }
@@ -1082,7 +1113,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         if (jl_field_isptr(jt, idx)) {
             Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
             if (idx >= (unsigned)jt->ninitialized) // TODO ptrfree
-                null_pointer_check(fldv, ctx);
+                null_field_check(fldv, strct, ConstantInt::get(T_size, idx), ctx);
             jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx, strct.gcroot || !strct.isimmutable);
             return ret;
         }
@@ -1107,7 +1138,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         if (jl_field_isptr(jt, idx)) {
             Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr, T_ppjlvalue)));
             if (idx >= (unsigned)jt->ninitialized) // TODO ptrfree
-                null_pointer_check(fldv, ctx);
+                null_field_check(fldv, strct, ConstantInt::get(T_size, idx), ctx);
             jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx, true);
             return ret;
 

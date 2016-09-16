@@ -819,7 +819,8 @@ void jl_get_builtin_hooks(void)
     jl_domain_exception    = jl_new_struct_uninit((jl_datatype_t*)core("DomainError"));
     jl_overflow_exception  = jl_new_struct_uninit((jl_datatype_t*)core("OverflowError"));
     jl_inexact_exception   = jl_new_struct_uninit((jl_datatype_t*)core("InexactError"));
-    jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
+    jl_undefref_exception  = core("empty_undefref_error");
+    jl_undefreferror_type  = (jl_datatype_t*)core("UndefRefError");
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");

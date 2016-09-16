@@ -183,6 +183,27 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, 
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_undefref_error_unboxed_int(void *data, jl_value_t *vt, size_t field)
+{
+    // data is expected to be gc-safe (either gc-rooted, or alloca)
+    // vt is expected to be gc-rooted (in a linfo-root probably)
+    jl_value_t *v = NULL, *boxed = NULL;
+    JL_GC_PUSH2(&v, &boxed);
+    v = jl_new_bits(vt, data);
+    boxed = jl_box_long(field+1);
+    jl_throw(jl_new_struct((jl_datatype_t*)jl_undefreferror_type, v, boxed));
+}
+
+JL_DLLEXPORT void JL_NORETURN jl_undefref_error_int(jl_value_t *v, size_t field)
+{
+    jl_value_t *boxed = NULL;
+    JL_GC_PUSH2(&v, &boxed); // root arguments so the caller doesn't need to
+    boxed = jl_box_long(field+1);
+    jl_throw(jl_new_struct((jl_datatype_t*)jl_undefreferror_type, v, boxed));
+}
+
+
+
 JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
 {
     jl_datatype_t *eof_error =

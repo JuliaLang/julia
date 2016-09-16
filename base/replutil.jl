@@ -246,7 +246,18 @@ function showerror(io::IO, ex::SystemError)
 end
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
-showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
+function showerror(io::IO, e::UndefRefError)
+    print(io, "UndefRefError: ")
+    if isdefined(e, :a)
+        if isa(e.a, Array)
+            print(io, "access to undefined element ", e.i, " of ", summary(e.a))
+        else
+            print(io, "access to undefined field `", fieldname(typeof(e.a), e.i), "` of ", e.a)
+        end
+    else
+        print(io, "access to undefined reference")
+    end
+end
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
 showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = print(io, "KeyError: key $(repr(ex.key)) not found")

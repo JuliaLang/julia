@@ -209,7 +209,12 @@ immutable OutOfMemoryError   <: Exception end
 immutable ReadOnlyMemoryError<: Exception end
 immutable SegmentationFault  <: Exception end
 immutable StackOverflowError <: Exception end
-immutable UndefRefError      <: Exception end
+immutable UndefRefError      <: Exception
+    a::Any
+    i::Any
+    UndefRefError() = new()
+end
+const empty_undefref_error = UndefRefError()
 immutable UndefVarError      <: Exception
     var::Symbol
 end

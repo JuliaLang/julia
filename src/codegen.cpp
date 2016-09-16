@@ -338,6 +338,8 @@ static Function *jlboundserror_func;
 static Function *jluboundserror_func;
 static Function *jlvboundserror_func;
 static Function *jlboundserrorv_func;
+static Function *jlundefreferror_func;
+static Function *jluundefreferror_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
 static Function *jlgetbindingorerror_func;
@@ -2574,7 +2576,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                         *ret = ghostValue(ety);
                     }
                     else {
-                        *ret = typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx, tbaa_arraybuf);
+                        *ret = typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx, tbaa_arraybuf, 0, ary);
                     }
                     JL_GC_POP();
                     return true;
@@ -5559,6 +5561,28 @@ static void init_julia_llvm_env(Module *m)
                          "jl_bounds_error_unboxed_int", m);
     jluboundserror_func->setDoesNotReturn();
     add_named_global(jluboundserror_func, &jl_bounds_error_unboxed_int);
+
+    std::vector<Type*> args2_undefreferror;
+    args2_undefreferror.push_back(T_pjlvalue);
+    args2_undefreferror.push_back(T_size);
+    jlundefreferror_func =
+        Function::Create(FunctionType::get(T_void, args2_undefreferror, false),
+                         Function::ExternalLinkage,
+                         "jl_undefref_error_int", m);
+    jlundefreferror_func->setDoesNotReturn();
+    add_named_global(jlundefreferror_func, &jl_undefref_error_int);
+
+    std::vector<Type*> args3_uundefreferror;
+    args3_uundefreferror.push_back(T_pint8);
+    args3_uundefreferror.push_back(T_pjlvalue);
+    args3_uundefreferror.push_back(T_size);
+    jluundefreferror_func =
+        Function::Create(FunctionType::get(T_void, args3_uundefreferror, false),
+                         Function::ExternalLinkage,
+                         "jl_undefref_error_unboxed_int", m);
+    jluundefreferror_func->setDoesNotReturn();
+    add_named_global(jluundefreferror_func, &jl_undefref_error_unboxed_int);
+
 
     jlnew_func =
         Function::Create(jl_func_sig, Function::ExternalLinkage,

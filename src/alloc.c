@@ -68,6 +68,7 @@ JL_DLLEXPORT jl_value_t *jl_inexact_exception;
 JL_DLLEXPORT jl_value_t *jl_undefref_exception;
 jl_value_t *jl_interrupt_exception;
 jl_datatype_t *jl_boundserror_type;
+jl_datatype_t *jl_undefreferror_type;
 jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
 union jl_typemap_t jl_cfunction_list;
