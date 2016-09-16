@@ -70,7 +70,7 @@ Evaluate an expression in the given module and return the result. Every `Module`
 those defined with `baremodule`) has its own 1-argument definition of `eval`, which
 evaluates expressions in that module.
 """
-eval
+Core.eval
 
 """
     @eval

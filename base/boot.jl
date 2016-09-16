@@ -313,6 +313,7 @@ typealias NTuple{N,T} Tuple{Vararg{T,N}}
 # primitive array constructors
 (::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+(::Type{Array{T,N}}){T,N}(d::Vararg{Int, N}) = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
 (::Type{Array{T,1}}){T}(m::Int) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
 (::Type{Array{T,2}}){T}(m::Int, n::Int) =

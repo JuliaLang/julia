@@ -151,7 +151,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
             0,                          // LineNumber
             8 * jdt->size,              // SizeInBits
             8 * jdt->layout->alignment, // AlignInBits
-            0,                          // Flags
+            DIFlagZero,                 // Flags
             NULL,                       // DerivedFrom
             DINodeArray(),              // Elements
             dwarf::DW_LANG_Julia,       // RuntimeLanguage

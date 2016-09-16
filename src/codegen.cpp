@@ -117,6 +117,12 @@ legacy::PassManager *jl_globalPM;
 PassManager *jl_globalPM;
 #endif
 
+#ifdef LLVM40
+#define DIFlagZero (DINode::FlagZero)
+#else
+#define DIFlagZero (0)
+#endif
+
 #ifndef LLVM35
 #define AddrSpaceCastInst BitCastInst
 #endif
@@ -4288,20 +4294,20 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
         #else
         SP = dbuilder.createFunction(CU,
         #endif
-                                    dbgFuncName,  // Name
-                                    f->getName(), // LinkageName
-                                    topfile,       // File
-                                    0,            // LineNo
-                                    subrty,       // Ty
-                                    false,        // isLocalToUnit
-                                    true,         // isDefinition
-                                    0,            // ScopeLine
-                                    0,            // Flags
-                                    true,         // isOptimized
+                                    dbgFuncName,      // Name
+                                    f->getName(),     // LinkageName
+                                    topfile,          // File
+                                    0,                // LineNo
+                                    subrty,           // Ty
+                                    false,            // isLocalToUnit
+                                    true,             // isDefinition
+                                    0,                // ScopeLine
+                                    DIFlagZero,       // Flags
+                                    true,             // isOptimized
         #ifdef LLVM38
-                                    nullptr);       // Template Parameters
+                                    nullptr);         // Template Parameters
         #else
-                                    f);             // Function
+                                    f);               // Function
         #endif
         topdebugloc = DebugLoc::get(toplineno, 0, SP, NULL);
         #ifdef LLVM38
@@ -4327,11 +4333,11 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                 jl_symbol_name(argname),            // Variable name
                 ctx.sret + i + 1,                   // Argument number (1-based)
                 topfile,                            // File
-                toplineno == -1 ? 0 : toplineno,  // Line
+                toplineno == -1 ? 0 : toplineno,    // Line
                 // Variable type
                 julia_type_to_di(varinfo.value.typ, &dbuilder, false),
-                AlwaysPreserve,                  // May be deleted if optimized out
-                0);                     // Flags (TODO: Do we need any)
+                AlwaysPreserve,                     // May be deleted if optimized out
+                DIFlagZero);                        // Flags (TODO: Do we need any)
 #else
             varinfo.dinfo = dbuilder.createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,    // Tag
@@ -4350,12 +4356,12 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
             ctx.slots[ctx.vaSlot].dinfo = dbuilder.createParameterVariable(
                 SP,                     // Scope (current function will be fill in later)
                 std::string(jl_symbol_name(slot_symbol(ctx.vaSlot, &ctx))) + "...",  // Variable name
-                ctx.sret + nreq + 1,               // Argument number (1-based)
-                topfile,                    // File
-                toplineno == -1 ? 0 : toplineno,             // Line (for now, use lineno of the function)
+                ctx.sret + nreq + 1,             // Argument number (1-based)
+                topfile,                         // File
+                toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(ctx.slots[ctx.vaSlot].value.typ, &dbuilder, false),
                 AlwaysPreserve,                  // May be deleted if optimized out
-                0);                     // Flags (TODO: Do we need any)
+                DIFlagZero);                     // Flags (TODO: Do we need any)
 #else
             ctx.slots[ctx.vaSlot].dinfo = dbuilder.createLocalVariable(
                 llvm::dwarf::DW_TAG_arg_variable,   // Tag
@@ -4385,10 +4391,10 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                 topfile,                 // File
                 toplineno == -1 ? 0 : toplineno, // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.value.typ, &dbuilder, false), // Variable type
-                AlwaysPreserve,                  // May be deleted if optimized out
-                0                       // Flags (TODO: Do we need any)
+                AlwaysPreserve,          // May be deleted if optimized out
+                DIFlagZero               // Flags (TODO: Do we need any)
 #ifndef LLVM38
-                ,0                      // Argument number (1-based)
+                ,0                       // Argument number (1-based)
 #endif
                 );
         }
@@ -4643,22 +4649,17 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
         return (!jl_is_submodule(mod, jl_base_module) &&
                 !jl_is_submodule(mod, jl_core_module));
     };
-#ifdef LLVM37
     struct DbgState {
         DebugLoc loc;
+#ifdef LLVM37
         DISubprogram *sp;
+#else
+        DISubprogram sp;
+#endif
         StringRef file;
         ssize_t line;
         bool in_user_code;
     };
-#else
-    struct DbgState {
-        DebugLoc loc;
-        DISubprogram sp;
-        StringRef file;
-        ssize_t line;
-    };
-#endif
     struct StmtProp {
         DebugLoc loc;
         StringRef file;
@@ -4737,7 +4738,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
 #endif
                 if (ctx.debug_enabled)
                     new_file = dbuilder.createFile(new_filename, ".");
-                DI_stack.push_back({cur_prop.loc, SP,
+                DI_stack.push_back(DbgState{cur_prop.loc, SP,
                             cur_prop.file, cur_prop.line,
                             cur_prop.in_user_code});
                 const char *inl_name = "";
@@ -4770,7 +4771,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                                                  false,
                                                  true,
                                                  0,
-                                                 0,
+                                                 DIFlagZero,
                                                  true,
                                                  nullptr);
                     MDNode *inlinedAt = NULL;
@@ -4828,7 +4829,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
     // Whether we are doing codegen in statement order.
     // We need to update debug location if this is false even if
     // `loc_changed` is false.
-    bool linear_codegen = false;
+    bool linear_codegen = true;
     auto find_next_stmt = [&] (int seq_next) {
         // `seq_next` is the next statement we want to emit
         // i.e. if it exists, it's the next one following control flow and
@@ -4907,18 +4908,11 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                 (malloc_log_mode == JL_LOG_USER && in_user_code));
     };
 
-    // If the first expresion changes the line number, we need to visit
-    // the start of the function. This can happen when the first line is
-    // a inlined function call.
-    if (stmtprops[0].loc_changed && coverage_mode != JL_LOG_NONE &&
-        do_coverage(in_user_mod(ctx.module))) {
-        // Compute `in_user_code` using `ctx.module` instead of using
-        // `stmtprops[0].in_user_code` since the code property is for the first
-        // statement, which might have been a push_loc.
-        if (ctx.debug_enabled)
-            builder.SetCurrentDebugLocation(topdebugloc);
+    // Handle the implicit first line number node.
+    if (ctx.debug_enabled)
+        builder.SetCurrentDebugLocation(topdebugloc);
+    if (coverage_mode != JL_LOG_NONE && do_coverage(in_user_mod(ctx.module)))
         coverageVisitLine(filename, toplineno);
-    }
     while (cursor != -1) {
         auto &props = stmtprops[cursor];
         if ((props.loc_changed || !linear_codegen) && ctx.debug_enabled)
@@ -5246,7 +5240,7 @@ static void init_julia_llvm_env(Module *m)
         71, // At the time of this writing. Not sure if it's worth it to keep this in sync
         0 * 8, // sizeof(jl_value_t) * 8,
         __alignof__(void*) * 8, // __alignof__(jl_value_t) * 8,
-        0, // Flags
+        DIFlagZero, // Flags
 #ifdef LLVM37
         nullptr,    // Derived from
         nullptr);  // Elements - will be corrected later

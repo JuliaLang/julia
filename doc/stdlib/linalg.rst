@@ -346,9 +346,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
+   Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods :func:`diag`\ , :func:`det`\ , and :func:`logdet` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extract "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
 
-   Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
+   Setting the optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
    .. note::
       This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
@@ -361,6 +361,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Compute the Cholesky (:math:`LL'`\ ) factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian.
+
+   See also :func:`cholfact`\ .
 
    .. note::
       This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
@@ -406,7 +408,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. currentmodule:: Base
 
-.. function:: ldltfact(::SymTridiagonal) -> LDLt
+.. function:: ldltfact(S::SymTridiagonal) -> LDLt
 
    .. Docstring generated from Julia source
 
@@ -416,9 +418,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the :math:`LDL'` factorization of a sparse matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations ``A*x = b`` with ``F\b``\ . The returned factorization object ``F`` also supports the methods ``diag``\ , ``det``\ , and ``logdet``\ . You can extract individual factors from ``F`` using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it is typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
+   Compute the :math:`LDL'` factorization of a sparse matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations ``A*x = b`` with ``F\b``\ . The returned factorization object ``F`` also supports the methods :func:`diag`\ , :func:`det`\ , and :func:`logdet`\ . You can extract individual factors from ``F`` using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it is typically preferable to extract "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
 
-   Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
+   Setting the optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
    .. note::
       This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
@@ -432,61 +434,41 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the :math:`LDL'` factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian.
 
+   See also :func:`ldltfact`\ .
+
    .. note::
       This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
 
-.. function:: ldltfact!(::SymTridiagonal) -> LDLt
+.. function:: ldltfact!(S::SymTridiagonal) -> LDLt
 
    .. Docstring generated from Julia source
 
-   Same as ``ldltfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
+   Same as :func:`ldltfact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
 
-.. function:: qr(v::AbstractVector)
-
-   .. Docstring generated from Julia source
-
-   Computes the polar decomposition of a vector.
-
-   Input:
-
-   * ``v::AbstractVector`` - vector to normalize
-
-   Outputs:
-
-   * ``w`` - A unit vector in the direction of ``v``
-   * ``r`` - The norm of ``v``
-
-   See also:
-
-   ``normalize``\ , ``normalize!``\ , ``LinAlg.qr!``
-
-.. function:: LinAlg.qr!(v::AbstractVector)
+.. function:: qr(v::AbstractVector) -> w, r
 
    .. Docstring generated from Julia source
 
-   Computes the polar decomposition of a vector. Instead of returning a new vector as ``qr(v::AbstractVector)``\ , this function mutates the input vector ``v`` in place.
+   Computes the polar decomposition of a vector. Returns ``w``\ , a unit vector in the direction of ``v``\ , and ``r``\ , the norm of ``v``\ .
 
-   Input:
+   See also :func:`normalize`\ , :func:`normalize!`\ , and :func:`LinAlg.qr!`\ .
 
-   * ``v::AbstractVector`` - vector to normalize
-
-   Outputs:
-
-   * ``w`` - A unit vector in the direction of ``v`` (This is a mutation of ``v``\ ).
-   * ``r`` - The norm of ``v``
-
-   See also:
-
-   ``normalize``\ , ``normalize!``\ , ``qr``
-
-.. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
+.. function:: LinAlg.qr!(v::AbstractVector) -> w, r
 
    .. Docstring generated from Julia source
 
-   Compute the (pivoted) QR factorization of ``A`` such that either ``A = Q*R`` or ``A[:,p] = Q*R``\ . Also see ``qrfact``\ . The default is to compute a thin factorization. Note that ``R`` is not extended with zeros when the full ``Q`` is requested.
+   Computes the polar decomposition of a vector. Instead of returning a new vector as ``qr(v::AbstractVector)``\ , this function mutates the input vector ``v`` in place. Returns ``w``\ , a unit vector in the direction of ``v`` (this is a mutation of ``v``\ ), and ``r``\ , the norm of ``v``\ .
 
-.. function:: qrfact(A [,pivot=Val{false}]) -> F
+   See also :func:`normalize`\ , :func:`normalize!`\ , and :func:`qr`\ .
+
+.. function:: qr(A, pivot=Val{false}; thin::Bool=true) -> Q, R, [p]
+
+   .. Docstring generated from Julia source
+
+   Compute the (pivoted) QR factorization of ``A`` such that either ``A = Q*R`` or ``A[:,p] = Q*R``\ . Also see :func:`qrfact`\ . The default is to compute a thin factorization. Note that ``R`` is not extended with zeros when the full ``Q`` is requested.
+
+.. function:: qrfact(A, pivot=Val{false}) -> F
 
    .. Docstring generated from Julia source
 
@@ -518,7 +500,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    | ``F[:P]`` | (pivot) permutation ``Matrix``                |                     |                        | ✓                   |
    +-----------+-----------------------------------------------+---------------------+------------------------+---------------------+
 
-   The following functions are available for the ``QR`` objects: ``size``\ , ``\``\ . When ``A`` is rectangular, ``\`` will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
+   The following functions are available for the ``QR`` objects: :func:`size` and :func:`\\`\ . When ``A`` is rectangular, ``\`` will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.
 
    Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``Q`` matrix can be converted into a regular matrix with :func:`full` which has a named argument ``thin``\ .
 
@@ -550,19 +532,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the QR factorization of a sparse matrix ``A``\ . A fill-reducing permutation is used. The main application of this type is to solve least squares problems with ``\``\ . The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
+   Compute the ``QR`` factorization of a sparse matrix ``A``\ . A fill-reducing permutation is used. The main application of this type is to solve least squares problems with ``\``\ . The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
 
-.. function:: qrfact!(A [,pivot=Val{false}])
-
-   .. Docstring generated from Julia source
-
-   ``qrfact!`` is the same as :func:`qrfact` when ``A`` is a subtype of ``StridedMatrix``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
-
-.. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
+.. function:: qrfact!(A, pivot=Val{false})
 
    .. Docstring generated from Julia source
 
-   Converts an orthogonal or unitary matrix stored as a ``QRCompactWYQ`` object, i.e. in the compact WY format [Bischof1987]_, to a dense matrix.
+   ``qrfact!`` is the same as :func:`qrfact` when ``A`` is a subtype of ``StridedMatrix``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An :obj:`InexactError` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
+
+.. function:: full(A::Union{QRPackedQ,QRCompactWYQ}; thin::Bool=true) -> Matrix
+
+   .. Docstring generated from Julia source
+
+   Converts an orthogonal or unitary matrix stored as a ``QRCompactWYQ`` object, i.e. in the compact WY format [Bischof1987]_, or in the ``QRPackedQ`` format, to a dense matrix.
 
    Optionally takes a ``thin`` Boolean argument, which if ``true`` omits the columns that span the rows of ``R`` in the QR factorization that are zero. The resulting matrix is the ``Q`` in a thin QR factorization (sometimes called the reduced QR factorization). If ``false``\ , returns a ``Q`` that spans all rows of ``R`` in its corresponding QR factorization.
 
@@ -588,7 +570,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. ``uplo`` indicates which triangle of matrix ``A`` to reference. If ``symmetric`` is ``true``\ , ``A`` is assumed to be symmetric. If ``symmetric`` is ``false``\ , ``A`` is assumed to be complex Hermitian. If ``rook`` is ``true``\ , rook pivoting is used. If ``rook`` is false, rook pivoting is not used. The following functions are available for ``BunchKaufman`` objects: :func:`size`\ , ``\``\ , :func:`inv`\ , :func:`issymmetric`\ , :func:`ishermitian`\ .
+   Compute the Bunch-Kaufman [Bunch1977]_ factorization of a symmetric or Hermitian matrix ``A`` and return a ``BunchKaufman`` object. ``uplo`` indicates which triangle of matrix ``A`` to reference. If ``symmetric`` is ``true``\ , ``A`` is assumed to be symmetric. If ``symmetric`` is ``false``\ , ``A`` is assumed to be Hermitian. If ``rook`` is ``true``\ , rook pivoting is used. If ``rook`` is false, rook pivoting is not used. The following functions are available for ``BunchKaufman`` objects: :func:`size`\ , ``\``\ , :func:`inv`\ , :func:`issymmetric`\ , :func:`ishermitian`\ .
 
    .. [Bunch1977] J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. `url <http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0>`_\ .
 

@@ -90,12 +90,21 @@ qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}) = QRPivoted(LAPACK
 qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(A, Val{false})
 
 # Generic fallbacks
+
+"""
+    qrfact!(A, pivot=Val{false})
+
+`qrfact!` is the same as [`qrfact`](:func:`qrfact`) when `A` is a subtype of
+`StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
+An [`InexactError`](:obj:`InexactError`) exception is thrown if the factorisation produces a number not
+representable by the element type of `A`, e.g. for integer types.
+"""
 qrfact!(A::StridedMatrix, ::Type{Val{false}}) = qrfactUnblocked!(A)
 qrfact!(A::StridedMatrix, ::Type{Val{true}}) = qrfactPivotedUnblocked!(A)
 qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
 
 """
-    qrfact(A [,pivot=Val{false}]) -> F
+    qrfact(A, pivot=Val{false}) -> F
 
 Computes the QR factorization of `A`. The return type of `F` depends on the element type of
 `A` and whether pivoting is specified (with `pivot==Val{true}`).
@@ -117,9 +126,9 @@ The individual components of the factorization `F` can be accessed by indexing:
 | `F[:p]`   | pivot `Vector`                            |                 |                    | ✓               |
 | `F[:P]`   | (pivot) permutation `Matrix`              |                 |                    | ✓               |
 
-The following functions are available for the `QR` objects: `size`, `\\`. When `A` is
-rectangular, `\\` will return a least squares solution and if the solution is not unique,
-the one with smallest norm is returned.
+The following functions are available for the `QR` objects: [`size`](:func:`size`)
+and [`\\`](:func:`\\`). When `A` is rectangular, `\\` will return a least squares
+solution and if the solution is not unique, the one with smallest norm is returned.
 
 Multiplication with respect to either thin or full `Q` is allowed, i.e. both `F[:Q]*F[:R]`
 and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
@@ -170,6 +179,14 @@ function qrfact{T}(A::AbstractMatrix{T})
 end
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
+"""
+    qr(A, pivot=Val{false}; thin::Bool=true) -> Q, R, [p]
+
+Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
+Also see [`qrfact`](:func:`qrfact`).
+The default is to compute a thin factorization. Note that `R` is not
+extended with zeros when the full `Q` is requested.
+"""
 qr(A::Union{Number, AbstractMatrix}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; thin::Bool=true) =
     _qr(A, pivot, thin=thin)
 function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{false}}; thin::Bool=true)
@@ -182,22 +199,14 @@ function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{true}}; thin::Bool=tru
 end
 
 """
-    qr(v::AbstractVector)
+    qr(v::AbstractVector) -> w, r
 
 Computes the polar decomposition of a vector.
+Returns `w`, a unit vector in the direction of `v`, and
+`r`, the norm of `v`.
 
-Input:
-
-- `v::AbstractVector` - vector to normalize
-
-Outputs:
-
-- `w` - A unit vector in the direction of `v`
-- `r` - The norm of `v`
-
-See also:
-
-`normalize`, `normalize!`, `LinAlg.qr!`
+See also [`normalize`](:func:`normalize`), [`normalize!`](:func:`normalize!`),
+and [`LinAlg.qr!](:func:`LinAlg.qr!`).
 """
 function qr(v::AbstractVector)
     nrm = norm(v)
@@ -211,23 +220,15 @@ function qr(v::AbstractVector)
 end
 
 """
-    LinAlg.qr!(v::AbstractVector)
+    LinAlg.qr!(v::AbstractVector) -> w, r
 
 Computes the polar decomposition of a vector. Instead of returning a new vector
 as `qr(v::AbstractVector)`, this function mutates the input vector `v` in place.
+Returns `w`, a unit vector in the direction of `v` (this is a mutation of `v`),
+and `r`, the norm of `v`.
 
-Input:
-
-- `v::AbstractVector` - vector to normalize
-
-Outputs:
-
-- `w` - A unit vector in the direction of `v` (This is a mutation of `v`).
-- `r` - The norm of `v`
-
-See also:
-
-`normalize`, `normalize!`, `qr`
+See also [`normalize`](:func:`normalize`), [`normalize!`](:func:`normalize!`),
+and [`qr`](:func:`qr`).
 """
 function qr!(v::AbstractVector)
     nrm = norm(v)
@@ -317,6 +318,18 @@ convert{S}(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) = QRCompactWYQ(convert(Abst
 convert{S}(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) = convert(QRCompactWYQ{S}, Q)
 convert{T}(::Type{Matrix}, A::Union{QRPackedQ{T},QRCompactWYQ{T}}) = A_mul_B!(A, eye(T, size(A.factors, 1), minimum(size(A.factors))))
 convert(::Type{Array}, A::Union{QRPackedQ,QRCompactWYQ}) = convert(Matrix, A)
+
+"""
+    full(A::Union{QRPackedQ,QRCompactWYQ}; thin::Bool=true) -> Matrix
+
+Converts an orthogonal or unitary matrix stored as a `QRCompactWYQ` object, i.e. in the
+compact WY format [^Bischof1987], or in the `QRPackedQ` format, to a dense matrix.
+
+Optionally takes a `thin` Boolean argument, which if `true` omits the columns that span the
+rows of `R` in the QR factorization that are zero. The resulting matrix is the `Q` in a thin
+QR factorization (sometimes called the reduced QR factorization). If `false`, returns a `Q`
+that spans all rows of `R` in its corresponding QR factorization.
+"""
 function full{T}(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool = true)
     if thin
         convert(Array, A)
