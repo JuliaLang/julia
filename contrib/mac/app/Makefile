@@ -5,16 +5,12 @@
 JULIAHOME := $(abspath ../../..)
 include ../../../Make.inc
 
-JULIA_PKGDIR:=$(shell echo $$JULIA_PKGDIR)
-ifeq ($(JULIA_PKGDIR),)
-	JULIA_PKGDIR:=$(shell echo ~)/.julia
-endif
-
 # X.Y.Z or X.Y.Z-hash
 JULIA_VERSION_OPT_COMMIT:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
 
 # X.Y
 JULIA_VERSION_MAJOR_MINOR:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+')
+JULIA_VERSION_MAJOR_MINOR_PATCH:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+.[0-9]\+')
 
 DMG_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT).dmg
 APP_NAME:=Julia-$(JULIA_VERSION_MAJOR_MINOR).app
@@ -22,14 +18,16 @@ VOL_NAME:=Julia-$(JULIA_VERSION_OPT_COMMIT)
 
 all: clean $(DMG_NAME)
 
-$(DMG_NAME): dmg/$(APP_NAME)
-	-cp -f julia.icns dmg/.VolumeIcon.icns
-	-ln -fs /Applications ./dmg/Applications
-	-chmod 755 $</Contents/MacOS/applet
-	@echo "We're going to chown the .app file to root:admin now, which requires sudo.  You may be asked for your password:"
-	sudo chown -R root:admin $<
-	sudo hdiutil create $@ -size 500m -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder dmg
+$(DMG_NAME): dmg/$(APP_NAME) dmg/.VolumeIcon.icns dmg/Applications
+	hdiutil create $@ -size 500m -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder dmg
 
+dmg/.VolumeIcon.icns: julia.icns
+	-mkdir -p dmg
+	cp -f julia.icns $@
+
+dmg/Applications:
+	-mkdir -p dmg
+	ln -fs /Applications $@
 
 dmg/$(APP_NAME): startup.applescript julia.icns
 	-mkdir -p dmg
@@ -39,17 +37,22 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	plutil -replace CFBundleName -string "Julia" $@/Contents/Info.plist
 	plutil -replace CFBundleIconFile -string "julia.icns" $@/Contents/Info.plist
 	plutil -insert  CFBundleVersion -string "$(JULIA_VERSION_OPT_COMMIT)" $@/Contents/Info.plist
-	plutil -insert  CFBundleShortVersionString -string "$(JULIA_VERSION)" $@/Contents/Info.plist
+	plutil -insert  CFBundleShortVersionString -string "$(JULIA_VERSION_MAJOR_MINOR_PATCH)" $@/Contents/Info.plist
 	plutil -insert  CFBundleIdentifier -string "org.julialang.julia" $@/Contents/Info.plist
 	plutil -insert  NSHumanReadableCopyright -string "© 2016 The Julia Project" $@/Contents/Info.plist
 	-mkdir -p $@/Contents/Resources/julia
 	make -C $(JULIAHOME) binary-dist
-	tar zxf ../../../julia-*.tar.gz -C $@/Contents/Resources/julia --strip-components 1
-	rm -f $@/Contents/Resources/julia/lib/*.{a,la}
+	tar zxf $(JULIAHOME)/julia-*.tar.gz -C $@/Contents/Resources/julia --strip-components 1
 	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep $@
 
+
+ROOTFILES := $(shell ls -ld dmg/*.app *.dmg 2> /dev/null | awk '{print $$3}')
 clean:
+ifneq ($(filter root,$(ROOTFILES)),)
 	@echo "We have to use sudo here to clean out folders owned by root.  You may be asked for your password"
-	sudo rm -fr dmg *.dmg
+	sudo rm -rf dmg *.dmg
+else
+	rm -rf dmg *.dmg
+endif
 
 .PHONY: clean all
