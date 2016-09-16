@@ -2,7 +2,7 @@
 
 using Base.Test
 
-if Sys.ARCH === :x86_64 || Sys.Arch == :i386
+if Sys.ARCH === :x86_64 || Sys.Arch === :i386
   let
     function linear_foo()
          x = 4
@@ -13,13 +13,14 @@ if Sys.ARCH === :x86_64 || Sys.Arch == :i386
     rgx = r"%"
     buf = IOBuffer()
     output=""
-
-    code_native(buf,linear_foo,(),"att")
+    #test that the string output is at&t syntax by checking for occurrences of '%'s
+    code_native(buf,linear_foo,(),:att)
     output=takebuf_string(buf)
-
+     
     @test ismatch(rgx,output)
-
-    code_native(buf,linear_foo,(),"intel")
+    
+    #test that the code output is intel syntax by checking it has no occurrences of '%'
+    code_native(buf,linear_foo,(),:intel)
     output=takebuf_string(buf)
 
     @test !(ismatch(rgx,output))
