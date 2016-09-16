@@ -606,7 +606,7 @@ void gc(fl_context_t *fl_ctx, int mustgrow)
         free(&((void**)temp)[-1]);
         temp = next;
     }
-    fl_n_ctx->allocd = 0;
+    fl_ctx->n_allocd = 0;
 #else
 #ifdef VERBOSEGC
     printf("GC: found %d/%d live conses\n",
