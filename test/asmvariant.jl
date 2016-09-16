@@ -2,29 +2,31 @@
 
 using Base.Test
 
-
-function linear_foo()
+if Sys.ARCH === :x86_64 || Sys.Arch == :i386
+  let
+    function linear_foo()
          x = 4
          y = 5
-end
+    end
 
-let 
-  rgx = r"%"
-  buf = IOBuffer()
-  output=""
 
-  code_native(buf,linear_foo,(),"att")
-  output=takebuf_string(buf)
+    rgx = r"%"
+    buf = IOBuffer()
+    output=""
 
-  @test ismatch(rgx,output)
+    code_native(buf,linear_foo,(),"att")
+    output=takebuf_string(buf)
 
-  code_native(buf,linear_foo,(),"intel")
-  output=takebuf_string(buf)
+    @test ismatch(rgx,output)
 
-  @test !(ismatch(rgx,output))
+    code_native(buf,linear_foo,(),"intel")
+    output=takebuf_string(buf)
 
-  code_native(buf,linear_foo,())
-  output=takebuf_string(buf)
+    @test !(ismatch(rgx,output))
 
-  @test ismatch(rgx, output)
+    code_native(buf,linear_foo,())
+    output=takebuf_string(buf)
+
+    @test ismatch(rgx, output)
+  end
 end
