@@ -503,19 +503,11 @@ function extrema(itr)
     s = start(itr)
     done(itr, s) && throw(ArgumentError("collection must be non-empty"))
     (v, s) = next(itr, s)
-    while v != v && !done(itr, s)
-        (x, s) = next(itr, s)
-        v = x
-    end
-    vmin = v
-    vmax = v
+    vmin = vmax = v
     while !done(itr, s)
         (x, s) = next(itr, s)
-        if x > vmax
-            vmax = x
-        elseif x < vmin
-            vmin = x
-        end
+        vmax = max(x, vmax)
+        vmin = min(x, vmin)
     end
     return (vmin, vmax)
 end
