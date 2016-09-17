@@ -1350,4 +1350,7 @@ export quadgk
 @deprecate map!{F}(f::F, A::AbstractArray) map!(f, A, A)
 @deprecate asyncmap!(f, c; ntasks=0, batch_size=nothing) asyncmap!(f, c, c; ntasks=ntasks, batch_size=batch_size)
 
+# Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
+@deprecate abs2(x::AbstractSparseVector) abs2.(x)
+
 # End deprecations scheduled for 0.6
