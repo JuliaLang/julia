@@ -131,7 +131,7 @@ stage-$(strip $1): $$(build_staging)/$2.tgz
 install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
 uninstall-$(strip $1):
 	-rm $$(build_prefix)/manifest/$(strip $1)
-	-cd $$(build_prefix) && rm -dv -- $$$$($(TAR) tzf $$(build_staging)/$2.tgz --exclude './$$$$')
+	-cd $$(build_prefix) && rm -dv -- $$$$($(TAR) -tzf $$(build_staging)/$2.tgz --exclude './$$$$')
 
 ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tgz ] && echo exists ))
 # clean depends on uninstall only if the staged file exists

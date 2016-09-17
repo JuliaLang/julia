@@ -131,7 +131,7 @@ $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz: | $(SRCDIR)/srccache
 $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
 	mkdir -p $(BUILDDIR)
-	cd $(BUILDDIR) && $(TAR) zxf $<
+	cd $(BUILDDIR) && $(TAR) -zxf $<
 	cp $(dir $@)INSTALL/make.inc.gfortran $(dir $@)make.inc
 	echo 1 > $@
 

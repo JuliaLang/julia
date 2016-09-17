@@ -11,7 +11,7 @@ $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz: | $(SRCDIR)/srccache
 
 $(VIRTUALENV_SOURCE): $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) zxf $<
+	cd $(dir $<) && $(TAR) -zxf $<
 	touch -c $@
 
 $(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
