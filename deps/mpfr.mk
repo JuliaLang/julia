@@ -29,7 +29,7 @@ $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
 $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/source-extracted: $(SRCDIR)/srccache/mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) jxf $<
+	cd $(dir $<) && $(TAR) -jxf $<
 	touch -c $(SRCDIR)/srccache/mpfr-$(MPFR_VER)/configure # old target
 	echo 1 > $@
 

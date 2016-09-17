@@ -46,7 +46,7 @@ $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCDIR)/srccache
 
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/source-extracted: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) zxf $<
+	cd $(dir $<) && $(TAR) -zxf $<
 	touch -c $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure # old target
 	echo 1 > $@
 
