@@ -105,7 +105,7 @@ If neither `x` nor `y` is null, compare them according to their values
 (i.e. `isequal(get(x), get(y))`). Else, return `true` if both arguments are null,
 and `false` if one is null but not the other: nulls are considered equal.
 """
-function isequal{S,T}(x::Nullable{S}, y::Nullable{T})
+@inline function isequal{S,T}(x::Nullable{S}, y::Nullable{T})
     if null_safe_op(isequal, S, T)
         (x.isnull & y.isnull) | (!x.isnull & !y.isnull & isequal(x.value, y.value))
     else
@@ -132,7 +132,7 @@ If neither `x` nor `y` is null, compare them according to their values
 otherwise: nulls are always considered greater than non-nulls, but not greater than
 another null.
 """
-function isless{S,T}(x::Nullable{S}, y::Nullable{T})
+@inline function isless{S,T}(x::Nullable{S}, y::Nullable{T})
     # NULL values are sorted last
     if null_safe_op(isless, S, T)
         (!x.isnull & y.isnull) | (!x.isnull & !y.isnull & isless(x.value, y.value))
