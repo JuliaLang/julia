@@ -912,7 +912,8 @@ hvcat{T}(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) = Base.type
 ### Unary Map
 
 # zero-preserving functions (z->z, nz->nz)
-for op in [:abs, :abs2, :conj]
+broadcast(::typeof(abs), x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), abs.(nonzeros(x)))
+for op in [:abs2, :conj]
     @eval begin
         $(op)(x::AbstractSparseVector) =
             SparseVector(length(x), copy(nonzeroinds(x)), $(op).(nonzeros(x)))

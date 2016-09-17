@@ -996,7 +996,7 @@ function empty!(B::BitVector)
 end
 
 ## Misc functions
-abs(B::BitArray) = copy(B)
+broadcast(::typeof(abs), B::BitArray) = copy(B)
 
 ## Unary operators ##
 
