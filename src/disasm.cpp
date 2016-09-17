@@ -448,9 +448,9 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
     unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
 
     if( strcmp(asm_variant, "intel")==0){
-       OutputAsmVariant = 1;
+        OutputAsmVariant = 1;
     }
-	bool ShowEncoding = false;
+    bool ShowEncoding = false;
 
 #if JL_LLVM_VERSION >= 30500
     std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
