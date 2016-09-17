@@ -99,17 +99,19 @@ documentation:
        ...
        """
 
-5. Group examples under an ``# Examples`` section and use `````julia`` blocks instead of
-   standard text.
+5. Include any code examples in an ``# Examples`` section.
 
-   Examples should consist of verbatim copies of the Julia REPL, including the ``julia>``
-   prompt (see example above). This is used to allow running examples automatically and
-   checking that their actual output is consistent with that presented in the
-   documentation (a feature called *doctests*). This way, the code will be tested and
-   examples won't get out of date without notice. An example::
+   Examples should, whenever possible, be written as *doctests*. A *doctest* is a fenced
+   code block (see `Code blocks`_) starting with `````jldoctest`` and contains any number of
+   ``julia>`` prompts together with inputs and expected outputs that mimic the Julia REPL.
+
+   For example in the following docstring a variable ``a`` is defined and the expected
+   result, as printed in a Julia REPL, appears afterwards::
 
        """
        Some nice documentation here.
+
+       # Examples
 
        ```jldoctest
        julia> a = [1 2; 3 4]
@@ -119,9 +121,27 @@ documentation:
        ```
        """
 
-   You can then run ``make -C doc doctest`` to run all the doctests, which will ensure
-   that your example works. Note that whitespace in your doctest is significant! The
-   doctest will fail if you misalign the output of pretty-printing an array, for example.
+   .. warning::
+
+      Calling ``rand`` and other RNG-related functions should be avoided in doctests since
+      they will not produce consistent outputs during different Julia sessions.
+
+      Operating system word size (``Int32`` or ``Int64``) as well as path separator
+      differences (``/`` or ``\``) will also effect the reproducibility of some doctests.
+
+      Note that whitespace in your doctest is significant! The doctest will fail if you
+      misalign the output of pretty-printing an array, for example.
+
+   You can then run ``make -C doc doctest`` to run all the doctests in the Julia Manual,
+   which will ensure that your example works.
+
+   Examples that are untestable should be written within fenced code blocks starting with
+   `````julia`` so that they are highlighted correctly in the generated documentation.
+
+   .. tip::
+
+      Wherever possible examples should be **self-contained** and **runnable** so that
+      readers are able to try them out without having to include any dependencies.
 
 6. Use backticks to identify code and equations.
 
