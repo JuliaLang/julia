@@ -41,7 +41,7 @@ available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Ava
 function available(cache::AvailableCache = PKG_AVAILABLE_CACHE)
     names = readdir("METADATA")
     # Not a git repo so just bail on using cache
-    if in(".git", names)
+    if in(".git", names) && !haskey(ENV, "JULIA_PKG_DISABLE_CACHE")
         pkgs, usecache = LibGit2.with(LibGit2.GitRepo("METADATA")) do repo
             LibGit2.with(LibGit2.head(repo)) do head
                 sha = Base.LibGit2.Oid(head)
