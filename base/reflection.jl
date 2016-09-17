@@ -549,11 +549,15 @@ code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
     code_native([io], f, types, [asm_variant])
 
 Prints the native assembly instructions generated for running the method matching the given
-generic function and type signature to `io` which defaults to `STDOUT`.Switch assembly syntax using `asmvariant` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax. Output is AT&T syntax by default.
+generic function and type signature to `io` which defaults to `STDOUT`.Switch assembly syntax using `asmvariant` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax. Output is AT&T syntax by default .
 """
+
+
 code_native(io::IO, f::ANY, types::ANY=Tuple, asmvariant::Symbol=:att) =
     print(io, _dump_function(f, types, true, false, false, false, asmvariant))
-code_native(f::ANY, types::ANY=Tuple, asmvariant::Symbol=:att) = code_native(STDOUT, f, types, asmvariant)
+
+code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types, :att)
+
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, types::ANY)
