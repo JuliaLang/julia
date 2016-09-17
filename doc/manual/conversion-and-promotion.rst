@@ -284,9 +284,6 @@ the catch-all method definitions given in
     *(x::Number, y::Number) = *(promote(x,y)...)
     /(x::Number, y::Number) = /(promote(x,y)...)
 
-In certain cases, the result type also depends on the operator;
-such scenarios are handled by the ``promote_op`` function.
-
 These method definitions say that in the absence of more specific rules
 for adding, subtracting, multiplying and dividing pairs of numeric
 values, promote the values to a common type and then try again. That's
@@ -377,21 +374,18 @@ Finally, we finish off our ongoing case study of Julia's rational number
 type, which makes relatively sophisticated use of the promotion
 mechanism with the following promotion rules::
 
-    promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
     promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
     promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
     promote_rule{T<:Integer,S<:AbstractFloat}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
-The first rule asserts that promotion of a rational number with its own
-numerator/denominator type, simply promotes to itself. The second rule
-says that promoting a rational number with any other integer type
-promotes to a rational type whose numerator/denominator type is the
-result of promotion of its numerator/denominator type with the other
-integer type. The third rule applies the same logic to two different
-types of rational numbers, resulting in a rational of the promotion of
-their respective numerator/denominator types. The fourth and final rule
-dictates that promoting a rational with a float results in the same type
-as promoting the numerator/denominator type with the float.
+The first rule says that promoting a rational number with any other integer
+type promotes to a rational type whose numerator/denominator type is the
+result of promotion of its numerator/denominator type with the other integer
+type. The second rule applies the same logic to two different types of rational
+numbers, resulting in a rational of the promotion of their respective
+numerator/denominator types. The third and final rule dictates that promoting
+a rational with a float results in the same type as promoting the
+numerator/denominator type with the float.
 
 This small handful of promotion rules, together with the `conversion
 methods discussed above <#case-study-rational-conversions>`_, are
