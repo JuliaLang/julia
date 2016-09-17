@@ -1347,4 +1347,7 @@ function quadgk(args...)
 end
 export quadgk
 
+# Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
+@deprecate abs2(x::AbstractSparseVector) abs2.(x)
+
 # End deprecations scheduled for 0.6
