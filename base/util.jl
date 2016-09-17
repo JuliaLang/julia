@@ -301,7 +301,6 @@ end
 
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...)
     buf = IOBuffer()
-
     have_color && print(buf, get(text_colors, color, color_normal))
     try f(buf, args...)
     finally
