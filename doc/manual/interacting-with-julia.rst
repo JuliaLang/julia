@@ -289,13 +289,17 @@ Customizing Colors
 The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia
 prompt you can add something like the following to your ``juliarc.jl`` file::
 
-    Base.active_repl.prompt_color = Base.text_colors[:cyan]
+    function customize_colors(repl)
+        repl.prompt_color = Base.text_colors[:cyan]
+    end
+
+    atreplinit(customize_colors)
 
 The available color keys in ``Base.text_colors`` are ``:black``, ``:red``, ``:green``, ``:yellow``,
 ``:blue``, ``:magenta``, ``:cyan``, ``:white``, ``:normal``, and ``:bold``. Similarly, you can
 change the colors for the help and shell prompts and input and answer text by setting the
-appropriate member of ``Base.active_repl`` (respectively, ``help_color``, ``shell_color``,
-``input_color``, and ``answer_color``). For the latter two, be sure that the ``envcolors`` member
+appropriate field of ``repl`` in the ``customize_colors`` function above (respectively, ``help_color``, ``shell_color``,
+``input_color``, and ``answer_color``). For the latter two, be sure that the ``envcolors`` field
 is also set to false.
 
 You can also customize the color used to render warning and informational messages by
