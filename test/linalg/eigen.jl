@@ -100,7 +100,7 @@ end
 for eltya in (NaN16, NaN32, NaN)
     @test_throws(ArgumentError, eig(fill(eltya, 1, 1)))
     @test_throws(ArgumentError, eig(fill(eltya, 2, 2)))
-    test_matrix = rand(typeof(eltya,3,3)
+    test_matrix = rand(typeof(eltya,3,3))
     test_matrix[2,2] = eltya
     @test_throws(ArgumentError, eig(test_matrix))
 end
