@@ -29,7 +29,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
     @test full(real(D)) == real(DM)
     @test full(abs.(D)) == abs.(DM)
-    @test full(imag(D)) == imag(DM)
+    @test full(imag.(D)) == imag.(DM)
 
     @test parent(D) == d
     @test diag(D) == d

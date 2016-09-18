@@ -43,10 +43,10 @@ end
 LowerTriangular(U::UpperTriangular) = throw(ArgumentError("cannot create a LowerTriangular matrix from an UpperTriangular input"))
 UpperTriangular(U::LowerTriangular) = throw(ArgumentError("cannot create an UpperTriangular matrix from a LowerTriangular input"))
 
-imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
-imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
-imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
-imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
+broadcast(::typeof(imag), A::UpperTriangular) = UpperTriangular(imag.(A.data))
+broadcast(::typeof(imag), A::LowerTriangular) = LowerTriangular(imag.(A.data))
+broadcast(::typeof(imag), A::UnitLowerTriangular) = LowerTriangular(tril!(imag.(A.data), -1))
+broadcast(::typeof(imag), A::UnitUpperTriangular) = UpperTriangular(triu!(imag.(A.data), 1))
 
 convert(::Type{Array}, A::AbstractTriangular) = convert(Matrix, A)
 full(A::AbstractTriangular) = convert(Array, A)

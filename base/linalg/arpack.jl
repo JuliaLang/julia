@@ -122,9 +122,9 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
     elseif which == "SR" || which == "SA"
         dmap = x->-real(x)
     elseif which == "LI"
-        dmap = imag
+        dmap = x -> imag.(x)
     elseif which == "SI"
-        dmap = x->-imag(x)
+        dmap = x -> map(t -> -imag(t), x)
     end
 
     if cmplx

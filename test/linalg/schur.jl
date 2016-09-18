@@ -36,7 +36,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         f   = schurfact(a)
         @test f[:vectors]*f[:Schur]*f[:vectors]' ≈ a
         @test sort(real(f[:values])) ≈ sort(real(d))
-        @test sort(imag(f[:values])) ≈ sort(imag(d))
+        @test sort(imag.(f[:values])) ≈ sort(imag.(d))
         @test istriu(f[:Schur]) || eltype(a)<:Real
         @test full(f) ≈ a
         @test_throws KeyError f[:A]

@@ -97,9 +97,9 @@ copy{T,S}(A::Symmetric{T,S}) = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.upl
 copy{T,S}(A::Hermitian{T,S}) = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
 ishermitian(A::Hermitian) = true
 ishermitian{T<:Real,S}(A::Symmetric{T,S}) = true
-ishermitian{T<:Complex,S}(A::Symmetric{T,S}) = all(imag(A.data) .== 0)
+ishermitian{T<:Complex,S}(A::Symmetric{T,S}) = all(imag.(A.data) .== 0)
 issymmetric{T<:Real,S}(A::Hermitian{T,S}) = true
-issymmetric{T<:Complex,S}(A::Hermitian{T,S}) = all(imag(A.data) .== 0)
+issymmetric{T<:Complex,S}(A::Hermitian{T,S}) = all(imag.(A.data) .== 0)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
 ctranspose{T<:Real}(A::Symmetric{T}) = A
