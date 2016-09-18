@@ -712,7 +712,7 @@ function issymmetric(A::AbstractMatrix)
     return true
 end
 
-issymmetric(x::Number) = true
+issymmetric(x::Number) = x == x
 
 """
     ishermitian(A) -> Bool
