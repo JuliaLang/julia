@@ -1372,4 +1372,11 @@ end
 @deprecate round(x::AbstractArray, r::RoundingMode) round.(x, r)
 @deprecate round(x::AbstractArray, digits::Integer, base::Integer = 10) round.(x, digits, base)
 
+# Deprecate manually vectorized trunc methods in favor of compact broadcast syntax
+@deprecate trunc(M::Bidiagonal) trunc.(M)
+@deprecate trunc(M::Tridiagonal) trunc.(M)
+@deprecate trunc(M::SymTridiagonal) trunc.(M)
+@deprecate trunc{T<:Integer}(::Type{T}, x::AbstractArray) trunc.(T, x)
+@deprecate trunc(x::AbstractArray, digits::Integer, base::Integer = 10) trunc.(x, digits, base)
+
 # End deprecations scheduled for 0.6
