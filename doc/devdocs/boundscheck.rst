@@ -66,9 +66,9 @@ The bounds checking call hierarchy
 The overall hierarchy is:
 
 |   ``checkbounds(A, I...)`` which calls
-|     ``checkbounds(Bool, A, I...)`` which calls
-|       ``checkbounds_indices(Bool, indices(A), I)`` which recursively calls
-|         ``checkindex`` for each dimension
+|     ``checkbounds(Bool, A, I...)`` which calls either of:
+|       ``checkbounds_logical(Bool, A, I)``  when ``I`` is a single logical array
+|       ``checkbounds_indices(Bool, indices(A), I)`` otherwise
 |
 
 Here ``A`` is the array, and ``I`` contains the "requested" indices.
@@ -89,8 +89,8 @@ dimensions handled by calling another important function,
                                                          checkbounds_indices(Bool, IA, I)
 
 so ``checkindex`` checks a single dimension.  All of these functions,
-including the unexported ``checkbounds_indices`` have docstrings
-accessible with ``?`` .
+including the unexported ``checkbounds_indices`` and
+``checkbounds_logical``, have docstrings accessible with ``?`` .
 
 If you have to customize bounds checking for a specific array type,
 you should specialize ``checkbounds(Bool, A, I...)``. However, in most

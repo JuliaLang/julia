@@ -79,13 +79,6 @@ A = rand(5,4,3)
 @test checkbounds(Bool, A, trues(5), trues(12)) == true
 @test checkbounds(Bool, A, trues(5), trues(13)) == false
 @test checkbounds(Bool, A, trues(6), trues(12)) == false
-@test checkbounds(Bool, A, trues(5, 4, 3)) == true
-@test checkbounds(Bool, A, trues(5, 4, 2)) == false
-@test checkbounds(Bool, A, trues(5, 12)) == false
-@test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 3)) == true
-@test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 2)) == false
-@test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
-@test checkbounds(Bool, A, trues(1, 5), :, 2) == true
 
 # array of CartesianIndex
 @test checkbounds(Bool, A, [CartesianIndex((1, 1, 1))]) == true
