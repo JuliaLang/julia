@@ -33,6 +33,9 @@ This section lists changes that do not have deprecation warnings.
     for `real(z) < 0`, which differs from `log(gamma(z))` by multiples of 2π
     in the imaginary part ([#18330]).
 
+  * `broadcast` now handles tuples, and treats any argument that is not a tuple
+    or an array as a "scalar" ([#16986]).
+
 Library improvements
 --------------------
 
@@ -646,6 +649,7 @@ Language tooling improvements
 [#16854]: https://github.com/JuliaLang/julia/issues/16854
 [#16953]: https://github.com/JuliaLang/julia/issues/16953
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
+[#16986]: https://github.com/JuliaLang/julia/issues/16986
 [#17033]: https://github.com/JuliaLang/julia/issues/17033
 [#17037]: https://github.com/JuliaLang/julia/issues/17037
 [#17075]: https://github.com/JuliaLang/julia/issues/17075

@@ -116,7 +116,7 @@ function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, 
         return R
     end
     indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(R)) # handle d=1 manually
-    keep, Idefault = Broadcast.newindexer(indsAt, indsRt)
+    keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
     if reducedim1(R, A)
         i1 = first(indices1(R))
         @inbounds for IA in CartesianRange(indsAt)
