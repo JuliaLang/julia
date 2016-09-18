@@ -63,7 +63,7 @@ tuple-type describing the types of the arguments, and ``sig`` is a
 tuple-type specifying the types in the function's signature.)  For
 this algorithm to work, it's important that methods be sorted by their
 specificity, and that the search begins with the most specific
-methods.  Consequently, julia also implements a partial order on
+methods.  Consequently, Julia also implements a partial order on
 types; this is achieved by functionality that is similar to ``<:``,
 but with differences that will be discussed below.
 

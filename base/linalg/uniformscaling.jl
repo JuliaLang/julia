@@ -24,6 +24,11 @@ one{T}(J::UniformScaling{T}) = one(UniformScaling{T})
 zero{T}(::Type{UniformScaling{T}}) = UniformScaling(zero(T))
 zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
 
+istriu(::UniformScaling) = true
+istril(::UniformScaling) = true
+issym(::UniformScaling) = true
+ishermitian(J::UniformScaling) = isreal(J.λ)
+
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+){T}(B::BitArray{2},J::UniformScaling{T}) = bitunpack(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + bitunpack(B)
@@ -121,9 +126,8 @@ inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(bitunpack(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, bitunpack(B))
-*(A::AbstractMatrix, J::UniformScaling) = J.λ == 1 ? A : J.λ*A
-*(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 1 ? A : J.λ*A
-
+*(A::AbstractMatrix, J::UniformScaling) = A*J.λ
+*(J::UniformScaling, A::AbstractVecOrMat) = J.λ*A
 *(x::Number, J::UniformScaling) = UniformScaling(x*J.λ)
 *(J::UniformScaling, x::Number) = UniformScaling(J.λ*x)
 

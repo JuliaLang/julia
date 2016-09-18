@@ -555,11 +555,11 @@ computation, and also in the following references:
 - For even more extensive documentation of the history of, rationale for,
   and issues with floating-point numbers, as well as discussion of many other
   topics in numerical computing, see the `collected writings
-  <http://www.cs.berkeley.edu/~wkahan/>`_ of `William Kahan
+  <https://people.eecs.berkeley.edu/~wkahan/>`_ of `William Kahan
   <https://en.wikipedia.org/wiki/William_Kahan>`_, commonly known as the "Father
   of Floating-Point". Of particular interest may be `An Interview with the Old
   Man of Floating-Point
-  <http://www.cs.berkeley.edu/~wkahan/ieee754status/754story.html>`_.
+  <https://people.eecs.berkeley.edu/~wkahan/ieee754status/754story.html>`_.
 
 .. _man-arbitrary-precision-arithmetic:
 

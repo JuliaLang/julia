@@ -45,11 +45,11 @@ To evaluate expressions written in a source file ``file.jl``, write
 ``include("file.jl")``.
 
 To run code in a file non-interactively, you can give it as the first
-argument to the julia command::
+argument to the ``julia`` command::
 
     $ julia script.jl arg1 arg2...
 
-As the example implies, the following command-line arguments to julia
+As the example implies, the following command-line arguments to ``julia``
 are taken as command-line arguments to the program ``script.jl``, passed
 in the global constant ``ARGS``. ``ARGS`` is also set when script code
 is given using the ``-e`` option on the command line (see the ``julia``
@@ -84,7 +84,7 @@ specifies the ip-address and port that other workers should use to
 connect to this worker.
 
 
-If you have code that you want executed whenever julia is run, you can
+If you have code that you want executed whenever Julia is run, you can
 put it in ``~/.juliarc.jl``:
 
 .. raw:: latex
@@ -104,7 +104,9 @@ put it in ``~/.juliarc.jl``:
     \end{CJK*}
 
 There are various ways to run Julia code and provide options, similar to
-those available for the ``perl`` and ``ruby`` programs::
+those available for the ``perl`` and ``ruby`` programs:
+
+.. code-block:: none
 
     julia [switches] -- [programfile] [args...]
      -v, --version             Display version information
@@ -112,7 +114,7 @@ those available for the ``perl`` and ``ruby`` programs::
 
      -J, --sysimage <file>     Start up with the given system image file
      --precompiled={yes|no}    Use precompiled code from system image if available
-     -H, --home <dir>          Set location of julia executable
+     -H, --home <dir>          Set location of `julia` executable
      --startup-file={yes|no}   Load ~/.juliarc.jl
      -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)
      -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)
@@ -160,7 +162,7 @@ In addition to this manual, there are various other resources that may
 help new users get started with Julia:
 
 - `Julia and IJulia cheatsheet <http://math.mit.edu/~stevenj/Julia-cheatsheet.pdf>`_
-- `Learn Julia in a few minutes <http://learnxinyminutes.com/docs/julia/>`_
+- `Learn Julia in a few minutes <https://learnxinyminutes.com/docs/julia/>`_
 - `Learn Julia the Hard Way <https://github.com/chrisvoncsefalvay/learn-julia-the-hard-way>`_
 - `Julia by Example <http://samuelcolvin.github.io/JuliaByExample/>`_
 - `Hands-on Julia <https://github.com/dpsanders/hands_on_julia>`_

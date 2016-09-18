@@ -28,6 +28,7 @@ matrix:
             - gfortran
     - os: osx
       env: ARCH="x86_64"
+      osx_image: xcode7
 cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps-i686
@@ -64,6 +65,7 @@ before_install:
         contrib/travis_fastfail.sh || exit 1;
         brew tap staticfloat/julia;
         brew rm --force $(brew deps julia);
+        brew install -v cmake staticfloat/juliadeps/libgfortran;
         brew install -v --only-dependencies julia;
         BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1 STAGE2_DEPS=utf8proc";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";

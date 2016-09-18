@@ -3547,3 +3547,13 @@ end
     foo() = x
     foo()
 end
+
+# issue discovered in #11973
+for j = 1:1
+    x = try
+        error()
+        2
+    catch
+        continue
+    end
+end

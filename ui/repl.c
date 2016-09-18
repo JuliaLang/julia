@@ -47,7 +47,7 @@ static const char opts[]  =
     // startup options
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " --precompiled={yes|no}    Use precompiled code from system image if available\n"
-    " -H, --home <dir>          Set location of julia executable\n"
+    " -H, --home <dir>          Set location of `julia` executable\n"
     " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
     " -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)\n"
     " -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)\n"

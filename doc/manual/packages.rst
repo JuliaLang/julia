@@ -194,7 +194,7 @@ To get the latest and greatest versions of all your packages, just do :func:`Pkg
 
 The first step of updating packages is to pull new changes to ``~/.julia/v0.4/METADATA`` and see if any new registered package versions have been published.
 After this, :func:`Pkg.update` attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have been made to files tracked by git) by pulling changes from the package's upstream repository.
-Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be `"fast-forwarded" <http://git-scm.com/book/en/Git-Branching-Basic-Branching-and-Merging>`_.
+Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be `"fast-forwarded" <https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging>`_.
 If the branch cannot be fast-forwarded, it is assumed that you're working on it and will update the repository yourself.
 
 Finally, the update process recomputes an optimal set of package versions to have installed to satisfy your top-level requirements and the requirements of "fixed" packages.
@@ -349,7 +349,7 @@ We recommend that you create a `free account <https://github.com/join>`_ on GitH
 
 where ``USERNAME`` is your actual GitHub user name.
 Once you do this, the package manager knows your GitHub user name and can configure things accordingly.
-You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
+You should also `upload <https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Fssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 
 Making changes to an existing package
@@ -442,7 +442,7 @@ are several possible approaches, here is one that is widely used:
   ``fixbar``). By creating a branch, you ensure that you can easily go
   back and forth between your new work and the current ``master``
   branch (see
-  `<http://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell>`_).
+  `<https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell>`_).
 
   If you forget to do this step until after you've already made some
   changes, don't worry: see :ref:`more detail about branching
@@ -462,7 +462,7 @@ are several possible approaches, here is one that is widely used:
   run the tests:
 
   + From Julia, run :func:`Pkg.test("Foo") <Pkg.test>`: this will run your
-    tests in a separate (new) julia process.
+    tests in a separate (new) ``julia`` process.
   + From Julia, ``include("runtests.jl")`` from the package's ``test/`` folder
     (it's possible the file has a different name, look for one that runs all
     the tests): this allows you to run the tests repeatedly in the same session
@@ -473,7 +473,7 @@ are several possible approaches, here is one that is widely used:
     ``src/`` folder.
 
 
-- Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
+- Commit your changes: see `<https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
 
 - Submit your changes: From the Julia prompt, type
   :func:`Pkg.submit("Foo") <Pkg.submit>`. This will push your changes to your
@@ -541,7 +541,7 @@ following procedure:
   until you have resolved the problems, or you may lose your changes.
 - *Reset* ``master`` (your current branch) back to an earlier state
   with ``git reset --hard origin/master`` (see
-  `<http://git-scm.com/blog/2011/07/11/reset.html>`_).
+  `<https://git-scm.com/blog/2011/07/11/reset.html>`_).
 
 This requires a bit more familiarity with git, so it's much better to
 get in the habit of creating a branch at the outset.
@@ -569,7 +569,7 @@ quite simple but your commit history looks like this::
 
 This gets into the territory of more advanced git usage, and you're
 encouraged to do some reading
-(`<http://git-scm.com/book/en/v2/Git-Branching-Rebasing>`_).  However,
+(`<https://git-scm.com/book/en/v2/Git-Branching-Rebasing>`_).  However,
 a brief summary of the procedure is as follows:
 
 - To protect yourself from error, start from your ``fixbar`` branch
@@ -753,7 +753,7 @@ different license, you can ask us to add it to the package generator, or just pi
 
 If you created a GitHub account and configured git to know about it, :func:`Pkg.generate` will set an appropriate origin URL
 for you.  It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated
-testing service, and an ``appveyor.yml`` file for using `AppVeyor <http://appveyor.com>`_.  You will have to enable testing on
+testing service, and an ``appveyor.yml`` file for using `AppVeyor <https://www.appveyor.com>`_.  You will have to enable testing on
 the Travis and AppVeyor websites for your package repository, but once you've done that, it will already have working tests.
 Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
 
@@ -826,7 +826,7 @@ on GitHub, push your changes to your fork, and open a pull request::
     then you may have encountered an issue from using the GitHub API on
     multiple systems. The solution is to delete the "Julia Package Manager"
     personal access token `from your Github account
-    <https://github.com/settings/tokens>`_ and try again.
+    <https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Ftokens>`_ and try again.
 
     Other failures may require you to circumvent :func:`Pkg.publish` by
     `creating a pull request on GitHub
@@ -901,7 +901,7 @@ that copy exists, you can push your local changes to your copy
 (just like any other GitHub project).
 
 
-1. go to `<https://github.com/JuliaLang/METADATA.jl/fork>`_ and create your own
+1. go to `<https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2FJuliaLang%2FMETADATA.jl%2Ffork>`_ and create your own
 fork.
 
 2. add your fork as a remote repository for the METADATA

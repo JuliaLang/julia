@@ -264,7 +264,7 @@ to reduce this time.
 There are two mechanisms that can achieve this:
 incremental compile and custom system image.
 
-To create a custom system image that can be used to start julia with the -J option,
+To create a custom system image that can be used when starting Julia with the ``-J`` option,
 recompile Julia after modifying the file ``base/userimg.jl`` to require the desired modules.
 
 To create an incremental precompiled module file, add

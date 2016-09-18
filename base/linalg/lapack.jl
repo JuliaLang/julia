@@ -1504,7 +1504,12 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 end
                 @lapackerror
                 if lwork < 0
-                    lwork = BlasInt(real(work[1]))
+                    # Work around issue with truncated Float32 representation of lwork in
+                    # sgesdd by using nextfloat. See
+                    # http://icl.cs.utk.edu/lapack-forum/viewtopic.php?f=13&t=4587&p=11036&hilit=sgesdd#p11036
+                    # and
+                    # https://github.com/scipy/scipy/issues/5401
+                    lwork = round(BlasInt, nextfloat(real(work[1])))
                     work = Array($elty, lwork)
                 end
             end

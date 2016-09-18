@@ -495,3 +495,14 @@ ccall(foo13031p, Cint, (Ref{Tuple{}},), ())
 foo13031(x,y,z) = z
 foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint))
 ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)
+
+# Special calling convention for `Array`
+function f17204(a)
+    b = similar(a)
+    for i in eachindex(a)
+        b[i] = a[i] + 10
+    end
+    return b
+end
+@test ccall(cfunction(f17204, Vector{Any}, Tuple{Vector{Any}}),
+            Vector{Any}, (Vector{Any},), Any[1:10;]) == Any[11:20;]

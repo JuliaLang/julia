@@ -3152,7 +3152,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, bool 
         if (!valuepos) return NULL;
         ssize_t idx = ((jl_gensym_t*)expr)->id;
         assert(idx >= 0);
-        assert(ctx->gensym_assigned.at(idx));
+        //assert(ctx->gensym_assigned.at(idx));
         Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the SAvalue
         if (bp == NULL || type_is_ghost(bp->getType())) {
             // assert(vi.isGhost);

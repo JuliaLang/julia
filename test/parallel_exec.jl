@@ -220,6 +220,13 @@ map!(x->1, d)
 @test 2.0 == remotecall_fetch(id_other, D->D[2], Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
 @test 3.0 == remotecall_fetch(id_other, D->D[1], Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
 
+# Shared arrays of singleton immutables
+@everywhere immutable ShmemFoo end
+for T in [Void, ShmemFoo]
+    s = SharedArray(T, 10)
+    @test T() === remotecall_fetch(workers()[1], x->x[3], s)
+end
+
 function finalize_and_test(r)
     finalize(r)
     @test_throws ErrorException fetch(r)
@@ -280,6 +287,24 @@ function testcpt()
     @test size == 0
 end
 testcpt()
+
+# Test multiple "for" loops waiting on the same channel which
+# is closed after adding a few elements.
+c=Channel()
+results=[]
+@sync begin
+    for i in 1:20
+        @async for i in c
+            push!(results, i)
+        end
+    end
+    sleep(1.0)
+    for i in 1:5
+        put!(c,i)
+    end
+    close(c)
+end
+@test sum(results) == 15
 
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)

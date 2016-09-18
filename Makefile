@@ -563,11 +563,11 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_13.2 \
 		"mingw32-libexpat1 mingw32-zlib1" && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libgfortran3-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libquadmath0-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libstdc++6-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libgcc_s_sjlj1-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libssp0-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libgfortran3-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libquadmath0-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libstdc++6-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libgcc_s_sjlj1-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw32-libssp0-5.3.0-1.1.noarch.rpm && \
 	for i in *.rpm; do 7z x -y $$i; done && \
 	for i in *.cpio; do 7z x -y $$i; done && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll . && \
@@ -580,11 +580,11 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.exe 7z.exe && \
 	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.2 \
 		"mingw64-libexpat1 mingw64-zlib1" && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libgfortran3-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libquadmath0-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libstdc++6-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libgcc_s_seh1-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libssp0-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libgfortran3-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libquadmath0-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libstdc++6-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libgcc_s_seh1-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://julialang.s3.amazonaws.com/bin/winnt/extras/mingw64-libssp0-5.3.0-1.1.noarch.rpm && \
 	for i in *.rpm; do 7z x -y $$i; done && \
 	for i in *.cpio; do 7z x -y $$i; done && \
 	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll . && \

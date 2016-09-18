@@ -136,6 +136,7 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - try to adhere to a 92 character line length limit
  - use upper camel case convention for modules, type names
  - use lower case with underscores for method names
+ - in docstring refer to the language as "Julia" and the executable as "`julia`"
 
 #### General Formatting Guidelines For C code contributions
 

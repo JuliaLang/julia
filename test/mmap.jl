@@ -284,3 +284,16 @@ n = similar(m, 12)
 @test length(n) == 12
 @test size(n) == (12,)
 finalize(m); m = nothing; gc()
+
+# test #14885
+file = tempname()
+touch(file)
+open(file, "r+") do s
+    A = Mmap.mmap(s, Vector{UInt8}, (10,), 0);
+    Mmap.sync!(A)
+    finalize(A); A = nothing; gc()
+    A = Mmap.mmap(s, Vector{UInt8}, (10,), 1);
+    Mmap.sync!(A)
+    finalize(A); A = nothing; gc()
+end
+rm(file)

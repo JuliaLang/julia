@@ -18,11 +18,6 @@ function increment!{T<:Integer}(A::AbstractArray{T})
 end
 increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
 
-## Multiplication with UniformScaling (scaled identity matrices)
-
-(*)(S::SparseMatrixCSC, J::UniformScaling) = J.λ == 1 ? S : J.λ*S
-(*){Tv,Ti}(J::UniformScaling, S::SparseMatrixCSC{Tv,Ti}) = J.λ == 1 ? S : S*J.λ
-
 ## sparse matrix multiplication
 
 function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})

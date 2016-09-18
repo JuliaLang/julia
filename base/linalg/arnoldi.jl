@@ -117,7 +117,7 @@ function _eigs(A, B;
     T = eltype(A)
     iscmplx = T <: Complex
     isgeneral = B !== I
-    sym = issym(A) && !iscmplx
+    sym = issym(A) && issym(B) && !iscmplx
     nevmax=sym ? n-1 : n-2
     if nevmax <= 0
         throw(ArgumentError("Input matrix A is too small. Use eigfact instead."))
@@ -135,9 +135,6 @@ function _eigs(A, B;
         ncv = ncvmin
     end
     ncv = BlasInt(min(ncv, n))
-    if isgeneral && !isposdef(B)
-        throw(PosDefException(0))
-    end
     bmat = isgeneral ? "G" : "I"
     isshift = sigma !== nothing
 
@@ -208,7 +205,7 @@ function _eigs(A, B;
             solveSI(x) = x
         else                #    Shift-invert mode
             mode       = 3
-            F = factorize(sigma==zero(T) ? A : A - UniformScaling(sigma))
+            F = factorize(A - UniformScaling(sigma))
             solveSI(x) = F \ x
         end
     else                    # Generalized eigenproblem
@@ -219,7 +216,7 @@ function _eigs(A, B;
             solveSI(x) = F \ x
         else                #    Shift-invert mode
             mode       = 3
-            F = factorize(sigma==zero(T) ? A : A-sigma*B)
+            F = factorize(A - sigma*B)
             solveSI(x) = F \ x
         end
     end

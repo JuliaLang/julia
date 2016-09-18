@@ -597,11 +597,15 @@ quite what is needed. For these kinds of situations, Julia provides
 :ref:`non-standard string literals <man-non-standard-string-literals2>`.
 A non-standard string literal looks like
 a regular double-quoted string literal, but is immediately prefixed by
-an identifier, and doesn't behave quite like a normal string literal. Regular
+an identifier, and doesn't behave quite like a normal string literal. The
+convention is that non-standard literals with uppercase prefixes produce
+actual string objects, while those with lowercase prefixes produce
+non-string objects like byte arrays or compiled regular expressions. Regular
 expressions, byte array literals and version number literals, as described
 below, are some examples of non-standard string literals. Other examples are
 given in the :ref:`metaprogramming <man-non-standard-string-literals2>`
 section.
+
 
 Regular Expressions
 -------------------
@@ -824,11 +828,8 @@ Byte Array Literals
 
 Another useful non-standard string literal is the byte-array string
 literal: ``b"..."``. This form lets you use string notation to express
-literal byte arrays — i.e. arrays of ``UInt8`` values. The convention is
-that non-standard literals with uppercase prefixes produce actual string
-objects, while those with lowercase prefixes produce non-string objects
-like byte arrays or compiled regular expressions. The rules for byte
-array literals are the following:
+literal byte arrays — i.e. arrays of ``UInt8`` values. The rules for
+byte array literals are the following:
 
 -  ASCII characters and ASCII escapes produce a single byte.
 -  ``\x`` and octal escape sequences produce the *byte* corresponding to
@@ -943,7 +944,7 @@ would only run with stable ``0.2`` versions, and exclude such versions as
 
 Another non-standard version specification extension allows one to use a trailing
 ``+`` to express an upper limit on build versions, e.g.  ``VERSION >
-"v"0.2-rc1+"`` can be used to mean any version above ``0.2-rc1`` and any of its
+v"0.2-rc1+"`` can be used to mean any version above ``0.2-rc1`` and any of its
 builds: it will return ``false`` for version ``v"0.2-rc1+win64"`` and ``true``
 for ``v"0.2-rc2"``.
 
