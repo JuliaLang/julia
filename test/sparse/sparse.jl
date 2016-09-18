@@ -1535,7 +1535,7 @@ end
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
-    Ai = trunc(Int,Ar*100)
+    Ai = trunc.(Int, Ar*100)
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
