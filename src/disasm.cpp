@@ -366,7 +366,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #else
                           formatted_raw_ostream &stream,
 #endif
-						  const char* asm_variant="att"
+                          const char* asm_variant="att"
                           )
 {
     // GC safe
@@ -447,7 +447,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
     }
     unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
 
-    if( strcmp(asm_variant, "intel")==0){
+    if (strcmp(asm_variant, "intel")==0) {
         OutputAsmVariant = 1;
     }
     bool ShowEncoding = false;

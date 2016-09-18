@@ -5,12 +5,10 @@ using Base.Test
 ix86 = r"i[356]86"
 
 if Sys.ARCH === :x86_64 || ismatch(ix86, string(Sys.ARCH))
-  let
     function linear_foo()
-         x = 4
-         y = 5
+        x = 4
+        y = 5
     end
-
 
     rgx = r"%"
     buf = IOBuffer()
@@ -31,5 +29,4 @@ if Sys.ARCH === :x86_64 || ismatch(ix86, string(Sys.ARCH))
     output=takebuf_string(buf)
 
     @test ismatch(rgx, output)
-  end
 end

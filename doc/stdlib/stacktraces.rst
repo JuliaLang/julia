@@ -17,7 +17,7 @@
    * ``func::Symbol``
 
      The name of the function containing the execution context.
-   * ``linfo::Nullable{MethodInstance}``
+   * ``linfo::Nullable{Core.MethodInstance}``
 
      The MethodInstance containing the execution context (if it could be found).
    * ``file::Symbol``
