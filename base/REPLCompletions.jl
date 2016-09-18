@@ -167,8 +167,16 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
             for file in filesinpath
                 # In a perfect world, we would filter on whether the file is executable
                 # here, or even on whether the current user can execute the file in question.
-                if startswith(file, prefix) && isfile(joinpath(pathdir, file))
-                    push!(matches, file)
+                if startswith(file, prefix)
+                    try
+                        # isfile can cause an error when trying to ask for stat on a
+                        # system file, it does not have permision to read.
+                        if isfile(joinpath(pathdir, file))
+                            push!(matches, file)
+                        end
+                    catch err
+                        isa(err, Base.UVError) && Base.uverrorname(err)=="EPERM" || rethrow(err)
+                    end
                 end
             end
         end
@@ -438,15 +446,22 @@ function completions(string, pos)
 
     # otherwise...
     if inc_tag in [:cmd, :string]
-        m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
+        m = match(r"[\t\n\r\"><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
-           length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) &&  # except if it's a directory
-           (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
-            paths[1] *= "\""
+               length(paths) == 1 &&                              # Only close if there's a single choice,
+               (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
+            not_dir = try
+                !isdir(expanduser(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " "))) # except if it's a directory
+            catch err
+                isa(err, Base.UVError) && Base.uverrorname(err)=="EPERM" || rethrow(err)
+                false
+            end
+            if not_dir
+                paths[1] *= "\""
+            end
         end
         #Latex symbols can be completed for strings
         (success || inc_tag==:cmd) && return sort(paths), r, success
