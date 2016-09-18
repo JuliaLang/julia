@@ -508,7 +508,7 @@ end
 
 function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att)
     if syntax != :att && syntax != :intel
-       throw(ArgumentError("'syntax' must be either :intel or :att"))
+        throw(ArgumentError("'syntax' must be either :intel or :att"))
     end
     if native
         llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool), linfo, wrapper)
