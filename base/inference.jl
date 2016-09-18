@@ -245,7 +245,7 @@ isType(t::ANY) = isa(t,DataType) && is((t::DataType).name,Type.name)
 # true if Type is inlineable as constant
 isconstType(t::ANY,b::Bool) =
     isType(t) && !has_typevars(t.parameters[1],b) &&
-    !issubtype(Tuple{Vararg}, t.parameters[1])  # work around inference bug #18450
+    !issubtype(Type{Tuple{Vararg}}, t)  # work around inference bug #18450
 
 const IInf = typemax(Int) # integer infinity
 const n_ifunc = reinterpret(Int32,arraylen)+1
