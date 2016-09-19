@@ -1386,4 +1386,11 @@ end
 @deprecate floor{T<:Integer}(::Type{T}, A::AbstractArray) floor.(T, A)
 @deprecate floor(A::AbstractArray, digits::Integer, base::Integer = 10) floor.(A, digits, base)
 
+# Deprecate manually vectorized ceil methods in favor of compact broadcast syntax
+@deprecate ceil(M::Bidiagonal) ceil.(M)
+@deprecate ceil(M::Tridiagonal) ceil.(M)
+@deprecate ceil(M::SymTridiagonal) ceil.(M)
+@deprecate ceil{T<:Integer}(::Type{T}, x::AbstractArray) ceil.(T, x)
+@deprecate ceil(x::AbstractArray, digits::Integer, base::Integer = 10) ceil.(x, digits, base)
+
 # End deprecations scheduled for 0.6

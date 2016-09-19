@@ -100,15 +100,15 @@ broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.
 broadcast(::typeof(round), M::SymTridiagonal) = SymTridiagonal(round.(M.dv), round.(M.ev))
 broadcast(::typeof(trunc), M::SymTridiagonal) = SymTridiagonal(trunc.(M.dv), trunc.(M.ev))
 broadcast(::typeof(floor), M::SymTridiagonal) = SymTridiagonal(floor.(M.dv), floor.(M.ev))
-for func in (:conj, :copy, :ceil, :real, :imag)
+broadcast(::typeof(ceil), M::SymTridiagonal) = SymTridiagonal(ceil.(M.dv), ceil.(M.ev))
+for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
 broadcast{T<:Integer}(::typeof(round), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(round.(T, M.dv), round.(T, M.ev))
 broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(trunc.(T, M.dv), trunc.(T, M.ev))
 broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
-for func in (:ceil,)
-    @eval ($func){T<:Integer}(::Type{T},M::SymTridiagonal) = SymTridiagonal(($func)(T,M.dv), ($func)(T,M.ev))
-end
+broadcast{T<:Integer}(::typeof(ceil), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(ceil.(T, M.dv), ceil.(T, M.ev))
+
 transpose(M::SymTridiagonal) = M #Identity operation
 ctranspose(M::SymTridiagonal) = conj(M)
 
@@ -511,7 +511,8 @@ broadcast(::typeof(abs), M::Tridiagonal) = Tridiagonal(abs.(M.dl), abs.(M.d), ab
 broadcast(::typeof(round), M::Tridiagonal) = Tridiagonal(round.(M.dl), round.(M.d), round.(M.du), round.(M.du2))
 broadcast(::typeof(trunc), M::Tridiagonal) = Tridiagonal(trunc.(M.dl), trunc.(M.d), trunc.(M.du), trunc.(M.du2))
 broadcast(::typeof(floor), M::Tridiagonal) = Tridiagonal(floor.(M.dl), floor.(M.d), floor.(M.du), floor.(M.du2))
-for func in (:conj, :copy, :ceil, :real, :imag)
+broadcast(::typeof(ceil), M::Tridiagonal) = Tridiagonal(ceil.(M.dl), ceil.(M.d), ceil.(M.du), ceil.(M.du2))
+for func in (:conj, :copy, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du), ($func)(M.du2))
     end
@@ -522,11 +523,8 @@ broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::Tridiagonal) =
     Tridiagonal(trunc.(T, M.dl), trunc.(T, M.d), trunc.(T, M.du), trunc.(T, M.du2))
 broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::Tridiagonal) =
     Tridiagonal(floor.(T, M.dl), floor.(T, M.d), floor.(T, M.du), floor.(T, M.du2))
-for func in (:ceil,)
-    @eval function ($func){T<:Integer}(::Type{T},M::Tridiagonal)
-        Tridiagonal(($func)(T,M.dl), ($func)(T,M.d), ($func)(T,M.du), ($func)(T,M.du2))
-    end
-end
+broadcast{T<:Integer}(::typeof(ceil), ::Type{T}, M::Tridiagonal) =
+    Tridiagonal(ceil.(T, M.dl), ceil.(T, M.d), ceil.(T, M.du), ceil.(T, M.du2))
 
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))

@@ -1403,9 +1403,6 @@ sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
 (-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
 
-# TODO: The following definitions should be deprecated.
-ceil{To}(::Type{To}, A::SparseMatrixCSC) = ceil.(To, A)
-
 
 ## Binary arithmetic and boolean operators
 (+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
