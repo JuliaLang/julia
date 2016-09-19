@@ -485,6 +485,8 @@ f16(z::Complex) = Complex32(z)
 
 # If we really cared about single precision, we could make a faster
 # Float32 version by truncating the Stirling series at a smaller cutoff.
+# and if we really cared about half precision, we could make a faster
+# Float16 version, by using a precomputed table look-up.
 for (f,T) in ((:f32,Float32),(:f16,Float16))
     @eval begin
         zeta(s::Integer, z::Union{$T,Complex{$T}}) = $f(zeta(Int(s), f64(z)))
@@ -496,20 +498,71 @@ for (f,T) in ((:f32,Float32),(:f16,Float16))
     end
 end
 
-zeta(s::Integer, z::Number) = zeta(Int(s), f64(z))
-zeta(s::Number, z::Number) = zeta(f64(s), f64(z))
-for f in (:digamma, :trigamma)
+
+function zeta(s::Integer, z::Number) 
+    x = float(z)
+    t = Int(s)
+    if typeof(x) === typeof(z) && typeof(t) === typeof(s)
+        throw MethodError(zeta,(s,t))
+    end
+    oftype(x, zeta(t, x))
+end
+
+function zeta(s::Number, z::Number) 
+    x = float(z)
+    t = float(s)
+    if typeof(x) === typeof(z) && typeof(t) === typeof(s)
+        throw MethodError(zeta,(s,t))
+    end
+    oftype(x, zeta(t, x))
+end
+
+
+function polygamma(m::Integer, z::Number)
+    x = float(z)
+    typeof(x) == typeof(z) && throw(MethodError(polygamma, (m,z))
+    oftype(x,polygamma(m, x))
+end
+
+
+for f in (:digamma, :trigamma, :zeta, :eta, invdigamma)
     @eval begin
-        $f(z::Number) = $f(f64(z))
+        $f(z::Base.BitInteger) = $f(Float64(z))
+        $f(z::Float32) = Float32($f(Float64(z)))
+        $f(z::Float16) = Float16($f(Float64(z)))
+
+        function $f(z::Number)
+            x = float(z)
+            typeof(x) == typeof(z) && throw(MethodError($f, (z,)))
+            oftype(x, $f(x))
+        end
     end
 end
-polygamma(m::Integer, z::Number) = polygamma(m, f64(z))
 
-# Inverse digamma function:
-# Implementation of fixed point algorithm described in
-#  "Estimating a Dirichlet distribution" by Thomas P. Minka, 2000
+for f in (:zeta, :eta)
+    @eval begin
+        $f{T<:Union{Base.BitInteger,Float32,Float16}}(x::t) = oftype(float(x), $f(Complex128(z)))
+
+        function $f(z::Complex)
+            x = float(z)
+            typeof(x) == typeof(z) && throw(MethodError($f, (z,)))
+            oftype(x, $f(Complex(x))
+        end
+    end
+end
+
+
+
+"""
+    invdigamma(x)
+
+Compute the inverse [`digamma`](:func:`digamma`) function of `x`.
+"""
 function invdigamma(y::Float64)
-    # Closed form initial estimates
+   # Implementation of fixed point algorithm described in
+   # "Estimating a Dirichlet distribution" by Thomas P. Minka, 2000
+
+   # Closed form initial estimates
     if y >= -2.22
         x_old = exp(y) + 0.5
         x_new = x_old
@@ -530,14 +583,6 @@ function invdigamma(y::Float64)
 
     return x_new
 end
-invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
-
-"""
-    invdigamma(x)
-
-Compute the inverse [`digamma`](:func:`digamma`) function of `x`.
-"""
-invdigamma(x::Real) = invdigamma(Float64(x))
 
 """
     beta(x, y)
@@ -559,9 +604,16 @@ function ``\\log(|\\operatorname{B}(x,y)|)``.
 """
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
 
-# Riemann zeta function; algorithm is based on specializing the Hurwitz
-# zeta function above for z==1.
+
+"""
+    zeta(s)
+
+Riemann zeta function ``\\zeta(s)``.
+"""
 function zeta(s::Union{Float64,Complex{Float64}})
+    # Riemann zeta function; algorithm is based on specializing the Hurwitz
+    # zeta function above for z==1.
+
     # blows up to ±Inf, but get correct sign of imaginary zero
     s == 1 && return NaN + zero(s) * imag(s)
 
@@ -606,16 +658,13 @@ function zeta(s::Union{Float64,Complex{Float64}})
     return ζ
 end
 
-zeta(x::Integer) = zeta(Float64(x))
-zeta(x::Real)    = oftype(float(x),zeta(Float64(x)))
+
 
 """
-    zeta(s)
+    eta(x)
 
-Riemann zeta function ``\\zeta(s)``.
+Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-1)^{n-1}/n^{s}``.
 """
-zeta(z::Complex) = oftype(float(z),zeta(Complex128(z)))
-
 function eta(z::Union{Float64,Complex{Float64}})
     δz = 1 - z
     if abs(real(δz)) + abs(imag(δz)) < 7e-3 # Taylor expand around z==1
@@ -630,12 +679,4 @@ function eta(z::Union{Float64,Complex{Float64}})
         return -zeta(z) * expm1(0.6931471805599453094172321214581765*δz)
     end
 end
-eta(x::Integer) = eta(Float64(x))
-eta(x::Real)    = oftype(float(x),eta(Float64(x)))
 
-"""
-    eta(x)
-
-Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-1)^{n-1}/n^{s}``.
-"""
-eta(z::Complex) = oftype(float(z),eta(Complex128(z)))

@@ -941,3 +941,12 @@ end
 
 # no domain error is thrown for negative values
 @test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0
+
+# issue #17474
+@test typeof(eta(big"2")) == BigFloat
+@test typeof(zeta(big"2")) == BigFloat
+@test typeof(digamma(big"2")) == BigFloat
+@test_throws MethodError trigamma(big"2")
+@test_throws MethodError trigamma(big"2.0")
+@test_throws MethodError invdigamma(big"2")
+@test_throws MethodError invdiamma(big"2.0")
