@@ -53,8 +53,8 @@ promote_array_type{S<:Integer}(::typeof(.\), ::Type{S}, ::Type{Bool}, T::Type) =
 promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
-    @eval ($f)(A::AbstractArray, B::AbstractArray) =
-        _elementwise($f, promote_eltype_op($f, A, B), A, B)
+    @eval ($f){R,S}(A::AbstractArray{R}, B::AbstractArray{S}) =
+        _elementwise($f, promote_op($f, R, S), A, B)
 end
 function _elementwise(op, ::Type{Any}, A::AbstractArray, B::AbstractArray)
     promote_shape(A, B) # check size compatibility

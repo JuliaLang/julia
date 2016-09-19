@@ -526,27 +526,6 @@ function elementwise:
 
 Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a :func:`broadcast!` function to specify an explicit destination, and :func:`broadcast_getindex` and :func:`broadcast_setindex!` that broadcast the indices before indexing.   Moreover, ``f.(args...)`` is equivalent to ``broadcast(f, args...)``, providing a convenient syntax to broadcast any function (:ref:`man-dot-vectorizing`).
 
-Additionally, :func:`broadcast` is not limited to arrays (see the function documentation), it also handles tuples and treats any argument that is not an array or a tuple as a "scalar".
-
-.. doctest::
-
-    julia> convert.(Float32, [1, 2])
-    2-element Array{Float32,1}:
-     1.0
-     2.0
-
-    julia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])
-    2×2 Array{UInt8,2}:
-     0x02  0x04
-     0x06  0x07
-
-    julia> string.(1:3, ". ", ["First", "Second", "Third"])
-    3-element Array{String,1}:
-     "1. First"
-     "2. Second"
-     "3. Third"
-
-
 Implementation
 --------------
 

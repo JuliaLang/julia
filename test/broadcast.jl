@@ -2,8 +2,7 @@
 
 module TestBroadcastInternals
 
-using Base.Broadcast: broadcast_indices, check_broadcast_indices,
-                      check_broadcast_shape, newindex, _bcs, _bcsm
+using Base.Broadcast: broadcast_shape, check_broadcast_shape, newindex, _bcs, _bcsm
 using Base: Test, OneTo
 
 @test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
@@ -19,28 +18,28 @@ using Base: Test, OneTo
 @test_throws DimensionMismatch _bcs((), (-1:1, 2:6), (-1:1, 2:5))
 @test_throws DimensionMismatch _bcs((), (-1:1, 2:5), (2, 2:5))
 
-@test @inferred(broadcast_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(broadcast_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
-@test @inferred(broadcast_indices(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(broadcast_indices(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
+@test @inferred(broadcast_shape(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
+@test @inferred(broadcast_shape(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
+@test @inferred(broadcast_shape(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
+@test @inferred(broadcast_shape(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
 
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,1))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
-check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), 1)
-check_broadcast_indices((OneTo(3),OneTo(5)), 5, 2)
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(2,5))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4,2))
-@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
-check_broadcast_indices((-1:1, 6:9), 1)
+check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,5))
+check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,1))
+check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3))
+check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
+check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,5), 1)
+check_broadcast_shape((OneTo(3),OneTo(5)), 5, 2)
+@test_throws DimensionMismatch check_broadcast_shape((OneTo(3),OneTo(5)), zeros(2,5))
+@test_throws DimensionMismatch check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,4))
+@test_throws DimensionMismatch check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,4,2))
+@test_throws DimensionMismatch check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
 
 check_broadcast_shape((-1:1, 6:9), (-1:1, 6:9))
 check_broadcast_shape((-1:1, 6:9), (-1:1, 1))
 check_broadcast_shape((-1:1, 6:9), (1, 6:9))
 @test_throws DimensionMismatch check_broadcast_shape((-1:1, 6:9), (-1, 6:9))
 @test_throws DimensionMismatch check_broadcast_shape((-1:1, 6:9), (-1:1, 6))
+check_broadcast_shape((-1:1, 6:9), 1)
 
 ci(x) = CartesianIndex(x)
 @test @inferred(newindex(ci((2,2)), (true, true), (-1,-1)))   == ci((2,2))
@@ -328,12 +327,3 @@ end
 let A17984 = []
     @test isa(abs.(A17984), Array{Any,1})
 end
-
-# Issue #16966
-@test parse.(Int, "1") == 1
-@test parse.(Int, ["1", "2"]) == [1, 2]
-@test trunc.((Int,), [1.2, 3.4]) == [1, 3]
-@test abs.((1, -2)) == (1, 2)
-@test broadcast(+, 1.0, (0, -2.0)) == (1.0,-1.0)
-@test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
-@test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]

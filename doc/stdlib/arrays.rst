@@ -606,13 +606,7 @@ All mathematical operations and functions are supported for arrays
 
    .. Docstring generated from Julia source
 
-   Broadcasts the arrays, tuples and/or scalars ``As`` to a container of the appropriate type and dimensions. In this context, anything that is not a subtype of ``AbstractArray`` or ``Tuple`` is considered a scalar. The resulting container is stablished by the following rules:
-
-   * If all the arguments are scalars, it returns a scalar.
-   * If the arguments are tuples and zero or more scalars, it returns a tuple.
-   * If there is at least an array in the arguments, it returns an array (and treats tuples as 1-dimensional arrays) expanding singleton dimensions.
-
-   A special syntax exists for broadcasting: ``f.(args...)`` is equivalent to ``broadcast(f, args...)``\ , and nested ``f.(g.(args...))`` calls are fused into a single broadcast loop.
+   Broadcasts the arrays ``As`` to a common size by expanding singleton dimensions, and returns an array of the results ``f(as...)`` for each position.
 
    .. doctest::
 
@@ -639,29 +633,6 @@ All mathematical operations and functions are supported for arrays
          8   9
         11  12
         14  15
-
-       julia> parse.(Int, ["1", "2"])
-       2-element Array{Int64,1}:
-        1
-        2
-
-       julia> abs.((1, -2))
-       (1,2)
-
-       julia> broadcast(+, 1.0, (0, -2.0))
-       (1.0,-1.0)
-
-       julia> broadcast(+, 1.0, (0, -2.0), [1])
-       2-element Array{Float64,1}:
-        2.0
-        0.0
-
-       julia> string.(("one","two","three","four"), ": ", 1:4)
-       4-element Array{String,1}:
-        "one: 1"
-        "two: 2"
-        "three: 3"
-        "four: 4"
 
 .. function:: broadcast!(f, dest, As...)
 
