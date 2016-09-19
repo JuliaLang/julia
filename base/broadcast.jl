@@ -255,18 +255,11 @@ end
 
 @inline broadcast_t(f, T, As...) = broadcast!(f, similar(Array{T}, broadcast_indices(As...)), As...)
 
-@generated function broadcast_tup{AT,nargs}(f, As::AT, ::Type{Val{nargs}}, n)
-    quote
-        ntuple(n -> (@ncall $nargs f i->_broadcast_getindex(As[i], n)), Val{n})
-    end
-end
-
 function broadcast_c(f, ::Type{Tuple}, As...)
     shape = broadcast_indices(As...)
     check_broadcast_indices(shape, As...)
     n = length(shape[1])
-    nargs = length(As)
-    return broadcast_tup(f, As, Val{nargs}, n)
+    return ntuple(k->f((_broadcast_getindex(A, k) for A in As)...), n)
 end
 @inline broadcast_c(f, ::Type{Any}, a...) = f(a...)
 @inline broadcast_c(f, ::Type{Array}, As...) = broadcast_t(f, promote_eltype_op(f, As...), As...)
