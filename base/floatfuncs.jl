@@ -112,7 +112,7 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
 end
 round{T<:Integer}(::Type{T}, x::AbstractFloat, r::RoundingMode) = trunc(T,round(x,r))
 
-for f in (:trunc,:floor,:ceil,:round)
+for f in (:trunc,:floor,:ceil)
     @eval begin
         function ($f){T,R}(::Type{T}, x::AbstractArray{R,1})
             [ ($f)(T, y)::T for y in x ]
@@ -133,26 +133,6 @@ for f in (:trunc,:floor,:ceil,:round)
             reshape([ ($f)(y, digits, base) for y in x ], size(x))
         end
     end
-end
-
-function round{R}(x::AbstractArray{R,1}, r::RoundingMode)
-    [ round(y, r) for y in x ]
-end
-function round{R}(x::AbstractArray{R,2}, r::RoundingMode)
-    [ round(x[i,j], r) for i = 1:size(x,1), j = 1:size(x,2) ]
-end
-function round(x::AbstractArray, r::RoundingMode)
-    reshape([ round(y, r) for y in x ], size(x))
-end
-
-function round{T,R}(::Type{T}, x::AbstractArray{R,1}, r::RoundingMode)
-    [ round(T, y, r)::T for y in x ]
-end
-function round{T,R}(::Type{T}, x::AbstractArray{R,2}, r::RoundingMode)
-    [ round(T, x[i,j], r)::T for i = 1:size(x,1), j = 1:size(x,2) ]
-end
-function round{T}(::Type{T}, x::AbstractArray, r::RoundingMode)
-    reshape([ round(T, y, r)::T for y in x ], size(x))
 end
 
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
