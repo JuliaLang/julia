@@ -1363,4 +1363,13 @@ end
 # Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
 @deprecate clamp(A::AbstractArray, lo, hi) clamp.(A, lo, hi)
 
+# Deprecate manually vectorized round methods in favor of compact broadcast syntax
+@deprecate round(M::Bidiagonal) round.(M)
+@deprecate round(M::Tridiagonal) round.(M)
+@deprecate round(M::SymTridiagonal) round.(M)
+@deprecate round{T<:Integer}(::Type{T}, x::AbstractArray) round.(T, x)
+@deprecate round{T<:Integer}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round(x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round(x::AbstractArray, digits::Integer, base::Integer = 10) round.(x, digits, base)
+
 # End deprecations scheduled for 0.6

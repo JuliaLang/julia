@@ -800,7 +800,7 @@ end
     @test countnz(A) == 11
     @test A[I] == A[X] == c
 
-    S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
+    S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
     I = sprand(Bool, 50, 30, 0.2)
     FS = Array(S)
     FI = Array(I)
@@ -828,7 +828,7 @@ end
     S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
 
-    S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
+    S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
     N = length(S) >> 2
     I = randperm(N) .* 4
     J = randperm(N)
@@ -1456,7 +1456,7 @@ end
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
-    Ai = round(Int,Ar*100)
+    Ai = round.(Int, Ar*100)
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
@@ -1605,7 +1605,7 @@ end
 @testset "issue #16073" begin
     @inferred sprand(1, 1, 1.0)
     @inferred sprand(1, 1, 1.0, rand, Float64)
-    @inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))
+    @inferred sprand(1, 1, 1.0, x -> round.(Int, rand(x) * 100))
 end
 
 # Test that concatenations of combinations of sparse matrices with sparse matrices or dense

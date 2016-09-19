@@ -2026,13 +2026,21 @@ x = 0.0
 @test approx_eq(round(pi,3,5), 3.144)
 # vectorized trunc/round/floor/ceil with digits/base argument
 a = rand(2, 2, 2)
-for f in (trunc, round, floor, ceil)
+for f in (trunc, floor, ceil)
     @test f(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
     @test f(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
     @test f(a, 9, 2) == map(x->f(x, 9, 2), a)
     @test f(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
     @test f(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
     @test f(a, 9, 2) == map(x->f(x, 9, 2), a)
+end
+for f in (round,)
+    @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
+    @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
+    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
+    @test f.(a[:, 1, 1], 9, 2) == map(x->f(x, 9, 2), a[:, 1, 1])
+    @test f.(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
+    @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)
  end
 # significant digits (would be nice to have a smart vectorized
 # version of signif)

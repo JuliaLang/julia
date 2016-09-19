@@ -1407,7 +1407,6 @@ conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
 ceil{To}(::Type{To}, A::SparseMatrixCSC) = ceil.(To, A)
 floor{To}(::Type{To}, A::SparseMatrixCSC) = floor.(To, A)
 trunc{To}(::Type{To}, A::SparseMatrixCSC) = trunc.(To, A)
-round{To}(::Type{To}, A::SparseMatrixCSC) = round.(To, A)
 
 
 ## Binary arithmetic and boolean operators
