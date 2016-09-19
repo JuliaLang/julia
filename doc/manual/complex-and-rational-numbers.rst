@@ -159,7 +159,7 @@ versus ``-1 + 0im`` even though ``-1 == -1 + 0im``:
     julia> sqrt(-1)
     ERROR: DomainError:
     sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
-     in sqrt(::Int64) at ./math.jl:185
+     in sqrt(::Int64) at ./math.jl:211
      ...
 
     julia> sqrt(-1 + 0im)

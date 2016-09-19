@@ -118,15 +118,15 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 /// ----- Insertion logic for special entries ----- ///
 
 // get or create the LambdaInfo for a specialization
-JL_DLLEXPORT jl_lambda_info_t *jl_specializations_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams)
+JL_DLLEXPORT jl_lambda_info_t *jl_specializations_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams, int allow_exec)
 {
     JL_LOCK(&m->writelock);
     jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->specializations, type, NULL, 1, /*subtype*/0, /*offs*/0);
-    if (sf && jl_is_lambda_info(sf->func.value) && ((jl_lambda_info_t*)sf->func.value)->code != jl_nothing) {
+    if (sf && jl_is_lambda_info(sf->func.value) && (!allow_exec || sf->func.linfo->code != jl_nothing)) {
         JL_UNLOCK(&m->writelock);
         return (jl_lambda_info_t*)sf->func.value;
     }
-    jl_lambda_info_t *li = jl_get_specialized(m, type, sparams, 1);
+    jl_lambda_info_t *li = jl_get_specialized(m, type, sparams, allow_exec);
     JL_GC_PUSH1(&li);
     // TODO: fuse lookup and insert steps
     jl_typemap_insert(&m->specializations, (jl_value_t*)m, type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &tfunc_cache, NULL);
@@ -756,7 +756,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     }
 
     // here we infer types and specialize the method
-    newmeth = jl_specializations_get_linfo(definition, type, sparams);
+    newmeth = jl_specializations_get_linfo(definition, type, sparams, allow_exec);
 
     if (cache_with_orig) {
         // if there is a need to cache with one of the original signatures,
@@ -825,7 +825,7 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
     sig = join_tsig(tt, entry->sig);
     jl_lambda_info_t *nf;
     if (!cache) {
-        nf = jl_get_specialized(m, sig, env, allow_exec);
+        nf = jl_specializations_get_linfo(m, sig, env, allow_exec);
     }
     else {
         nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, entry, env, allow_exec);
@@ -1591,14 +1591,27 @@ static void _compile_all_deq(jl_array_t *found)
         if (m->isstaged)
             linfo = templ;
         else
-            linfo = jl_specializations_get_linfo(m, ml->sig, jl_emptysvec);
+            linfo = jl_specializations_get_linfo(m, ml->sig, jl_emptysvec, 1);
 
-        if (linfo->jlcall_api == 2)
+        if (linfo->jlcall_api == 2) {
+            if (linfo != templ) {
+                templ->jlcall_api = 2;
+                templ->constval = linfo->constval;
+            }
             continue;
+        }
 
         // infer this function now, if necessary
         if (!linfo->inferred || linfo->code == jl_nothing)
             jl_type_infer(linfo, 1);
+
+        if (linfo->jlcall_api == 2) {
+            if (linfo != templ) {
+                templ->jlcall_api = 2;
+                templ->constval = linfo->constval;
+            }
+            continue;
+        }
 
         // keep track of whether all possible signatures have been cached (and thus whether it can skip trying to compile the template function)
         // this is necessary because many intrinsics try to call static_eval and thus are not compilable unspecialized

@@ -2572,13 +2572,6 @@ faster and more accurate.
 log(x)
 
 """
-    log(b,x)
-
-Compute the base `b` logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
-"""
-log(b, x)
-
-"""
     trunc([T,] x, [digits, [base]])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value

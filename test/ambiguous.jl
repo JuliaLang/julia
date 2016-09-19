@@ -185,4 +185,34 @@ immutable T end
 end
 @test length(detect_ambiguities(Ambig7)) == 1
 
+module Ambig17648
+immutable MyArray{T,N} <: AbstractArray{T,N}
+    data::Array{T,N}
+end
+
+foo{T,N}(::Type{Array{T,N}}, A::MyArray{T,N}) = A.data
+foo{T<:AbstractFloat,N}(::Type{Array{T,N}}, A::MyArray{T,N}) = A.data
+foo{S<:AbstractFloat,N,T<:AbstractFloat}(::Type{Array{S,N}}, A::AbstractArray{T,N}) = copy!(Array{S}(size(A)), A)
+foo{S<:AbstractFloat,N,T<:AbstractFloat}(::Type{Array{S,N}}, A::MyArray{T,N}) = copy!(Array{S}(size(A)), A.data)
+end
+
+@test isempty(detect_ambiguities(Ambig17648))
+
+module Ambig8
+using Base: DimsInteger, Indices
+g18307{T<:Integer}(::Union{Indices,Dims}, I::AbstractVector{T}...) = 1
+g18307(::DimsInteger) = 2
+g18307(::DimsInteger, I::Integer...) = 3
+end
+try
+    # want this to be a test_throws MethodError, but currently it's not (see #18307)
+    Ambig8.g18307((1,))
+catch err
+    if isa(err, MethodError)
+        error("Test correctly returned a MethodError, please change to @test_throws MethodError")
+    else
+        rethrow(err)
+    end
+end
+
 nothing

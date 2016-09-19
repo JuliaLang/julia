@@ -4507,6 +4507,35 @@ ptr18236_2 = cfunction(identity, VecElement{NTuple{2,Int8}},
                                       $v18236_2)
 @test f18236_2(ptr18236_2) === v18236_2
 
+# issue #18385
+function f18385(g)
+    if g
+        a = (1, 2)
+    end
+    return a[1]
+end
+@test f18385(true) === 1
+# variable name in the error is tested above in `TestSSA16244`
+@test_throws UndefVarError f18385(false)
+
+# Another similar issue, make sure newvar nodes are created for the fields
+# variables too.
+function f18386(a, b, second_pass)
+    s = 0
+    firstpass = true
+    for i in 1:2
+        if firstpass
+            x = (a, b)
+            firstpass = !second_pass
+        end
+        s += x[1]
+    end
+    s
+end
+@test f18386(1, 2, false) === 2
+# variable name in the error is tested above in `TestSSA16244`
+@test_throws UndefVarError f18386(1, 2, true)
+
 # issue #18173
 function f18173()
     identity(()->successflag)

@@ -120,6 +120,32 @@ deg2rad(z::Real) = deg2rad(float(z))
 @vectorize_1arg Real deg2rad
 
 log{T<:Number}(b::T, x::T) = log(x)/log(b)
+
+"""
+    log(b,x)
+
+Compute the base `b` logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
+
+```jldoctest
+julia> log(4,8)
+1.5
+
+julia> log(4,2)
+0.5
+```
+
+!!! note
+    If `b` is a power of 2 or 10, `log2` or `log10` should be used, as these will
+    typically be faster and more accurate. For example,
+
+    ```jldoctest
+    julia> log(100,1000000)
+    2.9999999999999996
+
+    julia> log10(1000000)/2
+    3.0
+    ```
+"""
 log(b::Number, x::Number) = log(promote(b,x)...)
 @vectorize_2arg Number log
 
