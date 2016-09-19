@@ -85,6 +85,7 @@ type InferenceState
         toplevel = !isdefined(linfo, :def)
 
         if !toplevel && isempty(linfo.sparam_vals) && !isempty(linfo.def.sparam_syms)
+            # linfo is unspecialized
             sp = svec(Any[ TypeVar(sym, Any, true) for sym in linfo.def.sparam_syms ]...)
         else
             sp = linfo.sparam_vals
@@ -663,7 +664,7 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
     meth = entry.func
     (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
                       argtype, meth.sig, meth.tvars)::SimpleVector
-    return typeinf_edge(meth::Method, ti, env, sv)[2]
+    return typeinf_edge(meth::Method, ti, env, sv)
 end
 
 function tuple_tfunc(argtype::ANY)
@@ -913,7 +914,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
             sig = recomputed[1]::DataType
             sparams = recomputed[2]::SimpleVector
         end
-        (_tree, rt) = typeinf_edge(method, sig, sparams, sv)
+        rt = typeinf_edge(method, sig, sparams, sv)
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
             break
@@ -1469,118 +1470,32 @@ function newvar!(sv::InferenceState, typ::ANY)
     return SSAValue(id)
 end
 
-# create a specialized MethodInstance from a method
-function get_linfo(method::Method, types::ANY, sp::SimpleVector)
-    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, types, sp)
-end
-
 inlining_enabled() = (JLOptions().can_inline == 1)
 coverage_enabled() = (JLOptions().code_coverage != 0)
 
-#### entry points for inferring a MethodInstance given a type signature ####
-function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool, optimize::Bool, cached::Bool, caller)
-    local code = nothing
-    local frame = nothing
-    if isa(caller, MethodInstance)
-        code = caller
-    elseif cached && !is(method.specializations, nothing)
-        # check cached specializations
-        # for an existing result stored there
-        code = ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
-        if isa(code, Void)
-            # something completely new
-        elseif isa(code, MethodInstance)
-            # something existing
-        else
-            # sometimes just a return type is stored here. if a full AST
-            # is not needed, we can return it.
-            typeassert(code, Type)
-            if !needtree
-                return (nothing, code, true)
-            end
-            cached = false # don't need to save the new result
-            code = nothing
-        end
+function code_for_method(method::Method, atypes::ANY, sparams::SimpleVector, preexisting::Bool=false)
+    if method.isstaged && !isleaftype(atypes)
+        # don't call staged functions on abstract types.
+        # (see issues #8504, #10230)
+        # we can't guarantee that their type behavior is monotonic.
+        # XXX: this test is wrong if Types (such as DataType) are present
+        return nothing
     end
-
-    if isa(code, MethodInstance) && isdefined(code, :inferred)
-        if code.jlcall_api == 2
-            if needtree
-                tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                tree.code = Any[ Expr(:return, QuoteNode(code.inferred)) ]
-                tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
-                tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
-                tree.slottypes = nothing
-                tree.ssavaluetypes = 0
-                tree.inferred = true
-                tree.pure = true
-                tree.inlineable = true
-            else
-                tree = Const(code.inferred)
-            end
-            return (tree, code.rettype, true)
-        elseif isa(code.inferred, CodeInfo)
-            if code.inferred.inferred
-                return (code.inferred, code.rettype, true)
-            end
-        elseif !needtree
-            return (nothing, code.rettype, true)
-        else
-            cached = false # don't need to save the new result
+    if preexisting
+        if !is(method.specializations, nothing)
+            # check cached specializations
+            # for an existing result stored there
+            return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
         end
+        return nothing
     end
+    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
+end
 
-    ccall(:jl_typeinf_begin, Void, ())
-    thread_in_typeinf_loop = in_typeinf_loop::Bool
-    ccall(:jl_typeinf_end, Void, ())
 
-    if caller === nothing && thread_in_typeinf_loop
-        # if the caller needed the ast, but we are already in the typeinf loop
-        # then just return early -- we can't fulfill this request
-        # if the client was inlining, then this means we decided not to try to infer this
-        # particular signature (due to signature coarsening in abstract_call_gf_by_type)
-        # and attempting to force it now would be a bad idea (non terminating)
-        skip = true
-        if method.module == _topmod(method.module) || (isdefined(Main, :Base) && method.module == Main.Base)
-            # however, some gf have special tfunc and meaning they wouldn't have been inferred yet
-            # check the same conditions from abstract_call to detect this case
-            if method.name == :promote_type || method.name == :typejoin
-                skip = false
-            elseif method.name == :getindex || method.name == :next || method.name == :indexed_next
-                argtypes = atypes.parameters
-                if length(argtypes)>2 && argtypes[3] ⊑ Int
-                    at2 = widenconst(argtypes[2])
-                    if (at2 <: Tuple ||
-                        (isa(at2, DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
-                         (at2::DataType).name === Main.Base.Pair.name))
-                        skip = false
-                    end
-                end
-            end
-        end
-        if skip
-            return (nothing, Union{}, false)
-        end
-    end
-
-    if isa(code, MethodInstance)
-        # reuse the existing code object
-        linfo = code
-        @assert typeseq(linfo.specTypes, atypes)
-    else
-        if method.isstaged && !isleaftype(atypes)
-            # don't call staged functions on abstract types.
-            # (see issues #8504, #10230)
-            # we can't guarantee that their type behavior is monotonic.
-            # XXX: this test is wrong if Types (such as DataType) are present
-            return (nothing, Any, false)
-        end
-        linfo = get_linfo(method, atypes, sparams)
-    end
-
-    ccall(:jl_typeinf_begin, Void, ())
-    # XXX: the following logic is likely subtly broken if code.code was nothing,
-    #      although it seems unlikely something bad (infinite recursion) will happen as a result
+# build (and start inferring) the inference frame for the linfo
+function typeinf_frame(linfo::MethodInstance, optimize::Bool, cached::Bool, caller)
+    frame = nothing
     if linfo.inInference
         # inference on this signature may be in progress,
         # find the corresponding frame in the active list
@@ -1597,25 +1512,24 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
     else
         # TODO: verify again here that linfo wasn't just inferred
         # inference not started yet, make a new frame for a new lambda
-        if method.isstaged
+        if linfo.def.isstaged
             try
                 # user code might throw errors – ignore them
                 src = get_staged(linfo)
             catch
-                return (nothing, Any, false)
+                return nothing
             end
         else
             src = get_source(linfo)
         end
         linfo.inInference = true
-        frame = InferenceState(linfo::MethodInstance, src, optimize, inlining_enabled(), cached)
+        frame = InferenceState(linfo, src, optimize, inlining_enabled(), cached)
     end
     frame = frame::InferenceState
 
-    if isa(caller, InferenceState)
+    if isa(caller, InferenceState) && !caller.inferred
         # if we were called from inside inference, the caller will be the InferenceState object
         # for which the edge was required
-        caller = caller::InferenceState
         if haskey(caller.edges, frame)
             Ws = caller.edges[frame]::Vector{Int}
             if !(caller.currpc in Ws)
@@ -1629,36 +1543,112 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         end
     end
     typeinf_loop(frame)
-    ccall(:jl_typeinf_end, Void, ())
-    return (frame.src, widenconst(frame.bestguess), frame.inferred)
+    return frame
 end
 
-function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller)
-    return typeinf_edge(method, atypes, sparams, false, true, true, caller)
+# compute (and cache) an inferred AST and return the current best estimate of the result type
+function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller::InferenceState)
+    code = code_for_method(method, atypes, sparams)
+    code === nothing && return Any
+    code = code::MethodInstance
+    if isdefined(code, :inferred)
+        # return rettype if the code is already inferred
+        # staged functions make this hard since they have two "inferred" conditions,
+        # so need to check whether the code itself is also inferred
+        inf = code.inferred
+        if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
+            return code.rettype
+        end
+    end
+    frame = typeinf_frame(code, true, true, caller)
+    frame === nothing && return Any
+    frame = frame::InferenceState
+    return widenconst(frame.bestguess)
 end
-function typeinf(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool=false)
-    return typeinf_edge(method, atypes, sparams, needtree, true, true, nothing)
+
+#### entry points for inferring a MethodInstance given a type signature ####
+
+# compute an inferred AST and return type
+function typeinf_code(method::Method, atypes::ANY, sparams::SimpleVector, optimize::Bool, cached::Bool)
+    code = code_for_method(method, atypes, sparams)
+    code === nothing && return (nothing, Any)
+    return typeinf_code(code::MethodInstance, optimize, cached)
 end
-# compute an inferred (optionally optimized) AST without global effects (i.e. updating the cache)
-function typeinf_uncached(method::Method, atypes::ANY, sparams::ANY; optimize::Bool=true)
-    return typeinf_edge(method, atypes, sparams, true, optimize, false, nothing)
+function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool)
+    for i = 1:2 # test-and-lock-and-test
+        if cached && isdefined(linfo, :inferred)
+            # see if this code already exists in the cache
+            # staged functions make this hard since they have two "inferred" conditions,
+            # so need to check whether the code itself is also inferred
+            inf = linfo.inferred
+            if linfo.jlcall_api == 2
+                method = linfo.def
+                tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+                tree.code = Any[ Expr(:return, QuoteNode(inf)) ]
+                tree.slotnames = Any[ compiler_temp_sym for i = 1:method.nargs ]
+                tree.slotflags = UInt8[ 0 for i = 1:method.nargs ]
+                tree.slottypes = nothing
+                tree.ssavaluetypes = 0
+                tree.inferred = true
+                tree.pure = true
+                tree.inlineable = true
+                i == 2 && ccall(:jl_typeinf_end, Void, ())
+                return (tree, linfo.rettype)
+            elseif isa(inf, CodeInfo)
+                if (inf::CodeInfo).inferred
+                    i == 2 && ccall(:jl_typeinf_end, Void, ())
+                    return (inf, linfo.rettype)
+                end
+            else
+                cached = false # don't need to save the new result
+            end
+        end
+        i == 1 && ccall(:jl_typeinf_begin, Void, ())
+    end
+    frame = typeinf_frame(linfo, optimize, cached, nothing)
+    ccall(:jl_typeinf_end, Void, ())
+    frame === nothing && return (nothing, Any)
+    frame = frame::InferenceState
+    frame.inferred || return (nothing, Any)
+    return (frame.src, widenconst(frame.bestguess))
 end
-function typeinf_uncached(method::Method, atypes::ANY, sparams::SimpleVector, optimize::Bool)
-    return typeinf_edge(method, atypes, sparams, true, optimize, false, nothing)
+
+# compute (and cache) an inferred AST and return the inferred return type
+function typeinf_type(method::Method, atypes::ANY, sparams::SimpleVector, cached::Bool=true)
+    code = code_for_method(method, atypes, sparams)
+    code === nothing && return nothing
+    code = code::MethodInstance
+    for i = 1:2 # test-and-lock-and-test
+        if cached && isdefined(code, :inferred)
+            # see if this rettype already exists in the cache
+            # staged functions make this hard since they have two "inferred" conditions,
+            # so need to check whether the code itself is also inferred
+            inf = code.inferred
+            if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
+                i == 2 && ccall(:jl_typeinf_end, Void, ())
+                return code.rettype
+            end
+        end
+        i == 1 && ccall(:jl_typeinf_begin, Void, ())
+    end
+    frame = typeinf_frame(code, cached, cached, nothing)
+    ccall(:jl_typeinf_end, Void, ())
+    frame === nothing && return nothing
+    frame = frame::InferenceState
+    frame.inferred || return nothing
+    return widenconst(frame.bestguess)
 end
+
 function typeinf_ext(linfo::MethodInstance)
     if isdefined(linfo, :def)
         # method lambda - infer this specialization via the method cache
-        if isdefined(linfo, :inferred) && isa(linfo.inferred, CodeInfo)
-            return linfo.inferred
-        end
-        (code, typ, inferred) = typeinf_edge(linfo.def, linfo.specTypes, linfo.sparam_vals, true, true, true, linfo)
+        (code, typ) = typeinf_code(linfo, true, true)
         return code
     else
         # toplevel lambda - infer directly
         linfo.inInference = true
         ccall(:jl_typeinf_begin, Void, ())
-        frame = InferenceState(linfo, linfo.inferred, true, inlining_enabled(), true)
+        frame = InferenceState(linfo, linfo.inferred::CodeInfo, true, inlining_enabled(), true)
         typeinf_loop(frame)
         ccall(:jl_typeinf_end, Void, ())
         @assert frame.inferred # TODO: deal with this better
@@ -1666,6 +1656,7 @@ function typeinf_ext(linfo::MethodInstance)
     end
 end
 
+#### do the work of inference ####
 
 in_typeinf_loop = false
 function typeinf_loop(frame)
@@ -2000,9 +1991,9 @@ function finish(me::InferenceState)
     end
 
     if me.cached
-        # TODO: check that mutating the lambda info is OK first?
-        if !const_api
-            if isdefined(me.linfo, :def)
+        toplevel = !isdefined(me.linfo, :def)
+        if !toplevel
+            if !const_api
                 keeptree = me.src.inlineable || ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any),
                     me.linfo.specTypes, me.linfo.def.sig, me.linfo.def) != 0
                 if !keeptree
@@ -2581,17 +2572,62 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         isa(si, TypeVar) && return NF
     end
 
-    (src, rettype, inferred) = typeinf(method, metharg, methsp, false)
-    if src === nothing || !inferred
-        return invoke_NF()
+    # see if the method has been previously inferred (and cached)
+    linfo = code_for_method(method, metharg, methsp, true)
+    if isa(linfo, MethodInstance) && isdefined(linfo, :inferred)
+        src = (linfo::MethodInstance).inferred
+    elseif !method.isstaged
+        # if we decided in the past not to try to infer this particular signature
+        # (due to signature coarsening in abstract_call_gf_by_type)
+        # don't infer it now, as attempting to force it now would be a bad idea (non terminating)
+        force_infer = false
+        if method.module == _topmod(method.module) || (isdefined(Main, :Base) && method.module == Main.Base)
+            # however, some gf have special tfunc, meaning they wouldn't have been inferred yet
+            # check the same conditions from abstract_call to detect this case
+            if method.name == :promote_type || method.name == :typejoin
+                force_infer = true
+            elseif method.name == :getindex || method.name == :next || method.name == :indexed_next
+                if length(atypes) > 2 && atypes[3] ⊑ Int
+                    at2 = widenconst(atypes[2])
+                    if (at2 <: Tuple ||
+                        (isa(at2, DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
+                         (at2::DataType).name === Main.Base.Pair.name))
+                        force_infer = true
+                    end
+                end
+            end
+        end
+        frame = nothing
+        if force_infer
+            if !isa(linfo, MethodInstance)
+                linfo = code_for_method(method, metharg, methsp)
+            end
+            if isa(linfo, MethodInstance)
+                frame = typeinf_frame(linfo::MethodInstance, true, true, nothing)
+            end
+        end
+        if isa(frame, InferenceState) && frame.inferred
+            linfo = frame.linfo
+            src = frame.src
+        else
+            linfo = nothing
+            src = nothing
+        end
+    else
+        linfo = nothing
+        src = nothing
     end
-    if isa(src, Const)
+
+    if isa(linfo, MethodInstance) && linfo.jlcall_api == 2
         # in this case function can be inlined to a constant
-        return inline_as_constant(src.val, argexprs, sv)
-    elseif !isa(src, CodeInfo) || !src.inlineable
+        return inline_as_constant(linfo.inferred, argexprs, sv)
+    end
+
+    if !isa(src, CodeInfo) || !src.inferred || !src.inlineable
         return invoke_NF()
     end
     ast = src.code
+    rettype = linfo.rettype
 
     spvals = Any[]
     for i = 1:length(methsp)
@@ -3875,8 +3911,8 @@ end
 function return_type(f::ANY, t::ANY)
     rt = Union{}
     for m in _methods(f, t, -1)
-        _, ty, inferred = typeinf(m[3], m[1], m[2], false)
-        !inferred && return Any
+        ty = typeinf_type(m[3], m[1], m[2])
+        ty === nothing && return Any
         rt = tmerge(rt, ty)
         rt === Any && break
     end
@@ -3889,8 +3925,8 @@ end
 # this ensures that typeinf_ext doesn't recurse before it can add the item to the workq
 
 for m in _methods_by_ftype(Tuple{typeof(typeinf_loop), Vararg{Any}}, 10)
-    typeinf(m[3], m[1], m[2], true)
+    typeinf_type(m[3], m[1], m[2])
 end
 for m in _methods_by_ftype(Tuple{typeof(typeinf_edge), Vararg{Any}}, 10)
-    typeinf(m[3], m[1], m[2], true)
+    typeinf_type(m[3], m[1], m[2])
 end
