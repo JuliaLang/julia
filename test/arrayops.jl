@@ -887,6 +887,11 @@ let
     m = mapslices(x->fill!(x, 0), o, 2)
     @test m == zeros(3, 4)
     @test o == ones(3, 4)
+
+    # issue #18524
+    m = mapslices(x->tuple(x), [1 2; 3 4], 1)
+    @test m[1,1] == ([1,3],)
+    @test m[1,2] == ([2,4],)
 end
 
 

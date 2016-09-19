@@ -1737,6 +1737,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
 
     Aslice = A[idx...]
     r1 = f(Aslice)
+    safe_for_reuse = isa(r1, Number) || (isa(r1, AbstractArray) && eltype(r1) <: Number)
 
     # determine result size and allocate
     Rsize = copy(dimsA)
@@ -1761,15 +1762,31 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
 
     isfirst = true
     nidx = length(otherdims)
-    for I in CartesianRange(itershape)
-        if isfirst
-            isfirst = false
-        else
-            for i in 1:nidx
-                idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
+    if safe_for_reuse
+        # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
+        # so we can reuse Aslice
+        for I in CartesianRange(itershape)
+            if isfirst
+                isfirst = false  # skip the first element, we already handled it
+            else
+                for i in 1:nidx
+                    idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
+                end
+                _unsafe_getindex!(Aslice, A, idx...)
+                R[ridx...] = f(Aslice)
             end
-            _unsafe_getindex!(Aslice, A, idx...)
-            R[ridx...] = f(Aslice)
+        end
+    else
+        # we can't guarantee safety (#18524), so allocate new storage for each slice
+        for I in CartesianRange(itershape)
+            if isfirst
+                isfirst = false
+            else
+                for i in 1:nidx
+                    idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
+                end
+                R[ridx...] = f(A[idx...])
+            end
         end
     end
 
