@@ -39,7 +39,7 @@ matrix:
             - gfortran-5
     - os: osx
       env: ARCH="x86_64"
-      osx_image: xcode7
+      osx_image: xcode6.3
 cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps/srccache
@@ -61,6 +61,10 @@ notifications:
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - make check-whitespace
+# remove cache if it came from master instead of release-0.5
+    - if [ -e deps/scratch ]; then
+        rm -rf deps/srccache deps/scratch;
+      fi
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
         mkdir -p $HOME/bin;
