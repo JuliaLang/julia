@@ -255,12 +255,14 @@ end
 broadcast(::typeof(abs), M::Bidiagonal) = Bidiagonal(abs.(M.dv), abs.(M.ev), abs.(M.isupper))
 broadcast(::typeof(round), M::Bidiagonal) = Bidiagonal(round.(M.dv), round.(M.ev), M.isupper)
 broadcast(::typeof(trunc), M::Bidiagonal) = Bidiagonal(trunc.(M.dv), trunc.(M.ev), M.isupper)
-for func in (:conj, :copy, :floor, :ceil, :real, :imag)
+broadcast(::typeof(floor), M::Bidiagonal) = Bidiagonal(floor.(M.dv), floor.(M.ev), M.isupper)
+for func in (:conj, :copy, :ceil, :real, :imag)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.isupper)
 end
 broadcast{T<:Integer}(::typeof(round), ::Type{T}, M::Bidiagonal) = Bidiagonal(round.(T, M.dv), round.(T, M.ev), M.isupper)
 broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::Bidiagonal) = Bidiagonal(trunc.(T, M.dv), trunc.(T, M.ev), M.isupper)
-for func in (:floor, :ceil)
+broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::Bidiagonal) = Bidiagonal(floor.(T, M.dv), floor.(T, M.ev), M.isupper)
+for func in (:ceil,)
     @eval ($func){T<:Integer}(::Type{T}, M::Bidiagonal) = Bidiagonal(($func)(T,M.dv), ($func)(T,M.ev), M.isupper)
 end
 

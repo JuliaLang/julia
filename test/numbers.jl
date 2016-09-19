@@ -2026,7 +2026,7 @@ x = 0.0
 @test approx_eq(round(pi,3,5), 3.144)
 # vectorized trunc/round/floor/ceil with digits/base argument
 a = rand(2, 2, 2)
-for f in (floor, ceil)
+for f in (ceil,)
     @test f(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
     @test f(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
     @test f(a, 9, 2) == map(x->f(x, 9, 2), a)
@@ -2034,7 +2034,7 @@ for f in (floor, ceil)
     @test f(a[:, :, 1], 9, 2) == map(x->f(x, 9, 2), a[:, :, 1])
     @test f(a, 9, 2) == map(x->f(x, 9, 2), a)
 end
-for f in (round, trunc)
+for f in (round, trunc, floor)
     @test f.(a[:, 1, 1], 2) == map(x->f(x, 2), a[:, 1, 1])
     @test f.(a[:, :, 1], 2) == map(x->f(x, 2), a[:, :, 1])
     @test f.(a, 9, 2) == map(x->f(x, 9, 2), a)

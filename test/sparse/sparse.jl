@@ -547,7 +547,7 @@ end
     @test cos.(Afull) == Array(cos.(A))
     # Test representatives of remaining vectorized-nonbroadcast unary functions
     @test ceil(Int, Afull) == Array(ceil(Int, A))
-    @test floor(Int, Afull) == Array(floor(Int, A))
+    @test floor.(Int, Afull) == Array(floor.(Int, A))
     # Tests of real, imag, abs, and abs2 for SparseMatrixCSC{Int,X}s previously elsewhere
     for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
         R = rand(T[1:100;], 2, 2)
