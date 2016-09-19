@@ -87,6 +87,19 @@ try
               (::Type{Vector{NominalValue{T, T}}}){T}() = 4
               (::Type{Vector{NominalValue{Int, Int}}})() = 5
 
+              # more tests for method signature involving a complicated type
+              # issue 18343
+              immutable Pool18343{R, V}
+                  valindex::Vector{V}
+              end
+              immutable Value18343{T, R}
+                  pool::Pool18343{R, Value18343{T, R}}
+              end
+              Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2
+              Base.convert(::Type{Nullable{Value18343}}, ::Value18343{Nullable}) = 2
+              Base.convert{T}(::Type{Ref}, ::Value18343{T}) = 3
+
+
               let some_method = @which Base.include("string")
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
@@ -159,6 +172,15 @@ try
                 ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any),
                     some_method, Tuple{typeof(Base.include), String}, Core.svec())
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
+
+        PV = Foo.Value18343{Nullable}.types[1]
+        VR = PV.types[1].parameters[1]
+        @test PV.types[1] === Array{VR,1}
+        @test pointer_from_objref(PV.types[1]) ===
+              pointer_from_objref(PV.types[1].parameters[1].types[1].types[1]) ===
+              pointer_from_objref(Array{VR,1})
+        @test PV === PV.types[1].parameters[1].types[1]
+        @test pointer_from_objref(PV) !== pointer_from_objref(PV.types[1].parameters[1].types[1])
     end
 
     Baz_file = joinpath(dir, "Baz.jl")
