@@ -196,7 +196,7 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
         return R
     end
     indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(R)) # handle d=1 manually
-    keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
+    keep, Idefault = Broadcast.newindexer(indsAt, indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(indices1(R))
@@ -331,7 +331,7 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
     # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
     # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
     indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(Rval))
-    keep, Idefault = Broadcast.shapeindexer(indsAt, indsRt)
+    keep, Idefault = Broadcast.newindexer(indsAt, indsRt)
     k = 0
     if reducedim1(Rval, A)
         i1 = first(indices1(Rval))

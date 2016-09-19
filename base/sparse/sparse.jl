@@ -26,7 +26,7 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     rotl90, rotr90, round, scale!, setindex!, similar, size, transpose, tril,
     triu, vec, permute!
 
-import Base.Broadcast: broadcast_indices
+import Base.Broadcast: broadcast_shape
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, dense, droptol!, dropzeros!, dropzeros,
