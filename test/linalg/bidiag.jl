@@ -166,8 +166,8 @@ srand(1)
                 @test isa(trunc.(Int,T), Bidiagonal)
                 @test round.(Int, T) == Bidiagonal(round.(Int, T.dv), round.(Int, T.ev), T.isupper)
                 @test isa(round.(Int, T), Bidiagonal)
-                @test ceil(Int,T) == Bidiagonal(ceil(Int,T.dv),ceil(Int,T.ev),T.isupper)
-                @test isa(ceil(Int,T), Bidiagonal)
+                @test ceil.(Int,T) == Bidiagonal(ceil.(Int,T.dv), ceil.(Int,T.ev), T.isupper)
+                @test isa(ceil.(Int,T), Bidiagonal)
             end
         end
 

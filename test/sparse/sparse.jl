@@ -546,7 +546,7 @@ end
     # Test representatives of [unary functions that map both zeros and nonzeros to nonzeros]
     @test cos.(Afull) == Array(cos.(A))
     # Test representatives of remaining vectorized-nonbroadcast unary functions
-    @test ceil(Int, Afull) == Array(ceil(Int, A))
+    @test ceil.(Int, Afull) == Array(ceil.(Int, A))
     @test floor.(Int, Afull) == Array(floor.(Int, A))
     # Tests of real, imag, abs, and abs2 for SparseMatrixCSC{Int,X}s previously elsewhere
     for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
@@ -1442,7 +1442,7 @@ end
 @testset "sparse matrix norms" begin
     Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
     Ar = sprandn(10,10,.1)
-    Ai = ceil(Int,Ar*100)
+    Ai = ceil.(Int,Ar*100)
     @test norm(Ac,1) ≈ norm(Array(Ac),1)
     @test norm(Ac,Inf) ≈ norm(Array(Ac),Inf)
     @test vecnorm(Ac) ≈ vecnorm(Array(Ac))
@@ -1484,9 +1484,9 @@ end
 
 @testset "sparse matrix normestinv" begin
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
-    Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
+    Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
-    Ari = ceil(Int64,100*Ar)
+    Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
         @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(Array(Ac)),1) 1e-4
         @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(Array(Aci)),1) 1e-4

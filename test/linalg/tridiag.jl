@@ -276,8 +276,8 @@ let n = 12 #Size of matrix problem to test
             @test isa(round.(Int,A), SymTridiagonal)
             @test trunc.(Int,A) == trunc.(Int,fA)
             @test isa(trunc.(Int,A), SymTridiagonal)
-            @test ceil(Int,A) == ceil(Int,fA)
-            @test isa(ceil(Int,A), SymTridiagonal)
+            @test ceil.(Int,A) == ceil.(Int,fA)
+            @test isa(ceil.(Int,A), SymTridiagonal)
             @test floor.(Int,A) == floor.(Int,fA)
             @test isa(floor.(Int,A), SymTridiagonal)
         end
@@ -394,8 +394,8 @@ let n = 12 #Size of matrix problem to test
             @test isa(round.(Int,A), Tridiagonal)
             @test trunc.(Int,A) == trunc.(Int,fA)
             @test isa(trunc.(Int,A), Tridiagonal)
-            @test ceil(Int,A) == ceil(Int,fA)
-            @test isa(ceil(Int,A), Tridiagonal)
+            @test ceil.(Int,A) == ceil.(Int,fA)
+            @test isa(ceil.(Int,A), Tridiagonal)
             @test floor.(Int,A) == floor.(Int,fA)
             @test isa(floor.(Int,A), Tridiagonal)
         end
