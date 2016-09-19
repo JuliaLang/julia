@@ -912,13 +912,13 @@ end
 # left-division operations involving triangular matrices and sparse vectors (#14005)
 let m = 10
     sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]
-    sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
+    sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round.(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
     sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
 
     sprmat = sprand(m, m, 0.2)
     sparsefloatmat = speye(m) + sprmat/(2m)
     sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex(sprmat.nzval, sprmat.nzval)/(4m))
-    sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round(Int, sprmat.nzval*10))
+    sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
 
     denseintmat = eye(Int, m)*10m + rand(1:m, m, m)
     densefloatmat = eye(m) + randn(m, m)/(2m)
