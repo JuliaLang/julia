@@ -112,7 +112,7 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
 end
 round{T<:Integer}(::Type{T}, x::AbstractFloat, r::RoundingMode) = trunc(T,round(x,r))
 
-for f in (:floor,:ceil)
+for f in (:ceil,)
     @eval begin
         function ($f){T,R}(::Type{T}, x::AbstractArray{R,1})
             [ ($f)(T, y)::T for y in x ]

@@ -1379,4 +1379,11 @@ end
 @deprecate trunc{T<:Integer}(::Type{T}, x::AbstractArray) trunc.(T, x)
 @deprecate trunc(x::AbstractArray, digits::Integer, base::Integer = 10) trunc.(x, digits, base)
 
+# Deprecate manually vectorized floor methods in favor of compact broadcast syntax
+@deprecate floor(M::Bidiagonal) floor.(M)
+@deprecate floor(M::Tridiagonal) floor.(M)
+@deprecate floor(M::SymTridiagonal) floor.(M)
+@deprecate floor{T<:Integer}(::Type{T}, A::AbstractArray) floor.(T, A)
+@deprecate floor(A::AbstractArray, digits::Integer, base::Integer = 10) floor.(A, digits, base)
+
 # End deprecations scheduled for 0.6

@@ -160,8 +160,8 @@ srand(1)
 
         @testset "Round,float,trunc,ceil" begin
             if elty <: BlasReal
-                @test floor(Int,T) == Bidiagonal(floor(Int,T.dv),floor(Int,T.ev),T.isupper)
-                @test isa(floor(Int,T), Bidiagonal)
+                @test floor.(Int, T) == Bidiagonal(floor.(Int, T.dv), floor.(Int, T.ev), T.isupper)
+                @test isa(floor.(Int, T), Bidiagonal)
                 @test trunc.(Int,T) == Bidiagonal(trunc.(Int, T.dv), trunc.(Int, T.ev), T.isupper)
                 @test isa(trunc.(Int,T), Bidiagonal)
                 @test round.(Int, T) == Bidiagonal(round.(Int, T.dv), round.(Int, T.ev), T.isupper)
