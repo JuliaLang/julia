@@ -35,7 +35,7 @@ for f in (:+, :-, :mod, :&, :|)
     end
 end
 
-for f in (:mod, :rem, :&, :|, :/, :\, :*, :+, :-)
+for f in (:mod, :&, :|, :/, :\, :*, :+, :-)
     if f != :/
         @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
     end
