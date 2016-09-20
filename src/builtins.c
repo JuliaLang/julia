@@ -553,50 +553,35 @@ JL_CALLABLE(jl_f__apply)
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 {
-    return jl_toplevel_eval_in_warn(m, ex, 0);
-}
-
-jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_warn)
-{
     jl_ptls_t ptls = jl_get_ptls_states();
-    static int jl_warn_on_eval = 0;
-    int last_delay_warn = jl_warn_on_eval;
     if (m == NULL)
         m = jl_main_module;
     if (jl_is_symbol(ex))
         return jl_eval_global_var(m, (jl_sym_t*)ex);
-    jl_value_t *v=NULL;
+    if (ptls->in_pure_callback)
+        jl_error("eval cannot be used in a generated function");
+    jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
     jl_module_t *last_m = ptls->current_module;
     jl_module_t *task_last_m = ptls->current_task->current_module;
-    if (!delay_warn && jl_options.incremental && jl_generating_output()) {
+    if (jl_options.incremental && jl_generating_output()) {
         if (m != last_m) {
             jl_printf(JL_STDERR, "WARNING: eval from module %s to %s:    \n",
                       jl_symbol_name(m->name), jl_symbol_name(last_m->name));
             jl_static_show(JL_STDERR, ex);
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
         }
-        else if (jl_warn_on_eval) {
-            jl_printf(JL_STDERR, "WARNING: eval from staged function in module %s:    \n", jl_symbol_name(m->name));
-            jl_static_show(JL_STDERR, ex);
-            jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for these modules **\n\n");
-        }
     }
-    if (ptls->in_pure_callback && !delay_warn)
-        jl_error("eval cannot be used in a generated function");
     JL_TRY {
-        jl_warn_on_eval = delay_warn && (jl_warn_on_eval || m != last_m); // compute whether a warning was suppressed
         ptls->current_task->current_module = ptls->current_module = m;
         v = jl_toplevel_eval(ex);
     }
     JL_CATCH {
-        jl_warn_on_eval = last_delay_warn;
         jl_lineno = last_lineno;
         ptls->current_module = last_m;
         ptls->current_task->current_module = task_last_m;
         jl_rethrow();
     }
-    jl_warn_on_eval = last_delay_warn;
     jl_lineno = last_lineno;
     ptls->current_module = last_m;
     ptls->current_task->current_module = task_last_m;
