@@ -1168,4 +1168,8 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
     end
 end
 
+# Deprecate manually vectorized rem methods in favor of compact broadcast syntax
+@deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
+@deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
+
 # End deprecations scheduled for 0.6
