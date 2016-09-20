@@ -1047,9 +1047,10 @@ the order that the first of each set of equivalent elements originally appears.
 If `dim` is specified, returns unique regions of the array `itr` along `dim`.
 """
 @generated function unique{T,N}(A::AbstractArray{T,N}, dim::Int)
+    inds = inds -> zeros(UInt, inds)
     quote
         1 <= dim <= $N || return copy(A)
-        hashes = similar(inds->zeros(UInt, inds), indices(A, dim))
+        hashes = similar($inds, indices(A, dim))
 
         # Compute hash for each row
         k = 0

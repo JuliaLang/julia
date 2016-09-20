@@ -156,7 +156,7 @@ end
 @generated function _g_f_with_inner(x)
     :(y->y)
 end
-@test (_g_f_with_inner(1))(8) == 8
+@test_throws ErrorException _g_f_with_inner(1)
 
 # @generated functions errors
 global gf_err_ref = Ref{Int}()
