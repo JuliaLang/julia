@@ -1418,4 +1418,11 @@ end
 @deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
 @deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
 
+# Deprecate manually vectorized mod methods in favor of compact broadcast syntax
+@deprecate mod(B::BitArray, x::Bool) mod.(B, x)
+@deprecate mod(x::Bool, B::BitArray) mod.(x, B)
+@deprecate mod(A::AbstractArray, B::AbstractArray) mod.(A, B)
+@deprecate mod{T}(x::Number, A::AbstractArray{T}) mod.(x, A)
+@deprecate mod{T}(A::AbstractArray{T}, x::Number) mod.(A, x)
+
 # End deprecations scheduled for 0.6

@@ -1237,40 +1237,6 @@ end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)
 (/)(x::Number, B::BitArray) = (/)(x, Array(B))
 
-function mod(A::BitArray, B::BitArray)
-    shp = promote_shape(size(A), size(B))
-    all(B) || throw(DivideError())
-    return falses(shp)
-end
-mod(A::BitArray, B::Array{Bool}) = mod(A, BitArray(B))
-mod(A::Array{Bool}, B::BitArray) = mod(BitArray(A), B)
-function mod(B::BitArray, x::Bool)
-    return x ? falses(size(B)) : throw(DivideError())
-end
-function mod(x::Bool, B::BitArray)
-    all(B) || throw(DivideError())
-    return falses(size(B))
-end
-function mod(x::Number, B::BitArray)
-    all(B) || throw(DivideError())
-    y = mod(x, true)
-    return fill(y, size(B))
-end
-
-for f in (:mod,)
-    @eval begin
-        function ($f)(B::BitArray, x::Number)
-            T = promote_op($f, Bool, typeof(x))
-            T === Any && return [($f)(b, x) for b in B]
-            F = Array{T}(size(B))
-            for i = 1:length(F)
-                F[i] = ($f)(B[i], x)
-            end
-            return F
-        end
-    end
-end
-
 function (&)(B::BitArray, x::Bool)
     x ? copy(B) : falses(size(B))
 end
