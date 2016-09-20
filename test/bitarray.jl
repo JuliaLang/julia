@@ -13,7 +13,7 @@ tc(r1,r2) = false
 bitcheck(b::BitArray) = Base._check_bitarray_consistency(b)
 bitcheck(x) = true
 
-function check_bitop(ret_type, func, args...)
+function check_bitop_call(ret_type, func, args...)
     r1 = func(args...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...)
     ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, r1
@@ -22,15 +22,13 @@ function check_bitop(ret_type, func, args...)
     @test isequal(r1, ret_type ≡ nothing ? r2 : convert(ret_type, r2))
     @test bitcheck(r1)
 end
-
 macro check_bit_operation(ex, ret_type)
     @assert Meta.isexpr(ex, :call)
-    Expr(:call, :check_bitop, esc(ret_type), map(esc,ex.args)...)
+    Expr(:call, :check_bitop_call, esc(ret_type), map(esc, ex.args)...)
 end
-
 macro check_bit_operation(ex)
     @assert Meta.isexpr(ex, :call)
-    Expr(:call, :check_bitop, nothing, map(esc,ex.args)...)
+    Expr(:call, :check_bitop_call, nothing, map(esc,ex.args)...)
 end
 
 let t0 = time()
@@ -794,11 +792,11 @@ let b1 = bitrand(n1, n2)
 
     b2 = trues(n1, n2)
     @check_bit_operation div(b1, b2) BitMatrix
-    @check_bit_operation mod(b1, b2) BitMatrix
+    @check_bit_operation broadcast(mod, b1, b2) BitMatrix
     @check_bit_operation div(b1,Array(b2)) BitMatrix
-    @check_bit_operation mod(b1,Array(b2)) BitMatrix
+    @check_bit_operation broadcast(mod, b1, Array(b2)) BitMatrix
     @check_bit_operation div(Array(b1),b2) BitMatrix
-    @check_bit_operation mod(Array(b1),b2) BitMatrix
+    @check_bit_operation broadcast(mod, Array(b1), b2) BitMatrix
 end
 
 let b1 = bitrand(n1, n1)
@@ -833,7 +831,7 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation broadcast(/, b1, i2) Matrix{Float64}
     @check_bit_operation broadcast(^, b1, i2) BitMatrix
     @check_bit_operation div(b1, i2)  Matrix{Int}
-    @check_bit_operation mod(b1, i2)  Matrix{Int}
+    @check_bit_operation broadcast(mod, b1, i2)  Matrix{Int}
 end
 
 # Matrix{Bool}/Matrix{Float64}
@@ -844,7 +842,7 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation broadcast(/, b1, f2) Matrix{Float64}
     @check_bit_operation broadcast(^, b1, f2) Matrix{Float64}
     @check_bit_operation div(b1, f2)  Matrix{Float64}
-    @check_bit_operation mod(b1, f2)  Matrix{Float64}
+    @check_bit_operation broadcast(mod, b1, f2)  Matrix{Float64}
 end
 
 # Number/Matrix
@@ -883,22 +881,22 @@ let b2 = bitrand(n1, n2)
     b2 = trues(n1, n2)
     @check_bit_operation broadcast(/, true, b2)  Matrix{Float64}
     @check_bit_operation div(true, b2)   BitMatrix
-    @check_bit_operation mod(true, b2)   BitMatrix
+    @check_bit_operation broadcast(mod, true, b2)   BitMatrix
     @check_bit_operation broadcast(/, false, b2) Matrix{Float64}
     @check_bit_operation div(false, b2)  BitMatrix
-    @check_bit_operation mod(false, b2)  BitMatrix
+    @check_bit_operation broadcast(mod, false, b2)  BitMatrix
 
     @check_bit_operation broadcast(/, i1, b2) Matrix{Float64}
     @check_bit_operation div(i1, b2)  Matrix{Int}
-    @check_bit_operation mod(i1, b2)  Matrix{Int}
+    @check_bit_operation broadcast(mod, i1, b2)  Matrix{Int}
 
     @check_bit_operation broadcast(/, u1, b2) Matrix{Float64}
     @check_bit_operation div(u1, b2)  Matrix{UInt8}
-    @check_bit_operation mod(u1, b2)  Matrix{UInt8}
+    @check_bit_operation broadcast(mod, u1, b2)  Matrix{UInt8}
 
     @check_bit_operation broadcast(/, f1, b2) Matrix{Float64}
     @check_bit_operation div(f1, b2)  Matrix{Float64}
-    @check_bit_operation mod(f1, b2)  Matrix{Float64}
+    @check_bit_operation broadcast(mod, f1, b2)  Matrix{Float64}
 
     @check_bit_operation broadcast(/, ci1, b2) Matrix{Complex128}
     @check_bit_operation broadcast(/, cu1, b2) Matrix{Complex128}
@@ -956,7 +954,7 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation broadcast(/, b1, true)  Matrix{Float64}
     @check_bit_operation broadcast(/, b1, false) Matrix{Float64}
     @check_bit_operation div(b1, true)   BitMatrix
-    @check_bit_operation mod(b1, true)   BitMatrix
+    @check_bit_operation broadcast(mod, b1, true)   BitMatrix
 
     @check_bit_operation (&)(b1, b2)  BitMatrix
     @check_bit_operation (|)(b1, b2)  BitMatrix
@@ -972,7 +970,7 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation broadcast(*, b1, i2) Matrix{Int}
     @check_bit_operation broadcast(/, b1, i2) Matrix{Float64}
     @check_bit_operation div(b1, i2)  Matrix{Int}
-    @check_bit_operation mod(b1, i2)  Matrix{Int}
+    @check_bit_operation broadcast(mod, b1, i2)  Matrix{Int}
 
     @check_bit_operation (&)(b1, u2)  Matrix{UInt8}
     @check_bit_operation (|)(b1, u2)  Matrix{UInt8}
@@ -982,14 +980,14 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation broadcast(*, b1, u2) Matrix{UInt8}
     @check_bit_operation broadcast(/, b1, u2) Matrix{Float64}
     @check_bit_operation div(b1, u2)  Matrix{UInt8}
-    @check_bit_operation mod(b1, u2)  Matrix{UInt8}
+    @check_bit_operation broadcast(mod, b1, u2)  Matrix{UInt8}
 
     @check_bit_operation broadcast(+, b1, f2)  Matrix{Float64}
     @check_bit_operation broadcast(-, b1, f2)  Matrix{Float64}
     @check_bit_operation broadcast(*, b1, f2) Matrix{Float64}
     @check_bit_operation broadcast(/, b1, f2) Matrix{Float64}
     @check_bit_operation div(b1, f2)  Matrix{Float64}
-    @check_bit_operation mod(b1, f2)  Matrix{Float64}
+    @check_bit_operation broadcast(mod, b1, f2)  Matrix{Float64}
 
     @check_bit_operation broadcast(+, b1, ci2)  Matrix{Complex{Int}}
     @check_bit_operation broadcast(-, b1, ci2)  Matrix{Complex{Int}}
