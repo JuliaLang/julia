@@ -4193,7 +4193,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
 #endif
 
 #ifdef USE_POLLY
-    if (!jl_has_meta(code, polly_sym) || jl_options.polly == JL_OPTIONS_POLLY_OFF) {
+    if (!jl_has_meta(stmts, polly_sym) || jl_options.polly == JL_OPTIONS_POLLY_OFF) {
         f->addFnAttr(polly::PollySkipFnAttr);
     }
 #endif
