@@ -505,7 +505,7 @@ static int32_t get_subnormal_flags(void)
 }
 
 // Returns non-zero if subnormals go to 0; zero otherwise.
-JL_DLLEXPORT int32_t jl_get_zero_subnormals(int8_t isZero)
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 {
     uint32_t flags = get_subnormal_flags();
     return _mm_getcsr() & flags;
@@ -530,9 +530,39 @@ JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
     }
 }
 
+#elif defined(_CPU_AARCH64_)
+
+// FZ, bit [24]
+static const uint32_t fpcr_fz_mask = 1 << 24;
+
+static inline uint32_t get_fpcr_aarch64(void)
+{
+    uint32_t fpcr;
+    asm volatile("mrs %0, fpcr" : "=r"(fpcr));
+    return fpcr;
+}
+
+static inline void set_fpcr_aarch64(uint32_t fpcr)
+{
+    asm volatile("msr fpcr, %0" :: "r"(fpcr));
+}
+
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
+{
+    return (get_fpcr_aarch64() & fpcr_fz_mask) != 0;
+}
+
+JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
+{
+    uint32_t fpcr = get_fpcr_aarch64();
+    fpcr = isZero ? (fpcr | fpcr_fz_mask) : (fpcr & ~fpcr_fz_mask);
+    set_fpcr_aarch64(fpcr);
+    return 0;
+}
+
 #else
 
-JL_DLLEXPORT int32_t jl_get_zero_subnormals(int8_t isZero)
+JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 {
     return 0;
 }
