@@ -26,7 +26,7 @@ max_worker_rss != typemax(Csize_t) && move_to_node1("parallel")
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on
-        n = min(8, Sys.CPU_CORES, length(tests))
+        n = min(Sys.CPU_CORES, length(tests))
         n > 1 && addprocs(n; exeflags=`--check-bounds=yes --startup-file=no --depwarn=error`)
         BLAS.set_num_threads(1)
     end
