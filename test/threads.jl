@@ -274,8 +274,8 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
     # Temporarily omit 128-bit types on 32bit x86
     # 128-bit atomics do not exist on AArch32.
     # And we don't support them yet on power.
-    if Sys.ARCH === :i686 || Sys.ARCH === :powerpc64le ||
-       startswith(string(Sys.ARCH), "arm")
+    if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
+       Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
         filter!(T -> sizeof(T)<=8, atomic_types)
     end
     for T in atomic_types
