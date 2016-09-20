@@ -1409,4 +1409,9 @@ end
 @deprecate big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) big.(A)
 @deprecate big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) big.(A)
 
+# Deprecate manually vectorized div methods in favor of compact broadcast syntax
+@deprecate div(A::Number, B::AbstractArray) div.(A, B)
+@deprecate div(A::AbstractArray, B::Number) div.(A, B)
+@deprecate div(A::AbstractArray, B::AbstractArray) div.(A, B)
+
 # End deprecations scheduled for 0.6
