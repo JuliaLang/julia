@@ -456,6 +456,10 @@ $(eval $(call LLVM_PATCH,llvm-PR27046)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-3.8.0_ppc64_SUBFC8)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-D21271-instcombine-tbaa-3.8)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-win64-reloc-dwarf))
+else ifeq ($(LLVM_VER_SHORT),3.9)
+# fix lowering for atomics on ppc
+$(eval $(call LLVM_PATCH,llvm-rL279933-ppc-atomicrmw-lowering)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
