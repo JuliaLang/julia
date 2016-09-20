@@ -2,6 +2,10 @@
 
 #include <llvm/Config/llvm-config.h>
 
+#ifndef LLVM_VERSION_PATCH // for LLVM 3.3
+#define LLVM_VERSION_PATCH 0
+#endif
+
 // The LLVM version used, JL_LLVM_VERSION, is represented as a 5-digit integer
 // of the form ABBCC, where A is the major version, B is minor, and C is patch.
 // So for example, LLVM 3.7.0 is 30700.
