@@ -1414,4 +1414,8 @@ end
 @deprecate div(A::AbstractArray, B::Number) div.(A, B)
 @deprecate div(A::AbstractArray, B::AbstractArray) div.(A, B)
 
+# Deprecate manually vectorized rem methods in favor of compact broadcast syntax
+@deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
+@deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
+
 # End deprecations scheduled for 0.6
