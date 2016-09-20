@@ -485,10 +485,16 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     jl_code_info_t *func = NULL;
     JL_GC_PUSH4(&ex, &linenum, &sparam_vals, &func);
     jl_ptls_t ptls = jl_get_ptls_states();
+    int last_lineno = jl_lineno;
     int last_in = ptls->in_pure_callback;
+    jl_module_t *last_m = ptls->current_module;
+    jl_module_t *task_last_m = ptls->current_task->current_module;
     assert(jl_svec_len(linfo->def->sparam_syms) == jl_svec_len(sparam_vals));
     JL_TRY {
         ptls->in_pure_callback = 1;
+        // need to eval macros in the right module
+        ptls->current_task->current_module = ptls->current_module = linfo->def->module;
+
         ex = jl_exprn(lambda_sym, 2);
 
         int nargs = linfo->def->nargs;
@@ -522,18 +528,24 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             ex = newast;
         }
 
-        // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
-        func = (jl_code_info_t*)jl_toplevel_eval_in_warn(linfo->def->module, (jl_value_t*)ex, 1);
-        assert(jl_is_code_info(func));
+        func = (jl_code_info_t*)jl_expand((jl_value_t*)ex);
+        if (!jl_is_code_info(func))
+            jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
 
         jl_array_t *stmts = (jl_array_t*)func->code;
         for (i = 0, l = jl_array_len(stmts); i < l; i++) {
             jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), linfo->def->module));
         }
         ptls->in_pure_callback = last_in;
+        jl_lineno = last_lineno;
+        ptls->current_module = last_m;
+        ptls->current_task->current_module = task_last_m;
     }
     JL_CATCH {
         ptls->in_pure_callback = last_in;
+        jl_lineno = last_lineno;
+        ptls->current_module = last_m;
+        ptls->current_task->current_module = task_last_m;
         jl_rethrow();
     }
     JL_GC_POP();

@@ -4578,3 +4578,12 @@ end
 fVararg(x) = Vararg{x}
 gVararg(a::fVararg(Int)) = length(a)
 @test gVararg(1,2,3,4,5) == 5
+
+# issue #18577
+@generated f18577() = quote ()->1 end
+@test try
+    f18577()
+    false
+catch e
+    (e::ErrorException).msg
+end == "generated function body is not pure. this likely means it contains a closure or comprehension."
