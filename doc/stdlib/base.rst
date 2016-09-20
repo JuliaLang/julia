@@ -263,11 +263,23 @@ All Objects
 
    Scalar types generally do not need to implement ``isequal`` separate from ``==``\ , unless they represent floating-point numbers amenable to a more efficient implementation than that provided as a generic fallback (based on ``isnan``\ , ``signbit``\ , and ``==``\ ).
 
+.. function:: isequal(x::Nullable, y::Nullable)
+
+   .. Docstring generated from Julia source
+
+   If neither ``x`` nor ``y`` is null, compare them according to their values (i.e. ``isequal(get(x), get(y))``\ ). Else, return ``true`` if both arguments are null, and ``false`` if one is null but not the other: nulls are considered equal.
+
 .. function:: isless(x, y)
 
    .. Docstring generated from Julia source
 
    Test whether ``x`` is less than ``y``\ , according to a canonical total order. Values that are normally unordered, such as ``NaN``\ , are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``\ . Non-numeric types with a canonical total order should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``\ .
+
+.. function:: isless(x::Nullable, y::Nullable)
+
+   .. Docstring generated from Julia source
+
+   If neither ``x`` nor ``y`` is null, compare them according to their values (i.e. ``isless(get(x), get(y))``\ ). Else, return ``true`` if only ``y`` is null, and ``false`` otherwise: nulls are always considered greater than non-nulls, but not greater than another null.
 
 .. function:: ifelse(condition::Bool, x, y)
 

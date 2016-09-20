@@ -174,40 +174,6 @@ end
 
 @test isnull(Nullable())
 
-# function isequal{S, T}(x::Nullable{S}, y::Nullable{T})
-for T in types
-    x0 = Nullable()
-    x1 = Nullable{T}()
-    x2 = Nullable{T}()
-    x3 = Nullable(zero(T))
-    x4 = Nullable(one(T))
-
-    @test isequal(x0, x1) === true
-    @test isequal(x0, x2) === true
-    @test isequal(x0, x3) === false
-    @test isequal(x0, x4) === false
-
-    @test isequal(x1, x1) === true
-    @test isequal(x1, x2) === true
-    @test isequal(x1, x3) === false
-    @test isequal(x1, x4) === false
-
-    @test isequal(x2, x1) === true
-    @test isequal(x2, x2) === true
-    @test isequal(x2, x3) === false
-    @test isequal(x2, x4) === false
-
-    @test isequal(x3, x1) === false
-    @test isequal(x3, x2) === false
-    @test isequal(x3, x3) === true
-    @test isequal(x3, x4) === false
-
-    @test isequal(x4, x1) === false
-    @test isequal(x4, x2) === false
-    @test isequal(x4, x3) === false
-    @test isequal(x4, x4) === true
-end
-
 # function =={S, T}(x::Nullable{S}, y::Nullable{T})
 for T in types
     x0 = Nullable()
@@ -277,6 +243,74 @@ for T in types
     x1.v = one(T)
     @test !isnull(x1.v)
     @test get(x1.v, one(T)) === one(T)
+end
+
+# Operators
+TestTypes = Union{Base.NullSafeTypes, BigInt, BigFloat,
+                  Complex{Int}, Complex{Float64}, Complex{BigFloat},
+                  Rational{Int}, Rational{BigInt}}.types
+for S in TestTypes, T in TestTypes
+    u0 = zero(S)
+    u1 = one(S)
+    if S <: AbstractFloat
+        u2 = S(NaN)
+    elseif S <: Complex && S.parameters[1] <: AbstractFloat
+        u2 = S(NaN, NaN)
+    else
+        u2 = u1
+    end
+
+    v0 = zero(T)
+    v1 = one(T)
+    if T <: AbstractFloat
+        v2 = T(NaN)
+    elseif T <: Complex && T.parameters[1] <: AbstractFloat
+        v2 = T(NaN, NaN)
+    else
+        v2 = v1
+    end
+
+    for u in (u0, u1, u2), v in (v0, v1, v2)
+        # function isequal(x::Nullable, y::Nullable)
+        @test isequal(Nullable(u), Nullable(v)) === isequal(u, v)
+        @test isequal(Nullable(u), Nullable(u)) === true
+        @test isequal(Nullable(v), Nullable(v)) === true
+
+        @test isequal(Nullable(u), Nullable(v, true)) === false
+        @test isequal(Nullable(u, true), Nullable(v)) === false
+        @test isequal(Nullable(u, true), Nullable(v, true)) === true
+
+        @test isequal(Nullable(u), Nullable{T}()) === false
+        @test isequal(Nullable{S}(), Nullable(v)) === false
+        @test isequal(Nullable{S}(), Nullable{T}()) === true
+
+        @test isequal(Nullable(u), Nullable()) === false
+        @test isequal(Nullable(), Nullable(v)) === false
+        @test isequal(Nullable{S}(), Nullable()) === true
+        @test isequal(Nullable(), Nullable{T}()) === true
+        @test isequal(Nullable(), Nullable()) === true
+
+        # function isless(x::Nullable, y::Nullable)
+        if S <: Real && T <: Real
+            @test isless(Nullable(u), Nullable(v)) === isless(u, v)
+            @test isless(Nullable(u), Nullable(u)) === false
+            @test isless(Nullable(v), Nullable(v)) === false
+
+            @test isless(Nullable(u), Nullable(v, true)) === true
+            @test isless(Nullable(u, true), Nullable(v)) === false
+            @test isless(Nullable(u, true), Nullable(v, true)) === false
+
+            @test isless(Nullable(u), Nullable{T}()) === true
+            @test isless(Nullable{S}(), Nullable(v)) === false
+            @test isless(Nullable{S}(), Nullable{T}()) === false
+
+            @test isless(Nullable(u), Nullable()) === true
+            @test isless(Nullable(), Nullable(v)) === false
+            @test isless(Nullable{S}(), Nullable()) === false
+            @test isless(Nullable(), Nullable{T}()) === false
+            @test isless(Nullable(), Nullable()) === false
+        end
+    end
 end
 
 # issue #9462
