@@ -62,8 +62,8 @@ notifications:
 before_install:
     - make check-whitespace
 # remove cache if it came from master instead of release-0.5
-    - if [ -e deps/scratch ]; then
-        rm -rf deps/srccache deps/scratch;
+    - if [ -n "$(ls deps/srccache/gmp-*/build-patched)" ]; then
+        rm -rf deps/srccache deps/scratch deps/build;
       fi
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
