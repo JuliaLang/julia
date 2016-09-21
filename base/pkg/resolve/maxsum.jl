@@ -329,7 +329,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         end
 
         diff = newmsg - oldmsg
-        maxdiff = max(maxdiff, maximum(abs(diff)))
+        maxdiff = max(maxdiff, maximum(abs.(diff)))
 
         # update the field of p1
         fld1 = fld[p1]
