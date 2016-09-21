@@ -559,7 +559,7 @@ let x = spv_x1, x2 = x2 = spv_x2
     @test exact_equal(-x, SparseVector(8, [2, 5, 6], [-1.25, 0.75, -3.5]))
 
     # abs and abs2
-    @test exact_equal(abs(x), SparseVector(8, [2, 5, 6], abs.([1.25, -0.75, 3.5])))
+    @test exact_equal(abs.(x), SparseVector(8, [2, 5, 6], abs.([1.25, -0.75, 3.5])))
     @test exact_equal(abs2(x), SparseVector(8, [2, 5, 6], abs2.([1.25, -0.75, 3.5])))
 
     # plus and minus
@@ -683,12 +683,12 @@ let x = spv_x1
     @test minabs(x) == 0.0
 end
 
-let x = abs(spv_x1)
+let x = abs.(spv_x1)
     @test maximum(x) == 3.5
     @test minimum(x) == 0.0
 end
 
-let x = -abs(spv_x1)
+let x = -abs.(spv_x1)
     @test maximum(x) == 0.0
     @test minimum(x) == -3.5
 end

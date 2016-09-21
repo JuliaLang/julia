@@ -1000,4 +1000,13 @@ macro vectorize_2arg(S,f)
 end
 export @vectorize_1arg, @vectorize_2arg
 
+# Devectorize manually vectorized abs methods in favor of compact broadcast syntax
+@deprecate abs(f::Base.Pkg.Resolve.MaxSum.Field) abs.(f)
+@deprecate abs(B::BitArray) abs.(B)
+@deprecate abs(M::Bidiagonal) abs.(M)
+@deprecate abs(D::Diagonal) abs.(D)
+@deprecate abs(M::Tridiagonal) abs.(M)
+@deprecate abs(M::SymTridiagonal) abs.(M)
+@deprecate abs(x::AbstractSparseVector) abs.(x)
+
 # End deprecations scheduled for 0.6
