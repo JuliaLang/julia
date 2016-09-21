@@ -144,11 +144,11 @@ Getting Around
 
    ``__precompile__()`` should *not* be used in a module unless all of its dependencies are also using ``__precompile__()``\ . Failure to do so can result in a runtime error when loading the module.
 
-.. function:: include(path::AbstractString)
+.. function:: include(path::AbstractString...)
 
    .. Docstring generated from Julia source
 
-   Evaluate the contents of a source file in the current context. During including, a task-local include path is set to the directory containing the file. Nested calls to ``include`` will search relative to that path. All paths refer to files on node 1 when running in parallel, and files will be fetched from node 1. This function is typically used to load source interactively, or to combine files in packages that are broken into multiple source files.
+   Evaluate the contents of the input source file(s) in the current context. Returns the result of the last evaluated argument (of the last input file). During including, a task-local include path is set to the directory containing the file. Nested calls to ``include`` will search relative to that path. All paths refer to files on node 1 when running in parallel, and files will be fetched from node 1. This function is typically used to load source interactively, or to combine files in packages that are broken into multiple source files.
 
 .. function:: include_string(code::AbstractString, filename::AbstractString="string")
 
