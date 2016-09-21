@@ -3946,7 +3946,7 @@ void jl_init_types(void)
                                 jl_any_type, // void*
                                 jl_any_type, // void*
                                 jl_any_type, jl_any_type), // void*, void*
-                        0, 1, 4);
+                        0, 1, 3);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),
