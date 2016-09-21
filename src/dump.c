@@ -676,6 +676,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
 
 static int is_ast_node(jl_value_t *v)
 {
+    // TODO: this accidentally copies QuoteNode(Expr(...)) and QuoteNode(svec(...))
     return jl_is_symbol(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
         jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) || jl_is_tuple(v) ||
         jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||

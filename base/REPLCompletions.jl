@@ -235,7 +235,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(r, i)
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
-    return startind:endof(s), method_name_end
+    return (startind:endof(s), method_name_end)
 end
 
 # Returns the value in a expression if sym is defined in current namespace fn.
@@ -249,18 +249,18 @@ function get_value(sym::Expr, fn)
         fn, found = get_value(ex, fn)
         !found && return (nothing, false)
     end
-    fn, true
+    return (fn, true)
 end
 get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (getfield(fn, sym), true) : (nothing, false)
 get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.value), true) : (nothing, false)
-get_value(sym, fn) = sym, true
+get_value(sym, fn) = (sym, true)
 
 # Return the value of a getfield call expression
 function get_value_getfield(ex::Expr, fn)
     # Example :((top(getfield))(Base,:max))
     val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
     found || return (nothing, false)
-    get_value_getfield(ex.args[3],val) #Look up max in Base and returns the function if found.
+    return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
 end
 get_value_getfield(sym, fn) = get_value(sym, fn)
 
@@ -285,9 +285,9 @@ function get_type_call(expr::Expr)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    linfo = Base.func_for_method_checked(m[3], Tuple{args...})
-    (tree, return_type) = Core.Inference.typeinf(linfo, m[1], m[2])
-    return return_type, true
+    return_type = Core.Inference.typeinf_type(m[3], m[1], m[2])
+    return_type === nothing && return (Any, false)
+    return (return_type, true)
 end
 # Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (String,true)
 function get_type(sym::Expr, fn)
@@ -305,7 +305,7 @@ function get_type(sym::Expr, fn)
         end
         return get_type_call(sym)
     end
-    (Any, false)
+    return (Any, false)
 end
 function get_type(sym, fn)
     val, found = get_value(sym, fn)
