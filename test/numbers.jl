@@ -2847,3 +2847,12 @@ let types = (Base.BitInteger_types..., BigInt, Bool)
         end
     end
 end
+
+# test rescale()
+@test rescale(25, 0, 1, 0, 1.609344) == 40.2336 # miles to km
+@test rescale(-40, 32, 212, 0, 100) == -40.0    # Fahrenheit to Centigrade
+@test rescale(180, 0, 360) == 0.5               # hue 0-360 to 0-1
+@test rescale(15, 0, 0, 0, 1) == Inf            # empty From scale
+@test rescale(15, 0, 100, 1000, 0) == 850.0     # inverted To scale
+@test rescale(15, 100, 0, 0, 1000) == 850.0     # inverted From scale
+@test rescale(15, 100, 0, 1000, 0) == 150.0     # inverted From and To scales
