@@ -29,6 +29,17 @@
 extern "C" {
 #endif
 
+typedef __int128 int128_t;
+
+JL_DLLEXPORT int32_t jl__sync_lock_test_and_set_4(int32_t* d, int32_t i)
+{
+  return __sync_lock_test_and_set_4(d, i);
+}
+
+JL_DLLEXPORT int128_t jl__sync_lock_test_and_set_16(int128_t* d, int128_t i)
+{
+  return __sync_lock_test_and_set_16(d, i);
+}
 // exceptions -----------------------------------------------------------------
 
 JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)

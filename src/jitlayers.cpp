@@ -512,7 +512,15 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
     // We need a memory manager to allocate memory and resolve symbols for this
     // new module. Create one that resolves symbols by looking back into the JIT.
     auto Resolver = orc::createLambdaResolver(
-                      [&](const std::string &Name) {
+                      [&](const std::string &OriginalName) {
+                        std::string Name;
+                        std::string sync_prefix = "__sync_";
+                        if (OriginalName.compare(0, sync_prefix.size(), sync_prefix) == 0) {
+                            Name = "jl";
+                            Name.append(OriginalName);
+                        } else {
+                            Name = OriginalName;
+                        }
                         // TODO: consider moving the FunctionMover resolver here
                         // Step 0: ObjectLinkingLayer has checked whether it is in the current module
                         // Step 1: See if it's something known to the ExecutionEngine
