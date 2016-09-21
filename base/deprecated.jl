@@ -1000,4 +1000,7 @@ macro vectorize_2arg(S,f)
 end
 export @vectorize_1arg, @vectorize_2arg
 
+# Deprecate manually vectorized imag methods in favor of compact broadcast syntax
+@deprecate imag(A::AbstractArray) imag.(A)
+
 # End deprecations scheduled for 0.6

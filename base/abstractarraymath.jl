@@ -86,7 +86,7 @@ conj{T<:Real}(x::AbstractArray{T}) = x
 conj!{T<:Real}(x::AbstractArray{T}) = x
 
 real{T<:Real}(x::AbstractArray{T}) = x
-imag{T<:Real}(x::AbstractArray{T}) = zero(x)
+broadcast{T<:Real}(::typeof(imag), x::AbstractArray{T}) = zero(x)
 
 +{T<:Number}(x::AbstractArray{T}) = x
 *{T<:Number}(x::AbstractArray{T,2}) = x

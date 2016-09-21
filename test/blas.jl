@@ -106,7 +106,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test BLAS.asum(b) ≈ sum(abs.(b))
             @test BLAS.iamax(b) ≈ indmax(abs.(b))
         else
-            @test BLAS.asum(b) ≈ sum(abs.(real(b))) + sum(abs.(imag(b)))
+            @test BLAS.asum(b) ≈ sum(abs.(real(b))) + sum(abs.(imag.(b)))
             @test BLAS.iamax(b) == indmax(map(x -> abs(real(x)) + abs(imag(x)), b))
         end
 

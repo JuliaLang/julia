@@ -133,7 +133,7 @@ let
     @test d[1] ≈ 1. # largest eigenvalue should be 1.
     v=reshape(v,(50,50)) # reshape to matrix
     v/=trace(v) # factor out arbitrary phase
-    @test isapprox(vecnorm(imag(v)),0.) # it should be real
+    @test isapprox(vecnorm(imag.(v)),0.) # it should be real
     v=real(v)
     # @test isapprox(vecnorm(v-v')/2,0.) # it should be Hermitian
     # Since this fails sometimes (numerical precision error),this test is commented out
