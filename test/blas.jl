@@ -106,7 +106,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test BLAS.asum(b) ≈ sum(abs.(b))
             @test BLAS.iamax(b) ≈ indmax(abs.(b))
         else
-            @test BLAS.asum(b) ≈ sum(abs.(real(b))) + sum(abs.(imag(b)))
+            @test BLAS.asum(b) ≈ sum(abs.(real.(b))) + sum(abs.(imag(b)))
             @test BLAS.iamax(b) == indmax(map(x -> abs(real(x)) + abs(imag(x)), b))
         end
 
@@ -214,7 +214,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
             fST[2,:] = ST.dv
             @test BLAS.sbmv('U',1,fST,x) ≈ ST*x
         else
-            dv = real(rand(elty,n))
+            dv = real.(rand(elty,n))
             ev = rand(elty,n-1)
             bH = zeros(elty,2,n)
             bH[1,2:n] = ev

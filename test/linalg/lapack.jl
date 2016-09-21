@@ -414,7 +414,7 @@ end
 
 #ptsv
 for elty in (Float32, Float64, Complex64, Complex128)
-    dv = real(ones(elty,10))
+    dv = real.(ones(elty,10))
     ev = zeros(elty,9)
     A = SymTridiagonal(dv,ev)
     if elty <: Complex
@@ -429,7 +429,7 @@ end
 
 #pttrf and pttrs
 for elty in (Float32, Float64, Complex64, Complex128)
-    dv = real(ones(elty,10))
+    dv = real.(ones(elty,10))
     ev = zeros(elty,9)
     A = SymTridiagonal(dv,ev)
     if elty <: Complex
@@ -453,7 +453,7 @@ end
 #posv and some errors for friends
 for elty in (Float32, Float64, Complex64, Complex128)
     A = 0.01*rand(elty,10,10)
-    A += real(diagm(10*real(rand(elty,10))))
+    A += real.(diagm(10*real.(rand(elty,10))))
     if elty <: Complex
         A = A + A'
     else

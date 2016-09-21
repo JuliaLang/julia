@@ -213,7 +213,7 @@ for itype in UmfpackIndexTypes
             @isok ccall(($sym_c, :libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void},
                          Ptr{Float64}, Ptr{Float64}),
-                        U.m, U.n, U.colptr, U.rowval, real(U.nzval), imag(U.nzval), tmp,
+                        U.m, U.n, U.colptr, U.rowval, real.(U.nzval), imag(U.nzval), tmp,
                         umf_ctrl, umf_info)
             U.symbolic = tmp[1]
             return U
@@ -240,7 +240,7 @@ for itype in UmfpackIndexTypes
             status = ccall(($num_c, :libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),
-                           U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
+                           U.colptr, U.rowval, real.(U.nzval), imag(U.nzval), U.symbolic, tmp,
                            umf_ctrl, umf_info)
             if status != UMFPACK_WARNING_singular_matrix
                 umferror(status)
@@ -395,7 +395,7 @@ for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
             # TODO: Optionally let user allocate these and pass in somehow
             r = similar(b, Float64)
             i = similar(b, Float64)
-            solve!(r, lu, convert(Vector{Float64}, real(b)), $umfpack)
+            solve!(r, lu, convert(Vector{Float64}, real.(b)), $umfpack)
             solve!(i, lu, convert(Vector{Float64}, imag(b)), $umfpack)
             # We have checked size in solve!
             @inbounds for k in eachindex(x)

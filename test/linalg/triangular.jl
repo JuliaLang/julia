@@ -142,7 +142,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test diag(A1) == diag(full(A1))
 
         # real
-        @test full(real(A1)) == real(full(A1))
+        @test full(real.(A1)) == real.(full(A1))
         @test full(imag(A1)) == imag(full(A1))
         @test full(abs.(A1)) == abs.(full(A1))
 
@@ -302,7 +302,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         end
 
         for eltyB in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat})
-            B = convert(Matrix{eltyB}, elty1 <: Complex ? real(A1)*ones(n, n) : A1*ones(n, n))
+            B = convert(Matrix{eltyB}, elty1 <: Complex ? real.(A1)*ones(n, n) : A1*ones(n, n))
 
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
@@ -402,7 +402,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")
 
         debug && println("Solve upper triangular system")
-        Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real.(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
         x = full(Atri) \ b
 
@@ -430,7 +430,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         end
 
         debug && println("Solve lower triangular system")
-        Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
+        Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real.(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
         x = full(Atri)\b
 

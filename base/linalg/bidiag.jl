@@ -189,7 +189,8 @@ function size(M::Bidiagonal, d::Integer)
 end
 
 #Elementary operations
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag, :abs)
+broadcast(::typeof(real), M::Bidiagonal) = Bidiagonal(real.(M.dv), real.(M.ev), M.isupper)
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :imag, :abs)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.isupper)
 end
 for func in (:round, :trunc, :floor, :ceil)

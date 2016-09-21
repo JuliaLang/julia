@@ -250,7 +250,7 @@ function expm{T}(A::Hermitian{T})
     F = eigfact(A)
     retmat = (F.vectors * Diagonal(exp.(F.values))) * F.vectors'
     if T <: Real
-        return real(Hermitian(retmat))
+        return real.(Hermitian(retmat))
     else
         for i = 1:n
             retmat[i,i] = real(retmat[i,i])

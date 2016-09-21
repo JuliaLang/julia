@@ -85,7 +85,7 @@ squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 conj{T<:Real}(x::AbstractArray{T}) = x
 conj!{T<:Real}(x::AbstractArray{T}) = x
 
-real{T<:Real}(x::AbstractArray{T}) = x
+broadcast{T<:Real}(::typeof(real), x::AbstractArray{T}) = x
 imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 +{T<:Number}(x::AbstractArray{T}) = x
