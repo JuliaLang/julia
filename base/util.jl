@@ -299,7 +299,7 @@ end
 
 ## printing with color ##
 
-function with_output_color(f::Function, color::Symbol, io::IO, args...)
+function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...)
     buf = IOBuffer()
     have_color && print(buf, get(text_colors, color, color_normal))
     try f(buf, args...)
@@ -309,13 +309,21 @@ function with_output_color(f::Function, color::Symbol, io::IO, args...)
     end
 end
 
-print_with_color(color::Symbol, io::IO, msg::AbstractString...) =
+"""
+    print_with_color(color::Union{Symbol, Int}, [io], strings...)
+
+Print strings in a color specified as a symbol.
+
+`color` may take any of the values $(Base.available_text_colors_docstring)
+or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
+"""
+print_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...) =
     with_output_color(print, color, io, msg...)
-print_with_color(color::Symbol, msg::AbstractString...) =
+print_with_color(color::Union{Int, Symbol}, msg::AbstractString...) =
     print_with_color(color, STDOUT, msg...)
-println_with_color(color::Symbol, io::IO, msg::AbstractString...) =
+println_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...) =
     with_output_color(println, color, io, msg...)
-println_with_color(color::Symbol, msg::AbstractString...) =
+println_with_color(color::Union{Int, Symbol}, msg::AbstractString...) =
     println_with_color(color, STDOUT, msg...)
 
 ## warnings and messages ##
