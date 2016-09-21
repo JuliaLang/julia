@@ -3221,14 +3221,6 @@ Unicode string.)
 reverseind
 
 """
-    float(x)
-
-Convert a number, array, or string to a `AbstractFloat` data type. For numeric data, the
-smallest suitable `AbstractFloat` type is used. Converts strings to `Float64`.
-"""
-float
-
-"""
     signbit(x)
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.

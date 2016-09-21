@@ -262,7 +262,7 @@ used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 """
 expm{T<:BlasFloat}(A::StridedMatrix{T}) = expm!(copy(A))
-expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
+expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float.(A))
 expm(x::Number) = exp(x)
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
@@ -686,7 +686,7 @@ function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::Stri
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
     scale!(QA*A_mul_Bc(Y,QB), inv(scale))
 end
-sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
+sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float.(A), float.(B), float.(C))
 
 # AX + XA' + C = 0
 
@@ -704,5 +704,5 @@ function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
     scale!(Q*A_mul_Bc(Y,Q), inv(scale))
 end
-lyap{T<:Integer}(A::StridedMatrix{T},C::StridedMatrix{T}) = lyap(float(A), float(C))
+lyap{T<:Integer}(A::StridedMatrix{T},C::StridedMatrix{T}) = lyap(float.(A), float.(C))
 lyap{T<:Number}(a::T, c::T) = -c/(2a)

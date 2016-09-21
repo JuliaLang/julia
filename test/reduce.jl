@@ -46,7 +46,7 @@
 @test sum([3.0]) === 3.0
 
 z = reshape(1:16, (2,2,2,2))
-fz = float(z)
+fz = float.(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
@@ -58,7 +58,7 @@ a = sum(sin, z)
 @test a ≈ sum(sin.(fz))
 
 z = [-4, -3, 2, 5]
-fz = float(z)
+fz = float.(z)
 a = randn(32) # need >16 elements to trigger BLAS code path
 b = complex(randn(32), randn(32))
 @test sumabs(Float64[]) === 0.0

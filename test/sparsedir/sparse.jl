@@ -1189,9 +1189,9 @@ A = speye(5)
 
 # test float
 A = sprand(Bool, 5,5,0.0)
-@test eltype(float(A)) == Float64  # issue #11658
+@test eltype(float.(A)) == Float64  # issue #11658
 A = sprand(Bool, 5,5,0.2)
-@test float(A) == float(full(A))
+@test float.(A) == float.(full(A))
 
 # test sparsevec
 A = sparse(ones(5,5))

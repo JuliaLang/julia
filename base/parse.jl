@@ -168,8 +168,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString)
 end
 
 float(x::AbstractString) = parse(Float64,x)
-
-float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
+broadcast{S<:AbstractString}(::typeof(float), a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 
 ## interface to parser ##
 

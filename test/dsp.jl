@@ -58,11 +58,11 @@ if Base.fftw_vendor() != :mkl
         4.0  -2.071929829606556   4.0  -2.388955165168770; 12.  -0.765366864730179   4.0  -1.847759065022573 ]
 
     Xdct = dct(X)
-    Xdct! = float(X); dct!(Xdct!)
+    Xdct! = float.(X); dct!(Xdct!)
     Xdct_1 = dct(X,1)
-    Xdct!_1 = float(X); dct!(Xdct!_1,1)
+    Xdct!_1 = float.(X); dct!(Xdct!_1,1)
     Xdct_2 = dct(X,2)
-    Xdct!_2 = float(X); dct!(Xdct!_2,2)
+    Xdct!_2 = float.(X); dct!(Xdct!_2,2)
 
     Xidct = idct(true_Xdct)
     Xidct! = copy(true_Xdct); idct!(Xidct!)
@@ -72,11 +72,11 @@ if Base.fftw_vendor() != :mkl
     Xidct!_2 = copy(true_Xdct_2); idct!(Xidct!_2,2)
 
     pXdct = plan_dct(X)*(X)
-    pXdct! = float(X); plan_dct!(pXdct!)*(pXdct!)
+    pXdct! = float.(X); plan_dct!(pXdct!)*(pXdct!)
     pXdct_1 = plan_dct(X,1)*(X)
-    pXdct!_1 = float(X); plan_dct!(pXdct!_1,1)*(pXdct!_1)
+    pXdct!_1 = float.(X); plan_dct!(pXdct!_1,1)*(pXdct!_1)
     pXdct_2 = plan_dct(X,2)*(X)
-    pXdct!_2 = float(X); plan_dct!(pXdct!_2,2)*(pXdct!_2)
+    pXdct!_2 = float.(X); plan_dct!(pXdct!_2,2)*(pXdct!_2)
 
     pXidct = plan_idct(true_Xdct)*(true_Xdct)
     pXidct! = copy(true_Xdct); plan_idct!(pXidct!)*(pXidct!)
