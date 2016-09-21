@@ -1573,11 +1573,11 @@ Internals
 
    Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_llvm` on the resulting expression.
 
-.. function:: code_native([io], f, types)
+.. function:: code_native([io], f, types, [syntax])
 
    .. Docstring generated from Julia source
 
-   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to ``io`` which defaults to ``STDOUT``\ .
+   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to ``io`` which defaults to ``STDOUT``\ . Switch assembly syntax using ``syntax`` symbol parameter set to ``:att`` for AT&T syntax or ``:intel`` for Intel syntax. Output is AT&T syntax by default.
 
 .. function:: @code_native
 
