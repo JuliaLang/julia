@@ -287,6 +287,7 @@ end
 # conj
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
 @test full(conj.(cA)) == conj(full(cA))
+@test full(conj!(copy(cA))) == conj(full(cA))
 
 # Test SparseMatrixCSC [c]transpose[!] and permute[!] methods
 let smalldim = 5, largedim = 10, nzprob = 0.4
@@ -401,6 +402,7 @@ end
 # spdiagm
 @test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==
                        [1.0  0.0  0.0; 1.0  1.0  0.0;  0.0  1.0  0.0]
+@test full(spdiagm(ones(2), -1, 3, 3)) == diagm(ones(2), -1)
 
 # issue #4986, reinterpret
 sfe22 = speye(Float64, 2)
