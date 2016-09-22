@@ -25,6 +25,8 @@ Language changes
     One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
     For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
 
+  * The function `print_with_color` no longer prints text in bold by default.
+
 Breaking changes
 ----------------
 

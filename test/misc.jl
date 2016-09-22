@@ -452,3 +452,21 @@ if is_windows()
         err18083 == 0 && error(Libc.GetLastError())
     end
 end
+
+let
+    old_have_color = Base.have_color
+    try
+        eval(Base, :(have_color = true))
+        io = IOBuffer()
+        Base.with_output_color(:red, io) do io
+            Base.with_output_color(:bold, io) do io
+                print(io, " boldred ")
+            end
+            print(io, " just red ")
+        end
+        print(io, " normal")
+        @test takebuf_string(io) == "\e[31m\e[1m boldred \e[22m just red \e[39m normal"
+    finally
+        eval(Base, :(have_color = $(old_have_color)))
+    end
+end

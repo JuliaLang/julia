@@ -181,7 +181,7 @@ function task_done_hook(t::Task)
         if !suppress_excp_printing(t)
             let bt = t.backtrace
                 # run a new task to print the error for us
-                @schedule with_output_color(:red, STDERR) do io
+                @schedule with_output_color(:light_red, STDERR) do io
                     print(io, "ERROR (unhandled task failure): ")
                     showerror(io, result, bt)
                     println(io)

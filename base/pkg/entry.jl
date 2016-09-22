@@ -174,7 +174,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
         catch err
-            print_with_color(:red, io, " broken-repo (unregistered)")
+            print_with_color(:light_red, io, " broken-repo (unregistered)")
         finally
             finalize(prepo)
         end
