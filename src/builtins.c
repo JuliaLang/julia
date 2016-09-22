@@ -432,7 +432,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t
     return ret;
 }
 
-static jl_function_t *jl_append_any_func;
+jl_function_t *jl_append_any_func;
 
 JL_CALLABLE(jl_f__apply)
 {
@@ -468,7 +468,7 @@ JL_CALLABLE(jl_f__apply)
         else {
             if (jl_append_any_func == NULL) {
                 jl_append_any_func =
-                    (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("append_any"));
+                    (jl_function_t*)jl_get_global(jl_top_module, jl_symbol("append_any"));
                 if (jl_append_any_func == NULL) {
                     // error if append_any not available
                     JL_TYPECHK(apply, tuple, jl_typeof(args[i]));
