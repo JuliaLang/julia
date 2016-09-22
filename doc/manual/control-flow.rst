@@ -725,6 +725,19 @@ the way :exc:`UndefVarError` is written:
            end
     julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defined");
 
+.. note::
+    When writing an error message, it is preferred to make the first word
+    lowercase. For example,
+    ``size(A) == size(B) || throw(DimensionMismatch("size of A not equal to size of B"))``
+
+    is preferred over
+
+    ``size(A) == size(B) || throw(DimensionMismatch("Size of A not equal to size of B"))``.
+
+    However, sometimes it makes sense to keep the uppercase first letter,
+    for instance if an argument to a function is a capital letter:
+    ``size(A,1) == size(B,2) || throw(DimensionMismatch("A has first dimension..."))``.
+
 Errors
 ~~~~~~
 
