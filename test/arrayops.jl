@@ -68,6 +68,8 @@ a[1,1,2,2,1] = 30
 @test a[1,2,1,1,2] == 20
 @test a[1,1,2,2,1] == 30
 
+@test_throws ArgumentError reinterpret(Int8, a)
+
 b = reshape(a, (32,))
 @test b[1]  == 10
 @test b[19] == 20
