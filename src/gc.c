@@ -1543,6 +1543,7 @@ void visit_mark_stack(jl_ptls_t ptls)
 
 extern jl_array_t *jl_module_init_order;
 extern jl_typemap_entry_t *call_cache[N_CALL_CACHE];
+extern jl_array_t *jl_all_methods;
 
 // mark the initial root set
 void pre_mark(jl_ptls_t ptls)
@@ -1575,6 +1576,8 @@ void pre_mark(jl_ptls_t ptls)
     for (i = 0; i < N_CALL_CACHE; i++)
         if (call_cache[i])
             gc_push_root(ptls, call_cache[i], 0);
+    if (jl_all_methods != NULL)
+        gc_push_root(ptls, jl_all_methods, 0);
 
     jl_mark_box_caches(ptls);
     //gc_push_root(ptls, jl_unprotect_stack_func, 0);
