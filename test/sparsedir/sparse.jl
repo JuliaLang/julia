@@ -120,6 +120,8 @@ for i = 1:5
     @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs.(A_mul_B!(similar(b), a, b) - full(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
     @test (maximum(abs.(A_mul_B!(similar(c), a, c) - full(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+    @test (maximum(abs.(At_mul_B!(similar(b), a, b) - full(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+    @test (maximum(abs.(At_mul_B!(similar(c), a, c) - full(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
     @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
     @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
