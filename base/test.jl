@@ -43,7 +43,7 @@ immutable Pass <: Result
     value
 end
 function Base.show(io::IO, t::Pass)
-    print_with_color(:green, io, "Test Passed\n")
+    print_with_color(:green, io, "Test Passed\n"; bold = true)
     if !(t.orig_expr === nothing)
         print(io, "  Expression: ", t.orig_expr)
     end
@@ -70,7 +70,7 @@ type Fail <: Result
     value
 end
 function Base.show(io::IO, t::Fail)
-    print_with_color(:red, io, "Test Failed\n")
+    print_with_color(:light_red, io, "Test Failed\n"; bold = true)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -102,7 +102,7 @@ type Error <: Result
     backtrace
 end
 function Base.show(io::IO, t::Error)
-    print_with_color(:red, io, "Error During Test\n")
+    print_with_color(:light_red, io, "Error During Test\n"; bold = true)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -140,7 +140,7 @@ type Broken <: Result
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(:yellow, io, "Test Broken\n")
+    print_with_color(:yellow, io, "Test Broken\n"; bold = true)
     if t.test_type == :skipped && !(t.orig_expr === nothing)
         println(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
@@ -478,21 +478,21 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
-    print_with_color(:white, rpad("Test Summary:",align," "), " | ")
+    print_with_color(:white, rpad("Test Summary:",align," "), " | "; bold = true)
     if pass_width > 0
-        print_with_color(:green, lpad("Pass",pass_width," "), "  ")
+        print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
     end
     if fail_width > 0
-        print_with_color(:red, lpad("Fail",fail_width," "), "  ")
+        print_with_color(:light_red, lpad("Fail",fail_width," "), "  "; bold = true)
     end
     if error_width > 0
-        print_with_color(:red, lpad("Error",error_width," "), "  ")
+        print_with_color(:light_red, lpad("Error",error_width," "), "  "; bold = true)
     end
     if broken_width > 0
-        print_with_color(:yellow, lpad("Broken",broken_width," "), "  ")
+        print_with_color(:yellow, lpad("Broken",broken_width," "), "  "; bold = true)
     end
     if total_width > 0
-        print_with_color(:blue, lpad("Total",total_width, " "))
+        print_with_color(:blue, lpad("Total",total_width, " "); bold = true)
     end
     println()
     # Recursively print a summary at every level
@@ -595,7 +595,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     np = passes + c_passes
     if np > 0
-        print_with_color(:green, lpad(string(np), pass_width, " "), "  ")
+        print_with_color(:green, lpad(string(np), pass_width, " "), "  "; bold = true)
     elseif pass_width > 0
         # No passes at this level, but some at another level
         print(lpad(" ", pass_width), "  ")
@@ -603,7 +603,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nf = fails + c_fails
     if nf > 0
-        print_with_color(:red, lpad(string(nf), fail_width, " "), "  ")
+        print_with_color(:light_red, lpad(string(nf), fail_width, " "), "  "; bold = true)
     elseif fail_width > 0
         # No fails at this level, but some at another level
         print(lpad(" ", fail_width), "  ")
@@ -611,7 +611,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     ne = errors + c_errors
     if ne > 0
-        print_with_color(:red, lpad(string(ne), error_width, " "), "  ")
+        print_with_color(:light_red, lpad(string(ne), error_width, " "), "  "; bold = true)
     elseif error_width > 0
         # No errors at this level, but some at another level
         print(lpad(" ", error_width), "  ")
@@ -619,16 +619,16 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nb = broken + c_broken
     if nb > 0
-        print_with_color(:yellow, lpad(string(nb), broken_width, " "), "  ")
+        print_with_color(:yellow, lpad(string(nb), broken_width, " "), "  "; bold = true)
     elseif broken_width > 0
         # None broken at this level, but some at another level
         print(lpad(" ", broken_width), "  ")
     end
 
     if np == 0 && nf == 0 && ne == 0 && nb == 0
-        print_with_color(:blue, "No tests")
+        print_with_color(:blue, "No tests"; bold = true)
     else
-        print_with_color(:blue, lpad(string(subtotal), total_width, " "))
+        print_with_color(:blue, lpad(string(subtotal), total_width, " "); bold = true)
     end
     println()
 
