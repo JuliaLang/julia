@@ -91,7 +91,8 @@ get(x::Nullable) = x.isnull ? throw(NullException()) : x.value
 """
     isnull(x::Nullable) -> Bool
 
-Is the [`Nullable`](:obj:`Nullable`) object `x` null, i.e. missing a value?
+Returns `true` if the [`Nullable`](:obj:`Nullable`) object `x` is null,
+i.e. missing a value.
 
 ```jldoctest
 julia> x = Nullable(1, false)

@@ -57,7 +57,7 @@ kwerr(kw, args...) = throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,arg
 """
     systemerror(sysfunc, iftrue::Bool; extrainfo=nothing)
 
-Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`.
+Raises a `SystemError` with the descriptive string `sysfunc` if `iftrue` is `true`.
 """
 systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
 

@@ -846,7 +846,7 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   Is the :obj:`Nullable` object ``x`` null, i.e. missing a value?
+   Returns ``true`` if the :obj:`Nullable` object ``x`` is null, i.e. missing a value.
 
    .. doctest::
 
