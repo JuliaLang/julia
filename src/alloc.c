@@ -655,6 +655,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     return m;
 }
 
+jl_array_t *jl_all_methods;
 jl_method_t *jl_new_method(jl_code_info_t *definition,
                            jl_sym_t *name,
                            jl_tupletype_t *sig,
@@ -692,6 +693,17 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
         m->unspecialized->inferred = (jl_value_t*)m->source;
         m->source = NULL;
     }
+
+#ifdef RECORD_METHOD_ORDER
+    if (jl_all_methods == NULL)
+        jl_all_methods = jl_alloc_vec_any(0);
+#endif
+    if (jl_all_methods != NULL) {
+        while (jl_array_len(jl_all_methods) < jl_world_counter)
+            jl_array_ptr_1d_push(jl_all_methods, NULL);
+        jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)m);
+    }
+
     JL_GC_POP();
     return m;
 }
