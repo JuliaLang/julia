@@ -337,3 +337,15 @@ end
 @test broadcast(+, 1.0, (0, -2.0)) == (1.0,-1.0)
 @test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
 @test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]
+
+# Ensure that even strange constructors that break `T(x)::T` work with broadcast
+immutable StrangeType18623 end
+StrangeType18623(x) = x
+StrangeType18623(x,y) = (x,y)
+@test @inferred broadcast(StrangeType18623, 1:3) == [1,2,3]
+@test @inferred broadcast(StrangeType18623, 1:3, 4:6) == [(1,4),(2,5),(3,6)]
+
+@test typeof(Int.(Number[1, 2, 3])) === typeof((x->Int(x)).(Number[1, 2, 3]))
+
+@test @inferred broadcast(CartesianIndex, 1:2) == [CartesianIndex(1), CartesianIndex(2)]
+@test @inferred broadcast(CartesianIndex, 1:2,3:4) == [CartesianIndex(1,3), CartesianIndex(2,4)]

@@ -224,7 +224,16 @@ if isdefined(Core, :Inference)
         G = Tuple{Generator{Tuple{T},typeof(op)}}
         return Core.Inference.return_type(first, G)
     end
+    function _promote_op{op}(::Type{op}, T::ANY)
+        G = Tuple{Generator{Tuple{T},Type{op}}}
+        return Core.Inference.return_type(first, G)
+    end
     function _promote_op(op, R::ANY, S::ANY)
+        F = typeof(a -> op(a...))
+        G = Tuple{Generator{Zip2{Tuple{R},Tuple{S}},F}}
+        return Core.Inference.return_type(first, G)
+    end
+    function _promote_op{op}(::Type{op}, R::ANY, S::ANY)
         F = typeof(a -> op(a...))
         G = Tuple{Generator{Zip2{Tuple{R},Tuple{S}},F}}
         return Core.Inference.return_type(first, G)
@@ -235,8 +244,6 @@ end
 _default_type(T::Type) = (@_pure_meta; T)
 
 promote_op(::Any...) = (@_pure_meta; Any)
-promote_op(T::Type, ::Any) = (@_pure_meta; T)
-promote_op(T::Type, ::Type) = (@_pure_meta; T) # To handle ambiguities
 # Promotion that tries to preserve non-concrete types
 function promote_op{S}(f, ::Type{S})
     T = _promote_op(f, _default_type(S))
