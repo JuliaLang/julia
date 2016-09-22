@@ -810,7 +810,7 @@ pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr
 """
     getindex(A, inds...)
 
-Returns a subset of array `A` as specified by `inds`, where each `ind` may be an
+Return a subset of array `A` as specified by `inds`, where each `ind` may be an
 `Int`, a `Range`, or a `Vector`. See the manual section on
 [array indexing](:ref:`array indexing <man-array-indexing>`) for details.
 

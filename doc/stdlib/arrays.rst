@@ -692,7 +692,7 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Returns a subset of array ``A`` as specified by ``inds``\ , where each ``ind`` may be an ``Int``\ , a ``Range``\ , or a ``Vector``\ . See the manual section on :ref:`array indexing <man-array-indexing>` for details.
+   Return a subset of array ``A`` as specified by ``inds``\ , where each ``ind`` may be an ``Int``\ , a ``Range``\ , or a ``Vector``\ . See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
    .. doctest::
 
