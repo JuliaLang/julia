@@ -53,10 +53,10 @@ Index replacement
 
 Consider making 2d slices of a 3d array::
 
-  S1 = slice(A, :, 5, 2:6)
-  S2 = slice(A, 5, :, 2:6)
+  S1 = view(A, :, 5, 2:6)
+  S2 = view(A, 5, :, 2:6)
 
-``slice`` drops "singleton" dimensions (ones that are specified by an
+``view`` drops "singleton" dimensions (ones that are specified by an
 ``Int``), so both ``S1`` and ``S2`` are two-dimensional ``SubArray``\s.
 Consequently, the natural way to index these is with ``S1[i,j]``.  To
 extract the value from the parent array ``A``, the natural approach is
@@ -75,28 +75,27 @@ Type parameters and fields
 The strategy adopted is first and foremost expressed in the definition
 of the type::
 
-    type SubArray{T,N,P<:AbstractArray,I<:(ViewIndex...),LD} <: AbstractArray{T,N}
+    immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
         parent::P
         indexes::I
-        dims::NTuple{N,Int}
-        first_index::Int   # for linear indexing and pointer
+        offset1::Int       # for linear indexing and pointer, only valid when L==true
         stride1::Int       # used only for linear indexing
+        ...
     end
 
 ``SubArray`` has 5 type parameters.  The first two are the
 standard element type and dimensionality.  The next is the type of the
 parent ``AbstractArray``.  The most heavily-used is the fourth
-parameter, a ``tuple`` of the types of the indexes for each dimension.
-The final one, ``LD``, is used only in special circumstances, to
-implement efficient linear indexing for those types that can support
-it.
+parameter, a ``Tuple`` of the types of the indices for each dimension.
+The final one, ``L``, is only provided as a convenience for dispatch;
+it's a boolean that represents whether the index types support fast
+linear indexing. More on that later.
 
 If in our example above ``A`` is a ``Array{Float64, 3}``, our ``S1``
 case above would be a
-``SubArray{Float64,2,Array{Float64,3},(Colon,Int64,UnitRange{Int64}),2}``.
+``SubArray{Int64,2,Array{Int64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}``.
 Note in particular the tuple parameter, which stores the types of
-the indexes used to create ``S1``.  Likewise,
-::
+the indices used to create ``S1``.  Likewise, ::
 
     julia> S1.indexes
     (Colon(),5,2:6)
@@ -104,39 +103,31 @@ the indexes used to create ``S1``.  Likewise,
 Storing these values allows index replacement, and having the types
 encoded as parameters allows one to dispatch to efficient algorithms.
 
-An ``Int`` index is used to represent a parent dimension that should
-be dropped.  The distinction between the ``sub`` and ``slice``
-commands is that ``sub`` converts *interior* ``Int`` indices into
-ranges at the time of construction.  For example::
-
-    S3 = sub(A, :, 5, 2:6)
-
-    julia> S3.indexes
-    (Colon(),5:5,2:6)
-
-Because of this conversion, ``S3`` is three-dimensional.
-
-``getindex`` and ``setindex!`` (index translation)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Index translation
+~~~~~~~~~~~~~~~~~
 
 Performing index translation requires that you do different things for
 different concrete ``SubArray`` types.  For example, for ``S1``, one needs
-to apply the ``i,j`` indexes to the first and third dimensions of the
+to apply the ``i,j`` indices to the first and third dimensions of the
 parent array, whereas for ``S2`` one needs to apply them to the
 second and third.  The simplest approach to indexing would be to do
 the type-analysis at runtime::
 
     parentindexes = Array{Any}(0)
-    for i = 1:ndims(S.parent)
+    for thisindex in S.indexes
         ...
         if isa(thisindex, Int)
             # Don't consume one of the input indexes
 	    push!(parentindexes, thisindex)
-        else
+        elseif isa(thisindex, AbstractVector)
 	    # Consume an input index
 	    push!(parentindexes, thisindex[inputindex[j]])
 	    j += 1
-        end
+        elseif isa(thisindex, AbstractMatrix)
+            # Consume two input indices
+            push!(parentindexes, thisindex[inputindex[j], inputindex[j+1]])
+            j += 2
+        elseif ...
     end
     S.parent[parentindexes...]
 
@@ -144,31 +135,52 @@ Unfortunately, this would be disastrous in terms of performance: each
 element access would allocate memory, and involves the running of a
 lot of poorly-typed code.
 
-The better approach is to dispatch to specific methods to handle each
-type of input.  Note, however, that the number of distinct methods
-needed grows exponentially in the number of dimensions, and since
-Julia supports arrays of any dimension the number of methods required
-is in fact infinite.  Fortunately, ``@generated function``\s allow one to
-generate the necessary methods quite straightforwardly.  The resulting
-code looks quite a lot like the runtime approach above, but all of the
-type analysis is performed at the time of method instantiation.  For a
-``SubArray`` of the type of ``S1``, the method executed at runtime is
-literally ::
+The better approach is to dispatch to specific methods to handle each type of
+stored index. That's what ``reindex`` does: it dispatches on the type of the
+first stored index and consumes the appropriate number of input indices, and
+then it recurses on the remaining indices. In the case of ``S1``, this expands
+to ::
 
-    getindex(S::<type of S1>, i, j) = S.parent[i, S.indexes[2], S.indexes[3][j]]
+    Base.reindex(S1, S1.indexes, (i, j)) == (i, S1.indexes[2], S1.indexes[3][j])
+
+for any pair of indices ``(i,j)`` (except ``CartesianIndex``\ s and
+arrays thereof, see below).
+
+This is the core of a ``SubArray``; indexing methods depend upon ``reindex``
+to do this index translation. Sometimes, though, we can avoid the indirection
+and make it even faster.
 
 Linear indexing
 ~~~~~~~~~~~~~~~
 
-Linear indexing can be implemented efficiently when the entire array
-has a single stride that separates successive elements.  For
-``SubArray`` types, the availability of efficient linear indexing is based
-purely on the types of the indexes, and does not depend on values like
-the size of the array.  It therefore can miss some cases in which the
-stride happens to be uniform::
+Linear indexing can be implemented efficiently when the entire array has a
+single stride that separates successive elements, starting from some offset.
+This means that we can pre-compute these values and represent linear indexing
+simply as an addition and multiplication, avoiding the indirection of
+``reindex`` and (more importantly) the slow computation of the cartesian
+coordinates entirely.
+
+For ``SubArray`` types, the availability of efficient linear indexing is based
+purely on the types of the indices, and does not depend on values like the size
+of the parent array. You can ask whether a given set of indices supports fast
+linear indexing with the internal ``Base.viewindexing`` function::
+
+    julia> Base.viewindexing(S1.indexes)
+    Base.LinearSlow()
+
+    julia> Base.viewindexing(S2.indexes)
+    Base.LinearFast()
+
+This is computed during construction of the ``SubArray`` and stored in the
+``L`` type parameter as a boolean that encodes fast linear indexing support.
+While not strictly necessary, it means that we can define dispatch directly on
+``SubArray{T,N,A,I,true}`` without any intermediaries.
+
+Since this computation doesn't depend on runtime values, it can miss some cases
+in which the stride happens to be uniform::
 
  julia> A = reshape(1:4*2, 4, 2)
- 4×2 Array{Int64,2}:
+ 4×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
   1  5
   2  6
   3  7
@@ -180,13 +192,13 @@ stride happens to be uniform::
   2
   2
 
-A view constructed as ``sub(A, 2:2:4, :)`` happens to have uniform
+A view constructed as ``view(A, 2:2:4, :)`` happens to have uniform
 stride, and therefore linear indexing indeed could be performed
 efficiently.  However, success in this case depends on the size of the
 array: if the first dimension instead were odd, ::
 
  julia> A = reshape(1:5*2, 5, 2)
- 5×2 Array{Int64,2}:
+ 5×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
   1   6
   2   7
   3   8
@@ -202,79 +214,73 @@ array: if the first dimension instead were odd, ::
 then ``A[2:2:4,:]`` does not have uniform stride, so we cannot
 guarantee efficient linear indexing.  Since we have to base this
 decision based purely on types encoded in the parameters of the
-``SubArray``, ``S = sub(A, 2:2:4, :)`` cannot implement efficient
+``SubArray``, ``S = view(A, 2:2:4, :)`` cannot implement efficient
 linear indexing.
-
-The last parameter of ``SubArray``, ``LD``, encodes the highest
-dimension up to which elements are guaranteed to have uniform stride.
-When ``LD == length(I)``, the length of the ``indexes`` tuple,
-efficient linear indexing becomes possible.
-
-An example might help clarify what this means:
-
-- For ``S1`` above, the ``Colon`` along the first dimension is
-  uniformly spaced (all elements are displaced by 1 from the previous
-  value), so this dimension does not "break" linear indexing.
-  Consequently ``LD`` has a value of at least 1.
-
-- The second dimension of the parent, sliced out as ``5``, does not
-  not by itself break linear indexing:  if all of the remaining
-  indexes were ``Int``, the entire ``SubArray`` would have efficient
-  linear indexing.  Consequently, ``LD`` is at least 2.
-
-- The last dimension is a ``Range``.  This would by itself break
-  linear indexing (even though it is a ``UnitRange``, the fact that it
-  might not start at 1 means that there might be gaps).  Additionally,
-  given the preceding indexes any choice other than ``Int`` would
-  also have truncated ``LD`` at 2.
-
-Consequently, as a whole ``S1`` does not have efficient linear
-indexing.
-
-However, if we were to later say ``S1a = slice(S1, 2:2:7, 3)``,
-``S1a`` would have an ``LD`` of 3 (its indexes tuple has type
-``(Colon, Int, Int)``) and would have efficient linear indexing.  This
-ability to re-slice is the main motivation to use an integer ``LD``
-rather than a boolean flag to encode the applicability of linear
-indexing.
-
-The main reason ``LD`` cannot always be inferred from the ``indexes`` tuple
-is because ``sub`` converts internal ``Int`` indexes into
-``UnitRange``\s.  Consequently it is important to encode "safe"
-dimensions of size 1 prior to conversion.  Up to the ``LD``\ th entry,
-we can be sure that any ``UnitRange`` was, in fact, an ``Integer``
-prior to conversion.
 
 
 A few details
 ~~~~~~~~~~~~~
 
+- Note that the ``Base.reindex`` function is agnostic to the types of the input
+  indices; it simply determines how and where the stored indices should be
+  reindexed. It not only supports integer indices, but it supports non-scalar
+  indexing, too. This means that views of views don't need two levels of
+  indirection; they can simply re-compute the indices into the original parent
+  array!
+
 - Hopefully by now it's fairly clear that supporting slices means that
   the dimensionality, given by the parameter ``N``, is not necessarily
   equal to the dimensionality of the parent array or the length of the
-  ``indexes`` tuple.  Neither do user-supplied indexes necessarily
+  ``indexes`` tuple.  Neither do user-supplied indices necessarily
   line up with entries in the ``indexes`` tuple (e.g., the second
   user-supplied index might correspond to the third dimension of the
   parent array, and the third element in the ``indexes`` tuple).
 
-  What might be less obvious is that the dimensionality of the parent
-  array may not be equal to the length of the ``indexes`` tuple.  Some
-  examples::
+  What might be less obvious is that the dimensionality of the stored
+  parent array must be equal to the number of effective indices in the
+  ``indexes`` tuple. Some examples::
 
     A = reshape(1:35, 5, 7) # A 2d parent Array
-    S = sub(A, 2:7)         # A 1d view created by linear indexing
-    S = sub(A, :, :, 1)     # Appending extra indexes is supported
-    S = sub(A, :, :, 1:1)
+    S = view(A, 2:7)         # A 1d view created by linear indexing
+    S = view(A, :, :, 1:1)   # Appending extra indices is supported
 
-  Consequently, internal ``SubArray`` code needs to be fairly careful
-  about which of these three notions of dimensionality is relevant in
-  each circumstance.
+  Naively, you'd think you could just set ``S.parent = A`` and
+  ``S.indexes = (:,:,1:1)``, but supporting this dramatically complicates the
+  reindexing process, especially for views of views. Not only do you need to
+  dispatch on the types of the stored indices, but you need to examine whether
+  a given index is the final one and "merge" any remaining stored indices
+  together. This is not an easy task, and even worse: it's slow since it
+  implicitly depends upon linear indexing.
 
-- Because the processing needed to implement all of the ``@generated``
-  expressions isn't readily available at the time ``subarray.jl``
-  appears in the bootstrap process, ``SubArray`` functionality is
-  split into two files, the second being ``subarray2.jl``.
+  Fortunately, this is precisely the computation that ``ReshapedArray``
+  performs, and it does so linearly if possible. Consequently, ``view`` ensures
+  that the parent array is the appropriate dimensionality for the given indices
+  by reshaping it if needed. The inner ``SubArray`` constructor ensures that
+  this invariant is satisfied.
 
-- Bounds-checking has currently not been tackled. There are two
-  relevant notions of bounds-checking, one at construction time and
-  one during element access.  This is an important outstanding issue.
+- ``CartesianIndex`` and arrays thereof throw a nasty wrench into the
+  ``reindex`` scheme. Recall that ``reindex`` simply dispatches on the type of
+  the stored indices in order to determine how many passed indices should be
+  used and where they should go. But with ``CartesianIndex``, there's no longer
+  a one-to-one correspondence between the number of passed arguments and the
+  number of dimensions that they index into. If we return to the above example
+  of ``Base.reindex(S1, S1.indexes, (i, j))``, you can see that the expansion
+  is incorrect for ``i, j = CartesianIndex(), CartesianIndex(2,1)``. It should
+  *skip* the ``CartesianIndex()`` entirely and return::
+
+      (CartesianIndex(2,1)[1], S1.indexes[2], S1.indexes[3][CartesianIndex(2,1)[2]])
+
+  Instead, though, we get::
+
+      (CartesianIndex(), S1.indexes[2], S1.indexes[3][CartesianIndex(2,1)])
+
+  Doing this correctly would require *combined* dispatch on both the stored and
+  passed indices across all combinations of dimensionalities in an intractable
+  manner. As such, ``reindex`` must never be called with ``CartesianIndex``
+  indices. Fortunately, the scalar case is easily handled by first flattening
+  the ``CartesianIndex`` arguments to plain integers. Arrays of
+  ``CartesianIndex``, however, cannot be split apart into orthogonal pieces so
+  easily. Before attempting to use ``reindex``, ``view`` must ensure that there
+  are no arrays of ``CartesianIndex`` in the argument list. If there are, it
+  can simply "punt" by avoiding the ``reindex`` calculation entirely,
+  constructing a nested ``SubArray`` with two levels of indirection instead.
