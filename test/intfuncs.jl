@@ -87,6 +87,7 @@ end
 let n = rand(Int)
     @test ndigits(n) == ndigits(big(n)) == ndigits(n, 10)
 end
+@test ndigits(Int8(5)) == ndigits(5)
 
 @test bin('3') == "110011"
 @test bin('3',7) == "0110011"
@@ -124,10 +125,14 @@ end
 @test count_zeros(Int64(1)) == 63
 
 @test factorial(3) == 6
+@test factorial(Int8(3)) == 6
 @test_throws DomainError factorial(-3)
+@test_throws DomainError factorial(Int8(-3))
 
 @test isqrt(4) == 2
 @test isqrt(5) == 2
+@test isqrt(Int8(4)) == 2
+@test isqrt(Int8(5)) == 2
 # issue #4884
 @test isqrt(9223372030926249000) == 3037000498
 @test isqrt(typemax(Int128)) == parse(Int128,"13043817825332782212")
