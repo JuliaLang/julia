@@ -327,6 +327,8 @@ rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x&1)!=0)
 mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
 
+unsafe_trunc{T<:Integer}(::Type{T}, x::Integer) = rem(x, T)
+
 convert{Tf<:Union{Float32,Float64}}(T::BitSigned64T, x::Tf) =
     box(T,checked_fptosi(T,unbox(Tf,x)))
 convert{Tf<:Union{Float32,Float64}}(T::BitUnsigned64T, x::Tf) =
