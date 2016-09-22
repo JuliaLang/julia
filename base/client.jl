@@ -4,26 +4,40 @@
 ##             and REPL
 
 const text_colors = AnyDict(
-    :black   => "\033[1m\033[30m",
-    :red     => "\033[1m\033[31m",
-    :green   => "\033[1m\033[32m",
-    :yellow  => "\033[1m\033[33m",
-    :blue    => "\033[1m\033[34m",
-    :magenta => "\033[1m\033[35m",
-    :cyan    => "\033[1m\033[36m",
-    :white   => "\033[1m\033[37m",
-    :normal  => "\033[0m",
-    :bold    => "\033[1m",
+    :black         => "\033[30m",
+    :red           => "\033[31m",
+    :green         => "\033[32m",
+    :yellow        => "\033[33m",
+    :blue          => "\033[34m",
+    :magenta       => "\033[35m",
+    :cyan          => "\033[36m",
+    :white         => "\033[37m",
+    :light_black   => "\033[90m", # gray
+    :light_red     => "\033[91m",
+    :light_green   => "\033[92m",
+    :light_yellow  => "\033[93m",
+    :light_blue    => "\033[94m",
+    :light_magenta => "\033[95m",
+    :light_cyan    => "\033[96m",
+    :normal        => "\033[0m",
+    :default       => "\033[39m",
+    :bold          => "\033[1m",
+)
+
+const disable_text_style = AnyDict(
+    :bold => "\033[22m",
+    :normal => "",
+    :default => "",
 )
 
 for i in 0:255
-    text_colors[i] = "\033[1m\033[38;5;$(i)m"
+    text_colors[i] = "\033[38;5;$(i)m"
 end
 
 # Create a docstring with an automatically generated list
 # of colors.
-const possible_formatting_symbols = [:normal, :bold]
 available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
+const possible_formatting_symbols = [:normal, :bold, :default]
 available_text_colors = cat(1,
     sort(intersect(available_text_colors, possible_formatting_symbols), rev=true),
     sort(setdiff(  available_text_colors, possible_formatting_symbols)))
@@ -35,12 +49,15 @@ const available_text_colors_docstring =
 """Dictionary of color codes for the terminal.
 
 Available colors are: $available_text_colors_docstring as well as the integers 0 to 255 inclusive.
+
+The color `:default` will print text in the default color while the color `:normal`
+will print text with all text properties (like boldness) reset.
 """
 text_colors
 
 have_color = false
-default_color_warn = :red
-default_color_error = :red
+default_color_warn = :light_red
+default_color_error = :light_red
 default_color_info = :cyan
 if is_windows()
     default_color_input = :normal
@@ -59,10 +76,12 @@ function repl_color(key, default)
 end
 
 error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
-warn_color()   = repl_color("JULIA_WARN_COLOR", default_color_warn)
-info_color()   = repl_color("JULIA_INFO_COLOR", default_color_info)
-input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
-answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
+warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn)
+info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
+
+# Print input and answer in bold.
+input_color()  = text_colors[:bold] * text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
+answer_color() = text_colors[:bold] * text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
 
 function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
@@ -103,8 +122,8 @@ end
 
 display_error(er) = display_error(er, [])
 function display_error(er, bt)
+    print_with_color(Base.error_color(), STDERR, "ERROR: "; bold = true)
     with_output_color(Base.error_color(), STDERR) do io
-        print(io, "ERROR: ")
         showerror(io, er, bt)
         println(io)
     end

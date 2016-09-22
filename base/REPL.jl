@@ -111,8 +111,8 @@ function ip_matches_func(ip, func::Symbol)
 end
 
 function display_error(io::IO, er, bt)
+    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
     Base.with_output_color(Base.error_color(), io) do io
-        print(io, "ERROR: ")
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
         if eval_ind != 0
