@@ -1255,6 +1255,78 @@ If you apply :func:`supertype` to other type objects (or non-type objects), a
     julia> supertype(Union{Float64,Int64})
     ERROR: `supertype` has no method matching supertype(::Type{Union{Float64,Int64}})
 
+Custom pretty-printing
+----------------------
+
+Often, one wants to customize how instances of a type are displayed.  This
+is accomplished by overloading the :func:`show` function.  For example,
+suppose we define a type to represent complex numbers in polar form::
+
+    type Polar{T<:Real} <: Number
+        r::T
+        Θ::T
+    end
+    Polar(r::Real,Θ::Real) = Polar(promote(r,Θ)...)
+
+Here, we've added a custom constructor function so that it can take
+arguments of different ``Real`` types and promote them to a commmon type
+(see :ref:`man-conversion-and-promotion`). (Of course, we would have to define
+lots of other methods, too, to make it act like a ``Number``,
+e.g. ``+``, ``*``, ``one``, ``zero``, promotion rules and so on.)
+By default, instances of this type display rather simply, with information
+about the type name and the field values::
+
+    julia> Polar(3,4.0)
+    Polar{Float64}(3.0,4.0)
+
+If we want it to display instead as ``3.0 * exp(4.0im)``, we would
+define the following method to print the object to a given output
+object ``io`` (representing a file, terminal, buffer, etcetera; see
+:ref:`man-networking-and-streams`)::
+
+    Base.show(io::IO, z::Polar) = print(io, z.r, " * exp(", z.Θ, "im)")
+
+More fine-grained control over display of ``Polar`` objects is possible.
+In particular, sometimes one wants both a verbose multi-line printing
+format, used for displaying an single object in the REPL and other interactive
+environments, and also a more compact single-line format used for :func:`print`
+or for displaying the object as part of another object (e.g. in an array).
+Although by default the ``show(io, z)`` function is called in both cases,
+you can define a *different* multi-line format for displaying an object
+by overloading a three-argument form of ``show`` that takes the ``text/plain``
+MIME type as its second argument (see :ref:`man-multimedia-io`), for example::
+
+    Base.show{T}(io::IO, ::MIME"text/plain", z::Polar{T}) =
+        println(io, "Polar{$T} complex number:\n   ", z)
+
+(Note that ``println(..., z)`` here will call the 2-argument ``show(io, z)`` method.)
+This results in::
+
+    julia> Polar(3, 4.0)
+    Polar{Float64} complex number:
+       3.0 * exp(4.0im)
+
+    julia> [Polar(3, 4.0), Polar(4.0,5.3)]
+    2-element Array{Polar{Float64},1}:
+     3.0 * exp(4.0im)
+     4.0 * exp(5.3im)
+
+where the single-line ``show(io, z)`` form is still used for an array of ``Polar``
+values.   Technically, the REPL calls ``display(z)`` to display the result of
+executing a line, which defaults to ``show(STDOUT, MIME("text/plain"), z)``, which
+in turn defaults to ``show(STDOUT, z)``, but you should *not* define new :func:`display`
+methods unless you are defining a new multimedia display handler
+(see :ref:`man-multimedia-io`).
+
+Moreover, you can also define ``show`` methods for other MIME types in order
+to enable richer display (HTML, images, etcetera) of objects in environments
+that support this (e.g. IJulia).   For example, we can define formatted
+HTML display of ``Polar`` objects, with superscripts and italics, via::
+
+    Base.show{T}(io::IO, ::MIME"text/html", z::Polar{T}) =
+        println(io, "<code>Polar{$T}<code> complex number: ",
+                z.r, " <i>e</i><sup>", z.Θ, " <i>i</i></sup>")
+
 .. _man-val-trick:
 
 "Value types"
