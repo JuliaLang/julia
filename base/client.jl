@@ -40,6 +40,7 @@ text_colors
 
 have_color = false
 default_color_warn = :red
+default_color_error = :red
 default_color_info = :cyan
 if is_windows()
     default_color_input = :normal
@@ -57,6 +58,7 @@ function repl_color(key, default)
     haskey(text_colors, c_conv) ? c_conv : default
 end
 
+error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
 warn_color()   = repl_color("JULIA_WARN_COLOR", default_color_warn)
 info_color()   = repl_color("JULIA_INFO_COLOR", default_color_info)
 input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
@@ -101,7 +103,7 @@ end
 
 display_error(er) = display_error(er, [])
 function display_error(er, bt)
-    with_output_color(:red, STDERR) do io
+    with_output_color(Base.error_color(), STDERR) do io
         print(io, "ERROR: ")
         showerror(io, er, bt)
         println(io)
