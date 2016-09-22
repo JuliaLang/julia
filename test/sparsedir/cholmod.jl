@@ -107,6 +107,10 @@ chma = ldltfact(A)                      # LDL' form
 x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
+@test size(chma) == size(A)
+chmal = CHOLMOD.FactorComponent(chma, :L)
+@test size(chmal) == size(A)
+@test size(chmal, 1) == size(A, 1)
 
 chma = cholfact(A)                      # LL' form
 @test CHOLMOD.isvalid(chma)
@@ -115,6 +119,10 @@ x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(chma) == 489
 @test nnz(cholfact(A, perm=1:size(A,1))) > nnz(chma)
+@test size(chma) == size(A)
+chmal = CHOLMOD.FactorComponent(chma, :L)
+@test size(chmal) == size(A)
+@test size(chmal, 1) == size(A, 1)
 
 #lp_afiro example
 afiro = CHOLMOD.Sparse(27, 51,
