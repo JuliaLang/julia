@@ -300,7 +300,6 @@ import Base.Meta: isexpr
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
 @test isa(broadcast(+, [true]), Array{Int,1})
-@test Base.promote_op(Float64, Bool) === Float64
 
 # issue #17304
 let foo = [[1,2,3],[4,5,6],[7,8,9]]

@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
+using Base: promote_eltype_op, _default_eltype, linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 import Base: broadcast
@@ -16,7 +16,7 @@ export broadcast_getindex, broadcast_setindex!
 broadcast(f) = f()
 @inline broadcast(f, x::Number...) = f(x...)
 @inline broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
-@inline broadcast(f, As::AbstractArray...) = broadcast_t(f, promote_eltype_op(f, As...), As...)
+@inline broadcast(f, As::AbstractArray...) = broadcast_c(f, Array, As...)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
@@ -127,14 +127,14 @@ Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 ## Broadcasting core
 # nargs encodes the number of As arguments (which matches the number
 # of keeps). The first two type parameters are to ensure specialization.
-@generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}})
+@generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
     quote
         $(Expr(:meta, :noinline))
         # destructure the keeps and As tuples
         @nexprs $nargs i->(A_i = As[i])
         @nexprs $nargs i->(keep_i = keeps[i])
         @nexprs $nargs i->(Idefault_i = Idefaults[i])
-        @simd for I in CartesianRange(indices(B))
+        @simd for I in iter
             # reverse-broadcast the indices
             @nexprs $nargs i->(I_i = newindex(I, keep_i, Idefault_i))
             # extract array values
@@ -148,7 +148,7 @@ end
 
 # For BitArray outputs, we cache the result in a "small" Vector{Bool},
 # and then copy in chunks into the output
-@generated function _broadcast!{K,ID,AT,nargs}(f, B::BitArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}})
+@generated function _broadcast!{K,ID,AT,nargs}(f, B::BitArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
     quote
         $(Expr(:meta, :noinline))
         # destructure the keeps and As tuples
@@ -159,7 +159,7 @@ end
         Bc = B.chunks
         ind = 1
         cind = 1
-        @simd for I in CartesianRange(indices(B))
+        @simd for I in iter
             # reverse-broadcast the indices
             @nexprs $nargs i->(I_i = newindex(I, keep_i, Idefault_i))
             # extract array values
@@ -193,12 +193,12 @@ as in `broadcast!(f, A, A, B)` to perform `A[:] = broadcast(f, A, B)`.
     shape = indices(B)
     check_broadcast_indices(shape, As...)
     keeps, Idefaults = map_newindexer(shape, As)
-    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs})
-    B
+    iter = CartesianRange(shape)
+    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
+    return B
 end
 
 # broadcast with computed element type
-
 @generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter, st, count)
     quote
         $(Expr(:meta, :noinline))
@@ -233,12 +233,8 @@ end
     end
 end
 
-function broadcast_t(f, ::Type{Any}, As...)
-    shape = broadcast_indices(As...)
-    iter = CartesianRange(shape)
-    if isempty(iter)
-        return similar(Array{Any}, shape)
-    end
+# broadcast methods that dispatch on the type found by inference
+function _broadcast_t(f, ::Type{Any}, shape, iter, As...)
     nargs = length(As)
     keeps, Idefaults = map_newindexer(shape, As)
     st = start(iter)
@@ -248,17 +244,45 @@ function broadcast_t(f, ::Type{Any}, As...)
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
+@inline function _broadcast_t(f, T, shape, iter, As...)
+    B = similar(Array{T}, shape)
+    nargs = length(As)
+    keeps, Idefaults = map_newindexer(shape, As)
+    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
+    return B
+end
 
-@inline broadcast_t(f, T, As...) = broadcast!(f, similar(Array{T}, broadcast_indices(As...)), As...)
+# broadcast method that uses inference to find the type, but preserves abstract
+# container types when possible (used by binary elementwise operators)
+@inline broadcast_t(f, As...) = broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
+ftype(f, A) = typeof(a -> f(a))
+ftype(f, A...) = typeof(a -> f(a...))
+ftype(T::DataType, A) = Type{T}
+ftype(T::DataType, A...) = Type{T}
+ziptype(A) = Tuple{eltype(A)}
+ziptype(A, B) = Iterators.Zip2{Tuple{eltype(A)}, Tuple{eltype(B)}}
+@inline ziptype(A, B, C, D...) = Iterators.Zip{Tuple{eltype(A)}, ziptype(B, C, D...)}
+
+# broadcast methods that dispatch on the type of the final container
+@inline function broadcast_c(f, ::Type{Array}, As...)
+    T = _default_eltype(Base.Generator{ziptype(As...), ftype(f, As...)})
+    shape = broadcast_indices(As...)
+    iter = CartesianRange(shape)
+    if isleaftype(T)
+        return broadcast_t(f, T, shape, iter, As...)
+    end
+    if isempty(iter)
+        return similar(Array{T}, shape)
+    end
+    return broadcast_t(f, Any, shape, iter, As...)
+end
 function broadcast_c(f, ::Type{Tuple}, As...)
     shape = broadcast_indices(As...)
-    check_broadcast_indices(shape, As...)
     n = length(shape[1])
     return ntuple(k->f((_broadcast_getindex(A, k) for A in As)...), n)
 end
 @inline broadcast_c(f, ::Type{Any}, a...) = f(a...)
-@inline broadcast_c(f, ::Type{Array}, As...) = broadcast_t(f, promote_eltype_op(f, As...), As...)
 
 """
     broadcast(f, As...)
@@ -441,10 +465,10 @@ end
 ## elementwise operators ##
 
 for op in (:÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
-    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast($op, A, B)
+    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast_t($op, A, B)
 end
-.+(As::AbstractArray...) = broadcast(+, As...)
-.*(As::AbstractArray...) = broadcast(*, As...)
+.+(As::AbstractArray...) = broadcast_t(+, As...)
+.*(As::AbstractArray...) = broadcast_t(*, As...)
 
 # ## element-wise comparison operators returning BitArray ##
 

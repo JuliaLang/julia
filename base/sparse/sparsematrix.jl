@@ -1777,7 +1777,6 @@ end # macro
 (.-)(A::Number, B::SparseMatrixCSC) = A .- Array(B)
 ( -)(A::Array , B::SparseMatrixCSC) = A  - Array(B)
 
-(.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(*, A, B)
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
 

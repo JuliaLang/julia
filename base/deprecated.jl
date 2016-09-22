@@ -1034,6 +1034,17 @@ end))
 @deprecate_binding cycle     Iterators.cycle
 @deprecate_binding repeated  Iterators.repeated
 
+# promote_op method where the operator is also a type
+function promote_op(op::Type, Ts::Type...)
+    depwarn("promote_op(op::Type, ::Type...) is deprecated as it is no " *
+            "longer needed in Base. If you need its functionality, consider " *
+            "defining it locally.", :promote_op)
+    if isdefined(Core, :Inference)
+        return Core.Inference.return_type(op, Tuple{Ts...})
+    end
+    return op
+end
+
 # NOTE: Deprecation of Channel{T}() is implemented in channels.jl.
 # To be removed from there when 0.6 deprecations are removed.
 
