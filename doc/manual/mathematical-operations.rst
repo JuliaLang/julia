@@ -365,7 +365,7 @@ such definitions make sense.
 Moreover, these functions (like any Julia function) can be applied
 in "vectorized" fashion to arrays and other collections with the
 syntax ``f.(A)``, e.g. ``sin.(A)`` will compute the elementwise
-sine of each element of an array ``A``.  See :ref:`man-dot-vectorizing`:.
+sine of each element of an array ``A``.  See :ref:`man-dot-vectorizing`.
 
 .. _man-numerical-conversions:
 
