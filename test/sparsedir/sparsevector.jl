@@ -738,6 +738,9 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
         xc = copy(x)
         @test is(scale!(xc, 2.5), xc)
         @test exact_equal(xc, sx)
+        xc = copy(x)
+        @test is(scale!(2.5, xc), xc)
+        @test exact_equal(xc, sx)
     end
 
     # dot
