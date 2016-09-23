@@ -706,6 +706,8 @@ Text I/O
 
    Return the nominal size of the screen that may be used for rendering output to this io object
 
+.. _man-multimedia-io:
+
 Multimedia I/O
 --------------
 
@@ -1076,4 +1078,3 @@ Network I/O
    .. Docstring generated from Julia source
 
    The 32-bit byte-order-mark indicates the native byte order of the host machine. Little-endian machines will contain the value ``0x04030201``\ . Big-endian machines will contain the value ``0x01020304``\ .
-
