@@ -494,11 +494,14 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     int last_in = ptls->in_pure_callback;
     jl_module_t *last_m = ptls->current_module;
     jl_module_t *task_last_m = ptls->current_task->current_module;
+    size_t last_age = jl_get_ptls_states()->world_age;
     assert(jl_svec_len(linfo->def->sparam_syms) == jl_svec_len(sparam_vals));
     JL_TRY {
         ptls->in_pure_callback = 1;
         // need to eval macros in the right module
         ptls->current_task->current_module = ptls->current_module = linfo->def->module;
+        // and the right world
+        ptls->world_age = generator->def->min_world;
 
         ex = jl_exprn(lambda_sym, 2);
 
@@ -519,7 +522,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         // invoke code generator
         assert(jl_nparams(tt) == jl_array_len(argnames) ||
                (linfo->def->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
-        // TODO: set world to that of the generator while calling func
         jl_array_ptr_set(body->args, 1,
                 jl_call_staged(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt)));
 
@@ -549,6 +551,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_lineno = last_lineno;
         ptls->current_module = last_m;
         ptls->current_task->current_module = task_last_m;
+        ptls->world_age = last_age;
     }
     JL_CATCH {
         ptls->in_pure_callback = last_in;
