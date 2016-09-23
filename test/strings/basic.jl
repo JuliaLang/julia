@@ -55,6 +55,7 @@ let
     # make symbol with invalid char
     sym = Symbol(Char(0xdcdb))
     @test string(sym) == string(Char(0xdcdb))
+    @test String(sym) == string(Char(0xdcdb))
     @test expand(sym) === sym
     res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
     @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
