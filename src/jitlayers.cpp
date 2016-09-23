@@ -27,6 +27,8 @@
 #include <polly/CodeGen/CodegenCleanup.h>
 #endif
 
+#include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Instrumentation.h>
@@ -95,6 +97,66 @@ void jl_init_jit(Type *T_pjlvalue_)
 
 // Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
 
+static void addAddressSanitizerPasses(const PassManagerBuilder &PMB,
+                                      legacy::PassManagerBase &PM) {
+#   if JL_LLVM_VERSION >= 30700 && JL_LLVM_VERSION < 30800
+    // LLVM 3.7 BUG: ASAN pass doesn't properly initialize its dependencies
+    initializeTargetLibraryInfoWrapperPassPass(*PassRegistry::getPassRegistry());
+#   endif
+    PM.add(createAddressSanitizerFunctionPass());
+    PM.add(createAddressSanitizerModulePass());
+}
+
+static void addMemorySanitizerPass(const PassManagerBuilder &PMB,
+                                   PassManagerBase &PM) {
+  PM.add(createMemorySanitizerPass());
+
+  // MemorySanitizer inserts complex instrumentation that mostly follows
+  // the logic of the original code, but operates on "shadow" values.
+  // It can benefit from re-running some general purpose optimization passes.
+  if (PMB.OptLevel > 0) {
+    PM.add(createEarlyCSEPass());
+    PM.add(createReassociatePass());
+    PM.add(createLICMPass());
+    PM.add(createGVNPass());
+    PM.add(createInstructionCombiningPass());
+    PM.add(createDeadStoreEliminationPass());
+  }
+}
+
+static void addVerifierPass(const PassManagerBuilder &PMB,
+                            legacy::PassManagerBase &PM) {
+    PM.add(createVerifierPass());
+}
+
+static void addJuliaLowerGCFramePass(const PassManagerBuilder &PMB,
+                                     legacy::PassManagerBase &PM) {
+    PM.add(createLowerGCFramePass(tbaa_const));
+}
+
+static void addJuliaLowerPTLSPass(const PassManagerBuilder &Builder,
+                                  legacy::PassManagerBase &PM) {
+    PM.add(createLowerPTLSPass(imaging_mode, tbaa_const));
+}
+
+static void addJuliaLowerSIMDPass(const PassManagerBuilder &Builder,
+                                  legacy::PassManagerBase &PM) {
+    PM.add(createLowerSimdLoopPass());
+}
+
+#ifdef USE_POLLY
+static void addPollyPasses(const PassManagerBuilder &Builder,
+                           legacy::PassManagerBase &PM) {
+    // LCSSA (which has already run at this point due to the dependencies of the
+    // above passes) introduces redundant phis that hinder Polly. Therefore we
+    // run InstCombine here to remove them.
+    PM.add(createInstructionCombiningPass());
+    PM.add(polly::createCodePreparationPass());
+    polly::registerPollyPasses(*PM);
+    PM.add(polly::createCodegenCleanupPass());
+}
+#endif
+
 // this defines the set of optimization passes defined for Julia at various optimization levels
 #if JL_LLVM_VERSION >= 30700
 void addOptimizationPasses(legacy::PassManager *PM)
@@ -102,135 +164,49 @@ void addOptimizationPasses(legacy::PassManager *PM)
 void addOptimizationPasses(PassManager *PM)
 #endif
 {
-    PM->add(createLowerGCFramePass(tbaa_gcframe));
+
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass());
 #endif
 
-#if defined(JL_ASAN_ENABLED)
-#   if JL_LLVM_VERSION >= 30700 && JL_LLVM_VERSION < 30800
-    // LLVM 3.7 BUG: ASAN pass doesn't properly initialize its dependencies
-    initializeTargetLibraryInfoWrapperPassPass(*PassRegistry::getPassRegistry());
-#   endif
-    PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(JL_MSAN_ENABLED)
-    PM->add(llvm::createMemorySanitizerPass(true));
-#endif
-    if (jl_options.opt_level == 0) {
-        PM->add(createLowerPTLSPass(imaging_mode, tbaa_const));
-        return;
-    }
 #if JL_LLVM_VERSION >= 30700
     PM->add(createTargetTransformInfoWrapperPass(jl_TargetMachine->getTargetIRAnalysis()));
 #else
     jl_TargetMachine->addAnalysisPasses(*PM);
 #endif
-#if JL_LLVM_VERSION >= 30800
-    PM->add(createTypeBasedAAWrapperPass());
-#else
-    PM->add(createTypeBasedAliasAnalysisPass());
-#endif
-    if (jl_options.opt_level >= 3) {
-#if JL_LLVM_VERSION >= 30800
-        PM->add(createBasicAAWrapperPass());
-#else
-        PM->add(createBasicAliasAnalysisPass());
-#endif
-    }
-    // list of passes from vmkit
-    PM->add(createCFGSimplificationPass()); // Clean up disgusting code
-    PM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
 
-#ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    auto PMB = PassManagerBuilder();
+    PMB.OptLevel = jl_options.opt_level;
+    PMB.Inliner = createAlwaysInlinerPass();
+
+    // FIXME: EP_EarlyAsPossible doesn't work, running it later results in segfaulting code
+    // PMB.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
+    //                  addJuliaLowerGCFramePass);
+    PM->add(createLowerGCFramePass(tbaa_gcframe));
+    PMB.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
+                     addJuliaLowerPTLSPass);
+    PMB.addExtension(PassManagerBuilder::EP_LoopOptimizerEnd,
+                     addJuliaLowerSIMDPass);
+
+#if defined(JL_ASAN_ENABLED)
+    PMB.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                     addAddressSanitizerPasses);
+    PMB.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+                     addAddressSanitizerPasses);
 #endif
-    // Let the InstCombine pass remove the unnecessary load of
-    // safepoint address first
-    PM->add(createLowerPTLSPass(imaging_mode, tbaa_const));
-    PM->add(createSROAPass());                 // Break up aggregate allocas
-#ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
-#endif
-    PM->add(createJumpThreadingPass());        // Thread jumps.
-    // NOTE: CFG simp passes after this point seem to hurt native codegen.
-    // See issue #6112. Should be re-evaluated when we switch to MCJIT.
-    //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
-#ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass()); // Combine silly seq's
+#if defined(JL_MSAN_ENABLED)
+    PMB.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                     addMemorySanitizerPass);
+    PMB.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+                     addMemorySanitizerPass);
 #endif
 
-    //PM->add(createCFGSimplificationPass());    // Merge & remove BBs
-    PM->add(createReassociatePass());          // Reassociate expressions
-
-    // this has the potential to make some things a bit slower
-    //PM->add(createBBVectorizePass());
-
-    PM->add(createEarlyCSEPass()); //// ****
-
-    PM->add(createLoopIdiomPass()); //// ****
-    PM->add(createLoopRotatePass());           // Rotate loops.
 #ifdef USE_POLLY
-    // LCSSA (which has already run at this point due to the dependencies of the
-    // above passes) introduces redundant phis that hinder Polly. Therefore we
-    // run InstCombine here to remove them.
-    PM->add(createInstructionCombiningPass());
-    PM->add(polly::createCodePreparationPass());
-    polly::registerPollyPasses(*PM);
-    PM->add(polly::createCodegenCleanupPass());
-#endif
-    // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
-    PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
-    PM->add(createLICMPass());                 // Hoist loop invariants
-    PM->add(createLoopUnswitchPass());         // Unswitch loops.
-    // Subsequent passes not stripping metadata from terminator
-#ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass());
-#endif
-    PM->add(createIndVarSimplifyPass());       // Canonicalize indvars
-    PM->add(createLoopDeletionPass());         // Delete dead loops
-#if JL_LLVM_VERSION >= 30500
-    PM->add(createSimpleLoopUnrollPass());     // Unroll small loops
-#else
-    PM->add(createLoopUnrollPass());           // Unroll small loops
-#endif
-#if JL_LLVM_VERSION < 30500 && !defined(INSTCOMBINE_BUG)
-    PM->add(createLoopVectorizePass());        // Vectorize loops
-#endif
-    //PM->add(createLoopStrengthReducePass());   // (jwb added)
-
-#ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass()); // Clean up after the unroller
-#endif
-    PM->add(createGVNPass());                  // Remove redundancies
-    PM->add(createMemCpyOptPass());            // Remove memcpy / form memset
-    PM->add(createSCCPPass());                 // Constant prop with SCCP
-
-    // Run instcombine after redundancy elimination to exploit opportunities
-    // opened up by them.
-    PM->add(createSinkingPass()); ////////////// ****
-    PM->add(createInstructionSimplifierPass());///////// ****
-#ifndef INSTCOMBINE_BUG
-    PM->add(createInstructionCombiningPass());
-#endif
-    PM->add(createJumpThreadingPass());         // Thread jumps
-    PM->add(createDeadStoreEliminationPass());  // Delete dead stores
-#if !defined(INSTCOMBINE_BUG)
-    if (jl_options.opt_level >= 3) {
-        PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
-    }
+    PMB.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
+                     addPollyPasses);
 #endif
 
-    PM->add(createAggressiveDCEPass());         // Delete dead instructions
-#if !defined(INSTCOMBINE_BUG)
-    if (jl_options.opt_level >= 3)
-        PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
-#endif
-#if JL_LLVM_VERSION >= 30500
-    PM->add(createLoopVectorizePass());         // Vectorize loops
-    PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
-#endif
-    //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
+    PMB.populateModulePassManager(*PM);
 }
 
 #ifdef USE_ORCJIT
