@@ -311,7 +311,7 @@ end
 let f17314 = x -> x < 0 ? false : x
     @test eltype(broadcast(f17314, 1:3)) === Int
     @test eltype(broadcast(f17314, -1:1)) === Integer
-    @test eltype(broadcast(f17314, Int[])) === Any
+    @test eltype(broadcast(f17314, Int[])) === Union{Bool,Int}
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects
@@ -336,3 +336,19 @@ end
 @test broadcast(+, 1.0, (0, -2.0)) == (1.0,-1.0)
 @test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
 @test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]
+
+# Ensure that even strange constructors that break `T(x)::T` work with broadcast
+immutable StrangeType18623 end
+StrangeType18623(x) = x
+StrangeType18623(x,y) = (x,y)
+@test @inferred broadcast(StrangeType18623, 1:3) == [1,2,3]
+@test @inferred broadcast(StrangeType18623, 1:3, 4:6) == [(1,4),(2,5),(3,6)]
+
+@test typeof(Int.(Number[1, 2, 3])) === typeof((x->Int(x)).(Number[1, 2, 3]))
+
+@test @inferred broadcast(CartesianIndex, 1:2) == [CartesianIndex(1), CartesianIndex(2)]
+@test @inferred broadcast(CartesianIndex, 1:2, 3:4) == [CartesianIndex(1,3), CartesianIndex(2,4)]
+
+# Issue 18622
+@test @inferred muladd.([1.0], [2.0], [3.0])::Vector{Float64} == [5.0]
+@test @inferred tuple.(1:3, 4:6, 7:9)::Vector{Tuple{Int,Int,Int}} == [(1,4,7), (2,5,8), (3,6,9)]
