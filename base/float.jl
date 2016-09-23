@@ -597,28 +597,45 @@ prevfloat(x::AbstractFloat) = nextfloat(x,-1)
 
 for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     for Tf in (Float32, Float64)
-        if sizeof(Ti) < sizeof(Tf) || Ti <: Unsigned # Tf(typemin(Ti))-1 is exact
-            @eval function trunc(::Type{$Ti},x::$Tf)
-                $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf)) || throw(InexactError())
-                unsafe_trunc($Ti,x)
-            end
-            @eval function convert(::Type{$Ti}, x::$Tf)
-                if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
-                    return unsafe_trunc($Ti,x)
-                else
-                    throw(InexactError())
+        if Ti <: Unsigned || sizeof(Ti) < sizeof(Tf)
+            # Here `Tf(typemin(Ti))-1` is exact, so we can compare the lower-bound
+            # directly. `Tf(typemax(Ti))+1` is either always exactly representable, or
+            # rounded to `Inf` (e.g. when `Ti==UInt128 && Tf==Float32`).
+            @eval begin
+                function trunc(::Type{$Ti},x::$Tf)
+                    if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
+                        return unsafe_trunc($Ti,x)
+                    else
+                        throw(InexactError())
+                    end
+                end
+                function convert(::Type{$Ti}, x::$Tf)
+                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                        return unsafe_trunc($Ti,x)
+                    else
+                        throw(InexactError())
+                    end
                 end
             end
-        else #
-            @eval function trunc(::Type{$Ti},x::$Tf)
-                $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti))) || throw(InexactError())
-                unsafe_trunc($Ti,x)
-            end
-            @eval function convert(::Type{$Ti}, x::$Tf)
-                if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
-                    return unsafe_trunc($Ti,x)
-                else
-                    throw(InexactError())
+        else
+            # Here `eps(Tf(typemin(Ti))) > 1`, so the only value which can be truncated to
+            # `Tf(typemin(Ti)` is itself. Similarly, `Tf(typemax(Ti))` is inexact and will
+            # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
+            # these types, but not for `Float16` or larger integer types.
+            @eval begin
+                function trunc(::Type{$Ti},x::$Tf)
+                    if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
+                        return unsafe_trunc($Ti,x)
+                    else
+                        throw(InexactError())
+                    end
+                end
+                function convert(::Type{$Ti}, x::$Tf)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
+                        return unsafe_trunc($Ti,x)
+                    else
+                        throw(InexactError())
+                    end
                 end
             end
         end
