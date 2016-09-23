@@ -338,6 +338,7 @@ julia> collect(take(a,3))
 ```
 """
 take(xs, n::Int) = Take(xs, n)
+take(xs::Take, n::Int) = Take(xs.xs, min(n, xs.n))
 
 eltype{I}(::Type{Take{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Take{I}}) = iteratoreltype(I)
@@ -391,6 +392,8 @@ julia> collect(drop(a,4))
 ```
 """
 drop(xs, n::Int) = Drop(xs, n)
+drop(xs::Take, n::Int) = Take(drop(xs.xs, n), max(0, xs.n - n))
+drop(xs::Drop, n::Int) = Drop(xs.xs, n + xs.n)
 
 eltype{I}(::Type{Drop{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Drop{I}}) = iteratoreltype(I)
