@@ -402,3 +402,27 @@ macro view(ex)
         throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
     end
 end
+
+"""
+    take(A::AbstractArray, n)
+
+Return a one-dimensional array view over at most the first `n` elements of `A`.
+See also [`view`](:func:`view`). Resizing `A` afterward is not allowed.
+"""
+function take(A::AbstractArray, n::Int)
+    inds = linearindices(A)
+    i, j = first(inds), last(inds)
+    view(A, i:min(i+n-1, j))
+end
+
+"""
+    drop(A::AbstractArray, n)
+
+Return a one-dimensional array view over all elements of `A` except the first
+`n`. See also [`view`](:func:`view`). Resizing `A` afterward is not allowed.
+"""
+function drop(A::Array, n::Int)
+    inds = linearindices(A)
+    i, j = first(inds), last(inds)
+    view(A, min(last(inds)+1, i+n):j)
+end
