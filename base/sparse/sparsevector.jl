@@ -1358,8 +1358,8 @@ end
 
 scale!(x::AbstractSparseVector, a::Real) = (scale!(nonzeros(x), a); x)
 scale!(x::AbstractSparseVector, a::Complex) = (scale!(nonzeros(x), a); x)
-scale!(a::Real, x::AbstractSparseVector) = scale!(nonzeros(x), a)
-scale!(a::Complex, x::AbstractSparseVector) = scale!(nonzeros(x), a)
+scale!(a::Real, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
+scale!(a::Complex, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 
 
 .*(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
