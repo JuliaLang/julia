@@ -5940,10 +5940,6 @@ static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
     // is disabled.
     HostFeatures["cx16"] = true;
 #endif
-#if defined(_CPU_PPC64_)
-    // Temporarily disable partword (i16) atomics due to LLVM bug(30451).
-    HostFeatures["partword-atomics"] = false;
-#endif
 
     // Figure out if we know the cpu_target
     cpu = (strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target :
