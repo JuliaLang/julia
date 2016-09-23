@@ -1260,7 +1260,9 @@ Custom pretty-printing
 
 Often, one wants to customize how instances of a type are displayed.  This
 is accomplished by overloading the :func:`show` function.  For example,
-suppose we define a type to represent complex numbers in polar form::
+suppose we define a type to represent complex numbers in polar form:
+
+.. testcode::
 
     type Polar{T<:Real} <: Number
         r::T
@@ -1268,21 +1270,25 @@ suppose we define a type to represent complex numbers in polar form::
     end
     Polar(r::Real,Θ::Real) = Polar(promote(r,Θ)...)
 
-Here, we've added a custom constructor function so that it can take
-arguments of different ``Real`` types and promote them to a commmon type
-(see :ref:`man-conversion-and-promotion`). (Of course, we would have to define
-lots of other methods, too, to make it act like a ``Number``,
-e.g. ``+``, ``*``, ``one``, ``zero``, promotion rules and so on.)
-By default, instances of this type display rather simply, with information
-about the type name and the field values::
+.. testoutput::
+   :hide:
 
-    julia> Polar(3,4.0)
-    Polar{Float64}(3.0,4.0)
+   Polar{T<:Real}
+
+Here, we've added a custom constructor function so that it can take arguments of
+different ``Real`` types and promote them to a commmon type (see
+:ref:`man-constructors` and :ref:`man-conversion-and-promotion`). (Of course, we
+would have to define lots of other methods, too, to make it act like a
+``Number``, e.g. ``+``, ``*``, ``one``, ``zero``, promotion rules and so on.) By
+default, instances of this type display rather simply, with information about
+the type name and the field values, as e.g. ``Polar{Float64}(3.0,4.0)``.
 
 If we want it to display instead as ``3.0 * exp(4.0im)``, we would
 define the following method to print the object to a given output
 object ``io`` (representing a file, terminal, buffer, etcetera; see
-:ref:`man-networking-and-streams`)::
+:ref:`man-networking-and-streams`):
+
+.. testcode::
 
     Base.show(io::IO, z::Polar) = print(io, z.r, " * exp(", z.Θ, "im)")
 
@@ -1294,13 +1300,17 @@ or for displaying the object as part of another object (e.g. in an array).
 Although by default the ``show(io, z)`` function is called in both cases,
 you can define a *different* multi-line format for displaying an object
 by overloading a three-argument form of ``show`` that takes the ``text/plain``
-MIME type as its second argument (see :ref:`man-multimedia-io`), for example::
+MIME type as its second argument (see :ref:`man-multimedia-io`), for example:
+
+.. testcode::
 
     Base.show{T}(io::IO, ::MIME"text/plain", z::Polar{T}) =
-        println(io, "Polar{$T} complex number:\n   ", z)
+        print(io, "Polar{$T} complex number:\n   ", z)
 
-(Note that ``println(..., z)`` here will call the 2-argument ``show(io, z)`` method.)
-This results in::
+(Note that ``print(..., z)`` here will call the 2-argument ``show(io, z)`` method.)
+This results in:
+
+.. doctest::
 
     julia> Polar(3, 4.0)
     Polar{Float64} complex number:
@@ -1321,11 +1331,22 @@ methods unless you are defining a new multimedia display handler
 Moreover, you can also define ``show`` methods for other MIME types in order
 to enable richer display (HTML, images, etcetera) of objects in environments
 that support this (e.g. IJulia).   For example, we can define formatted
-HTML display of ``Polar`` objects, with superscripts and italics, via::
+HTML display of ``Polar`` objects, with superscripts and italics, via:
+
+.. testcode::
 
     Base.show{T}(io::IO, ::MIME"text/html", z::Polar{T}) =
         println(io, "<code>Polar{$T}<code> complex number: ",
                 z.r, " <i>e</i><sup>", z.Θ, " <i>i</i></sup>")
+
+A ``Polar`` object will then display automatically using HTML in an environment
+that supports HTML display, but you can call ``show`` manually to get HTML
+output if you want:
+
+.. doctest::
+
+   julia> show(STDOUT, "text/html", Polar(3.0,4.0))
+   <code>Polar{Float64}<code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
 
 .. _man-val-trick:
 
