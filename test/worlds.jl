@@ -150,3 +150,16 @@ let ex = t265.exception
     cmp = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
     @test contains(str, cmp)
 end
+
+# test for generated function correctness
+# and min/max world computation validity of cache_method
+f_gen265(x) = 1
+@generated g_gen265(x) = f_gen265(x)
+@generated h_gen265(x) = :(f_gen265(x))
+f_gen265(x::Int) = 2
+f_gen265(x::Type{Int}) = 3
+@generated g_gen265b(x) = f_gen265(x)
+@test h_gen265(0) == 2
+@test g_gen265(0) == 1
+@test f_gen265(Int) == 3
+@test g_gen265b(0) == 3
