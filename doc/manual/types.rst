@@ -1348,6 +1348,10 @@ output if you want:
    julia> show(STDOUT, "text/html", Polar(3.0,4.0))
    <code>Polar{Float64}<code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
 
+.. raw:: html
+
+   <p>An HTML renderer would display this as: <code>Polar{Float64}<code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p>
+
 .. _man-val-trick:
 
 "Value types"
