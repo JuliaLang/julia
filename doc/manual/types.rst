@@ -1288,7 +1288,7 @@ object ``io`` (representing a file, terminal, buffer, etcetera; see
 
 More fine-grained control over display of ``Polar`` objects is possible.
 In particular, sometimes one wants both a verbose multi-line printing
-format, used for displaying an single object in the REPL and other interactive
+format, used for displaying a single object in the REPL and other interactive
 environments, and also a more compact single-line format used for :func:`print`
 or for displaying the object as part of another object (e.g. in an array).
 Although by default the ``show(io, z)`` function is called in both cases,
