@@ -21,7 +21,9 @@ $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled: $(BUILDDIR)/patchelf-$(PATC
 
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-checked: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
+ifeq (,$(filter $(ARCH), powerpc64le ppc64le)) # https://github.com/NixOS/patchelf/issues/105
 	$(MAKE) -C $(dir $@) check
+endif
 endif
 	echo 1 > $@
 
