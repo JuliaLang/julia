@@ -7,7 +7,7 @@ index c79b263..ee37d05 100644
  ENDIF()
  
 +IF (NOT USE_OPENSSL)
-+	OPTION( USE_MBEDTLS		"Link with and use mbedtls library"             ON )
++	OPTION( USE_MBEDTLS		"Link with and use mbedtls library"             OFF )
 +ENDIF()
 +
  # This variable will contain the libraries we need to put into
