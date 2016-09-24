@@ -61,6 +61,16 @@ Takes the expression `x` and returns an equivalent expression with all macros re
 """
 macroexpand(x::ANY) = ccall(:jl_macroexpand, Any, (Any,), x)
 
+"""
+@macroexpand
+
+Return equivalent expression with all macros removed (expanded).
+"""
+macro macroexpand(code)
+    code_expanded = macroexpand(code)
+    Expr(:quote, code_expanded)
+end
+
 ## misc syntax ##
 
 """

@@ -1052,6 +1052,7 @@ export
     expand,
     gensym,
     macroexpand,
+    @macroexpand,
     parse,
 
 # help and reflection
