@@ -62,7 +62,7 @@ Takes the expression `x` and returns an equivalent expression with all macros re
 macroexpand(x::ANY) = ccall(:jl_macroexpand, Any, (Any,), x)
 
 """
-@macroexpand
+    @macroexpand
 
 Return equivalent expression with all macros removed (expanded).
 """
