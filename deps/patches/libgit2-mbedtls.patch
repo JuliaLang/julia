@@ -1,8 +1,8 @@
 diff --git a/.travis.yml b/.travis.yml
-index bfc0fac..0ef35b6 100644
+index 2f3ffe3..f4e5dca 100644
 --- a/.travis.yml
 +++ b/.travis.yml
-@@ -45,6 +45,16 @@ matrix:
+@@ -48,6 +48,16 @@ matrix:
         - VALGRIND=1
           OPTIONS="-DBUILD_CLAR=ON -DBUILD_EXAMPLES=OFF -DDEBUG_POOL=ON -DCMAKE_BUILD_TYPE=Debug"
       os: linux
@@ -20,7 +20,7 @@ index bfc0fac..0ef35b6 100644
     - env: COVERITY=1
     - env:
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 93a9e47..b201cff 100644
+index c79b263..ee37d05 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -88,7 +88,7 @@ IF(MSVC)
@@ -32,20 +32,18 @@ index 93a9e47..b201cff 100644
  ENDIF()
  
  CHECK_STRUCT_HAS_MEMBER ("struct stat" st_mtim "sys/types.h;sys/stat.h"
-@@ -109,7 +109,11 @@ ELSE ()
+@@ -112,6 +112,10 @@ IF (HAVE_STRUCT_STAT_NSEC OR WIN32)
+ 	OPTION( USE_NSEC		"Care about sub-second file mtimes and ctimes"	OFF )
  ENDIF()
  
- IF (HAVE_STRUCT_STAT_NSEC OR WIN32)
--	OPTION( USE_NSEC		"Care about sub-second file mtimes and ctimes"	ON  )
-+	OPTION( USE_NSEC		"Care about sub-second file mtimes and ctimes"	ON )
++IF (NOT USE_OPENSSL)
++	OPTION( USE_MBEDTLS		"Link with and use mbedtls library"             ON )
 +ENDIF()
 +
-+IF (NOT USE_OPENSSL)
-+	OPTION( USE_MBEDTLS     "Link with and use mbedTLS library"             ON )
- ENDIF()
- 
  # This variable will contain the libraries we need to put into
-@@ -283,6 +287,10 @@ ELSE ()
+ # libgit2.pc's Requires.private. That is, what we're linking to or
+ # what someone who's statically linking us needs to link to.
+@@ -277,6 +281,10 @@ ELSE ()
  		FIND_PACKAGE(OpenSSL)
  	ENDIF ()
  
@@ -56,7 +54,7 @@ index 93a9e47..b201cff 100644
  	IF (CURL_FOUND)
  		ADD_DEFINITIONS(-DGIT_CURL)
  		INCLUDE_DIRECTORIES(${CURL_INCLUDE_DIRS})
-@@ -315,6 +323,9 @@ ELSEIF (OPENSSL_FOUND AND NOT SHA1_TYPE STREQUAL "builtin")
+@@ -309,6 +317,9 @@ ELSEIF (OPENSSL_FOUND AND NOT SHA1_TYPE STREQUAL "builtin")
  	ELSE()
  		SET(LIBGIT2_PC_REQUIRES "${LIBGIT2_PC_REQUIRES} openssl")
  	ENDIF ()
@@ -66,7 +64,7 @@ index 93a9e47..b201cff 100644
  ELSE()
  	FILE(GLOB SRC_SHA1 src/hash/hash_generic.c)
  ENDIF()
-@@ -542,6 +553,11 @@ IF (OPENSSL_FOUND)
+@@ -534,6 +545,11 @@ IF (OPENSSL_FOUND)
    SET(SSL_LIBRARIES ${OPENSSL_LIBRARIES})
  ENDIF()
  
@@ -78,7 +76,7 @@ index 93a9e47..b201cff 100644
  
  
  IF (THREADSAFE)
-@@ -689,7 +705,7 @@ IF (BUILD_CLAR)
+@@ -679,7 +695,7 @@ IF (BUILD_CLAR)
  	ENDIF ()
  
  	ENABLE_TESTING()
@@ -158,12 +156,12 @@ index 0000000..2f4adbc
 +    MBEDCRYPTO_LIBRARY
 +)
 diff --git a/script/cibuild.sh b/script/cibuild.sh
-index 979eb0c..634fc74 100755
+index 00cde0a..2191e37 100755
 --- a/script/cibuild.sh
 +++ b/script/cibuild.sh
-@@ -15,6 +15,11 @@ curl -L https://github.com/ethomson/poxyproxy/releases/download/v0.1.0/poxyproxy
- # Run this early so we know it's ready by the time we need it
- java -jar poxyproxy.jar -d --port 8080 --credentials foo:bar &
+@@ -6,6 +6,11 @@ then
+ 	exit $?;
+ fi
  
 +if [ -n "$MBEDTLS" ];
 +then
@@ -186,13 +184,13 @@ index 0000000..fda7abc
 +git checkout mbedtls-2.1.2
 +make CFLAGS='-fPIC -fpic' -j2 lib
 diff --git a/src/global.c b/src/global.c
-index eee0aea..1803810 100644
+index adf353d..bdad772 100644
 --- a/src/global.c
 +++ b/src/global.c
-@@ -10,7 +10,11 @@
+@@ -9,7 +9,11 @@
+ #include "hash.h"
  #include "sysdir.h"
  #include "filter.h"
- #include "merge_driver.h"
 +#ifdef GIT_OPENSSL
  #include "openssl_stream.h"
 +#elif GIT_MBEDTLS
@@ -201,9 +199,9 @@ index eee0aea..1803810 100644
  #include "thread-utils.h"
  #include "git2/global.h"
  #include "transports/ssh.h"
-@@ -62,7 +66,11 @@ static int init_common(void)
+@@ -60,7 +64,11 @@ static int init_common(void)
+ 		(ret = git_sysdir_global_init()) == 0 &&
  		(ret = git_filter_global_init()) == 0 &&
- 		(ret = git_merge_driver_global_init()) == 0 &&
  		(ret = git_transport_ssh_global_init()) == 0)
 +#ifdef GIT_OPENSSL
  		ret = git_openssl_stream_global_init();
@@ -826,7 +824,7 @@ index 0000000..5cb1071
 +
 +#endif
 diff --git a/src/settings.c b/src/settings.c
-index 4a6e0f3..9ebcd78 100644
+index 0da19ea..65bbb41 100644
 --- a/src/settings.c
 +++ b/src/settings.c
 @@ -9,6 +9,10 @@
@@ -840,7 +838,7 @@ index 4a6e0f3..9ebcd78 100644
  #include <git2.h>
  #include "common.h"
  #include "sysdir.h"
-@@ -29,7 +33,7 @@ int git_libgit2_features(void)
+@@ -29,7 +33,7 @@ int git_libgit2_features()
  #ifdef GIT_THREADS
  		| GIT_FEATURE_THREADS
  #endif
@@ -920,10 +918,10 @@ index 327052f..a438459 100644
  #endif
  	{ "file://",  git_transport_local, NULL },
 diff --git a/src/transports/http.c b/src/transports/http.c
-index 4fbbfbb..19078e4 100644
+index 88b124b..f4474ef 100644
 --- a/src/transports/http.c
 +++ b/src/transports/http.c
-@@ -620,7 +620,7 @@ static int http_connect(http_subtransport *t)
+@@ -597,7 +597,7 @@ static int http_connect(http_subtransport *t)
  
  	error = git_stream_connect(t->io);
  
