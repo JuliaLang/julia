@@ -251,7 +251,8 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         println(io, "DEBUG build")
     end
     println(io,             "Platform Info:")
-    println(io,             "  System: ", Sys.KERNEL, " (", Sys.MACHINE, ")")
+    println(io,             "  OS: ", is_windows() ? "Windows" : is_apple() ?
+        "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
     cpu = Sys.cpu_info()
     println(io,         "  CPU: ", cpu[1].model)
