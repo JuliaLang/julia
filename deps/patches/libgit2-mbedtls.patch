@@ -1,37 +1,7 @@
-diff --git a/.travis.yml b/.travis.yml
-index 2f3ffe3..f4e5dca 100644
---- a/.travis.yml
-+++ b/.travis.yml
-@@ -48,6 +48,16 @@ matrix:
-        - VALGRIND=1
-          OPTIONS="-DBUILD_CLAR=ON -DBUILD_EXAMPLES=OFF -DDEBUG_POOL=ON -DCMAKE_BUILD_TYPE=Debug"
-      os: linux
-+   - compiler: gcc
-+     env:
-+       - MBEDTLS=1
-+         OPTIONS="-DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release -DUSE_OPENSSL=OFF -DMBEDTLS_ROOT_DIR=../mbedtls"
-+     os: linux
-+   - compiler: gcc
-+     env:
-+       - MBEDTLS=1
-+         OPTIONS="-DTHREADSAFE=OFF -DBUILD_EXAMPLES=ON -DUSE_OPENSSL=OFF -DMBEDTLS_ROOT_DIR=../mbedtls"
-+     os: linux
-  allow_failures:
-    - env: COVERITY=1
-    - env:
 diff --git a/CMakeLists.txt b/CMakeLists.txt
 index c79b263..ee37d05 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -88,7 +88,7 @@ IF(MSVC)
- ENDIF()
- 
- IF (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
--	OPTION( USE_OPENSSL                     "Link with and use openssl library"             ON )
-+	OPTION( USE_OPENSSL     "Link with and use openssl library"             ON )
- ENDIF()
- 
- CHECK_STRUCT_HAS_MEMBER ("struct stat" st_mtim "sys/types.h;sys/stat.h"
 @@ -112,6 +112,10 @@ IF (HAVE_STRUCT_STAT_NSEC OR WIN32)
  	OPTION( USE_NSEC		"Care about sub-second file mtimes and ctimes"	OFF )
  ENDIF()
@@ -155,34 +125,6 @@ index 0000000..2f4adbc
 +    MBEDX509_LIBRARY
 +    MBEDCRYPTO_LIBRARY
 +)
-diff --git a/script/cibuild.sh b/script/cibuild.sh
-index 00cde0a..2191e37 100755
---- a/script/cibuild.sh
-+++ b/script/cibuild.sh
-@@ -6,6 +6,11 @@ then
- 	exit $?;
- fi
- 
-+if [ -n "$MBEDTLS" ];
-+then
-+    ./script/mbedtls.sh;
-+fi
-+
- mkdir _build
- cd _build
- # shellcheck disable=SC2086
-diff --git a/script/mbedtls.sh b/script/mbedtls.sh
-new file mode 100755
-index 0000000..fda7abc
---- /dev/null
-+++ b/script/mbedtls.sh
-@@ -0,0 +1,6 @@
-+#!/bin/sh
-+
-+git clone https://github.com/ARMmbed/mbedtls.git mbedtls
-+cd mbedtls
-+git checkout mbedtls-2.1.2
-+make CFLAGS='-fPIC -fpic' -j2 lib
 diff --git a/src/global.c b/src/global.c
 index adf353d..bdad772 100644
 --- a/src/global.c
