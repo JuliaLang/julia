@@ -58,7 +58,8 @@ All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectur
 <a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
 
-First, acquire the source code by cloning the git repository:
+First, make sure you have all the [required dependencies](#Required-Build-Tools-External-Libraries) installed.
+Then, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
