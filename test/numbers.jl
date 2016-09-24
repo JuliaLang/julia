@@ -1020,6 +1020,7 @@ f9085() = typemax(UInt64) != 2.0^64
 
 @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
 @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+@test_throws ArgumentError rationalize(Int, big(3.0), -1.)
 
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
