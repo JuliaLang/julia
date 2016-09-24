@@ -8,6 +8,10 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/libssh2
 endif
 
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
+endif
+
 ifneq ($(OS),WINNT)
 ifeq ($(USE_SYSTEM_CURL), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
@@ -33,18 +37,18 @@ LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="-L$(bu
 endif
 
 ifeq ($(OS),Linux)
-LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied
-	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-require-openssl.patch
+$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-mbedtls.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied
+	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls.patch
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied
+$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-mbedtls.patch-applied
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
@@ -53,7 +57,7 @@ $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: $(SRCD
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied \
+	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-mbedtls.patch-applied \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied
@@ -81,15 +85,6 @@ ifeq ($$(OS),WINNT)
 	cp $1/libgit2.$$(SHLIB_EXT) $2/$$(build_shlibdir)/libgit2.$$(SHLIB_EXT)
 else
 	$(call MAKE_INSTALL,$1,$2,$3)
-endif
-ifeq ($$(OS),Linux)
-	@# If we're on linux, copy over libssl and libcrypto for libgit2
-	-LIBGIT_LIBS=$$$$(ldd "$1/libgit2.$$(SHLIB_EXT)" | tail -n +2 | awk '{print $$$$(NF-1)}'); \
-	for LIB in libssl libcrypto; do \
-		LIB_PATH=$$$$(echo "$$$$LIBGIT_LIBS" | grep "$$$$LIB"); \
-		echo "LIB_PATH for $$$$LIB: $$$$LIB_PATH"; \
-		[ ! -z "$$$$LIB_PATH" ] && cp -v "$$$$LIB_PATH" $2/$$(build_shlibdir); \
-	done
 endif
 endef
 $(eval $(call staged-install, \
