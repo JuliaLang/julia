@@ -1517,6 +1517,12 @@ Internals
 
    Takes the expression ``x`` and returns an equivalent expression with all macros removed (expanded).
 
+.. function:: @macroexpand
+
+   .. Docstring generated from Julia source
+
+   Return equivalent expression with all macros removed (expanded).
+
 .. function:: expand(x)
 
    .. Docstring generated from Julia source
