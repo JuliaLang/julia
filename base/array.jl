@@ -990,9 +990,7 @@ julia> findnext(A,3)
 0
 ```
 """
-function findnext(A, start::Integer)
-    findnext(x->x!=0, A, start)
-end
+findnext(A, start::Integer) = findnext(x->x!=0, A, start)
 
 """
     findfirst(A)
@@ -1030,9 +1028,8 @@ julia> findnext(A,4,3)
 3
 ```
 """
-function findnext(A, v, start::Integer)
-    findnext(x->x==v, A, start)
-end
+findnext(A, v, start::Integer) = findnext(x->x==v, A, start)
+
 """
     findfirst(A, v)
 
