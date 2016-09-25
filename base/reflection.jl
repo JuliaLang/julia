@@ -280,7 +280,7 @@ enumerated types (see `@enum`).
 function instances end
 
 # subtypes
-function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
+function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Module}())
     push!(visited, m)
     for s in names(m, true)
         if isdefined(m, s) && !isdeprecated(m, s)
