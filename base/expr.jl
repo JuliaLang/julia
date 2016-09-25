@@ -68,7 +68,7 @@ Return equivalent expression with all macros removed (expanded).
 """
 macro macroexpand(code)
     code_expanded = macroexpand(code)
-    Expr(:quote, code_expanded)
+    QuoteNode(code_expanded)
 end
 
 ## misc syntax ##

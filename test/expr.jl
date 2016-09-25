@@ -14,5 +14,5 @@ let
     @test (@macroexpand @doc "" f() = @x) == Expr(:error, UndefVarError(Symbol("@x")))
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
-    @test (@macroexpand @seven_dollar 1+$x) == :(1 + 2)
+    @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
 end
