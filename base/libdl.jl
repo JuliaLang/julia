@@ -18,7 +18,8 @@ if is_apple()
     push!(DL_LOAD_PATH, "@loader_path")
 end
 
-# constants to match JL_RTLD_* in src/julia.h
+# note: constants to match JL_RTLD_* in src/julia.h, translated
+#       to system-specific values by JL_RTLD macro in src/dlload.c
 const RTLD_LOCAL     = 0x00000001
 const RTLD_GLOBAL    = 0x00000002
 const RTLD_LAZY      = 0x00000004
