@@ -1000,6 +1000,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         assert(isPtr);
         // Create Function skeleton
         f = (llvm::Function*)jl_unbox_voidpointer(ir);
+        assert(!f->isDeclaration());
         assert(f->getReturnType() == rettype);
         int i = 0;
         for (std::vector<Type *>::iterator it = argtypes.begin();
@@ -1024,15 +1025,6 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             jl_error("Malformed LLVM Function");
         }
     }
-
-    /*
-     * It might be tempting to just try to set the Always inline attribute on the function
-     * and hope for the best. However, this doesn't work since that would require an inlining
-     * pass (which is a Call Graph pass and cannot be managed by a FunctionPassManager). Instead
-     * We are sneaky and call the inliner directly. This however doesn't work until we've actually
-     * generated the entire function, so we need to store it in the context until the end of the
-     * function. This also has the benefit of looking exactly like we cut/pasted it in in `code_llvm`.
-     */
 
     // Since we dumped all of f's dependencies into the active module,
     // we cannot reasonably inline it, so leave it there and just emit
@@ -1064,7 +1056,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     mark_gc_uses(gc_uses);
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
     if (isString)
-        ctx->to_inline.push_back(inst);
+        f->addFnAttr(Attribute::AlwaysInline);
     mark_gc_uses(gc_uses);
 
     JL_GC_POP();
