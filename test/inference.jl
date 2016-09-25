@@ -368,3 +368,6 @@ end
 # issue #18450
 f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 @test f18450() == Tuple{Vararg{Int}}
+
+# issue #18569
+@test Core.Inference.isconstType(Type{Tuple},true)
