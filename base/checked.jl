@@ -307,8 +307,7 @@ Calculates `div(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-# Base.div already checks; nothing to do here
-checked_div{T<:Integer}(x::T, y::T) = div(x, y)
+checked_div{T<:Integer}(x::T, y::T) = div(x, y) # Base.div already checks
 
 """
     Base.checked_rem(x, y)
@@ -317,8 +316,7 @@ Calculates `x%y`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-# Base.rem already checks; nothing to do here
-checked_rem{T<:Integer}(x::T, y::T) = rem(x, y)
+checked_rem{T<:Integer}(x::T, y::T) = rem(x, y) # Base.rem already checks
 
 """
     Base.checked_fld(x, y)
@@ -327,8 +325,7 @@ Calculates `fld(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-# Base.fld already checks; nothing to do here
-checked_fld{T<:Integer}(x::T, y::T) = fld(x, y)
+checked_fld{T<:Integer}(x::T, y::T) = fld(x, y) # Base.fld already checks
 
 """
     Base.checked_mod(x, y)
@@ -337,8 +334,7 @@ Calculates `mod(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-# Base.mod already checks; nothing to do here
-checked_mod{T<:Integer}(x::T, y::T) = mod(x, y)
+checked_mod{T<:Integer}(x::T, y::T) = mod(x, y) # Base.mod already checks
 
 """
     Base.checked_cld(x, y)
@@ -347,7 +343,6 @@ Calculates `cld(x,y)`, checking for overflow errors where applicable.
 
 The overflow protection may impose a perceptible performance penalty.
 """
-# Base.cld already checks; nothing to do here
-checked_cld{T<:Integer}(x::T, y::T) = cld(x, y)
+checked_cld{T<:Integer}(x::T, y::T) = cld(x, y) # Base.cld already checks
 
 end
