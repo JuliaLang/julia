@@ -113,7 +113,6 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
-include("float16.jl")
 
 # SIMD loops
 include("simdloop.jl")
