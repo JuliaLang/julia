@@ -991,12 +991,7 @@ julia> findnext(A,3)
 ```
 """
 function findnext(A, start::Integer)
-    for i = start:length(A)
-        if A[i] != 0
-            return i
-        end
-    end
-    return 0
+    findnext(x->x!=0, A, start)
 end
 
 """
@@ -1036,12 +1031,7 @@ julia> findnext(A,4,3)
 ```
 """
 function findnext(A, v, start::Integer)
-    for i = start:length(A)
-        if A[i] == v
-            return i
-        end
-    end
-    return 0
+    findnext(x->x==v, A, start)
 end
 """
     findfirst(A, v)
@@ -1082,13 +1072,13 @@ julia> findnext(isodd, A, 2)
 0
 ```
 """
-function findnext(testf::Function, A, start::Integer)
-    for i = start:length(A)
-        if testf(A[i])
-            return i
-        end
+function findnext(testf::Function, A, idx::Integer)
+    while !done(A, idx)
+        lastidx = idx
+        elem, idx = next(A, idx)
+        testf(elem) && return lastidx
     end
-    return 0
+    0
 end
 
 """
