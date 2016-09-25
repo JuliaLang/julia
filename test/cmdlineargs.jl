@@ -303,8 +303,9 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
         JL_OPTIONS_STARTUPFILE_OFF = 2
         # `HOME=$tmpdir` to avoid errors in the user .juliarc.jl, which hangs the tests.  Issue #17642
         mktempdir() do tmpdir
-            @test parse(Int,readchomp(setenv(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`,
-                ["HOME="*tmpdir, "PATH="*ENV["PATH"]]))) == JL_OPTIONS_STARTUPFILE_ON
+            withenv("HOME"=>tmpdir) do
+                @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON
+            end
         end
         @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=no`)) == JL_OPTIONS_STARTUPFILE_OFF
     end
