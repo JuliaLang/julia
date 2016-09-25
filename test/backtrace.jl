@@ -118,7 +118,11 @@ for sfs in lkup
     end
 end
 @test hasbt
-@test_broken hasbt2
+if Base.JLOptions().can_inline != 0
+    @test_broken hasbt2
+else
+    @test hasbt2
+end
 
 function btmacro()
     ret = @timed backtrace()
