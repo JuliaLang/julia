@@ -118,11 +118,13 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
     return files
 end
 
+""" Determines if `b` is a child of `a`. `a` and `b` should be OIDs converted to `String`s. """
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
     A = revparseid(repo, a)
     merge_base(repo, a, b) == A
 end
 
+""" Set a `remote`'s `url` for the `repo`, with default `remote` name `origin`. Uses SSH protocol, not HTTPS."""
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
     with(GitConfig, repo) do cfg
         set!(cfg, "remote.$remote.url", url)
@@ -137,6 +139,7 @@ function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractStri
     end
 end
 
+""" Set a `remote`'s `url` for the `repo` located at `path`, with default `remote` name `origin`. Uses SSH protocol, not HTTPS."""
 function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
     with(GitRepo, path) do repo
         set_remote_url(repo, url, remote=remote)
@@ -480,6 +483,8 @@ function authors(repo::GitRepo)
     end
 end
 
+""" Makes a record of the repository's current state so that it can be
+restored to that state later, if needed. """
 function snapshot(repo::GitRepo)
     head = Oid(repo, Consts.HEAD_FILE)
     index = with(GitIndex, repo) do idx; write_tree!(idx) end
@@ -501,6 +506,7 @@ function snapshot(repo::GitRepo)
     State(head, index, work)
 end
 
+""" Returns a repository to a state previously recorded with `snapshot`."""
 function restore(s::State, repo::GitRepo)
     reset!(repo, Consts.HEAD_FILE, "*")  # unstage everything
     with(GitIndex, repo) do idx
