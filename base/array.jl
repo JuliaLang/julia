@@ -990,7 +990,7 @@ julia> findnext(A,3)
 0
 ```
 """
-findnext(A, start::Integer) = findnext(x->x!=0, A, start)
+findnext(A, start::Integer) = findnext(x-> x!=0, A, start)
 
 """
     findfirst(A)
@@ -1028,7 +1028,7 @@ julia> findnext(A,4,3)
 3
 ```
 """
-findnext(A, v, start::Integer) = findnext(x->x==v, A, start)
+findnext(A, v, start::Integer) = findnext(x-> x==v, A, start)
 
 """
     findfirst(A, v)
@@ -1117,12 +1117,7 @@ julia> findprev(A,1)
 0
 ```
 """
-function findprev(A, start::Integer)
-    for i = start:-1:1
-        A[i] != 0 && return i
-    end
-    return 0
-end
+findprev(A, start::Integer) = findprev(x-> x!=0, A, start)
 
 """
     findlast(A)
@@ -1168,12 +1163,8 @@ julia> findprev(A, 1, 1)
 0
 ```
 """
-function findprev(A, v, start::Integer)
-    for i = start:-1:1
-        A[i] == v && return i
-    end
-    return 0
-end
+findprev(A, v, start::Integer) = findprev(x-> x==v, A, start)
+
 
 """
     findlast(A, v)
@@ -1218,11 +1209,13 @@ julia> findprev(isodd, A, 3)
 2
 ```
 """
-function findprev(testf::Function, A, start::Integer)
-    for i = start:-1:1
-        testf(A[i]) && return i
+function findprev(testf::Function, A, idx::Integer)
+    while idx > 0
+        elem, _ = next(A, idx)
+        testf(elem) && return idx
+        idx = prevind(A, idx)
     end
-    return 0
+    0
 end
 
 """
