@@ -1276,6 +1276,13 @@ end
 @test diagm(sparse(ones(1,5))) == speye(5)
 @test diagm(sparse(ones(5,1))) == speye(5)
 
+#expandptr
+A = speye(5)
+@test Base.SparseArrays.expandptr(A.colptr) == collect(1:5)
+A[1,2] = 1
+@test Base.SparseArrays.expandptr(A.colptr) == [1; 2; 2; 3; 4; 5]
+@test_throws ArgumentError Base.SparseArrays.expandptr([2; 3])
+
 # triu/tril
 A = sprand(5,5,0.2)
 AF = full(A)
@@ -1427,6 +1434,14 @@ Ai = ceil(Int,Ar*100)
 @test norm(Ar,1) ≈ norm(full(Ar),1)
 @test norm(Ar,Inf) ≈ norm(full(Ar),Inf)
 @test vecnorm(Ar) ≈ vecnorm(full(Ar))
+@test norm(Ai,1) ≈ norm(full(Ai),1)
+@test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
+@test vecnorm(Ai) ≈ vecnorm(full(Ai))
+Ai = trunc(Int,Ar*100)
+@test norm(Ai,1) ≈ norm(full(Ai),1)
+@test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
+@test vecnorm(Ai) ≈ vecnorm(full(Ai))
+Ai = round(Int,Ar*100)
 @test norm(Ai,1) ≈ norm(full(Ai),1)
 @test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
 @test vecnorm(Ai) ≈ vecnorm(full(Ai))
