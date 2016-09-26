@@ -35,10 +35,12 @@ typealias VarTable Array{Any,1}
 type VarState
     typ
     undef::Bool
+    VarState(typ::ANY, undef::Bool) = new(typ, undef)
 end
 
 immutable Const
     val
+    Const(v::ANY) = new(v)
 end
 
 type InferenceState
@@ -107,11 +109,11 @@ type InferenceState
             if linfo.def.isva
                 if atypes === Tuple
                     if la > 1
-                        atypes = Tuple{Any[Any for i=1:la-1]..., Tuple.parameters[1]}
+                        atypes = Tuple{Any[Any for i = 1:(la - 1)]..., Tuple.parameters[1]}
                     end
-                    s[1][la] = VarState(Tuple,false)
+                    s[1][la] = VarState(Tuple, false)
                 else
-                    s[1][la] = VarState(tuple_tfunc(limit_tuple_depth(tupletype_tail(atypes,la))),false)
+                    s[1][la] = VarState(tuple_tfunc(limit_tuple_depth(tupletype_tail(atypes, la))), false)
                 end
                 la -= 1
             end
@@ -127,17 +129,25 @@ type InferenceState
             if isa(lastatype, TypeVar)
                 lastatype = lastatype.ub
             end
+            if isa(lastatype, DataType) && isdefined(lastatype, :instance)
+                # replace singleton types with their equivalent Const object
+                lastatype = Const(lastatype.instance)
+            end
             if laty > la
                 laty = la
             end
-            for i=1:laty
+            for i = 1:laty
                 atyp = atypes.parameters[i]
                 if isa(atyp, TypeVar)
                     atyp = atyp.ub
                 end
+                if isa(atyp, DataType) && isdefined(atyp, :instance)
+                    # replace singleton types with their equivalent Const object
+                    atyp = Const(atyp.instance)
+                end
                 s[1][i] = VarState(atyp, false)
             end
-            for i=laty+1:la
+            for i = (laty + 1):la
                 s[1][i] = VarState(lastatype, false)
             end
         else
@@ -668,12 +678,15 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
 end
 
 function tuple_tfunc(argtype::ANY)
-    if isa(argtype,DataType) && argtype.name === Tuple.name
-        p = map(x->(isType(x) && !isa(x.parameters[1],TypeVar) ? typeof(x.parameters[1]) : x),
+    if isa(argtype, DataType) && argtype.name === Tuple.name
+        p = map(x->(isType(x) && !isa(x.parameters[1], TypeVar) ? typeof(x.parameters[1]) : x),
                 argtype.parameters)
-        return Tuple{p...}
+        t = Tuple{p...}
+        # replace a singleton type with its equivalent Const object
+        isdefined(t, :instance) && return Const(t.instance)
+        return t
     end
-    argtype
+    return argtype
 end
 
 function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
@@ -1219,6 +1232,10 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     if isa(t,TypeVar)
         # no need to use a typevar as the type of an expression
         t = t.ub
+    end
+    if isa(t, DataType) && isdefined(t, :instance)
+        # replace singleton types with their equivalent Const object
+        t = Const(t.instance)
     end
     e.typ = t
     return t
