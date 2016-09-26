@@ -39,7 +39,7 @@ include $(SRCDIR)/tools/git-external.mk
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-DEP_LIBS :=
+DEP_LIBS := compiler-rt
 
 ifeq ($(USE_GPL_LIBS), 1)
 DEP_LIBS += suitesparse-wrapper
@@ -162,9 +162,10 @@ uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-mbedtls get-libssh2 get-curl get-libgit2
+getall: get-llvm get-compiler-rt get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-mbedtls get-libssh2 get-curl get-libgit2
 
 include $(SRCDIR)/llvm.mk
+include $(SRCDIR)/compiler-rt.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk
 include $(SRCDIR)/openlibm.mk

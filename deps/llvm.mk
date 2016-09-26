@@ -59,12 +59,25 @@ ifeq ($(BUILD_LLDB),1)
 LLVM_LLDB_TAR:=$(SRCDIR)/srccache/lldb-$(LLVM_TAR_EXT)
 endif # BUILD_LLDB
 
-ifeq ($(BUILD_LLVM_CLANG),1)
-LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_TAR_EXT)
+# Decide when to build compiler-rt alongside LLVM.
+ifeq ($(STANDALONE_COMPILER_RT),0)
+BUILD_LLVM_COMPILER_RT:=1
+else ifeq ($(BUILD_LLVM_CLANG), 1)
+BUILD_LLVM_COMPILER_RT:=1
+else
+BUILD_LLVM_COMPILER_RT:=0
+endif
+
+ifeq ($(BUILD_LLVM_COMPILER_RT),1)
 LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_TAR_EXT)
 else
-LLVM_CLANG_TAR:=
 LLVM_COMPILER_RT_TAR:=
+endif # BUILD_LLVM_COMPILER_RT
+
+ifeq ($(BUILD_LLVM_CLANG),1)
+LLVM_CLANG_TAR:=$(SRCDIR)/srccache/cfe-$(LLVM_TAR_EXT)
+else
+LLVM_CLANG_TAR:=
 LLVM_LIBCXX_TAR:=
 endif # BUILD_LLVM_CLANG
 
@@ -203,19 +216,30 @@ LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
 LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
 endif
 
+ifeq ($(BUILD_LLVM_COMPILER_RT),1)
+ifneq ($(BUILD_LLVM_CLANG),1)
+#block default building of Clang
+LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=compiler-rt
+endif
+else
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
+LLVM_CMAKE += -DLLVM_EXTERNAL_COMPILER_RT_BUILD=OFF
+else
+LLVM_CMAKE += -DLLVM_TOOL_COMPILER_RT_BUILD=OFF
+endif
+endif
+
 ifeq ($(BUILD_LLVM_CLANG),1)
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
 else
 # block default building of Clang
-LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=
 ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
 LLVM_CMAKE += -DLLVM_EXTERNAL_CLANG_BUILD=OFF
-LLVM_CMAKE += -DLLVM_EXTERNAL_COMPILER_RT_BUILD=OFF
 else
 LLVM_CMAKE += -DLLVM_TOOL_CLANG_BUILD=OFF
-LLVM_CMAKE += -DLLVM_TOOL_COMPILER_RT_BUILD=OFF
 endif
 endif
+
 ifeq ($(BUILD_LLDB),1)
 LLVM_MFLAGS += OPTIONAL_DIRS=lldb
 else
@@ -363,14 +387,16 @@ ifneq ($(LLVM_LLDB_TAR),)
 	$(TAR) -C $(LLVM_SRC_DIR)/tools/lldb --strip-components 1 -xf $(LLVM_LLDB_TAR)
 endif # LLVM_LLDB_TAR
 else # LLVM_VER
+ifeq ($(BUILD_LLVM_COMPILER_RT),1)
+	([ ! -d $(LLVM_SRC_DIR)/projects/compiler-rt ] && \
+		git clone $(LLVM_GIT_URL_COMPILER_RT) $(LLVM_SRC_DIR)/projects/compiler-rt  ) || \
+		(cd $(LLVM_SRC_DIR)/projects/compiler-rt  && \
+		git pull --ff-only)
+endif #BUILD_LLVM_COMPILER_RT
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d $(LLVM_SRC_DIR)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) $(LLVM_SRC_DIR)/tools/clang  ) || \
 		(cd $(LLVM_SRC_DIR)/tools/clang  && \
-		git pull --ff-only)
-	([ ! -d $(LLVM_SRC_DIR)/projects/compiler-rt ] && \
-		git clone $(LLVM_GIT_URL_COMPILER_RT) $(LLVM_SRC_DIR)/projects/compiler-rt  ) || \
-		(cd $(LLVM_SRC_DIR)/projects/compiler-rt  && \
 		git pull --ff-only)
 ifneq ($(LLVM_GIT_VER_CLANG),)
 	(cd $(LLVM_SRC_DIR)/tools/clang && \
@@ -467,7 +493,7 @@ ifeq ($(LLVM_VER),3.7.1)
 ifeq ($(BUILD_LLDB),1)
 $(eval $(call LLVM_PATCH,lldb-3.7.1))
 endif
-ifeq ($(BUILD_LLVM_CLANG),1)
+ifeq ($(BUILD_LLVM_COMPILER_RT),1)
 $(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
 endif
 endif

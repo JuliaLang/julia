@@ -178,7 +178,7 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
 # utf8proc since its headers are not in the binary download
-echo 'override DEP_LIBS = libuv utf8proc' >> Make.user
+echo 'override DEP_LIBS = compiler-rt libuv utf8proc' >> Make.user
 
 if [ -n "$USEMSVC" ]; then
   # Openlibm doesn't build well with MSVC right now
