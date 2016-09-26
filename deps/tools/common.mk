@@ -100,6 +100,7 @@ $(eval $(call dir_target,$(SRCDIR)/srccache))
 
 
 upper = $(shell echo $1 | tr a-z A-Z)
+lower = $(shell echo $1 | tr A-Z a-z)
 
 ## A rule for calling `make install` ##
 # example usage:
