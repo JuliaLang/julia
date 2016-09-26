@@ -347,9 +347,9 @@
          ;; pick up only function name
          (let ((fname (cond ((eq? (car e) '=) (cadr (cadr e)))
                             ((eq? (car e) 'function)
-                             (if (eq? (car (cadr e)) 'tuple)
-                                 #f
-                                 (cadr (cadr e))))
+                             (cond ((atom? (cadr e))             (cadr e))
+                                   ((eq? (car (cadr e)) 'tuple)  #f)
+                                   (else                         (cadr (cadr e)))))
                             (else #f))))
            (if (symbol? fname)
                (list fname)
