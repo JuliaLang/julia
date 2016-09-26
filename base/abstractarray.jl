@@ -1,31 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## Type aliases for convenience ##
-
-typealias AbstractVector{T} AbstractArray{T,1}
-typealias AbstractMatrix{T} AbstractArray{T,2}
-typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
-typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
-typealias DimOrInd Union{Integer, AbstractUnitRange}
-typealias IntOrInd Union{Int, AbstractUnitRange}
-typealias DimsOrInds{N} NTuple{N,DimOrInd}
-typealias NeedsShaping Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
-
-macro _inline_pure_meta()
-    Expr(:meta, :inline, :pure)
-end
-
 ## Basic functions ##
-
-vect() = Array{Any,1}(0)
-vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
-
-function vect(X...)
-    T = promote_typeof(X...)
-    #T[ X[i] for i=1:length(X) ]
-    # TODO: this is currently much faster. should figure out why. not clear.
-    copy!(Array{T,1}(length(X)), X)
-end
 
 """
     size(A::AbstractArray, [dim...])
