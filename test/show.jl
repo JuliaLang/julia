@@ -606,3 +606,6 @@ end
 
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
 @test isa(stringmime("text/plain", String(UInt8[0x00:0xff;])), String)
+
+# don't use julia-specific `f` in Float32 printing (PR #18053)
+@test sprint(print, 1f-7) == "1.0e-7"
