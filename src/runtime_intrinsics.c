@@ -501,7 +501,7 @@ cmp_iintrinsic(name, u)
 
 typedef int (*intrinsic_checked_t)(unsigned, void*, void*, void*);
 SELECTOR_FUNC(intrinsic_checked)
-#define checked_iintrinsic(name, u, lambda_checked)				 \
+#define checked_iintrinsic(name, u, lambda_checked) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
     return jl_iintrinsic_2(a, b, #name, u##signbitbyte, lambda_checked, name##_list, 0); \
