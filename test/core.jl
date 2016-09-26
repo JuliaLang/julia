@@ -3610,6 +3610,17 @@ end
 @test TestMacroGlobalFunction.ff(1) == 2
 @test TestMacroGlobalFunction.gg(1) == 3
 
+# issue #18672
+macro x18672()
+    quote
+        function f
+        end
+    end
+end
+let
+    @test isa(@x18672, Function)
+end
+
 # issue #14564
 @test isa(object_id(Tuple.name.cache), Integer)
 
