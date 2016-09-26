@@ -172,7 +172,8 @@
   (and (pair? e) (eq? (car e) 'ssavalue)))
 
 (define (symbol-like? e)
-  (or (symbol? e) (ssavalue? e)))
+  (or (and (symbol? e) (not (eq? e 'true)) (not (eq? e 'false)))
+      (ssavalue? e)))
 
 (define (simple-atom? x)
   (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)))
