@@ -554,8 +554,8 @@ Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T sy
 """
 code_native(io::IO, f::ANY, types::ANY=Tuple, syntax::Symbol=:att) =
     print(io, _dump_function(f, types, true, false, false, false, syntax))
-code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types, :att)
-
+code_native(f::ANY, types::ANY=Tuple, syntax::Symbol=:att) = code_native(STDOUT, f, types, syntax)
+code_native(::IO, ::ANY, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, types::ANY)
