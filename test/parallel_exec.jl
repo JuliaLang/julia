@@ -1108,31 +1108,28 @@ end
 
 # Test addprocs enable_threaded_blas parameter
 
-function define_get_num_threads()
-    @everywhere get_num_threads = function()
-        blas = BLAS.vendor()
-        # Wrap in a try to catch unsupported blas versions
-        try
-            if blas == :openblas
-                return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
-            elseif blas == :openblas64
-                return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
-            elseif blas == :mkl
-                return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
-            end
-
-            # OSX BLAS looks at an environment variable
-            if is_apple()
-                return ENV["VECLIB_MAXIMUM_THREADS"]
-            end
+const get_num_threads = function() # anonymous so it will be serialized when called
+    blas = BLAS.vendor()
+    # Wrap in a try to catch unsupported blas versions
+    try
+        if blas == :openblas
+            return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
+        elseif blas == :openblas64
+            return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
+        elseif blas == :mkl
+            return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
         end
 
-        return nothing
+        # OSX BLAS looks at an environment variable
+        if is_apple()
+            return ENV["VECLIB_MAXIMUM_THREADS"]
+        end
     end
+
+    return nothing
 end
 
 function get_remote_num_threads(processes_added)
-    define_get_num_threads()
     return [remotecall_fetch(get_num_threads, proc_id) for proc_id in processes_added]
 end
 
@@ -1146,7 +1143,6 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    define_get_num_threads()
     if get_num_threads() == nothing
         warn("Skipping blas num threads tests due to unsupported blas version")
         return
