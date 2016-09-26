@@ -35,6 +35,9 @@
 #if JL_LLVM_VERSION >= 30900
 #include <llvm/Transforms/Scalar/GVN.h>
 #endif
+#if JL_LLVM_VERSION >= 40000
+#include <llvm/Transforms/IPO/AlwaysInliner.h>
+#endif
 
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
@@ -142,7 +145,11 @@ void addOptimizationPasses(PassManager *PM)
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
     PM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
+#if JL_LLVM_VERSION >= 40000
+    PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+#else
     PM->add(createAlwaysInlinerPass()); // Respect always_inline
+#endif
 
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
