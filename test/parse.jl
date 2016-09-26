@@ -783,4 +783,27 @@ else
     @test count_meta_loc(f2_exprs) == 1
 end
 
+# Check that string and command literals are parsed to the appropriate macros
+@test :(x"s") == :(@x_str "s")
+@test :(x"s"flag) == :(@x_str "s" "flag")
+@test :(x"s\"`\x\$\\") == :(@x_str "s\"`\\x\\\$\\\\")
+@test :(x`s`) == :(@x_cmd "s")
+@test :(x`s`flag) == :(@x_cmd "s" "flag")
+@test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\\\")
+
+# Check multiline command literals
+@test :```
+multiline
+command
+``` == :(@cmd "multiline\ncommand\n")
+
+macro julia_cmd(s)
+    Meta.quot(parse(s))
+end
+@test julia```
+if test + test == test
+    println(test)
+end
+```.head == :if
+
 end

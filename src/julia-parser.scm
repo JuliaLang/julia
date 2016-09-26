@@ -980,11 +980,17 @@
   (error (string "space before \"" t "\" not allowed in \""
                  (deparse ex) " " (deparse t) "\"")))
 
+;; string macro suffix for given delimiter t
+(define (macsuffix t)
+  (case t
+    ((#\") '_str)
+    ((#\`) '_cmd)))
+
 (define (parse-call-chain s ex one-call)
   (let loop ((ex ex))
     (let ((t (peek-token s)))
       (if (or (and space-sensitive (ts:space? s)
-                   (memv t '(#\( #\[ #\{ |'| #\")))
+                   (memv t '(#\( #\[ #\{ |'| #\" #\`)))
               (and (or (number? ex)  ;; 2(...) is multiply, not call
                        (large-number? ex))
                    (eqv? t #\()))
@@ -1060,15 +1066,14 @@
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              (loop (list* 'curly ex (parse-arglist s #\} ))))
-            ((#\")
+            ((#\" #\`)
              (if (and (symbol? ex) (not (operator? ex))
                       (not (ts:space? s)))
-                 ;; custom prefixed string literals, x"s" => @x_str "s"
-                 (let* ((str (begin (take-token s)
-                                    (parse-string-literal s #t)))
+                 ;; custom string and command literals; x"s" => @x_str "s"
+                 (let* ((macstr (begin (take-token s)
+                                       (parse-raw-literal s t)))
                         (nxt (peek-token s))
-                        (macname (symbol (string #\@ ex '_str)))
-                        (macstr (car str)))
+                        (macname (symbol (string #\@ ex (macsuffix t)))))
                    (if (and (symbol? nxt) (not (operator? nxt))
                             (not (ts:space? s)))
                        ;; string literal suffix, "s"x
@@ -1667,31 +1672,12 @@
               `(tuple ,(car args) ,@first ,@(map kw-to-= (cdr args)))
               `(tuple ,@first ,@(map kw-to-= args))))))
 
-(define (not-eof-2 c)
+(define (not-eof-for delim c)
   (if (eof-object? c)
-      (error "incomplete: invalid \"`\" syntax") ; NOTE: changing this may affect code in base/client.jl
-      c))
-
-(define (parse-backquote s)
-  (let ((b (open-output-string))
-        (p (ts:port s)))
-    (let loop ((c (read-char p)))
-      (if (eqv? c #\`)
-          #t
-          (begin (if (eqv? c #\\)
-                     (let ((nextch (read-char p)))
-                       (if (eqv? nextch #\`)
-                           (write-char nextch b)
-                           (begin (write-char #\\ b)
-                                  (write-char (not-eof-2 nextch) b))))
-                     (write-char (not-eof-2 c) b))
-                 (loop (read-char p)))))
-    (let ((str (io.tostring! b)))
-      `(macrocall @cmd ,str))))
-
-(define (not-eof-3 c)
-  (if (eof-object? c)
-      (error "incomplete: invalid string syntax") ; NOTE: changing this may affect code in base/client.jl
+      ;; NOTE: changing this may affect code in base/client.jl
+      (error (case delim
+                   ((#\`) "incomplete: invalid \"`\" syntax")
+                   ((#\") "incomplete: invalid string syntax")))
       c))
 
 (define (take-char p)
@@ -1712,15 +1698,18 @@
           (map-at- pred f (cdr lst) (+ i 1) (cons y r)))))
   (map-at- pred f lst 0 ()))
 
-(define (parse-string-literal s custom)
+(define (parse-raw-literal s delim)
+  (car (parse-string-literal s delim #t)))
+
+(define (parse-string-literal s delim raw)
   (let ((p (ts:port s)))
-    (if (eqv? (peek-char p) #\")
-        (if (eqv? (peek-char (take-char p)) #\")
+    (if (eqv? (peek-char p) delim)
+        (if (eqv? (peek-char (take-char p)) delim)
             (map-first strip-leading-newline
                        (dedent-triplequoted-string
-                        (parse-string-literal- 2 (take-char p) s custom)))
+                        (parse-string-literal- 2 (take-char p) s delim raw)))
             (list ""))
-        (parse-string-literal- 0 p s custom))))
+        (parse-string-literal- 0 p s delim raw))))
 
 (define (strip-leading-newline s)
   (let ((n (sizeof s)))
@@ -1817,53 +1806,53 @@
                    (else (error "invalid interpolation syntax")))))
           (else (error (string "invalid interpolation syntax: \"$" c "\""))))))
 
-(define (tostr custom io)
-  (if custom
+(define (tostr raw io)
+  (if raw
       (io.tostring! io)
       (let ((str (unescape-string (io.tostring! io))))
         (if (not (string.isutf8 str))
             (error "invalid UTF-8 sequence")
             str))))
 
-;; custom = custom string literal
-;; when custom is #t, unescape only \\ and \"
+;; raw = raw string literal
+;; when raw is #t, unescape only \\ and delimiter
 ;; otherwise do full unescaping, and parse interpolations too
-(define (parse-string-literal- n p s custom)
+(define (parse-string-literal- n p s delim raw)
   (let loop ((c (read-char p))
              (b (open-output-string))
              (e ())
              (quotes 0))
     (cond
-      ((eqv? c #\")
+      ((eqv? c delim)
        (if (< quotes n)
            (loop (read-char p) b e (+ quotes 1))
-           (reverse (cons (tostr custom b) e))))
+           (reverse (cons (tostr raw b) e))))
 
       ((= quotes 1)
-       (if (not custom) (write-char #\\ b))
-       (write-char #\" b)
+       (if (not raw) (write-char #\\ b))
+       (write-char delim b)
        (loop c b e 0))
 
       ((= quotes 2)
-       (if (not custom) (write-char #\\ b))
-       (write-char #\" b)
-       (if (not custom) (write-char #\\ b))
-       (write-char #\" b)
+       (if (not raw) (write-char #\\ b))
+       (write-char delim b)
+       (if (not raw) (write-char #\\ b))
+       (write-char delim b)
        (loop c b e 0))
 
       ((eqv? c #\\)
-       (let ((nxch (not-eof-3 (read-char p))))
-         (if (or (not custom)
-                 (not (or (eqv? nxch #\") #;(eqv? nxch #\\))))
+       (let ((nxch (not-eof-for delim (read-char p))))
+         (if (or (not raw)
+                 (not (or (eqv? nxch delim) #;(eqv? nxch #\\))))
              (write-char #\\ b))
          (write-char nxch b)
          (loop (read-char p) b e 0)))
 
-      ((and (eqv? c #\$) (not custom))
+      ((and (eqv? c #\$) (not raw))
        (let ((ex (parse-interpolate s)))
          (loop (read-char p)
                (open-output-string)
-               (list* ex (tostr custom b) e)
+               (list* ex (tostr raw b) e)
                0)))
 
       ; convert literal \r and \r\n in strings to \n (issue #11988)
@@ -1875,7 +1864,7 @@
          (loop (read-char p) b e 0)))
 
       (else
-       (write-char (not-eof-3 c) b)
+       (write-char (not-eof-for delim c) b)
        (loop (read-char p) b e 0)))))
 
 (define (not-eof-1 c)
@@ -2030,7 +2019,7 @@
           ;; string literal
           ((eqv? t #\")
            (take-token s)
-           (let ((ps (parse-string-literal s #f)))
+           (let ((ps (parse-string-literal s #\" #f)))
              (if (length> ps 1)
                  `(string ,@(filter (lambda (s)
                                       (not (and (string? s)
@@ -2059,7 +2048,7 @@
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)
-           (parse-backquote s))
+           `(macrocall @cmd ,(parse-raw-literal s #\`)))
 
           ((or (string? t) (number? t) (large-number? t)) (take-token s))
 
