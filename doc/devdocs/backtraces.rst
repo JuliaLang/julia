@@ -23,7 +23,7 @@ No matter the error, we will always need to know what version of Julia you are r
  Julia Version 0.3.3-pre+25
  Commit 417b50a* (2014-11-03 11:32 UTC)
  Platform Info:
-   System: Linux (x86_64-linux-gnu)
+   OS: Linux (x86_64-linux-gnu)
    CPU: Intel(R) Core(TM) i7 CPU       L 640  @ 2.13GHz
    WORD_SIZE: 64
    BLAS: libopenblas (USE64BITINT DYNAMIC_ARCH NO_AFFINITY Nehalem)
