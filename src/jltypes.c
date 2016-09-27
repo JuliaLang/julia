@@ -2083,6 +2083,18 @@ jl_value_t *jl_unwrap_unionall(jl_value_t *v)
     return v;
 }
 
+// wrap `t` in the same unionalls that surround `u`
+jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
+{
+    if (!jl_is_unionall(u))
+        return t;
+    JL_GC_PUSH1(&t);
+    t = jl_rewrap_unionall(t, ((jl_unionall_t*)u)->body);
+    t = jl_new_unionall_type(((jl_unionall_t*)u)->var, t);
+    JL_GC_POP();
+    return t;
+}
+
 static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, size_t ntp,
                                      jl_value_t **iparams)
 {
