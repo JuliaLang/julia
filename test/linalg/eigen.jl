@@ -95,6 +95,16 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         @test v == f[:vectors]
     end
 end
+
+#test eigenvalue computations with NaNs
+for eltya in (NaN16, NaN32, NaN)
+    @test_throws(ArgumentError, eig(fill(eltya, 1, 1)))
+    @test_throws(ArgumentError, eig(fill(eltya, 2, 2)))
+    test_matrix = rand(typeof(eltya),3,3)
+    test_matrix[2,2] = eltya
+    @test_throws(ArgumentError, eig(test_matrix))
+end
+
 # test a matrix larger than 140-by-140 for #14174
 let aa = rand(200, 200)
     for atype in ("Array", "SubArray")
