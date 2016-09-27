@@ -665,8 +665,8 @@ start(A::AbstractArray) = (@_inline_meta; itr = eachindex(A); (itr, start(itr)))
 next(A::AbstractArray,i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
 done(A::AbstractArray,i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
 
-nextind(s, i::Integer) = Int(i)+1
-prevind(s, i::Integer) = Int(i)-1
+nextind{T<:Integer}(s, i::T) = i+T(1)
+prevind{T<:Integer}(s, i::T) = i-T(1)
 
 # eachindex iterates over all indices. LinearSlow definitions are later.
 eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
