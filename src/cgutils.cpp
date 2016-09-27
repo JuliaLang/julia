@@ -113,7 +113,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
 #endif
     }
     if (jl_is_bitstype(jt)) {
-        uint64_t SizeInBits = 8*jdt->size;
+        uint64_t SizeInBits = jl_datatype_nbits(jdt);
     #if JL_LLVM_VERSION >= 30700
         llvm::DIType *t = dbuilder->createBasicType(
                 jl_symbol_name(jdt->name->name),
@@ -149,7 +149,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
             tname,                      // Name
             NULL,                       // File
             0,                          // LineNumber
-            8 * jdt->size,              // SizeInBits
+            jl_datatype_nbits(jdt),     // SizeInBits
             8 * jdt->layout->alignment, // AlignInBits
             DIFlagZero,                 // Flags
             NULL,                       // DerivedFrom
@@ -345,10 +345,10 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
             else if (nb == 16)
                 return T_float128;
         }
-        return Type::getIntNTy(jl_LLVMContext, nb*8);
+        return Type::getIntNTy(jl_LLVMContext, jl_datatype_nbits(jt));
     }
     if (jl_isbits(jt)) {
-        if (((jl_datatype_t*)jt)->size == 0) {
+        if (jl_datatype_nbits(jt) == 0) {
             return T_void;
         }
         return julia_struct_to_llvm(jt, isboxed);
@@ -371,7 +371,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
         jl_datatype_t *jst = (jl_datatype_t*)jt;
         if (jst->struct_decl == NULL) {
             size_t ntypes = jl_datatype_nfields(jst);
-            if (ntypes == 0 || jst->size == 0)
+            if (ntypes == 0 || jl_datatype_nbits(jst) == 0)
                 return T_void;
             StructType *structdecl;
             if (!isTuple) {
@@ -1519,7 +1519,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         assert("Don't know how to box this type" && false);
         return NULL;
     }
-    else if (!jb->abstract && jb->size == 0) {
+    else if (!jb->abstract && jl_datatype_nbits(jb) == 0) {
         assert(jb->instance != NULL);
         return literal_pointer_val(jb->instance);
     }
@@ -1731,7 +1731,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             f1 = boxed(fval_info, ctx);
             j++;
         }
-        Value *strct = emit_allocobj(ctx, sty->size,
+        Value *strct = emit_allocobj(ctx, jl_datatype_size(sty),
                                      literal_pointer_val((jl_value_t*)ty));
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
         if (f1) {
@@ -1769,7 +1769,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
     }
     else if (!sty->mutabl) {
         // 0 fields, ghost or bitstype
-        if (sty->size == 0)
+        if (jl_datatype_nbits(sty) == 0)
             return ghostValue(sty);
         if (nargs >= 2)
             return emit_expr(args[1], ctx);  // do side effects

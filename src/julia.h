@@ -767,6 +767,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
 #define jl_field_count(st)     jl_svec_len(((jl_datatype_t*)st)->types)
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
+#define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
 
 // inline version with strong type check to detect typos in a `->name` chain
@@ -871,14 +872,14 @@ STATIC_INLINE int jl_is_bitstype(void *v)
     return (jl_is_datatype(v) && jl_is_immutable(v) &&
             ((jl_datatype_t*)(v))->layout &&
             jl_datatype_nfields(v) == 0 &&
-            ((jl_datatype_t*)(v))->size > 0);
+            jl_datatype_size(v) > 0);
 }
 
 STATIC_INLINE int jl_is_structtype(void *v)
 {
     return (jl_is_datatype(v) &&
             (jl_field_count(v) > 0 ||
-             ((jl_datatype_t*)(v))->size == 0) &&
+             jl_datatype_size(v) == 0) &&
             !((jl_datatype_t*)(v))->abstract);
 }
 
@@ -895,7 +896,7 @@ STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)
 
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 {
-    return (!d->abstract && d->size == 0 && d != jl_sym_type && d->name != jl_array_typename &&
+    return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
             d->uid != 0 && (d->name->names == jl_emptysvec || !d->mutabl));
 }
 
@@ -950,6 +951,27 @@ STATIC_INLINE int jl_is_vecelement_type(jl_value_t* t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_vecelement_typename);
+}
+
+STATIC_INLINE int jl_is_vec_type(jl_value_t* t)
+{
+    if (!jl_is_tuple_type(t))
+        return 0;
+
+    jl_value_t* ft0 = jl_field_type(t, 0);
+    if (!jl_is_vecelement_type(ft0))
+        return 0;
+
+    if (!jl_is_bitstype(jl_field_type(ft0, 0)))
+        return 0;
+
+    size_t nf = jl_datatype_nfields(t);
+    for (size_t i = 1; i < nf; ++i)
+        if (jl_field_type(t, i) != ft0)
+            // Not homogeneous
+            return 0;
+
+    return 1;
 }
 
 STATIC_INLINE int jl_is_type_type(jl_value_t *v)

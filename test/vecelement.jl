@@ -65,3 +65,16 @@ a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
 @test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
 
 @test isa(VecElement((1,2)), VecElement{Tuple{Int,Int}})
+
+import Core.Intrinsics
+# Test intrinsics for #18445
+# Explicit form
+function trunc_vec{T1 <: Vec, T2 <: Vec}(::Type{T1}, x :: T2)
+    Intrinsics.box(T1, Intrinsics.trunc_int(T1, Intrinsics.unbox(T2, x)))
+end
+
+@test trunc_vec(Vec{4, UInt8}, Vec((0xff00, 0xff01, 0x00ff, 0xf0f0))) == Vec((0x00, 0x01, 0xff, 0xf0))
+@test Intrinsics.zext_int(Vec{4, UInt16}, Vec((0x00, 0x01, 0xff, 0xf0))) == Vec((0x0000, 0x0001, 0x00ff, 0x00f0))
+@test Intrinsics.sext_int(Vec{4, UInt16}, Vec((0x00, 0x01, 0xff, 0xf0))) == Vec((0x0000, 0x0001, 0xffff, 0xfff0))
+@test Intrinsics.add_int(Vec((1,2,3,4)), Vec((1,2,3,4))) == Vec((2,4,6,8))
+@test Intrinsics.mul_float(Vec((1.0, 2.0, 1.0, 2.0)), Vec((0.5, 0.5, 1.5, 1.5))) == Vec((0.5, 1.0, 1.5, 3.0))
