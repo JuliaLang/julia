@@ -39,11 +39,10 @@
 //===----------------------------------------------------------------------===//
 
 
-typedef bool AbiState;
-AbiState default_abi_state = 0;
+struct ABI_PPC64leLayout : AbiLayout {
 
 // count the homogeneous floating agregate size (saturating at max count of 8)
-static unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva)
+unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
 {
     size_t i, l = ty->layout->nfields;
     // handle homogeneous float aggregates
@@ -93,7 +92,7 @@ static unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva)
     return n;
 }
 
-bool use_sret(AbiState *state, jl_datatype_t *dt)
+bool use_sret(jl_datatype_t *dt) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
@@ -102,7 +101,7 @@ bool use_sret(AbiState *state, jl_datatype_t *dt)
     return false;
 }
 
-void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
+void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
@@ -110,7 +109,7 @@ void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
         *byRef = true;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
     // Arguments are either scalar or passed by value
     size_t size = dt->size;
@@ -153,7 +152,4 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
     return Type::getIntNTy(jl_LLVMContext, size * 8);
 }
 
-bool need_private_copy(jl_value_t *ty, bool byRef)
-{
-    return false;
-}
+};

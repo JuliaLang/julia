@@ -36,17 +36,25 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "abi_x86_vec.h"
+enum ArgClass { Integer, Sse, SseUp, X87, X87Up, ComplexX87, NoClass, Memory };
+
+struct ABI_x86_64Layout : AbiLayout {
 
 // used to track the state of the ABI generator during
 // code generation
-struct AbiState {
-    unsigned char int_regs, sse_regs;
-};
+uint8_t int_regs, sse_regs;
 
-const AbiState default_abi_state = {6,8};
+ABI_x86_64Layout()
+    : int_regs(6),
+      sse_regs(8)
+{
+}
 
-enum ArgClass { Integer, Sse, SseUp, X87, X87Up, ComplexX87, NoClass, Memory };
+ABI_x86_64Layout(uint8_t int_regs, uint8_t sse_regs)
+    : int_regs(int_regs),
+      sse_regs(sse_regs)
+{
+}
 
 struct Classification {
     bool isMemory;
@@ -107,7 +115,7 @@ struct Classification {
         // make sure other half knows about it too:
         accum.addField(offset+16, ComplexX87);
     } */
-void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset)
+void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const
 {
     // Floating point types
     if (dt == jl_float64_type || dt == jl_float32_type) {
@@ -153,24 +161,24 @@ void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset)
     }
 }
 
-Classification classify(jl_datatype_t *dt)
+Classification classify(jl_datatype_t *dt) const
 {
     Classification cl;
     classifyType(cl, dt, 0);
     return cl;
 }
 
-bool use_sret(AbiState *state, jl_datatype_t *dt)
+bool use_sret(jl_datatype_t *dt) override
 {
     int sret = classify(dt).isMemory;
     if (sret) {
-        assert(state->int_regs>0 && "No int regs available when determining sret-ness?");
-        state->int_regs--;
+        assert(this->int_regs > 0 && "No int regs available when determining sret-ness?");
+        this->int_regs--;
     }
     return sret;
 }
 
-void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
+void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
 {
     Classification cl = classify(dt);
     if (cl.isMemory) {
@@ -179,7 +187,7 @@ void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
     }
 
     // Figure out how many registers we want for this arg:
-    AbiState wanted = { 0, 0 };
+    ABI_x86_64Layout wanted(0, 0);
     for (int i = 0 ; i < 2; i++) {
         if (cl.classes[i] == Integer)
             wanted.int_regs++;
@@ -187,9 +195,9 @@ void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
             wanted.sse_regs++;
     }
 
-    if (wanted.int_regs <= state->int_regs && wanted.sse_regs <= state->sse_regs) {
-        state->int_regs -= wanted.int_regs;
-        state->sse_regs -= wanted.sse_regs;
+    if (wanted.int_regs <= this->int_regs && wanted.sse_regs <= this->sse_regs) {
+        this->int_regs -= wanted.int_regs;
+        this->sse_regs -= wanted.sse_regs;
     }
     else if (jl_is_structtype(dt)) {
         // spill to memory even though we would ordinarily pass
@@ -200,7 +208,7 @@ void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 
 // Called on behalf of ccall to determine preferred LLVM representation
 // for an argument or return value.
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
     (void) isret;
     // no need to rewrite these types (they are returned as pointers anyways)
@@ -253,7 +261,4 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
     return NULL;
 }
 
-bool need_private_copy(jl_value_t *ty, bool isRef)
-{
-    return false;
-}
+};

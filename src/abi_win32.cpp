@@ -37,10 +37,9 @@
 //===----------------------------------------------------------------------===//
 
 
-typedef bool AbiState;
-AbiState default_abi_state = 0;
+struct ABI_Win32Layout : AbiLayout {
 
-bool use_sret(AbiState *state, jl_datatype_t *dt)
+bool use_sret(jl_datatype_t *dt) override
 {
     // Use sret if the size of the argument is not one of 1, 2, 4, 8 bytes
     // This covers the special case of Complex64
@@ -50,13 +49,13 @@ bool use_sret(AbiState *state, jl_datatype_t *dt)
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
+void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
 {
     // Use pass by reference for all structs
     *byRef = dt->layout->nfields > 0;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
     // Arguments are either scalar or passed by value
     // rewrite integer sized (non-sret) struct to the corresponding integer
@@ -65,7 +64,4 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
     return Type::getIntNTy(jl_LLVMContext, dt->size * 8);
 }
 
-bool need_private_copy(jl_value_t *ty, bool byRef)
-{
-    return false;
-}
+};
