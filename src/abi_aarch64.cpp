@@ -11,12 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-namespace {
+struct ABI_AArch64Layout : AbiLayout {
 
-typedef bool AbiState;
-static const AbiState default_abi_state = 0;
-
-static Type *get_llvm_vectype(jl_datatype_t *dt)
+Type *get_llvm_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
@@ -61,7 +58,7 @@ static Type *get_llvm_vectype(jl_datatype_t *dt)
     return lltype;
 }
 
-static Type *get_llvm_fptype(jl_datatype_t *dt)
+Type *get_llvm_fptype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields == 0`
@@ -87,7 +84,7 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
             lltype : nullptr);
 }
 
-static Type *get_llvm_fp_or_vectype(jl_datatype_t *dt)
+Type *get_llvm_fp_or_vectype(jl_datatype_t *dt) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     if (dt->mutabl || !dt->layout->pointerfree || dt->layout->haspadding)
@@ -107,7 +104,7 @@ struct ElementType {
 // Data Types of the members that compose the type are the same.
 // Note that it is the fundamental types that are important and not the member
 // types.
-static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele)
+bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele) const
 {
     // Assume:
     //     dt is a pointerfree type, (all members are isbits)
@@ -170,7 +167,7 @@ static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType 
     return false;
 }
 
-static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
+Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
 
@@ -191,7 +188,7 @@ static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
     return NULL;
 }
 
-void needPassByRef(AbiState*, jl_datatype_t *dt, bool *byRef, bool*)
+void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
 {
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
@@ -212,11 +209,6 @@ void needPassByRef(AbiState*, jl_datatype_t *dt, bool *byRef, bool*)
     //   is rounded up to the nearest multiple of 8 bytes.
 }
 
-bool need_private_copy(jl_value_t*, bool)
-{
-    return false;
-}
-
 // Determine which kind of register the argument will be passed in and
 // if the argument has to be passed on stack (including by reference).
 //
@@ -228,8 +220,8 @@ bool need_private_copy(jl_value_t*, bool)
 // If the argument has to be passed on stack, we need to use sret.
 //
 // All the out parameters should be default to `false`.
-static Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
-                          size_t *rewrite_len)
+Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
+                   size_t *rewrite_len) const
 {
     // Based on section 5.4 C of the Procedure Call Standard
     // C.1
@@ -352,7 +344,7 @@ static Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     // <handled by C.10 above>
 }
 
-bool use_sret(AbiState*, jl_datatype_t *dt)
+bool use_sret(jl_datatype_t *dt) override
 {
     // Section 5.5
     // If the type, T, of the result of a function is such that
@@ -370,7 +362,7 @@ bool use_sret(AbiState*, jl_datatype_t *dt)
     return onstack;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
     if (Type *fptype = get_llvm_fp_or_vectype(dt))
         return fptype;
@@ -382,4 +374,4 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool)
     return NULL;
 }
 
-}
+};
