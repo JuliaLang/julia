@@ -1740,7 +1740,7 @@ broadcast{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::Spar
                  broadcast!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
 
 @inline broadcast_zpreserving!(args...) = broadcast!(args...)
-@inline broadcast_zpreserving(args...) = broadcast(args...)
+@inline broadcast_zpreserving(args...) = Base.Broadcast.broadcast_elwise_op(args...)
 broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
                  broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
 broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
@@ -1777,6 +1777,7 @@ end # macro
 (.-)(A::Number, B::SparseMatrixCSC) = A .- Array(B)
 ( -)(A::Array , B::SparseMatrixCSC) = A  - Array(B)
 
+(.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(*, A, B)
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
 

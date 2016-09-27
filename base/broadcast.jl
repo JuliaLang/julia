@@ -234,7 +234,7 @@ end
 end
 
 # broadcast methods that dispatch on the type found by inference
-function _broadcast_t(f, ::Type{Any}, shape, iter, As...)
+function broadcast_t(f, ::Type{Any}, shape, iter, As...)
     nargs = length(As)
     keeps, Idefaults = map_newindexer(shape, As)
     st = start(iter)
@@ -244,7 +244,7 @@ function _broadcast_t(f, ::Type{Any}, shape, iter, As...)
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
-@inline function _broadcast_t(f, T, shape, iter, As...)
+@inline function broadcast_t(f, T, shape, iter, As...)
     B = similar(Array{T}, shape)
     nargs = length(As)
     keeps, Idefaults = map_newindexer(shape, As)
@@ -254,7 +254,8 @@ end
 
 # broadcast method that uses inference to find the type, but preserves abstract
 # container types when possible (used by binary elementwise operators)
-@inline broadcast_t(f, As...) = broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
+@inline broadcast_elwise_op(f, As...) =
+    broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
 ftype(f, A) = typeof(a -> f(a))
 ftype(f, A...) = typeof(a -> f(a...))
@@ -465,10 +466,10 @@ end
 ## elementwise operators ##
 
 for op in (:÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
-    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast_t($op, A, B)
+    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast_elwise_op($op, A, B)
 end
-.+(As::AbstractArray...) = broadcast_t(+, As...)
-.*(As::AbstractArray...) = broadcast_t(*, As...)
+.+(As::AbstractArray...) = broadcast_elwise_op(+, As...)
+.*(As::AbstractArray...) = broadcast_elwise_op(*, As...)
 
 # ## element-wise comparison operators returning BitArray ##
 
