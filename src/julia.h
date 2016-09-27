@@ -992,6 +992,7 @@ JL_DLLEXPORT const char *jl_typename_str(jl_value_t *v);
 JL_DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_unwrap_unionall(jl_value_t *v);
+jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 
 #ifdef NDEBUG
 STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
