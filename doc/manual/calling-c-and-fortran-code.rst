@@ -1003,6 +1003,20 @@ For more information, please see the `LLVM Language Reference`_.
 
 .. _LLVM Language Reference: http://llvm.org/docs/LangRef.html#calling-conventions
 
+There is one additional special calling convention ``llvmcall``,
+which allows inserting calls to LLVM intrinsics directly.
+This can be especially useful when targeting unusual platforms such as GPGPUs.
+For example, for `CUDA`_, we need to be able to read the thread index::
+
+    ccall("llvm.nvvm.read.ptx.sreg.tid.x", llvmcall, Int32, ())
+
+.. _CUDA: http://llvm.org/docs/NVPTXUsage.html
+
+As with any ccall, it is essential to get the argument signature exactly correct.
+Also, note that there is no compatibility layer that ensures the intrinsic makes
+sense and works on the current target,
+unlike the equivalent Julia functions exposed by ``Core.Intrinsics``.
+
 
 Accessing Global Variables
 --------------------------
