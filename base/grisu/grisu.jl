@@ -52,18 +52,18 @@ function grisu(v::AbstractFloat,mode,requested_digits,buffer=DIGITS,bignums=BIGN
     return len-1, point, neg
 end
 
-_show(io::IO, x::AbstractFloat, mode, n::Int, t) =
-    _show(io, x, mode, n, t, "NaN", "Inf")
-_show(io::IO, x::Float32, mode, n::Int, t) =
-    _show(io, x, mode, n, t, "NaN32", "Inf32")
-_show(io::IO, x::Float16, mode, n::Int, t) =
-    _show(io, x, mode, n, t, "NaN16", "Inf16")
+nanstr(x::AbstractFloat) = "NaN"
+nanstr(x::Float32) = "NaN32"
+nanstr(x::Float16) = "NaN16"
+infstr(x::AbstractFloat) = "Inf"
+infstr(x::Float32) = "Inf32"
+infstr(x::Float16) = "Inf16"
 
-function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
-    isnan(x) && return write(io, typed ? nanstr : "NaN")
+function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, compact)
+    isnan(x) && return write(io, typed ? nanstr(x) : "NaN")
     if isinf(x)
         signbit(x) && write(io,'-')
-        write(io, typed ? infstr : "Inf")
+        write(io, typed ? infstr(x) : "Inf")
         return
     end
     typed && isa(x,Float16) && write(io, "Float16(")
@@ -86,7 +86,7 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
         else
             write(io, '0')
         end
-        write(io, isa(x,Float32) ? 'f' : 'e')
+        write(io, (typed && isa(x,Float32)) ? 'f' : 'e')
         write(io, dec(pt-1))
         typed && isa(x,Float16) && write(io, ")")
         return
@@ -111,29 +111,29 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
         write(io, '.')
         unsafe_write(io, pdigits+pt, len-pt)
     end
-    typed && isa(x,Float32) && write(io, "f0")
+    typed && !compact && isa(x,Float32) && write(io, "f0")
     typed && isa(x,Float16) && write(io, ")")
     nothing
 end
 
 function Base.show(io::IO, x::Union{Float64,Float32})
     if get(io, :compact, false)
-        _show(io, x, PRECISION, 6, false)
+        _show(io, x, PRECISION, 6, true, true)
     else
-        _show(io, x, SHORTEST, 0, true)
+        _show(io, x, SHORTEST, 0, true, false)
     end
 end
 
 function Base.show(io::IO, x::Float16)
     if get(io, :compact, false)
-        _show(io, x, PRECISION, 5, false)
+        _show(io, x, PRECISION, 5, false, true)
     else
-        _show(io, x, SHORTEST, 0, true)
+        _show(io, x, SHORTEST, 0, true, false)
     end
 end
 
-Base.print(io::IO, x::Float32) = _show(io, x, SHORTEST, 0, false)
-Base.print(io::IO, x::Float16) = _show(io, x, SHORTEST, 0, false)
+Base.print(io::IO, x::Float32) = _show(io, x, SHORTEST, 0, false, false)
+Base.print(io::IO, x::Float16) = _show(io, x, SHORTEST, 0, false, false)
 
 # normal:
 #   0 < pt < len        ####.####           len+1
