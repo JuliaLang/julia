@@ -1397,7 +1397,7 @@ such that `broadcast(::typeof(fc), A::SparseMatrixCSC) = fp(fc, A)`.
 macro _enumerate_childmethods(fp, fcs...)
     fcexps = Expr(:block)
     for fc in fcs
-        push!(fcexps.args, :( broadcast(::typeof($(esc(fc))), A::SparseMatrixCSC) = $(esc(fp))($(esc(fc)), A) ) )
+        push!(fcexps.args, :( $(esc(:broadcast))(::typeof($(esc(fc))), A::SparseMatrixCSC) = $(esc(fp))($(esc(fc)), A) ) )
     end
     return fcexps
 end
