@@ -389,6 +389,9 @@ a = [0,1,2,3,0,1,2,3]
 @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
 @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
 
+# find with a type where zero(T) != 0
+@test findlast(Any[[1], I, 5, 0*I]) == 3
+
 # find with general iterables
 s = "julia"
 # FIXME once 16269 is resolved
