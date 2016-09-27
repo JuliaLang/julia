@@ -704,7 +704,7 @@ function issymmetric(A::AbstractMatrix)
     if indsm != indsn
         return false
     end
-    for i = first(indsn):last(indsn)-1, j = (i+1):last(indsn)
+    for i = first(indsn):last(indsn), j = (i):last(indsn)
         if A[i,j] != transpose(A[j,i])
             return false
         end
