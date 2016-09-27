@@ -2376,6 +2376,7 @@ end
 @test widen(1.5f0) === 1.5
 @test widen(Int32(42)) === Int64(42)
 @test widen(Int8) === Int32
+@test widen(Int64) === Int128
 @test widen(Float32) === Float64
 @test widen(Float16) === Float32
 ## Note: this should change to e.g. Float128 at some point
@@ -2848,3 +2849,5 @@ let types = (Base.BitInteger_types..., BigInt, Bool)
         end
     end
 end
+
+@test !isempty(complex(1,2))
