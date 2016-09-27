@@ -44,10 +44,16 @@ struct AbiState {
 
 const AbiState default_abi_state = {};
 
+// whether the argument can be passed in register
+static bool win64_reg_size(size_t size)
+{
+    return size <= 2 || size == 4 || size == 8;
+}
+
 bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
     size_t size = jl_datatype_size(dt);
-    if (size <= 8 || is_native_simd_type(dt))
+    if (win64_reg_size(size) || is_native_simd_type(dt))
         return false;
     return true;
 }
@@ -55,14 +61,13 @@ bool use_sret(AbiState *state, jl_datatype_t *dt)
 void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 {
     size_t size = jl_datatype_size(dt);
-    if (size > 8)
-        *byRef = true;
+    *byRef = !win64_reg_size(size);
 }
 
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
 {
     size_t size = jl_datatype_size(dt);
-    if (size > 0 && size <= 8 && !jl_is_bitstype(dt))
+    if (size > 0 && win64_reg_size(size) && !jl_is_bitstype(dt))
         return Type::getIntNTy(jl_LLVMContext, size*8);
     return NULL;
 }

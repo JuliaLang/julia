@@ -409,10 +409,25 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
     // one or both of from_type and target_type is a VectorType or AggregateType
     // LLVM doesn't allow us to cast these values directly, so
     // we need to use this alloca copy trick instead
-    // NOTE: it is assumed that the ABI has ensured that sizeof(from_type) == sizeof(target_type)
-    Value *mem = emit_static_alloca(target_type, ctx);
-    builder.CreateStore(v, builder.CreatePointerCast(mem, from_type->getPointerTo()));
-    return builder.CreateLoad(mem);
+    // On ARM and AArch64, the ABI requires casting through memory to different
+    // sizes.
+    Value *from;
+    Value *to;
+#if JL_LLVM_VERSION >= 30600
+    const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+#else
+    const DataLayout &DL = *jl_ExecutionEngine->getDataLayout();
+#endif
+    if (DL.getTypeAllocSize(target_type) >= DL.getTypeAllocSize(from_type)) {
+        to = emit_static_alloca(target_type, ctx);
+        from = builder.CreatePointerCast(to, from_type->getPointerTo());
+    }
+    else {
+        from = emit_static_alloca(from_type, ctx);
+        to = builder.CreatePointerCast(from, target_type->getPointerTo());
+    }
+    builder.CreateStore(v, from);
+    return builder.CreateLoad(to);
 }
 
 // --- argument passing and scratch space utilities ---
@@ -1839,8 +1854,23 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jl_cgval_t newst = emit_new_struct(rt, 1, NULL, ctx); // emit a new, empty struct
             assert(newst.typ != NULL && "Type was not concrete");
             assert(newst.isboxed);
+            size_t rtsz = jl_datatype_size(rt);
+            assert(rtsz > 0);
+            int boxalign = jl_gc_alignment(rtsz);
+#ifndef NDEBUG
+#if JL_LLVM_VERSION >= 30600
+            const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+#else
+            const DataLayout &DL = *jl_ExecutionEngine->getDataLayout();
+#endif
+            // ARM and AArch64 can use a LLVM type larger than the julia
+            // type. However, the LLVM type size should be no larger than
+            // the GC allocation size. (multiple of `sizeof(void*)`)
+            assert(DL.getTypeStoreSize(lrt) <= LLT_ALIGN(jl_datatype_size(rt),
+                                                         boxalign));
+#endif
             // copy the data from the return value to the new struct
-            tbaa_decorate(newst.tbaa, builder.CreateAlignedStore(result, emit_bitcast(newst.V, prt->getPointerTo()), 16)); // julia gc is aligned 16
+            tbaa_decorate(newst.tbaa, builder.CreateAlignedStore(result, emit_bitcast(newst.V, prt->getPointerTo()), boxalign));
             return newst;
         }
         else if (jlrt != prt) {

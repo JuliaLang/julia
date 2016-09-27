@@ -111,14 +111,19 @@ type Struct1
     x::Float32
     y::Float64
 end
+immutable Struct1I
+    x::Float32
+    y::Float64
+end
 copy(a::Struct1) = Struct1(a.x, a.y)
+copy(a::Struct1I) = a
 
-let a, b, a2, x
-    a = Struct1(352.39422f23, 19.287577)
+function test_struct1{Struct}(::Type{Struct})
+    a = Struct(352.39422f23, 19.287577)
     b = Float32(123.456)
 
     a2 = copy(a)
-    x = ccall((:test_1, libccalltest), Struct1, (Struct1, Float32), a2, b)
+    x = ccall((:test_1, libccalltest), Struct, (Struct, Float32), a2, b)
 
     @test a2.x == a.x && a2.y == a.y
     @test !(a2 === x)
@@ -126,6 +131,8 @@ let a, b, a2, x
     @test x.x ≈ a.x + 1*b
     @test x.y ≈ a.y - 2*b
 end
+test_struct1(Struct1)
+test_struct1(Struct1I)
 
 let a, b, x, y
     a = Complex{Int32}(Int32(10),Int32(31))
@@ -161,17 +168,24 @@ type Struct4
     y::Int32
     z::Int32
 end
+immutable Struct4I
+    x::Int32
+    y::Int32
+    z::Int32
+end
 
-let a, b, x
-    a = Struct4(-512275808,882558299,-2133022131)
+function test_struct4{Struct}(::Type{Struct})
+    a = Struct(-512275808,882558299,-2133022131)
     b = Int32(42)
 
-    x = ccall((:test_4, libccalltest), Struct4, (Struct4,Int32), a, b)
+    x = ccall((:test_4, libccalltest), Struct, (Struct, Int32), a, b)
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
     @test x.z == a.z+b*3
 end
+test_struct4(Struct4)
+test_struct4(Struct4I)
 
 type Struct5
     x::Int32
@@ -179,80 +193,113 @@ type Struct5
     z::Int32
     a::Int32
 end
+immutable Struct5I
+    x::Int32
+    y::Int32
+    z::Int32
+    a::Int32
+end
 
-let a, b, x
-    a = Struct5(1771319039, 406394736, -1269509787, -745020976)
+function test_struct5{Struct}(::Type{Struct})
+    a = Struct(1771319039, 406394736, -1269509787, -745020976)
     b = Int32(42)
 
-    x = ccall((:test_5, libccalltest), Struct5, (Struct5,Int32), a, b)
+    x = ccall((:test_5, libccalltest), Struct, (Struct, Int32), a, b)
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
     @test x.z == a.z+b*3
     @test x.a == a.a-b*4
 end
+test_struct5(Struct5)
+test_struct5(Struct5I)
 
 type Struct6
     x::Int64
     y::Int64
     z::Int64
 end
+immutable Struct6I
+    x::Int64
+    y::Int64
+    z::Int64
+end
 
-let a, b, x
-    a = Struct6(-654017936452753226, -5573248801240918230, -983717165097205098)
+function test_struct6{Struct}(::Type{Struct})
+    a = Struct(-654017936452753226, -5573248801240918230, -983717165097205098)
     b = Int64(42)
 
-    x = ccall((:test_6, libccalltest), Struct6, (Struct6, Int64), a, b)
+    x = ccall((:test_6, libccalltest), Struct, (Struct, Int64), a, b)
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
     @test x.z == a.z+b*3
 end
+test_struct6(Struct6)
+test_struct6(Struct6I)
 
 type Struct7
     x::Int64
     y::Cchar
 end
+immutable Struct7I
+    x::Int64
+    y::Cchar
+end
 
-let a, b, x
-    a = Struct7(-384082741977533896, 'h')
+function test_struct7{Struct}(::Type{Struct})
+    a = Struct(-384082741977533896, 'h')
     b = Int8(42)
 
-    x = ccall((:test_7, libccalltest), Struct7, (Struct7,Int8), a, b)
+    x = ccall((:test_7, libccalltest), Struct, (Struct, Int8), a, b)
 
     @test x.x == a.x+Int(b)*1
     @test x.y == a.y-Int(b)*2
 end
+test_struct7(Struct7)
+test_struct7(Struct7I)
 
 type Struct8
     x::Int32
     y::Cchar
 end
+immutable Struct8I
+    x::Int32
+    y::Cchar
+end
 
-let a, b, x
-    a = Struct8(-384082896, 'h')
+function test_struct8{Struct}(::Type{Struct})
+    a = Struct(-384082896, 'h')
     b = Int8(42)
 
-    r8 = ccall((:test_8, libccalltest), Struct8, (Struct8,Int8), a, b)
+    r8 = ccall((:test_8, libccalltest), Struct, (Struct, Int8), a, b)
 
     @test r8.x == a.x+b*1
     @test r8.y == a.y-b*2
 end
+test_struct8(Struct8)
+test_struct8(Struct8I)
 
 type Struct9
     x::Int32
     y::Int16
 end
+immutable Struct9I
+    x::Int32
+    y::Int16
+end
 
-let a, b, x
-    a = Struct9(-394092996, -3840)
+function test_struct9{Struct}(::Type{Struct})
+    a = Struct(-394092996, -3840)
     b = Int16(42)
 
-    x = ccall((:test_9, libccalltest), Struct9, (Struct9,Int16), a, b)
+    x = ccall((:test_9, libccalltest), Struct, (Struct, Int16), a, b)
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
 end
+test_struct9(Struct9)
+test_struct9(Struct9I)
 
 type Struct10
     x::Cchar
@@ -260,89 +307,125 @@ type Struct10
     z::Cchar
     a::Cchar
 end
+immutable Struct10I
+    x::Cchar
+    y::Cchar
+    z::Cchar
+    a::Cchar
+end
 
-let a, b, x
-    a = Struct10('0', '1', '2', '3')
+function test_struct10{Struct}(::Type{Struct})
+    a = Struct('0', '1', '2', '3')
     b = Int8(2)
 
-    x = ccall((:test_10, libccalltest), Struct10, (Struct10,Int8), a, b)
+    x = ccall((:test_10, libccalltest), Struct, (Struct, Int8), a, b)
 
     @test x.x == a.x+b*1
     @test x.y == a.y-b*2
     @test x.z == a.z+b*3
     @test x.a == a.a-b*4
 end
+test_struct10(Struct10)
+test_struct10(Struct10I)
 
 type Struct11
     x::Complex64
 end
+immutable Struct11I
+    x::Complex64
+end
 
-let a, b, x
-    a = Struct11(0.8877077f0 + 0.4591081f0im)
+function test_struct11{Struct}(::Type{Struct})
+    a = Struct(0.8877077f0 + 0.4591081f0im)
     b = Float32(42)
 
-    x = ccall((:test_11, libccalltest), Struct11, (Struct11,Float32), a, b)
+    x = ccall((:test_11, libccalltest), Struct, (Struct, Float32), a, b)
 
     @test x.x ≈ a.x + b*1 - b*2im
 end
+test_struct11(Struct11)
+test_struct11(Struct11I)
 
 type Struct12
     x::Complex64
     y::Complex64
 end
+immutable Struct12I
+    x::Complex64
+    y::Complex64
+end
 
-let a, b, x
-    a = Struct12(0.8877077f5 + 0.4591081f2im, 0.0004842868f0 - 6982.3265f3im)
+function test_struct12{Struct}(::Type{Struct})
+    a = Struct(0.8877077f5 + 0.4591081f2im, 0.0004842868f0 - 6982.3265f3im)
     b = Float32(42)
 
-    x = ccall((:test_12, libccalltest), Struct12, (Struct12,Float32), a, b)
+    x = ccall((:test_12, libccalltest), Struct, (Struct, Float32), a, b)
 
     @test x.x ≈ a.x + b*1 - b*2im
     @test x.y ≈ a.y + b*3 - b*4im
 end
+test_struct12(Struct12)
+test_struct12(Struct12I)
 
 type Struct13
     x::Complex128
 end
+immutable Struct13I
+    x::Complex128
+end
 
-let a, b, x
-    a = Struct13(42968.97560380495 - 803.0576845153616im)
+function test_struct13{Struct}(::Type{Struct})
+    a = Struct(42968.97560380495 - 803.0576845153616im)
     b = Float64(42)
 
-    x = ccall((:test_13, libccalltest), Struct13, (Struct13,Float64), a, b)
+    x = ccall((:test_13, libccalltest), Struct, (Struct, Float64), a, b)
 
     @test x.x ≈ a.x + b*1 - b*2im
 end
+test_struct13(Struct13)
+test_struct13(Struct13I)
 
 type Struct14
     x::Float32
     y::Float32
 end
+immutable Struct14I
+    x::Float32
+    y::Float32
+end
 
-let a, b, x
-    a = Struct14(0.024138331f0, 0.89759064f32)
+function test_struct14{Struct}(::Type{Struct})
+    a = Struct(0.024138331f0, 0.89759064f32)
     b = Float32(42)
 
-    x = ccall((:test_14, libccalltest), Struct14, (Struct14,Float32), a, b)
+    x = ccall((:test_14, libccalltest), Struct, (Struct, Float32), a, b)
 
     @test x.x ≈ a.x + b*1
     @test x.y ≈ a.y - b*2
 end
+test_struct14(Struct14)
+test_struct14(Struct14I)
 
 type Struct15
     x::Float64
     y::Float64
 end
+immutable Struct15I
+    x::Float64
+    y::Float64
+end
 
-let a, b, x
-    a = Struct15(4.180997967273657, -0.404218594294923)
+function test_struct15{Struct}(::Type{Struct})
+    a = Struct(4.180997967273657, -0.404218594294923)
     b = Float64(42)
 
-    x = ccall((:test_15, libccalltest), Struct15, (Struct15,Float64), a, b)
+    x = ccall((:test_15, libccalltest), Struct, (Struct, Float64), a, b)
 
     @test x.x ≈ a.x + b*1
     @test x.y ≈ a.y - b*2
 end
+test_struct15(Struct15)
+test_struct15(Struct15I)
 
 type Struct16
     x::Float32
@@ -352,13 +435,21 @@ type Struct16
     b::Float64
     c::Float64
 end
+immutable Struct16I
+    x::Float32
+    y::Float32
+    z::Float32
+    a::Float64
+    b::Float64
+    c::Float64
+end
 
-let a, b, x
-    a = Struct16(0.1604656f0, 0.6297606f0, 0.83588994f0,
-                 0.6460273620993535, 0.9472692581106656, 0.47328535437352093)
+function test_struct16{Struct}(::Type{Struct})
+    a = Struct(0.1604656f0, 0.6297606f0, 0.83588994f0,
+               0.6460273620993535, 0.9472692581106656, 0.47328535437352093)
     b = Float32(42)
 
-    x = ccall((:test_16, libccalltest), Struct16, (Struct16,Float32), a, b)
+    x = ccall((:test_16, libccalltest), Struct, (Struct, Float32), a, b)
 
     @test x.x ≈ a.x + b*1
     @test x.y ≈ a.y - b*2
@@ -367,6 +458,53 @@ let a, b, x
     @test x.b ≈ a.b + b*5
     @test x.c ≈ a.c - b*6
 end
+test_struct16(Struct16)
+test_struct16(Struct16I)
+
+type Struct17
+    a::Int8
+    b::Int16
+end
+immutable Struct17I
+    a::Int8
+    b::Int16
+end
+
+function test_struct17{Struct}(::Type{Struct})
+    a = Struct(2, 10)
+    b = Int8(2)
+
+    x = ccall((:test_17, libccalltest), Struct, (Struct, Int8), a, b)
+
+    @test x.a == a.a + b * 1
+    @test x.b == a.b - b * 2
+end
+test_struct17(Struct17)
+test_struct17(Struct17I)
+
+type Struct18
+    a::Int8
+    b::Int8
+    c::Int8
+end
+immutable Struct18I
+    a::Int8
+    b::Int8
+    c::Int8
+end
+
+function test_struct18{Struct}(::Type{Struct})
+    a = Struct(2, 10, -3)
+    b = Int8(2)
+
+    x = ccall((:test_18, libccalltest), Struct, (Struct, Int8), a, b)
+
+    @test x.a == a.a + b * 1
+    @test x.b == a.b - b * 2
+    @test x.c == a.c + b * 3
+end
+test_struct18(Struct18)
+test_struct18(Struct18I)
 
 let a, b, x
     a = Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
@@ -383,19 +521,27 @@ type Struct_Big
     y::Int
     z::Int8
 end
+immutable Struct_BigI
+    x::Int
+    y::Int
+    z::Int8
+end
 copy(a::Struct_Big) = Struct_Big(a.x, a.y, a.z)
+copy(a::Struct_BigI) = a
 
-let a, a2, x
-    a = Struct_Big(424,-5,Int8('Z'))
+function test_struct_big{Struct}(::Type{Struct})
+    a = Struct(424,-5,Int8('Z'))
     a2 = copy(a)
 
-    x = ccall((:test_big, libccalltest), Struct_Big, (Struct_Big,), a2)
+    x = ccall((:test_big, libccalltest), Struct, (Struct,), a2)
 
     @test a2.x == a.x && a2.y == a.y && a2.z == a.z
     @test x.x == a.x + 1
     @test x.y == a.y - 2
     @test x.z == a.z - Int('A')
 end
+test_struct_big(Struct_Big)
+test_struct_big(Struct_BigI)
 
 const Struct_huge1a = NTuple{8, Int64}
 const Struct_huge1b = NTuple{9, Int64}

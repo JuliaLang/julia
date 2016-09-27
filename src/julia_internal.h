@@ -92,6 +92,27 @@ static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
 //    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
 };
 
+STATIC_INLINE int jl_gc_alignment(size_t sz)
+{
+    if (sz == 0)
+        return sizeof(void*);
+#ifdef _P64
+    (void)sz;
+    return 16;
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+    return sz <= 4 ? 8 : 16;
+#else
+    // szclass 8
+    if (sz <= 4)
+        return 8;
+    // szclass 12
+    if (sz <= 8)
+        return 4;
+    // szclass 16+
+    return 16;
+#endif
+}
+
 STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
 {
 #ifdef _P64
