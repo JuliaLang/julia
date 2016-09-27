@@ -3683,7 +3683,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     size_t nargs = jl_nparams(argt);
     std::string err_msg = generate_func_sig(&crt, &prt, sret, fargt, fargt_isboxed,
                                             fargt_sig, fargt_vasig, byRefList,
-                                            attrs, jlrettype, argt->parameters, nargs);
+                                            attrs, jlrettype, argt->parameters, nargs, false);
     if (!err_msg.empty())
         jl_error(err_msg.c_str());
     if (fargt.size() + sret != fargt_sig.size())

@@ -822,6 +822,20 @@ err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 
 For more information, please see the [LLVM Language Reference](http://llvm.org/docs/LangRef.html#calling-conventions).
 
+There is one additional special calling convention `llvmcall`,
+which allows inserting calls to LLVM intrinsics directly.
+This can be especially useful when targeting unusual platforms such as GPGPUs.
+For example, for [CUDA](http://llvm.org/docs/NVPTXUsage.html), we need to be able to read the thread index:
+
+```julia
+ccall("llvm.nvvm.read.ptx.sreg.tid.x", llvmcall, Int32, ())
+```
+
+As with any `ccall`, it is essential to get the argument signature exactly correct.
+Also, note that there is no compatibility layer that ensures the intrinsic makes
+sense and works on the current target,
+unlike the equivalent Julia functions exposed by `Core.Intrinsics`.
+
 ## Accessing Global Variables
 
 Global variables exported by native libraries can be accessed by name using the [`cglobal()`](@ref)
