@@ -218,13 +218,12 @@ function process_options(opts::JLOptions)
     global have_color     = (opts.color == 1)
     global is_interactive = (opts.isinteractive != 0)
     while true
-        # load ~/.juliarc file
-        startup && load_juliarc()
-
-        # startup worker
+        # startup worker.
+        # opts.startupfile, opts.load, etc should should not be processed for workers.
         if opts.worker != C_NULL
             start_worker(unsafe_string(opts.worker)) # does not return
         end
+
         # add processors
         if opts.nprocs > 0
             addprocs(opts.nprocs)
@@ -233,6 +232,10 @@ function process_options(opts::JLOptions)
         if opts.machinefile != C_NULL
             addprocs(load_machine_file(unsafe_string(opts.machinefile)))
         end
+
+        # load ~/.juliarc file
+        startup && load_juliarc()
+
         # load file immediately on all processors
         if opts.load != C_NULL
             @sync for p in procs()
