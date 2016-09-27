@@ -845,3 +845,20 @@ begin
 end"""))
     @test !any(x->(x == Expr(:meta, :push_loc, :none)), ex.args)
 end
+
+# Check qualified string macros
+Base.r"regex" == r"regex"
+
+module QualifiedStringMacro
+module SubModule
+macro x_str(x)
+    1
+end
+macro y_cmd(x)
+    2
+end
+end
+end
+
+@test QualifiedStringMacro.SubModule.x"" === 1
+@test QualifiedStringMacro.SubModule.y`` === 2
