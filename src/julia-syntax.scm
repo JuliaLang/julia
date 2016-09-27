@@ -3243,7 +3243,7 @@ f(x) = yt(x)
     ;; from the current function.
     (define (compile e break-labels value tail)
       (if (or (not (pair? e)) (memq (car e) '(null ssavalue quote inert top core copyast the_exception $
-                                                   globalref outerref cdecl stdcall fastcall thiscall)))
+                                                   globalref outerref cdecl stdcall fastcall thiscall llvmcall)))
           (let ((e (if (and arg-map (symbol? e))
                        (get arg-map e e)
                        e)))
