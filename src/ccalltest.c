@@ -192,6 +192,17 @@ typedef struct {
 } struct16;
 
 typedef struct {
+    int8_t a;
+    int16_t b;
+} struct17;
+
+typedef struct {
+    int8_t a;
+    int8_t b;
+    int8_t c;
+} struct18;
+
+typedef struct {
     jint x;
     jint y;
     char z;
@@ -464,6 +475,24 @@ JL_DLLEXPORT struct16 test_16(struct16 a, float b) {
     a.a -= b*4;
     a.b += b*5;
     a.c -= b*6;
+    return a;
+}
+
+JL_DLLEXPORT struct17 test_17(struct17 a, int8_t b) {
+    //Unpack a struct with non-obvious packing requirements
+    if (verbose) fprintf(stderr,"%d %d & %d\n", (int)a.a, (int)a.b, (int)b);
+    a.a += b*1;
+    a.b -= b*2;
+    return a;
+}
+
+JL_DLLEXPORT struct18 test_18(struct18 a, int8_t b) {
+    //Unpack a struct with non-obvious packing requirements
+    if (verbose) fprintf(stderr,"%d %d %d & %d\n",
+                         (int)a.a, (int)a.b, (int)a.c, (int)b);
+    a.a += b*1;
+    a.b -= b*2;
+    a.c += b*3;
     return a;
 }
 
