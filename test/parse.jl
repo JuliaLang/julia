@@ -663,6 +663,10 @@ end
 # issue #17701
 @test expand(:(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3)&&i\"")
 
+# issue #18667
+@test expand(:(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
+@test expand(:(false = 1)) == Expr(:error, "invalid assignment location \"false\"")
+
 # PR #15592
 let str = "[1] [2]"
     @test_throws ParseError parse(str)
