@@ -369,7 +369,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
 static Value *auto_unbox(const jl_cgval_t &v, jl_codectx_t *ctx)
 {
     jl_value_t *bt = v.typ;
-    if (!(jl_is_bitstype(bt) || jl_is_vec_type(bt))) {
+    if (!(jl_is_bitstype(bt) || jl_is_vec_type(bt) || jl_is_vecelement_type(bt))) {
         // This can be reached with a direct invalid call to an Intrinsic, such as:
         //   Intrinsics.neg_int("")
         emit_error("auto_unbox: unable to determine argument type", ctx);
