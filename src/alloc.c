@@ -983,11 +983,21 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         // LLVM allows pointer types as vector elements, but until a
         // motivating use case comes up for Julia, we reject pointers.
         return 0;
-    size_t elsz = jl_datatype_size(ty);
-    if (elsz>8 || (1<<elsz & 0x116) == 0)
-        // Element size is not 1, 2, 4, or 8.
-        return 0;
-    size_t size = nfields*elsz;
+    size_t nbits = jl_datatype_nbits(ty);
+    size_t size = 0; // in bytes
+    if (nbits < 8) {
+        if ((1<<nbits & 0x116) == 0)
+            // NBits is not 1,2,4 or 8.
+            return 0;
+        size = ((nfields*nbits)+7)/8; // in bytes
+    } else {
+        size_t elsz = jl_datatype_size(ty);
+
+        if (elsz>8 || (1<<elsz & 0x116) == 0)
+            // Element size is not 1, 2, 4, or 8.
+            return 0;
+        size = nfields*elsz;
+    }
     // LLVM's alignment rule for vectors seems to be to round up to
     // a power of two, even if that's overkill for the target hardware.
     size_t alignment=1;
