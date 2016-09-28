@@ -723,7 +723,7 @@ for fn in (:float,:big)
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
         function $fn(r::LinSpace)
             new_len = $fn(r.len)
-            new_len == r.len || throw(ArgumentError("$(r): too long for ", $fn))
+            new_len == r.len || throw(ArgumentError("length of r, $(r.len), too long for $fn"))
             LinSpace($fn(r.start), $fn(r.stop), new_len, $fn(r.divisor))
         end
     end
