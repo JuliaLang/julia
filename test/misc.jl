@@ -452,3 +452,26 @@ if is_windows()
         err18083 == 0 && error(Libc.GetLastError())
     end
 end
+
+let
+    old_have_color = Base.have_color
+     try
+        eval(Base, :(have_color = true))
+        buf = IOBuffer()
+        print_with_color(:red, buf, "foo")
+        @test startswith(takebuf_string(buf), Base.text_colors[:red])
+    finally
+        eval(Base, :(have_color = $(old_have_color)))
+    end
+end
+
+let
+    global c_18711 = 0
+    buf = IOContext(IOBuffer(), :hascontext => true)
+    Base.with_output_color(:red, buf) do buf
+        global c_18711
+        get(buf, :hascontext, false) && (c_18711 += 1)
+    end
+    @test c_18711 == 1
+
+end
