@@ -229,7 +229,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
     va_list args;
     size_t nf = jl_datatype_nfields(type);
     va_start(args, type);
-    jl_value_t *jv = jl_gc_alloc(ptls, type->size, type);
+    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     for(size_t i=0; i < nf; i++) {
         jl_set_nth_field(jv, i, va_arg(args, jl_value_t*));
     }
@@ -243,7 +243,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     jl_ptls_t ptls = jl_get_ptls_states();
     if (type->instance != NULL) return type->instance;
     size_t nf = jl_datatype_nfields(type);
-    jl_value_t *jv = jl_gc_alloc(ptls, type->size, type);
+    jl_value_t *jv = jl_gc_alloc(ptls, jl_datatype_size(type), type);
     for(size_t i=0; i < na; i++) {
         jl_set_nth_field(jv, i, args[i]);
     }
@@ -259,7 +259,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (type->instance != NULL) return type->instance;
-    size_t size = type->size;
+    size_t size = jl_datatype_size(type);
     jl_value_t *jv = jl_gc_alloc(ptls, size, type);
     if (size > 0)
         memset(jl_data_ptr(jv), 0, size);

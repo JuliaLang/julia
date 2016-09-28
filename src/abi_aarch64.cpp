@@ -32,7 +32,7 @@ static Type *get_llvm_vectype(jl_datatype_t *dt)
     // Short vector should be either 8 bytes or 16 bytes.
     // Note that there are only two distinct fundamental types for
     // short vectors so we normalize them to <2 x i32> and <4 x i32>
-    switch (dt->size) {
+    switch (jl_datatype_size(dt)) {
     case 8:
         lltype = T_vec64;
         break;
@@ -67,7 +67,7 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
     // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields == 0`
     Type *lltype;
     // Check size first since it's cheaper.
-    switch (dt->size) {
+    switch (jl_datatype_size(dt)) {
     case 2:
         lltype = T_float16;
         break;
@@ -111,7 +111,7 @@ static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType 
 {
     // Assume:
     //     dt is a pointerfree type, (all members are isbits)
-    //     dsz == dt->size > 0
+    //     dsz == jl_datatype_size(dt) > 0
     //     0 <= nele <= 3
     //     dt has no padding
 
@@ -181,7 +181,7 @@ static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
     // with a Fundamental Data Type that is a Short-Vector type and at most four
     // uniquely addressable members.
     // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
-    size_t dsz = dt->size;
+    size_t dsz = jl_datatype_size(dt);
     if (dsz > 64 || !dt->layout || !dt->layout->pointerfree || dt->layout->haspadding)
         return NULL;
     nele = 0;
@@ -206,7 +206,7 @@ void needPassByRef(AbiState*, jl_datatype_t *dt, bool *byRef, bool*)
     // We only check for the total size and not whether it is a composite type
     // since there's no corresponding C type and we just treat such large
     // bitstype as a composite type of the right size.
-    *byRef = dt->size > 16;
+    *byRef = jl_datatype_size(dt) > 16;
     // B.4
     //   If the argument type is a Composite Type then the size of the argument
     //   is rounded up to the nearest multiple of 8 bytes.
@@ -262,7 +262,7 @@ static Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     // done before starting step C but we do this here to avoid checking for
     // HFA and HVA twice. We don't check whether it is a composite type.
     // See `needPassByRef` above.
-    if (dt->size > 16) {
+    if (jl_datatype_size(dt) > 16) {
         *onstack = true;
         return NULL;
     }
@@ -295,8 +295,9 @@ static Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     // pointers. We don't need to worry about floating points here since they
     // are handled above.
     if (jl_is_immutable(dt) && jl_datatype_nfields(dt) == 0 &&
-        (dt->size == 1 || dt->size == 2 || dt->size == 4 ||
-         dt->size == 8 || dt->size == 16))
+        (jl_datatype_size(dt) == 1 || jl_datatype_size(dt) == 2 ||
+         jl_datatype_size(dt) == 4 || jl_datatype_size(dt) == 8 ||
+         jl_datatype_size(dt) == 16))
         return NULL;
 
     // C.8
@@ -325,10 +326,10 @@ static Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     // The type can fit in 8 x 8 bytes since it is handled by
     // need_pass_by_ref otherwise.
     // 0-size types (Void) won't be rewritten and that is what we want
-    assert(dt->size <= 16); // Should be pass by reference otherwise
-    *rewrite_len = (dt->size + 7) >> 3;
+    assert(jl_datatype_size(dt) <= 16); // Should be pass by reference otherwise
+    *rewrite_len = (jl_datatype_size(dt) + 7) >> 3;
     // Rewrite to [n x Int64] where n is the **size in dword**
-    return dt->size ? T_int64 : NULL;
+    return jl_datatype_size(dt) ? T_int64 : NULL;
 
     // C.11
     //   The NGRN is set to 8.

@@ -329,7 +329,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
         return dta->name == dtb->name && compare_svec(dta->parameters, dtb->parameters);
     }
     if (dt->mutabl) return 0;
-    size_t sz = dt->size;
+    size_t sz = jl_datatype_size(dt);
     if (sz == 0) return 1;
     size_t nf = jl_datatype_nfields(dt);
     if (nf == 0)
@@ -359,7 +359,7 @@ JL_CALLABLE(jl_f_sizeof)
         jl_datatype_t *dx = (jl_datatype_t*)x;
         if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type)
             jl_error("type does not have a canonical binary representation");
-        if (!(dx->name->names == jl_emptysvec && dx->size > 0)) {
+        if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
             // names===() and size > 0  =>  bitstype, size always known
             if (dx->abstract || !jl_is_leaf_type(x))
                 jl_error("argument is an abstract type; size is indeterminate");

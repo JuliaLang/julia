@@ -119,7 +119,8 @@ function show_default(io::IO, x::ANY)
     show(io, t)
     print(io, '(')
     nf = nfields(t)
-    if nf != 0 || t.size==0
+    nb = sizeof(x)
+    if nf != 0 || nb==0
         if !show_circular(io, x)
             recur_io = IOContext(io, :SHOWN_SET => x)
             for i=1:nf
@@ -135,7 +136,6 @@ function show_default(io::IO, x::ANY)
             end
         end
     else
-        nb = t.size
         print(io, "0x")
         p = data_pointer_from_objref(x)
         for i=nb-1:-1:0
