@@ -8,7 +8,7 @@ static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
     return load_or_store;
 }
 
-static llvm::Value *prepare_call(llvm::Value *Callee)
+static Value *prepare_call(IRBuilder<> &builder, Value *Callee)
 {
     if (Function *F = dyn_cast<Function>(Callee)) {
         Module *M = jl_builderModule;
@@ -20,10 +20,15 @@ static llvm::Value *prepare_call(llvm::Value *Callee)
     }
     return Callee;
 }
+static Value *prepare_call(Value *Callee)
+{
+    return prepare_call(builder, Callee);
+}
+
 
 // --- string constants ---
 static StringMap<GlobalVariable*> stringConstants;
-static Value *stringConstPtr(const std::string &txt)
+static Value *stringConstPtr(IRBuilder<> &builder, const std::string &txt)
 {
     StringRef ctxt(txt.c_str(), strlen(txt.c_str()) + 1);
 #if JL_LLVM_VERSION >= 30600
@@ -57,7 +62,7 @@ static Value *stringConstPtr(const std::string &txt)
             jl_ExecutionEngine->addGlobalMapping(gv, (void*)(uintptr_t)pooledtxt.data());
         }
 
-        GlobalVariable *v = prepare_global(pooledval->second);
+        GlobalVariable *v = prepare_global(pooledval->second, jl_builderModule);
         Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
         Value *Args[] = { zero, zero };
 #if JL_LLVM_VERSION >= 30700
@@ -72,6 +77,10 @@ static Value *stringConstPtr(const std::string &txt)
                 T_pint8);
         return v;
     }
+}
+static Value *stringConstPtr(const std::string &txt)
+{
+    return stringConstPtr(builder, txt);
 }
 
 // --- Debug info ---
