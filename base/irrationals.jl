@@ -64,9 +64,6 @@ end
 @pure function rationalize{T<:Integer}(::Type{T}, x::Irrational; tol::Real=0)
     return rationalize(T, big(x), tol=tol)
 end
-@pure function rationalize{T<:Integer}(::Type{T}, x::Irrational)
-    return rationalize(T, big(x), tol=0)
-end
 @pure function lessrational{T<:Integer}(rx::Rational{T}, x::Irrational)
     # an @pure version of `<` for determining if the rationalization of
     # an irrational number required rounding up or down
