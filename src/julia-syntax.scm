@@ -533,10 +533,10 @@
                                      ,@(if (null? vararg) '()
                                            (list `(... ,(arg-name (car vararg))))))
                               ;; otherwise add to rest keywords
-                              `(ccall 'jl_array_ptr_1d_push Void (tuple Any Any)
-                                      ,rkw (tuple ,elt
+                              `(foreigncall 'jl_array_ptr_1d_push (core Void) (call (core svec) Any Any)
+                                      ,rkw 0 (tuple ,elt
                                                   (call (core arrayref) ,kw
-                                                        (call (top +) ,ii 1)))))
+                                                        (call (top +) ,ii 1))) 0))
                           (map list vars vals flags))))
             ;; set keywords that weren't present to their default values
             ,@(apply append
@@ -897,7 +897,7 @@
     (if (or (null? F) (null? A))
         `(block
           ,.(reverse! stmts)
-          (call (core ccall) ,name ,RT (call (core svec) ,@(dots->vararg atypes))
+          (foreigncall ,name ,RT (call (core svec) ,@(dots->vararg atypes))
                 ,.(reverse! C)
                 ,@A))
         (let* ((a     (car A))
@@ -1206,7 +1206,7 @@
                         (= ,err true)))
                   (= ,finally-exception (the_exception))
                   ,finalb
-                  (if ,err (ccall 'jl_rethrow_other Void (tuple Any) ,finally-exception))
+                  (if ,err (foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any) ,finally-exception 0))
                   ,(if hasret
                        (if ret
                            `(if ,ret (return ,retval) ,val)
@@ -1411,20 +1411,20 @@
                    (if (null? stmts)
                        (loop (cdr kw) (list* (caddr arg) `(quote ,(cadr arg)) initial-kw) stmts #t)
                        (loop (cdr kw) initial-kw
-                             (cons `(ccall 'jl_array_ptr_1d_push2 Void (tuple Any Any Any)
-                                           ,container
-                                           (|::| (quote ,(cadr arg)) (core Symbol))
-                                           ,(caddr arg))
+                             (cons `(foreigncall 'jl_array_ptr_1d_push2 (core Void) (call (core svec) Any Any Any)
+                                           ,container 0
+                                           (|::| (quote ,(cadr arg)) (core Symbol)) 0
+                                           ,(caddr arg) 0)
                                    stmts)
                              #t)))
                   (else
                    (loop (cdr kw) initial-kw
                          (cons (let* ((k (make-ssavalue))
                                       (v (make-ssavalue))
-                                      (push-expr `(ccall 'jl_array_ptr_1d_push2 Void (tuple Any Any Any)
-                                                         ,container
-                                                         (|::| ,k (core Symbol))
-                                                         ,v)))
+                                      (push-expr `(foreigncall 'jl_array_ptr_1d_push2 (core Void) (call (core svec) Any Any Any)
+                                                         ,container 0
+                                                         (|::| ,k (core Symbol)) 0
+                                                         ,v 0)))
                                  (if (vararg? arg)
                                      `(for (= (tuple ,k ,v) ,(cadr arg))
                                            ,push-expr)
@@ -1957,6 +1957,24 @@
          (let ((f (cadr e)))
            (cond ((dotop? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
+                 ((and (eq? f 'ccall) (length> e 4))
+                  (let* ((cconv (cadddr e))
+                         (have-cconv (memq cconv '(cdecl stdcall fastcall thiscall llvmcall)))
+                         (after-cconv (if have-cconv (cddddr e) (cdddr e)))
+                         (name (caddr e))
+                         (RT   (car after-cconv))
+                         (argtypes (cadr after-cconv))
+                         (args (cddr after-cconv)))
+                        (begin
+                          (if (not (and (pair? argtypes)
+                                        (eq? (car argtypes) 'tuple)))
+                              (if (and (pair? RT)
+                                       (eq? (car RT) 'tuple))
+                                  (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
+                                  (error "ccall argument types must be a tuple; try \"(T,)\"")))
+                          (expand-forms
+                           (lower-ccall name RT (cdr argtypes)
+                            (if have-cconv (append args (list (list cconv))) args)))))) ;; place (callingconv) at end of arglist
                  ((and (pair? (caddr e))
                        (eq? (car (caddr e)) 'parameters))
                   ;; (call f (parameters . kwargs) ...)
@@ -2168,24 +2186,6 @@
 
    '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
-
-   'ccall
-   (lambda (e)
-     (if (length> e 3)
-         (let ((name (cadr e))
-               (RT   (caddr e))
-               (argtypes (cadddr e))
-               (args (cddddr e)))
-           (begin
-             (if (not (and (pair? argtypes)
-                           (eq? (car argtypes) 'tuple)))
-                 (if (and (pair? RT)
-                          (eq? (car RT) 'tuple))
-                     (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
-                     (error "ccall argument types must be a tuple; try \"(T,)\"")))
-             (expand-forms
-              (lower-ccall name RT (cdr argtypes) args))))
-         e))
 
    'generator
    (lambda (e)
@@ -3255,18 +3255,17 @@ f(x) = yt(x)
                   ((and (pair? e) (eq? (car e) 'globalref)) (emit e) #f) ;; keep globals for undefined-var checking
                   (else #f)))
           (case (car e)
-            ((call new)
-             (let* ((ccall? (and (eq? (car e) 'call) (equal? (cadr e) '(core ccall))))
-                    (args (if ccall?
+            ((call new foreigncall)
+             (let* ((args (if (eq? (car e) 'foreigncall)
                               ;; NOTE: 2nd and 3rd arguments of ccall must be left in place
                               ;;       the 1st should be compiled if an atom.
-                              (append (list (cadr e))
-                                      (cond (atom? (caddr e) (compile-args (list (caddr e)) break-labels))
-                                            (else (caddr e)))
-                                      (list-head (cdddr e) 2)
-                                      (compile-args (list-tail e 5) break-labels))
+                              (append (list)
+                                      (cond (atom? (cadr e) (compile-args (list (cadr e)) break-labels))
+                                            (else (cadr e)))
+                                      (list-head (cddr e) 2)
+                                      (compile-args (list-tail e 4) break-labels))
                               (compile-args (cdr e) break-labels)))
-                    (callex (cons (car e) args)))
+                    (callex (if (eq? (car e) 'foreigncall) (cons 'call (cons `(core ccall) args)) (cons (car e) args))))
                (cond (tail (emit-return callex))
                      (value callex)
                      ((eq? (car e) 'new) #f)
