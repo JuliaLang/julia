@@ -561,7 +561,9 @@ static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx,
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx);
 static GlobalVariable *prepare_global(GlobalVariable *G, Module *M = jl_builderModule);
-static llvm::Value *prepare_call(llvm::Value *Callee);
+static Value *prepare_call(Value *Callee);
+static Value *prepare_call(IRBuilder<> &builder, Value *Callee);
+
 
 template<typename T> static void push_gc_use(T &&vec, const jl_cgval_t &v)
 {
@@ -3804,7 +3806,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             prt = fargt_sig[0]->getContainedType(0); // sret is a PointerType
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type, 0);
         Value *v = julia_to_native(crt, toboxed, declrt, retval,
-                false, false, false, false, false, 0, &ctx, NULL);
+                false, false, false, false, 0, &ctx, NULL);
         r = llvm_type_rewrite(v, crt, prt, false, false, issigned, &ctx);
         if (sret)
             builder.CreateStore(r, sretPtr);

@@ -1,7 +1,5 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#include "support/hashing.h"
-
 // --- the ccall, cglobal, and llvm intrinsics ---
 
 // Map from symbol name (in a certain library) to its GV in sysimg and the
@@ -163,15 +161,15 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
     builder.SetInsertPoint(dlsym_lookup);
     Value *libname;
     if (runtime_lib) {
-        libname = stringConstPtr(f_lib);
+        libname = stringConstPtr(builder, f_lib);
     }
     else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
 #if JL_LLVM_VERSION >= 30700
-    Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, stringConstPtr(f_name), libptrgv });
+    Value *llvmf = builder.CreateCall(prepare_call(builder, jldlsym_func), { libname, stringConstPtr(builder, f_name), libptrgv });
 #else
-    Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, stringConstPtr(f_name), libptrgv);
+    Value *llvmf = builder.CreateCall3(prepare_call(builder, jldlsym_func), libname, stringConstPtr(builder, f_name), libptrgv);
 #endif
     auto store = builder.CreateAlignedStore(llvmf, llvmgv, sizeof(void*));
 #  if JL_LLVM_VERSION >= 30900
@@ -214,6 +212,85 @@ static DenseMap<AttributeSet,
 
 // Emit a "PLT" entry that will be lazily initialized
 // when being called the first time.
+static GlobalVariable *emit_plt_thunk(Module *M, FunctionType *functype, const AttributeSet &attrs,
+                                      CallingConv::ID cc, const char *f_lib, const char *f_name,
+                                      GlobalVariable *libptrgv, GlobalVariable *llvmgv,
+                                      void *symaddr, bool runtime_lib)
+{
+    PointerType *funcptype = PointerType::get(functype, 0);
+    libptrgv = prepare_global(libptrgv, M);
+    llvmgv = prepare_global(llvmgv, M);
+    BasicBlock *old = builder.GetInsertBlock();
+    DebugLoc olddl = builder.getCurrentDebugLocation();
+    DebugLoc noDbg;
+    builder.SetCurrentDebugLocation(noDbg);
+    std::stringstream funcName;
+    funcName << "jlplt_" << f_name << "_" << globalUnique++;
+    auto fname = funcName.str();
+    Function *plt = Function::Create(functype,
+                                     GlobalVariable::ExternalLinkage,
+                                     fname, M);
+    jl_init_function(plt);
+    plt->setAttributes(attrs);
+    if (cc != CallingConv::C)
+        plt->setCallingConv(cc);
+    funcName << "_got";
+    auto gname = funcName.str();
+    GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
+                                             GlobalVariable::ExternalLinkage,
+                                             nullptr, gname);
+    *(void**)jl_emit_and_add_to_shadow(got) = symaddr;
+    BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
+    builder.SetInsertPoint(b0);
+    Value *ptr = runtime_sym_lookup(funcptype, f_lib, f_name, plt, libptrgv,
+                                    llvmgv, runtime_lib);
+    auto store = builder.CreateAlignedStore(builder.CreateBitCast(ptr, T_pvoidfunc), got, sizeof(void*));
+#if JL_LLVM_VERSION >= 30900
+    store->setAtomic(AtomicOrdering::Release);
+#else
+    store->setAtomic(Release);
+#endif
+    SmallVector<Value*, 16> args;
+    for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
+        args.push_back(&*arg);
+    CallInst *ret = builder.CreateCall(ptr, ArrayRef<Value*>(args));
+    ret->setAttributes(attrs);
+    if (cc != CallingConv::C)
+        ret->setCallingConv(cc);
+    // NoReturn function can trigger LLVM verifier error when declared as
+    // MustTail since other passes might replace the `ret` with
+    // `unreachable` (LLVM should probably accept `unreachable`).
+    if (attrs.hasAttribute(AttributeSet::FunctionIndex,
+                           Attribute::NoReturn)) {
+        builder.CreateUnreachable();
+    }
+    else {
+        // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
+        // Known failures includes vararg (not needed here) and sret.
+#if JL_LLVM_VERSION >= 30700 && (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
+                        defined(_CPU_AARCH64_))
+        ret->setTailCallKind(CallInst::TCK_MustTail);
+#endif
+        if (functype->getReturnType() == T_void) {
+            builder.CreateRetVoid();
+        }
+        else {
+            builder.CreateRet(ret);
+        }
+    }
+    builder.SetInsertPoint(old);
+    builder.SetCurrentDebugLocation(olddl);
+    got = global_proto(got); // exchange got for the permanent global before jl_finalize_module destroys it
+    jl_finalize_module(M, true);
+
+    auto shadowgot =
+        cast<GlobalVariable>(shadow_output->getNamedValue(gname));
+    auto shadowplt = cast<Function>(shadow_output->getNamedValue(fname));
+    shadowgot->setInitializer(ConstantExpr::getBitCast(shadowplt,
+                                                       T_pvoidfunc));
+    return got;
+}
+
 static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
                        CallingConv::ID cc, const char *f_lib, const char *f_name)
 {
@@ -235,87 +312,16 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
 
     auto &pltMap = allPltMap[attrs];
     auto key = std::make_tuple(llvmgv, functype, cc);
-    auto &slot = pltMap[key];
-    GlobalVariable *got;
-    if (!slot) {
-        Module *M = LM.get();
-        libptrgv = prepare_global(libptrgv, M);
-        llvmgv = prepare_global(llvmgv, M);
-        BasicBlock *old = builder.GetInsertBlock();
-        DebugLoc olddl = builder.getCurrentDebugLocation();
-        DebugLoc noDbg;
-        builder.SetCurrentDebugLocation(noDbg);
-        std::stringstream funcName;
-        funcName << "jlplt_" << f_name << "_" << globalUnique++;
-        auto fname = funcName.str();
-        Function *plt = Function::Create(functype,
-                                         GlobalVariable::ExternalLinkage,
-                                         fname, M);
-        jl_init_function(plt);
-        plt->setAttributes(attrs);
-        if (cc != CallingConv::C)
-            plt->setCallingConv(cc);
-        funcName << "_got";
-        auto gname = funcName.str();
-        got = new GlobalVariable(*M, T_pvoidfunc, false,
-                                 GlobalVariable::ExternalLinkage,
-                                 nullptr, gname);
-        slot = global_proto(got);
-        *(void**)jl_emit_and_add_to_shadow(got) = symaddr;
-        BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
-        builder.SetInsertPoint(b0);
-        Value *ptr = runtime_sym_lookup(funcptype, f_lib, f_name, plt, libptrgv,
-                                        llvmgv, runtime_lib);
-        auto store = builder.CreateAlignedStore(builder.CreateBitCast(ptr, T_pvoidfunc), got, sizeof(void*));
-#  if JL_LLVM_VERSION >= 30900
-        store->setAtomic(AtomicOrdering::Release);
-#  else
-        store->setAtomic(Release);
-#  endif
-        SmallVector<Value*, 16> args;
-        for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
-            args.push_back(&*arg);
-        CallInst *ret = builder.CreateCall(ptr, ArrayRef<Value*>(args));
-        ret->setAttributes(attrs);
-        if (cc != CallingConv::C)
-            ret->setCallingConv(cc);
-        // NoReturn function can trigger LLVM verifier error when declared as
-        // MustTail since other passes might replace the `ret` with
-        // `unreachable` (LLVM should probably accept `unreachable`).
-        if (attrs.hasAttribute(AttributeSet::FunctionIndex,
-                               Attribute::NoReturn)) {
-            builder.CreateUnreachable();
-        }
-        else {
-            // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
-            // Known failures includes vararg (not needed here) and sret.
-#if JL_LLVM_VERSION >= 30700 && (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
-                        defined(_CPU_AARCH64_))
-            ret->setTailCallKind(CallInst::TCK_MustTail);
-#endif
-            if (functype->getReturnType() == T_void) {
-                builder.CreateRetVoid();
-            }
-            else {
-                builder.CreateRet(ret);
-            }
-        }
-        builder.SetInsertPoint(old);
-        builder.SetCurrentDebugLocation(olddl);
-        jl_finalize_module(M, true);
-        auto shadowgot =
-            cast<GlobalVariable>(shadow_output->getNamedValue(gname));
-        auto shadowplt = cast<Function>(shadow_output->getNamedValue(fname));
-        shadowgot->setInitializer(ConstantExpr::getBitCast(shadowplt,
-                                                           T_pvoidfunc));
-        got = prepare_global(shadowgot);
+    GlobalVariable *&shadowgot = pltMap[key];
+    if (!shadowgot) {
+        shadowgot = emit_plt_thunk(LM.get(), functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, symaddr, runtime_lib);
     }
     else {
         // `runtime_sym_gvs` shouldn't have created anything in a new module
         // if it returns a GV that already exists.
         assert(!LM.m);
-        got = prepare_global(slot);
     }
+    GlobalVariable *got = prepare_global(shadowgot);
     LoadInst *got_val = builder.CreateAlignedLoad(got, sizeof(void*));
     // See comment in `runtime_sym_lookup` above. This in principle needs a
     // consume ordering too. This is even less likely to cause issue though
@@ -328,32 +334,70 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
 // --- ABI Implementations ---
 // Partially based on the LDC ABI implementations licensed under the BSD 3-clause license
 
+class AbiLayout {
+public:
+    virtual bool use_sret(jl_datatype_t *ty) = 0;
+    virtual void needPassByRef(jl_datatype_t *ty, bool *byRef, bool *inReg) = 0;
+    virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret) const = 0;
+};
+
+// Determine if object of bitstype ty maps to a native x86 SIMD type (__m128, __m256, or __m512) in C
+static bool is_native_simd_type(jl_datatype_t *dt) {
+    size_t size = jl_datatype_size(dt);
+    if (size != 16 && size != 32 && size != 64)
+        // Wrong size for xmm, ymm, or zmm register.
+        return false;
+    uint32_t n = jl_datatype_nfields(dt);
+    if (n<2)
+        // Not mapped to SIMD register.
+        return false;
+    jl_value_t *ft0 = jl_field_type(dt, 0);
+    for (uint32_t i = 1; i < n; ++i)
+        if (jl_field_type(dt, i) != ft0)
+            // Not homogeneous
+            return false;
+    // Type is homogeneous.  Check if it maps to LLVM vector.
+    return jl_special_vector_alignment(n, ft0) != 0;
+}
+
+#include "abi_llvm.cpp"
+
+#include "abi_arm.cpp"
+#include "abi_aarch64.cpp"
+#include "abi_ppc64le.cpp"
+#include "abi_win32.cpp"
+#include "abi_win64.cpp"
+#include "abi_x86_64.cpp"
+#include "abi_x86.cpp"
+
 #if defined ABI_LLVM
-#  include "abi_llvm.cpp"
+  typedef ABI_LLVMLayout DefaultAbiState;
 #elif defined _CPU_X86_64_
 #  if defined _OS_WINDOWS_
-#    include "abi_win64.cpp"
+     typedef ABI_Win64Layout DefaultAbiState;
 #  else
-#    include "abi_x86_64.cpp"
+     typedef ABI_x86_64Layout DefaultAbiState;
 #  endif
 #elif defined _CPU_X86_
 #  if defined _OS_WINDOWS_
-#    include "abi_win32.cpp"
+     typedef ABI_Win32Layout DefaultAbiState;
 #  else
-#    include "abi_x86.cpp"
+     typedef ABI_x86Layout DefaultAbiState;
 #  endif
 #elif defined _CPU_ARM_
-#  include "abi_arm.cpp"
+  typedef ABI_ArmLayout DefaultAbiState;
 #elif defined _CPU_AARCH64_
-#  include "abi_aarch64.cpp"
+  typedef ABI_AArch64Layout DefaultAbiState;
 #elif defined _CPU_PPC64_
-#  include "abi_ppc64le.cpp"
+  typedef ABI_PPC64leLayout DefaultAbiState;
 #else
 #  warning "ccall is defaulting to llvm ABI, since no platform ABI has been defined for this CPU/OS combination"
-#  include "abi_llvm.cpp"
+  typedef ABI_LLVMLayout DefaultAbiState;
 #endif
 
-Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
+
+static Value *llvm_type_rewrite(
+        Value *v, Type *from_type, Type *target_type,
         bool tojulia, /* only matters if byref is set (declares the direction of the byref attribute) */
         bool byref, /* only applies to arguments, set false for return values -- effectively the same as jl_cgval_t.ispointer() */
         bool issigned, /* determines whether an integer value should be zero or sign extended */
@@ -437,7 +481,7 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
 // jlto = Julia type of formal argument
 // jvinfo = value of actual argument
 static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl_cgval_t &jvinfo,
-                              bool addressOf, bool byRef, bool inReg, bool needCopy,
+                              bool addressOf, bool byRef, bool inReg,
                               bool tojulia, int argn, jl_codectx_t *ctx,
                               bool *needStackRestore)
 {
@@ -518,9 +562,9 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         // emit maybe copy
         *needStackRestore = true;
         Value *jvt = emit_typeof_boxed(jvinfo, ctx);
-        BasicBlock *mutableBB = BasicBlock::Create(jl_LLVMContext,"is-mutable",ctx->f);
-        BasicBlock *immutableBB = BasicBlock::Create(jl_LLVMContext,"is-immutable",ctx->f);
-        BasicBlock *afterBB = BasicBlock::Create(jl_LLVMContext,"after",ctx->f);
+        BasicBlock *mutableBB = BasicBlock::Create(jl_LLVMContext, "is-mutable", ctx->f);
+        BasicBlock *immutableBB = BasicBlock::Create(jl_LLVMContext, "is-immutable", ctx->f);
+        BasicBlock *afterBB = BasicBlock::Create(jl_LLVMContext, "after", ctx->f);
         Value *ismutable = emit_datatype_mutabl(jvt);
         builder.CreateCondBr(ismutable, mutableBB, immutableBB);
         builder.SetInsertPoint(mutableBB);
@@ -905,8 +949,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
 
     stt = jl_alloc_svec(nargs - 3);
 
-    for (size_t i = 0; i < nargs-3; ++i) {
-        jl_svecset(stt,i,expr_type(args[4+i],ctx));
+    for (size_t i = 0; i < nargs - 3; ++i) {
+        jl_svecset(stt, i, expr_type(args[4 + i], ctx));
     }
 
     // Generate arguments
@@ -936,7 +980,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         jl_cgval_t &arg = argv[i];
         arg = emit_expr(argi, ctx);
 
-        Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, false, false, i, ctx, NULL);
+        Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, false, i, ctx, NULL);
         // make sure args are rooted
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0);
         argvals[i] = llvm_type_rewrite(v, t, t, false, false, issigned, ctx);
@@ -1119,7 +1163,7 @@ static std::string generate_func_sig(
     assert(rt && !jl_is_abstract_ref_type(rt));
 
     std::vector<AttrBuilder> paramattrs;
-    AbiState abi = default_abi_state;
+    std::unique_ptr<AbiLayout> abi(new DefaultAbiState());
     sret = 0;
 
     if (type_is_ghost(*lrt)) {
@@ -1129,7 +1173,7 @@ static std::string generate_func_sig(
         if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_cpointer_type(rt) || jl_is_array_type(rt)) {
             *prt = *lrt; // passed as pointer
         }
-        else if (use_sret(&abi, (jl_datatype_t*)rt)) {
+        else if (abi->use_sret((jl_datatype_t*)rt)) {
             paramattrs.push_back(AttrBuilder());
             paramattrs[0].clear();
 #if !defined(_OS_WINDOWS_) || JL_LLVM_VERSION >= 30500 // llvm used to use the old mingw ABI, skipping this marking works around that difference
@@ -1141,7 +1185,7 @@ static std::string generate_func_sig(
             *prt = *lrt;
         }
         else {
-            *prt = preferred_llvm_type((jl_datatype_t*)rt, true);
+            *prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true);
             if (*prt == NULL)
                 *prt = *lrt;
         }
@@ -1200,7 +1244,7 @@ static std::string generate_func_sig(
         if (!jl_is_datatype(tti) || ((jl_datatype_t*)tti)->layout == NULL || jl_is_array_type(tti))
             tti = (jl_value_t*)jl_voidpointer_type; // passed as pointer
 
-        needPassByRef(&abi, (jl_datatype_t*)tti, &byRef, &inReg);
+        abi->needPassByRef((jl_datatype_t*)tti, &byRef, &inReg);
         if (jl_is_cpointer_type(tti)) {
             pat = t;
         }
@@ -1208,7 +1252,7 @@ static std::string generate_func_sig(
             pat = PointerType::get(t, 0);
         }
         else {
-            pat = preferred_llvm_type((jl_datatype_t*)tti, false);
+            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false);
             if (pat == NULL)
                 pat = t;
         }
@@ -1724,7 +1768,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
 
         Value *v = julia_to_native(largty, toboxed, jargty, arg, addressOf, byRef, inReg,
-                    need_private_copy(jargty, byRef), false, ai + 1, ctx, &needStackRestore);
+                                   false, ai + 1, ctx, &needStackRestore);
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
         argvals[ai + sret] = llvm_type_rewrite(v, largty,
                 ai + sret < fargt_sig.size() ? fargt_sig.at(ai + sret) : fargt_vasig,
