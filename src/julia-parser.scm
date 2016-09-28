@@ -113,7 +113,7 @@
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const
-                         abstract typealias type bitstype immutable ccall do
+                         abstract typealias type bitstype immutable do
                          module baremodule using import export importall))
 
 (define initial-reserved-word? (Set initial-reserved-words))
@@ -1360,17 +1360,6 @@
           (if (length= imports 1)
               (car imports)
               (cons 'toplevel imports))))
-       ((ccall)
-        (if (not (eqv? (peek-token s) #\())
-            (error "invalid \"ccall\" syntax")
-            (begin
-              (take-token s)
-              (let ((al (parse-arglist s #\))))
-                (if (and (length> al 1)
-                         (memq (cadr al) '(cdecl stdcall fastcall thiscall llvmcall)))
-                    ;; place (callingconv) at end of arglist
-                    `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
-                    `(ccall ,.al))))))
        ((do)
         (error "invalid \"do\" syntax"))
        (else (error "unhandled reserved word")))))))
