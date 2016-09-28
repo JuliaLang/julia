@@ -18,6 +18,7 @@
 @test !(pi == e)
 @test !(e == 1//2)
 @test 1//2 <= e
+@test e <= 15//3
 @test big(1//2) < e
 @test e < big(20//6)
 @test e^pi == exp(pi)
