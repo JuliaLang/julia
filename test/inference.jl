@@ -398,3 +398,20 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 
 # issue #18569
 @test Core.Inference.isconstType(Type{Tuple},true)
+
+# ensure pure attribute applies correctly to all signatures of fpure
+Base.@pure function fpure(a=rand(); b=rand())
+    # use the `rand` function since it is known to be `@inline`
+    # but would be too big to inline
+    return a + b + rand()
+end
+gpure() = fpure()
+gpure(x::Irrational) = fpure(x)
+@test which(fpure, ()).source.pure
+@test which(fpure, (typeof(pi),)).source.pure
+@test !which(gpure, ()).source.pure
+@test !which(gpure, (typeof(pi),)).source.pure
+@test @code_typed(gpure())[1].pure
+@test @code_typed(gpure(π))[1].pure
+@test gpure() == gpure() == gpure()
+@test gpure(π) == gpure(π) == gpure(π)
