@@ -2108,25 +2108,7 @@ dense counterparts. The following functions are specific to sparse arrays.
                [2, 2]  =  2
                [3, 3]  =  3
 
-<<<<<<< HEAD
-   .. doctest::
-
-       julia> Is = [1; 2; 3];
-
-       julia> Js = [1; 2; 3];
-
-       julia> Vs = [1; 2; 3];
-
-       julia> sparse(Is, Js, Vs)
-       3×3 sparse matrix with 3 Int64 nonzero entries:
-               [1, 1]  =  1
-               [2, 2]  =  2
-               [3, 3]  =  3
-
-.. function:: sparsevec(I, V, [m, combine])
-=======
 .. function:: sparsevec(I, V, combine)
->>>>>>> Fixes
 
    .. Docstring generated from Julia source
 
