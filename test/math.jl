@@ -639,6 +639,21 @@ end
 @test quadgk(x -> [exp(-x), exp(-2x)], 0, Inf)[1] ≈ [1,0.5]
 @test quadgk(cos, 0,0.7,1, norm=abs)[1] ≈ sin(1)
 
+# simple integration: trapz, simps
+@test_approx_eq trapz([1:9])  (9^2 - 1)/2
+@test_approx_eq simps(4.5*[1:0.1:2].^2, 0.1)  4.5/3*(2^3 - 1)
+# now test consistency between methods
+for (fint,a,b,n,f) in [ (trapz, 1,  2, 10, x->2x), 
+                        (simps, 1, 11, 20, x->3x^2) ] 
+    dx = (b - a) / n
+    x = [a:dx:b]
+    y = map(f,x)
+    @test_approx_eq fint(y,dx) fint(y,x)
+end
+# test unequal spacings for vector input
+@test_approx_eq simps(3*[1,8,9].^2, [1,8,9]) (9^3 - 1)
+@test_approx_eq trapz([1,8,9], [1,8,9]) (9^2 - 1)/2
+
 # Ensure subnormal flags functions don't segfault
 @test any(set_zero_subnormals(true) .== [false,true])
 @test any(get_zero_subnormals() .== [false,true])

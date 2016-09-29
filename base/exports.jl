@@ -955,6 +955,8 @@ export
 
 # numerical integration
     quadgk,
+    trapz,
+    simps,
 
 # iteration
     done,

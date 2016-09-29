@@ -330,6 +330,8 @@ importall .DSP
 # Numerical integration
 include("quadgk.jl")
 importall .QuadGK
+include("integrate.jl")
+importall .Integrate
 
 # Fast math
 include("fastmath.jl")
