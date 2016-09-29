@@ -864,13 +864,27 @@ majority of use cases, however, regular expressions are not constructed
 based on run-time data. In this majority of cases, the ability to write
 regular expressions as compile-time values is invaluable.
 
+Like non-standard string literals, non-standard command literals exist using a
+prefixed variant of the command literal syntax. The command literal
+``custom`literal``` is parsed as ``@custom_cmd "literal"``. Julia itself does
+not contain any non-standard command literals, but packages can make use of
+this syntax. Aside from the different syntax and the ``_cmd`` suffix instead of
+the ``_str`` suffix, non-standard command literals behave exactly like
+non-standard string literals.
+
+In the event that two modules provide non-standard string or command literals
+with the same name, it is possible to qualify the string or command literal
+with a module name. For instance, if both ``Foo`` and ``Bar`` provide
+non-standard string literal ``@x_str``, then one can write ``Foo.x"literal"``
+or ``Bar.x"literal"`` to disambiguate between the two.
+
 The mechanism for user-defined string literals is deeply, profoundly
 powerful. Not only are Julia's non-standard literals implemented using
 it, but also the command literal syntax (```echo "Hello, $person"```)
 is implemented with the following innocuous-looking macro::
 
     macro cmd(str)
-      :(cmd_gen($shell_parse(str)))
+      :(cmd_gen($(shell_parse(str)[1])))
     end
 
 Of course, a large amount of complexity is hidden in the functions used

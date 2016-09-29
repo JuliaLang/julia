@@ -7,6 +7,19 @@ New language features
 Language changes
 ----------------
 
+  * The default color for info messages has been changed from blue to cyan.
+    This can be changed back to the original color by setting the environment variable `JULIA_INFO_COLOR` to `"blue"`.
+    One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
+    For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
+  * Multiline and singleline command macros have been added. A command macro is
+    like a string macro, but the syntax uses backquotes (<code>\`</code>)
+    instead of double quotes, and the resulting macro called is suffixed with
+    `_cmd`. For instance, the syntax <code>q\`xyz\`</code> is equivalent to
+    `@q_cmd "xyz"`.
+  * String and command macros can now be qualified with their module. For
+    instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`. Previously, this
+    syntax parsed as an implicit multiplication.
+
 Breaking changes
 ----------------
 
