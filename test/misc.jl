@@ -455,7 +455,7 @@ end
 
 let
     old_have_color = Base.have_color
-     try
+    try
         eval(Base, :(have_color = true))
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
@@ -473,5 +473,4 @@ let
         get(buf, :hascontext, false) && (c_18711 += 1)
     end
     @test c_18711 == 1
-
 end
