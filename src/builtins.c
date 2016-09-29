@@ -807,7 +807,7 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
     char *bstr = str+offset;
     char *pend = bstr+len;
     char *tofree = NULL;
-    int err = 0;
+    int hasvalue = 0;
 
     errno = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
@@ -827,28 +827,28 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
     double out = jl_strtod_c(bstr, &p);
 
     if (errno==ERANGE && (out==0 || out==HUGE_VAL || out==-HUGE_VAL)) {
-        err = 1;
+        hasvalue = 0;
     }
     else if (p == bstr) {
-        err = 1;
+        hasvalue = 0;
     }
     else {
         // Deal with case where the substring might be something like "1 ",
         // which is OK, and "1 X", which we don't allow.
-        err = substr_isspace(p, pend) ? 0 : 1;
+        hasvalue = substr_isspace(p, pend) ? 1 : 0;
     }
 
     if (__unlikely(tofree))
         free(tofree);
 
-    jl_nullable_float64_t ret = {(uint8_t)err, out};
+    jl_nullable_float64_t ret = {(uint8_t)hasvalue, out};
     return ret;
 }
 
 JL_DLLEXPORT int jl_substrtod(char *str, size_t offset, size_t len, double *out)
 {
     jl_nullable_float64_t nd = jl_try_substrtod(str, offset, len);
-    if (0 == nd.isnull) {
+    if (0 != nd.hasvalue) {
         *out = nd.value;
         return 0;
     }
@@ -866,7 +866,7 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
     char *bstr = str+offset;
     char *pend = bstr+len;
     char *tofree = NULL;
-    int err = 0;
+    int hasvalue = 0;
 
     errno = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
@@ -890,28 +890,28 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
 #endif
 
     if (errno==ERANGE && (out==0 || out==HUGE_VALF || out==-HUGE_VALF)) {
-        err = 1;
+        hasvalue = 0;
     }
     else if (p == bstr) {
-        err = 1;
+        hasvalue = 0;
     }
     else {
         // Deal with case where the substring might be something like "1 ",
         // which is OK, and "1 X", which we don't allow.
-        err = substr_isspace(p, pend) ? 0 : 1;
+        hasvalue = substr_isspace(p, pend) ? 1 : 0;
     }
 
     if (__unlikely(tofree))
         free(tofree);
 
-    jl_nullable_float32_t ret = {(uint8_t)err, out};
+    jl_nullable_float32_t ret = {(uint8_t)hasvalue, out};
     return ret;
 }
 
 JL_DLLEXPORT int jl_substrtof(char *str, int offset, size_t len, float *out)
 {
     jl_nullable_float32_t nf = jl_try_substrtof(str, offset, len);
-    if (0 == nf.isnull) {
+    if (0 != nf.hasvalue) {
         *out = nf.value;
         return 0;
     }
