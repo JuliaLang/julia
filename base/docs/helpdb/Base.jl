@@ -3074,15 +3074,6 @@ type. This is similar to [`reprmime`](:func:`reprmime`) except that binary data 
 stringmime
 
 """
-    print_with_color(color::Symbol, [io], strings...)
-
-Print strings in a color specified as a symbol.
-
-`color` may take any of the values $(Base.available_text_colors_docstring).
-"""
-print_with_color
-
-"""
     zero(x)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
