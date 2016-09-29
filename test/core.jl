@@ -3126,13 +3126,13 @@ f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 foo11904(x::Int) = x
 @inline function foo11904{S}(x::Nullable{S})
     if isbits(S)
-        Nullable(foo11904(x.value), x.isnull)
+        Nullable(foo11904(x.value), x.hasvalue)
     else
         throw_error()
     end
 end
 
-@test !foo11904(Nullable(1)).isnull
+@test !isnull(foo11904(Nullable(1)))
 
 # issue 11874
 immutable Foo11874
