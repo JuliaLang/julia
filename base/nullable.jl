@@ -1,8 +1,34 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    NullException()
+
+An attempted access to a [`Nullable`](:obj:`Nullable`) with no defined value.
+"""
 immutable NullException <: Exception
 end
 
+"""
+    Nullable(x, isnull::Bool=false)
+
+Wrap value `x` in an object of type `Nullable`, which indicates whether a value is present.
+`Nullable(x)` yields a non-empty wrapper, and `Nullable{T}()` yields an empty instance of a
+wrapper that might contain a value of type `T`.
+
+```jldoctest
+julia> Nullable()
+Nullable{Union{}}()
+
+julia> Nullable(2)
+Nullable{Int64}(2)
+
+julia> Nullable(0, true)
+Nullable{Int64}()
+
+julia> Nullable(0, false)
+Nullable{Int64}(0)
+```
+"""
 Nullable{T}(value::T, isnull::Bool=false) = Nullable{T}(value, isnull)
 Nullable() = Nullable{Union{}}()
 
@@ -61,6 +87,27 @@ end
 
 get(x::Nullable) = x.isnull ? throw(NullException()) : x.value
 
+
+"""
+    isnull(x::Nullable) -> Bool
+
+Returns `true` if the [`Nullable`](:obj:`Nullable`) object `x` is null,
+i.e. missing a value.
+
+```jldoctest
+julia> x = Nullable(1, false)
+Nullable{Int64}(1)
+
+julia> isnull(x)
+false
+
+julia> x = Nullable(1, true)
+Nullable{Int64}()
+
+julia> isnull(x)
+true
+```
+"""
 isnull(x::Nullable) = x.isnull
 
 

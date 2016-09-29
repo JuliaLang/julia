@@ -147,6 +147,33 @@ for jy in ("j","y"), nu in (0,1)
     end
 end
 
+"""
+    besselj0(x)
+
+Bessel function of the first kind of order 0, ``J_0(x)``.
+"""
+besselj0(x)
+
+"""
+    bessely0(x)
+
+Bessel function of the second kind of order 0, ``Y_0(x)``.
+"""
+bessely0(x)
+
+"""
+    bessely1(x)
+
+Bessel function of the second kind of order 1, ``Y_1(x)``.
+"""
+bessely1(x)
+
+"""
+    besselj1(x)
+
+Bessel function of the first kind of order 1, ``J_1(x)``.
+"""
+besselj1(x)
 
 const cy = Array{Float64}(2)
 const ae = Array{Int32}(2)

@@ -153,11 +153,11 @@
 
    Re-enable Ctrl-C handler during execution of a function. Temporarily reverses the effect of ``disable_sigint``\ .
 
-.. function:: systemerror(sysfunc, iftrue)
+.. function:: systemerror(sysfunc, iftrue::Bool; extrainfo=nothing)
 
    .. Docstring generated from Julia source
 
-   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``iftrue`` is ``true``
+   Raises a ``SystemError`` with the descriptive string ``sysfunc`` if ``iftrue`` is ``true``\ .
 
 .. data:: Ptr{T}
 

@@ -3,13 +3,6 @@
 # Base
 
 """
-    systemerror(sysfunc, iftrue)
-
-Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
-"""
-systemerror
-
-"""
     fill!(A, x)
 
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
@@ -51,14 +44,6 @@ empty!
 Compute the inverse sine of `x`, where the output is in radians.
 """
 asin
-
-"""
-    takebuf_array(b::IOBuffer)
-
-Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
-`IOBuffer` is reset to its initial state.
-"""
-takebuf_array
 
 """
     pointer(array [, index])
@@ -177,13 +162,6 @@ julia> [1 2 3] .* [1 2 3]
 Base.:(.*)
 
 """
-    backtrace()
-
-Get a backtrace object for the current program point.
-"""
-backtrace
-
-"""
     -(x)
 
 Unary minus operator.
@@ -196,15 +174,6 @@ Unary minus operator.
 Subtraction operator.
 """
 -(x, y)
-
-"""
-    Nullable(x)
-
-Wrap value `x` in an object of type `Nullable`, which indicates whether a value is present.
-`Nullable(x)` yields a non-empty wrapper, and `Nullable{T}()` yields an empty instance of a
-wrapper that might contain a value of type `T`.
-"""
-Nullable
 
 """
     bits(n)
@@ -228,36 +197,6 @@ Construct a 1-d array of the specified type. This is usually called with the syn
 `Type[]`. Element values can be specified using `Type[a,b,c,...]`.
 """
 getindex(::Type, elements...)
-
-"""
-    getindex(A, inds...)
-
-Returns a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, a `Range`, or a `Vector`. See the manual section on
-[array indexing](:ref:`array indexing <man-array-indexing>`) for details.
-
-```jldoctest
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> getindex(A, 1)
-1
-
-julia> getindex(A, [2, 1])
-2-element Array{Int64,1}:
- 3
- 1
-
-julia> getindex(A, 2:4)
-3-element Array{Int64,1}:
- 3
- 2
- 4
-```
-"""
-getindex(::AbstractArray, inds...)
 
 """
     getindex(collection, key...)
@@ -289,14 +228,6 @@ return an object of a type different from `T`, which however is suitable for
 Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
 """
 cconvert
-
-"""
-    assert(cond)
-
-Throw an [`AssertionError`](:obj:`AssertionError`) if `cond` is `false`.
-Also available as the macro `@assert expr`.
-"""
-assert
 
 """
     sech(x)
@@ -439,13 +370,6 @@ the byte representation is different.
 This would create a 25-by-30000 `BitArray`, linked to the file associated with stream `s`.
 """
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
-
-"""
-    bessely0(x)
-
-Bessel function of the second kind of order 0, ``Y_0(x)``.
-"""
-bessely0
 
 """
     any!(r, A)
@@ -697,14 +621,6 @@ julia> reshape(A, (2, 8))
 reshape
 
 """
-    randsubseq!(S, A, p)
-
-Like [`randsubseq`](:func:`randsubseq`), but the results are stored in `S`
-(which is resized as needed).
-"""
-randsubseq!
-
-"""
     maximum(A, dims)
 
 Compute the maximum value of an array over the given dimensions. See also the
@@ -727,16 +643,6 @@ several times, and the backend may choose to defer the display until
 (for example) the next interactive prompt.
 """
 redisplay
-
-"""
-    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the range of indices of `a` which compare as equal to `x` according to the order
-specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already sorted in that
-order. Returns an empty range located at the insertion point if `a` does not contain values
-equal to `x`.
-"""
-searchsorted
 
 """
     /(x, y)
@@ -933,14 +839,6 @@ to 1.
 cumsum!
 
 """
-    select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Variant of `select!` which copies `v` before partially sorting it, thereby returning the
-same thing as `select!` but leaving `v` unmodified.
-"""
-select
-
-"""
     accept(server[,client])
 
 Accepts a connection on the given server and returns a connection to the client. An
@@ -981,13 +879,6 @@ Create an `IO`-like object for creating zeroed-out mmapped-memory that is not ti
 for use in `Mmap.mmap`. Used by `SharedArray` for creating shared memory arrays.
 """
 Mmap.Anonymous
-
-"""
-    erfi(x)
-
-Compute the imaginary error function of `x`, defined by ``-i \\operatorname{erf}(ix)``.
-"""
-erfi
 
 """
     floor([T,] x, [digits, [base]])
@@ -1051,13 +942,6 @@ Base.:(.<)
 The item or field is not defined for the given object.
 """
 UndefRefError
-
-"""
-    bessely1(x)
-
-Bessel function of the second kind of order 1, ``Y_1(x)``.
-"""
-bessely1
 
 """
     append!(collection, collection2) -> collection.
@@ -1140,38 +1024,12 @@ test `get(io, :compact, false)` in its normal `show` method.
 showcompact
 
 """
-    erfc(x)
-
-Compute the complementary error function of `x`, defined by ``1 - \\operatorname{erf}(x)``.
-"""
-erfc
-
-"""
     getfield(value, name::Symbol)
 
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
 """
 getfield
-
-"""
-    besselj1(x)
-
-Bessel function of the first kind of order 1, ``J_1(x)``.
-"""
-besselj1
-
-"""
-    select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
-`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
-at the position where it would appear if the array were fully sorted via a non-stable
-algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
-values at those indices is returned. Note that `select!` does not fully sort the input
-array.
-"""
-select!
 
 """
     maximum!(r, A)
@@ -1355,33 +1213,11 @@ behavior, including program corruption or segfaults, at any later time.
 unsafe_convert
 
 """
-    erfinv(x)
-
-Compute the inverse error function of a real `x`, defined by ``\\operatorname{erf}(\\operatorname{erfinv}(x)) = x``.
-"""
-erfinv
-
-"""
     seek(s, pos)
 
 Seek a stream to the given position.
 """
 seek
-
-"""
-    besselj0(x)
-
-Bessel function of the first kind of order 0, ``J_0(x)``.
-"""
-besselj0
-
-"""
-    erfcinv(x)
-
-Compute the inverse error complementary function of a real `x`, defined by
-``\\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x``.
-"""
-erfcinv
 
 """
     minabs(A, dims)
@@ -1465,13 +1301,6 @@ julia> log2(10)
 ```
 """
 log2
-
-"""
-    isnull(x)
-
-Is the `Nullable` object `x` null, i.e. missing a value?
-"""
-isnull
 
 """
     abs2(x)
@@ -1565,20 +1394,6 @@ Base.:(^)(x, y)
 Get the current position of a stream.
 """
 position
-
-"""
-    selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Return a partial permutation of the vector `v`, according to the order specified by
-`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
-if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index
-(Integer), an array of the first `k` indices is returned; if `k` is a range, an array of
-those indices is returned. Note that the handling of integer values for `k` is different
-from `select` in that it returns a vector of `k` elements instead of just the `k` th
-element. Also note that this is equivalent to, but more efficient than, calling
-`sortperm(...)[k]`
-"""
-selectperm
 
 """
     reinterpret(type, A)
@@ -1691,14 +1506,6 @@ The distance between `x` and the next larger representable floating-point value 
 eps(::AbstractFloat)
 
 """
-    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
-"""
-searchsortedfirst
-
-"""
     big(x)
 
 Convert a number to a maximum precision representation (typically `BigInt` or `BigFloat`).
@@ -1727,14 +1534,6 @@ typejoin
 Compute sine of `x`, where `x` is in radians.
 """
 sin
-
-"""
-    selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
-
-Like `selectperm`, but accepts a preallocated index vector `ix`. If `initialized` is `false`
-(the default), ix is initialized to contain the values `1:length(ix)`.
-"""
-selectperm!
 
 """
     precompile(f,args::Tuple{Vararg{Any}})
@@ -2034,16 +1833,6 @@ Compute the inverse hyperbolic cosine of `x`.
 acosh
 
 """
-    IntSet([itr])
-
-Construct a sorted set of positive `Int`s generated by the given iterable object, or an
-empty set. Implemented as a bit string, and therefore designed for dense integer sets. Only
-`Int`s greater than 0 can be stored. If the set will be sparse (for example holding a few
-very large integers), use [`Set`](:obj:`Set`) instead.
-"""
-IntSet
-
-"""
     Task(func)
 
 Create a `Task` (i.e. coroutine) to execute the given function (which must be
@@ -2183,13 +1972,6 @@ Show a descriptive representation of an exception object.
 showerror
 
 """
-    error(message::AbstractString)
-
-Raise an `ErrorException` with the given message.
-"""
-error
-
-"""
     sqrtm(A)
 
 If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
@@ -2224,14 +2006,6 @@ unsafe_store!
 Equivalent to `readdlm` with `delim` set to comma, and type optionally defined by `T`.
 """
 readcsv
-
-"""
-    erfcx(x)
-
-Compute the scaled complementary error function of `x`, defined by ``e^{x^2} \\operatorname{erfc}(x)``.
-Note also that ``\\operatorname{erfcx}(-ix)`` computes the Faddeeva function ``w(x)``.
-"""
-erfcx
 
 """
     UndefVarError(var::Symbol)
@@ -2330,13 +2104,6 @@ secd
 The result of an expression is too large for the specified type and will cause a wraparound.
 """
 OverflowError
-
-"""
-    object_id(x)
-
-Get a hash value for `x` based on object identity. `object_id(x)==object_id(y)` if `x === y`.
-"""
-object_id
 
 """
     cat(dims, A...)
@@ -2515,13 +2282,6 @@ Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e
 Base.:(*)(x, y...)
 
 """
-    time()
-
-Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
-"""
-time()
-
-"""
     TextDisplay(stream)
 
 Returns a `TextDisplay <: Display`, which can display any object as the text/plain MIME type
@@ -2575,14 +2335,6 @@ This is intended to be called using `do` block syntax:
 get!(f::Function,collection,key)
 
 """
-    @assert cond [text]
-
-Throw an `AssertionError` if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
-"""
-:@assert
-
-"""
     deserialize(stream)
 
 Read a value written by [`serialize`](:func:`serialize`). `deserialize` assumes the binary data read from
@@ -2622,14 +2374,6 @@ median!
 Cumulative product of `A` along a dimension, storing the result in `B`. The dimension defaults to 1.
 """
 cumprod!
-
-"""
-    rethrow([e])
-
-Throw an object without changing the current exception backtrace. The default argument is
-the current exception (if called within a `catch` block).
-"""
-rethrow
 
 """
     reprmime(mime, x)
@@ -2684,14 +2428,6 @@ julia> length([1; 2; 3; 4])
 length(collection)
 
 """
-    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Returns `0` if `x` is less than all values in `a`.
-"""
-searchsortedlast
-
-"""
     InterruptException()
 
 The process was stopped by a terminal interrupt (CTRL+C).
@@ -2711,13 +2447,6 @@ den
 Test whether a floating point number is subnormal.
 """
 issubnormal
-
-"""
-    NullException()
-
-An attempted access to a [`Nullable`](:obj:`Nullable`) with no defined value.
-"""
-NullException
 
 """
     .==(x, y)
@@ -2850,13 +2579,6 @@ pointer `p` to ensure that it is valid. Incorrect usage may segfault your progra
 garbage answers, in the same manner as C.
 """
 unsafe_load
-
-"""
-    catch_backtrace()
-
-Get the backtrace of the current exception, for use within `catch` blocks.
-"""
-catch_backtrace
 
 """
     cos(x)
@@ -3340,23 +3062,6 @@ julia> widen(1.5f0)
 widen
 
 """
-    Set([itr])
-
-Construct a [`Set`](:obj:`Set`) of the values generated by the given iterable object, or an
-empty set. Should be used instead of [`IntSet`](:obj:`IntSet`) for sparse integer sets, or
-for sets of arbitrary objects.
-"""
-Set
-
-"""
-    erf(x)
-
-Compute the error function of `x`, defined by ``\\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt``
-for arbitrary complex `x`.
-"""
-erf
-
-"""
     signed(x)
 
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
@@ -3448,14 +3153,6 @@ Julia object. If this is not the case, undefined behavior results, hence this fu
 considered "unsafe" and should be used with care.
 """
 unsafe_pointer_to_objref
-
-"""
-    dawson(x)
-
-Compute the Dawson function (scaled imaginary error function) of `x`, defined by
-``\\frac{\\sqrt{\\pi}}{2} e^{-x^2} \\operatorname{erfi}(x)``.
-"""
-dawson
 
 """
     \$(x, y)

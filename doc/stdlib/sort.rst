@@ -169,47 +169,47 @@ Order-Related Functions
 
    Test whether a vector is in sorted order. The ``by``\ , ``lt`` and ``rev`` keywords modify what order is considered to be sorted just as they do for :func:`sort`\ .
 
-.. function:: searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: searchsorted(a, x; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    Returns the range of indices of ``a`` which compare as equal to ``x`` according to the order specified by the ``by``\ , ``lt`` and ``rev`` keywords, assuming that ``a`` is already sorted in that order. Returns an empty range located at the insertion point if ``a`` does not contain values equal to ``x``\ .
 
-.. function:: searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: searchsortedfirst(a, x; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    Returns the index of the first value in ``a`` greater than or equal to ``x``\ , according to the specified order. Returns ``length(a)+1`` if ``x`` is greater than all values in ``a``\ .
 
-.. function:: searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: searchsortedlast(a, x; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    Returns the index of the last value in ``a`` less than or equal to ``x``\ , according to the specified order. Returns ``0`` if ``x`` is less than all values in ``a``\ .
 
-.. function:: select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: select!(v::AbstractVector, k; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    Partially sort the vector ``v`` in place, according to the order specified by ``by``\ , ``lt`` and ``rev`` so that the value at index ``k`` (or range of adjacent values if ``k`` is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If ``k`` is a single index, that value is returned; if ``k`` is a range, an array of values at those indices is returned. Note that ``select!`` does not fully sort the input array.
 
-.. function:: select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: select(v::AbstractVector, k; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
-   Variant of ``select!`` which copies ``v`` before partially sorting it, thereby returning the same thing as ``select!`` but leaving ``v`` unmodified.
+   Variant of :func:`select!` which copies ``v`` before partially sorting it, thereby returning the same result as ``select!`` but leaving ``v`` unmodified.
 
-.. function:: selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+.. function:: selectperm(v::AbstractVector, k; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
    .. Docstring generated from Julia source
 
    Return a partial permutation of the vector ``v``\ , according to the order specified by ``by``\ , ``lt`` and ``rev``\ , so that ``v[output]`` returns the first ``k`` (or range of adjacent values if ``k`` is a range) values of a fully sorted version of ``v``\ . If ``k`` is a single index (Integer), an array of the first ``k`` indices is returned; if ``k`` is a range, an array of those indices is returned. Note that the handling of integer values for ``k`` is different from ``select`` in that it returns a vector of ``k`` elements instead of just the ``k`` th element. Also note that this is equivalent to, but more efficient than, calling ``sortperm(...)[k]``
 
-.. function:: selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+.. function:: selectperm!(ix::AbstractVector, v::AbstractVector, k; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
    .. Docstring generated from Julia source
 
-   Like ``selectperm``\ , but accepts a preallocated index vector ``ix``\ . If ``initialized`` is ``false`` (the default), ix is initialized to contain the values ``1:length(ix)``\ .
+   Like :func:`selectperm`\ , but accepts a preallocated index vector ``ix``\ . If ``initialized`` is ``false`` (the default), ``ix`` is initialized to contain the values ``1:length(ix)``\ .
 
 Sorting Algorithms
 ------------------

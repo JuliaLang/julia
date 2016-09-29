@@ -161,6 +161,13 @@ isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
 
 # return an integer such that object_id(x)==object_id(y) if is(x,y)
+
+"""
+    object_id(x)
+
+Get a hash value for `x` based on object identity.
+`object_id(x)==object_id(y)` if `x === y`.
+"""
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 immutable DataTypeLayout

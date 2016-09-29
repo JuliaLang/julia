@@ -17,6 +17,45 @@ for f in (:erfcx, :erfi, :Dawson)
     end
 end
 
+"""
+    erf(x)
+
+Compute the error function of `x`, defined by ``\\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt``
+for arbitrary complex `x`.
+"""
+function erf(x) end
+
+"""
+    erfi(x)
+
+Compute the imaginary error function of `x`, defined by ``-i \\operatorname{erf}(ix)``.
+"""
+function erfi(x) end
+
+
+"""
+    erfc(x)
+
+Compute the complementary error function of `x`, defined by ``1 - \\operatorname{erf}(x)``.
+"""
+function erfc(x) end
+
+"""
+    erfcx(x)
+
+Compute the scaled complementary error function of `x`, defined by ``e^{x^2} \\operatorname{erfc}(x)``.
+Note also that ``\\operatorname{erfcx}(-ix)`` computes the Faddeeva function ``w(x)``.
+"""
+function erfcx(x) end
+
+"""
+    dawson(x)
+
+Compute the Dawson function (scaled imaginary error function) of `x`, defined by
+``\\frac{\\sqrt{\\pi}}{2} e^{-x^2} \\operatorname{erfi}(x)``.
+"""
+function dawson(x) end
+
 # Compute the inverse of the error function: erf(erfinv(x)) == x,
 # using the rational approximants tabulated in:
 #     J. M. Blair, C. A. Edwards, and J. H. Johnson, "Rational Chebyshev
@@ -24,6 +63,12 @@ end
 #     pp. 827--830 (1976).
 #         http://dx.doi.org/10.1090/S0025-5718-1976-0421040-7
 #         http://www.jstor.org/stable/2005402
+
+"""
+    erfinv(x)
+
+Compute the inverse error function of a real `x`, defined by ``\\operatorname{erf}(\\operatorname{erfinv}(x)) = x``.
+"""
 function erfinv(x::Float64)
     a = abs(x)
     if a >= 1.0
@@ -139,6 +184,13 @@ erfinv(x::Integer) = erfinv(float(x))
 
 # Inverse complementary error function: use Blair tables for y = 1-x,
 # exploiting the greater accuracy of y (vs. x) when y is small.
+
+"""
+    erfcinv(x)
+
+Compute the inverse error complementary function of a real `x`, defined by
+``\\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x``.
+"""
 function erfcinv(y::Float64)
     if y > 0.0625
         return erfinv(1.0 - y)

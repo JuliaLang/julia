@@ -65,6 +65,17 @@ issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
+
+"""
+    select!(v::AbstractVector, k; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
+`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
+at the position where it would appear if the array were fully sorted via a non-stable
+algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
+values at those indices is returned. Note that `select!` does not fully sort the input
+array.
+"""
 function select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     sort!(v, 1, length(v), PartialQuickSort(k), o)
     v[k]
@@ -73,6 +84,13 @@ select!(v::AbstractVector, k::Union{Int,OrdinalRange};
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
+
+"""
+    select(v::AbstractVector, k; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Variant of [`select!`](:func:`select!`) which copies `v` before partially sorting it,
+thereby returning the same result as `select!` but leaving `v` unmodified.
+"""
 select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copymutable(v), k; kws...)
 
 
@@ -194,6 +212,32 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
         $s(v::AbstractVector, x) = $s(v, x, Forward)
     end
 end
+
+"""
+    searchsortedfirst(a, x; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Returns the index of the first value in `a` greater than or equal to `x`, according to the
+specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
+"""
+searchsortedfirst
+
+"""
+    searchsortedlast(a, x; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Returns the index of the last value in `a` less than or equal to `x`, according to the
+specified order. Returns `0` if `x` is less than all values in `a`.
+"""
+searchsortedlast
+
+"""
+    searchsorted(a, x; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Returns the range of indices of `a` which compare as equal to `x` according to the order
+specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already sorted in that
+order. Returns an empty range located at the insertion point if `a` does not contain values
+equal to `x`.
+"""
+searchsorted
 
 ## sorting algorithms ##
 
@@ -443,9 +487,28 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
 ## selectperm: the permutation to sort the first k elements of an array ##
 
+"""
+    selectperm(v::AbstractVector, k; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Return a partial permutation of the vector `v`, according to the order specified by
+`by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
+if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index
+(Integer), an array of the first `k` indices is returned; if `k` is a range, an array of
+those indices is returned. Note that the handling of integer values for `k` is different
+from `select` in that it returns a vector of `k` elements instead of just the `k` th
+element. Also note that this is equivalent to, but more efficient than, calling
+`sortperm(...)[k]`
+"""
 selectperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     selectperm!(Vector{eltype(k)}(length(v)), v, k; kwargs..., initialized=false)
 
+
+"""
+    selectperm!(ix::AbstractVector, v::AbstractVector, k; lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
+
+Like [`selectperm`](:func:`selectperm`), but accepts a preallocated index vector `ix`.
+If `initialized` is `false` (the default), `ix` is initialized to contain the values `1:length(ix)`.
+"""
 function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
                                  k::Union{Int, OrdinalRange};
                                  lt::Function=isless,
