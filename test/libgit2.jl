@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#@testset "libgit2" begin
-
 isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
 
@@ -11,18 +9,18 @@ const LIBGIT2_MIN_VER = v"0.23.0"
 # TESTS #
 #########
 
-#@testset "Check library version" begin
+@testset "Check library version" begin
     v = LibGit2.version()
-    @test  v.major == LIBGIT2_MIN_VER.major && v.minor >= LIBGIT2_MIN_VER.minor
-#end
+    @test v.major == LIBGIT2_MIN_VER.major && v.minor >= LIBGIT2_MIN_VER.minor
+end
 
-#@testset "Check library features" begin
+@testset "Check library features" begin
     f = LibGit2.features()
     @test findfirst(f, LibGit2.Consts.FEATURE_SSH) > 0
     @test findfirst(f, LibGit2.Consts.FEATURE_HTTPS) > 0
-#end
+end
 
-#@testset "OID" begin
+@testset "OID" begin
     z = LibGit2.Oid()
     @test LibGit2.iszero(z)
     @test z == zero(LibGit2.Oid)
@@ -35,9 +33,9 @@ const LIBGIT2_MIN_VER = v"0.23.0"
     for i in 11:length(rr); rr[i] = 0; end
     @test LibGit2.Oid(rr) == LibGit2.Oid(rs[1:20])
     @test_throws ArgumentError LibGit2.Oid(Ptr{UInt8}(C_NULL))
-#end
+end
 
-#@testset "StrArrayStruct" begin
+@testset "StrArrayStruct" begin
     p1 = "XXX"
     p2 = "YYY"
     sa1 = LibGit2.StrArrayStruct(p1)
@@ -61,9 +59,9 @@ const LIBGIT2_MIN_VER = v"0.23.0"
     finally
         finalize(sa2)
     end
-#end
+end
 
-#@testset "Signature" begin
+@testset "Signature" begin
     sig = LibGit2.Signature("AAA", "AAA@BBB.COM", round(time(), 0), 0)
     git_sig = convert(LibGit2.GitSignature, sig)
     sig2 = LibGit2.Signature(git_sig)
@@ -74,7 +72,7 @@ const LIBGIT2_MIN_VER = v"0.23.0"
     sig3 = LibGit2.Signature("AAA","AAA@BBB.COM")
     @test sig3.name == sig.name
     @test sig3.email == sig.email
-#end
+end
 
 #@testset "URL parsing" begin
     # HTTPS URL
@@ -145,7 +143,7 @@ mktempdir() do dir
     tag1 = "tag1"
     tag2 = "tag2"
 
-    #@testset "Configuration" begin
+    @testset "Configuration" begin
         cfg = LibGit2.GitConfig(joinpath(dir, config_file), LibGit2.Consts.CONFIG_LEVEL_APP)
         try
             @test_throws LibGit2.Error.GitError LibGit2.get(AbstractString, cfg, "tmp.str")
@@ -163,10 +161,10 @@ mktempdir() do dir
         finally
             finalize(cfg)
         end
-    #end
+    end
 
-    #@testset "Initializing repository" begin
-        #@testset "with remote branch" begin
+    @testset "Initializing repository" begin
+        @testset "with remote branch" begin
             repo = LibGit2.init(cache_repo)
             try
                 @test isdir(cache_repo)
@@ -187,9 +185,9 @@ mktempdir() do dir
             finally
                 finalize(repo)
             end
-        #end
+        end
 
-        #@testset "bare" begin
+        @testset "bare" begin
             path = joinpath(dir, "Example.Bare")
             repo = LibGit2.init(path, true)
             try
@@ -208,12 +206,12 @@ mktempdir() do dir
                 @test typeof(e) == LibGit2.GitError
                 @test startswith(sprint(show,e),"GitError(Code:ENOTFOUND, Class:OS, Failed to resolve path")
             end
-        #end
-    #end
+        end
+    end
 
-    #@testset "Cloning repository" begin
+    @testset "Cloning repository" begin
 
-        #@testset "bare" begin
+        @testset "bare" begin
             repo_path = joinpath(dir, "Example.Bare1")
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true)
             try
@@ -224,8 +222,8 @@ mktempdir() do dir
             finally
                 finalize(repo)
             end
-        #end
-        #@testset "bare with remote callback" begin
+        end
+        @testset "bare with remote callback" begin
             repo_path = joinpath(dir, "Example.Bare2")
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb())
             try
@@ -242,8 +240,8 @@ mktempdir() do dir
             finally
                 finalize(repo)
             end
-        #end
-        #@testset "normal" begin
+        end
+        @testset "normal" begin
             repo = LibGit2.clone(cache_repo, test_repo, remote_cb = LibGit2.mirror_cb())
             try
                 @test isdir(test_repo)
@@ -252,12 +250,12 @@ mktempdir() do dir
             finally
                 finalize(repo)
             end
-        #end
-    #end
+        end
+    end
 
-    #@testset "Update cache repository" begin
+    @testset "Update cache repository" begin
 
-        #@testset "with commits" begin
+        @testset "with commits" begin
             repo = LibGit2.GitRepo(cache_repo)
             repo_file = open(joinpath(cache_repo,test_file), "a")
             try
@@ -310,9 +308,9 @@ mktempdir() do dir
                 finalize(repo)
                 close(repo_file)
             end
-        #end
+        end
 
-        #@testset "with branch" begin
+        @testset "with branch" begin
             repo = LibGit2.GitRepo(cache_repo)
             try
                 brnch = LibGit2.branch(repo)
@@ -347,9 +345,9 @@ mktempdir() do dir
             finally
                 finalize(repo)
             end
-        #end
+        end
 
-        #@testset "with default configuration" begin
+        @testset "with default configuration" begin
             repo = LibGit2.GitRepo(cache_repo)
             try
                 try
@@ -369,10 +367,9 @@ mktempdir() do dir
             finally
                 finalize(repo)
             end
-        #end
+        end
 
-
-        #@testset "with tags" begin
+        @testset "with tags" begin
             repo = LibGit2.GitRepo(cache_repo)
             try
                 tags = LibGit2.tag_list(repo)
@@ -406,9 +403,9 @@ mktempdir() do dir
             finally
                 finalize(repo)
             end
-        #end
+        end
 
-        #@testset "status" begin
+        @testset "status" begin
             repo = LibGit2.GitRepo(cache_repo)
             try
                 status = LibGit2.GitStatus(repo)
@@ -426,13 +423,14 @@ mktempdir() do dir
                 @test_throws BoundsError status[length(status)+1]
                 #we've added a file - show that it is new
                 @test status[1].status == LibGit2.Consts.STATUS_WT_NEW
+                close(repo_file)
             finally
                 finalize(repo)
-                close(repo_file)
             end
-    #end
+        end
+    end
 
-    #@testset "Fetch from cache repository" begin
+    @testset "Fetch from cache repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
             # fetch changes
@@ -469,14 +467,14 @@ mktempdir() do dir
         finally
             finalize(repo)
         end
-    #end
+    end
 
-    #@testset "Examine test repository" begin
-        #@testset "files" begin
+    @testset "Examine test repository" begin
+        @testset "files" begin
             @test readstring(joinpath(test_repo, test_file)) == readstring(joinpath(cache_repo, test_file))
-        #end
+        end
 
-        #@testset "tags & branches" begin
+        @testset "tags & branches" begin
             repo = LibGit2.GitRepo(test_repo)
             try
                 # all tag in place
@@ -500,9 +498,9 @@ mktempdir() do dir
             finally
                 finalize(repo)
             end
-        #end
+        end
 
-        #@testset "commits with revwalk" begin
+        @testset "commits with revwalk" begin
             repo = LibGit2.GitRepo(test_repo)
             cache = LibGit2.GitRepo(cache_repo)
             try
@@ -524,10 +522,10 @@ mktempdir() do dir
                 finalize(repo)
                 finalize(cache)
             end
-        #end
-    #end
+        end
+    end
 
-    #@testset "Modify and reset repository" begin
+    @testset "Modify and reset repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
             # check index for file
@@ -586,9 +584,9 @@ mktempdir() do dir
         finally
             finalize(repo)
         end
-    #end
+    end
 
-    #@testset "Transact test repository" begin
+    @testset "Transact test repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
             cp(joinpath(test_repo, test_file), joinpath(test_repo, "CCC"))
@@ -607,9 +605,9 @@ mktempdir() do dir
         finally
             finalize(repo)
         end
-    #end
+    end
 
-    #@testset "Credentials" begin
+    @testset "Credentials" begin
         creds_user = "USER"
         creds_pass = "PASS"
         creds = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
@@ -619,9 +617,10 @@ mktempdir() do dir
         @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
-    #end
+    end
 
     #= temporarily disabled until working on the buildbots, ref https://github.com/JuliaLang/julia/pull/17651#issuecomment-238211150
+    @testset "SSH" begin
         sshd_command = ""
         ssh_repo = joinpath(dir, "Example.SSH")
         if !is_windows()
@@ -795,5 +794,3 @@ mktempdir() do dir
         end
     =#
 end
-
-#end
