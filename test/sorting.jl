@@ -348,3 +348,4 @@ end
 
 # issue #12833 - type stability of sort
 @test Base.return_types(sort, (Vector{Int},)) == [Vector{Int}]
+

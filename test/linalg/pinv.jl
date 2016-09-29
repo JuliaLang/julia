@@ -1,12 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#
-#  Test the pseudo-inverse
-#
-
 debug = false
-
-using Base.Test
 
 function hilb(T::Type, n::Integer)
     a=Array{T}(n,n)

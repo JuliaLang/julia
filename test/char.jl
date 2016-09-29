@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#tests for /base/char.jl
-
 @test typemin(Char) == Char(0)
 @test ndims(Char) == 0
 @test getindex('a', 1) == 'a'

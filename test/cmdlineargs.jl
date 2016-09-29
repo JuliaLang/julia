@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "cmdlineargs" begin
+
 catcmd = `cat`
 if is_windows()
     try # use busybox-w32 on windows
@@ -338,4 +340,6 @@ for precomp in ("yes", "no")
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
     @test parse(Int, lno.captures[1]) > 0
+end
+
 end

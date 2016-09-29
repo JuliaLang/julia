@@ -561,3 +561,4 @@ temp_pkg_dir() do
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
     end
 end
+

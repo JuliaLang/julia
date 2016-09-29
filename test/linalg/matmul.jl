@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
 ## Test Julia fallbacks to BLAS routines
 
 # matrices with zero dimensions

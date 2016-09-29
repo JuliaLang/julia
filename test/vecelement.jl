@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module VecElementTests
+using Base.Test
 make_value{T<:Integer}(::Type{T}, i::Integer) = 3*i%T
 make_value{T<:AbstractFloat}(::Type{T},i::Integer) = T(3*i)
 
@@ -65,3 +67,5 @@ a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
 @test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
 
 @test isa(VecElement((1,2)), VecElement{Tuple{Int,Int}})
+
+end

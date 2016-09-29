@@ -123,13 +123,11 @@ body.args = ast.code
 
 end
 
-
-# tests to fully cover functions in base/meta.jl
 module MetaJLtest
 
-using Base.Test
 using Base.Meta
-
+using Base.Test
+# tests to fully cover functions in base/meta.jl
 @test isexpr(:(1+1),Set([:call]))
 @test isexpr(:(1+1),Vector([:call]))
 @test isexpr(1,:call)==false
@@ -138,5 +136,4 @@ ioB = IOBuffer()
 show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
-
 end

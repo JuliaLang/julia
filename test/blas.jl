@@ -299,3 +299,4 @@ for elty in [Float32, Float64, Complex64, Complex128]
         @test_throws DimensionMismatch BLAS.syrk!('L','N',one(elty),eye(elty,5),one(elty),eye(elty,6))
     end
 end
+

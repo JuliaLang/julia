@@ -137,3 +137,4 @@ function simd_sum_over_array(a)
 end
 @test 2001000 == simd_sum_over_array(collect(1:2000))
 @test 2001000 == simd_sum_over_array(Float32[i+j*500 for i=1:500, j=0:3])
+

@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# fast math
-
 # check expansions
 
 @test macroexpand(:(@fastmath 1+2)) == :(Base.FastMath.add_fast(1,2))

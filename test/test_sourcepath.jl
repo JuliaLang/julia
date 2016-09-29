@@ -15,3 +15,4 @@ end == path
     wait(t)
 end == path
 @test isabspath(@__FILE__)
+
