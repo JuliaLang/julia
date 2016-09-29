@@ -1336,7 +1336,7 @@ HTML display of ``Polar`` objects, with superscripts and italics, via:
 .. testcode::
 
     Base.show{T}(io::IO, ::MIME"text/html", z::Polar{T}) =
-        println(io, "<code>Polar{$T}<code> complex number: ",
+        println(io, "<code>Polar{$T}</code> complex number: ",
                 z.r, " <i>e</i><sup>", z.Θ, " <i>i</i></sup>")
 
 A ``Polar`` object will then display automatically using HTML in an environment
@@ -1346,11 +1346,11 @@ output if you want:
 .. doctest::
 
    julia> show(STDOUT, "text/html", Polar(3.0,4.0))
-   <code>Polar{Float64}<code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
+   <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
 
 .. raw:: html
 
-   <p>An HTML renderer would display this as: <code>Polar{Float64}<code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p>
+   <p>An HTML renderer would display this as: <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p>
 
 .. _man-val-trick:
 
