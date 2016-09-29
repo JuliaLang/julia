@@ -964,6 +964,11 @@ reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
 endof(p::Pair) = 2
 length(p::Pair) = 2
 
+convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
+function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
+    convert(A, x[1]) => convert(B, x[2])
+end
+
 # some operators not defined yet
 global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
