@@ -385,7 +385,7 @@ static bool is_native_simd_type(jl_datatype_t *dt) {
      typedef ABI_x86Layout DefaultAbiState;
 #  endif
 #elif defined _CPU_ARM_
-  typedef ABI_ArmLayout DefaultAbiState;
+  typedef ABI_ARMLayout DefaultAbiState;
 #elif defined _CPU_AARCH64_
   typedef ABI_AArch64Layout DefaultAbiState;
 #elif defined _CPU_PPC64_
