@@ -71,6 +71,26 @@ function choosetests(choices = [])
         prepend!(tests, datestests)
     end
 
+    sparsetests = ["sparse/sparse", "sparse/sparsevector"]
+    if Base.USE_GPL_LIBS
+        append!(sparsetests, ["sparse/umfpack", "sparse/cholmod", "sparse/spqr"])
+    end
+    if "sparse" in skip_tests
+        filter!(x -> (x != "sparse" && !(x in sparsetests)), tests)
+    elseif "sparse" in tests
+        # specifically selected case
+        filter!(x -> x != "sparse", tests)
+        prepend!(tests, sparsetests)
+    end
+
+    #do subarray before sparse but after linalg
+    if "subarray" in skip_tests
+        filter!(x -> x != "subarray", tests)
+    elseif "subarray" in tests
+        filter!(x -> x != "subarray", tests)
+        prepend!(tests, ["subarray"])
+    end
+
     linalgtests = ["linalg/triangular", "linalg/qr", "linalg/dense",
                    "linalg/matmul", "linalg/schur", "linalg/special",
                    "linalg/eigen", "linalg/bunchkaufman", "linalg/svd",
