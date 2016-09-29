@@ -3672,21 +3672,11 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (crt == NULL)
         jl_error("cfunction: return type doesn't correspond to a C type");
 
-    std::vector<Type*> fargt(0);
-    std::vector<bool> fargt_isboxed(0);
-    std::vector<Type*> fargt_sig(0);
-    Type *fargt_vasig;
-    std::vector<bool> byRefList(0);
-    AttributeSet attrs;
-    Type *prt = NULL;
-    int sret = 0;
     size_t nargs = jl_nparams(argt);
-    std::string err_msg = generate_func_sig(&crt, &prt, sret, fargt, fargt_isboxed,
-                                            fargt_sig, fargt_vasig, byRefList,
-                                            attrs, jlrettype, argt->parameters, nargs, false);
-    if (!err_msg.empty())
-        jl_error(err_msg.c_str());
-    if (fargt.size() + sret != fargt_sig.size())
+    function_sig_t sig(crt, jlrettype, argt->parameters, nargs, false, CallingConv::C, false);
+    if (!sig.err_msg.empty())
+        jl_error(sig.err_msg.c_str());
+    if (sig.fargt.size() + sig.sret != sig.fargt_sig.size())
         jl_error("va_arg syntax not allowed for cfunction argument list");
 
     const char *name = "cfunction";
@@ -3724,11 +3714,11 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     Module *M = new Module(name, jl_LLVMContext);
     jl_setup_module(M);
-    Function *cw = Function::Create(FunctionType::get(sret ? T_void : prt, fargt_sig, false),
+    Function *cw = Function::Create(sig.functype,
             GlobalVariable::ExternalLinkage,
             funcName.str(), M);
     jl_init_function(cw);
-    cw->setAttributes(attrs);
+    cw->setAttributes(sig.attributes);
 #if JL_LLVM_VERSION >= 30700
     cw->addFnAttr("no-frame-pointer-elim", "true");
 #endif
@@ -3769,7 +3759,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     size_t FParamIndex = 0;
     std::vector<Value*> args;
     Function::arg_iterator AI = cw->arg_begin();
-    Value *sretPtr = sret ? &*AI++ : NULL;
+    Value *sretPtr = sig.sret ? &*AI++ : NULL;
     if (lam == NULL) {
         theFptr = jlapplygeneric_func;
         specsig = false;
@@ -3790,7 +3780,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         jlfunc_sret = theFptr->hasStructRetAttr();
         if (jlfunc_sret) {
             // fuse the two sret together, or emit an alloca to hold it
-            if (sret)
+            if (sig.sret)
                 result = emit_bitcast(sretPtr, theFptr->getFunctionType()->getParamType(0));
             else
                 result = builder.CreateAlloca(theFptr->getFunctionType()->getParamType(0)->getContainedType(0));
@@ -3860,7 +3850,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 // something of type T
                 // undo whatever we might have done to this poor argument
                 bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type);
-                val = llvm_type_rewrite(val, val->getType(), fargt[i], true, byRefList[i], issigned, &ctx);
+                val = llvm_type_rewrite(val, val->getType(), sig.fargt[i], true, sig.byRefList[i], issigned, &ctx);
                 bool isboxed;
                 (void)julia_type_to_llvm(jargty, &isboxed);
                 if (isboxed) {
@@ -3961,30 +3951,31 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     // Prepare the return value
     Value *r;
     if (toboxed) {
-        assert(!sret);
+        assert(!sig.sret);
         // return a jl_value_t*
         r = boxed(retval, &ctx, false); // no gcroot since this is on the return path
     }
-    else if (sret && jlfunc_sret) {
+    else if (sig.sret && jlfunc_sret) {
         // nothing to do
     }
-    else if (!type_is_ghost(crt)) {
-        if (sret)
-            prt = fargt_sig[0]->getContainedType(0); // sret is a PointerType
+    else if (!type_is_ghost(sig.lrt)) {
+        Type *prt = sig.prt;
+        if (sig.sret)
+            prt = sig.fargt_sig[0]->getContainedType(0); // sret is a PointerType
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type);
-        Value *v = julia_to_native(crt, toboxed, declrt, retval,
+        Value *v = julia_to_native(sig.lrt, toboxed, declrt, retval,
                 false, false, false, 0, &ctx, NULL);
-        r = llvm_type_rewrite(v, crt, prt, false, false, issigned, &ctx);
-        if (sret)
+        r = llvm_type_rewrite(v, sig.lrt, prt, false, false, issigned, &ctx);
+        if (sig.sret)
             builder.CreateStore(r, sretPtr);
     }
     else {
-        assert(type_is_ghost(prt));
-        sret = true;
+        assert(type_is_ghost(sig.lrt));
+        sig.sret = true;
     }
 
     builder.CreateStore(last_age, ctx.world_age_field);
-    if (sret)
+    if (sig.sret)
         builder.CreateRetVoid();
     else
         builder.CreateRet(r);
