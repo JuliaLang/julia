@@ -118,7 +118,7 @@ function display_error(io::IO, er, bt)
         if eval_ind != 0
             bt = bt[1:eval_ind-1]
         end
-        Base.showerror(io, er, bt)
+        Base.showerror(IOContext(io, :limit => true), er, bt)
     end
 end
 
