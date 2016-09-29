@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
 @test issparse(sparse(ones(5,5)))
 @test !issparse(ones(5,5))
 @test Base.SparseArrays.indtype(sparse(ones(Int8,2),ones(Int8,2),rand(2))) == Int8
@@ -465,8 +463,7 @@ end
 @test maximum(sparse(-ones(3,3))) == -1
 @test minimum(sparse(ones(3,3))) == 1
 
-# Test unary functions with specialized broadcast over SparseMatrixCSCs
-let
+@testset "Unary functions" begin
     A = sprand(5, 15, 0.5)
     C = A + im*A
     Afull = full(A)
