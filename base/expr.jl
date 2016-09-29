@@ -88,9 +88,9 @@ julia> macro m()
 julia> M.f()
 (1,2)
 ```
-With @macroexpand the expression expands where @macroexpand appears in the code (module M).
-With macroexpand the expressions expands in the current module where the code was finally called.
-Note that when calling macroexpand or @macroexpand directly from the REPL, both of these contexts coincide, hence there is no difference.
+With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module `M`).
+With `macroexpand` the expressions expands in the current module where the code was finally called (REPL).
+Note that when calling `macroexpand` or `@macroexpand` directly from the REPL, both of these contexts coincide, hence there is no difference.
 """
 macro macroexpand(code)
     code_expanded = macroexpand(code)
