@@ -224,18 +224,19 @@ yield()
 @test consume(ducer) == 1
 @test consume(ducer) == 2
 
-# redirect_*
-let OLD_STDOUT = STDOUT,
-    fname = tempname(),
-    f = open(fname,"w")
+@testset "redirect_*" begin
+    let OLD_STDOUT = STDOUT,
+        fname = tempname(),
+        f = open(fname,"w")
 
-    redirect_stdout(f)
-    println("Hello World")
-    redirect_stdout(OLD_STDOUT)
-    close(f)
-    @test "Hello World\n" == readstring(fname)
-    @test is(OLD_STDOUT,STDOUT)
-    rm(fname)
+        redirect_stdout(f)
+        println("Hello World")
+        redirect_stdout(OLD_STDOUT)
+        close(f)
+        @test "Hello World\n" == readstring(fname)
+        @test is(OLD_STDOUT,STDOUT)
+        rm(fname)
+    end
 end
 
 # Test that redirecting an IOStream does not crash the process

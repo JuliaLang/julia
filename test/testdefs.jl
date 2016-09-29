@@ -4,10 +4,22 @@ using Base.Test
 
 function runtests(name)
     @printf("     \033[1m*\033[0m \033[31m%-21s\033[0m", name)
-    tt = @elapsed include("$name.jl")
+    res_and_time_data = @timed @testset "$name" begin
+        include("$name.jl")
+    end
     rss = Sys.maxrss()
-    @printf(" in %6.2f seconds, maxrss %7.2f MB\n", tt, rss / 2^20)
-    rss
+    @printf(" maxrss %7.2f MB\n", rss / 2^20)
+    #res_and_time_data[1] is the testset
+    passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Base.Test.get_test_counts(res_and_time_data[1])
+    if res_and_time_data[1].anynonpass == false
+        res_and_time_data = (
+                             (passes+c_passes,broken+c_broken),
+                             res_and_time_data[2],
+                             res_and_time_data[3],
+                             res_and_time_data[4],
+                             res_and_time_data[5])
+    end
+    vcat(collect(res_and_time_data), rss)
 end
 
 # looking in . messes things up badly
