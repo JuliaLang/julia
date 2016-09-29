@@ -103,3 +103,4 @@ b = Dates.Date(2000)
 @test convert(Date,730120) == b
 @test convert(Date,730120.0) == b
 @test convert(Date,Int32(730120)) == b
+

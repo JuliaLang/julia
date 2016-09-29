@@ -60,6 +60,17 @@ function choosetests(choices = [])
         tests = testnames
     end
 
+    datestests = ["dates/accessors", "dates/adjusters", "dates/query",
+                  "dates/periods", "dates/ranges", "dates/rounding", "dates/types",
+                  "dates/io", "dates/arithmetic", "dates/conversions"]
+    if "dates" in skip_tests
+        filter!(x -> (x != "dates" && !(x in datestests)), tests)
+    elseif "dates" in tests
+        # specifically selected case
+        filter!(x -> x != "dates", tests)
+        prepend!(tests, datestests)
+    end
+
     linalgtests = ["linalg/triangular", "linalg/qr", "linalg/dense",
                    "linalg/matmul", "linalg/schur", "linalg/special",
                    "linalg/eigen", "linalg/bunchkaufman", "linalg/svd",
