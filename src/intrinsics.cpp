@@ -663,9 +663,9 @@ static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_value
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
     Value *alignarg = boxed(emit_expr(align, ctx), ctx);
 #if JL_LLVM_VERSION >= 30700
-    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { boxed(parg, ctx), iarg, alignarg });
+    Value *ret = builder.CreateCall(prepare_call(runtime_func[pointerref]), { boxed(parg, ctx), iarg, alignarg });
 #else
-    Value *ret = builder.CreateCall3(prepare_call(jlpref_func), boxed(parg, ctx), iarg, alignarg);
+    Value *ret = builder.CreateCall3(prepare_call(runtime_func[pointerref]), boxed(parg, ctx), iarg, alignarg);
 #endif
     jl_value_t *ety;
     if (jl_is_cpointer_type(parg.typ)) {
@@ -730,9 +730,9 @@ static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
     Value *alignarg = boxed(emit_expr(align, ctx), ctx);
 #if JL_LLVM_VERSION >= 30700
-    builder.CreateCall(prepare_call(jlpset_func), { boxed(parg, ctx), xarg, iarg, alignarg });
+    builder.CreateCall(prepare_call(runtime_func[pointerset]), { boxed(parg, ctx), xarg, iarg, alignarg });
 #else
-    builder.CreateCall4(prepare_call(jlpset_func), boxed(parg, ctx), xarg, iarg, alignarg);
+    builder.CreateCall4(prepare_call(runtime_func[pointerset]), boxed(parg, ctx), xarg, iarg, alignarg);
 #endif
     return parg;
 }
@@ -860,57 +860,37 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         jl_errorf("intrinsic #%d %s: wrong number of arguments", f, JL_I::jl_intrinsic_name((int)f));
     }
 
+    if (f == llvmcall)
+        return emit_llvmcall(args, nargs, ctx);
+    if (f == unbox)
+        return generic_unbox(args[1], args[2], ctx); // TODO: replace with generic_box
+
+#if 0 // this section enables runtime-intrinsics (e.g. for testing), and disables their llvm counterparts
+    jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        argv[i] = emit_expr(args[i + 1], ctx);
+    }
+    Value *func = prepare_call(runtime_func[f]);
+    Value **argvalues = (Value**)alloca(sizeof(Value*) * nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        argvalues[i] = boxed(argv[i], ctx);
+    }
+    Value *r = builder.CreateCall(func, makeArrayRef(argvalues, nargs));
+    return mark_julia_type(r, true, (jl_value_t*)jl_any_type, ctx);
+#else
     switch (f) {
-    case cglobal_auto:
-    case cglobal: return emit_cglobal(args, nargs, ctx);
-    case llvmcall: return emit_llvmcall(args, nargs, ctx);
     case arraylen:
         return mark_julia_type(emit_arraylen(emit_expr(args[1], ctx), args[1], ctx), false,
                                jl_long_type, ctx);
-#if 0 // this section enables runtime-intrinsics (e.g. for testing), and disables their llvm counterparts
-    default:
-        Value *r;
-        Value *func = prepare_call(runtime_func[f]);
-        if (nargs == 1) {
-            Value *x = boxed(emit_expr(args[1], ctx), ctx);
-#if JL_LLVM_VERSION >= 30700
-            r = builder.CreateCall(func, {x});
-#else
-            r = builder.CreateCall(func, x);
-#endif
-        }
-        else if (nargs == 2) {
-            Value *x = boxed(emit_expr(args[1], ctx), ctx);
-            Value *y = boxed(emit_expr(args[2], ctx), ctx);
-#if JL_LLVM_VERSION >= 30700
-            r = builder.CreateCall(func, {x, y});
-#else
-            r = builder.CreateCall2(func, x, y);
-#endif
-        }
-        else if (nargs == 3) {
-            Value *x = boxed(emit_expr(args[1], ctx), ctx);
-            Value *y = boxed(emit_expr(args[2], ctx), ctx);
-            Value *z = boxed(emit_expr(args[3], ctx), ctx);
-#if JL_LLVM_VERSION >= 30700
-            r = builder.CreateCall(func, {x, y, z});
-#else
-            r = builder.CreateCall3(func, x, y, z);
-#endif
-        }
-        else {
-            assert(0);
-        }
-        return mark_julia_type(r, true, (jl_value_t*)jl_any_type, ctx);
-#else
+    case cglobal_auto:
+    case cglobal:
+        return emit_cglobal(args, nargs, ctx);
     case pointerref:
         return emit_pointerref(args[1], args[2], args[3], ctx);
     case pointerset:
         return emit_pointerset(args[1], args[2], args[3], args[4], ctx);
     case box:
         return generic_box(args[1], args[2], ctx);
-    case unbox:
-        return generic_unbox(args[1], args[2], ctx); // TODO: replace with generic_box
     case trunc_int:
         return generic_trunc(args[1], args[2], ctx, false, false);
     case checked_trunc_sint:
@@ -1078,9 +1058,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             r = builder.CreateZExt(r, T_int8);
         return mark_julia_type(r, false, newtyp ? newtyp : xinfo.typ, ctx);
     }
-#endif
     }
-    assert(0);
+#endif
+    abort(); // unreachable
 }
 
 static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, size_t nargs,

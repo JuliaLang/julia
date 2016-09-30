@@ -348,8 +348,6 @@ static Function *jlboundserrorv_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
 static Function *jlgetbindingorerror_func;
-static Function *jlpref_func;
-static Function *jlpset_func;
 static Function *jltopeval_func;
 static Function *jlcopyast_func;
 static Function *jltuple_func;
@@ -5717,15 +5715,6 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_get_binding_or_error", m);
     add_named_global(jlgetbindingorerror_func, &jl_get_binding_or_error);
-
-    jlpref_func = Function::Create(FunctionType::get(T_pjlvalue, three_pvalue_llvmt, false),
-                            Function::ExternalLinkage,
-                            "jl_pointerref", m);
-
-    jlpset_func = Function::Create(FunctionType::get(T_pjlvalue, four_pvalue_llvmt, false),
-                            Function::ExternalLinkage,
-                            "jl_pointerset", m);
-
 
     builtin_func_map[jl_f_is] = jlcall_func_to_llvm("jl_f_is", &jl_f_is, m);
     builtin_func_map[jl_f_typeof] = jlcall_func_to_llvm("jl_f_typeof", &jl_f_typeof, m);
