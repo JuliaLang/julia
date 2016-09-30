@@ -1517,6 +1517,36 @@ Internals
 
    Takes the expression ``x`` and returns an equivalent expression with all macros removed (expanded).
 
+.. function:: @macroexpand
+
+   .. Docstring generated from Julia source
+
+   Return equivalent expression with all macros removed (expanded).
+
+   There is a subtle difference between ``@macroexpand`` and ``macroexpand`` in that expansion takes place in different contexts. This is best seen in the following example:
+
+   .. doctest::
+
+       julia> module M
+                  macro m()
+                      1
+                  end
+                  function f()
+                     (@macroexpand(@m), macroexpand(:(@m)))
+                  end
+              end
+       M
+
+       julia> macro m()
+                 2
+              end
+       @m (macro with 1 method)
+
+       julia> M.f()
+       (1,2)
+
+   With @macroexpand the expression expands where @macroexpand appears in the code (module M). With macroexpand the expressions expands in the current module where the code was finally called. Note that when calling macroexpand or @macroexpand directly from the REPL, both of these contexts coincide, hence there is no difference.
+
 .. function:: expand(x)
 
    .. Docstring generated from Julia source
