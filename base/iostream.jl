@@ -321,15 +321,30 @@ function peek(s::IOStream)
     ccall(:ios_peekc, Cint, (Ptr{Void},), s)
 end
 
-function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
-    ch = peekchar(s); status = Int(ch)
-    while status >= 0 && (pred(ch) || ch == linecomment)
-        if ch == linecomment
-            readline(s)
+function skipchars(io::IO, pred; linecomment::Char=Char(0xffffffff))
+    function skipcomment(c)
+        if c == linecomment
+            readline(io)
+            return true
         else
-            read(s, Char)  # advance one character
+            return false
         end
-        ch = peekchar(s); status = Int(ch)
     end
-    return s
+    if linecomment == Char(0xffffffff)
+        _skipchars_impl(c->false, io, pred)
+    else
+        _skipchars_impl(skipcomment, io, pred)
+    end
 end
+
+function _skipchars_impl(action, io::IO, pred)
+    while !eof(io)
+        c = read(io, Char)
+        if !action(c) && !pred(c)
+            seek(io,position(io)-sizeof(string(c)))
+            break
+        end
+     end
+    return io
+end
+
