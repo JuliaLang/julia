@@ -139,9 +139,6 @@ JL_DLLEXPORT const char *jl_intrinsic_name(int f)
 static void (*runtime_fp[num_intrinsics])(void);
 static unsigned intrinsic_nargs[num_intrinsics];
 
-typedef jl_value_t *(*intrinsic_call_1_arg)(jl_value_t*);
-typedef jl_value_t *(*intrinsic_call_2_arg)(jl_value_t*, jl_value_t*);
-typedef jl_value_t *(*intrinsic_call_3_arg)(jl_value_t*, jl_value_t*, jl_value_t*);
 #define jl_is_intrinsic(v)       jl_typeis(v,jl_intrinsic_type)
 
 #ifdef __cplusplus
@@ -162,13 +159,24 @@ JL_CALLABLE(jl_f_intrinsic_call)
     if (!fargs)
         jl_error("this intrinsic must be compiled to be called");
     JL_NARGS(intrinsic_call, fargs, fargs);
+
+    union {
+        void (*fptr)(void);
+        jl_value_t *(*call1)(jl_value_t*);
+        jl_value_t *(*call2)(jl_value_t*, jl_value_t*);
+        jl_value_t *(*call3)(jl_value_t*, jl_value_t*, jl_value_t*);
+        jl_value_t *(*call4)(jl_value_t*, jl_value_t*, jl_value_t*, jl_value_t*);
+    } fptr;
+    fptr.fptr = runtime_fp[f];
     switch (fargs) {
         case 1:
-            return ((intrinsic_call_1_arg)runtime_fp[f])(args[0]);
+            return fptr.call1(args[0]);
         case 2:
-            return ((intrinsic_call_2_arg)runtime_fp[f])(args[0], args[1]);
+            return fptr.call2(args[0], args[1]);
         case 3:
-            return ((intrinsic_call_3_arg)runtime_fp[f])(args[0], args[1], args[2]);
+            return fptr.call3(args[0], args[1], args[2]);
+        case 4:
+            return fptr.call4(args[0], args[1], args[2], args[3]);
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
