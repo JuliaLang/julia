@@ -252,3 +252,19 @@ end
 @test pop!(Set(1:2), 2, nothing) == 2
 
 @test length(Set(['x',120])) == 2
+
+# convert
+let
+    iset = Set([17, 4711])
+    cfset = convert(Set{Float64}, iset)
+    @test typeof(cfset) == Set{Float64}
+    @test cfset == iset
+    fset = Set([17.0, 4711.0])
+    ciset = convert(Set{Int}, fset)
+    @test typeof(ciset) == Set{Int}
+    @test ciset == fset
+    ssset = Set(split("foo bar"))
+    cssset = convert(Set{String}, ssset)
+    @test typeof(cssset) == Set{String}
+    @test cssset == Set(["foo", "bar"])
+end
