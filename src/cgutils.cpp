@@ -869,11 +869,6 @@ static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned ali
     return alignment;
 }
 
-static LoadInst *build_load(Value *ptr, jl_value_t *jltype)
-{
-    return builder.CreateAlignedLoad(ptr, julia_alignment(ptr, jltype, 0));
-}
-
 static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
@@ -1493,9 +1488,7 @@ static void jl_add_method_root(jl_method_instance_t *li, jl_value_t *val);
 static Value *as_value(Type *t, const jl_cgval_t &v)
 {
     assert(!v.isboxed);
-    if (v.ispointer())
-        return tbaa_decorate(v.tbaa, build_load(builder.CreatePointerCast(v.V, t->getPointerTo()), v.typ));
-    return v.V;
+    return emit_unbox(t, v, v.typ);
 }
 
 // this is used to wrap values for generic contexts, where a
@@ -1517,9 +1510,9 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
     assert(!type_is_ghost(t)); // should have been handled by isghost above!
 
     if (jt == (jl_value_t*)jl_bool_type)
-        return julia_bool(builder.CreateTrunc(as_value(t,vinfo), T_int1));
+        return julia_bool(builder.CreateTrunc(as_value(t, vinfo), T_int1));
     if (t == T_int1)
-        return julia_bool(as_value(t,vinfo));
+        return julia_bool(as_value(t, vinfo));
 
     if (ctx->linfo && ctx->linfo->def && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(v)) {
@@ -1537,26 +1530,26 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
     if (jb == jl_int8_type)
         box = call_with_signed(box_int8_func, as_value(t, vinfo));
     else if (jb == jl_int16_type)
-        box = call_with_signed(box_int16_func, as_value(t,vinfo));
+        box = call_with_signed(box_int16_func, as_value(t, vinfo));
     else if (jb == jl_int32_type)
-        box = call_with_signed(box_int32_func, as_value(t,vinfo));
+        box = call_with_signed(box_int32_func, as_value(t, vinfo));
     else if (jb == jl_int64_type)
-        box = call_with_signed(box_int64_func, as_value(t,vinfo));
+        box = call_with_signed(box_int64_func, as_value(t, vinfo));
     else if (jb == jl_float32_type)
-        box = builder.CreateCall(prepare_call(box_float32_func), as_value(t,vinfo));
+        box = builder.CreateCall(prepare_call(box_float32_func), as_value(t, vinfo));
     //if (jb == jl_float64_type)
-    //  box = builder.CreateCall(box_float64_func, as_value(t,vinfo);
+    //  box = builder.CreateCall(box_float64_func, as_value(t, vinfo);
     // for Float64, fall through to generic case below, to inline alloc & init of Float64 box. cheap, I know.
     else if (jb == jl_uint8_type)
-        box = call_with_unsigned(box_uint8_func, as_value(t,vinfo));
+        box = call_with_unsigned(box_uint8_func, as_value(t, vinfo));
     else if (jb == jl_uint16_type)
-        box = call_with_unsigned(box_uint16_func, as_value(t,vinfo));
+        box = call_with_unsigned(box_uint16_func, as_value(t, vinfo));
     else if (jb == jl_uint32_type)
-        box = call_with_unsigned(box_uint32_func, as_value(t,vinfo));
+        box = call_with_unsigned(box_uint32_func, as_value(t, vinfo));
     else if (jb == jl_uint64_type)
-        box = call_with_unsigned(box_uint64_func, as_value(t,vinfo));
+        box = call_with_unsigned(box_uint64_func, as_value(t, vinfo));
     else if (jb == jl_char_type)
-        box = call_with_unsigned(box_char_func, as_value(t,vinfo));
+        box = call_with_unsigned(box_char_func, as_value(t, vinfo));
     else if (jb == jl_ssavalue_type) {
         unsigned zero = 0;
         v = as_value(t, vinfo);

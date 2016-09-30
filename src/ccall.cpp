@@ -695,6 +695,8 @@ static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failu
 
 // --- code generator for cglobal ---
 
+static jl_cgval_t emit_runtime_call(JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs, jl_codectx_t *ctx);
+
 static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
     JL_NARGS(cglobal, 1, 2);
@@ -704,10 +706,13 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     JL_GC_PUSH2(&rt, &sym.gcroot);
 
     if (nargs == 2) {
-        rt = try_eval(args[2], ctx, "error interpreting cglobal pointer type");
+        rt = static_eval(args[2], ctx, true, true);
         if (rt == NULL) {
             JL_GC_POP();
-            return jl_cgval_t();
+            jl_cgval_t argv[2];
+            argv[0] = emit_expr(args[0], ctx);
+            argv[1] = emit_expr(args[1], ctx);
+            return emit_runtime_call(JL_I::cglobal, argv, nargs, ctx);
         }
 
         JL_TYPECHK(cglobal, type, rt);

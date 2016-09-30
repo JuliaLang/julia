@@ -209,10 +209,6 @@ let x = (2,3)
     @test +(x...) == 5
 end
 
-# bits types
-@test isa((()->Core.Intrinsics.box(Ptr{Int8}, Core.Intrinsics.unbox(Int, 0)))(), Ptr{Int8})
-@test isa(convert(Char,65), Char)
-
 # conversions
 function fooo()
     local x::Int8
@@ -347,13 +343,6 @@ end
 glotest()
 @test glob_x == 88
 @test loc_x == 10
-
-# runtime intrinsics
-
-let f = Any[Core.Intrinsics.add_int, Core.Intrinsics.sub_int]
-    @test f[1](1, 1) == 2
-    @test f[2](1, 1) == 0
-end
 
 # issue #7234
 begin
@@ -1317,25 +1306,6 @@ f4518(x, y::Union{Int32,Int64}) = 0
 f4518(x::String, y::Union{Int32,Int64}) = 1
 @test f4518("",1) == 1
 
-# issue #4581
-bitstype 64 Date4581{T}
-let
-    x = Core.Intrinsics.box(Date4581{Int}, Core.Intrinsics.unbox(Int64,Int64(1234)))
-    xs = Date4581[x]
-    ys = copy(xs)
-    @test ys !== xs
-    @test ys == xs
-end
-
-# issue #6591
-function f6591(d)
-    Core.Intrinsics.box(Int64, d)
-    (f->f(d))(identity)
-end
-let d = Core.Intrinsics.box(Date4581{Int}, Int64(1))
-    @test isa(f6591(d), Date4581)
-end
-
 # issue #4645
 i4645(x) = (println(zz); zz = x; zz)
 @test_throws UndefVarError i4645(4)
@@ -1766,8 +1736,8 @@ obj6387 = ObjMember(DateRange6387{Int64}())
 
 function v6387{T}(r::Range{T})
     a = Array{T}(1)
-    a[1] = Core.Intrinsics.box(Date6387{Int64}, Core.Intrinsics.unbox(Int64,Int64(1)))
-    a
+    a[1] = Core.Intrinsics.box(Date6387{Int64}, Int64(1))
+    return a
 end
 
 function day_in(obj::ObjMember)
@@ -2255,20 +2225,6 @@ f7221{T<:Number}(::T) = 1
 f7221(::BitArray) = 2
 f7221(::AbstractVecOrMat) = 3
 @test f7221(trues(1)) == 2
-
-# test functionality of non-power-of-2 bitstype constants
-bitstype 24 Int24
-Int24(x::Int) = Core.Intrinsics.box(Int24,Core.Intrinsics.trunc_int(Int24,Core.Intrinsics.unbox(Int,x)))
-Int(x::Int24) = Core.Intrinsics.box(Int,Core.Intrinsics.zext_int(Int,Core.Intrinsics.unbox(Int24,x)))
-let x,y,f
-    x = Int24(Int(0x12345678)) # create something (via truncation)
-    @test Int(0x345678) === Int(x)
-    function f() Int24(Int(0x02468ace)) end
-    y = f() # invoke llvm constant folding
-    @test Int(0x468ace) === Int(y)
-    @test x !== y
-    @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
-end
 
 # issue #10570
 immutable Array_512_Uint8

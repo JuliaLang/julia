@@ -267,6 +267,14 @@ JL_DLLEXPORT int jl_is_debugbuild(void)
 #endif
 }
 
+JL_DLLEXPORT int8_t jl_is_memdebug() {
+#ifdef MEMDEBUG
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_julia_home(void)
 {
     return jl_cstr_to_string(jl_options.julia_home);
