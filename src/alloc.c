@@ -1006,7 +1006,12 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     uint64_t max_size = max_offset >> 1;
 
     uint32_t nfields = jl_svec_len(st->types);
-    jl_fielddesc32_t* desc = (jl_fielddesc32_t*) alloca(nfields * sizeof(jl_fielddesc32_t));
+    size_t descsz = nfields * sizeof(jl_fielddesc32_t);
+    jl_fielddesc32_t *desc;
+    if (descsz < jl_page_size)
+        desc = (jl_fielddesc32_t*)alloca(descsz);
+    else
+        desc = (jl_fielddesc32_t*)malloc(descsz);
     int haspadding = 0;
     assert(st->name == jl_tuple_typename ||
            st == jl_sym_type ||
@@ -1020,7 +1025,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             fsz = jl_datatype_size(ty);
             // Should never happen
             if (__unlikely(fsz > max_size))
-                jl_throw(jl_overflow_exception);
+                goto throw_ovf;
             al = ((jl_datatype_t*)ty)->layout->alignment;
             desc[i].isptr = 0;
             if (((jl_datatype_t*)ty)->layout->haspadding)
@@ -1046,7 +1051,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         desc[i].offset = sz;
         desc[i].size = fsz;
         if (__unlikely(max_offset - sz < fsz))
-            jl_throw(jl_overflow_exception);
+            goto throw_ovf;
         sz += fsz;
     }
     if (homogeneous && lastty!=NULL && jl_is_tuple_type(st)) {
@@ -1060,6 +1065,11 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->size > sz)
         haspadding = 1;
     st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
+    if (descsz >= jl_page_size) free(desc);
+    return;
+ throw_ovf:
+    if (descsz >= jl_page_size) free(desc);
+    jl_throw(jl_overflow_exception);
 }
 
 extern int jl_boot_file_loaded;
