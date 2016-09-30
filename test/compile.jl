@@ -366,4 +366,30 @@ let module_name = string("a",randstring())
     rm(file_name)
 end
 
+let
+    t = redirected_stderr("")
+    try
+        f_overwrite_main(x) = x
+        f_overwrite_main(x) = x
+    finally
+        close(STDERR)
+        redirect_stderr(olderr)
+    end
+    wait(t)
+
+    t = redirected_stderr("WARNING: Method definition f_overwrite_module(Any) in module F18725")
+    mktemp() do path, stream
+        try
+        include_string("""module F18725
+                f_overwrite_module(x) = x
+                f_overwrite_module(x) = x
+            end""")
+        finally
+            close(STDERR)
+            redirect_stderr(olderr)
+        end
+    end
+    wait(t)
+end
+
 end # !withenv

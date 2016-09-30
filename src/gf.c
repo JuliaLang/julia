@@ -973,16 +973,18 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
     jl_method_t *method = (jl_method_t*)newentry->func.method;
     jl_module_t *newmod = method->module;
     jl_module_t *oldmod = oldvalue->module;
-    JL_STREAM *s = JL_STDERR;
-    jl_printf(s, "WARNING: Method definition ");
-    jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);
-    jl_printf(s, " in module %s", jl_symbol_name(oldmod->name));
-    print_func_loc(s, oldvalue);
-    jl_printf(s, " overwritten");
-    if (oldmod != newmod)
-        jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
-    print_func_loc(s, method);
-    jl_printf(s, ".\n");
+    if (!(newmod == jl_main_module && oldmod == jl_main_module)) {
+        JL_STREAM *s = JL_STDERR;
+        jl_printf(s, "WARNING: Method definition ");
+        jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);
+        jl_printf(s, " in module %s", jl_symbol_name(oldmod->name));
+        print_func_loc(s, oldvalue);
+        jl_printf(s, " overwritten");
+        if (oldmod != newmod)
+            jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
+        print_func_loc(s, method);
+        jl_printf(s, ".\n");
+    }
 }
 
 // invalidate cached methods that overlap this definition
