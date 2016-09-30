@@ -2458,6 +2458,13 @@ end
 @test_throws InexactError convert(Int16, typemax(UInt64))
 @test_throws InexactError convert(Int, typemax(UInt64))
 
+# issue #14549
+for T in (Int8, Int16, UInt8, UInt16)
+    for F in (Float32,Float64)
+        @test_throws InexactError convert(T, F(200000.0))
+    end
+end
+
 let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end

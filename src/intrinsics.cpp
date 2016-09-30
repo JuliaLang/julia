@@ -653,80 +653,6 @@ static jl_cgval_t generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ct
     return mark_julia_type(ans, false, jlto, ctx);
 }
 
-static Value *emit_eqfsi(Value *x, Value *y)
-{
-    Value *fy = JL_INT(y);
-
-    // using all 64-bit is slightly faster than using mixed sizes
-    Value *xx = x, *vv = fy;
-    if (x->getType() == T_float32)
-        xx = builder.CreateFPExt(xx, T_float64);
-    if (vv->getType()->getPrimitiveSizeInBits() < 64)
-        vv = builder.CreateSExt(vv, T_int64);
-
-    Value *back = builder.CreateSIToFP(vv, xx->getType());
-    return builder.CreateAnd
-        (builder.CreateFCmpOEQ(xx, back),
-         builder.CreateICmpEQ(vv, builder.CreateFPToSI(back, vv->getType())));
-}
-
-static Value *emit_eqfui(Value *x, Value *y)
-{
-    Value *fy = JL_INT(y);
-
-    // using all 64-bit is slightly faster than using mixed sizes
-    Value *xx = x, *vv = fy;
-    if (x->getType() == T_float32)
-        xx = builder.CreateFPExt(xx, T_float64);
-    if (vv->getType()->getPrimitiveSizeInBits() < 64)
-        vv = builder.CreateZExt(vv, T_int64);
-
-    Value *back = builder.CreateUIToFP(vv, xx->getType());
-    return builder.CreateAnd
-        (builder.CreateFCmpOEQ(xx, back),
-         builder.CreateICmpEQ(vv, builder.CreateFPToUI(back, vv->getType())));
-}
-
-static jl_cgval_t emit_checked_fptosi(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
-{
-    jl_value_t *jlto = staticeval_bitstype(targ, "checked_fptosi", ctx);
-    if (!jlto) return jl_cgval_t();
-    Type *to = staticeval_bitstype(jlto);
-    Value *fx = FP(auto_unbox(x, ctx));
-    if (fx->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-    Value *ans = builder.CreateFPToSI(fx, to);
-    if (fx->getType() == T_float32 && to == T_int32) {
-        raise_exception_unless
-            (builder.CreateFCmpOEQ(builder.CreateFPExt(fx, T_float64),
-                                   builder.CreateSIToFP(ans, T_float64)),
-             literal_pointer_val(jl_inexact_exception), ctx);
-    }
-    else {
-        raise_exception_unless(emit_eqfsi(fx, ans), literal_pointer_val(jl_inexact_exception), ctx);
-    }
-    return mark_julia_type(ans, false, jlto, ctx);
-}
-
-static jl_cgval_t emit_checked_fptoui(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
-{
-    jl_value_t *jlto = staticeval_bitstype(targ, "checked_fptoui", ctx);
-    if (!jlto) return jl_cgval_t();
-    Type *to = staticeval_bitstype(jlto);
-    Value *fx = FP(auto_unbox(x, ctx));
-    if (fx->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
-    Value *ans = builder.CreateFPToUI(fx, to);
-    if (fx->getType() == T_float32 && to == T_int32) {
-        raise_exception_unless
-            (builder.CreateFCmpOEQ(builder.CreateFPExt(fx, T_float64),
-                                   builder.CreateUIToFP(ans, T_float64)),
-             literal_pointer_val(jl_inexact_exception), ctx);
-    }
-    else {
-        raise_exception_unless(emit_eqfui(fx, ans), literal_pointer_val(jl_inexact_exception), ctx);
-    }
-    return mark_julia_type(ans, false, jlto, ctx);
-}
-
 static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_value_t *align, jl_codectx_t *ctx)
 {
     jl_cgval_t parg = emit_expr(e, ctx);
@@ -992,10 +918,6 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return generic_sext(args[1], args[2], ctx);
     case zext_int:
         return generic_zext(args[1], args[2], ctx);
-    case checked_fptosi:
-        return emit_checked_fptosi(args[1], args[2], ctx);
-    case checked_fptoui:
-        return emit_checked_fptoui(args[1], args[2], ctx);
 
     case uitofp: {
         jl_value_t *bt = staticeval_bitstype(args[1], "uitofp", ctx);
