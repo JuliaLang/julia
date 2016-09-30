@@ -876,15 +876,6 @@ static unsigned check_trunc_uint(unsigned isize, unsigned osize, void *pa)
 }
 cvt_iintrinsic_checked(LLVMTrunc, check_trunc_uint, checked_trunc_uint)
 
-#define checked_fptosi(pr, a) \
-        if (!LLVMFPtoSI_exact(sizeof(a) * host_char_bit, pa, osize, pr)) \
-            jl_throw(jl_inexact_exception);
-un_fintrinsic_withtype(checked_fptosi, checked_fptosi)
-#define checked_fptoui(pr, a) \
-        if (!LLVMFPtoUI_exact(sizeof(a) * host_char_bit, pa, osize, pr)) \
-            jl_throw(jl_inexact_exception);
-un_fintrinsic_withtype(checked_fptoui, checked_fptoui)
-
 JL_DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
 {
     jl_value_t *ty = jl_typeof(a);
