@@ -378,16 +378,15 @@ let
     wait(t)
 
     t = redirected_stderr("WARNING: Method definition f_overwrite_module(Any) in module F18725")
-    mktemp() do path, stream
-        try
-        include_string("""module F18725
+    try
+        include_string("""
+            module F18725
                 f_overwrite_module(x) = x
                 f_overwrite_module(x) = x
             end""")
-        finally
-            close(STDERR)
-            redirect_stderr(olderr)
-        end
+    finally
+        close(STDERR)
+        redirect_stderr(olderr)
     end
     wait(t)
 end
