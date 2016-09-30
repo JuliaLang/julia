@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # test core language features
-
 const Bottom = Union{}
 
 macro testintersect(args...)
@@ -1108,7 +1107,7 @@ let
     @test a==1 && b==2
 end
 
-# issue #1876
+@testset "issue #1876" begin
 let
     tst = 1
     m1(i) = (tst+=1;i-1)
@@ -1125,6 +1124,7 @@ let
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
+end
 end
 
 # issue #1632
@@ -2301,24 +2301,26 @@ g9535() = (f9535(),f9535())
 
 # weak references
 type Obj; x; end
-@noinline function mk_wr(r, wr)
-    x = Obj(1)
-    push!(r, x)
-    push!(wr, WeakRef(x))
+@testset "weak references" begin
+    @noinline function mk_wr(r, wr)
+        x = Obj(1)
+        push!(r, x)
+        push!(wr, WeakRef(x))
+    end
+    test_wr(r,wr) = @test r[1] == wr[1].value
+    function test_wr()
+        ref = []
+        wref = []
+        mk_wr(ref, wref)
+        test_wr(ref, wref)
+        gc()
+        test_wr(ref, wref)
+        pop!(ref)
+        gc()
+        @test wref[1].value === nothing
+    end
+    test_wr()
 end
-test_wr(r,wr) = @test r[1] == wr[1].value
-function test_wr()
-    ref = []
-    wref = []
-    mk_wr(ref, wref)
-    test_wr(ref, wref)
-    gc()
-    test_wr(ref, wref)
-    pop!(ref)
-    gc()
-    @test wref[1].value === nothing
-end
-test_wr()
 
 # issue #9947
 function f9947()
