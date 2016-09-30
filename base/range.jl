@@ -402,8 +402,12 @@ step{T}(r::LinSpace{T}) = ifelse(r.len <= 0, convert(T,NaN), (r.stop-r.start)/r.
 
 unsafe_length(r::Range) = length(r)  # generic fallback
 
-function unsafe_length(r::StepRange)
+function unsafe_length{T<:Integer,S<:Integer}(r::StepRange{T,S})
     n = Integer(div(r.stop+r.step - r.start, r.step))
+    isempty(r) ? zero(n) : n
+end
+function unsafe_length(r::StepRange)
+    n = round(Integer, (r.stop - r.start)/r.step + 1)
     isempty(r) ? zero(n) : n
 end
 length(r::StepRange) = unsafe_length(r)
