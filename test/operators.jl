@@ -21,6 +21,9 @@ B = [true true false]
 @test reverse(Pair(1,2)) == Pair(2,1)
 @test reverse(Pair("13","24")) == Pair("24","13")
 @test typeof(reverse(Pair{String,Int64}("a",1))) == Pair{Int64,String}
+@test convert(Pair{Float64,Float64}, 17 => 4711) === (17.0 => 4711.0)
+@test convert(Pair{Int,Float64}, 17 => 4711) === (17 => 4711.0)
+@test convert(Pair{Float64,Int}, 17 => 4711) === (17.0 => 4711)
 
 p = 1=>:foo
 @test first(p) == 1
