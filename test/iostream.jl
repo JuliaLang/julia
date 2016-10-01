@@ -7,10 +7,10 @@ end
 @test eof(skipchars(IOBuffer("#    \n   "), isspace, linecomment='#'))
 
 macro test_skipchars(str, expected_char, lnc=Char(0xffffffff))
-  quote
-    io = skipchars(IOBuffer($str), isspace, linecomment=$lnc)
-    @test !eof(io) && read(io, Char) == $expected_char
-  end
+    quote
+        io = skipchars(IOBuffer($str), isspace, linecomment=$lnc)
+        @test !eof(io) && read(io, Char) == $expected_char
+    end
 end
 
 @test_skipchars "abc" 'a'
