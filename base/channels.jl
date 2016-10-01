@@ -2,6 +2,17 @@
 
 abstract AbstractChannel
 
+"""
+    Channel{T}(sz::Int)
+
+Constructs a `Channel` that can hold a maximum of `sz` objects of type `T`. `put!` calls on
+a full channel block until an object is removed with `take!`.
+
+Other constructors:
+
+* `Channel()`: equivalent to `Channel{Any}(32)`
+* `Channel(sz::Int)`: equivalent to `Channel{Any}(sz)`
+"""
 type Channel{T} <: AbstractChannel
     cond_take::Condition    # waiting for data to become available
     cond_put::Condition     # waiting for a writeable slot
