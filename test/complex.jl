@@ -14,45 +14,47 @@ end
 @test sprint(io -> show(io,complex(true,true))) == "Complex(true,true)"
 
 @testset "arithmetic" begin
-    for T in (Float16, Float32, Float64, BigFloat)
+    @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true
         f = false
 
-        # Add and subtract
-        @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
-        @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
-        @test isequal(T(+0.0) - im, Complex(T(+0.0), T(-1.0)))
-        @test isequal(T(-0.0) - im, Complex(T(-0.0), T(-1.0)))
-        @test isequal(T(+1.0) + im, Complex(T(+1.0), T(+1.0)))
-        @test isequal(T(-1.0) + im, Complex(T(-1.0), T(+1.0)))
-        @test isequal(T(+1.0) - im, Complex(T(+1.0), T(-1.0)))
-        @test isequal(T(-1.0) - im, Complex(T(-1.0), T(-1.0)))
-        @test isequal(im + T(+0.0), Complex(T(+0.0), T(+1.0)))
-        @test isequal(im + T(-0.0), Complex(T(-0.0), T(+1.0)))
-        @test isequal(im - T(+0.0), Complex(T(+0.0), T(+1.0)))
-        @test isequal(im - T(-0.0), Complex(T(+0.0), T(+1.0)))
-        @test isequal(im + T(+1.0), Complex(T(+1.0), T(+1.0)))
-        @test isequal(im + T(-1.0), Complex(T(-1.0), T(+1.0)))
-        @test isequal(im - T(+1.0), Complex(T(-1.0), T(+1.0)))
-        @test isequal(im - T(-1.0), Complex(T(+1.0), T(+1.0)))
-        @test isequal(T(f) + im, Complex(T(+0.0), T(+1.0)))
-        @test isequal(T(t) + im, Complex(T(+1.0), T(+1.0)))
-        @test isequal(T(f) - im, Complex(T(+0.0), T(-1.0)))
-        @test isequal(T(t) - im, Complex(T(+1.0), T(-1.0)))
-        @test isequal(im + T(f), Complex(T(+0.0), T(+1.0)))
-        @test isequal(im + T(t), Complex(T(+1.0), T(+1.0)))
-        @test isequal(im - T(f), Complex(T(+0.0), T(+1.0)))
-        @test isequal(im - T(t), Complex(T(-1.0), T(+1.0)))
+        @testset "add and subtract" begin
+            @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
+            @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
+            @test isequal(T(+0.0) - im, Complex(T(+0.0), T(-1.0)))
+            @test isequal(T(-0.0) - im, Complex(T(-0.0), T(-1.0)))
+            @test isequal(T(+1.0) + im, Complex(T(+1.0), T(+1.0)))
+            @test isequal(T(-1.0) + im, Complex(T(-1.0), T(+1.0)))
+            @test isequal(T(+1.0) - im, Complex(T(+1.0), T(-1.0)))
+            @test isequal(T(-1.0) - im, Complex(T(-1.0), T(-1.0)))
+            @test isequal(im + T(+0.0), Complex(T(+0.0), T(+1.0)))
+            @test isequal(im + T(-0.0), Complex(T(-0.0), T(+1.0)))
+            @test isequal(im - T(+0.0), Complex(T(+0.0), T(+1.0)))
+            @test isequal(im - T(-0.0), Complex(T(+0.0), T(+1.0)))
+            @test isequal(im + T(+1.0), Complex(T(+1.0), T(+1.0)))
+            @test isequal(im + T(-1.0), Complex(T(-1.0), T(+1.0)))
+            @test isequal(im - T(+1.0), Complex(T(-1.0), T(+1.0)))
+            @test isequal(im - T(-1.0), Complex(T(+1.0), T(+1.0)))
+            @test isequal(T(f) + im, Complex(T(+0.0), T(+1.0)))
+            @test isequal(T(t) + im, Complex(T(+1.0), T(+1.0)))
+            @test isequal(T(f) - im, Complex(T(+0.0), T(-1.0)))
+            @test isequal(T(t) - im, Complex(T(+1.0), T(-1.0)))
+            @test isequal(im + T(f), Complex(T(+0.0), T(+1.0)))
+            @test isequal(im + T(t), Complex(T(+1.0), T(+1.0)))
+            @test isequal(im - T(f), Complex(T(+0.0), T(+1.0)))
+            @test isequal(im - T(t), Complex(T(-1.0), T(+1.0)))
+        end
 
-        # Multiply
-        @test isequal(T(+0.0) * im, Complex(T(+0.0), T(+0.0)))
-        @test isequal(T(-0.0) * im, Complex(T(-0.0), T(-0.0)))
-        @test isequal(T(+1.0) * im, Complex(T(+0.0), T(+1.0)))
-        @test isequal(T(-1.0) * im, Complex(T(-0.0), T(-1.0)))
-        @test isequal(im * T(+0.0), Complex(T(+0.0), T(+0.0)))
-        @test isequal(im * T(-0.0), Complex(T(-0.0), T(-0.0)))
-        @test isequal(im * T(+1.0), Complex(T(+0.0), T(+1.0)))
-        @test isequal(im * T(-1.0), Complex(T(-0.0), T(-1.0)))
+        @testset "multiply" begin
+            @test isequal(T(+0.0) * im, Complex(T(+0.0), T(+0.0)))
+            @test isequal(T(-0.0) * im, Complex(T(-0.0), T(-0.0)))
+            @test isequal(T(+1.0) * im, Complex(T(+0.0), T(+1.0)))
+            @test isequal(T(-1.0) * im, Complex(T(-0.0), T(-1.0)))
+            @test isequal(im * T(+0.0), Complex(T(+0.0), T(+0.0)))
+            @test isequal(im * T(-0.0), Complex(T(-0.0), T(-0.0)))
+            @test isequal(im * T(+1.0), Complex(T(+0.0), T(+1.0)))
+            @test isequal(im * T(-1.0), Complex(T(-0.0), T(-1.0)))
+        end
     end
     @test isequal(true + complex(true,false), complex(true,false) + complex(true,false))
     @test isequal(complex(true,false) + true, complex(true,false) + complex(true,false))
@@ -66,72 +68,75 @@ end
     # We compare to BigFloat instead of hard-coding
     # values, assuming that BigFloat has an independent and independently
     # tested implementation.
-    for T in (Float32, Float64)
+    @testset for T in (Float32, Float64)
         x = Complex{T}(1//3 + 1//4*im)
         y = Complex{T}(1//2 + 1//5*im)
         yi = 4
-        # Test random values
-        @test x^y ≈ big(x)^big(y)
-        @test x^yi ≈ big(x)^yi
-        @test x^true ≈ big(x)^true
-        @test x^false ≈ big(x)^false
-        @test x^1 ≈ big(x)^1
-        @test abs(x) ≈ abs(big(x))
-        @test abs2(x) ≈ abs2(big(x))
-        @test acos(x) ≈ acos(big(x))
-        @test acosh(1+x) ≈ acosh(1+big(x))
-        @test angle(x) ≈ angle(big(x))
-        @test asin(x) ≈ asin(big(x))
-        @test asinh(x) ≈ asinh(big(x))
-        @test atan(x) ≈ atan(big(x))
-        @test atanh(x) ≈ atanh(big(x))
-        @test cis(real(x)) ≈ cis(real(big(x)))
-        @test cis(x) ≈ cis(big(x))
-        @test cos(x) ≈ cos(big(x))
-        @test cosh(x) ≈ cosh(big(x))
-        @test exp(x) ≈ exp(big(x))
-        @test exp10(x) ≈ exp10(big(x))
-        @test exp2(x) ≈ exp2(big(x))
-        @test_approx_eq_eps expm1(x) expm1(big(x)) eps(T)
-        @test log(x) ≈ log(big(x))
-        @test log10(x) ≈ log10(big(x))
-        @test log1p(x) ≈ log1p(big(x))
-        @test log2(x) ≈ log2(big(x))
-        @test sin(x) ≈ sin(big(x))
-        @test sinh(x) ≈ sinh(big(x))
-        @test sqrt(x) ≈ sqrt(big(x))
-        @test tan(x) ≈ tan(big(x))
-        @test tanh(x) ≈ tanh(big(x))
-        # Test inverses
-        @test acos(cos(x)) ≈ x
-        @test acosh(cosh(x)) ≈ x
-        @test asin(sin(x)) ≈ x
-        @test asinh(sinh(x)) ≈ x
-        @test atan(tan(x)) ≈ x
-        @test atanh(tanh(x)) ≈ x
-        @test cos(acos(x)) ≈ x
-        @test cosh(acosh(1+x)) ≈ 1+x
-        @test exp(log(x)) ≈ x
-        @test exp10(log10(x)) ≈ x
-        @test exp2(log2(x)) ≈ x
-        @test expm1(log1p(x)) ≈ x
-        @test log(exp(x)) ≈ x
-        @test log10(exp10(x)) ≈ x
-        @test log1p(expm1(x)) ≈ x
-        @test log2(exp2(x)) ≈ x
-        @test sin(asin(x)) ≈ x
-        @test sinh(asinh(x)) ≈ x
-        @test sqrt(x)^2 ≈ x
-        @test sqrt(x^2) ≈ x
-        @test tan(atan(x)) ≈ x
-        @test tanh(atanh(x)) ≈ x
-        # Test some properties
-        @test cosh(x) ≈ (exp(x)+exp(-x))/2
-        @test cosh(x)^2-sinh(x)^2 ≈ 1
-        @test sin(x)^2+cos(x)^2 ≈ 1
-        @test sinh(x) ≈ (exp(x)-exp(-x))/2
-        @test tan(x) ≈ sin(x)/cos(x)
-        @test tanh(x) ≈ sinh(x)/cosh(x)
+        @testset "Random values" begin
+            @test x^y ≈ big(x)^big(y)
+            @test x^yi ≈ big(x)^yi
+            @test x^true ≈ big(x)^true
+            @test x^false ≈ big(x)^false
+            @test x^1 ≈ big(x)^1
+            @test abs(x) ≈ abs(big(x))
+            @test abs2(x) ≈ abs2(big(x))
+            @test acos(x) ≈ acos(big(x))
+            @test acosh(1+x) ≈ acosh(1+big(x))
+            @test angle(x) ≈ angle(big(x))
+            @test asin(x) ≈ asin(big(x))
+            @test asinh(x) ≈ asinh(big(x))
+            @test atan(x) ≈ atan(big(x))
+            @test atanh(x) ≈ atanh(big(x))
+            @test cis(real(x)) ≈ cis(real(big(x)))
+            @test cis(x) ≈ cis(big(x))
+            @test cos(x) ≈ cos(big(x))
+            @test cosh(x) ≈ cosh(big(x))
+            @test exp(x) ≈ exp(big(x))
+            @test exp10(x) ≈ exp10(big(x))
+            @test exp2(x) ≈ exp2(big(x))
+            @test_approx_eq_eps expm1(x) expm1(big(x)) eps(T)
+            @test log(x) ≈ log(big(x))
+            @test log10(x) ≈ log10(big(x))
+            @test log1p(x) ≈ log1p(big(x))
+            @test log2(x) ≈ log2(big(x))
+            @test sin(x) ≈ sin(big(x))
+            @test sinh(x) ≈ sinh(big(x))
+            @test sqrt(x) ≈ sqrt(big(x))
+            @test tan(x) ≈ tan(big(x))
+            @test tanh(x) ≈ tanh(big(x))
+        end
+        @testset "Inverses" begin
+            @test acos(cos(x)) ≈ x
+            @test acosh(cosh(x)) ≈ x
+            @test asin(sin(x)) ≈ x
+            @test asinh(sinh(x)) ≈ x
+            @test atan(tan(x)) ≈ x
+            @test atanh(tanh(x)) ≈ x
+            @test cos(acos(x)) ≈ x
+            @test cosh(acosh(1+x)) ≈ 1+x
+            @test exp(log(x)) ≈ x
+            @test exp10(log10(x)) ≈ x
+            @test exp2(log2(x)) ≈ x
+            @test expm1(log1p(x)) ≈ x
+            @test log(exp(x)) ≈ x
+            @test log10(exp10(x)) ≈ x
+            @test log1p(expm1(x)) ≈ x
+            @test log2(exp2(x)) ≈ x
+            @test sin(asin(x)) ≈ x
+            @test sinh(asinh(x)) ≈ x
+            @test sqrt(x)^2 ≈ x
+            @test sqrt(x^2) ≈ x
+            @test tan(atan(x)) ≈ x
+            @test tanh(atanh(x)) ≈ x
+        end
+        @testset "Relations between functions" begin
+            @test cosh(x) ≈ (exp(x)+exp(-x))/2
+            @test cosh(x)^2-sinh(x)^2 ≈ 1
+            @test sin(x)^2+cos(x)^2 ≈ 1
+            @test sinh(x) ≈ (exp(x)-exp(-x))/2
+            @test tan(x) ≈ sin(x)/cos(x)
+            @test tanh(x) ≈ sinh(x)/cosh(x)
+        end
     end
 end
 
@@ -846,40 +851,43 @@ end
 @test cdiv_test(complex(1//2, 3//4), complex(17//13, 4//5))
 @test cdiv_test(complex(1,2), complex(8997,2432))
 
-# inv
-@test inv(1e300+0im) == 1e-300 - 0.0im
-@test inv(0+1e300im) == 0.0 - 1e-300im
-
-# issue #7904
-@test log10(10+0im) === 1.0 + 0.0im
-@test log2(2+0im) === 1.0 + 0.0im
-
-# sign
-for T in (Float32, Float64)
-    z = Complex{T}(1)
-    @test typeof(sign(z)) == typeof(z)
-    z = Complex{T}(0)
-    @test typeof(sign(z)) == typeof(z)
-end
-for T in (Int32, Int64)
-    z = Complex{T}(1)
-    @test typeof(sign(z)) == typeof(float(z))
-    z = Complex{T}(0)
-    @test typeof(sign(z)) == typeof(float(z))
+@testset "inv" begin
+    @test inv(1e300+0im) == 1e-300 - 0.0im
+    @test inv(0+1e300im) == 0.0 - 1e-300im
 end
 
-@test sign(0 + 0im) == 0
-@test sign(2 + 0im) == 1
-@test sign(-2 + 0im) == -1
-@test sign(1 + im) ≈ (1 + im) / sqrt(2)
-@test sign(1 - im) ≈ (1 - im) / sqrt(2)
+@testset "issue #7904" begin
+    @test log10(10+0im) === 1.0 + 0.0im
+    @test log2(2+0im) === 1.0 + 0.0im
+end
 
-for T in (Float16, Float32, Float64)
-    z = Complex(zero(T), zero(T))
-    @test sign(z) === z
-    @test sign(-z) === -z
-    @test sign(conj(z)) === conj(z)
-    @test sign(-conj(z)) === -conj(z)
+@testset "sign" begin
+    for T in (Float32, Float64)
+        z = Complex{T}(1)
+        @test typeof(sign(z)) == typeof(z)
+        z = Complex{T}(0)
+        @test typeof(sign(z)) == typeof(z)
+    end
+    for T in (Int32, Int64)
+        z = Complex{T}(1)
+        @test typeof(sign(z)) == typeof(float(z))
+        z = Complex{T}(0)
+        @test typeof(sign(z)) == typeof(float(z))
+    end
+
+    @test sign(0 + 0im) == 0
+    @test sign(2 + 0im) == 1
+    @test sign(-2 + 0im) == -1
+    @test sign(1 + im) ≈ (1 + im) / sqrt(2)
+    @test sign(1 - im) ≈ (1 - im) / sqrt(2)
+
+    for T in (Float16, Float32, Float64)
+        z = Complex(zero(T), zero(T))
+        @test sign(z) === z
+        @test sign(-z) === -z
+        @test sign(conj(z)) === conj(z)
+        @test sign(-conj(z)) === -conj(z)
+    end
 end
 
 @testset "cis" begin
@@ -903,18 +911,17 @@ end
     @test exp10(1.0+2.0im) ≈ -1.0701348355877020772086517528518239460495529361-9.9425756941378968736161937190915602112878340717im
 end
 
-@testset "round, #8291" begin
+@testset "round and float, PR #8291" begin
     @test round(Complex(1.125, 0.875), 2) == Complex(1.12, 0.88)
     @test round(Complex(1.5, 0.5), RoundDown, RoundUp) == Complex(1.0, 1.0)
     @test round.([1:5;] + im) == [1:5;] + im
     @test round.([1:5;] + 0.5im) == [1.0:5.0;]
 
-    # float #8291
     @test float(Complex(1, 2)) == Complex(1.0, 2.0)
     @test round(float(Complex(π, e)),3) == Complex(3.142, 2.718)
 end
 
-@testset "Complex32 arithmetic, #10003" begin
+@testset "Complex32 arithmetic, PR #10003" begin
     @test Float16(1)+Float16(1)im === Complex32(1, 1)
     @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
     @test Float16(1)*im === Complex32(im)
