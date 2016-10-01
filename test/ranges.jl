@@ -794,8 +794,9 @@ Base.isless(x::FloatLike, y::FloatLike) = isless(x.val, y.val)
 Base.:+(x::FloatLike, y::FloatLike) = FloatLike(x.val+y.val)
 Base.:-(x::FloatLike, y::FloatLike) = FloatLike(x.val-y.val)
 Base.:/(x::FloatLike, y::FloatLike) = x.val / y.val
-# Base.div(x::FloatLike, y::FloatLike) = div(x.val, y.val)
 Base.rem(x::FloatLike, y::FloatLike) = FloatLike(rem(x.val, y.val))
+Base.:*(x::FloatLike, y::Int) = FloatLike(x.val * y)
+Base.:/(x::FloatLike, y::Int) = FloatLike(x.val / y)
 
 rf = 0.8:0.8:640.0
 rs = StepRange(FloatLike(0.8), FloatLike(0.8), FloatLike(640))
@@ -807,3 +808,6 @@ rs = StepRange(FloatLike(640), FloatLike(-0.8), FloatLike(0.8))
 @test first(rs) == FloatLike(640)
 @test last(rs).val ≈ 0.8
 @test length(rf) == length(rs) == 800
+rs = range(FloatLike(0), FloatLike(0.1), 10)
+@test length(rs) == 10
+@test last(rs).val ≈ 0.9

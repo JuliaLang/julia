@@ -135,7 +135,16 @@ colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
 """
-range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
+function range{T,S}(a::T, step::S, len::Integer)
+    r = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
+    if length(r) < len
+        r = StepRange{T,S}(a, step, convert(T, a+step*len))
+        if length(r) > len
+            throw(InexactError())
+        end
+    end
+    r
+end
 
 ## floating point ranges
 
