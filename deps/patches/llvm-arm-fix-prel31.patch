@@ -1,0 +1,60 @@
+From 6cef9adffcf9af3c632e58e0d7d4d6e1d0525980 Mon Sep 17 00:00:00 2001
+From: Yichao Yu <yyc1992@gmail.com>
+Date: Thu, 29 Sep 2016 22:41:57 -0400
+Subject: [PATCH] Fix PREL31 relocation on ARM
+
+This is a 31bits relative relocation instead of a 32bits absolute relocation.
+---
+ lib/ExecutionEngine/RuntimeDyld/RuntimeDyldELF.cpp |  4 ++++
+ .../RuntimeDyld/ARM/ELF_ARM_EXIDX_relocations.s    | 23 ++++++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+ create mode 100644 test/ExecutionEngine/RuntimeDyld/ARM/ELF_ARM_EXIDX_relocations.s
+
+diff --git a/lib/ExecutionEngine/RuntimeDyld/RuntimeDyldELF.cpp b/lib/ExecutionEngine/RuntimeDyld/RuntimeDyldELF.cpp
+index 6929732..2e0d168 100644
+--- a/lib/ExecutionEngine/RuntimeDyld/RuntimeDyldELF.cpp
++++ b/lib/ExecutionEngine/RuntimeDyld/RuntimeDyldELF.cpp
+@@ -463,7 +463,11 @@ void RuntimeDyldELF::resolveARMRelocation(const SectionEntry &Section,
+ 
+   case ELF::R_ARM_NONE:
+     break;
++    // Write a 31bit signed offset
+   case ELF::R_ARM_PREL31:
++    *TargetPtr &= 0x80000000;
++    *TargetPtr |= (Value - FinalAddress) & ~0x80000000;
++    break;
+   case ELF::R_ARM_TARGET1:
+   case ELF::R_ARM_ABS32:
+     *TargetPtr = Value;
+diff --git a/test/ExecutionEngine/RuntimeDyld/ARM/ELF_ARM_EXIDX_relocations.s b/test/ExecutionEngine/RuntimeDyld/ARM/ELF_ARM_EXIDX_relocations.s
+new file mode 100644
+index 0000000..eb07b00
+--- /dev/null
++++ b/test/ExecutionEngine/RuntimeDyld/ARM/ELF_ARM_EXIDX_relocations.s
+@@ -0,0 +1,23 @@
++# RUN: llvm-mc -triple=arm-linux-gnueabihf -filetype=obj -o %T/reloc.o %s
++# RUN: llvm-rtdyld -triple=arm-linux-gnueabihf -verify -map-section reloc.o,.ARM.exidx=0x6000 -map-section reloc.o,.text=0x4000  -dummy-extern __aeabi_unwind_cpp_pr0=0x1234 -check=%s %T/reloc.o
++
++        .text
++        .syntax unified
++        .eabi_attribute 67, "2.09"      @ Tag_conformance
++        .cpu    cortex-a8
++        .fpu    neon
++        .file   "reloc.c"
++        .globl  g
++        .align  2
++        .type   g,%function
++g:
++        .fnstart
++        movw    r0, #1
++        bx      lr
++        .Lfunc_end0:
++        .size   g, .Lfunc_end0-g
++        .fnend
++
++# rtdyld-check: *{4}(section_addr(reloc.o, .ARM.exidx)) = (g - (section_addr(reloc.o, .ARM.exidx))) & 0x7fffffff
++# Compat unwind info: finish(0xb0), finish(0xb0), finish(0xb0)
++# rtdyld-check: *{4}(section_addr(reloc.o, .ARM.exidx) + 0x4) = 0x80b0b0b0
+-- 
+2.10.0
+
