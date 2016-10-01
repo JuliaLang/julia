@@ -2112,13 +2112,49 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    .. Docstring generated from Julia source
 
-   Create a sparse vector ``S`` of length ``m`` such that ``S[I[k]] = V[k]``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if no ``combine`` argument is provided, unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ .
+   Create a sparse vector ``S`` such that ``S[I[k]] = V[k]``\ . The length of the vector will be the maximum element of ``I``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if no ``combine`` argument is provided, unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ .
 
-.. function:: sparsevec(D::Dict, [m])
+.. function:: sparsevec(I, V, len::Integer, combine)
 
    .. Docstring generated from Julia source
 
-   Create a sparse vector of length ``m`` where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.
+   Create a sparse vector ``S`` of length ``len`` such that ``S[I[k]] = V[k]``\ . All elements of ``I`` must be between ``1`` and ``len``\ . Duplicates are combined using the ``combine`` function, which defaults to ``+`` if no ``combine`` argument is provided, unless the elements of ``V`` are Booleans in which case ``combine`` defaults to ``|``\ .
+
+.. function:: sparsevec(D::Dict)
+
+   .. Docstring generated from Julia source
+
+   Create a sparse vector where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary. The length of the vector will be the largest key of the dictionary.
+
+   .. doctest::
+
+       julia> d = Dict(1=>2.5, 3=>2)
+       Dict{Int64,Any} with 2 entries:
+         3 => 2
+         1 => 2.5
+
+       julia> sparsevec(d)
+       Sparse vector of length 3 with 2 Any nonzero entries:
+         [1]  =  2.5
+         [3]  =  2
+
+.. function:: sparsevec(D::Dict, len::Integer)
+
+   .. Docstring generated from Julia source
+
+   Create a sparse vector of length ``len`` where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.
+
+   .. doctest::
+
+       julia> d = Dict(1=>2.5, 3=>2)
+       Dict{Int64,Any} with 2 entries:
+         3 => 2
+         1 => 2.5
+
+       julia> sparsevec(d, 5)
+       Sparse vector of length 5 with 2 Any nonzero entries:
+         [1]  =  2.5
+         [3]  =  2
 
 .. function:: issparse(S)
 

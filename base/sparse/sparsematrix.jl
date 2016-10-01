@@ -173,7 +173,9 @@ end
 function sparse_compute_reshaped_colptr_and_rowval{Ti}(colptrS::Vector{Ti}, rowvalS::Vector{Ti}, mS::Int, nS::Int, colptrA::Vector{Ti}, rowvalA::Vector{Ti}, mA::Int, nA::Int)
     lrowvalA = length(rowvalA)
     maxrowvalA = (lrowvalA > 0) ? maximum(rowvalA) : zero(Ti)
-    if length(colptrA) != (nA+1) || maximum(colptrA) > lrowvalA+1
+    if length(colptrA) != nA+1
+        throw(DimensionMismatch("length of colptrA must be $(nA+1) but is $(length(colptrA))"))
+    elseif maximum(colptrA) > lrowvalA+1
         Base.throw_boundsError(A,colptrA)
     elseif maxrowvalA > mA
         Base.throw_boundsError(A,maxrowvalA)

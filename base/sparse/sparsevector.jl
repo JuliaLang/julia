@@ -94,7 +94,8 @@ end
 """
     sparsevec(I, V, combine)
 
-Create a sparse vector `S` of length `m` such that `S[I[k]] = V[k]`.
+Create a sparse vector `S` such that `S[I[k]] = V[k]`.
+The length of the vector will be the maximum element of `I`.
 Duplicates are combined using the `combine` function, which defaults to
 `+` if no `combine` argument is provided, unless the elements of `V` are Booleans
 in which case `combine` defaults to `|`.
@@ -115,6 +116,15 @@ function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv},
     _sparsevector!(collect(Ti, I), collect(Tv, V), len, combine)
 end
 
+"""
+    sparsevec(I, V, len::Integer, combine)
+
+Create a sparse vector `S` of length `len` such that `S[I[k]] = V[k]`.
+All elements of `I` must be between `1` and `len`.
+Duplicates are combined using the `combine` function, which defaults to
+`+` if no `combine` argument is provided, unless the elements of `V` are Booleans
+in which case `combine` defaults to `|`.
+"""
 function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv}, len::Integer, combine::Function)
     if length(I) != length(V)
         throw(DimensionMismatch("index vector has length $(length(I)), and value vector has length $(length(V)), but these must be the same length"))
@@ -151,10 +161,23 @@ sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, len::Integer, combine::
 
 ### Construction from dictionary
 """
-    sparsevec(D::Dict, [m])
+    sparsevec(D::Dict)
 
-Create a sparse vector of length `m` where the nonzero indices are keys from
+Create a sparse vector where the nonzero indices are keys from
 the dictionary, and the nonzero values are the values from the dictionary.
+The length of the vector will be the largest key of the dictionary.
+
+```jldoctest
+julia> d = Dict(1=>2.5, 3=>2)
+Dict{Int64,Any} with 2 entries:
+  3 => 2
+  1 => 2.5
+
+julia> sparsevec(d)
+Sparse vector of length 3 with 2 Any nonzero entries:
+  [1]  =  2.5
+  [3]  =  2
+```
 """
 function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv})
     m = length(dict)
@@ -179,6 +202,24 @@ function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv})
     _sparsevector!(nzind, nzval, len)
 end
 
+"""
+    sparsevec(D::Dict, len::Integer)
+
+Create a sparse vector of length `len` where the nonzero indices are keys from
+the dictionary, and the nonzero values are the values from the dictionary.
+
+```jldoctest
+julia> d = Dict(1=>2.5, 3=>2)
+Dict{Int64,Any} with 2 entries:
+  3 => 2
+  1 => 2.5
+
+julia> sparsevec(d, 5)
+Sparse vector of length 5 with 2 Any nonzero entries:
+  [1]  =  2.5
+  [3]  =  2
+```
+"""
 function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv}, len::Integer)
     m = length(dict)
     nzind = Array{Ti}(m)
