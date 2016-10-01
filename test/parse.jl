@@ -777,3 +777,10 @@ f2_exprs = get_expr_list(@code_typed f2(1))
 @test Meta.isexpr(f2_exprs[end], :return)
 
 end
+
+# issue 18756
+module Mod18756
+type Type
+end
+end
+@test method_exists(Mod18756.Type, ())
