@@ -12,7 +12,23 @@ $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted: $(SRCDIR)/srccache/
 	touch -c $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure # old target
 	echo 1 > $@
 
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-arm-dyn.patch-applied: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted
+	cd $(SRCDIR)/srccache/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-arm-dyn.patch
+	echo 1 > $@
+
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-dwarf-ver.patch-applied: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-arm-dyn.patch-applied
+	cd $(SRCDIR)/srccache/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-dwarf-ver.patch
+	echo 1 > $@
+
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-dwarf-ver.patch-applied
+	cd $(SRCDIR)/srccache/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-prefer-extbl.patch
+	echo 1 > $@
+
+$(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-arm-pc-offset.patch-applied: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-prefer-extbl.patch-applied
+	cd $(SRCDIR)/srccache/libunwind-$(UNWIND_VER) && patch -p1 -f < $(SRCDIR)/patches/libunwind-arm-pc-offset.patch
+	echo 1 > $@
+
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/source-extracted $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/libunwind-arm-pc-offset.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --disable-shared --disable-minidebuginfo
