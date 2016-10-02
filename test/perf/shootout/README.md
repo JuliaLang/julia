@@ -3,7 +3,7 @@ Computer Language Benchmarks Game":
 https://benchmarksgame.alioth.debian.org/
 
 The source code for all the benchmarks are available there:
-http://alioth.debian.org/scm/viewvc.php/shootout/bench/?root=shootout
+https://alioth.debian.org/scm/viewvc.php/benchmarksgame/bench/?root=benchmarksgame
 
 See specific Julia discussion here:
 https://github.com/JuliaLang/julia/issues/660
