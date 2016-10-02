@@ -37,6 +37,12 @@ static bt_context_t *jl_to_bt_context(void *sigctx)
 {
 #ifdef __APPLE__
     return (bt_context_t*)&((ucontext64_t*)sigctx)->uc_mcontext64->__ss;
+#elif defined(_CPU_ARM_)
+    // libunwind does not use `ucontext_t` on ARM.
+    // `unw_context_t` is a struct of 16 `unsigned long` which should
+    // have the same layout as the `arm_r0` to `arm_pc` fields in `sigcontext`
+    ucontext_t *ctx = (ucontext_t*)sigctx;
+    return (bt_context_t*)&ctx->uc_mcontext.arm_r0;
 #else
     return (bt_context_t*)sigctx;
 #endif
