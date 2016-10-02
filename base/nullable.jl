@@ -70,7 +70,8 @@ getindex(x::Nullable) = isnull(x) ? throw(NullException()) : x.value
 """
     get(x::Nullable)
 
-Alias for `getindex(x::Nullable)`.
+Attempt to access the value of `x`. Throw a `NullException` if the value is not
+present.
 """
 get(x::Nullable) = x[]
 

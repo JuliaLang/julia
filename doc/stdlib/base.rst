@@ -826,7 +826,7 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   Attempt to access the value of ``x``\ . Returns the value if it is present; otherwise, returns ``y`` if provided.
+   Attempt to access the value of ``x``\ . Returns the value if it is present; otherwise, returns ``y``\ .
 
 .. function:: getindex(x::Nullable)
 
