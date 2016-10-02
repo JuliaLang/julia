@@ -49,7 +49,7 @@ end
     get(x::Nullable, y)
 
 Attempt to access the value of `x`. Returns the value if it is present;
-otherwise, returns `y` if provided.
+otherwise, returns `y`.
 """
 @inline function get{S,T}(x::Nullable{S}, y::T)
     if isbits(S)
