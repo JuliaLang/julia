@@ -811,3 +811,10 @@ end
 ```.head == :if
 
 end
+
+# issue 18756
+module Mod18756
+type Type
+end
+end
+@test method_exists(Mod18756.Type, ())
