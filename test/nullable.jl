@@ -140,11 +140,13 @@ for T in types
     x3 = Nullable(one(T))
 
     @test_throws NullException get(x1)
-    @test get(x2) === zero(T)
-    @test get(x3) === one(T)
+    @test_throws NullException x1[]
+    @test get(x2) === x2[] === zero(T)
+    @test get(x3) === x3[] === one(T)
 end
 
 @test_throws NullException get(Nullable())
+@test_throws NullException Nullable()[]
 
 # get{S, T}(x::Nullable{S}, y::T)
 for T in types

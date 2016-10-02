@@ -46,10 +46,10 @@ function show{T}(io::IO, x::Nullable{T})
 end
 
 """
-    get(x::Nullable[, y])
+    get(x::Nullable, y)
 
 Attempt to access the value of `x`. Returns the value if it is present;
-otherwise, returns `y` if provided, or throws a `NullException` if not.
+otherwise, returns `y` if provided.
 """
 @inline function get{S,T}(x::Nullable{S}, y::T)
     if isbits(S)
@@ -59,7 +59,20 @@ otherwise, returns `y` if provided, or throws a `NullException` if not.
     end
 end
 
-get(x::Nullable) = isnull(x) ? throw(NullException()) : x.value
+"""
+    getindex(x::Nullable)
+
+Attempt to access the value of `x`. Throw a `NullException` if the value is not
+present. Usually, this is written as `x[]`.
+"""
+getindex(x::Nullable) = isnull(x) ? throw(NullException()) : x.value
+
+"""
+    get(x::Nullable)
+
+Alias for `getindex(x::Nullable)`.
+"""
+get(x::Nullable) = x[]
 
 """
     unsafe_get(x)
