@@ -154,6 +154,38 @@ function call_jl_errno()
 end
 call_jl_errno()
 
+# Test support for llvm intrinsics.
+llvm_convert(::Type{Float32}, val::Float16) =
+    llvmcall(("""declare float @llvm.convert.from.fp16.f32(i16)""",
+              """%2 = call float @llvm.convert.from.fp16.f32(i16 %0)
+                 ret float %2"""),
+              Float32, Tuple{Int16}, reinterpret(Int16, val))
+
+llvm_convert(::Type{Float64}, val::Float16) =
+    llvmcall(("""declare double @llvm.convert.from.fp16.f64(i16)""",
+              """%2 = call double @llvm.convert.from.fp16.f64(i16 %0)
+                 ret double %2"""),
+              Float64, Tuple{Int16}, reinterpret(Int16, val))
+
+llvm_convert(::Type{Float16}, val::Float32) =
+    reinterpret(Float16,
+    llvmcall(("""declare i16 @llvm.convert.to.fp16.f32(float)""",
+              """%2 = call i16 @llvm.convert.to.fp16.f32(float %0)
+                 ret i16 %2"""),
+              Int16, Tuple{Float32}, val))
+
+llvm_convert(::Type{Float16}, val::Float64) =
+    reinterpret(Float16,
+    llvmcall(("""declare i16 @llvm.convert.to.fp16.f64(double)""",
+              """%2 = call i16 @llvm.convert.to.fp16.f64(double %0)
+                 ret i16 %2"""),
+              Int16, Tuple{Float64}, val))
+
+@test llvm_convert(Float32, Float16(1.0)) === 1.0f0
+@test llvm_convert(Float64, Float16(3.0)) === 3.0
+@test llvm_convert(Float16, 1.0f0) === Float16(1.0)
+@test llvm_convert(Float16, 3.0) === Float16(3.0)
+
 module ObjLoadTest
     using Base: Test, llvmcall, @ccallable
     didcall = false
