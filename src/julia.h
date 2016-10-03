@@ -24,6 +24,9 @@
 #  elif defined(_CPU_AARCH64_)
 // int128 is 16 bytes aligned on aarch64
 #    define MAX_ALIGN 16
+#  elif defined(_CPU_X86_64_) || defined(_CPU_X86_)
+// float128 is 16 bytes aligned on x86
+#    define MAX_ALIGN 16
 #  else
 #    define MAX_ALIGN sizeof(void*)
 #  endif
