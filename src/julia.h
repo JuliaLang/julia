@@ -20,20 +20,20 @@
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
 #  if defined(_CPU_ARM_) || defined(_CPU_PPC_)
-#    define MAX_ALIGN 8
+#    define JL_MAX_ALIGN 8
 #  elif defined(_CPU_AARCH64_)
 // int128 is 16 bytes aligned on aarch64
-#    define MAX_ALIGN 16
+#    define JL_MAX_ALIGN 16
 #  elif defined(_CPU_X86_64_) || defined(_CPU_X86_)
 // float128 is 16 bytes aligned on x86
-#    define MAX_ALIGN 16
+#    define JL_MAX_ALIGN 16
 #  else
-#    define MAX_ALIGN sizeof(void*)
+#    define JL_MAX_ALIGN sizeof(void*)
 #  endif
 #else
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
-#  define MAX_ALIGN 8
+#  define JL_MAX_ALIGN 8
 #endif
 
 #ifdef _P64

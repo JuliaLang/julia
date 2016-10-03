@@ -1033,8 +1033,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         else {
             fsz = sizeof(void*);
-            if (fsz > MAX_ALIGN)
-                fsz = MAX_ALIGN;
+            if (fsz > JL_MAX_ALIGN)
+                fsz = JL_MAX_ALIGN;
             al = fsz;
             desc[i].isptr = 1;
         }
@@ -1164,8 +1164,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
                                         jl_emptysvec, jl_emptysvec, 0, 0, 0);
     uint32_t nbytes = (nbits + 7) / 8;
     uint32_t alignm = next_power_of_two(nbytes);
-    if (alignm > MAX_ALIGN)
-        alignm = MAX_ALIGN;
+    if (alignm > JL_MAX_ALIGN)
+        alignm = JL_MAX_ALIGN;
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
     return bt;
