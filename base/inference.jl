@@ -2490,7 +2490,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 end
                 local ret_var, merge
                 if spec_miss !== nothing
-                    ret_var = add_slot!(sv.src, ex.typ, false)
+                    ret_var = add_slot!(sv.src, widenconst(ex.typ), false)
                     merge = genlabel(sv)
                     push!(stmts, spec_miss)
                     push!(stmts, Expr(:(=), ret_var, ex))
@@ -3140,7 +3140,7 @@ const compiler_temp_sym = Symbol("#temp#")
 function add_slot!(src::CodeInfo, typ::ANY, is_sa::Bool, name::Symbol=compiler_temp_sym)
     id = length(src.slotnames) + 1
     push!(src.slotnames, name)
-    push!(src.slottypes, typ)
+    push!(src.slottypes, typ); @assert !isa(typ, Const)
     push!(src.slotflags, Slot_Assigned + is_sa * Slot_AssignedOnce)
     return SlotNumber(id)
 end
@@ -3753,7 +3753,7 @@ function alloc_elim_pass!(sv::InferenceState)
                             tmpv = newvar!(sv, elty)
                         else
                             var = var::Slot
-                            tmpv = add_slot!(sv.src, elty, false,
+                            tmpv = add_slot!(sv.src, widenconst(elty), false,
                                              sv.src.slotnames[var.id])
                             slot_id = tmpv.id
                             new_slots[j] = slot_id
