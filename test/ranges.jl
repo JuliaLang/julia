@@ -391,6 +391,10 @@ for T = (Float32, Float64)
     end
 end
 
+# linspace with 1 or 0 elements (whose step length is NaN)
+@test issorted(linspace(1,1,0))
+@test issorted(linspace(1,1,1))
+
 # near-equal ranges
 @test 0.0:0.1:1.0 != 0.0f0:0.1f0:1.0f0
 
