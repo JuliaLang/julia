@@ -174,7 +174,7 @@ extern void _chkstk(void);
 #define __alignof__ __alignof
 #endif
 
-#define DISABLE_FLOAT16
+// #define DISABLE_FLOAT16
 
 // llvm state
 #if JL_LLVM_VERSION >= 30900
