@@ -33,56 +33,73 @@ mimewritable{mime}(::MIME{mime}, x) =
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
-###########################################################################
-# MIME types are assumed to be binary data except for a set of types known
-# to be text data (possibly Unicode).  istextmime(m) returns whether
-# m::MIME is text data, and reprmime(m, x) returns x written to either
-# a string (for text m::MIME) or a Vector{UInt8} (for binary m::MIME),
-# assuming the corresponding write_mime method exists.  stringmime
-# is like reprmime except that it always returns a string, which in the
-# case of binary data is Base64-encoded.
-#
-# Also, if reprmime is passed a AbstractString for a text type or Vector{UInt8} for
-# a binary type, the argument is assumed to already be in the corresponding
-# format and is returned unmodified.  This is useful so that raw data can be
-# passed to display(m::MIME, x).
-
 verbose_show(io, m, x) = show(IOContext(io,limit=false), m, x)
 
-macro textmime(mime)
-    quote
-        mimeT = MIME{Symbol($mime)}
-        # avoid method ambiguities with the general definitions below:
-        # (Q: should we treat Vector{UInt8} as a String?)
-        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(verbose_show, m, x)
-        Base.Multimedia.stringmime(m::mimeT, x::Vector{UInt8}) = reprmime(m, x)
+"""
+    reprmime(mime, x)
 
-        Base.Multimedia.istextmime(::mimeT) = true
-        if $(mime != "text/plain") # strings are shown escaped for text/plain
-            Base.Multimedia.reprmime(m::mimeT, x::AbstractString) = x
-        end
-        Base.Multimedia.reprmime(m::mimeT, x) = sprint(verbose_show, m, x)
-        Base.Multimedia.stringmime(m::mimeT, x) = reprmime(m, x)
-    end
-end
+Returns an `AbstractString` or `Vector{UInt8}` containing the representation of
+`x` in the requested `mime` type, as written by `show` (throwing a
+`MethodError` if no appropriate `show` is available). An `AbstractString` is
+returned for MIME types with textual representations (such as `"text/html"` or
+`"application/postscript"`), whereas binary data is returned as
+`Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
+treats a given `mime` type as text.)
 
-istextmime(::MIME) = false
-function reprmime(m::MIME, x)
+As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
+`Vector{UInt8}` (for binary MIME types), the `reprmime` function assumes that
+`x` is already in the requested `mime` format and simply returns `x`. This
+special case does not apply to the `"text/plain"` MIME type. This is useful so
+that raw data can be passed to `display(m::MIME, x)`.
+"""
+reprmime(m::MIME, x) = istextmime(m) ? _textreprmime(m, x) : _binreprmime(m, x)
+
+# strings are shown escaped for text/plain
+_textreprmime(m::MIME, x) = sprint(verbose_show, m, x)
+_textreprmime(::MIME, x::AbstractString) = x
+_textreprmime(m::MIME"text/plain", x::AbstractString) =
+    sprint(verbose_show, m, x)
+
+function _binreprmime(m::MIME, x)
     s = IOBuffer()
     verbose_show(s, m, x)
     takebuf_array(s)
 end
-reprmime(m::MIME, x::Vector{UInt8}) = x
-stringmime(m::MIME, x) = base64encode(verbose_show, m, x)
-stringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
+_binreprmime(m::MIME, x::Vector{UInt8}) = x
+
+"""
+    stringmime(mime, x)
+
+Returns an `AbstractString` containing the representation of `x` in the
+requested `mime` type. This is similar to [`reprmime`](:func:`reprmime`) except
+that binary data is base64-encoded as an ASCII string.
+"""
+stringmime(m::MIME, x) = istextmime(m) ? reprmime(m, x) : _binstringmime(m, x)
+
+_binstringmime(m::MIME, x) = base64encode(verbose_show, m, x)
+_binstringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
+
+"""
+    istextmime(m::MIME)
+
+Determine whether a MIME type is text data. MIME types are assumed to be binary
+data except for a set of types known to be text data (possibly Unicode).
+"""
+istextmime(m::MIME) = startswith(string(m), "text/")
 
 # it is convenient to accept strings instead of ::MIME
 istextmime(m::AbstractString) = istextmime(MIME(m))
 reprmime(m::AbstractString, x) = reprmime(MIME(m), x)
 stringmime(m::AbstractString, x) = stringmime(MIME(m), x)
 
-for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/markdown", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
-    @eval @textmime $mime
+for mime in ["application/atom+xml", "application/ecmascript",
+             "application/javascript", "application/julia",
+             "application/json", "application/postscript",
+             "application/rdf+xml", "application/rss+xml",
+             "application/x-latex", "application/xhtml+xml", "application/xml",
+             "application/xml-dtd", "image/svg+xml", "model/vrml",
+             "model/x3d+vrml", "model/x3d+xml"]
+    istextmime(::MIME{Symbol(mime)}) = true
 end
 
 ###########################################################################
