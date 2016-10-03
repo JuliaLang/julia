@@ -249,6 +249,33 @@ function foo9222()
 end
 @test 0.0 == foo9222()
 
+# make sure none of the slottypes are left as Core.Inference.Const objects
+function f18679()
+    for i = 1:2
+        if i == 1
+            a = ((),)
+        else
+            return a[1]
+        end
+    end
+end
+g18679(x::Tuple) = ()
+g18679() = g18679(any_undef_global::Union{Int,Tuple{}})
+for code in Any[
+        @code_typed(f18679())[1]
+        @code_typed(g18679())[1]]
+    @test all(x->isa(x, Type), code.slottypes)
+    local notconst(other::ANY) = true
+    notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
+    function notconst(expr::Expr)
+        @test isa(expr.typ, Type)
+        for a in expr.args
+            notconst(a)
+        end
+    end
+    notconst.(code.code)
+end
+
 # branching based on inferrable conditions
 let f(x) = isa(x,Int) ? 1 : ""
     @test Base.return_types(f, Tuple{Int}) == [Int]
