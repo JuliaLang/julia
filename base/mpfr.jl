@@ -79,7 +79,7 @@ type BigFloat <: AbstractFloat
     end
 end
 
-widen(::Type{Float64}) = BigFloat
+widen(::Type{Float128}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
 convert(::Type{BigFloat}, x::BigFloat) = x
