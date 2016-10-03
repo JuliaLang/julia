@@ -132,6 +132,8 @@ static Type *INTT(Type *t)
         return T_int32;
     if (t == T_float16)
         return T_int16;
+    if (t == T_float128)
+        return T_int128;
     unsigned nb = t->getPrimitiveSizeInBits();
     assert(t != T_void && nb > 0);
     return IntegerType::get(jl_LLVMContext, nb);
