@@ -499,6 +499,9 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V:
     end
 end
 
+sparse(I::AbstractVector, J::AbstractVector, V::AbstractVector, m::Integer, n::Integer, combine) =
+    sparse(AbstractVector{Int}(I), AbstractVector{Int}(J), V, m, n, combine)
+
 """
     sparse!{Tv,Ti<:Integer}(
         I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv},
