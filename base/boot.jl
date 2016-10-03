@@ -127,7 +127,7 @@ export
     Module, Symbol, Task, Array, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
-    AbstractFloat, Float16, Float32, Float64,
+    AbstractFloat, Float16, Float32, Float64, Float128,
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
@@ -163,6 +163,7 @@ abstract Unsigned <: Integer
 bitstype 16 Float16 <: AbstractFloat
 bitstype 32 Float32 <: AbstractFloat
 bitstype 64 Float64 <: AbstractFloat
+bitstype 128 Float128 <: AbstractFloat
 
 bitstype 8  Bool <: Integer
 bitstype 32 Char

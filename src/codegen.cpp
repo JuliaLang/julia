@@ -218,11 +218,13 @@ static IntegerType *T_int8;
 static IntegerType *T_int16;
 static IntegerType *T_int32;
 static IntegerType *T_int64;
+static IntegerType *T_int128;
 
 static IntegerType *T_uint8;
 static IntegerType *T_uint16;
 static IntegerType *T_uint32;
 static IntegerType *T_uint64;
+static IntegerType *T_uint128;
 
 static IntegerType *T_char;
 static IntegerType *T_size;
@@ -5187,8 +5189,10 @@ static void init_julia_llvm_env(Module *m)
     T_pint32 = PointerType::get(T_int32, 0);
     T_int64 = Type::getInt64Ty(jl_LLVMContext);
     T_pint64 = PointerType::get(T_int64, 0);
+    T_int128 = Type::getInt128Ty(jl_LLVMContext);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
+    T_uint128 = T_int128;
     if (sizeof(size_t) == 8)
         T_size = T_uint64;
     else

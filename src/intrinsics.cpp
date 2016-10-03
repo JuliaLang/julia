@@ -109,8 +109,10 @@ static Type *JL_INTT(Type *t)
         return t;
     if (t->isPointerTy())
         return T_size;
-    if (t == T_float32) return T_int32;
-    if (t == T_float64) return T_int64;
+    if (t == T_float16)  return T_int16;
+    if (t == T_float32)  return T_int32;
+    if (t == T_float64)  return T_int64;
+    if (t == T_float128) return T_int128;
     assert(t == T_void);
     return T_void;
 }
@@ -118,18 +120,20 @@ static Type *JL_INTT(Type *t)
 static jl_value_t *JL_JLUINTT(Type *t)
 {
     assert(!t->isIntegerTy());
-    if (t == T_float32) return (jl_value_t*)jl_uint32_type;
-    if (t == T_float64) return (jl_value_t*)jl_uint64_type;
-    if (t == T_float16) return (jl_value_t*)jl_uint16_type;
+    if (t == T_float16)  return (jl_value_t*)jl_uint16_type;
+    if (t == T_float32)  return (jl_value_t*)jl_uint32_type;
+    if (t == T_float64)  return (jl_value_t*)jl_uint64_type;
+    if (t == T_float128) return (jl_value_t*)jl_uint128_type;
     assert(t == T_void);
     return jl_bottom_type;
 }
 static jl_value_t *JL_JLSINTT(Type *t)
 {
     assert(!t->isIntegerTy());
-    if (t == T_float32) return (jl_value_t*)jl_int32_type;
-    if (t == T_float64) return (jl_value_t*)jl_int64_type;
-    if (t == T_float16) return (jl_value_t*)jl_int16_type;
+    if (t == T_float16)  return (jl_value_t*)jl_int16_type;
+    if (t == T_float32)  return (jl_value_t*)jl_int32_type;
+    if (t == T_float64)  return (jl_value_t*)jl_int64_type;
+    if (t == T_float128) return (jl_value_t*)jl_int128_type;
     assert(t == T_void);
     return jl_bottom_type;
 }
