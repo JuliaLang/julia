@@ -1179,6 +1179,12 @@ A = sprand(Bool, 5,5,0.2)
 @test_throws DimensionMismatch reshape(A,(20,2))
 @test_throws ArgumentError squeeze(A,(1,1))
 
+#test conditions on second set of arguments to this function
+#first four args are "dummy" and irrelevant for these tests
+@test_throws DimensionMismatch Base.SparseArrays.sparse_compute_reshaped_colptr_and_rowval([1], [1], 1, 1, [1], [1], 1, 1)
+@test_throws BoundsError Base.SparseArrays.sparse_compute_reshaped_colptr_and_rowval([1], [1], 1, 1, [1; 3], [1], 1, 1)
+@test_throws BoundsError Base.SparseArrays.sparse_compute_reshaped_colptr_and_rowval([1], [1], 1, 1, [1; 3], [1; 2], 1, 1)
+
 # test similar with type conversion
 A = speye(5)
 @test size(similar(A,Complex128,Int)) == (5,5)
