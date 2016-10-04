@@ -4,19 +4,7 @@ baremodule Base
 
 using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), true)
-function include(path::AbstractString)
-    local result
-    if INCLUDE_STATE === 1
-        result = Core.include(path)
-    elseif INCLUDE_STATE === 2
-        result = _include(path)
-    elseif INCLUDE_STATE === 3
-        result = include_from_node1(path)
-    end
-    result
-end
-INCLUDE_STATE = 1 # include = Core.include
-
+include = Core.include
 include("coreio.jl")
 
 eval(x) = Core.eval(Base,x)
@@ -80,9 +68,9 @@ end
 Symbol(x...) = Symbol(string(x...))
 
 # array structures
-include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
+include("array.jl")
 
 # Array convenience converting constructors
 (::Type{Array{T}}){T}(m::Integer) = Array{T,1}(Int(m))
@@ -114,6 +102,7 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
+include("float16.jl")
 
 # SIMD loops
 include("simdloop.jl")
@@ -216,7 +205,7 @@ include("permuteddimsarray.jl")
 using .PermutedDimsArrays
 
 let SOURCE_PATH = ""
-    global function _include(path)
+    global include = function(path)
         prev = SOURCE_PATH
         path = joinpath(dirname(prev),path)
         SOURCE_PATH = path
@@ -224,7 +213,6 @@ let SOURCE_PATH = ""
         SOURCE_PATH = prev
     end
 end
-INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
@@ -387,8 +375,8 @@ function __init__()
     init_threadcall()
 end
 
-INCLUDE_STATE = 3 # include = include_from_node1
-include("precompile.jl")
+include = include_from_node1
+#include("precompile.jl") #Don't commit me. Speed up testing l
 
 end # baremodule Base
 
