@@ -832,7 +832,27 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   Is the ``Nullable`` object ``x`` null, i.e. missing a value?
+   Return whether or not ``x`` is null for :obj:`Nullable` ``x``\ ; return ``false`` for all other ``x``\ .
+
+   .. doctest::
+
+       julia> x = Nullable(1, false)
+       Nullable{Int64}(1)
+
+       julia> isnull(x)
+       false
+
+       julia> x = Nullable(1, true)
+       Nullable{Int64}()
+
+       julia> isnull(x)
+       true
+
+       julia> x = 1
+       1
+
+       julia> isnull(x)
+       false
 
 System
 ------
