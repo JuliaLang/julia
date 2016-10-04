@@ -79,9 +79,9 @@ end
 Symbol(x...) = Symbol(string(x...))
 
 # array structures
+include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
-include("array.jl")
 
 # Array convenience converting constructors
 (::Type{Array{T}}){T}(m::Integer) = Array{T,1}(Int(m))

@@ -829,7 +829,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
     sig = join_tsig(tt, entry->sig);
     jl_method_instance_t *nf;
     if (!cache) {
-        nf = jl_get_specialized(m, sig, env); // TODO: should be jl_specializations_get_linfo
+        nf = jl_specializations_get_linfo(m, sig, env);
     }
     else {
         nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, entry, env, allow_exec);
