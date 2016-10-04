@@ -513,7 +513,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
             continue;
         if (decl_i == jl_ANY_flag) {
             // don't specialize on slots marked ANY
-            if (elt != (jl_value_t*)jl_any_type)
+            if (elt != (jl_value_t*)jl_any_type && elt != jl_ANY_flag)
                 return 0;
             continue;
         }
