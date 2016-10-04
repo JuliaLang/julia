@@ -218,7 +218,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *li, int force)
     return src;
 }
 
-JL_DLLEXPORT void jl_set_lambda_rettype(jl_method_instance_t *li, jl_value_t *rettype, jl_value_t *const_api, jl_value_t *inferred)
+JL_DLLEXPORT void jl_set_lambda_rettype(jl_method_instance_t *li, jl_value_t *rettype, int32_t const_flags, jl_value_t *inferred_const, jl_value_t *inferred)
 {
     // changing rettype changes the llvm signature,
     // so clear all of the llvm state at the same time
@@ -230,8 +230,14 @@ JL_DLLEXPORT void jl_set_lambda_rettype(jl_method_instance_t *li, jl_value_t *re
     jl_gc_wb(li, rettype);
     li->inferred = inferred;
     jl_gc_wb(li, inferred);
-    if (const_api == jl_true)
+    if (const_flags & 1) {
+        assert(const_flags & 2);
         li->jlcall_api = 2;
+    }
+    if (const_flags & 2) {
+        li->inferred_const = inferred_const;
+        jl_gc_wb(li, inferred_const);
+    }
 }
 
 static int jl_is_uninferred(jl_method_instance_t *li)

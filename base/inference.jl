@@ -1583,13 +1583,17 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller
         # so need to check whether the code itself is also inferred
         inf = code.inferred
         if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-            return code.rettype
+            if isdefined(code, :inferred_const)
+                return abstract_eval_constant(code.inferred_const)
+            else
+                return code.rettype
+            end
         end
     end
     frame = typeinf_frame(code, true, true, caller)
     frame === nothing && return Any
     frame = frame::InferenceState
-    return widenconst(frame.bestguess)
+    return frame.bestguess
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
@@ -1980,14 +1984,24 @@ function finish(me::InferenceState)
     end
     widen_all_consts!(me.src)
 
+    if isa(me.bestguess, Const)
+        bg = me.bestguess::Const
+        const_ret = true
+        inferred_const = bg.val
+    elseif isconstType(me.bestguess, true)
+        const_ret = true
+        inferred_const = me.bestguess.parameters[1]
+    else
+        const_ret = false
+        inferred_const = nothing
+    end
+
     const_api = false
     ispure = me.src.pure
     inferred = me.src
     # Do not emit `jlcall_api == 2` if coverage is enabled so that we don't
     # need to add coverage support to the `jl_call_method_internal` fast path
-    if !do_coverage &&
-        ((isa(me.bestguess,Const) && me.bestguess.val !== nothing) ||
-         isconstType(me.bestguess,true))
+    if !do_coverage && const_ret && inferred_const !== nothing
         if !ispure && length(me.src.code) < 10
             ispure = true
             for stmt in me.src.code
@@ -2005,7 +2019,7 @@ function finish(me::InferenceState)
         end
         if ispure
             # use constant calling convention
-            inferred = isa(me.bestguess,Const) ? me.bestguess.val : me.bestguess.parameters[1]
+            inferred = inferred_const
             const_api = true
         end
         me.src.pure = ispure
@@ -2030,7 +2044,10 @@ function finish(me::InferenceState)
                 end
             end
         end
-        ccall(:jl_set_lambda_rettype, Void, (Any, Any, Any, Any), me.linfo, widenconst(me.bestguess), const_api, inferred)
+        const_flags = (const_ret) << 1 | const_api
+        ccall(:jl_set_lambda_rettype, Void, (Any, Any, Int32, Any, Any),
+              me.linfo, widenconst(me.bestguess), const_flags,
+              inferred_const, inferred)
     end
 
     me.src.inferred = true
