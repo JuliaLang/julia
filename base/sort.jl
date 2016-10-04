@@ -430,7 +430,41 @@ function sort!(v::AbstractVector;
                by=identity,
                rev::Bool=false,
                order::Ordering=Forward)
-    sort!(v, alg, ord(lt,by,rev,order))
+    ordr = ord(lt,by,rev,order)
+    if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
+        n = length(v)
+        if n > 1
+            min, max = extrema(v)
+            rangelen = max - min + 1
+            if rangelen < div(n,2)
+                return sort_int_range!(v, rangelen, min)
+            end
+        end
+    end
+    sort!(v, alg, ordr)
+end
+
+# sort! for vectors of few unique integers
+function sort_int_range!{T<:Integer}(x::Vector{T}, rangelen, minval)
+    offs = 1 - minval
+    n = length(x)
+
+    where = fill(0, rangelen)
+    @inbounds for i = 1:n
+        where[x[i] + offs] += 1
+    end
+
+    idx = 1
+    @inbounds for i = 1:rangelen
+        lastidx = idx + where[i] - 1
+        val = i-offs
+        for j = idx:lastidx
+            x[j] = val
+        end
+        idx = lastidx + 1
+    end
+
+    return x
 end
 
 """
@@ -439,7 +473,6 @@ end
 Variant of [`sort!`](:func:`sort!`) that returns a sorted copy of `v` leaving `v` itself unmodified.
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
-
 
 ## selectperm: the permutation to sort the first k elements of an array ##
 
@@ -485,11 +518,22 @@ function sortperm(v::AbstractVector;
                   by=identity,
                   rev::Bool=false,
                   order::Ordering=Forward)
+    ordr = ord(lt,by,rev,order)
+    if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
+        n = length(v)
+        if n > 1
+            min, max = extrema(v)
+            rangelen = max - min + 1
+            if rangelen < div(n,2)
+                return sortperm_int_range(v, rangelen, min)
+            end
+        end
+    end
     p = similar(Vector{Int}, indices(v, 1))
     for (i,ind) in zip(eachindex(p), indices(v, 1))
         p[i] = ind
     end
-    sort!(p, alg, Perm(ord(lt,by,rev,order),v))
+    sort!(p, alg, Perm(ordr,v))
 end
 
 
@@ -515,6 +559,28 @@ function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
         end
     end
     sort!(x, alg, Perm(ord(lt,by,rev,order),v))
+end
+
+# sortperm for vectors of few unique integers
+function sortperm_int_range{T<:Integer}(x::Vector{T}, rangelen, minval)
+    offs = 1 - minval
+    n = length(x)
+
+    where = fill(0, rangelen+1)
+    where[1] = 1
+    @inbounds for i = 1:n
+        where[x[i] + offs + 1] += 1
+    end
+    cumsum!(where, where)
+
+    P = Vector{Int}(n)
+    @inbounds for i = 1:n
+        label = x[i] + offs
+        P[where[label]] = i
+        where[label] += 1
+    end
+
+    return P
 end
 
 ## sorting multi-dimensional arrays ##
