@@ -616,7 +616,9 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
         if isa(slottypes, Array) && slotid <= length(slottypes::Array)
             slottype = slottypes[slotid]
             # The Slot in assignment can somehow have an Any type
-            slottype <: typ && (typ = slottype)
+            if slottype <: typ
+                typ = slottype
+            end
         end
     end
     slotnames = get(io, :SOURCE_SLOTNAMES, false)

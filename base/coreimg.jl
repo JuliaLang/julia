@@ -45,8 +45,8 @@ Symbol(a::Array{UInt8,1}) =
     ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
 
 # core array operations
-include("abstractarray.jl")
 include("array.jl")
+include("abstractarray.jl")
 
 #TODO: eliminate Dict from inference
 include("hashing.jl")
