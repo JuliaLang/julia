@@ -1111,7 +1111,7 @@ julia> findprev(A,1)
 """
 function findprev(A, start::Integer)
     for i = start:-1:1
-        A[i] != 0 && return i
+        A[i] != zero(A[i]) && return i
     end
     return 0
 end
@@ -1119,7 +1119,7 @@ end
 """
     findlast(A)
 
-Return the linear index of the last non-zero value in `A` (determined by `A[i]!=0`).
+Return the linear index of the last non-zero value in `A` (determined by `A[i]!=zero(A[i])`).
 Returns `0` if there is no non-zero value in `A`.
 
 ```jldoctest
