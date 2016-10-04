@@ -19,8 +19,12 @@ INCLUDE_STATE = 1 # include = Core.include
 
 include("coreio.jl")
 
-eval(x) = Core.eval(Base,x)
-eval(m,x) = Core.eval(m,x)
+eval(x) = Core.eval(Base, x)
+eval(m, x) = Core.eval(m, x)
+(::Type{T}){T}(arg) = convert(T, arg)::T
+(::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
+convert{T<:VecElement}(::Type{T}, arg) = T(arg)
+convert{T<:VecElement}(::Type{T}, arg::T) = arg
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str
@@ -42,8 +46,8 @@ if false
 end
 
 ## Load essential files and libraries
-include("ctypes.jl")
 include("essentials.jl")
+include("ctypes.jl")
 include("base.jl")
 include("generator.jl")
 include("reflection.jl")
@@ -63,10 +67,6 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
-(::Type{T}){T}(arg) = convert(T, arg)::T
-(::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
-convert{T<:VecElement}(::Type{T}, arg) = T(arg)
-convert{T<:VecElement}(::Type{T}, arg::T) = arg
 include("checked.jl")
 importall .Checked
 
