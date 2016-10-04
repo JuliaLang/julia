@@ -14,7 +14,11 @@ typemax(::Type{Bool}) = true
 
 ## boolean operations ##
 
-!(x::Bool) = box(Bool,not_int(unbox(Bool,x)))
+function !(x::Bool)
+    ## We need a better heuristic to detect this automatically
+    @_pure_meta
+    return box(Bool,not_int(unbox(Bool,x)))
+end
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = box(Bool,and_int(unbox(Bool,x),unbox(Bool,y)))
