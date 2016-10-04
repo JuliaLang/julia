@@ -424,7 +424,8 @@ function log2(z::Complex)
     a/log(oftype(real(a),2))
 end
 
-function exp(z::Complex)
+exp(z::Complex) = exp(float(z))
+function exp{T<:AbstractFloat}(z::Complex{T})
     zr, zi = reim(z)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
@@ -446,7 +447,8 @@ function exp(z::Complex)
     end
 end
 
-function expm1(z::Complex)
+expm1(z::Complex) = expm1(float(z))
+function expm1{T<:AbstractFloat}(z::Complex{T})
     zr,zi = reim(z)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)

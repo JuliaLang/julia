@@ -951,3 +951,9 @@ end
         @inferred vecnorm(x)
     end
 end
+
+# issue #18785 type stability for exp, expm1 for Complex{Int64}
+let x = 2*im
+    @inferred exp(x)
+    @inferred expm1(x)
+end
