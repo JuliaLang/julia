@@ -73,7 +73,8 @@ function lgamma(z::Complex{Float64})
         else
             return Complex(NaN, NaN)
         end
-    elseif x > 7 || yabs > 7 # use the Stirling asymptotic series for sufficiently large x or |y|
+    elseif x > 7 || yabs > 7
+        # use the Stirling asymptotic series for sufficiently large x or |y|
         return lgamma_asymptotic(z)
     elseif x < 0.1 # use reflection formula to transform to x > 0
         if x == 0 && y == 0 # return Inf with the correct imaginary part for z == 0
@@ -107,7 +108,8 @@ function lgamma(z::Complex{Float64})
                                -2.2315475845357937976132853e-04,9.9457512781808533714662972e-05,
                                -4.4926236738133141700224489e-05,2.0507212775670691553131246e-05)
     end
-    # use recurrence relation lgamma(z) = lgamma(z+1) - log(z) to shift to x > 7 for asymptotic series
+    # use recurrence relation lgamma(z) = lgamma(z+1) - log(z )
+    # to shift to x > 7 for asymptotic series
     shiftprod = Complex(x,yabs)
     x += 1
     sb = false # == signbit(imag(shiftprod)) == signbit(yabs)
@@ -394,7 +396,8 @@ function zeta(s::Union{Int, ComplexOrReal{Float64}},
             minus_z = -z
             ζ += pow_oftype(ζ, minus_z, minus_s) # ν = 0 term
             if xf != z
-                ζ += pow_oftype(ζ, z - nx, minus_s) # real(z - nx) > 0, so use correct branch cut
+                ζ += pow_oftype(ζ, z - nx, minus_s)
+                # real(z - nx) > 0, so use correct branch cut
                 # otherwise, if xf==z, then the definition skips this term
             end
             # do loop in different order, depending on the sign of s,
@@ -447,8 +450,8 @@ end
 """
     polygamma(m, x)
 
-Compute the polygamma function of order `m` of argument `x` (the `(m+1)th` derivative of the
-logarithm of `gamma(x)`)
+Compute the polygamma function of order `m` of argument `x`
+(the `(m+1)th` derivative of the logarithm of `gamma(x)`)
 """
 function polygamma(m::Integer, z::ComplexOrReal{Float64})
     m == 0 && return digamma(z)
@@ -511,7 +514,8 @@ end
 """
     beta(x, y)
 
-Euler integral of the first kind ``\\operatorname{B}(x,y) = \\Gamma(x)\\Gamma(y)/\\Gamma(x+y)``.
+Euler integral of the first kind
+``\\operatorname{B}(x,y) = \\Gamma(x)\\Gamma(y)/\\Gamma(x+y)``.
 """
 function beta(x::Number, w::Number)
     yx, sx = lgamma_r(x)
@@ -611,10 +615,11 @@ end
 # and if we really cared about half precision, we could make a faster
 # Float16 version, by using a precomputed table look-up.
 
-# Float16, and Float32 and their Complex equivalents can be cast to Float64
-# and results cast back. Similar for BitIntegers (eg Int32), but no casting back
+# Float16, and Float32 and their Complex equivalents can be converted to Float64
+# and results converted back. Similar for BitIntegers (eg Int32), but no converting back
 # Otherwise, we need to make things use their own `float` converting methods
-# and in those cases, we do not cast back either.
+# and in those cases, we do not convert back either as we assume
+# they also implement there own versions of the functions
 
 
 ofpromotedtype(as::Tuple, c) = convert(promote_type(typeof.(as)...), c)
@@ -632,19 +637,19 @@ for f in (:digamma, :trigamma, :zeta, :eta, :invdigamma)
     @eval begin
         $f(z::ComplexOrRealUnion(Base.BitInteger.types...)) = $f(f64(z))
         $f(z::ComplexOrRealUnion(Float16,Float32)) = oftype(z, $f(f64(z)))
-        
+
         function $f(z::Number)
             x = float(z)
             typeof(x) == typeof(z) && throw(MethodError($f, (z,)))
-            # There is nothing to fallback to, since this didn't work
+            # There is nothing to fallback to, since this didn't change the argument types
             $f(x)
         end
     end
 end
 
-
-polygamma(m::Integer, z::ComplexOrRealUnion(Float16,Float32)) = oftype(z, polygamma(m, f64(z)))
-
+function polygamma(m::Integer, z::ComplexOrRealUnion(Float16,Float32))
+    oftype(z, polygamma(m, f64(z)))
+end
 
 for T1 in types_le_Float64, T2 in types_le_Float64
     if (T1 == T2 == Float64) ||  (T1 == Int && T2 == Float64)
@@ -664,12 +669,12 @@ for T1 in types_le_Float64, T2 in types_le_Float64
     end
 end
 
-# this is the one definition that is skipped 
+# this is the one definition that is skipped
 function zeta(s::Complex{Int}, z::ComplexOrReal{Float64})::Complex{Float64}
     zeta(f64(s), f64(z))
 end
 
-function zeta(s::Integer, z::Number) 
+function zeta(s::Integer, z::Number)
     x = float(z)
     t = Int(s)  # One could worry here about converting a BigInteger into a Int32/Int64
     if typeof(x) === typeof(z) && typeof(t) === typeof(s)
@@ -680,7 +685,7 @@ function zeta(s::Integer, z::Number)
 end
 
 
-function zeta(s::Number, z::Number) 
+function zeta(s::Number, z::Number)
     x = float(z)
     t = float(s)
     if typeof(x) === typeof(z) && typeof(t) === typeof(s)
