@@ -948,11 +948,22 @@ end
 @test typeof(eta(big"2")) == BigFloat
 @test typeof(zeta(big"2")) == BigFloat
 @test typeof(digamma(big"2")) == BigFloat
+
 @test_throws MethodError trigamma(big"2")
 @test_throws MethodError trigamma(big"2.0")
 @test_throws MethodError invdigamma(big"2")
 @test_throws MethodError invdigamma(big"2.0")
+
 @test_throws MethodError eta(Complex(big"2"))
 @test_throws MethodError eta(Complex(big"2.0"))
 @test_throws MethodError zeta(Complex(big"2"))
 @test_throws MethodError zeta(Complex(big"2.0"))
+@test_throws MethodError zeta(1.0,big"2")
+@test_throws MethodError zeta(1.0,big"2.0")
+@test_throws MethodError zeta(big"1.0",2.0)
+
+@test typeof(zeta(complex(1),2.0)) == Complex{Float64}
+@test typeof(polygamma(3, 0x2)) == Float64
+@test typeof(polygamma(big"3", 2f0)) == Float32
+@test typeof(zeta(big"1",2.0)) == Float64 #Is this really desirable behavour?
+

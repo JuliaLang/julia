@@ -640,7 +640,7 @@ for f in (:digamma, :trigamma, :zeta, :eta, :invdigamma)
 
         function $f(z::Number)
             x = float(z)
-            typeof(x) == typeof(z) && throw(MethodError($f, (z,)))
+            typeof(x) === typeof(z) && throw(MethodError($f, (z,)))
             # There is nothing to fallback to, since this didn't change the argument types
             $f(x)
         end
@@ -675,22 +675,22 @@ function zeta(s::Complex{Int}, z::ComplexOrReal{Float64})::Complex{Float64}
 end
 
 function zeta(s::Integer, z::Number)
-    x = float(z)
     t = Int(s)  # One could worry here about converting a BigInteger into a Int32/Int64
-    if typeof(x) === typeof(z) && typeof(t) === typeof(s)
+    x = float(z)
+    if typeof(t) === typeof(s) && typeof(x) === typeof(z)
         # There is nothing to fallback to, since this didn't work
-        throw(MethodError(zeta,(s,t)))
+        throw(MethodError(zeta,(s,z)))
     end
     zeta(t, x)
 end
 
 
 function zeta(s::Number, z::Number)
-    x = float(z)
     t = float(s)
-    if typeof(x) === typeof(z) && typeof(t) === typeof(s)
+    x = float(z)
+    if typeof(t) === typeof(s) && typeof(x) === typeof(z)
         # There is nothing to fallback to, since this didn't work
-        throw(MethodError(zeta,(s,t)))
+        throw(MethodError(zeta,(s,z)))
     end
     zeta(t, x)
 end
@@ -698,7 +698,7 @@ end
 
 function polygamma(m::Integer, z::Number)
     x = float(z)
-    typeof(x) == typeof(z) && throw(MethodError(polygamma, (m,z)))
+    typeof(x) === typeof(z) && throw(MethodError(polygamma, (m,z)))
     # There is nothing to fallback to, since this didn't work
     polygamma(m, x)
 end
