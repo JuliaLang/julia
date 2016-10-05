@@ -77,7 +77,7 @@ end
 Get an array of the names exported by a `Module`, with optionally more `Module` globals
 according to the additional parameters.
 """
-names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported))
+names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Cint,Cint), m, all, imported))
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -149,7 +149,7 @@ Determine the module containing the definition of a `DataType`.
 """
 datatype_module(t::DataType) = t.name.module
 
-isconst(s::Symbol) = ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
+isconst(s::Symbol) = ccall(:jl_is_const, Cint, (Ptr{Void}, Any), C_NULL, s) != 0
 
 """
     isconst([m::Module], s::Symbol) -> Bool
@@ -158,7 +158,7 @@ Determine whether a global is declared `const` in a given `Module`. The default 
 argument is [`current_module()`](:func:`current_module`).
 """
 isconst(m::Module, s::Symbol) =
-    ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
+    ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
 # return an integer such that object_id(x)==object_id(y) if is(x,y)
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
@@ -631,7 +631,7 @@ function which(f::ANY, t::ANY)
             error("no method found for the specified argument types")
         end
         meth = m.func::Method
-        if ccall(:jl_has_call_ambiguities, Int32, (Any, Any), tt, meth) != 0
+        if ccall(:jl_has_call_ambiguities, Cint, (Any, Any), tt, meth) != 0
             error("method match is ambiguous for the specified argument types")
         end
         return meth
