@@ -376,7 +376,7 @@ function __init__()
 end
 
 include = include_from_node1
-#include("precompile.jl") #Don't commit me. Speed up testing l
+include("precompile.jl")
 
 end # baremodule Base
 
