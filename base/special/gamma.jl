@@ -611,34 +611,74 @@ end
 # and if we really cared about half precision, we could make a faster
 # Float16 version, by using a precomputed table look-up.
 
-f64(x::Union{Base.BitInteger, Float16, Float32, Float64}) = Float64(x)
-f64(x::Complex{Union{Base.BitInteger, Float16, Float32, Float64}}) = Complex128(x)
-ofpromotedtype(as, c) = oftype(promote(as...), c)
+# Float16, and Float32 and their Complex equivalents can be cast to Float64
+# and results cast back. Similar for BitIntegers (eg Int32), but no casting back
+# Otherwise, we need to make things use their own `float` converting methods
+# and in those cases, we do not cast back either.
 
-for T in (Float32, Float16)
+
+ofpromotedtype(as::Tuple, c) = convert(promote_type(typeof.(as)...), c)
+ComplexOrRealUnion(TS...) = Union{(ComplexOrReal{T} for T in TS)...}
+
+const types_le_Float64 = (Float16, Float32, Float64, Base.BitInteger.types...)
+
+for T in types_le_Float64
+    @eval f64(x::Complex{$T}) = Complex128(x)
+    @eval f64(x::$T) = Float64(x)
+end
+
+
+for f in (:digamma, :trigamma, :zeta, :eta, :invdigamma)
     @eval begin
-        polygamma(m::Integer, z::ComplexOrReal{T}) = ofpromotedtype((m,z), polygamma(Int(m), f64(z)))
-        digamma(z::ComplexOrReal{$T}) = oftype(z, digamma(f64(z)))
-        trigamma(z::ComplexOrReal{$T}) = oftype(z, trigamma(f64(z)))
-        zeta(s::Integer, z::ComplexOrReal{$T}}) = ofpromotedtype((s,z), zeta(Int(s), f64(z)))
+        $f(z::ComplexOrRealUnion(Base.BitInteger.types...)) = $f(f64(z))
+        $f(z::ComplexOrRealUnion(Float16,Float32)) = oftype(z, $f(f64(z)))
+        
+        function $f(z::Number)
+            x = float(z)
+            typeof(x) == typeof(z) && throw(MethodError($f, (z,)))
+            # There is nothing to fallback to, since this didn't work
+            $f(x)
+        end
     end
 end
 
-function zeta(s::ComplexOrReal{Union{Float16, Float32}},
-              z::ComplexOrReal{Union{Float16, Float32, Float64, Base.BitInteger}) 
-    ofpromotedtype((s, z), zeta(f64(s), f64(z)))
+
+polygamma(m::Integer, z::ComplexOrRealUnion(Float16,Float32)) = oftype(z, polygamma(m, f64(z)))
+
+
+for T1 in types_le_Float64, T2 in types_le_Float64
+    if (T1 == T2 == Float64) ||  (T1 == Int && T2 == Float64)
+        continue # Avoid redefining base definition
+        # However this skips `zeta(::Complex{Int}, ::ComplexOrReal{Float64})`
+        # so that will need to be added back after
+    end
+
+    if T1<:Integer && T2<:Integer
+        @eval function zeta(s::ComplexOrReal{$T1}, z::ComplexOrReal{$T2})
+            zeta(f64(s), f64(z)) #Do not promote down to Integers
+        end
+    else
+        @eval function zeta(s::ComplexOrReal{$T1}, z::ComplexOrReal{$T2})
+            ofpromotedtype((s, z), zeta(f64(s), f64(z)))
+        end
+    end
 end
 
+# this is the one definition that is skipped 
+function zeta(s::Complex{Int}, z::ComplexOrReal{Float64})::Complex{Float64}
+    zeta(f64(s), f64(z))
+end
 
 function zeta(s::Integer, z::Number) 
     x = float(z)
-    t = Int(s)
+    t = Int(s)  # One could worry here about converting a BigInteger into a Int32/Int64
     if typeof(x) === typeof(z) && typeof(t) === typeof(s)
         # There is nothing to fallback to, since this didn't work
         throw(MethodError(zeta,(s,t)))
     end
-    ofpromotedtype((x,y), zeta(t, x))
+    zeta(t, x)
 end
+
 
 function zeta(s::Number, z::Number) 
     x = float(z)
@@ -647,7 +687,7 @@ function zeta(s::Number, z::Number)
         # There is nothing to fallback to, since this didn't work
         throw(MethodError(zeta,(s,t)))
     end
-    ofpromotedtype((x,t), zeta(t, x))
+    zeta(t, x)
 end
 
 
@@ -655,35 +695,5 @@ function polygamma(m::Integer, z::Number)
     x = float(z)
     typeof(x) == typeof(z) && throw(MethodError(polygamma, (m,z)))
     # There is nothing to fallback to, since this didn't work
-    oftype(x, polygamma(m, x))
+    polygamma(m, x)
 end
-
-
-for f in (:digamma, :trigamma, :zeta, :eta, :invdigamma)
-    @eval begin
-        $f(z::Base.BitInteger) = $f(Float64(z))
-        $f(z::Float32) = Float32($f(Float64(z)))
-        $f(z::Float16) = Float16($f(Float64(z)))
-
-        function $f(z::Number)
-            x = float(z)
-            typeof(x) == typeof(z) && throw(MethodError($f, (z,)))
-            # There is nothing to fallback to, since this didn't work
-            oftype(x, $f(x))
-        end
-    end
-end
-
-for f in (:zeta, :eta)
-    @eval begin
-        $f{T<:Union{Base.BitInteger,Float32,Float16}}(z::Complex{T}) = oftype(float(z), $f(Complex128(z)))
-
-        function $f(z::Complex)
-            x = float(z)
-            typeof(x) == typeof(z) && throw(MethodError($f, (z,)))
-            # There is nothing to fallback to, since this didn't work
-            oftype(x, $f(x))
-        end
-    end
-end
-

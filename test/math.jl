@@ -936,8 +936,10 @@ end
     end
 end
 
-@test Base.Math.f32(complex(1.0,1.0)) == complex(Float32(1.),Float32(1.))
-@test Base.Math.f16(complex(1.0,1.0)) == complex(Float16(1.),Float16(1.))
+
+@test Base.Math.f64(complex(1f0,1f0)) == complex(1.0, 1.0)
+@test Base.Math.f64(1f0) == 1.0
+@test Base.Math.ofpromotedtype((complex(1f0, 1f0), 1.0), 5.0) == complex(5.0)
 
 # no domain error is thrown for negative values
 @test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0
