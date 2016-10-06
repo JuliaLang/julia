@@ -211,6 +211,25 @@ end
     kron(A, B)
 
 Kronecker tensor product of two vectors or two matrices.
+
+```jldoctest
+julia> A = [1 2; 1 0]
+2×2 Array{Int64,2}:
+ 1  2
+ 1  0
+
+julia> B = [2 0; 0 1]
+2×2 Array{Int64,2}:
+ 2  0
+ 0  1
+
+julia> kron(A, B)
+4×4 Array{Int64,2}:
+ 2  0  4  0
+ 0  1  0  2
+ 2  0  0  0
+ 0  1  0  0
+```
 """
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
     R = Array{promote_type(T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
@@ -587,6 +606,23 @@ inverting dense ill-conditioned matrices in a least-squares sense,
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
+```jldoctest
+julia> M = [1.5 1.3; 1.2 1.9]
+2×2 Array{Float64,2}:
+ 1.5  1.3
+ 1.2  1.9
+
+julia> N = pinv(M)
+2×2 Array{Float64,2}:
+  1.47287   -1.00775
+ -0.930233   1.16279
+
+julia> M * N
+2×2 Array{Float64,2}:
+ 1.0          -2.22045e-16
+ 4.44089e-16   1.0
+```
+
 [^issue8859]: Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
 
 [^B96]: Åke Björck, "Numerical Methods for Least Squares Problems",  SIAM Press, Philadelphia, 1996, "Other Titles in Applied Mathematics", Vol. 51. [doi:10.1137/1.9781611971484](http://epubs.siam.org/doi/book/10.1137/1.9781611971484)
@@ -640,6 +676,20 @@ end
     nullspace(M)
 
 Basis for nullspace of `M`.
+
+```jldoctest
+julia> M = [1 0 0; 0 1 0; 0 0 0]
+3×3 Array{Int64,2}:
+ 1  0  0
+ 0  1  0
+ 0  0  0
+
+julia> nullspace(M)
+3×1 Array{Float64,2}:
+ 0.0
+ 0.0
+ 1.0
+```
 """
 function nullspace{T}(A::StridedMatrix{T})
     m, n = size(A)

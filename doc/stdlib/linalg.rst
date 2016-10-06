@@ -36,6 +36,21 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the dot product. For complex vectors, the first vector is conjugated.
 
+   .. doctest::
+
+       julia> a = [1; 1]
+       2-element Array{Int64,1}:
+        1
+        1
+
+       julia> b = [2; 3]
+       2-element Array{Int64,1}:
+        2
+        3
+
+       julia> dot(a, b)
+       5
+
 .. function:: vecdot(x, y)
 
    .. Docstring generated from Julia source
@@ -122,11 +137,37 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Constructs a matrix from the diagonal of ``A``\ .
 
+   .. doctest::
+
+       julia> A = [1 2 3; 4 5 6; 7 8 9]
+       3×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+        7  8  9
+
+       julia> Diagonal(A)
+       3×3 Diagonal{Int64}:
+        1  ⋅  ⋅
+        ⋅  5  ⋅
+        ⋅  ⋅  9
+
 .. function:: Diagonal(V::AbstractVector)
 
    .. Docstring generated from Julia source
 
    Constructs a matrix with ``V`` as its diagonal.
+
+   .. doctest::
+
+       julia> V = [1; 2]
+       2-element Array{Int64,1}:
+        1
+        2
+
+       julia> Diagonal(V)
+       2×2 Diagonal{Int64}:
+        1  ⋅
+        ⋅  2
 
 .. function:: Bidiagonal(dv, ev, isupper::Bool)
 
@@ -178,11 +219,61 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with :func:`convert` (or ``Array(_)`` for short).
 
+   .. doctest::
+
+       julia> dv = [1; 2; 3; 4]
+       4-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+
+       julia> ev = [7; 8; 9]
+       3-element Array{Int64,1}:
+        7
+        8
+        9
+
+       julia> SymTridiagonal(dv, ev)
+       4×4 SymTridiagonal{Int64}:
+        1  7  ⋅  ⋅
+        7  2  8  ⋅
+        ⋅  8  3  9
+        ⋅  ⋅  9  4
+
 .. function:: Tridiagonal(dl, d, du)
 
    .. Docstring generated from Julia source
 
    Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`convert` (or ``Array(_)`` for short). The lengths of ``dl`` and ``du`` must be one less than the length of ``d``\ .
+
+   .. doctest::
+
+       julia> dl = [1; 2; 3]
+       3-element Array{Int64,1}:
+        1
+        2
+        3
+
+       julia> du = [4; 5; 6]
+       3-element Array{Int64,1}:
+        4
+        5
+        6
+
+       julia> d = [7; 8; 9; 0]
+       4-element Array{Int64,1}:
+        7
+        8
+        9
+        0
+
+       julia> Tridiagonal(dl, d, du)
+       4×4 Tridiagonal{Int64}:
+        7  4  ⋅  ⋅
+        1  8  5  ⋅
+        ⋅  2  9  6
+        ⋅  ⋅  3  0
 
 .. function:: Symmetric(A, uplo=:U)
 
@@ -336,6 +427,33 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the Cholesky factorization of a dense symmetric positive definite matrix ``A`` and return a ``Cholesky`` factorization. The matrix ``A`` can either be a ``Symmetric`` or ``Hermitian`` ``StridedMatrix`` or a *perfectly* symmetric or Hermitian ``StridedMatrix``\ . In the latter case, the optional argument ``uplo`` may be ``:L`` for using the lower part or ``:U`` for the upper part of ``A``\ . The default is to use ``:U``\ . The triangular Cholesky factor can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``Cholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ . A ``PosDefException`` exception is thrown in case the matrix is not positive definite.
 
+   .. doctest::
+
+       julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+       3×3 Array{Float64,2}:
+          4.0   12.0  -16.0
+         12.0   37.0  -43.0
+        -16.0  -43.0   98.0
+
+       julia> C = cholfact(A)
+       Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
+       [2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
+
+       julia> C[:U]
+       3×3 UpperTriangular{Float64,Array{Float64,2}}:
+        2.0  6.0  -8.0
+         ⋅   1.0   5.0
+         ⋅    ⋅    3.0
+
+       julia> C[:L]
+       3×3 LowerTriangular{Float64,Array{Float64,2}}:
+         2.0   ⋅    ⋅
+         6.0  1.0   ⋅
+        -8.0  5.0  3.0
+
+       julia> C[:L] * C[:U] == A
+       true
+
 .. function:: cholfact(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted
 
    .. Docstring generated from Julia source
@@ -453,6 +571,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Computes the polar decomposition of a vector. Returns ``w``\ , a unit vector in the direction of ``v``\ , and ``r``\ , the norm of ``v``\ .
 
    See also :func:`normalize`\ , :func:`normalize!`\ , and :func:`LinAlg.qr!`\ .
+
+   .. doctest::
+
+       julia> v = [1; 2]
+       2-element Array{Int64,1}:
+        1
+        2
+
+       julia> w, r = qr(v)
+       ([0.447214,0.894427],2.23606797749979)
+
+       julia> w*r == v
+       true
 
 .. function:: LinAlg.qr!(v::AbstractVector) -> w, r
 
@@ -844,11 +975,50 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``svd`` is a wrapper around :func:`svdfact(A)`\ , extracting all parts of the ``SVD`` factorization to a tuple. Direct use of ``svdfact`` is therefore more efficient.
 
+   .. doctest::
+
+       julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+       4×5 Array{Float64,2}:
+        1.0  0.0  0.0  0.0  2.0
+        0.0  0.0  3.0  0.0  0.0
+        0.0  0.0  0.0  0.0  0.0
+        0.0  2.0  0.0  0.0  0.0
+
+       julia> U, S, V = svd(A)
+       (
+       [0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],
+       <BLANKLINE>
+       [3.0,2.23607,2.0,0.0],
+       [-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
+
+       julia> U*diagm(S)*V'
+       4×5 Array{Float64,2}:
+        1.0  0.0  0.0  0.0  2.0
+        0.0  0.0  3.0  0.0  0.0
+        0.0  0.0  0.0  0.0  0.0
+        0.0  2.0  0.0  0.0  0.0
+
 .. function:: svdvals(A)
 
    .. Docstring generated from Julia source
 
    Returns the singular values of ``A``\ .
+
+   .. doctest::
+
+       julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+       4×5 Array{Float64,2}:
+        1.0  0.0  0.0  0.0  2.0
+        0.0  0.0  3.0  0.0  0.0
+        0.0  0.0  0.0  0.0  0.0
+        0.0  2.0  0.0  0.0  0.0
+
+       julia> svdvals(A)
+       4-element Array{Float64,1}:
+        3.0
+        2.23607
+        2.0
+        0.0
 
 .. function:: svdvals!(A)
 
@@ -1177,6 +1347,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`convert` (or ``Array(_)`` for short). The lengths of ``dl`` and ``du`` must be one less than the length of ``d``\ .
 
+   .. doctest::
+
+       julia> dl = [1; 2; 3]
+       3-element Array{Int64,1}:
+        1
+        2
+        3
+
+       julia> du = [4; 5; 6]
+       3-element Array{Int64,1}:
+        4
+        5
+        6
+
+       julia> d = [7; 8; 9; 0]
+       4-element Array{Int64,1}:
+        7
+        8
+        9
+        0
+
+       julia> Tridiagonal(dl, d, du)
+       4×4 Tridiagonal{Int64}:
+        7  4  ⋅  ⋅
+        1  8  5  ⋅
+        ⋅  2  9  6
+        ⋅  ⋅  3  0
+
 .. function:: rank(M[, tol::Real])
 
    .. Docstring generated from Julia source
@@ -1191,7 +1389,31 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, ``norm(A, Inf)`` returns the largest value in ``abs(A)``\ , whereas ``norm(A, -Inf)`` returns the smallest.
 
+   .. doctest::
+
+       julia> v = [3;-2;6]
+       3-element Array{Int64,1}:
+         3
+        -2
+         6
+
+       julia> norm(v)
+       7.0
+
+       julia> norm(v, Inf)
+       6.0
+
    For matrices, the matrix norm induced by the vector ``p``\ -norm is used, where valid values of ``p`` are ``1``\ , ``2``\ , or ``Inf``\ . (Note that for sparse matrices, ``p=2`` is currently not implemented.) Use :func:`vecnorm` to compute the Frobenius norm.
+
+   .. doctest::
+
+       julia> A = [1 -2 -3; 2 3 -1]
+       2×3 Array{Int64,2}:
+        1  -2  -3
+        2   3  -1
+
+       julia> norm(A, Inf)
+       6.0
 
 .. function:: vecnorm(A, [p::Real=2])
 
@@ -1270,6 +1492,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix determinant.
 
+   .. doctest::
+
+       julia> M = [1 0; 2 2]
+       2×2 Array{Int64,2}:
+        1  0
+        2  2
+
+       julia> det(M)
+       2.0
+
 .. function:: logdet(M)
 
    .. Docstring generated from Julia source
@@ -1288,6 +1520,21 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix inverse. Computes matrix ``N`` such that ``M * N = I``\ , where ``I`` is the identity matrix. Computed by solving the left-division ``N = M \ I``\ .
 
+   .. doctest::
+
+       julia> M = [2 5; 1 3]
+       2×2 Array{Int64,2}:
+        2  5
+        1  3
+
+       julia> N = inv(M)
+       2×2 Array{Float64,2}:
+         3.0  -5.0
+        -1.0   2.0
+
+       julia> M*N == N*M == eye(2)
+       true
+
 .. function:: pinv(M[, tol::Real])
 
    .. Docstring generated from Julia source
@@ -1299,6 +1546,23 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The optimal choice of ``tol`` varies both with the value of ``M`` and the intended application of the pseudoinverse. The default value of ``tol`` is ``eps(real(float(one(eltype(M)))))*maximum(size(A))``\ , which is essentially machine epsilon for the real part of a matrix element multiplied by the larger matrix dimension. For inverting dense ill-conditioned matrices in a least-squares sense, ``tol = sqrt(eps(real(float(one(eltype(M))))))`` is recommended.
 
    For more information, see [issue8859]_, [B96]_, [S84]_, [KY88]_.
+
+   .. doctest::
+
+       julia> M = [1.5 1.3; 1.2 1.9]
+       2×2 Array{Float64,2}:
+        1.5  1.3
+        1.2  1.9
+
+       julia> N = pinv(M)
+       2×2 Array{Float64,2}:
+         1.47287   -1.00775
+        -0.930233   1.16279
+
+       julia> M * N
+       2×2 Array{Float64,2}:
+        1.0          -2.22045e-16
+        4.44089e-16   1.0
 
    .. [issue8859] Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
 
@@ -1313,6 +1577,20 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Basis for nullspace of ``M``\ .
+
+   .. doctest::
+
+       julia> M = [1 0 0; 0 1 0; 0 0 0]
+       3×3 Array{Int64,2}:
+        1  0  0
+        0  1  0
+        0  0  0
+
+       julia> nullspace(M)
+       3×1 Array{Float64,2}:
+        0.0
+        0.0
+        1.0
 
 .. function:: repmat(A, m::Int, n::Int=1)
 
@@ -1374,6 +1652,25 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Kronecker tensor product of two vectors or two matrices.
+
+   .. doctest::
+
+       julia> A = [1 2; 1 0]
+       2×2 Array{Int64,2}:
+        1  2
+        1  0
+
+       julia> B = [2 0; 0 1]
+       2×2 Array{Int64,2}:
+        2  0
+        0  1
+
+       julia> kron(A, B)
+       4×4 Array{Int64,2}:
+        2  0  4  0
+        0  1  0  2
+        2  0  0  0
+        0  1  0  0
 
 .. function:: blkdiag(A...)
 

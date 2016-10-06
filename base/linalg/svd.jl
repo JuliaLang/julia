@@ -52,6 +52,29 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `svd` is a wrapper around [`svdfact`](:func:`svdfact(A)`), extracting all parts
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
 efficient.
+
+```jldoctest
+julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> U, S, V = svd(A)
+(
+[0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],
+<BLANKLINE>
+[3.0,2.23607,2.0,0.0],
+[-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
+
+julia> U*diagm(S)*V'
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+```
 """
 function svd(A::Union{Number, AbstractArray}; thin::Bool=true)
     F = svdfact(A, thin=thin)
@@ -84,6 +107,22 @@ svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
     svdvals(A)
 
 Returns the singular values of `A`.
+
+```jldoctest
+julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> svdvals(A)
+4-element Array{Float64,1}:
+ 3.0
+ 2.23607
+ 2.0
+ 0.0
+```
 """
 function svdvals{T}(A::AbstractMatrix{T})
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))

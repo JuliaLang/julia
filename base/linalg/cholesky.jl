@@ -267,6 +267,33 @@ The default is to use `:U`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
 The following functions are available for `Cholesky` objects: `size`, `\\`, `inv`, `det`.
 A `PosDefException` exception is thrown in case the matrix is not positive definite.
+
+```jldoctest
+julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+3×3 Array{Float64,2}:
+   4.0   12.0  -16.0
+  12.0   37.0  -43.0
+ -16.0  -43.0   98.0
+
+julia> C = cholfact(A)
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
+[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
+
+julia> C[:U]
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
+
+julia> C[:L]
+3×3 LowerTriangular{Float64,Array{Float64,2}}:
+  2.0   ⋅    ⋅
+  6.0  1.0   ⋅
+ -8.0  5.0  3.0
+
+julia> C[:L] * C[:U] == A
+true
+```
 """
 function cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
     ishermitian(A) || non_hermitian_error("cholfact")

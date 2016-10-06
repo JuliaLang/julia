@@ -472,9 +472,33 @@ For vectors, `p` can assume any numeric value (even though not all values produc
 mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
 in `abs(A)`, whereas `norm(A, -Inf)` returns the smallest.
 
+```jldoctest
+julia> v = [3;-2;6]
+3-element Array{Int64,1}:
+  3
+ -2
+  6
+
+julia> norm(v)
+7.0
+
+julia> norm(v, Inf)
+6.0
+```
+
 For matrices, the matrix norm induced by the vector `p`-norm is used, where valid values of
 `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices, `p=2` is currently not
 implemented.) Use [`vecnorm`](:func:`vecnorm`) to compute the Frobenius norm.
+
+```jldoctest
+julia> A = [1 -2 -3; 2 3 -1]
+2×3 Array{Int64,2}:
+ 1  -2  -3
+ 2   3  -1
+
+julia> norm(A, Inf)
+6.0
+```
 """
 function norm{T}(A::AbstractMatrix{T}, p::Real=2)
     if p == 2
@@ -550,6 +574,21 @@ dot(x::Number, y::Number) = vecdot(x, y)
     ⋅(x,y)
 
 Compute the dot product. For complex vectors, the first vector is conjugated.
+
+```jldoctest
+julia> a = [1; 1]
+2-element Array{Int64,1}:
+ 1
+ 1
+
+julia> b = [2; 3]
+2-element Array{Int64,1}:
+ 2
+ 3
+
+julia> dot(a, b)
+5
+```
 """
 dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
 
@@ -608,6 +647,21 @@ Matrix inverse. Computes matrix `N` such that
 `M * N = I`, where `I` is the identity matrix.
 Computed by solving the left-division
 `N = M \\ I`.
+
+```jldoctest
+julia> M = [2 5; 1 3]
+2×2 Array{Int64,2}:
+ 2  5
+ 1  3
+
+julia> N = inv(M)
+2×2 Array{Float64,2}:
+  3.0  -5.0
+ -1.0   2.0
+
+julia> M*N == N*M == eye(2)
+true
+```
 """
 function inv{T}(A::AbstractMatrix{T})
     S = typeof(zero(T)/one(T))
@@ -1002,6 +1056,16 @@ end
     det(M)
 
 Matrix determinant.
+
+```jldoctest
+julia> M = [1 0; 2 2]
+2×2 Array{Int64,2}:
+ 1  0
+ 2  2
+
+julia> det(M)
+2.0
+```
 """
 function det{T}(A::AbstractMatrix{T})
     if istriu(A) || istril(A)
