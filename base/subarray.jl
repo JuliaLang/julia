@@ -18,7 +18,6 @@ immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     end
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
-SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple) = SubArray(parent, indexes) # for compatibility
 function SubArray(parent::AbstractArray, indexes::Tuple)
     @_inline_meta
     SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, index_dimsum(indexes...))

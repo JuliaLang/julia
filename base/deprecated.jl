@@ -831,6 +831,9 @@ function convert(::Type{UpperTriangular}, A::Bidiagonal)
     end
 end
 
+# Deprecate three-arg SubArray since the constructor doesn't need the dims tuple
+@deprecate SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple) SubArray(parent, indexes)
+
 # Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
 for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
