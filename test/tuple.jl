@@ -45,120 +45,125 @@ end
 @test @inferred(Base.fill_to_length((1,2,3), -1, Val{5})) == (1,2,3,-1,-1)
 @test_throws ArgumentError Base.fill_to_length((1,2,3), -1, Val{2})
 
-## iterating ##
-@test start((1,2,3)) === 1
+@testset "iterating" begin
+    @test start((1,2,3)) === 1
 
-@test done((), 1)
-@test !done((1,2,3), 3)
-@test done((1,2,3), 4)
+    @test done((), 1)
+    @test !done((1,2,3), 3)
+    @test done((1,2,3), 4)
 
-@test next((5,6,7), 1) === (5, 2)
-@test next((5,6,7), 3) === (7, 4)
-@test_throws BoundsError next((5,6,7), 0)
-@test_throws BoundsError next((), 1)
+    @test next((5,6,7), 1) === (5, 2)
+    @test next((5,6,7), 3) === (7, 4)
+    @test_throws BoundsError next((5,6,7), 0)
+    @test_throws BoundsError next((), 1)
 
-@test collect(eachindex((2,5,"foo"))) == collect(1:3)
-@test collect(eachindex((2,5,"foo"), (1,2,5,7))) == collect(1:4)
+    @test collect(eachindex((2,5,"foo"))) == collect(1:3)
+    @test collect(eachindex((2,5,"foo"), (1,2,5,7))) == collect(1:4)
+end
 
-
-## eltype ##
-@test eltype((1,2,3)) === Int
-@test eltype((1.0,2.0,3.0)) <: AbstractFloat
-@test eltype((true, false)) === Bool
-@test eltype((1,2.0, false)) === Any
-@test eltype(()) === Union{}
+@testset "eltype" begin
+    @test eltype((1,2,3)) === Int
+    @test eltype((1.0,2.0,3.0)) <: AbstractFloat
+    @test eltype((true, false)) === Bool
+    @test eltype((1,2.0, false)) === Any
+    @test eltype(()) === Union{}
+end
 
 begin
     local foo
-    ## mapping ##
-    foo() = 2
-    foo(x) = 2x
-    foo(x, y) = x + y
-    foo(x, y, z) = x + y + z
-    longtuple = ntuple(identity, 20)
+    @testset "mapping" begin
+        foo() = 2
+        foo(x) = 2x
+        foo(x, y) = x + y
+        foo(x, y, z) = x + y + z
+        longtuple = ntuple(identity, 20)
 
-    # 1 argument
-    @test map(foo, ()) === ()
-    @test map(foo, (1,)) === (2,)
-    @test map(foo, (1,2)) === (2,4)
-    @test map(foo, (1,2,3,4)) === (2,4,6,8)
-    @test map(foo, longtuple) === ntuple(i->2i,20)
+        @testset "1 argument" begin
+            @test map(foo, ()) === ()
+            @test map(foo, (1,)) === (2,)
+            @test map(foo, (1,2)) === (2,4)
+            @test map(foo, (1,2,3,4)) === (2,4,6,8)
+            @test map(foo, longtuple) === ntuple(i->2i,20)
+        end
+        @testset "2 argument" begin
+        @test map(foo, (), ()) === ()
+        @test map(foo, (1,), (1,)) === (2,)
+        @test map(foo, (1,2), (1,2)) === (2,4)
+        @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
+        @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
+        end
 
-    # 2 arguments
-    @test map(foo, (), ()) === ()
-    @test map(foo, (1,), (1,)) === (2,)
-    @test map(foo, (1,2), (1,2)) === (2,4)
-    @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
-    @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
-
-    # n arguments
-    @test map(foo, (), (), ()) === ()
-    @test map(foo, (), (1,2,3), (1,2,3)) === ()
-    @test map(foo, (1,), (1,), (1,)) === (3,)
-    @test map(foo, (1,2), (1,2), (1,2)) === (3,6)
-    @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
-    @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
+        @testset "n arguments" begin
+            @test map(foo, (), (), ()) === ()
+            @test map(foo, (), (1,2,3), (1,2,3)) === ()
+            @test map(foo, (1,), (1,), (1,)) === (3,)
+            @test map(foo, (1,2), (1,2), (1,2)) === (3,6)
+            @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
+            @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
+        end
+    end
 end
 
-## comparison ##
-@test isequal((), ())
-@test isequal((1,2,3), (1,2,3))
-@test !isequal((1,2,3), (1,2,4))
-@test !isequal((1,2,3), (1,2))
+@testset "comparison" begin
+    @test isequal((), ())
+    @test isequal((1,2,3), (1,2,3))
+    @test !isequal((1,2,3), (1,2,4))
+    @test !isequal((1,2,3), (1,2))
 
-@test ==((), ())
-@test ==((1,2,3), (1,2,3))
-@test !==((1,2,3), (1,2,4))
-@test !==((1,2,3), (1,2))
+    @test ==((), ())
+    @test ==((1,2,3), (1,2,3))
+    @test !==((1,2,3), (1,2,4))
+    @test !==((1,2,3), (1,2))
 
-@test isless((1,2), (1,3))
-@test isless((1,), (1,2))
-@test !isless((1,2), (1,2))
-@test !isless((2,1), (1,2))
+    @test isless((1,2), (1,3))
+    @test isless((1,), (1,2))
+    @test !isless((1,2), (1,2))
+    @test !isless((2,1), (1,2))
+end
 
+@testset "functions" begin
+    @test isempty(())
+    @test !isempty((1,))
 
-## functions ##
-@test isempty(())
-@test !isempty((1,))
+    @test reverse(()) === ()
+    @test reverse((1,2,3)) === (3,2,1)
+end
 
-@test reverse(()) === ()
-@test reverse((1,2,3)) === (3,2,1)
+@testset "specialized reduction" begin
+    @test sum((1,2,3)) === 6
 
+    @test prod(()) === 1
+    @test prod((1,2,3)) === 6
 
-## specialized reduction ##
-@test sum((1,2,3)) === 6
+    @test all(()) === true
+    @test all((false,)) === false
+    @test all((true,)) === true
+    @test all((true, true)) === true
+    @test all((true, false)) === false
+    @test all((false, false)) === false
 
-@test prod(()) === 1
-@test prod((1,2,3)) === 6
+    @test any(()) === false
+    @test any((true,)) === true
+    @test any((false,)) === false
+    @test any((true, true)) === true
+    @test any((true, false)) === true
+    @test any((false, false)) === false
+    @test any((false,false,false)) === false
+    @test any((true,false,false)) === true
+    @test any((false,true,false)) === true
+    @test any((false,false,true)) === true
+    @test any((true,true,false)) === true
+    @test any((true,false,true)) === true
+    @test any((true,true,false)) === true
+    @test any((true,true,true)) === true
 
-@test all(()) === true
-@test all((false,)) === false
-@test all((true,)) === true
-@test all((true, true)) === true
-@test all((true, false)) === false
-@test all((false, false)) === false
-
-@test any(()) === false
-@test any((true,)) === true
-@test any((false,)) === false
-@test any((true, true)) === true
-@test any((true, false)) === true
-@test any((false, false)) === false
-@test any((false,false,false)) === false
-@test any((true,false,false)) === true
-@test any((false,true,false)) === true
-@test any((false,false,true)) === true
-@test any((true,true,false)) === true
-@test any((true,false,true)) === true
-@test any((true,true,false)) === true
-@test any((true,true,true)) === true
-
-@test @inferred(ntuple(abs2, Val{0})) == ()
-@test @inferred(ntuple(abs2, Val{2})) == (1, 4)
-@test @inferred(ntuple(abs2, Val{3})) == (1, 4, 9)
-@test @inferred(ntuple(abs2, Val{4})) == (1, 4, 9, 16)
-@test @inferred(ntuple(abs2, Val{5})) == (1, 4, 9, 16, 25)
-@test @inferred(ntuple(abs2, Val{6})) == (1, 4, 9, 16, 25, 36)
+    @test @inferred(ntuple(abs2, Val{0})) == ()
+    @test @inferred(ntuple(abs2, Val{2})) == (1, 4)
+    @test @inferred(ntuple(abs2, Val{3})) == (1, 4, 9)
+    @test @inferred(ntuple(abs2, Val{4})) == (1, 4, 9, 16)
+    @test @inferred(ntuple(abs2, Val{5})) == (1, 4, 9, 16, 25)
+    @test @inferred(ntuple(abs2, Val{6})) == (1, 4, 9, 16, 25, 36)
+end
 
 # issue #12854
 @test_throws TypeError ntuple(identity, Val{1:2})
