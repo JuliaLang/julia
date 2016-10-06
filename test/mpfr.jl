@@ -756,7 +756,7 @@ end
     end
 
     c = parse(BigInt,"61728394506172839450617283945")
-    # d = 2^200 
+    # d = 2^200
     d = parse(BigFloat,"1606938044258990275541962092341162602522202993782792835301376")
     f = parse(BigFloat,"6.223015277861141707144064053780124240590252168721167133101116614789698834035383e-61")
     @testset "Signed division" begin
@@ -923,13 +923,15 @@ end
 end
 
 @testset "issue #9816" begin
-    # check exponent range is set to max possible
-    @test MPFR.get_emin() == MPFR.get_emin_min()
-    @test MPFR.get_emax() == MPFR.get_emax_max()
+    @testset "check exponent range is set to max possible" begin
+        @test MPFR.get_emin() == MPFR.get_emin_min()
+        @test MPFR.get_emax() == MPFR.get_emax_max()
+    end
 end
 
-# issue #10994: handle embedded NUL chars for string parsing
-@test_throws ArgumentError parse(BigFloat, "1\0")
+@testset "issue #10994: handle embedded NUL chars for string parsing" begin
+    @test_throws ArgumentError parse(BigFloat, "1\0")
+end
 
 @testset "serialization (issue #12386)" begin
     let b = IOBuffer()

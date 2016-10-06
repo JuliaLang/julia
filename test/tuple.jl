@@ -41,9 +41,10 @@ end
 
 @test getindex((5,6,7,8), []) === ()
 
-## filling to specified length
-@test @inferred(Base.fill_to_length((1,2,3), -1, Val{5})) == (1,2,3,-1,-1)
-@test_throws ArgumentError Base.fill_to_length((1,2,3), -1, Val{2})
+@testset "filling to specified length" begin
+    @test @inferred(Base.fill_to_length((1,2,3), -1, Val{5})) == (1,2,3,-1,-1)
+    @test_throws ArgumentError Base.fill_to_length((1,2,3), -1, Val{2})
+end
 
 @testset "iterating" begin
     @test start((1,2,3)) === 1
@@ -165,8 +166,9 @@ end
     @test @inferred(ntuple(abs2, Val{6})) == (1, 4, 9, 16, 25, 36)
 end
 
-# issue #12854
-@test_throws TypeError ntuple(identity, Val{1:2})
+@testset "#12854" begin
+    @test_throws TypeError ntuple(identity, Val{1:2})
+end
 
 for n = 0:20
     t = ntuple(identity, n)

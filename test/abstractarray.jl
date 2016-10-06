@@ -133,7 +133,7 @@ end
         @test_throws ArgumentError sub2ind((1:3,), 2)
         @test_throws ArgumentError ind2sub((1:3,), 2)
     end
-    
+
     @testset "2-dimensional" begin
         k = 0
         for j = 1:3, i = 1:4
@@ -150,7 +150,7 @@ end
             @test sub2ind((0:3,3:5), 7) == 8
         end
     end
-    
+
     @testset "3-dimensional" begin
         l = 0
         for k = 1:2, j = 1:3, i = 1:4
