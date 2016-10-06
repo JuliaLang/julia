@@ -1054,7 +1054,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
 
 static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, jl_datatype_t *jt, jl_codectx_t *ctx)
 {
-    jl_value_t *jfty = jl_field_type(jt,idx);
+    jl_value_t *jfty = jl_field_type(jt, idx);
     Type *elty = julia_type_to_llvm(jfty);
     assert(elty != NULL);
     if (jfty == jl_bottom_type) {
@@ -1064,39 +1064,28 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
     if (type_is_ghost(elty))
         return ghostValue(jfty);
     Value *fldv = NULL;
-    if (strct.isboxed) {
-        Value *addr =
-            builder.CreateGEP(emit_bitcast(boxed(strct, ctx), T_pint8),
-                              ConstantInt::get(T_size, jl_field_offset(jt,idx)));
-        MDNode *tbaa = strct.tbaa;
+    if (strct.ispointer()) {
+        Value *addr;
+        Value *ptr = data_pointer(strct, ctx, T_pint8);
+        Value *llvm_idx = ConstantInt::get(T_size, jl_field_offset(jt, idx));
+        addr = builder.CreateGEP(ptr, llvm_idx);
         if (jl_field_isptr(jt, idx)) {
-            Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
+            Value *fldv = tbaa_decorate(strct.tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
             if (idx >= (unsigned)jt->ninitialized)
                 null_pointer_check(fldv, ctx);
-            jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx, strct.gcroot || !strct.isimmutable);
-            return ret;
+            return mark_julia_type(fldv, true, jfty, ctx, strct.gcroot || !strct.isimmutable);
         }
-        else {
-            int align = jl_field_offset(jt,idx);
-            align |= 16;
-            align &= -align;
-            return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, tbaa, align);
+        else if (!jt->mutabl) {
+            // just compute the pointer and let user load it when necessary
+            jl_cgval_t fieldval = mark_julia_slot(addr, jfty, strct.tbaa);
+            fieldval.isimmutable = strct.isimmutable;
+            fieldval.gcroot = strct.gcroot;
+            return fieldval;
         }
-    }
-    else if (strct.ispointer()) { // something stack allocated
-        Value *addr;
-        if (jl_is_vecelement_type((jl_value_t*)jt))
-            // VecElement types are unwrapped in LLVM.
-            addr = strct.V;
-        else
-            addr = builder.CreateConstInBoundsGEP2_32(
-                LLVM37_param(julia_type_to_llvm(strct.typ))
-                strct.V, 0, idx);
-        assert(!jt->mutabl);
-        jl_cgval_t fieldval = mark_julia_slot(addr, jfty, strct.tbaa);
-        fieldval.isimmutable = strct.isimmutable;
-        fieldval.gcroot = strct.gcroot;
-        return fieldval;
+        int align = jl_field_offset(jt, idx);
+        align |= 16;
+        align &= -align;
+        return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.tbaa, align);
     }
     else if (isa<UndefValue>(strct.V)) {
         return jl_cgval_t();
