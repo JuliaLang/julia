@@ -839,7 +839,7 @@ stack with:
 
    .. Docstring generated from Julia source
 
-   Determine whether a MIME type is text data.
+   Determine whether a MIME type is text data. MIME types are assumed to be binary data except for a set of types known to be text data (possibly Unicode).
 
 Memory-mapped I/O
 -----------------
