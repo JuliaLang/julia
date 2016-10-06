@@ -92,6 +92,14 @@ let x0 = SparseVector(8, [2, 3, 6], [12.0, 18.0, 25.0])
         SparseVector(8, [2, 3, 6, 7], [12.0, 18.0, 25.0, 0.0]))
 end
 
+@test exact_equal(
+    sparsevec(Any[1, 3], [1, 1]),
+    sparsevec([1, 3], [1, 1]))
+
+@test exact_equal(
+    sparsevec(Any[1, 3], [1, 1], 5),
+    sparsevec([1, 3], [1, 1], 5))
+
 # from dictionary
 
 function my_intmap(x)

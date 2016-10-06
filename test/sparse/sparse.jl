@@ -13,6 +13,8 @@
 @test_throws ArgumentError sparse([1,2,4], [1,2,3], [1,2,3], 3, 3)
 @test_throws ArgumentError sparse([1,2,3], [1,2,4], [1,2,3], 3, 3)
 @test isequal(sparse(Int[], Int[], Int[], 0, 0), SparseMatrixCSC(0, 0, Int[1], Int[], Int[]))
+@test sparse(Any[1,2,3], Any[1,2,3], Any[1,1,1]) == sparse([1,2,3], [1,2,3], [1,1,1])
+@test sparse(Any[1,2,3], Any[1,2,3], Any[1,1,1], 5, 4) == sparse([1,2,3], [1,2,3], [1,1,1], 5, 4)
 
 # check matrix operations
 se33 = speye(3)
