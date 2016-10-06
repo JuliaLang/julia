@@ -12,18 +12,22 @@ immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     offset1::Int       # for linear indexing and pointer, only valid when L==true
     stride1::Int       # used only for linear indexing
     function SubArray(parent, indexes, offset1, stride1)
+        @_inline_meta
         check_parent_index_match(parent, indexes)
         new(parent, indexes, offset1, stride1)
     end
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
 function SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple)
+    @_inline_meta
     SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, dims)
 end
 function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, dims::NTuple{N})
+    @_inline_meta
     SubArray{eltype(P), N, P, I, false}(parent, indexes, 0, 0)
 end
 function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, dims::NTuple{N})
+    @_inline_meta
     # Compute the stride and offset
     stride1 = compute_stride1(parent, indexes)
     SubArray{eltype(P), N, P, I, true}(parent, indexes, compute_offset1(parent, stride1, indexes), stride1)
@@ -222,7 +226,7 @@ substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("st
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
 compute_stride1{N}(parent::AbstractArray, I::NTuple{N}) =
-    compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val{N}), I)
+    (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val{N}), I))
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{Real, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*unsafe_length(inds[1]), tail(inds), tail(I)))
@@ -253,10 +257,11 @@ end
 # indexing uses the indices along the given dimension. Otherwise
 # linear indexing always starts with 1.
 compute_offset1(parent, stride1::Integer, I::Tuple) = (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(I)..., I))
-compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Colon}, I::Tuple) = compute_linindex(parent, I) - stride1*first(indices(parent, dims[1]))  # index-preserving case
-compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) = compute_linindex(parent, I) - stride1  # linear indexing starts with 1
+compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Colon}, I::Tuple) = (@_inline_meta; compute_linindex(parent, I) - stride1*first(indices(parent, dims[1])))  # index-preserving case
+compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) = (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
 
 function compute_linindex{N}(parent, I::NTuple{N})
+    @_inline_meta
     IP = fill_to_length(indices(parent), OneTo(1), Val{N})
     compute_linindex(1, 1, IP, I)
 end
@@ -278,10 +283,10 @@ end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 
 find_extended_dims(I) = (@_inline_meta; _find_extended_dims((), (), 1, I...))
-_find_extended_dims(dims, inds, dim) = dims, inds
-_find_extended_dims(dims, inds, dim, ::Real, I...) = _find_extended_dims(dims, inds, dim+1, I...)
-_find_extended_dims(dims, inds, dim, i1::AbstractCartesianIndex, I...) = _find_extended_dims(dims, inds, dim, i1.I..., I...)
-_find_extended_dims(dims, inds, dim, i1, I...) = _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...)
+_find_extended_dims(dims, inds, dim) = (@_inline_meta; return (dims, inds));
+_find_extended_dims(dims, inds, dim, ::Real, I...) = (@_inline_meta; _find_extended_dims(dims, inds, dim+1, I...))
+_find_extended_dims(dims, inds, dim, i1::AbstractCartesianIndex, I...) = (@_inline_meta; _find_extended_dims(dims, inds, dim, i1.I..., I...))
+_find_extended_dims(dims, inds, dim, i1, I...) = (@_inline_meta; _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...))
 
 unsafe_convert{T,N,P,I<:Tuple{Vararg{RangeIndex}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
