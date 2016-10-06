@@ -4610,3 +4610,8 @@ let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
     @test length(b) == 2*10^6
     @test b[1] == b[end] == "sdf"
 end
+
+# issue #18710
+bad_tvars{T}() = 1
+@test isa(@which(bad_tvars()), Method)
+@test_throws MethodError bad_tvars()
