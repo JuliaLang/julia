@@ -3059,14 +3059,6 @@ Return `true` if `A` is a subset of or equal to `S`.
 issubset
 
 """
-    stringmime(mime, x)
-
-Returns an `AbstractString` containing the representation of `x` in the requested `mime`
-type. This is similar to [`reprmime`](:func:`reprmime`) except that binary data is base64-encoded as an ASCII string.
-"""
-stringmime
-
-"""
     zero(x)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).

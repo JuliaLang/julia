@@ -832,7 +832,27 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   Is the ``Nullable`` object ``x`` null, i.e. missing a value?
+   Return whether or not ``x`` is null for :obj:`Nullable` ``x``\ ; return ``false`` for all other ``x``\ .
+
+   .. doctest::
+
+       julia> x = Nullable(1, false)
+       Nullable{Int64}(1)
+
+       julia> isnull(x)
+       false
+
+       julia> x = Nullable(1, true)
+       Nullable{Int64}()
+
+       julia> isnull(x)
+       true
+
+       julia> x = 1
+       1
+
+       julia> isnull(x)
+       false
 
 System
 ------
@@ -1545,7 +1565,7 @@ Internals
        julia> M.f()
        (1,2)
 
-   With @macroexpand the expression expands where @macroexpand appears in the code (module M). With macroexpand the expressions expands in the current module where the code was finally called. Note that when calling macroexpand or @macroexpand directly from the REPL, both of these contexts coincide, hence there is no difference.
+   With ``@macroexpand`` the expression expands where ``@macroexpand`` appears in the code (module ``M`` in the example). With ``macroexpand`` the expression expands in the current module where the code was finally called (REPL in the example). Note that when calling ``macroexpand`` or ``@macroexpand`` directly from the REPL, both of these contexts coincide, hence there is no difference.
 
 .. function:: expand(x)
 
@@ -1620,4 +1640,3 @@ Internals
    .. Docstring generated from Julia source
 
    Compile the given function ``f`` for the argument tuple (of types) ``args``\ , but do not execute it.
-
