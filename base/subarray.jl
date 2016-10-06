@@ -18,15 +18,16 @@ immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     end
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
-function SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple)
+SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple) = SubArray(parent, indexes) # for compatibility
+function SubArray(parent::AbstractArray, indexes::Tuple)
     @_inline_meta
-    SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, dims)
+    SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, index_dimsum(indexes...))
 end
-function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, dims::NTuple{N})
+function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, ::NTuple{N})
     @_inline_meta
     SubArray{eltype(P), N, P, I, false}(parent, indexes, 0, 0)
 end
-function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, dims::NTuple{N})
+function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, ::NTuple{N})
     @_inline_meta
     # Compute the stride and offset
     stride1 = compute_stride1(parent, indexes)
@@ -96,7 +97,7 @@ view(A::AbstractArray, I::Union{ViewIndex, AbstractCartesianIndex}...) = view(A,
 function unsafe_view(A::AbstractArray, I::ViewIndex...)
     @_inline_meta
     J = to_indexes(I...)
-    SubArray(A, J, map(unsafe_length, index_shape(A, J...)))
+    SubArray(A, J)
 end
 # When we take the view of a view, it's often possible to "reindex" the parent
 # view's indices such that we can "pop" the parent view and keep just one layer
@@ -107,7 +108,7 @@ end
 unsafe_view(V::SubArray, I::ViewIndex...) = (@_inline_meta; _maybe_reindex(V, to_indexes(I...)))
 _maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
 _maybe_reindex{C<:AbstractCartesianIndex}(V, I, ::Tuple{AbstractArray{C}, Vararg{Any}}) =
-    (@_inline_meta; SubArray(V, I, map(unsafe_length, index_shape(V, I...))))
+    (@_inline_meta; SubArray(V, I))
 # But allow arrays of CartesianIndex{1}; they behave just like arrays of Ints
 _maybe_reindex{C<:AbstractCartesianIndex{1}}(V, I, A::Tuple{AbstractArray{C}, Vararg{Any}}) =
     (@_inline_meta; _maybe_reindex(V, I, tail(A)))
@@ -115,7 +116,7 @@ _maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@_inline_meta; _maybe_reinde
 function _maybe_reindex(V, I, ::Tuple{})
     @_inline_meta
     idxs = reindex(V, V.indexes, to_indexes(I...))
-    SubArray(V.parent, idxs, map(unsafe_length, (index_shape(V.parent, idxs...))))
+    SubArray(V.parent, idxs)
 end
 
 ## Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
