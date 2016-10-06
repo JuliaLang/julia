@@ -166,7 +166,7 @@ end
     @test @inferred(ntuple(abs2, Val{6})) == (1, 4, 9, 16, 25, 36)
 end
 
-@testset "#12854" begin
+@testset "issue #12854" begin
     @test_throws TypeError ntuple(identity, Val{1:2})
 end
 

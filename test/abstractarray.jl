@@ -356,109 +356,91 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
         end
     end
     @test C == B == A
-    @testset  "Test zero-dimensional setindex" begin
-        A[] = 0; B[] = 0
-        @test A[] == B[] == 0
-        @test A == B
-    end
+    # "Test zero-dimensional setindex"
+    A[] = 0; B[] = 0
+    @test A[] == B[] == 0
+    @test A == B
 end
 
 function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
-    @testset "test_vector_indexing{T}" begin
-        N = prod(shape)
-        A = reshape(collect(1:N), shape)
-        B = T(A)
-        idxs = rand(1:N, 3, 3, 3)
-        @test B[idxs] == A[idxs] == idxs
-        @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
-        @test B[:] == A[:] == collect(1:N)
-        @test B[1:end] == A[1:end] == collect(1:N)
-        @test B[:,:] == A[:,:] == reshape(1:N, shape[1], prod(shape[2:end]))
-        @test B[1:end,1:end] == A[1:end,1:end] == reshape(1:N, shape[1], prod(shape[2:end]))
+    N = prod(shape)
+    A = reshape(collect(1:N), shape)
+    B = T(A)
+    idxs = rand(1:N, 3, 3, 3)
+    @test B[idxs] == A[idxs] == idxs
+    @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
+    @test B[:] == A[:] == collect(1:N)
+    @test B[1:end] == A[1:end] == collect(1:N)
+    @test B[:,:] == A[:,:] == reshape(1:N, shape[1], prod(shape[2:end]))
+    @test B[1:end,1:end] == A[1:end,1:end] == reshape(1:N, shape[1], prod(shape[2:end]))
+    # Test with containers that aren't Int[]
+    @test B[[]] == A[[]] == []
+    @test B[convert(Array{Any}, idxs)] == A[convert(Array{Any}, idxs)] == idxs
 
-        @testset "Test with containers that aren't Int[]" begin
-            @test B[[]] == A[[]] == []
-            @test B[convert(Array{Any}, idxs)] == A[convert(Array{Any}, idxs)] == idxs
-        end
+    # Test adding dimensions with matrices
+    idx1 = rand(1:size(A, 1), 3)
+    idx2 = rand(1:Base.trailingsize(A, 2), 4, 5)
+    @test B[idx1, idx2] == A[idx1, idx2] == reshape(A[idx1, vec(idx2)], 3, 4, 5) == reshape(B[idx1, vec(idx2)], 3, 4, 5)
+    @test B[1, idx2] == A[1, idx2] == reshape(A[1, vec(idx2)], 4, 5) == reshape(B[1, vec(idx2)], 4, 5)
 
-        idx1 = rand(1:size(A, 1), 3)
-        idx2 = rand(1:Base.trailingsize(A, 2), 4, 5)
-        @testset "Test adding dimensions with matrices" begin
-            @test B[idx1, idx2] == A[idx1, idx2] == reshape(A[idx1, vec(idx2)], 3, 4, 5) == reshape(B[idx1, vec(idx2)], 3, 4, 5)
-            @test B[1, idx2] == A[1, idx2] == reshape(A[1, vec(idx2)], 4, 5) == reshape(B[1, vec(idx2)], 4, 5)
-        end
+    # test removing dimensions with 0-d arrays
+    idx0 = reshape([rand(1:size(A, 1))])
+    @test B[idx0, idx2] == A[idx0, idx2] == reshape(A[idx0[], vec(idx2)], 4, 5) == reshape(B[idx0[], vec(idx2)], 4, 5)
+    @test B[reshape([end]), reshape([end])] == A[reshape([end]), reshape([end])] == reshape([A[end,end]]) == reshape([B[end,end]])
 
-        @testset "test removing dimensions with 0-d arrays" begin
-            idx0 = reshape([rand(1:size(A, 1))])
-            @test B[idx0, idx2] == A[idx0, idx2] == reshape(A[idx0[], vec(idx2)], 4, 5) == reshape(B[idx0[], vec(idx2)], 4, 5)
-            @test B[reshape([end]), reshape([end])] == A[reshape([end]), reshape([end])] == reshape([A[end,end]]) == reshape([B[end,end]])
-        end
-
-        mask = bitrand(shape)
-        @testset "test logical indexing" begin
-            @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == find(mask)
-            @test B[vec(mask)] == A[vec(mask)] == find(mask)
-            mask1 = bitrand(size(A, 1))
-            mask2 = bitrand(Base.trailingsize(A, 2))
-            @test B[mask1, mask2] == A[mask1, mask2] == B[find(mask1), find(mask2)]
-            @test B[mask1, 1] == A[mask1, 1] == find(mask1)
-        end
-    end
+    # test logical indexing
+    mask = bitrand(shape)
+    @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == find(mask)
+    @test B[vec(mask)] == A[vec(mask)] == find(mask)
+    mask1 = bitrand(size(A, 1))
+    mask2 = bitrand(Base.trailingsize(A, 2))
+    @test B[mask1, mask2] == A[mask1, mask2] == B[find(mask1), find(mask2)]
+    @test B[mask1, 1] == A[mask1, 1] == find(mask1)
 end
 
 function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
-    @testset "test_primatives" begin
-        N = prod(shape)
-        A = reshape(collect(1:N), shape)
-        B = T(A)
+    N = prod(shape)
+    A = reshape(collect(1:N), shape)
+    B = T(A)
 
-        @testset "last(a)" begin
-            @test last(B) == B[length(B)]
-        end
+    # last(a)
+    @test last(B) == B[length(B)]
 
-        @testset "strides(a::AbstractArray)" begin
-            @inferred strides(B)
-            strides_B = strides(B)
-            for (i, _stride) in enumerate(collect(strides_B))
-                @test _stride == stride(B, i)
-            end
-        end
-
-        @testset "isassigned(a::AbstractArray, i::Int...)" begin
-            j = rand(1:length(B))
-            @test isassigned(B, j) == true
-            if T == T24Linear
-                @test isassigned(B, length(B) + 1) == false
-            end
-        end
-
-        @testset "reshape(a::AbstractArray, dims::Dims)" begin
-            @test_throws DimensionMismatch reshape(B, (0, 1))
-        end
-
-        @testset "copy!(dest::AbstractArray, src::AbstractArray)" begin
-            @test_throws BoundsError copy!(Array{Int}(10), [1:11...])
-        end
-
-        X = [1:10...]
-        Y = [1 2; 3 4]
-        @testset "convert{T, N}(::Type{Array}, A::AbstractArray{T, N})" begin
-            @test convert(Array, X) == X
-            @test convert(Array, Y) == Y
-        end
-
-        @testset "convert{T}(::Type{Vector}, A::AbstractVector{T})" begin
-            @test convert(Vector, X) == X
-            @test convert(Vector, view(X, 2:4)) == [2,3,4]
-            @test_throws MethodError convert(Vector, Y)
-        end
-
-        @testset "convert{T}(::Type{Matrix}, A::AbstractMatrix{T})" begin
-            @test convert(Matrix, Y) == Y
-            @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
-            @test_throws MethodError convert(Matrix, X)
-        end
+    # strides(a::AbstractArray)
+    @inferred strides(B)
+    strides_B = strides(B)
+    for (i, _stride) in enumerate(collect(strides_B))
+        @test _stride == stride(B, i)
     end
+
+    # isassigned(a::AbstractArray, i::Int...)
+    j = rand(1:length(B))
+    @test isassigned(B, j) == true
+    if T == T24Linear
+        @test isassigned(B, length(B) + 1) == false
+    end
+
+    # reshape(a::AbstractArray, dims::Dims)
+    @test_throws DimensionMismatch reshape(B, (0, 1))
+
+    # copy!(dest::AbstractArray, src::AbstractArray)
+    @test_throws BoundsError copy!(Array{Int}(10), [1:11...])
+
+    # convert{T, N}(::Type{Array}, A::AbstractArray{T, N})
+    X = [1:10...]
+    Y = [1 2; 3 4]
+    @test convert(Array, X) == X
+    @test convert(Array, Y) == Y
+
+    # convert{T}(::Type{Vector}, A::AbstractVector{T})
+    @test convert(Vector, X) == X
+    @test convert(Vector, view(X, 2:4)) == [2,3,4]
+    @test_throws MethodError convert(Vector, Y)
+
+    # convert{T}(::Type{Matrix}, A::AbstractMatrix{T})
+    @test convert(Matrix, Y) == Y
+    @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
+    @test_throws MethodError convert(Matrix, X)
 end
 
 let
@@ -711,23 +693,21 @@ function test_UInt_indexing(::Type{TestAbstractArray})
 end
 
 function test_13315(::Type{TestAbstractArray})
-    @testset "Issue 13315" begin
-        U = UInt(1):UInt(2)
-        @test [U;[U;]] == [UInt(1), UInt(2), UInt(1), UInt(2)]
-    end
+    # Issue 13315"
+    U = UInt(1):UInt(2)
+    @test [U;[U;]] == [UInt(1), UInt(2), UInt(1), UInt(2)]
 end
 
 function test_checksquare()
-    @testset "checksquare" begin
-        @test LinAlg.checksquare(zeros(2,2)) == 2
-        @test LinAlg.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
-        @test_throws DimensionMismatch LinAlg.checksquare(zeros(2,3))
-    end
+    # "checksquare"
+    @test LinAlg.checksquare(zeros(2,2)) == 2
+    @test LinAlg.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
+    @test_throws DimensionMismatch LinAlg.checksquare(zeros(2,3))
 end
 
 #----- run tests -------------------------------------------------------------#
 
-for T in (T24Linear, TSlow), shape in ((24,), (2, 12), (2,3,4), (1,2,3,4), (4,3,2,1))
+@testset for T in (T24Linear, TSlow), shape in ((24,), (2, 12), (2,3,4), (1,2,3,4), (4,3,2,1))
     test_scalar_indexing(T, shape, TestAbstractArray)
     test_vector_indexing(T, shape, TestAbstractArray)
     test_primitives(T, shape, TestAbstractArray)
