@@ -854,6 +854,35 @@ Nullables
        julia> isnull(x)
        false
 
+.. function:: unsafe_get(x)
+
+   .. Docstring generated from Julia source
+
+   Return the value of ``x`` for :obj:`Nullable` ``x``\ ; return ``x`` for all other ``x``\ .
+
+   This method does not check whether or not ``x`` is null before attempting to access the value of ``x`` for ``x::Nullable`` (hence "unsafe").
+
+   .. doctest::
+
+       julia> x = Nullable(1)
+       Nullable{Int64}(1)
+
+       julia> unsafe_get(x)
+       1
+
+       julia> x = Nullable{String}()
+       Nullable{String}()
+
+       julia> unsafe_get(x)
+       ERROR: UndefRefError: access to undefined reference
+        in unsafe_get(::Nullable{String}) at ./REPL[4]:1
+
+       julia> x = 1
+       1
+
+       julia> unsafe_get(x)
+       1
+
 System
 ------
 
@@ -1640,3 +1669,4 @@ Internals
    .. Docstring generated from Julia source
 
    Compile the given function ``f`` for the argument tuple (of types) ``args``\ , but do not execute it.
+
