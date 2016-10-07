@@ -3,7 +3,8 @@
 # Checked integer arithmetic
 
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
-             checked_div, checked_rem, checked_fld, checked_mod, checked_cld
+             checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+             add_with_overflow, sub_with_overflow, mul_with_overflow
 
 # checked operations
 
@@ -67,6 +68,23 @@ for T in (Int8, Int16, Int32, Int64, Int128)
     @test_throws OverflowError checked_add(halfmax_plus1, halfmax_plus1)
     @test_throws OverflowError checked_add(halfmin, halfmin_minus1)
 
+    @test add_with_overflow(typemax(T), T(-1)) === (T(typemax(T) - 1), false)
+    @test add_with_overflow(typemin(T), T(-1)) === (T(typemax(T)), true)
+    @test add_with_overflow(typemax(T), T(0))  === (typemax(T), false)
+    @test add_with_overflow(typemin(T), T(0))  === (typemin(T), false)
+    @test add_with_overflow(typemax(T), T(1))  === (typemin(T), true)
+    @test add_with_overflow(typemin(T), T(1))  === (T(typemin(T) + 1), false)
+    @test add_with_overflow(T(-1), typemax(T)) === (T(typemax(T) - 1), false)
+    @test add_with_overflow(T(-1), typemin(T)) === (typemax(T), true)
+    @test add_with_overflow(T(0), typemax(T))  === (typemax(T), false)
+    @test add_with_overflow(T(0), typemin(T))  === (typemin(T), false)
+    @test add_with_overflow(T(1), typemax(T))  === (typemin(T), true)
+    @test add_with_overflow(T(1), typemin(T))  === (T(typemin(T) + 1), false)
+    @test add_with_overflow(typemax(T), typemin(T)) === (T(-1), false)
+    @test add_with_overflow(typemin(T), typemax(T)) === (T(-1), false)
+    @test add_with_overflow(halfmax_plus1, halfmax_plus1) === (typemin(T), true)
+    @test add_with_overflow(halfmin, halfmin_minus1) === (typemax(T), true)
+
     @test_throws OverflowError checked_sub(typemax(T), T(-1))
     @test checked_sub(typemax(T), T(0)) === typemax(T)
     @test checked_sub(typemax(T), T(1)) === T(typemax(T) - 1)
@@ -82,6 +100,21 @@ for T in (Int8, Int16, Int32, Int64, Int128)
     @test checked_sub(halfmax, T(-halfmin)) === T(-1)
     @test_throws OverflowError checked_sub(halfmin, T(-halfmin_minus1))
 
+    @test sub_with_overflow(typemax(T), T(-1)) === (typemin(T), true)
+    @test sub_with_overflow(typemax(T), T(0))  === (typemax(T), false)
+    @test sub_with_overflow(typemax(T), T(1))  === (T(typemax(T) - 1), false)
+    @test sub_with_overflow(typemin(T), T(-1)) === (T(typemin(T) + 1), false)
+    @test sub_with_overflow(typemin(T), T(0))  === (typemin(T), false)
+    @test sub_with_overflow(typemin(T), T(1))  === (typemax(T), true)
+    @test sub_with_overflow(T(0), typemax(T))  === (T(typemin(T) + 1), false)
+    @test sub_with_overflow(T(1), typemax(T))  === (T(typemin(T) + 2), false)
+    @test sub_with_overflow(T(-1), typemin(T)) === (typemax(T), false)
+    @test sub_with_overflow(T(0), typemin(T))  === (typemin(T), true)
+    @test sub_with_overflow(typemax(T), typemax(T)) === (T(0), false)
+    @test sub_with_overflow(typemin(T), typemin(T)) === (T(0), false)
+    @test sub_with_overflow(halfmax, T(-halfmin)) === (T(-1), false)
+    @test sub_with_overflow(halfmin, T(-halfmin_minus1)) === (typemax(T), true)
+
     @test checked_mul(typemax(T), T(0)) === T(0)
     @test checked_mul(typemin(T), T(0)) === T(0)
     @test checked_mul(typemax(T), T(1)) === typemax(T)
@@ -92,6 +125,17 @@ for T in (Int8, Int16, Int32, Int64, Int128)
     @test checked_mul(-sqrtmax, half_sqrtmax) === T(-sqrtmax * half_sqrtmax)
     @test_throws OverflowError checked_mul(-sqrtmax, half_sqrtmax_plus1)
     @test_throws OverflowError checked_mul(-sqrtmax, -half_sqrtmax)
+
+    @test mul_with_overflow(typemax(T), T(0)) === (T(0), false)
+    @test mul_with_overflow(typemin(T), T(0)) === (T(0), false)
+    @test mul_with_overflow(typemax(T), T(1)) === (typemax(T), false)
+    @test mul_with_overflow(typemin(T), T(1)) === (typemin(T), false)
+    @test mul_with_overflow(sqrtmax, half_sqrtmax) === (typemin(T), true)
+    @test mul_with_overflow(sqrtmax, -half_sqrtmax) === (T(sqrtmax * -half_sqrtmax), false)
+    @test mul_with_overflow(sqrtmax, -half_sqrtmax_plus1) === (T(sqrtmax * -half_sqrtmax_plus1), true)
+    @test mul_with_overflow(-sqrtmax, half_sqrtmax) === (T(-sqrtmax * half_sqrtmax), false)
+    @test mul_with_overflow(-sqrtmax, half_sqrtmax_plus1) === (T(-sqrtmax * half_sqrtmax_plus1), true)
+    @test mul_with_overflow(-sqrtmax, -half_sqrtmax) === (T(-sqrtmax * -half_sqrtmax), true)
 
     @test checked_div(typemax(T), T(1)) === typemax(T)
     @test_throws DivideError checked_div(typemax(T), T(0))
@@ -158,6 +202,18 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     @test checked_add(T(0), typemax(T)) === typemax(T)
     @test_throws OverflowError checked_add(halfmax_plus1, halfmax_plus1)
 
+    @test add_with_overflow(typemax(T), T(0)) === (typemax(T), false)
+    @test add_with_overflow(T(0), T(0))       === (T(0), false)
+    @test add_with_overflow(typemax(T), T(1)) === (T(0), true)
+    @test add_with_overflow(T(0), T(1))       === (T(T(0) + 1), false)
+    @test add_with_overflow(T(0), typemax(T)) === (typemax(T), false)
+    @test add_with_overflow(T(0), T(0))       === (T(0), false)
+    @test add_with_overflow(T(1), typemax(T)) === (T(0), true)
+    @test add_with_overflow(T(1), T(0))       === (T(T(0) + 1), false)
+    @test add_with_overflow(typemax(T), T(0)) === (typemax(T), false)
+    @test add_with_overflow(T(0), typemax(T)) === (typemax(T), false)
+    @test add_with_overflow(halfmax_plus1, halfmax_plus1) === (T(0), true)
+
     @test checked_sub(typemax(T), T(0)) === typemax(T)
     @test checked_sub(typemax(T), T(1)) === T(typemax(T) - 1)
     @test checked_sub(T(0), T(0)) === T(0)
@@ -167,11 +223,26 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
     @test checked_sub(T(0), T(0)) === T(0)
     @test checked_sub(typemax(T), typemax(T)) === T(0)
 
+    @test sub_with_overflow(typemax(T), T(0)) === (typemax(T), false)
+    @test sub_with_overflow(typemax(T), T(1)) === (T(typemax(T) - 1), false)
+    @test sub_with_overflow(T(0), T(0))       === (T(0), false)
+    @test sub_with_overflow(T(0), T(1))       === (typemax(T), true)
+    @test sub_with_overflow(T(0), typemax(T)) === (T(1), true)
+    @test sub_with_overflow(T(1), typemax(T)) === (T(2), true)
+    @test sub_with_overflow(T(0), T(0))       === (T(0), false)
+    @test sub_with_overflow(typemax(T), typemax(T)) === (T(0), false)
+
     @test checked_mul(typemax(T), T(0)) === T(0)
     @test checked_mul(T(0), T(0)) === T(0)
     @test checked_mul(typemax(T), T(1)) === typemax(T)
     @test checked_mul(T(0), T(1)) === T(0)
     @test_throws OverflowError checked_mul(sqrtmax, sqrtmax)
+
+    @test mul_with_overflow(typemax(T), T(0)) === (T(0), false)
+    @test mul_with_overflow(T(0), T(0)) === (T(0), false)
+    @test mul_with_overflow(typemax(T), T(1)) === (typemax(T), false)
+    @test mul_with_overflow(T(0), T(1)) === (T(0), false)
+    @test mul_with_overflow(sqrtmax, sqrtmax) === (T(0), true)
 
     @test checked_div(typemax(T), T(1)) === typemax(T)
     @test_throws DivideError checked_div(typemax(T), T(0))
@@ -188,8 +259,6 @@ end
 # Boolean
 @test checked_add(false) === 0
 @test checked_add(true) === 1
-@test checked_sub(false) === 0
-@test checked_sub(true) === -1
 @test checked_neg(false) === 0
 @test checked_neg(true) === -1
 @test checked_abs(true) === true
