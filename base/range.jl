@@ -425,8 +425,10 @@ function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
     end
 end
 
-length{T<:Union{Int,Int64}}(r::AbstractUnitRange{T}) =
+function length{T<:Union{Int,Int64}}(r::AbstractUnitRange{T})
+    @_inline_meta
     checked_add(checked_sub(last(r), first(r)), one(T))
+end
 length{T<:Union{Int,Int64}}(r::OneTo{T}) = T(r.stop)
 
 length{T<:Union{UInt,UInt64}}(r::AbstractUnitRange{T}) =
