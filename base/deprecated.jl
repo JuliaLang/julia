@@ -1033,4 +1033,7 @@ end))
 @deprecate_binding cycle     Iterators.cycle
 @deprecate_binding repeated  Iterators.repeated
 
+# NOTE: Deprecation of Channel{T}() is implemented in channels.jl.
+# To be removed from there when 0.6 deprecations are removed.
+
 # End deprecations scheduled for 0.6
