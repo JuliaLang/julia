@@ -2,7 +2,7 @@
 
 module Sort
 
-using Base: Order, copymutable, linearindices, linearindexing, viewindexing, LinearFast
+using Base: Order, Checked, copymutable, linearindices, linearindexing, viewindexing, LinearFast
 
 import
     Base.sort,
@@ -435,8 +435,9 @@ function sort!(v::AbstractVector;
         n = length(v)
         if n > 1
             min, max = extrema(v)
-            rangelen = max - min + 1
-            if rangelen < div(n,2)
+            (diff, o1) = sub_with_overflow(max, min)
+            (rangelen, o2) = add_with_overflow(diff, one(diff))
+            if !o1 && !o2 && rangelen < div(n,2)
                 return sort_int_range!(v, rangelen, min)
             end
         end
@@ -523,8 +524,9 @@ function sortperm(v::AbstractVector;
         n = length(v)
         if n > 1
             min, max = extrema(v)
-            rangelen = max - min + 1
-            if rangelen < div(n,2)
+            (diff, o1) = sub_with_overflow(max, min)
+            (rangelen, o2) = add_with_overflow(diff, one(diff))
+            if !o1 && !o2 && rangelen < div(n,2)
                 return sortperm_int_range(v, rangelen, min)
             end
         end
