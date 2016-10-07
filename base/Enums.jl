@@ -5,12 +5,14 @@ module Enums
 import Core.Intrinsics.box
 export Enum, @enum
 
-abstract Enum
+function basetype end
 
-Base.convert{T<:Integer}(::Type{T}, x::Enum) = convert(T, box(Int32, x))
+abstract Enum{T<:Integer}
 
-Base.write(io::IO, x::Enum) = write(io, Int32(x))
-Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Int32))
+Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = box(T, x)
+Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, box(T2, x))
+Base.write{T<:Integer}(io::IO, x::Enum{T}) = write(io, T(x))
+Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Enums.basetype(T)))
 
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
@@ -47,20 +49,26 @@ macro enum(T,syms...)
     if isempty(syms)
         throw(ArgumentError("no arguments given for Enum $T"))
     end
-    if !isa(T,Symbol)
+    basetype = Int32
+    typename = T
+    if isa(T,Expr) && T.head == :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
+        typename = T.args[1]
+        basetype = eval(current_module(),T.args[2])
+        if !isa(basetype, DataType) || !(basetype <: Integer) || !isbits(basetype)
+            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer bitstype"))
+        end
+    elseif !isa(T,Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    typename = T
     vals = Array{Tuple{Symbol,Integer}}(0)
     lo = hi = 0
-    i = Int32(-1)
+    i = zero(basetype)
     hasexpr = false
     for s in syms
         if isa(s,Symbol)
-            if i == typemax(typeof(i))
+            if i == typemin(basetype) && !isempty(vals)
                 throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
             end
-            i += one(i)
         elseif isa(s,Expr) &&
                (s.head == :(=) || s.head == :kw) &&
                length(s.args) == 2 && isa(s.args[1],Symbol)
@@ -68,7 +76,7 @@ macro enum(T,syms...)
             if !isa(i, Integer)
                 throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
             end
-            i = convert(Int32, i)
+            i = convert(basetype, i)
             s = s.args[1]
             hasexpr = true
         else
@@ -84,27 +92,29 @@ macro enum(T,syms...)
             lo = min(lo, i)
             hi = max(hi, i)
         end
+        i += one(i)
     end
-    values = Int32[i[2] for i in vals]
+    values = basetype[i[2] for i in vals]
     if hasexpr && values != unique(values)
         throw(ArgumentError("values for Enum $typename are not unique"))
     end
     blk = quote
         # enum definition
-        Base.@__doc__(bitstype 32 $(esc(T)) <: Enum)
+        Base.@__doc__(bitstype $(basetype.size * 8) $(esc(typename)) <: Enum{$(basetype)})
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
-            box($(esc(typename)), convert(Int32, x))
+            box($(esc(typename)), convert($(basetype), x))
         end
+        Enums.basetype(::Type{$(esc(typename))}) = $(esc(basetype))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
-        Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless(Int32(x), Int32(y))
+        Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless($basetype(x), $basetype(y))
         let insts = ntuple(i->$(esc(typename))($values[i]), $(length(vals)))
             Base.instances(::Type{$(esc(typename))}) = insts
         end
         function Base.print(io::IO, x::$(esc(typename)))
             for (sym, i) in $vals
-                if i == Int32(x)
+                if i == $(basetype)(x)
                     print(io, sym); break
                 end
             end
@@ -115,7 +125,7 @@ macro enum(T,syms...)
             else
                 print(io, x, "::")
                 showcompact(io, typeof(x))
-                print(io, " = ", Int(x))
+                print(io, " = ", $basetype(x))
             end
         end
         function Base.show(io::IO, t::Type{$(esc(typename))})
@@ -130,9 +140,9 @@ macro enum(T,syms...)
             end
         end
     end
-    if isa(T,Symbol)
+    if isa(typename,Symbol)
         for (sym,i) in vals
-            push!(blk.args, :(const $(esc(sym)) = $(esc(T))($i)))
+            push!(blk.args, :(const $(esc(sym)) = $(esc(typename))($i)))
         end
     end
     push!(blk.args, :nothing)
