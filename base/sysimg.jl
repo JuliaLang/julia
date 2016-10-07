@@ -127,7 +127,9 @@ include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
-include("iterator.jl")
+include("itertools.jl")
+using .IterTools: zip, enumerate
+using .IterTools: Flatten, product  # for generators
 
 # Definition of StridedArray
 typealias StridedReshapedArray{T,N,A<:DenseArray} ReshapedArray{T,N,A}

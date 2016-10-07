@@ -23,7 +23,7 @@ end
 # Create a docstring with an automatically generated list
 # of colors.
 const possible_formatting_symbols = [:normal, :bold]
-available_text_colors = collect(filter(x -> !isa(x, Integer), keys(text_colors)))
+available_text_colors = collect(IterTools.filter(x -> !isa(x, Integer), keys(text_colors)))
 available_text_colors = cat(1,
     sort(intersect(available_text_colors, possible_formatting_symbols), rev=true),
     sort(setdiff(  available_text_colors, possible_formatting_symbols)))

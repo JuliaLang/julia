@@ -23,6 +23,7 @@ export
     Docs,
     Markdown,
     Threads,
+    IterTools,
 
 # Types
     AbstractChannel,
@@ -60,7 +61,6 @@ export
     Enumerate,
     Factorization,
     FileMonitor,
-    Filter,
     FloatRange,
     Future,
     Hermitian,
@@ -123,7 +123,6 @@ export
     VersionNumber,
     WeakKeyDict,
     WorkerConfig,
-    Zip,
 
 # Ccall types
     Cchar,
@@ -958,16 +957,11 @@ export
 
 # iteration
     done,
-    enumerate,
     next,
     start,
+
+    enumerate,  # re-exported from IterTools
     zip,
-    rest,
-    countfrom,
-    take,
-    drop,
-    cycle,
-    repeated,
 
 # object identity and equality
     copy,

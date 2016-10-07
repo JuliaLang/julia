@@ -66,7 +66,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
 
     vers = Array{Tuple{String,VersionNumber,VersionNumber}}(0)
     for (p,d) in deps, vn in keys(d)
-        lvns = VersionNumber[filter(vn2->(vn2>vn), keys(d))...]
+        lvns = VersionNumber[IterTools.filter(vn2->(vn2>vn), keys(d))...]
         nvn = isempty(lvns) ? typemax(VersionNumber) : minimum(lvns)
         push!(vers, (p,vn,nvn))
     end

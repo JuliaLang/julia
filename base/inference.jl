@@ -1017,7 +1017,8 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable
 end
 
 function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv::InferenceState)
-    for a in drop(argtypes,1)
+    for i = 2:length(argtypes)
+        a = argtypes[i]
         if !(isa(a,Const) || isconstType(a,false))
             return false
         end
@@ -1053,7 +1054,7 @@ function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv:
         return false
     end
 
-    args = Any[ isa(a,Const) ? a.val : a.parameters[1] for a in drop(argtypes,1) ]
+    args = Any[ (a=argtypes[i]; isa(a,Const) ? a.val : a.parameters[1]) for i in 2:length(argtypes) ]
     try
         return abstract_eval_constant(f(args...))
     catch

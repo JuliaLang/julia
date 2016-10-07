@@ -376,10 +376,10 @@ function bslash_completions(string, pos)
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
         if startswith(s, "\\:") # emoji
-            emoji_names = filter(k -> startswith(k, s), keys(emoji_symbols))
+            emoji_names = IterTools.filter(k -> startswith(k, s), keys(emoji_symbols))
             return (true, (sort!(collect(emoji_names)), slashpos:pos, true))
         else # latex
-            latex_names = filter(k -> startswith(k, s), keys(latex_symbols))
+            latex_names = IterTools.filter(k -> startswith(k, s), keys(latex_symbols))
             return (true, (sort!(collect(latex_names)), slashpos:pos, true))
         end
     end

@@ -381,7 +381,7 @@ end
 # and ensure the value to set is either an AbstractArray or a Repeated scalar
 # before redispatching to the _unsafe_batchsetindex!
 _iterable(v::AbstractArray) = v
-_iterable(v) = repeated(v)
+_iterable(v) = IterTools.repeated(v)
 @inline function _setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, x, J::Vararg{Union{Real,AbstractArray,Colon},N})
     @boundscheck checkbounds(A, J...)
     _unsafe_setindex!(l, A, x, J...)

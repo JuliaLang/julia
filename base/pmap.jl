@@ -24,7 +24,7 @@ function pgenerate(p::WorkerPool, f, c)
         return AsyncGenerator(f, c; ntasks=()->nworkers(p))
     end
     batches = batchsplit(c, min_batch_count = length(p) * 3)
-    return flatten(AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
+    return IterTools.flatten(AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
 end
 pgenerate(p::WorkerPool, f, c1, c...) = pgenerate(p, a->f(a...), zip(c1, c...))
 pgenerate(f, c) = pgenerate(default_worker_pool(), f, c)
@@ -133,7 +133,7 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
             f = wrap_on_error(f, (x,e)->BatchProcessingError(x,e); capture_data=true)
         end
         f = wrap_batch(f, p, on_error)
-        results = collect(flatten(AsyncGenerator(f, batches; ntasks=()->nworkers(p))))
+        results = collect(IterTools.flatten(AsyncGenerator(f, batches; ntasks=()->nworkers(p))))
         if (on_error !== nothing) || (retry_n > 0)
             process_batch_errors!(p, f_orig, results, on_error, retry_on, retry_n, retry_max_delay)
         end
@@ -213,6 +213,40 @@ function process_batch_errors!(p, f, results, on_error, retry_on, retry_n, retry
     nothing
 end
 
+"""
+    head_and_tail(c, n) -> head, tail
+
+Returns `head`: the first `n` elements of `c`;
+and `tail`: an iterator over the remaining elements.
+
+```jldoctest
+julia> a = 1:10
+1:10
+
+julia> b, c = Base.head_and_tail(a, 3)
+([1,2,3],Base.IterTools.Rest{UnitRange{Int64},Int64}(1:10,4))
+
+julia> collect(c)
+7-element Array{Any,1}:
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+```
+"""
+function head_and_tail(c, n)
+    head = Vector{eltype(c)}(n)
+    s = start(c)
+    i = 0
+    while i < n && !done(c, s)
+        i += 1
+        head[i], s = next(c, s)
+    end
+    return resize!(head, i), IterTools.rest(c, s)
+end
 
 """
     batchsplit(c; min_batch_count=1, max_batch_size=100) -> iterator
@@ -231,14 +265,14 @@ function batchsplit(c; min_batch_count=1, max_batch_size=100)
     end
 
     # Split collection into batches, then peek at the first few batches
-    batches = partition(c, max_batch_size)
+    batches = IterTools.partition(c, max_batch_size)
     head, tail = head_and_tail(batches, min_batch_count)
 
     # If there are not enough batches, use a smaller batch size
     if length(head) < min_batch_count
         batch_size = max(1, div(sum(length, head), min_batch_count))
-        return partition(collect(flatten(head)), batch_size)
+        return IterTools.partition(collect(IterTools.flatten(head)), batch_size)
     end
 
-    return flatten((head, tail))
+    return IterTools.flatten((head, tail))
 end

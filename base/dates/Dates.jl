@@ -4,6 +4,8 @@ module Dates
 
 importall ..Base.Operators
 
+using Base.IterTools
+
 include("types.jl")
 include("periods.jl")
 include("accessors.jl")

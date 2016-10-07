@@ -61,7 +61,6 @@ include("reduce.jl")
 ## core structures
 include("intset.jl")
 include("dict.jl")
-include("iterator.jl")
 
 # core docsystem
 include("docs/core.jl")

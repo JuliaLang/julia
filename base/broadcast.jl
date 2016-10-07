@@ -226,7 +226,7 @@ end
             else
                 R = typejoin(eltype(B), S)
                 new = similar(B, R)
-                for II in take(iter, count)
+                for II in IterTools.take(iter, count)
                     new[II] = B[II]
                 end
                 new[I] = V

@@ -226,7 +226,7 @@ if isdefined(Core, :Inference)
     end
     function _promote_op(op, R::ANY, S::ANY)
         F = typeof(a -> op(a...))
-        G = Tuple{Generator{Zip2{Tuple{R},Tuple{S}},F}}
+        G = Tuple{Generator{IterTools.Zip2{Tuple{R},Tuple{S}},F}}
         return Core.Inference.return_type(first, G)
     end
 else
