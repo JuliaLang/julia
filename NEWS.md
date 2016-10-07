@@ -49,6 +49,10 @@ Library improvements
     One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
     For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
 
+  * Iteration utilities that wrap iterators and return other iterators (`enumerate`, `zip`, `rest`,
+    `countfrom`, `take`, `drop`, `cycle`, `repeated`, `product`, `flatten`, `partition`) have been
+    moved to the module `Base.Iterators` ([#18839]).
+
 Compiler/Runtime improvements
 -----------------------------
 

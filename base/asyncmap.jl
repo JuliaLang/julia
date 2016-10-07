@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+using Base.Iterators.Enumerate
 
 """
     AsyncCollector(f, results, c...; ntasks=0) -> iterator
