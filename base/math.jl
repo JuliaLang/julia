@@ -204,16 +204,19 @@ end
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
 
 """
-    cbrt(x)
+    cbrt(x::Real)
 
-Return ``x^{1/3}``.  The prefix operator `∛` is equivalent to `cbrt`.
+Return the cube root of `x`, i.e. ``x^{1/3}``. Negative values are accepted
+(returning the negative real root when ``x < 0``).
+
+The prefix operator `∛` is equivalent to `cbrt`.
 
 ```jldoctest
 julia> cbrt(big(27))
 3.000000000000000000000000000000000000000000000000000000000000000000000000000000
 ```
 """
-cbrt(x::AbstractFloat) = x^(1//3)
+cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
 
 """
     exp2(x)
@@ -611,6 +614,7 @@ for func in (:atan2,:hypot)
 end
 
 ldexp(a::Float16, b::Integer) = Float16(ldexp(Float32(a), b))
+cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
 include("special/trig.jl")
