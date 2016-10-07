@@ -120,10 +120,8 @@ julia> isnull(x)
 false
 ```
 """
-isnull(x::Nullable) = x.isnull
-isnull(x) = false
-
 isnull(x::Nullable) = !x.hasvalue
+isnull(x) = false
 
 ## Operators
 
