@@ -156,7 +156,7 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
         end
         mod = parent
     end
-    return isexported(mod, name) && isdefined(mod, name) && getfield(mod, name) === orig
+    return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
 end
 
 function show(io::IO, f::Function)
