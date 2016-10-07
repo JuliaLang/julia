@@ -1364,6 +1364,24 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
+.. function:: Base.add_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x+y``\ , with the flag ``f`` indicating whether overflow has occurred.
+
+.. function:: Base.sub_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x-y``\ , with the flag ``f`` indicating whether overflow has occurred.
+
+.. function:: Base.mul_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x*y``\ , with the flag ``f`` indicating whether overflow has occurred.
+
 .. function:: abs2(x)
 
    .. Docstring generated from Julia source
