@@ -137,7 +137,7 @@ Mathematical Operators
         1  2
         3  4
 
-       julia> A . [1 2]
+       julia> A .\ [1 2]
        2×2 Array{Float64,2}:
         1.0       1.0
         0.333333  0.5
