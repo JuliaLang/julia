@@ -118,10 +118,23 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Example:
 
-   .. code-block:: julia
+   .. doctest::
 
-       A = diagm(rand(5)) + diagm(rand(4),1); #A is really bidiagonal
-       factorize(A) #factorize will check to see that A is already factorized
+       julia> A = Bidiagonal(ones(5, 5), true) #A is really bidiagonal
+       5×5 Bidiagonal{Float64}:
+        1.0  1.0   ⋅    ⋅    ⋅
+         ⋅   1.0  1.0   ⋅    ⋅
+         ⋅    ⋅   1.0  1.0   ⋅
+         ⋅    ⋅    ⋅   1.0  1.0
+         ⋅    ⋅    ⋅    ⋅   1.0
+
+       julia> factorize(A) #factorize will check to see that A is already factorized
+       5×5 Bidiagonal{Float64}:
+        1.0  1.0   ⋅    ⋅    ⋅
+         ⋅   1.0  1.0   ⋅    ⋅
+         ⋅    ⋅   1.0  1.0   ⋅
+         ⋅    ⋅    ⋅   1.0  1.0
+         ⋅    ⋅    ⋅    ⋅   1.0
 
    This returns a ``5×5 Bidiagonal{Float64}``\ , which can now be passed to other linear algebra functions (e.g. eigensolvers) which will use specialized methods for ``Bidiagonal`` types.
 
@@ -177,12 +190,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       dv = rand(5)
-       ev = rand(4)
-       Bu = Bidiagonal(dv, ev, true) #e is on the first superdiagonal
-       Bl = Bidiagonal(dv, ev, false) #e is on the first subdiagonal
+       julia> dv = [1; 2; 3; 4]
+       4-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+
+       julia> ev = [7; 8; 9]
+       3-element Array{Int64,1}:
+        7
+        8
+        9
+
+        julia> Bu = Bidiagonal(dv, ev, true) #e is on the first superdiagonal
+        4×4 Bidiagonal{Int64}:
+         1  7  ⋅  ⋅
+         ⋅  2  8  ⋅
+         ⋅  ⋅  3  9
+         ⋅  ⋅  ⋅  4
+
+        julia> Bl = Bidiagonal(dv, ev, false) #e is on the first subdiagonal
+        4×4 Bidiagonal{Int64}:
+         1  ⋅  ⋅  ⋅
+         7  2  ⋅  ⋅
+         ⋅  8  3  ⋅
+         ⋅  ⋅  9  4
 
 .. function:: Bidiagonal(dv, ev, uplo::Char)
 
@@ -192,12 +227,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       dv = rand(5)
-       ev = rand(4)
-       Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal
-       Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal
+       julia> dv = [1; 2; 3; 4]
+       4-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+
+       julia> ev = [7; 8; 9]
+       3-element Array{Int64,1}:
+        7
+        8
+        9
+
+       julia> Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal
+       4×4 Bidiagonal{Int64}:
+        1  7  ⋅  ⋅
+        ⋅  2  8  ⋅
+        ⋅  ⋅  3  9
+        ⋅  ⋅  ⋅  4
+
+       julia> Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal
+       4×4 Bidiagonal{Int64}:
+        1  ⋅  ⋅  ⋅
+        7  2  ⋅  ⋅
+        ⋅  8  3  ⋅
+        ⋅  ⋅  9  4
 
 .. function:: Bidiagonal(A, isupper::Bool)
 
@@ -207,11 +264,28 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       A = rand(5,5)
-       Bu = Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A
-       Bl = Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A
+       julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
+       4×4 Array{Int64,2}:
+        1  1  1  1
+        2  2  2  2
+        3  3  3  3
+        4  4  4  4
+
+       julia> Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A
+       4×4 Bidiagonal{Int64}:
+        1  1  ⋅  ⋅
+        ⋅  2  2  ⋅
+        ⋅  ⋅  3  3
+        ⋅  ⋅  ⋅  4
+
+       julia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A
+       4×4 Bidiagonal{Int64}:
+        1  ⋅  ⋅  ⋅
+        2  2  ⋅  ⋅
+        ⋅  3  3  ⋅
+        ⋅  ⋅  4  4
 
 .. function:: SymTridiagonal(dv, ev)
 
@@ -283,12 +357,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       A = randn(10,10)
-       Supper = Symmetric(A)
-       Slower = Symmetric(A,:L)
-       eigfact(Supper)
+       julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
+       5×5 Array{Int64,2}:
+        1  0  2  0  3
+        0  4  0  5  0
+        6  0  7  0  8
+        0  9  0  1  0
+        2  0  3  0  4
+
+       julia> Supper = Symmetric(A)
+       5×5 Symmetric{Int64,Array{Int64,2}}:
+        1  0  2  0  3
+        0  4  0  5  0
+        2  0  7  0  8
+        0  5  0  1  0
+        3  0  8  0  4
+
+       julia> Slower = Symmetric(A, :L)
+       5×5 Symmetric{Int64,Array{Int64,2}}:
+        1  0  6  0  2
+        0  4  0  9  0
+        6  0  7  0  3
+        0  9  0  1  0
+        2  0  3  0  4
+
+       julia> eigfact(Supper)
+       Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-2.72015,0.440875,7.72015,14.526],[-0.302016 -2.22045e-16 … 1.11022e-16 0.248524; -6.67755e-16 0.596931 … -0.802293 1.93069e-17; … ; 8.88178e-16 -0.802293 … -0.596931 0.0; 0.772108 8.93933e-16 … 0.0 0.630015])
 
    ``eigfact`` will use a method specialized for matrices known to be symmetric. Note that ``Supper`` will not be equal to ``Slower`` unless ``A`` is itself symmetric (e.g. if ``A == A.'``\ ).
 
@@ -300,12 +396,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       A = randn(10,10)
-       Hupper = Hermitian(A)
-       Hlower = Hermitian(A,:L)
-       eigfact(Hupper)
+       julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
+       5×5 Array{Int64,2}:
+        1  0  2  0  3
+        0  4  0  5  0
+        6  0  7  0  8
+        0  9  0  1  0
+        2  0  3  0  4
+
+       julia> Hupper = Hermitian(A)
+       5×5 Hermitian{Int64,Array{Int64,2}}:
+        1  0  2  0  3
+        0  4  0  5  0
+        2  0  7  0  8
+        0  5  0  1  0
+        3  0  8  0  4
+
+       julia> Hlower = Hermitian(A, :L)
+       5×5 Hermitian{Int64,Array{Int64,2}}:
+        1  0  6  0  2
+        0  4  0  9  0
+        6  0  7  0  3
+        0  9  0  1  0
+        2  0  3  0  4
+
+       julia> eigfact(Hupper)
+       Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-2.72015,0.440875,7.72015,14.526],[-0.302016 -2.22045e-16 … 1.11022e-16 0.248524; -6.67755e-16 0.596931 … -0.802293 1.93069e-17; … ; 8.88178e-16 -0.802293 … -0.596931 0.0; 0.772108 8.93933e-16 … 0.0 0.630015])
 
    ``eigfact`` will use a method specialized for matrices known to be Hermitian. Note that ``Hupper`` will not be equal to ``Hlower`` unless ``A`` is itself Hermitian (e.g. if ``A == A'``\ ).
 

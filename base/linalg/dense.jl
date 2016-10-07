@@ -505,9 +505,22 @@ If `factorize` is called on a Hermitian positive-definite matrix, for instance, 
 will return a Cholesky factorization.
 
 Example:
-```julia
-A = diagm(rand(5)) + diagm(rand(4),1); #A is really bidiagonal
-factorize(A) #factorize will check to see that A is already factorized
+```jldoctest
+julia> A = Bidiagonal(ones(5, 5), true) #A is really bidiagonal
+5×5 Bidiagonal{Float64}:
+ 1.0  1.0   ⋅    ⋅    ⋅
+  ⋅   1.0  1.0   ⋅    ⋅
+  ⋅    ⋅   1.0  1.0   ⋅
+  ⋅    ⋅    ⋅   1.0  1.0
+  ⋅    ⋅    ⋅    ⋅   1.0
+
+julia> factorize(A) #factorize will check to see that A is already factorized
+5×5 Bidiagonal{Float64}:
+ 1.0  1.0   ⋅    ⋅    ⋅
+  ⋅   1.0  1.0   ⋅    ⋅
+  ⋅    ⋅   1.0  1.0   ⋅
+  ⋅    ⋅    ⋅   1.0  1.0
+  ⋅    ⋅    ⋅    ⋅   1.0
 ```
 This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
 (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
