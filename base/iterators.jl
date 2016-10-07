@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module Iterators
+
+import Base: start, done, next, isempty, length, size, eltype, iteratorsize, iteratoreltype, indices, ndims
+
+using Base: tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo
+
+export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+
 _min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
 _min_length(a, b, A, ::IsInfinite) = length(a)
 _min_length(a, b, ::IsInfinite, B) = length(b)
@@ -9,6 +17,14 @@ _diff_length(a, b, A, ::IsInfinite) = 0
 _diff_length(a, b, ::IsInfinite, ::IsInfinite) = 0
 _diff_length(a, b, ::IsInfinite, B) = length(a) # inherit behaviour, error
 _diff_length(a, b, A, B) = max(length(a)-length(b), 0)
+
+and_iteratorsize{T}(isz::T, ::T) = isz
+and_iteratorsize(::HasLength, ::HasShape) = HasLength()
+and_iteratorsize(::HasShape, ::HasLength) = HasLength()
+and_iteratorsize(a, b) = SizeUnknown()
+
+and_iteratoreltype{T}(iel::T, ::T) = iel
+and_iteratoreltype(a, b) = EltypeUnknown()
 
 # enumerate
 
@@ -236,42 +252,6 @@ iteratoreltype{I,S}(::Type{Rest{I,S}}) = iteratoreltype(I)
 rest_iteratorsize(a) = SizeUnknown()
 rest_iteratorsize(::IsInfinite) = IsInfinite()
 iteratorsize{I,S}(::Type{Rest{I,S}}) = rest_iteratorsize(iteratorsize(I))
-
-
-"""
-    head_and_tail(c, n) -> head, tail
-
-Returns `head`: the first `n` elements of `c`;
-and `tail`: an iterator over the remaining elements.
-
-```jldoctest
-julia> a = 1:10
-1:10
-
-julia> b, c = Base.head_and_tail(a, 3)
-([1,2,3],Base.Rest{UnitRange{Int64},Int64}(1:10,4))
-
-julia> collect(c)
-7-element Array{Any,1}:
-  4
-  5
-  6
-  7
-  8
-  9
- 10
-```
-"""
-function head_and_tail(c, n)
-    head = Vector{eltype(c)}(n)
-    s = start(c)
-    i = 0
-    while i < n && !done(c, s)
-        i += 1
-        head[i], s = next(c, s)
-    end
-    return resize!(head, i), rest(c, s)
-end
 
 
 # Count -- infinite counting
@@ -677,7 +657,7 @@ end
 
 
 """
-    partition(collection, n) -> iterator
+    partition(collection, n)
 
 Iterate over a collection `n` elements at a time.
 
@@ -722,4 +702,6 @@ function next(itr::PartitionIterator, state)
         v[i], state = next(itr.c, state)
     end
     return resize!(v, i), state
+end
+
 end
