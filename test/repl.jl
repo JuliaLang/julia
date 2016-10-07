@@ -532,3 +532,13 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     @test readstring(outs) == "1\n"
 end
 end # let exename
+
+# Test containers in error messages are limited #18726
+let io = IOBuffer()
+    REPL.display_error(io,
+        try [][trues(6000)]
+        catch e
+            e
+        end, [])
+    @test length(takebuf_string(io)) < 1500
+end
