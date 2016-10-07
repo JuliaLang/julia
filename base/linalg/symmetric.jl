@@ -12,11 +12,33 @@ Construct a `Symmetric` matrix from the upper (if `uplo = :U`) or lower (if `upl
 
 **Example**
 
-```julia
-A = randn(10,10)
-Supper = Symmetric(A)
-Slower = Symmetric(A,:L)
-eigfact(Supper)
+```jldoctest
+julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
+5×5 Array{Int64,2}:
+ 1  0  2  0  3
+ 0  4  0  5  0
+ 6  0  7  0  8
+ 0  9  0  1  0
+ 2  0  3  0  4
+
+julia> Supper = Symmetric(A)
+5×5 Symmetric{Int64,Array{Int64,2}}:
+ 1  0  2  0  3
+ 0  4  0  5  0
+ 2  0  7  0  8
+ 0  5  0  1  0
+ 3  0  8  0  4
+
+julia> Slower = Symmetric(A, :L)
+5×5 Symmetric{Int64,Array{Int64,2}}:
+ 1  0  6  0  2
+ 0  4  0  9  0
+ 6  0  7  0  3
+ 0  9  0  1  0
+ 2  0  3  0  4
+
+julia> eigfact(Supper)
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-2.72015,0.440875,7.72015,14.526],[-0.302016 -2.22045e-16 … 1.11022e-16 0.248524; -6.67755e-16 0.596931 … -0.802293 1.93069e-17; … ; 8.88178e-16 -0.802293 … -0.596931 0.0; 0.772108 8.93933e-16 … 0.0 0.630015])
 ```
 
 `eigfact` will use a method specialized for matrices known to be symmetric.
@@ -34,11 +56,33 @@ Construct a `Hermitian` matrix from the upper (if `uplo = :U`) or lower (if `upl
 
 **Example**
 
-```julia
-A = randn(10,10)
-Hupper = Hermitian(A)
-Hlower = Hermitian(A,:L)
-eigfact(Hupper)
+```jldoctest
+julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
+5×5 Array{Int64,2}:
+ 1  0  2  0  3
+ 0  4  0  5  0
+ 6  0  7  0  8
+ 0  9  0  1  0
+ 2  0  3  0  4
+
+julia> Hupper = Hermitian(A)
+5×5 Hermitian{Int64,Array{Int64,2}}:
+ 1  0  2  0  3
+ 0  4  0  5  0
+ 2  0  7  0  8
+ 0  5  0  1  0
+ 3  0  8  0  4
+
+julia> Hlower = Hermitian(A, :L)
+5×5 Hermitian{Int64,Array{Int64,2}}:
+ 1  0  6  0  2
+ 0  4  0  9  0
+ 6  0  7  0  3
+ 0  9  0  1  0
+ 2  0  3  0  4
+
+julia> eigfact(Hupper)
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-2.72015,0.440875,7.72015,14.526],[-0.302016 -2.22045e-16 … 1.11022e-16 0.248524; -6.67755e-16 0.596931 … -0.802293 1.93069e-17; … ; 8.88178e-16 -0.802293 … -0.596931 0.0; 0.772108 8.93933e-16 … 0.0 0.630015])
 ```
 
 `eigfact` will use a method specialized for matrices known to be Hermitian.
