@@ -1508,9 +1508,8 @@ default value as a second argument to :func:`get`:
     julia> get(Nullable(1.0), 0.0)
     1.0
 
-Note that this default value will automatically be converted to the type of
-the :obj:`Nullable` object that you attempt to access using the :func:`get` function.
-For example, in the code shown above the value ``0`` would be automatically
-converted to a :class:`Float64` value before being returned. The presence of default
-replacement values makes it easy to use the :func:`get` function to write
-type-stable code that interacts with sources of potentially missing values.
+.. tip::
+
+    Make sure the type of the default value passed to :func:`get` and that of the
+    :obj:`Nullable` object match to avoid type instability, which could hurt
+    performance. Use :func:`convert` manually if needed.
