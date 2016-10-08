@@ -124,7 +124,7 @@ end
     end
 end
 
-@testset "Sparse matrix * bitArray" begin
+@testset "Sparse matrix * BitArray" begin
     A = sprand(5,5,0.2)
     B = trues(5)
     @test A*B ≈ full(A)*B
@@ -322,7 +322,7 @@ end
     @test full(conj!(copy(cA))) == conj(full(cA))
 end
 
-@testset "SparseMatrixCSC transpose[!] and permute[!]" begin
+@testset "SparseMatrixCSC [c]transpose[!] and permute[!]" begin
     let smalldim = 5, largedim = 10, nzprob = 0.4
         (m, n) = (smalldim, smalldim)
         A = sprand(m, n, nzprob)
@@ -330,7 +330,7 @@ end
         C = transpose(A)
         p = randperm(m)
         q = randperm(n)
-        @testset "transpose[!] error checking" begin
+        @testset "ftranspose[!] error checking" begin
             @test_throws DimensionMismatch transpose!(A[:, 1:(smalldim - 1)], A)
             @test_throws DimensionMismatch transpose!(A[1:(smalldim - 1), 1], A)
             @test_throws ArgumentError transpose!((B = similar(A); resize!(B.rowval, nnz(A) - 1); B), A)
@@ -485,6 +485,7 @@ end
         @test 4 <= mean(sprb45nnzs) <= 16
     end
 
+    # issue #5853, sparse diff
     @testset "Issue #5853" begin
         for i=1:2, a=Any[[1 2 3], [1 2 3]', eye(3)]
             @test all(diff(sparse(a),i) == diff(a,i))
@@ -605,11 +606,13 @@ end
         @test norm(full(B) - full(S)) == 0.0
     end
 
+    # Test error path if triplet vectors are not all the same length
     @testset "Issue #12177" begin
         @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
         @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
     end
 
+    # Issue 12118: sparse matrices are closed under +, -, min, max
     @testset "Issue #12118" begin
         let
             A12118 = sparse([1,2,3,4,5], [1,2,3,4,5], [1,2,3,4,5])
@@ -728,6 +731,8 @@ end
         @test which(\, (SparseMatrixCSC, AbstractVecOrMat)).module == Base.SparseArrays
     end
 
+    # Check that `broadcast` methods specialized for unary operations over
+    # `SparseMatrixCSC`s are called. (Issue #18705.)
     @testset "Issue #18705" begin
         let
             A = spdiagm(1.0:5.0)
@@ -778,7 +783,7 @@ end
     end
 end
 
-@testset "Getindex" begin
+@testset "getindex" begin
     ni = 23
     nj = 32
     a116 = reshape(1:(ni*nj), ni, nj)
@@ -869,9 +874,7 @@ end
     # end
 end
 
-
-# setindex tests
-@testset "Setindex" begin
+@testset "setindex" begin
     let a = spzeros(Int, 10, 10)
         @test countnz(a) == 0
         a[1,:] = 1
@@ -1059,7 +1062,7 @@ end
     end
 end
 
-@testset "Dropstored!" begin
+@testset "dropstored!" begin
     let A = spzeros(Int, 10, 10)
         # Introduce nonzeros in row and column two
         A[1,:] = 1
@@ -1164,22 +1167,22 @@ end
     @test size(rotl90(a)) == (5,3)
 end
 
-@testset "Get Index Algs" begin
-    function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int)
-        # Sorted vectors for indexing rows.
-        # Similar to getindex_general but without the transpose trick.
-        (m, n) = size(A)
-        !isempty(I) && ((I[1] < 1) || (I[end] > m)) && BoundsError()
-        if !isempty(J)
-            minj, maxj = extrema(J)
-            ((minj < 1) || (maxj > n)) && BoundsError()
-        end
-
-        (alg == 0) ? Base.SparseArrays.getindex_I_sorted_bsearch_A(A, I, J) :
-        (alg == 1) ? Base.SparseArrays.getindex_I_sorted_bsearch_I(A, I, J) :
-        Base.SparseArrays.getindex_I_sorted_linear(A, I, J)
+function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int)
+    # Sorted vectors for indexing rows.
+    # Similar to getindex_general but without the transpose trick.
+    (m, n) = size(A)
+    !isempty(I) && ((I[1] < 1) || (I[end] > m)) && BoundsError()
+    if !isempty(J)
+        minj, maxj = extrema(J)
+        ((minj < 1) || (maxj > n)) && BoundsError()
     end
 
+    (alg == 0) ? Base.SparseArrays.getindex_I_sorted_bsearch_A(A, I, J) :
+    (alg == 1) ? Base.SparseArrays.getindex_I_sorted_bsearch_I(A, I, J) :
+    Base.SparseArrays.getindex_I_sorted_linear(A, I, J)
+end
+
+@testset "test_get_index_algs" begin
     let M=2^14, N=2^4
         Irand = randperm(M)
         Jrand = randperm(N)
@@ -1278,7 +1281,7 @@ end
 end
 
 # Test that sparse / sparsevec constructors work for AbstractMatrix subtypes
-@testset "Sparse / Sparsevec AbstractMatrix constructors" begin
+@testset "sparse / sparsevec AbstractMatrix constructors" begin
     let D = Diagonal(ones(10,10)),
         sm = sparse(D),
         sv = sparsevec(D)
@@ -1299,7 +1302,7 @@ end
     end
 end
 
-@testset "Spdiagm promotion" begin
+@testset "spdiagm promotion" begin
     @test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
 end
 
@@ -1392,7 +1395,7 @@ end
     @test_throws ArgumentError squeeze(A,(1,1))
 end
 
-@testset "Similar checks with type conversion" begin
+@testset "similar checks with type conversion" begin
     A = speye(5)
     @test size(similar(A,Complex128,Int)) == (5,5)
     @test typeof(similar(A,Complex128,Int)) == SparseMatrixCSC{Complex128,Int}
@@ -1402,27 +1405,27 @@ end
     @test convert(Matrix,A) == full(A)
 end
 
-@testset "Float" begin
+@testset "float" begin
     A = sprand(Bool, 5,5,0.0)
     @test eltype(float(A)) == Float64  # issue #11658
     A = sprand(Bool, 5,5,0.2)
     @test float(A) == float(full(A))
 end
 
-@testset "Sparsevec" begin
+@testset "sparsevec" begin
     A = sparse(ones(5,5))
     @test all(full(sparsevec(A)) .== ones(25))
     @test all(full(sparsevec([1:5;],1)) .== ones(5))
     @test_throws ArgumentError sparsevec([1:5;], [1:4;])
 end
 
-@testset "Sparse" begin
+@testset "sparse" begin
     A = sparse(ones(5,5))
     @test sparse(A) == A
     @test sparse([1:5;],[1:5;],1) == speye(5)
 end
 
-@testset "Speye and one" begin
+@testset "speye and one" begin
     A = sparse(ones(5,5))
     @test speye(A) == speye(5)
     @test eye(A) == speye(5)
@@ -1446,7 +1449,7 @@ end
     @test isequal(Base.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1,1,Int[1,1],Int[],Int[]))
 end
 
-@testset "Dropzeros[!]" begin
+@testset "dropzeros[!]" begin
     let smalldim = 5, largedim = 10, nzprob = 0.4, targetnumposzeros = 5, targetnumnegzeros = 5
         for (m, n) in ((largedim, largedim), (smalldim, largedim), (largedim, smalldim))
             A = sprand(m, n, nzprob)
@@ -1486,19 +1489,19 @@ end
     end
 end
 
-@testset "Trace" begin
+@testset "trace" begin
     @test_throws DimensionMismatch trace(sparse(ones(5,6)))
     @test trace(speye(5)) == 5
 end
 
-@testset "Diagm" begin
+@testset "diagm" begin
     @test_throws DimensionMismatch diagm(sparse(ones(5,2)))
     @test_throws DimensionMismatch diagm(sparse(ones(2,5)))
     @test diagm(sparse(ones(1,5))) == speye(5)
     @test diagm(sparse(ones(5,1))) == speye(5)
 end
 
-@testset "Expandptr" begin
+@testset "expandptr" begin
     A = speye(5)
     @test Base.SparseArrays.expandptr(A.colptr) == collect(1:5)
     A[1,2] = 1
@@ -1526,7 +1529,7 @@ end
     @test isequal(length(tril!(sparse([1,2,3], [1,2,3], [1,2,3], 3, 4), -1).rowval), 0)
 end
 
-@testset "Norm" begin
+@testset "norm" begin
     A = sparse(Int[],Int[],Float64[],0,0)
     @test norm(A) == zero(eltype(A))
     A = sparse([1.0])
@@ -1621,7 +1624,7 @@ end
     @test sparse([1,1,0])!=sparse([0,1,1])
 end
 
-@testset "Uniform Scaling" begin
+@testset "UniformScaling" begin
     A = sprandn(10,10,0.5)
     @test A + I == full(A) + I
     @test I + A == I + full(A)
@@ -1688,7 +1691,7 @@ end
     @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
 end
 
-@testset "Issparse" begin
+@testset "issparse" begin
     let
         m = sprand(10, 10, 0.1)
         @test issparse(Symmetric(m))
