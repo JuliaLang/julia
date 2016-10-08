@@ -108,7 +108,7 @@ function lgamma(z::Complex{Float64})
                                -2.2315475845357937976132853e-04,9.9457512781808533714662972e-05,
                                -4.4926236738133141700224489e-05,2.0507212775670691553131246e-05)
     end
-    # use recurrence relation lgamma(z) = lgamma(z+1) - log(z )
+    # use recurrence relation lgamma(z) = lgamma(z+1) - log(z)
     # to shift to x > 7 for asymptotic series
     shiftprod = Complex(x,yabs)
     x += 1
