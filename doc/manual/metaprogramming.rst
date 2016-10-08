@@ -1051,23 +1051,23 @@ it must respect all of the limitations of that code.
 
 Some operations that should not be attempted include:
 
-  1. Caching of native pointers.
+1. Caching of native pointers.
 
-  2. Interacting with the contents or methods of Core.Inference in any way.
+2. Interacting with the contents or methods of Core.Inference in any way.
 
-  3. Observing any mutable state.
+3. Observing any mutable state.
 
-     - Inference on the generated function may be run at *any* time,
-       including while your code is attempting to observe or mutate this state.
+   - Inference on the generated function may be run at *any* time,
+     including while your code is attempting to observe or mutate this state.
 
-  4. Taking any locks: C code you call out to may use locks internally,
-     (for example, it is not problematic to call ``malloc``,
-     even though most implementations require locks internally)
-     but don't attempt to hold or acquire any while executing Julia code.
+4. Taking any locks: C code you call out to may use locks internally,
+   (for example, it is not problematic to call ``malloc``,
+   even though most implementations require locks internally)
+   but don't attempt to hold or acquire any while executing Julia code.
 
-  5. Calling any function that is defined after the body of the generated function.
-     This condition is relaxed for incrementally-loaded precompiled modules to
-     allow calling any function in the module.
+5. Calling any function that is defined after the body of the generated function.
+   This condition is relaxed for incrementally-loaded precompiled modules to
+   allow calling any function in the module.
 
 Alright, now that we have a better understanding of how generated functions
 work, let's use them to build some more advanced (and valid) functionality...
