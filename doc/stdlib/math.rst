@@ -137,7 +137,7 @@ Mathematical Operators
         1  2
         3  4
 
-       julia> A . [1 2]
+       julia> A .\ [1 2]
        2×2 Array{Float64,2}:
         1.0       1.0
         0.333333  0.5
@@ -1363,6 +1363,24 @@ Mathematical Functions
    Calculates ``cld(x,y)``\ , checking for overflow errors where applicable.
 
    The overflow protection may impose a perceptible performance penalty.
+
+.. function:: Base.add_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x+y``\ , with the flag ``f`` indicating whether overflow has occurred.
+
+.. function:: Base.sub_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x-y``\ , with the flag ``f`` indicating whether overflow has occurred.
+
+.. function:: Base.mul_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x*y``\ , with the flag ``f`` indicating whether overflow has occurred.
 
 .. function:: abs2(x)
 
