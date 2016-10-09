@@ -273,6 +273,7 @@ typedef struct _jl_method_instance_t {
     jl_value_t *rettype; // return type for fptr
     jl_svec_t *sparam_vals; // the values for the tvars, indexed by def->sparam_syms
     jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == 2, or null
+    jl_value_t *inferred_const; // inferred constant return value, or null
     jl_method_t *def; // method this is specialized from, null if this is a toplevel thunk
     uint8_t inInference; // flags to tell if inference is running on this function
     uint8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
