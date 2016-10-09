@@ -90,7 +90,7 @@ start(x::Number) = false
 next(x::Number, state) = (x, true)
 done(x::Number, state) = state
 isempty(x::Number) = false
-in(x::Number, y::Number) = x == y
+in(x::Number, y::Number) = isequal(x, y)
 
 map(f, x::Number, ys::Number...) = f(x, ys...)
 

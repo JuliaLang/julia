@@ -27,7 +27,7 @@ start(c::Char) = false
 next(c::Char, state) = (c, true)
 done(c::Char, state) = state
 isempty(c::Char) = false
-in(x::Char, y::Char) = x == y
+in(x::Char, y::Char) = isequal(x, y)
 
 ==(x::Char, y::Char) = UInt32(x) == UInt32(y)
 isless(x::Char, y::Char) = UInt32(x) < UInt32(y)
