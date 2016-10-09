@@ -26,7 +26,7 @@ type AsyncCollector
 end
 
 function AsyncCollector(f, results, c...; ntasks=0)
-    if ntasks == 0
+    if isa(ntasks, Integer) && ntasks == 0
         ntasks = max(nworkers(), 100)
         max_tasks = ()->ntasks
     elseif isa(ntasks, Integer)

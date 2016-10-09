@@ -407,7 +407,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     ft = typeof(f)
     lines = []
     # These functions are special cased to only show if first argument is matched.
-    special = f in [convert, getindex, setindex!]
+    special = isa(f, Function) && f in [convert, getindex, setindex!]
     funcs = Any[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.

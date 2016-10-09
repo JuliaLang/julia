@@ -151,7 +151,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
                 end
             end
             char = read(stream, Char)
-            char == match && (count += 1)
+            isequal(char, match) && (count += 1)
             !newlines && char == '\n' && break
             write(buffer, char)
         end

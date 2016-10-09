@@ -81,9 +81,9 @@ const FILE_MAP_READ          = DWORD(0x04)
 const FILE_MAP_EXECUTE       = DWORD(0x20)
 
 function gethandle(io::IO)
-    handle = Libc._get_osfhandle(RawFD(fd(io))).handle
+    handle = Int(Libc._get_osfhandle(RawFD(fd(io))).handle)
     systemerror("could not get handle for file to map: $(Libc.FormatMessage())", handle == -1)
-    return Int(handle)
+    return handle
 end
 
 settings(sh::Anonymous) = sh.name, sh.readonly, sh.create
