@@ -1219,8 +1219,11 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t *li)
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;
                 li->inferred = def->unspecialized->inferred;
-                li->jlcall_api = 2;
                 jl_gc_wb(li, li->inferred);
+                li->inferred_const = def->unspecialized->inferred_const;
+                if (li->inferred_const)
+                    jl_gc_wb(li, li->inferred_const);
+                li->jlcall_api = 2;
                 return li->functionObjectsDecls;
             }
             if (def->unspecialized->fptr) {

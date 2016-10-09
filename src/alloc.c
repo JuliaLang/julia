@@ -404,8 +404,9 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_method_instance_t *li =
         (jl_method_instance_t*)jl_gc_alloc(ptls, sizeof(jl_method_instance_t),
-                                       jl_method_instance_type);
+                                           jl_method_instance_type);
     li->inferred = NULL;
+    li->inferred_const = NULL;
     li->rettype = (jl_value_t*)jl_any_type;
     li->sparam_vals = jl_emptysvec;
     li->fptr = NULL;
