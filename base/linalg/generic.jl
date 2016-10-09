@@ -576,18 +576,11 @@ dot(x::Number, y::Number) = vecdot(x, y)
 Compute the dot product. For complex vectors, the first vector is conjugated.
 
 ```jldoctest
-julia> a = [1; 1]
-2-element Array{Int64,1}:
- 1
- 1
-
-julia> b = [2; 3]
-2-element Array{Int64,1}:
- 2
- 3
-
-julia> dot(a, b)
+julia> dot([1; 1], [2; 3])
 5
+
+julia> dot([im; im], [1; 1])
+0 - 2im
 ```
 """
 dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)

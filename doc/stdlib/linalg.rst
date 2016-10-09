@@ -38,18 +38,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. doctest::
 
-       julia> a = [1; 1]
-       2-element Array{Int64,1}:
-        1
-        1
-
-       julia> b = [2; 3]
-       2-element Array{Int64,1}:
-        2
-        3
-
-       julia> dot(a, b)
+       julia> dot([1; 1], [2; 3])
        5
+
+       julia> dot([im; im], [1; 1])
+       0 - 2im
 
 .. function:: vecdot(x, y)
 
@@ -116,19 +109,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    If ``factorize`` is called on a Hermitian positive-definite matrix, for instance, then ``factorize`` will return a Cholesky factorization.
 
-   Example:
-
    .. doctest::
 
-       julia> A = Bidiagonal(ones(5, 5), true) #A is really bidiagonal
-       5×5 Bidiagonal{Float64}:
-        1.0  1.0   ⋅    ⋅    ⋅
-         ⋅   1.0  1.0   ⋅    ⋅
-         ⋅    ⋅   1.0  1.0   ⋅
-         ⋅    ⋅    ⋅   1.0  1.0
-         ⋅    ⋅    ⋅    ⋅   1.0
+       julia> A = Array(Bidiagonal(ones(5, 5), true))
+       5×5 Array{Float64,2}:
+        1.0  1.0  0.0  0.0  0.0
+        0.0  1.0  1.0  0.0  0.0
+        0.0  0.0  1.0  1.0  0.0
+        0.0  0.0  0.0  1.0  1.0
+        0.0  0.0  0.0  0.0  1.0
 
-       julia> factorize(A) #factorize will check to see that A is already factorized
+       julia> factorize(A) # factorize will check to see that A is already factorized
        5×5 Bidiagonal{Float64}:
         1.0  1.0   ⋅    ⋅    ⋅
          ⋅   1.0  1.0   ⋅    ⋅
@@ -205,14 +196,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
         8
         9
 
-        julia> Bu = Bidiagonal(dv, ev, true) #e is on the first superdiagonal
+        julia> Bu = Bidiagonal(dv, ev, true) # ev is on the first superdiagonal
         4×4 Bidiagonal{Int64}:
          1  7  ⋅  ⋅
          ⋅  2  8  ⋅
          ⋅  ⋅  3  9
          ⋅  ⋅  ⋅  4
 
-        julia> Bl = Bidiagonal(dv, ev, false) #e is on the first subdiagonal
+        julia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal
         4×4 Bidiagonal{Int64}:
          1  ⋅  ⋅  ⋅
          7  2  ⋅  ⋅
@@ -1773,22 +1764,22 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. doctest::
 
-       julia> A = [1 2; 1 0]
+       julia> A = [1 2; 3 4]
        2×2 Array{Int64,2}:
         1  2
-        1  0
+        3  4
 
-       julia> B = [2 0; 0 1]
+       julia> B = [1 1; 1 1]
        2×2 Array{Int64,2}:
-        2  0
-        0  1
+        1  1
+        1  1
 
        julia> kron(A, B)
        4×4 Array{Int64,2}:
-        2  0  4  0
-        0  1  0  2
-        2  0  0  0
-        0  1  0  0
+        1  1  2  2
+        1  1  2  2
+        3  3  4  4
+        3  3  4  4
 
 .. function:: blkdiag(A...)
 

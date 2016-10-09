@@ -213,22 +213,22 @@ end
 Kronecker tensor product of two vectors or two matrices.
 
 ```jldoctest
-julia> A = [1 2; 1 0]
+julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
- 1  0
+ 3  4
 
-julia> B = [2 0; 0 1]
+julia> B = [1 1; 1 1]
 2×2 Array{Int64,2}:
- 2  0
- 0  1
+ 1  1
+ 1  1
 
 julia> kron(A, B)
 4×4 Array{Int64,2}:
- 2  0  4  0
- 0  1  0  2
- 2  0  0  0
- 0  1  0  0
+ 1  1  2  2
+ 1  1  2  2
+ 3  3  4  4
+ 3  3  4  4
 ```
 """
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
@@ -504,17 +504,16 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.
 
-Example:
 ```jldoctest
-julia> A = Bidiagonal(ones(5, 5), true) #A is really bidiagonal
-5×5 Bidiagonal{Float64}:
- 1.0  1.0   ⋅    ⋅    ⋅
-  ⋅   1.0  1.0   ⋅    ⋅
-  ⋅    ⋅   1.0  1.0   ⋅
-  ⋅    ⋅    ⋅   1.0  1.0
-  ⋅    ⋅    ⋅    ⋅   1.0
+julia> A = Array(Bidiagonal(ones(5, 5), true))
+5×5 Array{Float64,2}:
+ 1.0  1.0  0.0  0.0  0.0
+ 0.0  1.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  1.0  0.0
+ 0.0  0.0  0.0  1.0  1.0
+ 0.0  0.0  0.0  0.0  1.0
 
-julia> factorize(A) #factorize will check to see that A is already factorized
+julia> factorize(A) # factorize will check to see that A is already factorized
 5×5 Bidiagonal{Float64}:
  1.0  1.0   ⋅    ⋅    ⋅
   ⋅   1.0  1.0   ⋅    ⋅

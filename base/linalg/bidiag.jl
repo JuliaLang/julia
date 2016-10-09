@@ -37,14 +37,14 @@ julia> ev = [7; 8; 9]
  8
  9
 
- julia> Bu = Bidiagonal(dv, ev, true) #e is on the first superdiagonal
+ julia> Bu = Bidiagonal(dv, ev, true) # ev is on the first superdiagonal
  4×4 Bidiagonal{Int64}:
   1  7  ⋅  ⋅
   ⋅  2  8  ⋅
   ⋅  ⋅  3  9
   ⋅  ⋅  ⋅  4
 
- julia> Bl = Bidiagonal(dv, ev, false) #e is on the first subdiagonal
+ julia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal
  4×4 Bidiagonal{Int64}:
   1  ⋅  ⋅  ⋅
   7  2  ⋅  ⋅
