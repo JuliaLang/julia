@@ -518,6 +518,19 @@ oct(n::BigInt) = base( 8, n)
 dec(n::BigInt) = base(10, n)
 hex(n::BigInt) = base(16, n)
 
+for f in (:bin, :oct, :dec, :hex)
+    @eval function ($f)(n::BigInt, pad::Int)
+        b = IOBuffer()
+        res = ($f)(n)
+        diff = pad - length(res)
+        for _ in 1:diff
+            write(b, "0")
+        end
+        write(b, res)
+        String(b)
+    end
+end
+
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
