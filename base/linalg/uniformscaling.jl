@@ -62,7 +62,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
 end
 
 function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
-    ULnew = similar(full(UL), promote_type(eltype(J), eltype(UL)))
+    ULnew = similar(Array(UL), promote_type(eltype(J), eltype(UL)))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n
@@ -78,7 +78,7 @@ function (-)(J::UniformScaling, UL::Union{UpperTriangular,UnitUpperTriangular})
     return UpperTriangular(ULnew)
 end
 function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
-    ULnew = similar(full(UL), promote_type(eltype(J), eltype(UL)))
+    ULnew = similar(Array(UL), promote_type(eltype(J), eltype(UL)))
     n = size(ULnew, 1)
     ULold = UL.data
     for j = 1:n

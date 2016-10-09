@@ -177,8 +177,8 @@ A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{T}
 A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::Hermitian{T,S}, B::StridedMatrix{T}) = BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
 A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,S}) = BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 
-*(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
-*(A::StridedMatrix, B::HermOrSym) = A*full(B)
+*(A::HermOrSym, B::HermOrSym) = Array(A)*Array(B)
+*(A::StridedMatrix, B::HermOrSym) = A*Array(B)
 
 bkfact(A::HermOrSym) = bkfact(A.data, Symbol(A.uplo), issymmetric(A))
 factorize(A::HermOrSym) = bkfact(A)
