@@ -55,5 +55,5 @@ build_script:
 test_script:
   - usr\bin\julia -e "versioninfo()"
   - usr\bin\julia --precompiled=no -e "true"
-  - cd test && ..\usr\bin\julia --check-bounds=yes runtests.jl all &&
-      ..\usr\bin\julia --check-bounds=yes runtests.jl libgit2-online pkg
+  - cd test && ..\usr\bin\julia runtests.jl all &&
+      ..\usr\bin\julia runtests.jl libgit2-online pkg
