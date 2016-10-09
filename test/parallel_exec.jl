@@ -1143,7 +1143,7 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() == nothing
+    if get_num_threads() === nothing
         warn("Skipping blas num threads tests due to unsupported blas version")
         return
     end

@@ -290,7 +290,7 @@ function showerror(io::IO, ex::MethodError)
         kwargs = Any[(temp[i*2-1], temp[i*2]) for i in 1:(length(temp) ÷ 2)]
         ex = MethodError(f, ex.args[3:end])
     end
-    if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
+    if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         # See #13033
         T = striptype(ex.args[1])
