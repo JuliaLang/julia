@@ -112,25 +112,35 @@ If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](:func
 factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
 
 """
-    rescale(x, from_min, from_max, to_min=0.0, newmax=1.0)
+    rescale(x, from_min, from_max, to_min, to_max)
 
-Convert `x` from one linear scale (`from_min` to `from_max`) to another (`to_min` to `newmax`).
-If unspecified, the target scale is 0.0 to 1.0.
+Convert `x` from one linear scale (`from_min` to `from_max`) to another (`to_min` to `to_max`).
+
+The scales can also be supplied in tuple form:
+
+    rescale(x, (from_min, from_max), (to_min, to_max))
 
 ```jldoctest
 julia> rescale(15, 0, 100, 0, 1)
 0.15
 
-julia> rescale(pi/20, 0, 2pi)
+julia> rescale(15, (0, 100), (0, 1))
+0.15
+
+julia> rescale(pi/20, 0, 2pi, 0, 1)
+0.025
+
+julia> rescale(pi/20, (0, 2pi), (0, 1))
 0.025
 
 julia> rescale(25, 0, 1, 0, 1.609344)
 40.2336
 
-julia> rescale(15, 0, 100, 1000, 0)
+julia> rescale(15, (0, 100), (1000, 0))
 850.0
 ```
 """
-
-rescale(x, from_min, from_max, to_min=0.0, newmax=1.0) =
-    ((x - from_min) / (from_max - from_min)) * (newmax - to_min) + to_min
+rescale(x, from_min, from_max, to_min, to_max) =
+    ((x - from_min) / (from_max - from_min)) * (to_max - to_min) + to_min
+rescale(x, from::NTuple{2,Number}, to::NTuple{2, Number}) =
+    ((x - from[1]) / (from[2] - from[1])) * (to[2] - to[1]) + to[1]
