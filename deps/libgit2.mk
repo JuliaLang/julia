@@ -40,6 +40,13 @@ ifeq ($(OS),Linux)
 LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
+# We need to bundle ca certs on linux now that we're using libgit2 with ssl
+ifeq ($(OS),Linux)
+ifeq ($(shell [ -e $(shell openssl version -d | cut -d '"' -f 2)/cert.pem ] && echo exists),exists)
+CERTFILE=$(shell openssl version -d | cut -d '"' -f 2)/cert.pem
+endif
+endif
+
 $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
 	echo 1 > $@
@@ -56,11 +63,20 @@ $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: $(SRCD
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-openssl-hang.patch
 	echo 1 > $@
 
+$(build_datarootdir)/julia/cert.pem: $(CERTFILE)
+	mkdir -p $(build_datarootdir)/julia
+	echo "NABIL: Copying over certfile $(CERTFILE)"
+	-cp $(CERTFILE) $@
+
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-mbedtls.patch-applied \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied
+
+ifneq ($(CERTFILE),)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem
+endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
