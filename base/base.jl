@@ -152,3 +152,5 @@ immutable Nullable{T}
     Nullable() = new(false)
     Nullable(value::T, hasvalue::Bool=true) = new(hasvalue, value)
 end
+
+setfield!{T}(x::T, i, v) = Core.setfield!(x, i, convert(fieldtype(T, i), v))
