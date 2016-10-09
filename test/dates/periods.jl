@@ -7,7 +7,7 @@ using Base.Test
 @test Dates.Year(1) > Dates.Year(0)
 @test (Dates.Year(1) < Dates.Year(0)) == false
 @test Dates.Year(1) == Dates.Year(1)
-@test Dates.Year(1) != 1
+@test !isequal(Dates.Year(1), 1)
 @test Dates.Year(1) + Dates.Year(1) == Dates.Year(2)
 @test Dates.Year(1) - Dates.Year(1) == zero(Dates.Year)
 @test_throws MethodError Dates.Year(1) * Dates.Year(1) == Dates.Year(1)
@@ -172,7 +172,7 @@ y2 = Dates.Year(2)
 @test y*10 % Dates.Year(5) == Dates.Year(0)
 @test_throws MethodError (y > 3) == false
 @test_throws MethodError (4 < y) == false
-@test 1 != y
+@test !isequal(1, y)
 t = [y,y,y,y,y]
 @test t .+ Dates.Year(2) == [Dates.Year(3),Dates.Year(3),Dates.Year(3),Dates.Year(3),Dates.Year(3)]
 
@@ -233,8 +233,8 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Year(-1) < Dates.Year(1)
 @test !(Dates.Year(-1) > Dates.Year(1))
 @test Dates.Year(1) == Dates.Year(1)
-@test Dates.Year(1) != 1
-@test 1 != Dates.Year(1)
+@test !isequal(Dates.Year(1), 1)
+@test !isequal(1, Dates.Year(1))
 @test Dates.Month(-1) < Dates.Month(1)
 @test !(Dates.Month(-1) > Dates.Month(1))
 @test Dates.Month(1) == Dates.Month(1)

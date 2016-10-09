@@ -203,7 +203,8 @@ outstream(r::BasicREPL) = r.terminal
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
-    dopushdisplay = !in(d,Base.Multimedia.displays)
+    # FIXME: in (and therefore isequal) should work here as everywhere else, but doesn't
+    dopushdisplay = !any(x->x===d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     repl_channel, response_channel = backend.repl_channel, backend.response_channel
     hit_eof = false
@@ -921,7 +922,8 @@ end
 
 function run_frontend(repl::LineEditREPL, backend)
     d = REPLDisplay(repl)
-    dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
+    # FIXME: in (and therefore isequal) should work here as everywhere else, but doesn't
+    dopushdisplay = repl.specialdisplay === nothing && !any(x->x===d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
     if !isdefined(repl,:interface)
         interface = repl.interface = setup_interface(repl)
