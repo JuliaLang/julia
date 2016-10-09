@@ -1182,7 +1182,7 @@ function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector,
     Base.SparseArrays.getindex_I_sorted_linear(A, I, J)
 end
 
-@testset "test_get_index_algs" begin
+@testset "get_index_algs" begin
     let M=2^14, N=2^4
         Irand = randperm(M)
         Jrand = randperm(N)
@@ -1691,7 +1691,7 @@ end
     @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
 end
 
-@testset "issparse" begin
+@testset "issparse for specialized matrix types" begin
     let
         m = sprand(10, 10, 0.1)
         @test issparse(Symmetric(m))
