@@ -1182,7 +1182,7 @@ function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector,
     Base.SparseArrays.getindex_I_sorted_linear(A, I, J)
 end
 
-@testset "get_index_algs" begin
+@testset "test_getindex_algs" begin
     let M=2^14, N=2^4
         Irand = randperm(M)
         Jrand = randperm(N)
