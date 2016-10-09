@@ -598,7 +598,7 @@ end
 function set_ssl_cert_locations(cert_loc)
     cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
+    cert_file === C_NULL && cert_dir === C_NULL && return
     # TODO FIX https://github.com/libgit2/libgit2/pull/3935#issuecomment-253910017
     #ccall((:git_libgit2_opts, :libgit2), Cint,
     #      (Cint, Cstring, Cstring),
