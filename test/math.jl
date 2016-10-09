@@ -208,11 +208,11 @@ end
     TAA = rand(2,2)
     TAA = (TAA + TAA.')/2.
     STAA = Symmetric(TAA)
-    @test full(atanh.(STAA)) == atanh.(TAA)
-    @test full(asinh.(STAA)) == asinh.(TAA)
-    @test full(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
-    @test full(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
-    @test full(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
+    @test Array(atanh.(STAA)) == atanh.(TAA)
+    @test Array(asinh.(STAA)) == asinh.(TAA)
+    @test Array(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
+    @test Array(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
+    @test Array(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
 end
 
 @testset "check exp2(::Integer) matches exp2(::Float)" begin
