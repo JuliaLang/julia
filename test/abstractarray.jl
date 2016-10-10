@@ -356,7 +356,7 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
         end
     end
     @test C == B == A
-    # "Test zero-dimensional setindex"
+    # Test zero-dimensional setindex
     A[] = 0; B[] = 0
     @test A[] == B[] == 0
     @test A == B
@@ -692,14 +692,14 @@ function test_UInt_indexing(::Type{TestAbstractArray})
     end
 end
 
+# Issue 13315
 function test_13315(::Type{TestAbstractArray})
-    # Issue 13315"
     U = UInt(1):UInt(2)
     @test [U;[U;]] == [UInt(1), UInt(2), UInt(1), UInt(2)]
 end
 
+# checksquare
 function test_checksquare()
-    # "checksquare"
     @test LinAlg.checksquare(zeros(2,2)) == 2
     @test LinAlg.checksquare(zeros(2,2),zeros(3,3)) == [2,3]
     @test_throws DimensionMismatch LinAlg.checksquare(zeros(2,3))
