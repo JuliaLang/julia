@@ -1924,7 +1924,11 @@
                   (expand-forms
                    (receive
                     (kws args) (separate kwarg? (cdddr e))
-                    (lower-kw-call f (append kws (cdr (caddr e))) args))))
+                    (let ((kws (append kws (cdr (caddr e)))))
+                      (if (null? kws)
+                          ;; empty parameters block; issue #18845
+                          `(call ,f ,@args)
+                          (lower-kw-call f kws args))))))
                  ((any kwarg? (cddr e))
                   ;; (call f ... (kw a b) ...)
                   (expand-forms
