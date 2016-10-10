@@ -9,7 +9,7 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-            - kalakris-cmake
+            - george-edison55-precise-backports
           packages:
             - cmake
             - bar
@@ -30,7 +30,7 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-            - kalakris-cmake
+            - george-edison55-precise-backports
           packages:
             - cmake
             - bar
