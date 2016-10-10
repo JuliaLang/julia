@@ -200,8 +200,10 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                     (void)jl_get_binding_wr(m, var);
                     return NULL;
                 }
-                owner = imp;
-                b = tempb;
+                if (owner == NULL || !tempb->deprecated) {
+                    owner = imp;
+                    b = tempb;
+                }
             }
         }
         if (owner != NULL) {
