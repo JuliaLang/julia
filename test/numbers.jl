@@ -2857,11 +2857,9 @@ let types = (Base.BitInteger_types..., BigInt, Bool)
     end
 end
 
-<<<<<<< e94007ea13f963e545534028dc967697f7267649
 @test !isempty(complex(1,2))
-=======
+
 # test rescale()
-<<<<<<< 60897f7943050e90f583bf5590bd096abcf56a45
 @test rescale(25, 0, 1, 0, 1.609344) == 40.2336 # miles to km
 @test rescale(-40, 32, 212, 0, 100) == -40.0    # Fahrenheit to Centigrade
 @test rescale(180, 0, 360) == 0.5               # hue 0-360 to 0-1
@@ -2869,8 +2867,9 @@ end
 @test rescale(15, 0, 100, 1000, 0) == 850.0     # inverted To scale
 @test rescale(15, 100, 0, 0, 1000) == 850.0     # inverted From scale
 @test rescale(15, 100, 0, 1000, 0) == 150.0     # inverted From and To scales
->>>>>>> Add rescale() function.
-=======
+
+# test rescale()
+
 @test rescale(25, 0, 1, 0, 1.609344) == 40.2336     # miles to km
 @test rescale(-40, 32, 212, 0, 100) == -40.0        # Fahrenheit to Centigrade
 @test rescale(-40, (32, 212), (0, 100)) == -40.0    # Fahrenheit to Centigrade
@@ -2880,4 +2879,3 @@ end
 @test rescale(15, 100, 0, 0, 1000) == 850.0         # inverted From scale
 @test rescale(15, 100, 0, 1000, 0) == 150.0         # inverted From and To scales
 @test rescale(22//7, (0, 100), (0, 1000)) == 220//7 # rational
->>>>>>> removed 0.0 and 1.0 defaults. Version that accepts tuples added. Tests modified.
