@@ -99,6 +99,12 @@ extravagant_args(x,y=0,rest...;color="blue",kw...) =
 
 # passing empty kw container to function with no kwargs
 @test sin(1.0) == sin(1.0; Dict()...)
+# issue #18845
+@test (@eval sin(1.0; $([]...))) == sin(1.0)
+f18845() = 2
+@test f18845(;) == 2
+@test f18845(; []...) == 2
+@test (@eval f18845(; $([]...))) == 2
 
 # passing junk kw container
 @test_throws BoundsError extravagant_args(1; Any[[]]...)
