@@ -12,6 +12,7 @@ matrix:
             - george-edison55-precise-backports
           packages:
             - cmake
+            - cmake-data
             - bar
             - time
             - binutils
@@ -33,6 +34,7 @@ matrix:
             - george-edison55-precise-backports
           packages:
             - cmake
+            - cmake-data
             - bar
             - time
             - g++-5
