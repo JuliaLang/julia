@@ -519,6 +519,7 @@ end
     @test Base.circshift!(b, a, 1) == [5,1,2,3,4]
 end
 
+# unique across dim
 
 # All rows and columns unique
 A = ones(10, 10)
