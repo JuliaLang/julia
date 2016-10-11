@@ -920,6 +920,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
             }
         }
         jl_serialize_value(s, li->inferred);
+        jl_serialize_value(s, li->inferred_const);
         jl_serialize_value(s, li->rettype);
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         jl_serialize_value(s, (jl_value_t*)li->def);
@@ -1563,6 +1564,9 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
 
     li->inferred = jl_deserialize_value(s, &li->inferred);
     jl_gc_wb(li, li->inferred);
+    li->inferred_const = jl_deserialize_value(s, &li->inferred_const);
+    if (li->inferred_const)
+        jl_gc_wb(li, li->inferred_const);
     li->rettype = jl_deserialize_value(s, &li->rettype);
     jl_gc_wb(li, li->rettype);
     li->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_vals);

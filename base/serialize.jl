@@ -353,6 +353,11 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     isdefined(linfo, :def) && error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
     serialize(s, linfo.inferred)
+    if isdefined(linfo, :inferred_const)
+        serialize(s, linfo.inferred_const)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
     serialize(s, linfo.sparam_vals)
     serialize(s, linfo.rettype)
     serialize(s, linfo.specTypes)
@@ -654,6 +659,10 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Void},), C_NULL)
     deserialize_cycle(s, linfo)
     linfo.inferred = deserialize(s)::CodeInfo
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        linfo.inferred_const = handle_deserialize(s, tag)
+    end
     linfo.sparam_vals = deserialize(s)::SimpleVector
     linfo.rettype = deserialize(s)
     linfo.specTypes = deserialize(s)
