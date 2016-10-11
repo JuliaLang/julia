@@ -490,8 +490,12 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     while (ml != (void*)jl_nothing) {
         if (closure->type == (jl_value_t*)ml->sig) {
             // fast-path for the intersection of a type with itself
-            if (closure->env)
-                closure->env = ml->tvars;
+            if (closure->env) {
+                if (jl_is_typevar(ml->tvars))
+                    closure->env = jl_svec1(ml->tvars);
+                else
+                    closure->env = ml->tvars;
+            }
             closure->ti = closure->type;
             if (!fptr(ml, closure))
                 return 0;
