@@ -6,28 +6,6 @@ import Core.Intrinsics: cglobal, box
 
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
-"""
-    Ptr{T}
-
-A memory address referring to data of type `T`.  However, there is no guarantee that the
-memory is actually valid, or that it actually represents data of the specified type.
-"""
-Ptr
-
-"""
-    Ref{T}
-
-An object that safely references data of type `T`. This type is guaranteed to point to
-valid, Julia-allocated memory of the correct type. The underlying data is protected from
-freeing by the garbage collector as long as the `Ref` itself is referenced.
-
-When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
-converted to a native pointer to the data it references.
-
-There is no invalid (NULL) `Ref`.
-"""
-Ref
-
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
     typealias Cchar Int8
 else
