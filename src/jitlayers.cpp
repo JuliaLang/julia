@@ -324,7 +324,7 @@ static uint64_t resolve_compiler_rt(const char *name)
     // jl_dlsym_e expects an unmangled 'C' symbol name,
     // so iff we are on Darwin we strip the leading '_' off.
     static const char *const mangled_prefix = "___";
-    if (strncmp(name, mangled_prefix, strlen(mangled_prefix)) != 0) {
+    if (strncmp(name, mangled_prefix, strlen(mangled_prefix)) == 0) {
       ++name;
     }
 #endif
