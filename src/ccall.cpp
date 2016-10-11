@@ -1372,7 +1372,7 @@ static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_valu
     return "";
 }
 
-// ccall(pointer, rettype, (argtypes...), args...)
+// Expr(:ccall, pointer, rettype, (argtypes...), args...)
 static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -1380,6 +1380,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     jl_value_t *rt = NULL, *at = NULL;
     native_sym_arg_t symarg = {};
     JL_GC_PUSH3(&rt, &at, &symarg.gcroot);
+    args -= 1;
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;

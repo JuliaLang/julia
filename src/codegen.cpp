@@ -1986,16 +1986,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                 if (jl_value_t *fv = static_eval(f, ctx, false)) {
                     if (jl_typeis(fv, jl_intrinsic_type)) {
                         esc = false;
-                        JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
-                        if (fi == JL_I::ccall) {
-                            esc = true;
-                            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
-                            // 2nd and 3d arguments are static
-                            for(i=4; i < (size_t)alen; i+=2) {
-                                simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
-                            }
-                            return;
-                        }
                     }
                     else {
                         if ((fv==jl_builtin_getfield && alen==3 &&
@@ -2008,8 +1998,17 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                 }
             }
 
-            for(i=1; i < (size_t)alen; i++) {
+            for (i = 1; i < (size_t)alen; i++) {
                 simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
+            }
+        }
+        else if (e->head == foreigncall_sym) {
+            esc = true;
+            simple_escape_analysis(jl_exprarg(e, 0), esc, ctx);
+            // 2nd and 3d arguments are static
+            size_t alen = jl_array_dim0(e->args);
+            for (i = 3; i < alen; i += 2) {
+                simple_escape_analysis(jl_exprarg(e, i), esc, ctx);
             }
         }
         else if (e->head == method_sym) {
@@ -3503,6 +3502,9 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             CreateTrap(builder);
         }
         return res;
+    }
+    else if (head == foreigncall_sym) {
+        return emit_ccall(args, jl_array_dim0(ex->args), ctx);
     }
     else if (head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);

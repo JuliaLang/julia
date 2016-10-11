@@ -334,13 +334,16 @@ static jl_value_t *jl_static_eval(jl_value_t *ex, jl_module_t *mod,
 
 int jl_has_intrinsics(jl_method_instance_t *li, jl_value_t *v, jl_module_t *m)
 {
-    if (!jl_is_expr(v)) return 0;
+    if (!jl_is_expr(v))
+        return 0;
     jl_expr_t *e = (jl_expr_t*)v;
     if (jl_array_len(e->args) == 0)
         return 0;
     if (e->head == toplevel_sym || e->head == copyast_sym)
         return 0;
     jl_value_t *e0 = jl_exprarg(e, 0);
+    if (e->head == foreigncall_sym)
+        return 1;
     if (e->head == call_sym) {
         jl_value_t *sv = jl_static_eval(e0, m, li, li != NULL);
         if (sv && jl_typeis(sv, jl_intrinsic_type))
@@ -353,7 +356,7 @@ int jl_has_intrinsics(jl_method_instance_t *li, jl_value_t *v, jl_module_t *m)
             return 1;
     }
     int i;
-    for (i=0; i < jl_array_len(e->args); i++) {
+    for (i = 0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
         if (jl_is_expr(a) && jl_has_intrinsics(li, a, m))
             return 1;

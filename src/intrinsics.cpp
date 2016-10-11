@@ -861,7 +861,6 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 
     switch (f) {
-    case ccall: return emit_ccall(args, nargs, ctx);
     case cglobal_auto:
     case cglobal: return emit_cglobal(args, nargs, ctx);
     case llvmcall: return emit_llvmcall(args, nargs, ctx);
