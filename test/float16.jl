@@ -146,3 +146,6 @@ end
 
 # issue #17148
 @test rem(Float16(1.2), Float16(one(1.2))) == 0.20019531f0
+
+# no domain error is thrown for negative values
+@test cbrt(Float16(-1.0)) == -1.0
