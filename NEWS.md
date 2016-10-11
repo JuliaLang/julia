@@ -24,7 +24,7 @@ Language changes
     This can be changed back to the original color by setting the environment variable `JULIA_INFO_COLOR` to `"blue"`.
     One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
     For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
-  * The `chop` and `chomp` functions now return `SubString`s.
+  * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
 
 Breaking changes
 ----------------
@@ -674,4 +674,5 @@ Language tooling improvements
 [#17668]: https://github.com/JuliaLang/julia/issues/17668
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
+[#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
