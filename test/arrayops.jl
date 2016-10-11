@@ -397,15 +397,15 @@ end
     str = "𝐴 ∈ ℝⁿˣⁿ, 𝐯 ∈ ℝⁿ, λᵢ ∈ ℝ: 𝐯"
     idx = findnext(str, 'λ', 1)
     @test str[idx] == 'λ'
-    idx = findnext(str,'ᵢ', idx)
+    idx = findnext(str, 'ᵢ', idx)
     @test str[idx] == 'ᵢ'
-    idx = findnext(str,'𝐯', endof(str))
+    idx = findnext(str, '𝐯', endof(str))
     @test idx == endof(str)
     idx = findprev(str, 'λ', endof(str))
     @test str[idx] == 'λ'
-    idx = findprev(str,'ⁿ', idx)
+    idx = findprev(str, 'ⁿ', idx)
     @test str[idx] == 'ⁿ'
-    idx = findprev(str,'𝐴', 1)
+    idx = findprev(str, '𝐴', 1)
     @test idx == 1
 end
 @testset "find with general iterables" begin

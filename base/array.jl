@@ -1075,7 +1075,7 @@ function findnext(testf::Function, A, idx::Integer)
         elem, idx = next(A, idx)
         testf(elem) && return lastidx
     end
-    0
+    zero(idx)
 end
 
 """
@@ -1165,7 +1165,6 @@ julia> findprev(A, 1, 1)
 """
 findprev(A, v, start::Integer) = findprev(x-> x==v, A, start)
 
-
 """
     findlast(A, v)
 
@@ -1210,12 +1209,12 @@ julia> findprev(isodd, A, 3)
 ```
 """
 function findprev(testf::Function, A, idx::Integer)
-    while idx > 0
+    while idx > zero(idx)
         elem, _ = next(A, idx)
         testf(elem) && return idx
         idx = prevind(A, idx)
     end
-    0
+    zero(idx)
 end
 
 """
