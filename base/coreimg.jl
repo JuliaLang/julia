@@ -12,8 +12,7 @@ eval(m,x) = Core.eval(m,x)
 include = Core.include
 
 ## Load essential files and libraries
-typealias Cint Int32
-typealias Csize_t UInt
+include("ctypes.jl")
 include("essentials.jl")
 include("generator.jl")
 include("reflection.jl")
