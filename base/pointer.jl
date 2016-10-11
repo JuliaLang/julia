@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    Ptr{T}
+
+A memory address referring to data of type `T`.  However, there is no guarantee that the
+memory is actually valid, or that it actually represents data of the specified type.
+"""
+Ptr
+
 ## converting pointers to an appropriate unsigned ##
 
 """
