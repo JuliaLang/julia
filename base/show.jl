@@ -859,10 +859,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, " if ")
         show_unquoted(io, args[1], indent)
 
-    elseif head === :ccall
-        show_unquoted(io, :ccall, indent)
-        show_enclosed_list(io, '(', args, ",", ')', indent)
-
     # comparison (i.e. "x < y < z")
     elseif head === :comparison && nargs >= 3 && (nargs&1==1)
         comp_prec = minimum(operator_precedence, args[2:2:end])

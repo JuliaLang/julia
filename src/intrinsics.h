@@ -98,7 +98,6 @@
     ADD_I(pointerref, 3) \
     ADD_I(pointerset, 4) \
     /* c interface */ \
-    ALIAS(ccall, ccall) \
     ADD_I(cglobal, 2) \
     ALIAS(llvmcall, llvmcall) \
     /* object access */ \

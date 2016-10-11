@@ -331,7 +331,9 @@ add_tfunc(throw, 1, 1, x->Bottom)
 # the inverse of typeof_tfunc
 function instanceof_tfunc(t::ANY)
     # TODO improve
-    if isa(t, Const)
+    if t === Bottom
+        return t
+    elseif isa(t, Const)
         if isa(t.val, Type)
             return t.val
         end
@@ -358,7 +360,7 @@ add_tfunc(ne_float_fast, 2, 2, cmp_tfunc)
 add_tfunc(lt_float_fast, 2, 2, cmp_tfunc)
 add_tfunc(le_float_fast, 2, 2, cmp_tfunc)
 
-chk_tfunc = (x,y) -> Tuple{widenconst(x),Bool}
+chk_tfunc = (x::ANY, y::ANY) -> Tuple{widenconst(x), Bool}
 add_tfunc(checked_sadd_int, 2, 2, chk_tfunc)
 add_tfunc(checked_uadd_int, 2, 2, chk_tfunc)
 add_tfunc(checked_ssub_int, 2, 2, chk_tfunc)
@@ -366,19 +368,6 @@ add_tfunc(checked_usub_int, 2, 2, chk_tfunc)
 add_tfunc(checked_smul_int, 2, 2, chk_tfunc)
 add_tfunc(checked_umul_int, 2, 2, chk_tfunc)
 
-const _Ref_name = Ref.body.name
-add_tfunc(Core.Intrinsics.ccall, 3, IInf,
-    function(fptr::ANY, rt::ANY, at::ANY, a...)
-        t = instanceof_tfunc(rt)
-        if isa(t, DataType) && (t::DataType).name === _Ref_name
-            t = t.parameters[1]
-            if t === Any
-                return Union{} # a return type of Box{Any} is invalid
-            end
-            return t
-        end
-        return t
-    end)
 add_tfunc(Core.Intrinsics.llvmcall, 3, IInf,
     (fptr::ANY, rt::ANY, at::ANY, a...) -> instanceof_tfunc(rt))
 cglobal_tfunc(fptr::ANY) = Ptr{Void}
@@ -1407,20 +1396,22 @@ function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
     return abstract_call(f, e.args, argtypes, vtypes, sv)
 end
 
+const _Ref_name = Ref.body.name
+
 function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
-    if isa(e,QuoteNode)
+    if isa(e, QuoteNode)
         return abstract_eval_constant((e::QuoteNode).value)
-    elseif isa(e,SSAValue)
+    elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.src)
-    elseif isa(e,Slot)
+    elseif isa(e, Slot)
         return vtypes[slot_id(e)].typ
-    elseif isa(e,Symbol)
+    elseif isa(e, Symbol)
         return abstract_eval_global(sv.mod, e)
     elseif isa(e,GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
 
-    if !isa(e,Expr)
+    if !isa(e, Expr)
         return abstract_eval_constant(e)
     end
     e = e::Expr
@@ -1431,17 +1422,33 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     elseif e.head === :new
         t = instanceof_tfunc(abstract_eval(e.args[1], vtypes, sv))
         for i = 2:length(e.args)
-            abstract_eval(e.args[i], vtypes, sv)
+            if abstract_eval(e.args[i], vtypes, sv) === Bottom
+                rt = Bottom
+            end
         end
     elseif e.head === :&
         abstract_eval(e.args[1], vtypes, sv)
         t = Any
+    elseif e.head === :foreigncall
+        abstract_eval(e.args[1], vtypes, sv)
+        t = instanceof_tfunc(abstract_eval(e.args[2], vtypes, sv))
+        for i = 3:length(e.args)
+            if abstract_eval(e.args[i], vtypes, sv) === Bottom
+                t = Bottom
+            end
+        end
+        if isa(t, DataType) && (t::DataType).name === _Ref_name
+            t = t.parameters[1]
+            if t === Any
+                t = Bottom # a return type of Ref{Any} is invalid
+            end
+        end
     elseif e.head === :static_parameter
         n = e.args[1]
         t = Any
         if n <= length(sv.sp)
             val = sv.sp[n]
-            if isa(val,TypeVar)
+            if isa(val, TypeVar)
                 # static param bound to typevar
                 # if the tvar does not refer to anything more specific than Any,
                 # the static param might actually be an integer, symbol, etc.
@@ -1509,17 +1516,17 @@ type StateUpdate
 end
 
 function abstract_interpret(e::ANY, vtypes::VarTable, sv::InferenceState)
-    !isa(e,Expr) && return vtypes
+    !isa(e, Expr) && return vtypes
     # handle assignment
     if e.head === :(=)
         t = abstract_eval(e.args[2], vtypes, sv)
         t === Bottom && return ()
         lhs = e.args[1]
-        if isa(lhs,Slot) || isa(lhs,SSAValue)
+        if isa(lhs, Slot) || isa(lhs, SSAValue)
             # don't bother for GlobalRef
-            return StateUpdate(lhs, VarState(t,false), vtypes)
+            return StateUpdate(lhs, VarState(t, false), vtypes)
         end
-    elseif e.head === :call
+    elseif e.head === :call || e.head === :foreigncall
         t = abstract_eval(e, vtypes, sv)
         t === Bottom && return ()
     elseif e.head === :gotoifnot
@@ -1527,8 +1534,8 @@ function abstract_interpret(e::ANY, vtypes::VarTable, sv::InferenceState)
         t === Bottom && return ()
     elseif e.head === :method
         fname = e.args[1]
-        if isa(fname,Slot)
-            return StateUpdate(fname, VarState(Any,false), vtypes)
+        if isa(fname, Slot)
+            return StateUpdate(fname, VarState(Any, false), vtypes)
         end
     end
     return vtypes
@@ -2723,7 +2730,6 @@ function is_pure_builtin(f::ANY)
     if isa(f,IntrinsicFunction)
         if !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
-             f === Intrinsics.ccall ||      # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.checked_trunc_sint ||
              f === Intrinsics.checked_trunc_uint ||
@@ -3598,32 +3604,30 @@ const corenumtype = Union{Int32, Int64, Float32, Float64}
 function inlining_pass(e::Expr, sv::InferenceState)
     if e.head === :method
         # avoid running the inlining pass on function definitions
-        return (e,())
+        return (e, ())
     end
     eargs = e.args
-    if length(eargs)<1
-        return (e,())
+    if length(eargs) < 1
+        return (e, ())
     end
     stmts = []
     arg1 = eargs[1]
+    isccall = false
+    i0 = 1
     # don't inline first (global) arguments of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall (or try to move the variables out into the function)
-    if is_known_call(e, Core.Intrinsics.ccall, sv.src, sv.mod)
-        # 4 is rewritten to 2 below to handle the callee.
-        i0 = 4
+    if e.head === :foreigncall
+        # 3 is rewritten to 1 below to handle the callee.
+        i0 = 3
         isccall = true
     elseif is_known_call(e, Core.Intrinsics.llvmcall, sv.src, sv.mod)
         i0 = 5
-        isccall = false
-    else
-        i0 = 1
-        isccall = false
     end
     has_stmts = false # needed to preserve order-of-execution
-    for _i=length(eargs):-1:i0
-        if isccall && _i == 4
-            i = 2
+    for _i = length(eargs):-1:i0
+        if isccall && _i == 3
+            i = 1
             isccallee = true
         else
             i = _i
@@ -3682,16 +3686,16 @@ function inlining_pass(e::Expr, sv::InferenceState)
             end
         end
     end
-    if e.head !== :call
-        return (e, stmts)
-    end
     if isccall
         le = length(eargs)
-        for i=5:2:le-1
-            if eargs[i] === eargs[i+1]
-                eargs[i+1] = 0
+        for i = 4:2:(le - 1)
+            if eargs[i] === eargs[i + 1]
+                eargs[i + 1] = 0
             end
         end
+    end
+    if e.head !== :call
+        return (e, stmts)
     end
 
     ft = exprtype(arg1, sv.src, sv.mod)
