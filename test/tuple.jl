@@ -88,11 +88,11 @@ begin
         end
 
         @testset "2 arguments" begin
-          @test map(foo, (), ()) === ()
-          @test map(foo, (1,), (1,)) === (2,)
-          @test map(foo, (1,2), (1,2)) === (2,4)
-          @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
-          @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
+            @test map(foo, (), ()) === ()
+            @test map(foo, (1,), (1,)) === (2,)
+            @test map(foo, (1,2), (1,2)) === (2,4)
+            @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
+            @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
         end
 
         @testset "n arguments" begin
