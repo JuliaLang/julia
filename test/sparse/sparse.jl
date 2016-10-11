@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@testset "Is sparse" begin
+@testset "issparse" begin
     @test issparse(sparse(ones(5,5)))
     @test !issparse(ones(5,5))
     @test Base.SparseArrays.indtype(sparse(ones(Int8,2),ones(Int8,2),rand(2))) == Int8
@@ -330,14 +330,14 @@ end
         C = transpose(A)
         p = randperm(m)
         q = randperm(n)
-        @testset "ftranspose[!] error checking" begin
+        @testset "common error checking of [c]transpose! methods (ftranspose!)" begin
             @test_throws DimensionMismatch transpose!(A[:, 1:(smalldim - 1)], A)
             @test_throws DimensionMismatch transpose!(A[1:(smalldim - 1), 1], A)
             @test_throws ArgumentError transpose!((B = similar(A); resize!(B.rowval, nnz(A) - 1); B), A)
             @test_throws ArgumentError transpose!((B = similar(A); resize!(B.nzval, nnz(A) - 1); B), A)
         end
-        # Test common error checking of permute[!] methods / source-perm compat
         @testset "permute[!] error checking" begin
+            # Test common error checking of permute[!] methods / source-perm compat
             @test_throws DimensionMismatch permute(A, p[1:(end - 1)], q)
             @test_throws DimensionMismatch permute(A, p, q[1:(end - 1)])
             # Test common error checking of permute[!] methods / source-dest compat
@@ -358,8 +358,7 @@ end
             @test_throws ArgumentError permute!(A, p, (r = copy(q); r[2] = r[1]; r))
             @test_throws ArgumentError permute!(A, p, (r = copy(q); r[2] = n + 1; r))
         end
-        # Test overall functionality of [c]transpose[!] and permute[!]
-        @testset "Functionality of transpose[!] and permute[!]" begin
+        @testset "overall functionality of [c]transpose[!] and permute[!]" begin
             for (m, n) in ((smalldim, smalldim), (smalldim, largedim), (largedim, smalldim))
                 A = sprand(m, n, nzprob)
                 At = transpose(A)
@@ -449,7 +448,7 @@ end
 end
 
 @testset "Issues" begin
-    @testset "Issue #4986" begin
+    @testset "Issue #4986, reinterpret" begin
         sfe22 = speye(Float64, 2)
         mfe22 = eye(Float64, 2)
         @test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)
@@ -485,15 +484,14 @@ end
         @test 4 <= mean(sprb45nnzs) <= 16
     end
 
-    # issue #5853, sparse diff
-    @testset "Issue #5853" begin
+    @testset "Issue #5853, sparse diff" begin
         for i=1:2, a=Any[[1 2 3], [1 2 3]', eye(3)]
             @test all(diff(sparse(a),i) == diff(a,i))
         end
     end
 
     # test for "access to undefined error" types that initially allocate elements as #undef
-    @testset "Acess to undefined error" begin
+    @testset "Access to undefined error" begin
         @test all(sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4]))
         sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), 1)
     end
@@ -590,8 +588,7 @@ end
         end
     end
 
-    # test sparse constructors from special matrices
-    @testset "Issue #10837" begin
+    @testset "Issue #10837, sparse constructors from special matrices" begin
         T = Tridiagonal(randn(4),randn(5),randn(4))
         S = sparse(T)
         @test norm(full(T) - full(S)) == 0.0
@@ -606,14 +603,12 @@ end
         @test norm(full(B) - full(S)) == 0.0
     end
 
-    # Test error path if triplet vectors are not all the same length
-    @testset "Issue #12177" begin
+    @testset "Issue #12177, error path if triplet vectors are not all the same length" begin
         @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
         @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
     end
 
-    # Issue 12118: sparse matrices are closed under +, -, min, max
-    @testset "Issue #12118" begin
+    @testset "Issue #12118: sparse matrices are closed under +, -, min, max" begin
         let
             A12118 = sparse([1,2,3,4,5], [1,2,3,4,5], [1,2,3,4,5])
             B12118 = sparse([1,2,4,5],   [1,2,3,5],   [2,1,-1,-2])
