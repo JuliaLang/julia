@@ -42,6 +42,7 @@ if false
 end
 
 ## Load essential files and libraries
+include("ctypes.jl")
 include("essentials.jl")
 include("base.jl")
 include("generator.jl")
