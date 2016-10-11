@@ -1451,11 +1451,13 @@ Mathematical Functions
        julia> isqrt(5)
        2
 
-.. function:: cbrt(x)
+.. function:: cbrt(x::Real)
 
    .. Docstring generated from Julia source
 
-   Return :math:`x^{1/3}`\ .  The prefix operator ``∛`` is equivalent to ``cbrt``\ .
+   Return the cube root of ``x``\ , i.e. :math:`x^{1/3}`\ . Negative values are accepted (returning the negative real root when :math:`x < 0`\ ).
+
+   The prefix operator ``∛`` is equivalent to ``cbrt``\ .
 
    .. doctest::
 
