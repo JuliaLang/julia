@@ -33,6 +33,8 @@ istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
 issymmetric(::UniformScaling) = true
 ishermitian(J::UniformScaling) = isreal(J.λ)
+isapprox{T<:Number,S<:Number}(J1::UniformScaling{T}, J2::UniformScaling{S};
+                              rtol::Real=Base.rtoldefault(T,S), atol::Real=0) = isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol)
 
 (+)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ+J2.λ)
 (+){T}(B::BitArray{2},J::UniformScaling{T}) = Array(B) + J
