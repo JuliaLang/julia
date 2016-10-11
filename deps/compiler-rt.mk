@@ -135,12 +135,14 @@ fastcheck-compiler-rt: #NONE
 configure-compiler-rt: $(COMPILER_RT_BUILDDIR)/build-configured
 clean-compiler-rt:
 	rm -rf $(COMPILER_RT_BUILDDIR)
-	rm -f  $(build_prefix)/manifest/compiler-rt
-	rm -f  $(build_shlibdir)/$(COMPILER_RT_LIBFILE)
-	rm -f  $(build_private_libdir)/$(COMPILER_RT_STATICLIBFILE)
 distclean-compiler-rt: clean-compiler-rt
 	rm -f $(COMPILER_RT_TAR)
 	rm -rf $(COMPILER_RT_SRCDIR)
+uninstall-compiler-rt:
+	rm -f  $(build_prefix)/manifest/compiler-rt
+	rm -f  $(build_shlibdir)/$(COMPILER_RT_LIBFILE)
+	rm -f  $(build_private_libdir)/$(COMPILER_RT_STATICLIBFILE)
+distclean-compiler-rt clean-compiler-rt: | uninstall-compiler-rt
 
 compile-compiler-rt: $(COMPILER_RT_BUILDDIR)/$(COMPILER_RT_LIBFILE)
 install-compiler-rt: $(build_shlibdir)/$(COMPILER_RT_LIBFILE) $(build_private_libdir)/$(COMPILER_RT_STATICLIBFILE) $(build_prefix)/manifest/compiler-rt
