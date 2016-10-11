@@ -920,6 +920,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         write_int8(s->s, li->inferred);
+        jl_serialize_value(s, li->rettype);
         if (s->mode == MODE_MODULE) {
             int external = li->def && !module_in_worklist(li->def->module);
             write_uint8(s->s, external);
@@ -939,7 +940,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_serialize_value(s, li->slottypes);
         jl_serialize_value(s, li->slotflags);
         jl_serialize_value(s, li->ssavaluetypes);
-        jl_serialize_value(s, li->rettype);
         jl_serialize_value(s, (jl_value_t*)li->sparam_syms);
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         write_int8(s->s, li->pure);
@@ -1559,9 +1559,12 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
             arraylist_push(&backref_list, li);
 
         li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
-        if (li->specTypes) jl_gc_wb(li, li->specTypes);
+        if (li->specTypes)
+            jl_gc_wb(li, li->specTypes);
         int inferred = read_int8(s->s);
         li->inferred = inferred;
+        li->rettype = jl_deserialize_value(s, &li->rettype);
+        jl_gc_wb(li, li->rettype);
 
         if (s->mode == MODE_MODULE) {
             int external = read_uint8(s->s);
@@ -1578,8 +1581,6 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         li->slottypes = jl_deserialize_value(s, &li->slottypes); jl_gc_wb(li, li->slottypes);
         li->slotflags = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slotflags); jl_gc_wb(li, li->slotflags);
         li->ssavaluetypes = jl_deserialize_value(s, &li->ssavaluetypes); jl_gc_wb(li, li->ssavaluetypes);
-        li->rettype = jl_deserialize_value(s, &li->rettype);
-        jl_gc_wb(li, li->rettype);
         li->sparam_syms = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_syms);
         jl_gc_wb(li, li->sparam_syms);
         li->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_vals);
@@ -1724,10 +1725,10 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         }
         else {
             char *data = (char*)jl_data_ptr(v);
-            for(i=0; i < nf; i++) {
+            for (i = 0; i < nf; i++) {
                 if (jl_field_size(dt,i) > 0) {
                     if (jl_field_isptr(dt,i)) {
-                        jl_value_t **fld = (jl_value_t**)(data+jl_field_offset(dt, i));
+                        jl_value_t **fld = (jl_value_t**)(data + jl_field_offset(dt, i));
                         *fld = jl_deserialize_value(s, fld);
                     }
                     else {
@@ -2416,6 +2417,9 @@ static void jl_recache_types(void)
             jl_lambda_info_t *li = (jl_lambda_info_t*)o;
             int inferred = li->inferred;
             jl_datatype_t *argtypes = jl_recache_type(li->specTypes, i, NULL);
+            jl_value_t *rettype = li->rettype;
+            if (jl_is_datatype(rettype))
+                rettype = (jl_value_t*)jl_recache_type((jl_datatype_t*)li->rettype, i, NULL);
             jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
             jl_methtable_t *mt = ftype->name->mt;
             jl_set_typeof(li, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
@@ -2425,6 +2429,8 @@ static void jl_recache_types(void)
             if (inferred && !li->inferred) {
                 jl_set_lambda_code_null(li);
                 li->inferred = 1;
+                li->rettype = rettype;
+                jl_gc_wb(li, li->rettype);
             }
             // update the backref list
             if (loc) *loc = (jl_value_t*)li;

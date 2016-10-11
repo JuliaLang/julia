@@ -101,6 +101,9 @@ try
               Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2
               Base.convert(::Type{Nullable{Value18343}}, ::Value18343{Nullable}) = 2
               Base.convert{T}(::Type{Ref}, ::Value18343{T}) = 3
+
+              infer_rational() = 1//2
+              Test.@inferred infer_rational()
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -162,6 +165,11 @@ try
                 Val{3},
                 Val{nothing}},
             0:25)
+
+        @eval begin
+            @inferred 1//2 # use @eval to prevent this from being inferred before this point
+            @inferred $Foo.infer_rational()
+        end
 
         @test Foo.some_linfo === @code_typed Base.include("string")
 
