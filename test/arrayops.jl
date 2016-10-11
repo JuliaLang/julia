@@ -394,6 +394,19 @@ end
     @test findprev(a,1,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
     @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
+    str = "𝐴 ∈ ℝⁿˣⁿ, 𝐯 ∈ ℝⁿ, λᵢ ∈ ℝ: 𝐯"
+    idx = findnext(str, 'λ', 1)
+    @test str[idx] == 'λ'
+    idx = findnext(str,'ᵢ', idx)
+    @test str[idx] == 'ᵢ'
+    idx = findnext(str,'𝐯', endof(str))
+    @test idx == endof(str)
+    idx = findprev(str, 'λ', endof(str))
+    @test str[idx] == 'λ'
+    idx = findprev(str,'ⁿ', idx)
+    @test str[idx] == 'ⁿ'
+    idx = findprev(str,'𝐴', 1)
+    @test idx == 1
 end
 @testset "find with general iterables" begin
     s = "julia"
@@ -506,7 +519,6 @@ end
     @test Base.circshift!(b, a, 1) == [5,1,2,3,4]
 end
 
-# unique across dim
 
 # All rows and columns unique
 A = ones(10, 10)

@@ -188,9 +188,8 @@ end
 ## Generic indexing functions ##
 
 prevind(s::DirectIndexString, i::Integer) = Int(i)-1
-prevind(s::AbstractArray    , i::Integer) = Int(i)-1
 nextind(s::DirectIndexString, i::Integer) = Int(i)+1
-nextind(s::AbstractArray    , i::Integer) = Int(i)+1
+
 
 function prevind(s::String, i::Integer)
     j = Int(i)
