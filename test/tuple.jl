@@ -86,12 +86,13 @@ begin
             @test map(foo, (1,2,3,4)) === (2,4,6,8)
             @test map(foo, longtuple) === ntuple(i->2i,20)
         end
-        @testset "2 argument" begin
-        @test map(foo, (), ()) === ()
-        @test map(foo, (1,), (1,)) === (2,)
-        @test map(foo, (1,2), (1,2)) === (2,4)
-        @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
-        @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
+
+        @testset "2 arguments" begin
+          @test map(foo, (), ()) === ()
+          @test map(foo, (1,), (1,)) === (2,)
+          @test map(foo, (1,2), (1,2)) === (2,4)
+          @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
+          @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
         end
 
         @testset "n arguments" begin
@@ -170,10 +171,10 @@ end
     @test_throws TypeError ntuple(identity, Val{1:2})
 end
 
-for n = 0:20
+@testset for n in 0:20
     t = ntuple(identity, n)
     @test length(t) == n
-    for i = 1:n
+    @testset for i in 1:n
         @test t[i] == i
     end
 end

@@ -179,18 +179,14 @@ end
     @test exponent(x) == exponent(15.674)
 end
 
-@testset "frexp" begin
-    for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
-        mantissa, ex = frexp(i)
-        @test i == mantissa * 2. ^ ex
-    end
+@testset "frexp, $i" for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
+    mantissa, ex = frexp(i)
+    @test i == mantissa * 2. ^ ex
 end
 
 
-@testset "significand" begin
-    for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
-        @test i == significand(i) * 2. ^ exponent(i)
-    end
+@testset "significand, $i" for i in [big(0.2), big(1.2), big(1220.0), big(23414.123)]
+    @test i == significand(i) * 2. ^ exponent(i)
 end
 
 @testset "nextfloat/prevfloat should be immutable" begin
@@ -922,11 +918,9 @@ end
     @test convert(Int64,big(500_000_000_000_000.)) == 500_000_000_000_000
 end
 
-@testset "issue #9816" begin
-    @testset "check exponent range is set to max possible" begin
-        @test MPFR.get_emin() == MPFR.get_emin_min()
-        @test MPFR.get_emax() == MPFR.get_emax_max()
-    end
+@testset "issue #9816: check exponent range is set to max possible" begin
+    @test MPFR.get_emin() == MPFR.get_emin_min()
+    @test MPFR.get_emax() == MPFR.get_emax_max()
 end
 
 @testset "issue #10994: handle embedded NUL chars for string parsing" begin
