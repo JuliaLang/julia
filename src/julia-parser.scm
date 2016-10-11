@@ -1549,11 +1549,12 @@
           `(generator ,first ,@iters)))))
 
 (define (parse-comprehension s first closer)
-  (let ((gen (parse-generator s first)))
-    (if (not (eqv? (require-token s) closer))
-        (error (string "expected \"" closer "\""))
-        (take-token s))
-    `(comprehension ,gen)))
+  (with-whitespace-newline
+   (let ((gen (parse-generator s first)))
+     (if (not (eqv? (require-token s) closer))
+         (error (string "expected \"" closer "\""))
+         (take-token s))
+     `(comprehension ,gen))))
 
 (define (parse-dict-comprehension s first closer)
   (let ((c (parse-comprehension s first closer)))
