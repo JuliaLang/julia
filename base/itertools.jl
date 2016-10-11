@@ -8,7 +8,7 @@ import Base: start, done, next, isempty, length, size, eltype, iteratorsize, ite
 
 using Base: tuple_type_cons, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo
 
-export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, cycle, repeated, product, lexproduct, flatten, partition
 
 _min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
 _min_length(a, b, A, ::IsInfinite) = length(a)
@@ -496,6 +496,13 @@ _prod_indices(a, b, ::HasShape,  ::HasShape)   = (indices(a)..., indices(b)...)
 _prod_indices(a, b, A, B) =
     throw(ArgumentError("Cannot construct indices for objects of types $(typeof(a)) and $(typeof(b))"))
 
+prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
+# products can have an infinite iterator
+prod_iteratorsize(::IsInfinite, ::IsInfinite) = IsInfinite()
+prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
+prod_iteratorsize(::IsInfinite, b) = IsInfinite()
+prod_iteratorsize(a, b) = SizeUnknown()
+
 # one iterator
 immutable Prod1{I} <: AbstractProdIterator
     a::I
@@ -530,7 +537,7 @@ a tuple whose `i`th element comes from the `i`th argument iterator. The first it
 changes the fastest. Example:
 
 ```jldoctest
-julia> collect(product(1:2,3:5))
+julia> vec(collect(product(1:2,3:5)))
 6-element Array{Tuple{Int64,Int64},1}:
  (1,3)
  (2,3)
@@ -589,12 +596,75 @@ iteratorsize{I1,I2}(::Type{Prod{I1,I2}}) = prod_iteratorsize(iteratorsize(I1),it
     ((x[1][1],x[1][2]...), x[2])
 end
 
-prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
-# products can have an infinite iterator
-prod_iteratorsize(::IsInfinite, ::IsInfinite) = IsInfinite()
-prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
-prod_iteratorsize(::IsInfinite, b) = IsInfinite()
-prod_iteratorsize(a, b) = SizeUnknown()
+# lexicographic order product iterator
+
+immutable LexProd2{I1, I2} <: AbstractProdIterator
+    a::I1
+    b::I2
+end
+
+"""
+    lexproduct(iters...)
+
+Returns an iterator over the product of several iterators. Each generated element is
+a tuple whose `i`th element comes from the `i`th argument iterator. The first iterator
+changes the slowest, so the generated values are in lexicographic order. Example:
+
+```jldoctest
+julia> vec(collect(lexproduct(1:2,3:5)))
+6-element Array{Tuple{Int64,Int64},1}:
+ (1,3)
+ (1,4)
+ (1,5)
+ (2,3)
+ (2,4)
+ (2,5)
+```
+"""
+lexproduct(a, b) = LexProd2(a, b)
+
+lexproduct(a) = Prod1(a)
+
+eltype{I1,I2}(::Type{LexProd2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
+
+iteratoreltype{I1,I2}(::Type{LexProd2{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
+iteratorsize{I1,I2}(::Type{LexProd2{I1,I2}}) = prod_iteratorsize(iteratorsize(I1),iteratorsize(I2))
+
+@inline function lex_prod_next(p, st)
+    s1, s2 = st[1], st[2]
+    v2, s2 = next(p.b, s2)
+
+    nv1 = st[3]
+    if isnull(nv1)
+        v1, s1 = next(p.a, s1)
+    else
+        v1 = nv1.value
+    end
+
+    if done(p.b, s2)
+        return (v1,v2), (s1, start(p.b), oftype(nv1,nothing), done(p.a,s1))
+    end
+    return (v1,v2), (s1, s2, Nullable(v1), false)
+end
+
+@inline next(p::LexProd2, st) = lex_prod_next(p, st)
+
+# n iterators
+immutable LexProd{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
+    a::I1
+    b::I2
+end
+lexproduct(a, b, c...) = LexProd(a, lexproduct(b, c...))
+
+eltype{I1,I2}(::Type{LexProd{I1,I2}}) = tuple_type_cons(eltype(I1), eltype(I2))
+
+iteratoreltype{I1,I2}(::Type{LexProd{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
+iteratorsize{I1,I2}(::Type{LexProd{I1,I2}}) = prod_iteratorsize(iteratorsize(I1),iteratorsize(I2))
+
+@inline function next{I1,I2}(p::LexProd{I1,I2}, st)
+    x = lex_prod_next(p, st)
+    ((x[1][1],x[1][2]...), x[2])
+end
 
 
 # flatten an iterator of iterators
