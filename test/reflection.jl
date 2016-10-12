@@ -573,3 +573,20 @@ end
 @test counter18434 == 1
 @which get_A18434()(1, y=2)
 @test counter18434 == 2
+
+# PR #18888: code_typed shouldn't cache if not optimizing
+let
+    f18888() = return nothing
+    m = first(methods(f18888, Tuple{}))
+    @test m.specializations == nothing
+    ft = typeof(f18888)
+
+    code_typed(f18888, Tuple{}; optimize=false)
+    @test m.specializations != nothing  # uncached, but creates the specializations entry
+    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
+    @test !isdefined(code, :inferred)
+
+    code_typed(f18888, Tuple{}; optimize=true)
+    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
+    @test isdefined(code, :inferred)
+end
