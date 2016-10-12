@@ -71,7 +71,7 @@ getindex(x::Nullable) = isnull(x) ? throw(NullException()) : x.value
     get(x::Nullable)
 
 Attempt to access the value of `x`. Throw a `NullException` if the value is not
-present. Equivalent to `getindex(x::Nullable)`.
+present. Equivalent to `getindex(x::Nullable)`, which can be spelt `x[]`.
 """
 get(x::Nullable) = x[]
 
