@@ -3061,7 +3061,7 @@ f(x) = yt(x)
 ;; only possible returned values.
 (define (compile-body e vi lam)
   (let ((code '())
-        (filename #f)
+        (filename 'none)
         (first-line #t)
         (rett #f)
         (arg-map #f)          ;; map arguments to new names if they are assigned
