@@ -968,8 +968,10 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
         if isa(tti, TypeConstructor)
             tti = tti.body
         end
-        if isa(ai, Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
-                                                  abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
+        if isa(ti, Const) && (isa(ti.val, SimpleVector) || isa(ti.val, Tuple))
+            result[i] = Any[ abstract_eval_constant(x) for x in ti.val ]
+        elseif isa(ai, Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
+                                                      abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
             aa = ai.args
             result[i] = Any[ (isa(aa[j],Expr) ? aa[j].typ : abstract_eval(aa[j],vtypes,sv)) for j=2:length(aa) ]
             if _any(isvarargtype, result[i])
@@ -1008,7 +1010,7 @@ function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable
         n = length(at)
         if n-1 > MAX_TUPLETYPE_LEN
             tail = foldl((a,b)->tmerge(a,unwrapva(b)), Bottom, at[MAX_TUPLETYPE_LEN+1:n])
-            at = vcat(at[1:MAX_TUPLETYPE_LEN], Any[Vararg{tail}])
+            at = vcat(at[1:MAX_TUPLETYPE_LEN], Any[Vararg{widenconst(tail)}])
         end
         return abstract_call(af, (), at, vtypes, sv)
     end
