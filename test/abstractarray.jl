@@ -775,3 +775,15 @@ end
 #to_shape
 @test Base.to_shape(()) === ()
 @test Base.to_shape(1) === 1
+
+#vec for multiple arrays
+@testset "Multi-arg vec" begin
+    x = rand(4)
+    y = rand(3,4)
+    z = rand(2)
+    @test size(vec(x,y)) == (16,)
+    @test size(vec(y,z)) == (14,)
+    @test size(vec(x,y,z)) == (18,)
+    @test vec(x,y,z) == vcat(vec(x),vec(y),vec(z))
+end
+

@@ -34,6 +34,22 @@ julia> vec(a)
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
+function vec{T}(a1::AbstractArray{T}, a2::AbstractArray, arest::AbstractArray...)
+    n1 = length(a1)
+    n2 = length(a2)
+    n = n1 + n2 + mapreduce(length, +, 0, arest)
+    i = 0
+    v = Array(T,n)
+    v[1:n1] = a1
+    v[n1+1:n1+n2] = a2
+    i = n1+n2
+    for a in arest
+        ni = length(a)
+        v[i+1:i+ni] = a
+        i += ni
+    end
+    v
+end
 
 _sub(::Tuple{}, ::Tuple{}) = ()
 _sub(t::Tuple, ::Tuple{}) = t
