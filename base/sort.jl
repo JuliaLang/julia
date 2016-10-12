@@ -608,7 +608,7 @@ function sort(A::AbstractArray, dim::Integer;
         Ap = permutedims(A, pdims)
         Av = vec(Ap)
         sort_chunks!(Av, n, alg, order)
-        ipermutedims(Ap, pdims)
+        permutedims(Ap, invperm(pdims))
     else
         Av = A[:]
         sort_chunks!(Av, n, alg, order)
