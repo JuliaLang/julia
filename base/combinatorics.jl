@@ -103,17 +103,6 @@ function permute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-"""
-    permute!(v, p)
-
-Permute vector `v` in-place, according to permutation `p`. No checking is done
-to verify that `p` is a permutation.
-
-To return a new permutation, use `v[p]`. Note that this is generally faster than
-`permute!(v,p)` for large vectors.
-"""
-permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
-
 function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
     start = 0
@@ -137,12 +126,26 @@ function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     a
 end
 
-"""
-    ipermute!(v, p)
 
-Like `permute!`, but the inverse of the given permutation is applied.
 """
-ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
+    permute!(v, p, inverse = false)
+
+Permute vector `v` in-place, according to permutation `p`. No checking is done
+to verify that `p` is a permutation.
+
+To return a new permutation, use `v[p]`. Note that this is generally faster than
+`permute!(v,p)` for large vectors.
+
+If `inverse` is `true`, the inverse of the given permutation is applied.
+"""
+function permute!(a, p::AbstractVector, inverse = false)
+    if inverse
+        ipermute!!(a, copymutable(p))
+    else
+        permute!!(a, copymutable(p))
+    end
+end
+
 
 """
     invperm(v)
