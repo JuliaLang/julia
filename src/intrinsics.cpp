@@ -72,12 +72,9 @@ extern "C" JL_DLLEXPORT int8_t jl_is_memdebug() {
 
 static Type *FTnbits(size_t nb)
 {
-#ifndef DISABLE_FLOAT16
     if (nb == 16)
         return T_float16;
-    else
-#endif
-    if (nb == 32)
+    else if (nb == 32)
         return T_float32;
     else if (nb == 64)
         return T_float64;
@@ -109,6 +106,7 @@ static Type *JL_INTT(Type *t)
         return t;
     if (t->isPointerTy())
         return T_size;
+    if (t == T_float16) return T_int16;
     if (t == T_float32) return T_int32;
     if (t == T_float64) return T_int64;
     assert(t == T_void);
@@ -118,18 +116,18 @@ static Type *JL_INTT(Type *t)
 static jl_value_t *JL_JLUINTT(Type *t)
 {
     assert(!t->isIntegerTy());
+    if (t == T_float16) return (jl_value_t*)jl_uint16_type;
     if (t == T_float32) return (jl_value_t*)jl_uint32_type;
     if (t == T_float64) return (jl_value_t*)jl_uint64_type;
-    if (t == T_float16) return (jl_value_t*)jl_uint16_type;
     assert(t == T_void);
     return jl_bottom_type;
 }
 static jl_value_t *JL_JLSINTT(Type *t)
 {
     assert(!t->isIntegerTy());
+    if (t == T_float16) return (jl_value_t*)jl_int16_type;
     if (t == T_float32) return (jl_value_t*)jl_int32_type;
     if (t == T_float64) return (jl_value_t*)jl_int64_type;
-    if (t == T_float16) return (jl_value_t*)jl_int16_type;
     assert(t == T_void);
     return jl_bottom_type;
 }
@@ -180,10 +178,8 @@ static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
         }
         case 2: {
             uint16_t data16 = *(uint16_t*)ptr;
-#ifndef DISABLE_FLOAT16
             if (jl_is_floattype(bt))
                 return ConstantFP::get(jl_LLVMContext, LLVM_FP(APFloat::IEEEhalf,APInt(16,data16)));
-#endif
             return ConstantInt::get(T_int16, data16);
         }
         case 4: {
