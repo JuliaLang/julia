@@ -342,12 +342,9 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
             return T_size;
         int nb = jl_datatype_size(jt);
         if (jl_is_floattype(jt)) {
-#ifndef DISABLE_FLOAT16
             if (nb == 2)
                 return T_float16;
-            else
-#endif
-            if (nb == 4)
+            else if (nb == 4)
                 return T_float32;
             else if (nb == 8)
                 return T_float64;
