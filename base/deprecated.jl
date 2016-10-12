@@ -1019,4 +1019,38 @@ eval(Multimedia, :(macro textmime(mime)
     end
 end))
 
+# Deprecate conv2 in favor of more optimized methods in ImageFiltering module
+function conv2{T}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T})
+    depwarn(string("conv2 has been deprecated in favor imfilter in ImageFiltering.jl.\n",
+                   "Run Pkg.add(\"ImageFiltering\") to install ImageFiltering on Julia v0.6-"), :conv2)
+    m = length(u)+size(A,1)-1
+    n = length(v)+size(A,2)-1
+    B = zeros(T, m, n)
+    B[1:size(A,1),1:size(A,2)] = A
+    u = fft([u;zeros(T,m-length(u))])
+    v = fft([v;zeros(T,n-length(v))])
+    C = ifft(fft(B) .* (u * v.'))
+    if T <: Real
+        return real(C)
+    end
+    return C
+end
+function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
+    depwarn(string("conv2 has been deprecated in favor imfilter in ImageFiltering.jl.\n",
+                   "Run Pkg.add(\"ImageFiltering\") to install ImageFiltering on Julia v0.6-"), :conv2)
+    sa, sb = size(A), size(B)
+    At = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
+    Bt = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
+    At[1:sa[1], 1:sa[2]] = A
+    Bt[1:sb[1], 1:sb[2]] = B
+    p = plan_fft(At)
+    C = ifft((p*At).*(p*Bt))
+    if T <: Real
+        return real(C)
+    end
+    return C
+end
+conv2{T<:Integer}(A::StridedMatrix{T}, B::StridedMatrix{T}) = round(Int,conv2(float(A), float(B)))
+conv2{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) = round(Int,conv2(float(u), float(v), float(A)))
+
 # End deprecations scheduled for 0.6
