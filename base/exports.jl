@@ -923,7 +923,6 @@ export
     bfft,
     brfft,
     conv,
-    conv2,
     dct!,
     dct,
     deconv,
