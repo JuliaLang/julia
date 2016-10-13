@@ -191,7 +191,11 @@ Order-Related Functions
 
    .. Docstring generated from Julia source
 
-   Partially sort the vector ``v`` in place, according to the order specified by ``by``\ , ``lt`` and ``rev`` so that the value at index ``k`` (or range of adjacent values if ``k`` is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If ``k`` is a single index, that value is returned; if ``k`` is a range, an array of values at those indices is returned. Note that ``select!`` does not fully sort the input array.
+   Partially sort the vector ``v`` in place, according to the order specified by ``by``\ , ``lt`` and ``rev`` so that the value at index ``k`` (or range of adjacent values if ``k`` is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If ``k`` is a single index, that value is returned; if ``k`` is a range, an array of values at those indices is returned.
+
+   .. note::
+      ``select!`` does not fully sort the input array ``v``\ , but all elements will be correctly ordered with respect to the value at index ``k``\ . That is, for any indices ``i`` and ``j`` such that ``i <= k <= j``\ , then ``v[i] <= v[k] <= v[j]``\ .
+
 
 .. function:: select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
