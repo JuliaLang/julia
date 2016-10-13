@@ -597,16 +597,12 @@ There are situations when you want to construct a string or use string
 semantics, but the behavior of the standard string construct is not
 quite what is needed. For these kinds of situations, Julia provides
 :ref:`non-standard string literals <man-non-standard-string-literals2>`.
-A non-standard string literal looks like
-a regular double-quoted string literal, but is immediately prefixed by
-an identifier, and doesn't behave quite like a normal string literal. The
-convention is that non-standard literals with uppercase prefixes produce
-actual string objects, while those with lowercase prefixes produce
-non-string objects like byte arrays or compiled regular expressions. Regular
-expressions, byte array literals and version number literals, as described
-below, are some examples of non-standard string literals. Other examples are
-given in the :ref:`metaprogramming <man-non-standard-string-literals2>`
-section.
+A non-standard string literal looks like a regular double-quoted string literal,
+but is immediately prefixed by an identifier, and doesn't behave quite like a
+normal string literal.  Regular expressions, byte array literals and version
+number literals, as described below, are some examples of non-standard string
+literals. Other examples are given in the :ref:`metaprogramming
+<man-non-standard-string-literals2>` section.
 
 
 Regular Expressions
