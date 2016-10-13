@@ -659,47 +659,6 @@ end
                 @test op(A13024, B13024) == op.(full(A13024), full(B13024))
             end
         end
-
-        let A = 2. * speye(5,5)
-            @test full(spones(A)) == eye(full(A))
-        end
-
-        let
-            A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
-            A = A + A'
-            @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
-            A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
-            A = A*A'
-            @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
-            A = spdiagm(rand(5)) + sprandn(5,5,0.2)
-            A = A + A.'
-            @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
-            A = spdiagm(rand(5)) + sprandn(5,5,0.2)
-            A = A*A.'
-            @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
-            @test factorize(triu(A)) == triu(A)
-            @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-            @test factorize(tril(A)) == tril(A)
-            @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-            @test !Base.USE_GPL_LIBS || factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
-            @test_throws ErrorException chol(A)
-            @test_throws ErrorException lu(A)
-            @test_throws ErrorException eig(A)
-            @test_throws ErrorException inv(A)
-        end
-
-        let
-            n = 100
-            A = sprandn(n, n, 0.5) + sqrt(n)*I
-            x = LowerTriangular(A)*ones(n)
-            @test LowerTriangular(A)\x ≈ ones(n)
-            x = UpperTriangular(A)*ones(n)
-            @test UpperTriangular(A)\x ≈ ones(n)
-            A[2,2] = 0
-            dropzeros!(A)
-            @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
-            @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
-        end
     end
 
     @testset "https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA" begin
@@ -735,6 +694,53 @@ end
             @test isa(abs.(A), SparseMatrixCSC) # representative for _unary_nz2nz_z2z class
             @test isa(exp.(A), Array) # representative for _unary_nz2nz_z2nz class
         end
+    end
+end
+
+@testset "Test equivalency of created identity matrices from sparse matrix" begin
+    let A = 2. * speye(5,5)
+        @test full(spones(A)) == eye(full(A))
+    end
+end
+
+@testset "Test factorization" begin
+    let
+        A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+        A = A + A'
+        @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+        A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+        A = A*A'
+        @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+        A = spdiagm(rand(5)) + sprandn(5,5,0.2)
+        A = A + A.'
+        @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+        A = spdiagm(rand(5)) + sprandn(5,5,0.2)
+        A = A*A.'
+        @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+        @test factorize(triu(A)) == triu(A)
+        @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+        @test factorize(tril(A)) == tril(A)
+        @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+        @test !Base.USE_GPL_LIBS || factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
+        @test_throws ErrorException chol(A)
+        @test_throws ErrorException lu(A)
+        @test_throws ErrorException eig(A)
+        @test_throws ErrorException inv(A)
+    end
+end
+
+@testset "Test matrix division" begin
+    let
+        n = 100
+        A = sprandn(n, n, 0.5) + sqrt(n)*I
+        x = LowerTriangular(A)*ones(n)
+        @test LowerTriangular(A)\x ≈ ones(n)
+        x = UpperTriangular(A)*ones(n)
+        @test UpperTriangular(A)\x ≈ ones(n)
+        A[2,2] = 0
+        dropzeros!(A)
+        @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
+        @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
     end
 end
 
