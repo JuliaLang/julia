@@ -47,7 +47,6 @@ Symbol(a::Array{UInt8,1}) =
 include("array.jl")
 include("abstractarray.jl")
 
-#TODO: eliminate Dict from inference
 include("hashing.jl")
 include("nofloat_hashing.jl")
 
@@ -59,7 +58,7 @@ include("reduce.jl")
 
 ## core structures
 include("intset.jl")
-include("dict.jl")
+include("associative.jl")
 include("iterator.jl")
 
 # core docsystem
