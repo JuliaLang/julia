@@ -1019,4 +1019,6 @@ eval(Multimedia, :(macro textmime(mime)
     end
 end))
 
+@deprecate ipermutedims(A::AbstractArray,p) permutedims(A, invperm(p))
+
 # End deprecations scheduled for 0.6
