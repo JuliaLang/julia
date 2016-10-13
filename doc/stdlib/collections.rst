@@ -538,34 +538,58 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Returns the index of the maximum element in a collection. The collection must not be empty.
+   Returns the index of the maximum element in a collection. If there are multiple maximal elements, then the first one will be returned. ``NaN`` values are ignored, unless all elements are ``NaN``\ .
+
+   The collection must not be empty.
 
    .. doctest::
 
        julia> indmax([8,0.1,-9,pi])
        1
 
+       julia> indmax([1,7,7,6])
+       2
+
+       julia> indmax([1,7,7,NaN])
+       2
+
 .. function:: indmin(itr) -> Integer
 
    .. Docstring generated from Julia source
 
-   Returns the index of the minimum element in a collection. The collection must not be empty.
+   Returns the index of the minimum element in a collection. If there are multiple minimal elements, then the first one will be returned. ``NaN`` values are ignored, unless all elements are ``NaN``\ .
+
+   The collection must not be empty.
 
    .. doctest::
 
        julia> indmin([8,0.1,-9,pi])
        3
 
+       julia> indmin([7,1,1,6])
+       2
+
+       julia> indmin([7,1,1,NaN])
+       2
+
 .. function:: findmax(itr) -> (x, index)
 
    .. Docstring generated from Julia source
 
-   Returns the maximum element and its index. The collection must not be empty.
+   Returns the maximum element of the collection ``itr`` and its index. If there are multiple maximal elements, then the first one will be returned. ``NaN`` values are ignored, unless all elements are ``NaN``\ .
+
+   The collection must not be empty.
 
    .. doctest::
 
        julia> findmax([8,0.1,-9,pi])
        (8.0,1)
+
+       julia> findmax([1,7,7,6])
+       (7,2)
+
+       julia> findmax([1,7,7,NaN])
+       (7.0,2)
 
 .. function:: findmax(A, region) -> (maxval, index)
 
@@ -577,12 +601,20 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Returns the minimum element and its index. The collection must not be empty.
+   Returns the minimum element of the collection ``itr`` and its index. If there are multiple minimal elements, then the first one will be returned. ``NaN`` values are ignored, unless all elements are ``NaN``\ .
+
+   The collection must not be empty.
 
    .. doctest::
 
        julia> findmin([8,0.1,-9,pi])
        (-9.0,3)
+
+       julia> findmin([7,1,1,6])
+       (1,2)
+
+       julia> findmin([7,1,1,NaN])
+       (1.0,2)
 
 .. function:: findmin(A, region) -> (minval, index)
 

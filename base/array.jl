@@ -1413,12 +1413,21 @@ end
 """
     findmax(itr) -> (x, index)
 
-Returns the maximum element and its index.
+Returns the maximum element of the collection `itr` and its index. If there are multiple
+maximal elements, then the first one will be returned. `NaN` values are ignored, unless
+all elements are `NaN`.
+
 The collection must not be empty.
 
 ```jldoctest
 julia> findmax([8,0.1,-9,pi])
 (8.0,1)
+
+julia> findmax([1,7,7,6])
+(7,2)
+
+julia> findmax([1,7,7,NaN])
+(7.0,2)
 ```
 """
 function findmax(a)
@@ -1442,12 +1451,21 @@ end
 """
     findmin(itr) -> (x, index)
 
-Returns the minimum element and its index.
+Returns the minimum element of the collection `itr` and its index. If there are multiple
+minimal elements, then the first one will be returned. `NaN` values are ignored, unless
+all elements are `NaN`.
+
 The collection must not be empty.
 
 ```jldoctest
 julia> findmin([8,0.1,-9,pi])
 (-9.0,3)
+
+julia> findmin([7,1,1,6])
+(1,2)
+
+julia> findmin([7,1,1,NaN])
+(1.0,2)
 ```
 """
 function findmin(a)
@@ -1471,12 +1489,21 @@ end
 """
     indmax(itr) -> Integer
 
-Returns the index of the maximum element in a collection.
+Returns the index of the maximum element in a collection. If there are multiple maximal
+elements, then the first one will be returned. `NaN` values are ignored, unless all
+elements are `NaN`.
+
 The collection must not be empty.
 
 ```jldoctest
 julia> indmax([8,0.1,-9,pi])
 1
+
+julia> indmax([1,7,7,6])
+2
+
+julia> indmax([1,7,7,NaN])
+2
 ```
 """
 indmax(a) = findmax(a)[2]
@@ -1484,12 +1511,21 @@ indmax(a) = findmax(a)[2]
 """
     indmin(itr) -> Integer
 
-Returns the index of the minimum element in a collection.
+Returns the index of the minimum element in a collection. If there are multiple minimal
+elements, then the first one will be returned. `NaN` values are ignored, unless all
+elements are `NaN`.
+
 The collection must not be empty.
 
 ```jldoctest
 julia> indmin([8,0.1,-9,pi])
 3
+
+julia> indmin([7,1,1,6])
+2
+
+julia> indmin([7,1,1,NaN])
+2
 ```
 """
 indmin(a) = findmin(a)[2]
