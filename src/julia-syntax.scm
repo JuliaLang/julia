@@ -185,8 +185,8 @@
                                                                 val))))
                          `(,(car body) ,@meta
                            ,(if (return? val)
-                                `(return (call (top convert) ,rett ,(cadr val)))
-                                `(call (top convert) ,rett ,val)))
+                                `(return ,(convert-for-type-decl (cadr val) rett))
+                                (convert-for-type-decl val rett)))
                          (let ((R (make-ssavalue)))
                            `(,(car body) ,@meta
                              (= ,R ,rett)
