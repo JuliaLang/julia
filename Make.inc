@@ -403,9 +403,9 @@ DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS := -O3 -g
 ifeq ($(OS), Darwin)
 ifeq ($(USE_LIBCPP), 1)
-CC += -stdlib=libc++ -mmacosx-version-min=10.7
-CXX += -stdlib=libc++ -mmacosx-version-min=10.7
-FC += -mmacosx-version-min=10.7
+CC += -stdlib=libc++ -mmacosx-version-min=10.8
+CXX += -stdlib=libc++ -mmacosx-version-min=10.8
+FC += -mmacosx-version-min=10.8
 else
 CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
 CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
