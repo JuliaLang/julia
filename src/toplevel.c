@@ -584,11 +584,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         return jl_nothing;
     }
 
-    jl_value_t *thunk = NULL;
+    jl_method_instance_t *li = NULL;
     jl_value_t *result;
     jl_code_info_t *thk = NULL;
     int ewc = 0;
-    JL_GC_PUSH3(&thunk, &thk, &ex);
+    JL_GC_PUSH3(&li, &thk, &ex);
 
     if (!expanded && ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
         ex->head != method_sym && ex->head != toplevel_sym) {
@@ -633,7 +633,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     }
 
     if (ewc) {
-        jl_method_instance_t *li = jl_new_thunk(thk);
+        li = jl_new_thunk(thk);
         jl_type_infer(li, 0);
         jl_value_t *dummy_f_arg = NULL;
         result = jl_call_method_internal(li, &dummy_f_arg, 1);
