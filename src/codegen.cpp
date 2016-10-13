@@ -212,7 +212,6 @@ static DataLayout *jl_data_layout;
 #endif
 
 // types
-static Type *T_jlvalue;
 static Type *T_pjlvalue;
 static Type *T_ppjlvalue;
 static Type *jl_parray_llvmt;
@@ -299,8 +298,15 @@ int32_t jl_jlcall_api(const void *function)
     // give the function an index in the constant lookup table
     if (function == NULL)
         return 0;
-    const Function *F = (const Function*)function;
-    return (F->getFunctionType() == jl_func_sig ? 1 : 3);
+    const Function *F = cast<const Function>((const Value*)function);
+    StringRef Name = F->getName();
+    if (Name.startswith("japi3_")) // jlcall abi 3 from JIT
+        return 3;
+    assert(Name.startswith("japi1_") || // jlcall abi 1 from JIT
+           Name.startswith("jsys1_") || // jlcall abi 1 from sysimg
+           Name.startswith("jlcall_") || // jlcall abi 1 from JIT wrapping a specsig method
+           Name.startswith("jlsysw_")); // jlcall abi 1 from sysimg wrapping a specsig method
+    return 1;
 }
 
 
@@ -633,7 +639,6 @@ static inline jl_cgval_t ghostValue(jl_datatype_t *typ)
 static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, MDNode *tbaa)
 {
     // eagerly put this back onto the stack
-    assert(v->getType() != T_pjlvalue);
     assert(tbaa);
     jl_cgval_t tagval(v, NULL, false, typ);
     tagval.tbaa = tbaa;
@@ -648,7 +653,6 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
         return ghostValue(typ);
     }
     if (v && T->isAggregateType() && !isboxed) {
-        assert(v->getType() != T_pjlvalue);
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
         Value *loc = emit_static_alloca(T);
@@ -781,8 +785,9 @@ static Value *alloc_local(int s, jl_codectx_t *ctx)
     jl_varinfo_t &vi = ctx->slots[s];
     jl_value_t *jt = vi.value.typ;
     assert(store_unboxed_p(s,ctx));
-    Type *vtype = julia_type_to_llvm(jt);
-    assert(vtype != T_pjlvalue);
+    bool isboxed;
+    Type *vtype = julia_type_to_llvm(jt, &isboxed);
+    assert(!isboxed);
     if (type_is_ghost(vtype)) {
         vi.value = ghostValue(jt);
         return NULL;
@@ -813,7 +818,7 @@ static void maybe_alloc_arrayvar(int s, jl_codectx_t *ctx)
         // CreateAlloca is OK here because maybe_alloc_arrayvar is only called in the prologue setup
         av.dataptr = builder.CreateAlloca(PointerType::get(elt,0));
         av.len = builder.CreateAlloca(T_size);
-        for(int i=0; i < ndims-1; i++)
+        for (int i = 0; i < ndims - 1; i++)
             av.sizes.push_back(builder.CreateAlloca(T_size));
         av.ty = jt;
         (*ctx->arrayvars)[s] = av;
@@ -3223,8 +3228,9 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         assert(!ctx->ssavalue_assigned.at(idx));
         jl_cgval_t slot = emit_expr(r, ctx); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
         if (!slot.isboxed && !slot.isimmutable) { // emit a copy of values stored in mutable slots
-            Type *vtype = julia_type_to_llvm(slot.typ);
-            assert(vtype != T_pjlvalue);
+            bool isboxed;
+            Type *vtype = julia_type_to_llvm(slot.typ, &isboxed);
+            assert(!isboxed);
             Value *dest = emit_static_alloca(vtype);
             emit_unbox(vtype, slot, slot.typ, dest);
             slot = mark_julia_slot(dest, slot.typ, tbaa_stack);
@@ -4063,18 +4069,10 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
 }
 
 // generate a julia-callable function that calls f (AKA lam)
-static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, bool sret, Module *M)
+static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, const std::string &funcName, bool sret, Module *M)
 {
-    std::stringstream funcName;
-    const std::string &fname = f->getName().str();
-    funcName << "jlcall_";
-    if (fname.compare(0, 6, "julia_") == 0)
-        funcName << fname.substr(6);
-    else
-        funcName << fname;
-
     Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage,
-                                   funcName.str(), M);
+                                   funcName, M);
     jl_init_function(w);
 #if JL_LLVM_VERSION >= 30700
     w->addFnAttr("no-frame-pointer-elim", "true");
@@ -4246,7 +4244,6 @@ static std::unique_ptr<Module> emit_function(
 
     // step 4. determine function signature
     jl_value_t *jlrettype = lam->rettype;
-    Function *f = NULL;
 
     bool specsig = false;
     bool needsparams = lam->def ? jl_svec_len(lam->def->sparam_syms) != jl_svec_len(lam->sparam_vals) : false;
@@ -4272,20 +4269,28 @@ static std::unique_ptr<Module> emit_function(
     if (!specsig)
         ctx.nReqArgs--;  // function not part of argArray in jlcall
 
-    std::stringstream funcName;
-    // try to avoid conflicts in the global symbol table
-    funcName << "julia_" << ctx.name
-#if (defined(_OS_LINUX_) && JL_LLVM_VERSION < 30400)
-        + (ctx.name[0] == '@') ? 1 : 0
-#endif
-    ;
-
-    Function *fwrap = NULL;
-    funcName << "_" << globalUnique++;
-
-    ctx.sret = false;
     Module *M = new Module(ctx.name, jl_LLVMContext);
     jl_setup_module(M, params);
+
+    std::stringstream funcName;
+    // try to avoid conflicts in the global symbol table
+    if (specsig)
+        funcName << "jlcall_";
+    else if (needsparams)
+        funcName << "japi3_";
+    else
+        funcName << "japi1_";
+    const char* unadorned_name = ctx.name;
+#if (defined(_OS_LINUX_) && JL_LLVM_VERSION < 30400)
+    if (unadorned_name[0] == '@')
+        unadorned_name++;
+#endif
+    funcName << unadorned_name << "_" << globalUnique++;
+
+    Function *f = NULL;
+    Function *fwrap = NULL;
+    ctx.sret = false;
+
     if (specsig) { // assumes !va and !needsparams
         std::vector<Type*> fsig(0);
         Type *rt;
@@ -4302,7 +4307,7 @@ static std::unique_ptr<Module> emit_function(
             fsig.push_back(rt->getPointerTo());
             rt = T_void;
         }
-        for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
+        for (size_t i = 0; i < jl_nparams(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tparam(lam->specTypes,i));
             if (type_is_ghost(ty))
                 continue;
@@ -4310,9 +4315,11 @@ static std::unique_ptr<Module> emit_function(
                 ty = PointerType::get(ty,0);
             fsig.push_back(ty);
         }
+        std::stringstream specName;
+        specName << "julia_" << unadorned_name << "_" << globalUnique;
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              GlobalVariable::ExternalLinkage,
-                             funcName.str(), M);
+                             specName.str(), M);
         jl_init_function(f);
         if (ctx.sret) {
             f->addAttribute(1, Attribute::StructRet);
@@ -4321,7 +4328,7 @@ static std::unique_ptr<Module> emit_function(
 #if JL_LLVM_VERSION >= 30700
         f->addFnAttr("no-frame-pointer-elim", "true");
 #endif
-        fwrap = gen_jlcall_wrapper(lam, f, ctx.sret, M);
+        fwrap = gen_jlcall_wrapper(lam, f, funcName.str(), ctx.sret, M);
         declarations->functionObject = function_proto(fwrap);
         declarations->specFunctionObject = function_proto(f);
     }
@@ -5302,7 +5309,18 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int s
     else {
         // this assigns a function pointer (from loading the system image), to the function object
         std::stringstream funcName;
-        funcName << "jlsys_" << jl_symbol_name(lam->def->name) << "_" << globalUnique++;
+        if (specsig)
+            funcName << "jlsys_"; // the specsig implementation
+        else if (lam->functionObjectsDecls.specFunctionObject)
+            funcName << "jlsysw_"; // it's a specsig wrapper
+        else if (lam->jlcall_api == 1)
+            funcName << "jsys1_"; // it's a jlcall without a specsig
+        const char* unadorned_name = jl_symbol_name(lam->def->name);
+#if (defined(_OS_LINUX_) && JL_LLVM_VERSION < 30400)
+        if (unadorned_name[0] == '@')
+            unadorned_name++;
+#endif
+        funcName << unadorned_name << "_" << globalUnique++;
         if (specsig) { // assumes !va
             SmallVector<Type*, 8> fsig;
             jl_value_t *jlrettype = lam->rettype;
@@ -5321,7 +5339,7 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int s
                 fsig.push_back(rt->getPointerTo());
                 rt = T_void;
             }
-            for (size_t i=0; i < jl_nparams(lam->specTypes); i++) {
+            for (size_t i = 0; i < jl_nparams(lam->specTypes); i++) {
                 Type *ty = julia_type_to_llvm(jl_tparam(lam->specTypes,i));
                 if (type_is_ghost(ty))
                     continue;
@@ -5419,13 +5437,7 @@ static void init_julia_llvm_env(Module *m)
     // This type is used to create undef Values for use in struct declarations to skip indices
     NoopType = ArrayType::get(T_int1, 0);
 
-    // add needed base definitions to our LLVM environment
-    StructType *valueSt = StructType::create(jl_LLVMContext, "jl_value_t");
-    Type *valueStructElts[1] = { PointerType::getUnqual(valueSt) };
-    ArrayRef<Type*> vselts(valueStructElts);
-    valueSt->setBody(vselts);
-    T_jlvalue = valueSt;
-
+    // add needed base debugging definitions to our LLVM environment
     DIBuilder dbuilder(*m);
 #if JL_LLVM_VERSION >= 30700
     DIFile *julia_h = dbuilder.createFile("julia.h","");
@@ -5490,7 +5502,7 @@ static void init_julia_llvm_env(Module *m)
         dbuilder.getOrCreateArray(ArrayRef<Value*>()));
 #endif
 
-    T_pjlvalue = PointerType::get(T_jlvalue, 0);
+    T_pjlvalue = T_ppint8;
     T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
     two_pvalue_llvmt.push_back(T_pjlvalue);
     two_pvalue_llvmt.push_back(T_pjlvalue);

@@ -706,18 +706,26 @@ char *jl_demangle(const char *name)
     const char *start = name + 6;
     const char *end = name + strlen(name);
     char *ret;
-    if (strncmp(name, "julia_", 6)) goto done;
-    if (*start == '\0') goto done;
+    if (strncmp(name, "japi1_", 6) &&
+        strncmp(name, "japi3_", 6) &&
+        strncmp(name, "julia_", 6) &&
+        strncmp(name, "jsys1_", 6) &&
+        strncmp(name, "jlsys_", 6))
+        goto done;
+    if (*start == '\0')
+        goto done;
     while (*(--end) != '_') {
         char c = *end;
-        if (c < '0' || c > '9') goto done;
+        if (c < '0' || c > '9')
+            goto done;
     }
-    if (end <= start) goto done;
-    ret = (char*)malloc(end-start+1);
-    memcpy(ret,start,end-start);
-    ret[end-start] = '\0';
+    if (end <= start)
+        goto done;
+    ret = (char*)malloc(end - start + 1);
+    memcpy(ret, start, end - start);
+    ret[end - start] = '\0';
     return ret;
- done:
+done:
     return strdup(name);
 }
 
@@ -822,7 +830,10 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         else
             jl_copy_str(&frame->file_name, file_name.c_str());
 
-        if (!frame->func_name || !func_name.compare(0, 7, "jlcall_") || !func_name.compare(0, 7, "jlcapi_")) {
+        if (!frame->func_name ||
+                func_name.compare(0, 7, "jlsysw_") == 0 ||
+                func_name.compare(0, 7, "jlcall_") == 0 ||
+                func_name.compare(0, 7, "jlcapi_") == 0) {
             frame->fromC = 1;
         }
     }
