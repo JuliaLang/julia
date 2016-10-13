@@ -486,14 +486,11 @@ end
     @test_throws ArgumentError permutedims(s, (1,1,1))
     @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(a, (1,1,1))
     @test_throws ArgumentError Base.PermutedDimsArrays.PermutedDimsArray(s, (1,1,1))
-end
 
-@testset "ipermutedims" begin
-    tensors = Any[rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
-    for i = tensors
+    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
         perm = randperm(4)
-        @test isequal(i,ipermutedims(permutedims(i,perm),perm))
-        @test isequal(i,permutedims(ipermutedims(i,perm),perm))
+        @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
+        @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
     end
 end
 

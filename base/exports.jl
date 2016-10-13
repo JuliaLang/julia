@@ -532,7 +532,6 @@ export
     indmin,
     invperm,
     ipermute!,
-    ipermutedims,
     isassigned,
     isperm,
     issorted,
