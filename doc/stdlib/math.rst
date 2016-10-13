@@ -455,14 +455,6 @@ Mathematical Operators
 
    Not-equals comparison operator. Always gives the opposite answer as ``==``\ . New types should generally not implement this, and rely on the fallback definition ``!=(x,y) = !(x==y)`` instead.
 
-.. _===:
-.. function:: ===(x, y)
-              ≡(x,y)
-
-   .. Docstring generated from Julia source
-
-   See the :func:`is` operator.
-
 .. _!==:
 .. function:: !==(x, y)
               ≢(x,y)
