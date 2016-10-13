@@ -432,15 +432,15 @@ static void jl_update_all_fptrs(void)
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_method_instance_t *li = delayed_fptrs[i].li;
         assert(li->def);
-        int32_t func = delayed_fptrs[i].func - 1;
-        if (func >= 0) {
-            jl_fptr_to_llvm((jl_fptr_t)fvars[func], li, 0);
-            linfos[func] = li;
-        }
         int32_t cfunc = delayed_fptrs[i].cfunc - 1;
         if (cfunc >= 0) {
             jl_fptr_to_llvm((jl_fptr_t)fvars[cfunc], li, 1);
             linfos[cfunc] = li;
+        }
+        int32_t func = delayed_fptrs[i].func - 1;
+        if (func >= 0) {
+            jl_fptr_to_llvm((jl_fptr_t)fvars[func], li, 0);
+            linfos[func] = li;
         }
     }
     jl_register_fptrs(sysimage_base, fvars, linfos, sysimg_fvars_max);

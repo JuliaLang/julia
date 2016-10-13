@@ -295,7 +295,7 @@ static jl_cgval_t ghostValue(jl_value_t *ty);
 // emit code to unpack a raw value from a box into registers or a stack slot
 static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, bool volatile_store)
 {
-    assert(to != T_pjlvalue && to != T_void);
+    assert(to != T_void);
     // TODO: fully validate that x.typ == jt?
     if (x.isghost) {
         // this can happen when a branch yielding a different type ends

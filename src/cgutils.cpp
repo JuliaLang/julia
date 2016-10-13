@@ -1869,8 +1869,9 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             return ghostValue(sty);
         if (nargs >= 2)
             return emit_expr(args[1], ctx);  // do side effects
-        Type *lt = julia_type_to_llvm(ty);
-        assert(lt != T_pjlvalue);
+        bool isboxed;
+        Type *lt = julia_type_to_llvm(ty, &isboxed);
+        assert(!isboxed);
         return mark_julia_type(UndefValue::get(lt), false, ty, ctx);
     }
     else {
