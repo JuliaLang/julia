@@ -415,3 +415,9 @@ gpure(x::Irrational) = fpure(x)
 @test @code_typed(gpure(π))[1].pure
 @test gpure() == gpure() == gpure()
 @test gpure(π) == gpure(π) == gpure(π)
+
+# issue #10880
+function cat10880(a, b)
+    Tuple{a.parameters..., b.parameters...}
+end
+@inferred cat10880(Tuple{Int8,Int16}, Tuple{Int32})
