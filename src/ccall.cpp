@@ -336,6 +336,7 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
 
 class AbiLayout {
 public:
+    virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty) = 0;
     virtual void needPassByRef(jl_datatype_t *ty, bool *byRef, bool *inReg) = 0;
     virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret) const = 0;
