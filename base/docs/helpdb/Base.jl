@@ -498,14 +498,6 @@ ERROR: argument is an abstract type; size is indeterminate
 sizeof(::Type)
 
 """
-    ===(x, y)
-    ≡(x,y)
-
-See the [`is`](:func:`is`) operator.
-"""
-Base.:(===)
-
-"""
     ReadOnlyMemoryError()
 
 An operation tried to write to memory that is read-only.
