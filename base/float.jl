@@ -42,15 +42,29 @@ A not-a-number value of type `Float64`.
 """
 const NaN = NaN64
 
+# On 64bit systems we can take advantage of LLVM intrinisics for the conversions
+# to 128bit, but on 32bit systems compiler-rt does not include them.
+
+if sizeof(Int) == 4
+  const LLVM_SINTS = (Int8, Int16, Int64)
+  const LLVM_UINTS = (Bool, UInt8, UInt16, UInt64)
+  const LLVM_INTS  = (LLVM_SINTS..., LLVM_UINTS...)
+else
+  const LLVM_SINTS  = (Int8, Int16, Int64, Int128)
+  const LLVM_UINTS = (Bool, UInt8, UInt16, UInt64, UInt128)
+  const LLVM_INTS  = (LLVM_SINTS..., LLVM_UINTS...)
+end
+typealias IntrinsicFloats Union{Float16,Float32,Float64}
+
 ## conversions to floating-point ##
 for t1 in (Float16,Float32,Float64)
-    for st in (Int8,Int16,Int32,Int64,Int128)
+    for st in LLVM_SINTS
         @eval begin
             convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
             promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
         end
     end
-    for ut in (Bool,UInt8,UInt16,UInt32,UInt64,UInt128)
+    for ut in LLVM_UINTS
         @eval begin
             convert(::Type{$t1},x::($ut)) = box($t1,uitofp($t1,unbox($ut,x)))
             promote_rule(::Type{$t1}, ::Type{$ut}  ) = $t1
@@ -81,13 +95,12 @@ float(x) = convert(AbstractFloat, x)
 # for constructing arrays
 float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
 
-typealias IntrinsicFloats Union{Float16,Float32,Float64}
-for Ti in (Int8, Int16, Int32, Int64, Int128)
+for Ti in LLVM_SINTS
     @eval begin
         unsafe_trunc(::Type{$Ti}, x::IntrinsicFloats) = box($Ti,fptosi($Ti,x))
     end
 end
-for Ti in (UInt8, UInt16, UInt32, UInt64, UInt128)
+for Ti in LLVM_UINTS
     @eval begin
         unsafe_trunc(::Type{$Ti}, x::IntrinsicFloats) = box($Ti,fptoui($Ti,x))
     end
@@ -344,7 +357,7 @@ such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then returns `x`.
 """
 prevfloat(x::AbstractFloat) = nextfloat(x,-1)
 
-for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
+for Ti in LLVM_INTS
     for Tf in (Float32, Float64)
         if Ti <: Unsigned || sizeof(Ti) < sizeof(Tf)
             # Here `Tf(typemin(Ti))-1` is exact, so we can compare the lower-bound
