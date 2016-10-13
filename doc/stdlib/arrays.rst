@@ -1898,7 +1898,7 @@ Combinatorics
        julia> isperm([1; 3])
        false
 
-.. function:: permute!(v, p)
+.. function:: permute!(v, p, inverse = false)
 
    .. Docstring generated from Julia source
 
@@ -1906,11 +1906,7 @@ Combinatorics
 
    To return a new permutation, use ``v[p]``\ . Note that this is generally faster than ``permute!(v,p)`` for large vectors.
 
-.. function:: ipermute!(v, p)
-
-   .. Docstring generated from Julia source
-
-   Like ``permute!``\ , but the inverse of the given permutation is applied.
+   If ``inverse`` is ``true``, the inverse of the given permutation is applied.
 
 .. function:: randcycle([rng=GLOBAL_RNG,] n::Integer)
 

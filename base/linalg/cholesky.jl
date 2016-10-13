@@ -389,7 +389,7 @@ end
 
 function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
     chkfullrank(C)
-    ipermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
+    permute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv, true)
 end
 function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     chkfullrank(C)
@@ -399,7 +399,7 @@ function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     end
     LAPACK.potrs!(C.uplo, C.factors, B)
     for i=1:size(B, 2)
-        ipermute!(view(B, 1:n, i), C.piv)
+        permute!(view(B, 1:n, i), C.piv, true)
     end
     B
 end

@@ -1019,4 +1019,7 @@ eval(Multimedia, :(macro textmime(mime)
     end
 end))
 
+#18885
+ipermute!(v, p) = depwarn("`ipermute!(v, p)` is deprecated; use `permute!(v, p, true)` instead.")
+
 # End deprecations scheduled for 0.6

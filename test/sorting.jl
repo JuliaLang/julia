@@ -170,7 +170,7 @@ for alg in [InsertionSort, MergeSort]
     permute!(c, ix)
     @test c == b
 
-    ipermute!(c, ix)
+    permute!(c, ix, true)
     @test c == a
 
     c = sort(a, alg=alg, lt=(>))
@@ -239,7 +239,7 @@ for n in [0:10; 100; 101; 1000; 1001]
         c = copy(v)
         permute!(c, pi)
         @test c == si
-        ipermute!(c, pi)
+        permute!(c, pi, true)
         @test c == v
 
         # stable algorithms
@@ -250,7 +250,7 @@ for n in [0:10; 100; 101; 1000; 1001]
             s = copy(v)
             permute!(s, p)
             @test s == si
-            ipermute!(s, p)
+            permute!(s, p, true)
             @test s == v
         end
 
@@ -263,7 +263,7 @@ for n in [0:10; 100; 101; 1000; 1001]
             s = copy(v)
             permute!(s, p)
             @test s == si
-            ipermute!(s, p)
+            permute!(s, p, true)
             @test s == v
         end
     end
