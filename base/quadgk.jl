@@ -97,7 +97,7 @@ function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
                                  map(x -> isinf(x) ? copysign(one(x), x) : 2x / (1+hypot(1,2x)), s),
                                  n, Tw, abstol, reltol, maxevals, nrm)
             end
-            s0,si = inf1 ? (s2,s1) : (s1,s2)
+            s0::eltype(s),si = inf1 ? (s2,s1) : (s1,s2)
             if si < 0 # x = s0 - t/(1-t)
                 return do_quadgk(t -> begin den = 1 / (1 - t);
                                             f(s0 - t*den) * den*den; end,
@@ -113,7 +113,7 @@ function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
     end
 
     key = rulekey(Tw,n)
-    x,w,gw = haskey(rulecache, key) ? rulecache[key] :
+    x::Vector{Tw}, w::Vector{Tw}, gw::Vector{Tw} = haskey(rulecache, key) ? rulecache[key] :
        (rulecache[key] = kronrod(Tw, n))
     segs = Segment[]
     for i in 1:length(s) - 1
@@ -129,14 +129,14 @@ function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
     # Pop the biggest-error segment and subdivide (h-adaptation)
     # until convergence is achieved or maxevals is exceeded.
     while E > abstol && E > reltol * nrm(I) && numevals < maxevals
-        s = heappop!(segs, Reverse)
-        mid = (s.a + s.b) * 0.5
-        s1 = evalrule(f, s.a, mid, x,w,gw, nrm)
-        s2 = evalrule(f, mid, s.b, x,w,gw, nrm)
-        heappush!(segs, s1, Reverse)
-        heappush!(segs, s2, Reverse)
-        I = (I - s.I) + s1.I + s2.I
-        E = (E - s.E) + s1.E + s2.E
+        seg = heappop!(segs, Reverse)
+        mid = (seg.a + seg.b) * 0.5
+        seg1 = evalrule(f, seg.a, mid, x,w,gw, nrm)
+        seg2 = evalrule(f, mid, seg.b, x,w,gw, nrm)
+        heappush!(segs, seg1, Reverse)
+        heappush!(segs, seg2, Reverse)
+        I = (I - seg.I) + seg1.I + seg2.I
+        E = (E - seg.E) + seg1.E + seg2.E
         numevals += 4n+2
     end
     # re-sum (paranoia about accumulated roundoff)
@@ -221,14 +221,7 @@ transformation is performed internally to map the infinite interval to a finite 
 """
 # generic version: determine precision from a combination of
 # all the integration-segment endpoints
-function quadgk(f, a, b, c...; kws...)
-    T = promote_type(typeof(float(a)), typeof(b))
-    for x in c
-        T = promote_type(T, typeof(x))
-    end
-    cT = map(T, c)
-    quadgk(f, convert(T, a), convert(T, b), cT...; kws...)
-end
+quadgk(f, a, b, c...; kws...) = quadgk(f, promote(float(a),float(b),c...)...; kws...)
 
 ###########################################################################
 # Gauss-Kronrod integration-weight computation for arbitrary floating-point
