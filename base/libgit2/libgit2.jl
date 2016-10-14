@@ -529,18 +529,15 @@ function set_ssl_cert_locations(cert_loc)
     cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_file == C_NULL && cert_dir == C_NULL && return
-    ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring, Cstring),
-          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+    # TODO FIX https://github.com/libgit2/libgit2/pull/3935#issuecomment-253910017
+    #ccall((:git_libgit2_opts, :libgit2), Cint,
+    #      (Cint, Cstring, Cstring),
+    #      Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+    ENV["SSL_CERT_FILE"] = cert_file
+    ENV["SSL_CERT_DIR"] = cert_dir
 end
 
 function __init__()
-    err = ccall((:git_libgit2_init, :libgit2), Cint, ())
-    err > 0 || throw(ErrorException("error initializing LibGit2 module"))
-    atexit() do
-        ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
-    end
-
     # Look for OpenSSL env variable for CA bundle (linux only)
     # windows and macOS use the OS native security backends
     @static if is_linux()
@@ -553,6 +550,12 @@ function __init__()
             abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
         end
         set_ssl_cert_locations(cert_loc)
+    end
+
+    err = ccall((:git_libgit2_init, :libgit2), Cint, ())
+    err > 0 || throw(ErrorException("error initializing LibGit2 module"))
+    atexit() do
+        ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end
 end
 
