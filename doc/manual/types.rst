@@ -39,9 +39,11 @@ perhaps somewhat counterintuitively, often significantly simplify them.
 Describing Julia in the lingo of `type
 systems <https://en.wikipedia.org/wiki/Type_system>`_, it is: dynamic,
 nominative and parametric. Generic types can be parameterized,
-and the hierarchical relationships
-between types are explicitly declared, rather than implied by compatible
-structure. One particularly distinctive feature of Julia's type system
+and the hierarchical relationships between types are `explicitly
+declared <https://en.wikipedia.org/wiki/Nominal_type_system>`_,
+rather than `implied by compatible structure 
+<https://en.wikipedia.org/wiki/Structural_type_system>`_.
+One particularly distinctive feature of Julia's type system
 is that concrete types may not subtype each other: all concrete types
 are final and may only have abstract types as their supertypes. While
 this might at first seem unduly restrictive, it has many beneficial
@@ -324,7 +326,7 @@ cannot be declared to be any smaller than eight bits.
 The types :obj:`Bool`, :class:`Int8` and :class:`UInt8` all have identical
 representations: they are eight-bit chunks of memory. Since Julia's type
 system is nominative, however, they are not interchangeable despite
-having identical structure. Another fundamental difference between them
+having identical structure. A fundamental difference between them
 is that they have different supertypes: :obj:`Bool`'s direct supertype is
 :class:`Integer`, :class:`Int8`'s is :obj:`Signed`, and :class:`UInt8`'s is :obj:`Unsigned`.
 All other differences between :obj:`Bool`, :class:`Int8`, and :class:`UInt8` are
