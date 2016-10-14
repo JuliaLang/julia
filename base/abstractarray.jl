@@ -1415,7 +1415,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as...)
     T[rs...;]
 end
 
-## Reductions and scans ##
+## Reductions and accumulates ##
 
 function isequal(A::AbstractArray, B::AbstractArray)
     if A === B return true end
