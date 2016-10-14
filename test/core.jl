@@ -219,6 +219,11 @@ end
 
 # with bound varargs
 
+_bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
+_bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
+@test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
+@test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
+
 # issue #11840
 typealias TT11840{T} Tuple{T,T}
 f11840(::Type) = "Type"
