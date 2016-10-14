@@ -2187,6 +2187,25 @@
    '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
 
+   'ccall
+   (lambda (e)
+     (syntax-deprecation #f "Expr(:ccall)" "Expr(:call, :ccall)")
+     (if (length> e 3)
+         (let ((name (cadr e))
+               (RT   (caddr e))
+               (argtypes (cadddr e))
+               (args (cddddr e)))
+           (begin
+             (if (not (and (pair? argtypes)
+                           (eq? (car argtypes) 'tuple)))
+                 (if (and (pair? RT)
+                          (eq? (car RT) 'tuple))
+                     (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
+                     (error "ccall argument types must be a tuple; try \"(T,)\"")))
+             (expand-forms
+              (lower-ccall name RT (cdr argtypes) args))))
+         e))
+
    'generator
    (lambda (e)
      (let* ((expr  (cadr e))
