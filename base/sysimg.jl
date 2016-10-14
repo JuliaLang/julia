@@ -103,11 +103,16 @@ Array{T}(::Type{T}, m::Integer)                       = Array{T,1}(Int(m))
 Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T,2}(Int(m),Int(n))
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n),Int(o))
 
+# OS specific stuff part one
+include("osutils.jl")
+include("c.jl")
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
 importall .Rounding
-include("float.jl")
+include("rtlib.jl")
+include("float.jl") # depends on rtlib
 include("complex.jl")
 include("rational.jl")
 include("multinverses.jl")
@@ -138,11 +143,9 @@ typealias StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Var
 typealias StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
-# For OS specific stuff
+# For OS specific stuff part two
 include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
 include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
-include("osutils.jl")
-include("c.jl")
 include("sysinfo.jl")
 
 if !isdefined(Core, :Inference)
