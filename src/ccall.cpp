@@ -336,6 +336,7 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
 
 class AbiLayout {
 public:
+    virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty) = 0;
     virtual void needPassByRef(jl_datatype_t *ty, bool *byRef, bool *inReg) = 0;
     virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret) const = 0;
@@ -765,7 +766,7 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
 }
 
 #ifdef USE_MCJIT
-class FunctionMover : public ValueMaterializer
+class FunctionMover final : public ValueMaterializer
 {
 public:
     FunctionMover(llvm::Module *dest,llvm::Module *src) :
@@ -841,11 +842,11 @@ public:
     }
 
 #if JL_LLVM_VERSION >= 30900
-    virtual Value *materialize(Value *V) override
+    Value *materialize(Value *V) override
 #elif JL_LLVM_VERSION >= 30800
-    virtual Value *materializeDeclFor(Value *V) override
+    Value *materializeDeclFor(Value *V) override
 #else
-    virtual Value *materializeValueFor (Value *V) override
+    Value *materializeValueFor (Value *V) override
 #endif
     {
         Function *F = dyn_cast<Function>(V);
