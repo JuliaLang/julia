@@ -41,7 +41,7 @@ systems <https://en.wikipedia.org/wiki/Type_system>`_, it is: dynamic,
 nominative and parametric. Generic types can be parameterized,
 and the hierarchical relationships between types are `explicitly
 declared <https://en.wikipedia.org/wiki/Nominal_type_system>`_,
-rather than `implied by compatible structure 
+rather than `implied by compatible structure
 <https://en.wikipedia.org/wiki/Structural_type_system>`_.
 One particularly distinctive feature of Julia's type system
 is that concrete types may not subtype each other: all concrete types
