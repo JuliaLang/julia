@@ -13,7 +13,7 @@ macro test_skipchars(str, expected_char, lnc=Char(0xffffffff))
     end
 end
 
-@test_skipchars "abc" 'a'
-@test_skipchars "   bac" 'b'
-@test_skipchars "  #cm \n   cab" 'c' '#'
+@test_skipchars("abc", 'a')
+@test_skipchars("   bac", 'b')
+@test_skipchars("  #cm \n   cab", 'c', '#')
 
