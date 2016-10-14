@@ -65,7 +65,6 @@ $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: $(SRCD
 
 $(build_datarootdir)/julia/cert.pem: $(CERTFILE)
 	mkdir -p $(build_datarootdir)/julia
-	echo "NABIL: Copying over certfile $(CERTFILE)"
 	-cp $(CERTFILE) $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
