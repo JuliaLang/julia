@@ -82,7 +82,7 @@ echo "Found traces of libgfortran/libgcc in $LIBGFORTRAN_DIRS"
 
 # Do the private_libdir libraries
 if [ "$UNAME" = "Darwin" ]; then
-    cd "$private_libdir" || exit
+    cd "$private_libdir"
     for file in openlibm quadmath.0 gfortran.3 openblas arpack lapack openspecfun; do
         for dylib in lib$file*.dylib*; do
             for dir in $LIBGFORTRAN_DIRS; do
@@ -95,7 +95,7 @@ if [ "$UNAME" = "Darwin" ]; then
 fi
 
 if [ "$UNAME" = "Linux" ]; then
-    cd "$private_libdir" || exit
+    cd "$private_libdir"
     for file in openlibm quadmath gfortran openblas arpack lapack openspecfun; do
         for dylib in lib$file*.so*; do
             patchelf --set-rpath \$ORIGIN "$dylib"
