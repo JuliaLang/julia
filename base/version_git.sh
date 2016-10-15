@@ -16,10 +16,10 @@ echo "    fork_master_timestamp::Float64"
 echo "end"
 echo ""
 
-cd $1
+cd "$1" || exit
 
 # If the script didn't ask not to use git info
-if [  "$#" = "2"  -a "$2" = "NO_GIT" ]; then
+if [ "$#" = "2" ] && [ "$2" = "NO_GIT" ]; then
     # this comment is used in base/Makefile to distinguish boilerplate
     echo "# Default output if git is not available."
     echo "const GIT_VERSION_INFO = GitVersionInfo(\"\" ,\"\" ,\"\" ,0 ,\"\" ,true ,0 ,0.)"
@@ -43,7 +43,7 @@ branch=$(git branch | sed -n '/\* /s///p')
 
 topdir=$(git rev-parse --show-toplevel)
 verchanged=$(git blame -L ,1 -sl -- "$topdir/VERSION" | cut -f 1 -d " ")
-if [ $verchanged = 0000000000000000000000000000000000000000 ]; then
+if [ "$verchanged" = 0000000000000000000000000000000000000000 ]; then
     # uncommited change to VERSION
     build_number=0
 else
@@ -53,7 +53,7 @@ fi
 date_string=$git_time
 case $(uname) in
   Darwin | FreeBSD)
-    date_string="$(/bin/date -jr $git_time -u '+%Y-%m-%d %H:%M %Z')"
+    date_string="$(/bin/date -jr "$git_time" -u '+%Y-%m-%d %H:%M %Z')"
     ;;
   MINGW*)
     git_time=$(git log -1 --pretty=format:%ci)
@@ -63,13 +63,13 @@ case $(uname) in
     date_string="$(/bin/date --date="@$git_time" -u '+%Y-%m-%d %H:%M %Z')"
     ;;
 esac
-if [ $(git describe --tags --exact-match 2> /dev/null) ]; then
+if [ "$(git describe --tags --exact-match 2> /dev/null)" ]; then
     tagged_commit="true"
 else
     tagged_commit="false"
 fi
-fork_master_distance=$(git rev-list HEAD ^"$(echo $origin)master" | wc -l | sed -e 's/[^[:digit:]]//g')
-fork_master_timestamp=$(git show -s $(git merge-base HEAD $(echo $origin)master) --format=format:"%ct")
+fork_master_distance=$(git rev-list HEAD ^"$origin"master | wc -l | sed -e 's/[^[:digit:]]//g')
+fork_master_timestamp=$(git show -s "$(git merge-base HEAD "$origin"master)" --format=format:"%ct")
 
 # Check for errrors and emit default value for missing numbers.
 if [ -z "$build_number" ]; then
