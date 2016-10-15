@@ -14,6 +14,9 @@ register(f::Function, rtype::ANY, argt::ANY, name::String) =
     ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring),
           f, rtype, argt, name)
 
+include("rtlib/fp_util.jl")
+include("rtlib/fp_extend.jl")
+
 # All these function names are enumerated in lib/CodeGen/TargetLoweringBase.cpp
 # right now we don't have a good way of getting at this information.
 
@@ -22,65 +25,19 @@ register(f::Function, rtype::ANY, argt::ANY, name::String) =
 ###
 
 # "convert Float64 to Float128"
-# function extenddftf2(x::Float64)
-#     throw(MethodError(extenddftf2, x))
-# end
+# extenddftf2(x::Float64) = extendXfYf2(Float128, x)
 # convert(::Type{Float128}, x::Float64) = extenddftf2(x)
 
 # "convert Float32 to Float128"
-# function extendsftf2(x::Float32)
-#     throw(MethodError(extendsftf2, x))
-# end
+# extendsftf2(x::Float32) = extendXfYf2(Float128, x)
 # convert(::Type{Float128}, x::Float32) = extendsftf2(x)
 
 "convert Float32 to Float64"
-function extendsfdf2(x::Float32)
-    throw(MethodError(extendsfdf2, x))
-end
+extendsfdf2(x::Float32) = extendXfYf2(Float64, x)
 convert(::Type{Float64}, x::Float32) = extendsfdf2(x)
 
 "convert Float16 to Float32"
-function extendhfsf2(val::Float16)
-    local ival::UInt32 = reinterpret(UInt16, val),
-          sign::UInt32 = (ival & 0x8000) >> 15,
-          exp::UInt32  = (ival & 0x7c00) >> 10,
-          sig::UInt32  = (ival & 0x3ff) >> 0,
-          ret::UInt32
-
-    if exp == 0
-        if sig == 0
-            sign = sign << 31
-            ret = sign | exp | sig
-        else
-            n_bit = 1
-            bit = 0x0200
-            while (bit & sig) == 0
-                n_bit = n_bit + 1
-                bit = bit >> 1
-            end
-            sign = sign << 31
-            exp = (-14 - n_bit + 127) << 23
-            sig = ((sig & (~bit)) << n_bit) << (23 - 10)
-            ret = sign | exp | sig
-        end
-    elseif exp == 0x1f
-        if sig == 0  # Inf
-            if sign == 0
-                ret = 0x7f800000
-            else
-                ret = 0xff800000
-            end
-        else  # NaN
-            ret = 0x7fc00000 | (sign<<31)
-        end
-    else
-        sign = sign << 31
-        exp  = (exp - 15 + 127) << 23
-        sig  = sig << (23 - 10)
-        ret = sign | exp | sig
-    end
-    return reinterpret(Float32, ret)
-end
+extendhfsf2(x::Float16) = extendXfYf2(Float32, x)
 convert(::Type{Float32}, x::Float16) = extendhfsf2(x)
 
 "convert Float32 to Float16"
