@@ -1,6 +1,13 @@
-###
-# In this file we implement the RTLIB libcalls llvm emits
-##
+
+"""
+    RTLIB
+
+Implements the runtime library for Julia. The implementations are based on
+llvm's compiler-rt. This implementations follows the compiler-rt naming convention
+and registers the pure Julia implementation as `extern_c` so that LLVM can find them.
+
+As a secondary interface `RTLIB.convert(::Type{T}, x)` is provided.
+"""
 module RTLIB
 
 register(f::Function, rtype::ANY, argt::ANY, name::String) =
@@ -18,16 +25,19 @@ register(f::Function, rtype::ANY, argt::ANY, name::String) =
 # function extenddftf2(x::Float64)
 #     throw(MethodError(extenddftf2, x))
 # end
+# convert(::Type{Float128}, x::Float64) = extenddftf2(x)
 
 # "convert Float32 to Float128"
 # function extendsftf2(x::Float32)
 #     throw(MethodError(extendsftf2, x))
 # end
+# convert(::Type{Float128}, x::Float32) = extendsftf2(x)
 
 "convert Float32 to Float64"
 function extendsfdf2(x::Float32)
     throw(MethodError(extendsfdf2, x))
 end
+convert(::Type{Float64}, x::Float32) = extendsfdf2(x)
 
 "convert Float16 to Float32"
 function extendhfsf2(val::Float16)
@@ -71,6 +81,7 @@ function extendhfsf2(val::Float16)
     end
     return reinterpret(Float32, ret)
 end
+convert(::Type{Float32}, x::Float16) = extendhfsf2(x)
 
 "convert Float32 to Float16"
 function truncsfhf2(val::Float32)
@@ -91,31 +102,37 @@ function truncsfhf2(val::Float32)
     end
     reinterpret(Float16, h)
 end
+convert(::Type{Float16}, x::Float32) = truncsfhf2(x)
 
 "convert Float64 to Float16"
 function truncdfhf2(x::Float64)
     throw(MethodError(truncdfhf2, x))
 end
+convert(::Type{Float16}, x::Float64) = truncdfhf2(x)
 
 # "convert Float128 to Float16"
 # function trunctfhf2(x :: Float128)
 #    throw(MethodError(trunctfhf2, x))
 # end
+# convert(::Type{Float16}, x::Float128) = trunctfhf2(x)
 
 "convert Float64 to Float32"
 function truncdfsf2(x::Float64)
     throw(MethodError(truncdfsf2, x))
 end
+convert(::Type{Float32}, x::Float64) = truncdfsf2(x)
 
 # "convert Float128 to Float32"
 # function trunctfsf2(x :: Float128)
 #    throw(MethodError(trunctfsf2, x))
 # end
+# convert(::Type{Float32}, x::Float128) = trunctfsf2(x)
 
 # "convert Float128 to Float64"
 # function trunctfdf2(x :: Float128)
 #    throw(MethodError(trunctfdf2, x))
 # end
+# convert(::Type{Float64}, x::Float128) = trunctfdf2(x)
 
 ###
 # Conversion between integers and floats
@@ -161,6 +178,7 @@ function floattisf(x::Int128)
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, s | d + y)
 end
+convert(::Type{Float32}, x::Int128) = floattisf(x)
 
 "convert Int128 to Float64"
 function floattidf(x::Int128)
@@ -178,6 +196,7 @@ function floattidf(x::Int128)
     d = ((n+1022) % UInt64) << 52
     reinterpret(Float64, s | d + y)
 end
+convert(::Type{Float64}, x::Int128) = floattidf(x)
 
 # Names[RTLIB::SINTTOFP_I128_F128] = "__floattitf";
 # Names[RTLIB::UINTTOFP_I32_F32] = "__floatunsisf";
@@ -201,6 +220,7 @@ function floatuntisf(x::UInt128)
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, d + y)
 end
+convert(::Type{Float32}, x::UInt128) = floatuntisf(x)
 
 "convert UInt128 to Float64"
 function floatuntidf(x::UInt128)
@@ -216,6 +236,7 @@ function floatuntidf(x::UInt128)
     d = ((n+1022) % UInt64) << 52
     reinterpret(Float64, d + y)
 end
+convert(::Type{Float64}, x::UInt128) = floatuntidf(x)
 
 # Names[RTLIB::UINTTOFP_I128_F128] = "__floatuntitf";
 
@@ -282,4 +303,3 @@ RTLIB.register(RTLIB.floattisf, Float32, Tuple{Int128}, "__floattisf")
 RTLIB.register(RTLIB.floattidf, Float64, Tuple{Int128}, "__floattidf")
 RTLIB.register(RTLIB.floatuntisf, Float32, Tuple{UInt128}, "__floatuntisf")
 RTLIB.register(RTLIB.floatuntidf, Float64, Tuple{UInt128}, "__floatuntidf")
-
