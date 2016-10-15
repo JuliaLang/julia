@@ -16,7 +16,7 @@ echo "    fork_master_timestamp::Float64"
 echo "end"
 echo ""
 
-cd "$1" || exit
+cd "$1"
 
 # If the script didn't ask not to use git info
 if [ "$#" = "2" ] && [ "$2" = "NO_GIT" ]; then
@@ -63,7 +63,7 @@ case $(uname) in
     date_string="$(/bin/date --date="@$git_time" -u '+%Y-%m-%d %H:%M %Z')"
     ;;
 esac
-if [ "$(git describe --tags --exact-match 2> /dev/null)" ]; then
+if git describe --tags --exact-match > /dev/null; then
     tagged_commit="true"
 else
     tagged_commit="false"
