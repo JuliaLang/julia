@@ -337,10 +337,10 @@ function skipchars(io::IO, pred; linecomment::Char=Char(0xffffffff))
     end
 end
 
-function _skipchars_impl(action, io::IO, pred)
+function _skipchars_impl(skipcomment, io::IO, pred)
     while !eof(io)
         c = read(io, Char)
-        if !action(c) && !pred(c)
+        if !skipcomment(c) && !pred(c)
             seek(io,position(io)-sizeof(string(c)))
             break
         end
