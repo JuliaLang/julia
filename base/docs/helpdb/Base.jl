@@ -3,13 +3,6 @@
 # Base
 
 """
-    systemerror(sysfunc, iftrue)
-
-Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
-"""
-systemerror
-
-"""
     fill!(A, x)
 
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
@@ -177,13 +170,6 @@ julia> [1 2 3] .* [1 2 3]
 Base.:(.*)
 
 """
-    backtrace()
-
-Get a backtrace object for the current program point.
-"""
-backtrace
-
-"""
     -(x)
 
 Unary minus operator.
@@ -289,14 +275,6 @@ return an object of a type different from `T`, which however is suitable for
 Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
 """
 cconvert
-
-"""
-    assert(cond)
-
-Throw an [`AssertionError`](:obj:`AssertionError`) if `cond` is `false`.
-Also available as the macro `@assert expr`.
-"""
-assert
 
 """
     sech(x)
@@ -2156,13 +2134,6 @@ Show a descriptive representation of an exception object.
 showerror
 
 """
-    error(message::AbstractString)
-
-Raise an `ErrorException` with the given message.
-"""
-error
-
-"""
     sqrtm(A)
 
 If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
@@ -2539,14 +2510,6 @@ This is intended to be called using `do` block syntax:
 get!(f::Function,collection,key)
 
 """
-    @assert cond [text]
-
-Throw an `AssertionError` if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
-"""
-:@assert
-
-"""
     deserialize(stream)
 
 Read a value written by [`serialize`](:func:`serialize`). `deserialize` assumes the binary data read from
@@ -2586,14 +2549,6 @@ median!
 Cumulative product of `A` along a dimension, storing the result in `B`. The dimension defaults to 1.
 """
 cumprod!
-
-"""
-    rethrow([e])
-
-Throw an object without changing the current exception backtrace. The default argument is
-the current exception (if called within a `catch` block).
-"""
-rethrow
 
 """
     !(x)
@@ -2798,13 +2753,6 @@ pointer `p` to ensure that it is valid. Incorrect usage may segfault your progra
 garbage answers, in the same manner as C.
 """
 unsafe_load
-
-"""
-    catch_backtrace()
-
-Get the backtrace of the current exception, for use within `catch` blocks.
-"""
-catch_backtrace
 
 """
     cos(x)
