@@ -25,7 +25,7 @@ file_patterns='
 '
 
 # TODO: Look also for trailing empty lines, and missing '\n' after the last line
-if git --no-pager grep --color -n --full-name -e ' $' -- $file_patterns; then
+if git --no-pager grep --color -n --full-name -e ' $' -- "$file_patterns"; then
     echo "Error: trailing whitespace found in source file(s)"
     echo ""
     echo "This can often be fixed with:"
