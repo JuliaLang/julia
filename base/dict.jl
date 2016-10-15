@@ -601,7 +601,7 @@ ImmutableDict{K,V}(t::ImmutableDict{K,V}, KV::Pair) = ImmutableDict{K,V}(t, KV[1
 function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     key, value = key_value
     while isdefined(dict, :parent)
-        if dict.key == key
+        if isequal(dict.key, key)
             valcmp(value, dict.value) && return true
         end
         dict = dict.parent
@@ -611,7 +611,7 @@ end
 
 function haskey(dict::ImmutableDict, key)
     while isdefined(dict, :parent)
-        dict.key == key && return true
+        isequal(dict.key, key) && return true
         dict = dict.parent
     end
     return false
@@ -619,14 +619,14 @@ end
 
 function getindex(dict::ImmutableDict, key)
     while isdefined(dict, :parent)
-        dict.key == key && return dict.value
+        isequal(dict.key, key)&& return dict.value
         dict = dict.parent
     end
     throw(KeyError(key))
 end
 function get(dict::ImmutableDict, key, default)
     while isdefined(dict, :parent)
-        dict.key == key && return dict.value
+        isequal(dict.key, key) && return dict.value
         dict = dict.parent
     end
     return default

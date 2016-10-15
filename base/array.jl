@@ -975,7 +975,8 @@ end
 """
     findnext(A, i::Integer)
 
-Find the next linear index >= `i` of a non-zero element of `A`, or `0` if not found.
+Find the next linear index >= `i` of a non-zero element of `A` (determined by
+`!isequal(A[i], 0)`), or `0` if not found.
 
 ```jldoctest
 julia> A = [0 0; 1 0]
@@ -992,7 +993,7 @@ julia> findnext(A,3)
 """
 function findnext(A, start::Integer)
     for i = start:length(A)
-        if A[i] != 0
+        if !isequal(A[i], 0)
             return i
         end
     end
@@ -1002,7 +1003,7 @@ end
 """
     findfirst(A)
 
-Return the linear index of the first non-zero value in `A` (determined by `A[i]!=0`).
+Return the linear index of the first non-zero value in `A` (determined by `!isequal(A[i], 0)`).
 Returns `0` if no such value is found.
 
 ```jldoctest
@@ -1020,7 +1021,8 @@ findfirst(A) = findnext(A, 1)
 """
     findnext(A, v, i::Integer)
 
-Find the next linear index >= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
+Find the next linear index >= `i` of an element of `A` equal to `v` (using `isequal`),
+or `0` if not found.
 
 ```jldoctest
 julia> A = [1 4; 2 2]
@@ -1037,7 +1039,7 @@ julia> findnext(A,4,3)
 """
 function findnext(A, v, start::Integer)
     for i = start:length(A)
-        if A[i] == v
+        if isequal(A[i], v)
             return i
         end
     end
@@ -1115,7 +1117,8 @@ findfirst(testf::Function, A) = findnext(testf, A, 1)
 """
     findprev(A, i::Integer)
 
-Find the previous linear index <= `i` of a non-zero element of `A`, or `0` if not found.
+Find the previous linear index <= `i` of a non-zero element of `A` (determined by
+`!isequal(A[i], 0)`), or `0` if not found.
 
 ```jldoctest
 julia> A = [0 0; 1 2]
@@ -1132,7 +1135,7 @@ julia> findprev(A,1)
 """
 function findprev(A, start::Integer)
     for i = start:-1:1
-        A[i] != 0 && return i
+        !isequal(A[i], 0) && return i
     end
     return 0
 end
@@ -1140,7 +1143,8 @@ end
 """
     findlast(A)
 
-Return the linear index of the last non-zero value in `A` (determined by `A[i]!=0`).
+Return the linear index of the last non-zero value in `A` (determined by
+`!isequal(A[i], 0)`).
 Returns `0` if there is no non-zero value in `A`.
 
 ```jldoctest
@@ -1166,7 +1170,8 @@ findlast(A) = findprev(A, length(A))
 """
     findprev(A, v, i::Integer)
 
-Find the previous linear index <= `i` of an element of `A` equal to `v` (using `==`), or `0` if not found.
+Find the previous linear index <= `i` of an element of `A` equal to `v` (using `isequal`),
+or `0` if not found.
 
 ```jldoctest
 julia> A = [0 0; 1 2]
@@ -1183,7 +1188,7 @@ julia> findprev(A, 1, 1)
 """
 function findprev(A, v, start::Integer)
     for i = start:-1:1
-        A[i] == v && return i
+        isequal(A[i], v) && return i
     end
     return 0
 end
@@ -1191,7 +1196,7 @@ end
 """
     findlast(A, v)
 
-Return the linear index of the last element equal to `v` in `A`.
+Return the linear index of the last element equal to `v` in `A` (using `isequal`).
 Returns `0` if there is no element of `A` equal to `v`.
 
 ```jldoctest
@@ -1297,9 +1302,10 @@ _index_remapper(iter) = Colon()  # safe for objects that don't implement length
 """
     find(A)
 
-Return a vector of the linear indexes of the non-zeros in `A` (determined by `A[i]!=0`). A
-common use of this is to convert a boolean array to an array of indexes of the `true`
-elements. If there are no non-zero elements of `A`, `find` returns an empty array.
+Return a vector of the linear indexes of the non-zeros in `A` (determined by
+`!isequal(A[i], 0)`). A common use of this is to convert a boolean array to an
+array of indexes of the `true` elements. If there are no non-zero elements of `A`,
+`find` returns an empty array.
 
 ```jldoctest
 julia> A = [true false; false true]
@@ -1319,7 +1325,7 @@ function find(A)
     count = 1
     inds = _index_remapper(A)
     for (i,a) in enumerate(A)
-        if a != 0
+        if !isequal(a, 0)
             I[count] = inds[i]
             count += 1
         end
@@ -1327,7 +1333,7 @@ function find(A)
     return I
 end
 
-find(x::Number) = x == 0 ? Array{Int,1}(0) : [1]
+find(x::Number) = isequal(x, 0) ? Array{Int,1}(0) : [1]
 find(testf::Function, x::Number) = !testf(x) ? Array{Int,1}(0) : [1]
 
 findn(A::AbstractVector) = find(A)
@@ -1336,7 +1342,7 @@ findn(A::AbstractVector) = find(A)
     findn(A)
 
 Return a vector of indexes for each dimension giving the locations of the non-zeros in `A`
-(determined by `A[i]!=0`).
+(determined by `isequal(A[i], 0)`).
 If there are no non-zero elements of `A`, `findn` returns a 2-tuple of empty arrays.
 
 ```jldoctest
@@ -1364,7 +1370,7 @@ function findn(A::AbstractMatrix)
     J = similar(A, Int, nnzA)
     count = 1
     for j=indices(A,2), i=indices(A,1)
-        if A[i,j] != 0
+        if !isequal(A[i,j], 0)
             I[count] = i
             J[count] = j
             count += 1
@@ -1377,7 +1383,7 @@ end
     findnz(A)
 
 Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
-values in matrix `A`, and `V` is a vector of the non-zero values.
+values in matrix `A` (according to `isequal`), and `V` is a vector of the non-zero values.
 
 ```jldoctest
 julia> A = [1 2 0; 0 0 3; 0 4 0]
@@ -1399,7 +1405,7 @@ function findnz{T}(A::AbstractMatrix{T})
     if nnzA > 0
         for j=indices(A,2), i=indices(A,1)
             Aij = A[i,j]
-            if Aij != 0
+            if !isequal(Aij, 0)
                 I[count] = i
                 J[count] = j
                 NZs[count] = Aij

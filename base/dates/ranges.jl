@@ -27,7 +27,7 @@ Base.steprem{T<:TimeType}(a::T,b::T,c) = b - (a + c*len(a,b,c))
 import Base.in
 function in{T<:TimeType}(x::T, r::StepRange{T})
     n = len(first(r),x,step(r)) + 1
-    n >= 1 && n <= length(r) && r[n] == x
+    n >= 1 && n <= length(r) && isequal(r[n], x)
 end
 
 Base.start{T<:TimeType}(r::StepRange{T}) = 0

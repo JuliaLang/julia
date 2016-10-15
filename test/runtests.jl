@@ -13,7 +13,7 @@ end
 if haskey(ENV, "JULIA_TEST_EXEFLAGS")
     const test_exeflags = `$(Base.shell_split(ENV["JULIA_TEST_EXEFLAGS"]))`
 else
-    const test_exeflags = `--check-bounds=yes --startup-file=no --depwarn=error`
+    const test_exeflags = `--startup-file=no --depwarn=error`
 end
 
 if haskey(ENV, "JULIA_TEST_EXENAME")

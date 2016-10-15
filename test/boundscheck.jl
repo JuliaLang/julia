@@ -7,7 +7,7 @@ if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
     error("boundscheck test failed, cmd : $cmd")
 end
 
-cmd = `$(Base.julia_cmd()) --check-bounds=yes --startup-file=no --depwarn=error boundscheck_exec.jl`
+cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=error boundscheck_exec.jl`
 if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
     error("boundscheck test failed, cmd : $cmd")
 end

@@ -346,6 +346,9 @@ end
 
 # issue #12960
 type T12960 end
+# For x == 0 test in sparse matrix assignment
+Base.:(==)(x::T12960, y::Integer) = false
+Base.:(==)(x::Integer, y::T12960) = false
 let
     A = speye(3)
     B = similar(A, T12960)

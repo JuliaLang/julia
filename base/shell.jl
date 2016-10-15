@@ -10,7 +10,7 @@ function shell_parse(raw::AbstractString, interp::Bool)
     c_old = nothing
     while !done(r,i)
         c, j = next(r,i)
-        if c == '\\' && c_old == ' '
+        if isequal(c, '\\') && isequal(c_old, ' ')
             i -= 1
             break
         elseif !(c in _default_delims)

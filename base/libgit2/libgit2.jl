@@ -526,9 +526,9 @@ function transact(f::Function, repo::GitRepo)
 end
 
 function set_ssl_cert_locations(cert_loc)
-    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
+    cert_file = isfile(cert_loc) ? cert_loc : C_NULL
+    cert_dir  = isdir(cert_loc) ? cert_loc : C_NULL
+    cert_file === C_NULL && cert_dir === C_NULL && return
     ccall((:git_libgit2_opts, :libgit2), Cint,
           (Cint, Cstring, Cstring),
           Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)

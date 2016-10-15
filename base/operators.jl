@@ -27,7 +27,30 @@ supertype(T::DataType) = T.super
 
 ## generic comparison ##
 
-==(x, y) = x === y
+function notcomparablewarning{S, T}(x::S, y::T)
+    @_noinline_meta
+    b = IOBuffer()
+    print(b, "comparison of values of type $S with values of type $T using == operator are deprecated: use isequal or === instead. Found in attempt to compare ")
+    iolim = IOContext(b, :limit=>true)
+    show(iolim, x)
+    print(b, " with ")
+    show(iolim, y)
+    print(b, ".")
+    Base.depwarn(takebuf_string(b), :(==))
+end
+
+function ==(x::ANY, y::ANY)
+    @_inline_meta
+    @boundscheck notcomparablewarning(x, y)
+    x === y
+end
+
+=={T}(x::T, y::T) = x === y
+==(x::Union{Symbol, Expr, QuoteNode, GlobalRef},
+   y::Union{Symbol, Expr, QuoteNode, GlobalRef}) =
+   x === y
+# FIXME: why does removing this make bootstrap fail?
+==(x::Function, y::Function) = x === y
 
 """
     isequal(x, y)
@@ -48,25 +71,22 @@ Scalar types generally do not need to implement `isequal` separate from `==`, un
 represent floating-point numbers amenable to a more efficient implementation than that
 provided as a generic fallback (based on `isnan`, `signbit`, and `==`).
 """
-isequal(x, y) = x == y
+function isequal(x, y)
+    @inbounds res = x == y
+    res
+end
+
+# FIXME: Required since @inbounds does seem to work during early bootstrap
+isequal(::Void, ::Void) = true
+isequal(::Void, ::Any) = false
+isequal(::Any, ::Void) = false
+isequal(x::Union{Method, TypeName}, y::Union{Method, TypeName}) = x === y
+isequal(x::Union{Module, Symbol}, y::Union{Module, Symbol}) = x === y
 
 # TODO: these can be deleted once the deprecations of ==(x::Char, y::Integer) and
 # ==(x::Integer, y::Char) are gone and the above returns false anyway
 isequal(x::Char, y::Integer) = false
 isequal(x::Integer, y::Char) = false
-
-## minimally-invasive changes to test == causing NotComparableError
-# export NotComparableError
-# =={T}(x::T, y::T) = x === y
-# immutable NotComparableError <: Exception end
-# const NotComparable = NotComparableError()
-# ==(x::ANY, y::ANY) = NotComparable
-# !(e::NotComparableError) = throw(e)
-# isequal(x, y) = (x == y) === true
-
-## alternative NotComparableError which captures context
-# immutable NotComparableError; a; b; end
-# ==(x::ANY, y::ANY) = NotComparableError(x, y)
 
 isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
