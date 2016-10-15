@@ -14,10 +14,22 @@ register(f::Function, rtype::ANY, argt::ANY, name::String) =
 # Floating point extend and trunc functions
 ###
 
-# Names[RTLIB::FPEXT_F64_F128] = "__extenddftf2";
-# Names[RTLIB::FPEXT_F32_F128] = "__extendsftf2";
-# Names[RTLIB::FPEXT_F32_F64] = "__extendsfdf2";
+# "convert Float64 to Float128"
+# function extenddftf2(x::Float64)
+#     throw(MethodError(extenddftf2, x))
+# end
 
+# "convert Float32 to Float128"
+# function extendsftf2(x::Float32)
+#     throw(MethodError(extendsftf2, x))
+# end
+
+"convert Float32 to Float64"
+function extendsfdf2(x::Float32)
+    throw(MethodError(extendsfdf2, x))
+end
+
+"convert Float16 to Float32"
 function extendhfsf2(val::Float16)
     local ival::UInt32 = reinterpret(UInt16, val),
           sign::UInt32 = (ival & 0x8000) >> 15,
@@ -60,6 +72,7 @@ function extendhfsf2(val::Float16)
     return reinterpret(Float32, ret)
 end
 
+"convert Float32 to Float16"
 function truncsfhf2(val::Float32)
     f = reinterpret(UInt32, val)
     i = (f >> 23) & 0x1ff + 1
@@ -79,18 +92,30 @@ function truncsfhf2(val::Float32)
     reinterpret(Float16, h)
 end
 
+"convert Float64 to Float16"
 function truncdfhf2(x::Float64)
     throw(MethodError(truncdfhf2, x))
 end
 
+# "convert Float128 to Float16"
 # function trunctfhf2(x :: Float128)
-#   return truncsfhf2(convert(Float32, x))
+#    throw(MethodError(trunctfhf2, x))
 # end
-# register(trunctfhf2, Float16, Tuple{Float128}, "__trunctfhf2")
 
-# Names[RTLIB::FPROUND_F64_F32] = "__truncdfsf2";
-# Names[RTLIB::FPROUND_F128_F32] = "__trunctfsf2";
-# Names[RTLIB::FPROUND_F128_F64] = "__trunctfdf2";
+"convert Float64 to Float32"
+function truncdfsf2(x::Float64)
+    throw(MethodError(truncdfsf2, x))
+end
+
+# "convert Float128 to Float32"
+# function trunctfsf2(x :: Float128)
+#    throw(MethodError(trunctfsf2, x))
+# end
+
+# "convert Float128 to Float64"
+# function trunctfdf2(x :: Float128)
+#    throw(MethodError(trunctfdf2, x))
+# end
 
 ###
 # Conversion between integers and floats
@@ -120,6 +145,7 @@ end
 # Names[RTLIB::SINTTOFP_I64_F64] = "__floatdidf";
 # Names[RTLIB::SINTTOFP_I64_F128] = "__floatditf";
 
+"convert Int128 to Float32"
 function floattisf(x::Int128)
     x == 0 && return 0f0
     s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
@@ -136,6 +162,7 @@ function floattisf(x::Int128)
     reinterpret(Float32, s | d + y)
 end
 
+"convert Int128 to Float64"
 function floattidf(x::Int128)
     x == 0 && return 0.0
     s = ((x >>> 64) % UInt64) & 0x8000_0000_0000_0000 # sign bit
@@ -160,6 +187,7 @@ end
 # Names[RTLIB::UINTTOFP_I64_F64] = "__floatundidf";
 # Names[RTLIB::UINTTOFP_I64_F128] = "__floatunditf";
 
+"convert UInt128 to Float32"
 function floatuntisf(x::UInt128)
     x == 0 && return 0f0
     n = 128-leading_zeros(x) # ndigits0z(x,2)
@@ -174,6 +202,7 @@ function floatuntisf(x::UInt128)
     reinterpret(Float32, d + y)
 end
 
+"convert UInt128 to Float64"
 function floatuntidf(x::UInt128)
     x == 0 && return 0.0
     n = 128-leading_zeros(x) # ndigits0z(x,2)
@@ -233,6 +262,9 @@ for i = 0:255
 end
 end
 
+# RTLIB.register(RTLIB.extenddftf2, Float128, Tuple{Float64}, "__extenddftf2")
+# RTLIB.register(RTLIB.extendsftf2, Float128, Tuple{Float32}, "__extendsftf2")
+RTLIB.register(RTLIB.extendsfdf2, Float64, Tuple{Float32}, "__extendsfdf2")
 if is_apple()
     RTLIB.register(RTLIB.extendhfsf2, Float32, Tuple{Float16}, "__extendhfsf2")
     RTLIB.register(RTLIB.truncsfhf2, Float16, Tuple{Float32}, "__truncsfhf2")
@@ -241,6 +273,11 @@ else
     RTLIB.register(RTLIB.truncsfhf2, Float16, Tuple{Float32}, "__gnu_f2h_ieee")
 end
 RTLIB.register(RTLIB.truncdfhf2, Float16, Tuple{Float64}, "__truncdfhf2")
+# RTLIB.register(RTLIB.trunctfhf2, Float16, Tuple{Float128}, "__trunctfhf2")
+RTLIB.register(RTLIB.truncdfsf2, Float32, Tuple{Float64}, "__truncdfsf2")
+# RTLIB.register(RTLIB.trunctfsf2, Float32, Tuple{Float128}, "__trunctfsf2")
+# RTLIB.register(RTLIB.trunctfdf2, Float64, Tuple{Float128}, "__trunctfdf2")
+
 RTLIB.register(RTLIB.floattisf, Float32, Tuple{Int128}, "__floattisf")
 RTLIB.register(RTLIB.floattidf, Float64, Tuple{Int128}, "__floattidf")
 RTLIB.register(RTLIB.floatuntisf, Float32, Tuple{UInt128}, "__floatuntisf")
