@@ -1244,7 +1244,9 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_defn(jl_method_instance_t *linfo, bool getwrapper)
 {
-    if (linfo->def && linfo->def->source == NULL) {
+    // `source` is `NULL` for generated functions.
+    // The `isstaged` check can be removed if that is not the case anymore.
+    if (linfo->def && linfo->def->source == NULL && !linfo->def->isstaged) {
         // not a generic function
         return NULL;
     }
@@ -1323,7 +1325,9 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, bool getwrapper)
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_decl(jl_method_instance_t *linfo, bool getwrapper)
 {
-    if (linfo->def && linfo->def->source == NULL) {
+    // `source` is `NULL` for generated functions.
+    // The `isstaged` check can be removed if that is not the case anymore.
+    if (linfo->def && linfo->def->source == NULL && !linfo->def->isstaged) {
         // not a generic function
         return NULL;
     }
