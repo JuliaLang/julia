@@ -59,11 +59,6 @@ function extendhfsf2(val::Float16)
     end
     return reinterpret(Float32, ret)
 end
-if is_apple()
-    register(extendhfsf2, Float32, Tuple{Float16}, "__extendhfsf2")
-else
-    register(extendhfsf2, Float32, Tuple{Float16}, "__gnu_h2f_ieee")
-end
 
 function truncsfhf2(val::Float32)
     f = reinterpret(UInt32, val)
@@ -83,16 +78,10 @@ function truncsfhf2(val::Float32)
     end
     reinterpret(Float16, h)
 end
-if is_apple()
-    register(truncsfhf2, Float16, Tuple{Float32}, "__truncsfhf2")
-else
-    register(truncsfhf2, Float16, Tuple{Float32}, "__gnu_f2h_ieee")
-end
 
 function truncdfhf2(x::Float64)
     throw(MethodError(truncdfhf2, x))
 end
-register(truncdfhf2, Float16, Tuple{Float64}, "__truncdfhf2")
 
 # function trunctfhf2(x :: Float128)
 #   return truncsfhf2(convert(Float32, x))
@@ -146,7 +135,6 @@ function floattisf(x::Int128)
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, s | d + y)
 end
-register(floattisf, Float32, Tuple{Int128}, "__floattisf")
 
 function floattidf(x::Int128)
     x == 0 && return 0.0
@@ -163,7 +151,6 @@ function floattidf(x::Int128)
     d = ((n+1022) % UInt64) << 52
     reinterpret(Float64, s | d + y)
 end
-register(floattidf, Float64, Tuple{Int128}, "__floattidf")
 
 # Names[RTLIB::SINTTOFP_I128_F128] = "__floattitf";
 # Names[RTLIB::UINTTOFP_I32_F32] = "__floatunsisf";
@@ -186,7 +173,6 @@ function floatuntisf(x::UInt128)
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, d + y)
 end
-register(floatuntisf, Float32, Tuple{UInt128}, "__floatuntisf")
 
 function floatuntidf(x::UInt128)
     x == 0 && return 0.0
@@ -201,7 +187,6 @@ function floatuntidf(x::UInt128)
     d = ((n+1022) % UInt64) << 52
     reinterpret(Float64, d + y)
 end
-register(floatuntidf, Float64, Tuple{UInt128}, "__floatuntidf")
 
 # Names[RTLIB::UINTTOFP_I128_F128] = "__floatuntitf";
 
@@ -246,5 +231,18 @@ for i = 0:255
         shifttable[i|0x100+1] = 13
     end
 end
-
 end
+
+if is_apple()
+    RTLIB.register(RTLIB.extendhfsf2, Float32, Tuple{Float16}, "__extendhfsf2")
+    RTLIB.register(RTLIB.truncsfhf2, Float16, Tuple{Float32}, "__truncsfhf2")
+else
+    RTLIB.register(RTLIB.extendhfsf2, Float32, Tuple{Float16}, "__gnu_h2f_ieee")
+    RTLIB.register(RTLIB.truncsfhf2, Float16, Tuple{Float32}, "__gnu_f2h_ieee")
+end
+RTLIB.register(RTLIB.truncdfhf2, Float16, Tuple{Float64}, "__truncdfhf2")
+RTLIB.register(RTLIB.floattisf, Float32, Tuple{Int128}, "__floattisf")
+RTLIB.register(RTLIB.floattidf, Float64, Tuple{Int128}, "__floattidf")
+RTLIB.register(RTLIB.floatuntisf, Float32, Tuple{UInt128}, "__floatuntisf")
+RTLIB.register(RTLIB.floatuntidf, Float64, Tuple{UInt128}, "__floatuntidf")
+
