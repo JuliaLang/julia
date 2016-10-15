@@ -272,7 +272,7 @@ endif
 endif
 STD_LIB_PATH ?= $(PATH)
 
-JLDOWNLOAD := $(JULIAHOME)/deps/tools/jldownload
+JLDOWNLOAD := $(JULIAHOME)/deps/tools/jldownload.sh
 JLCHECKSUM := $(JULIAHOME)/deps/tools/jlchecksum
 
 # Figure out OS and architecture
