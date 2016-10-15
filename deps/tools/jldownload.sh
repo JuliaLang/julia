@@ -44,4 +44,4 @@ fi
 # forward to the original URL if it has not cached this download yet, or
 # if the URL is not cacheable.  We fallback to directly querying the
 # uncached URL to protect against cache service downtime
-$GETURL $CACHE_URL || $GETURL $URL
+$GETURL "$CACHE_URL" || $GETURL "$URL"
