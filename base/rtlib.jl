@@ -16,6 +16,7 @@ register(f::Function, rtype::ANY, argt::ANY, name::String) =
 
 include("rtlib/fp_util.jl")
 include("rtlib/fp_extend.jl")
+include("rtlib/fp_trunc.jl")
 
 # All these function names are enumerated in lib/CodeGen/TargetLoweringBase.cpp
 # right now we don't have a good way of getting at this information.
@@ -41,54 +42,27 @@ extendhfsf2(x::Float16) = extendXfYf2(Float32, x)
 convert(::Type{Float32}, x::Float16) = extendhfsf2(x)
 
 "convert Float32 to Float16"
-function truncsfhf2(val::Float32)
-    f = reinterpret(UInt32, val)
-    i = (f >> 23) & 0x1ff + 1
-    sh = shifttable[i]
-    f &= 0x007fffff
-    h::UInt16 = basetable[i] + (f >> sh)
-    # round
-    # NOTE: we maybe should ignore NaNs here, but the payload is
-    # getting truncated anyway so "rounding" it might not matter
-    nextbit = (f >> (sh-1)) & 1
-    if nextbit != 0
-        # Round halfway to even or check lower bits
-        if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
-            h += 1
-        end
-    end
-    reinterpret(Float16, h)
-end
+truncsfhf2(x::Float32) = truncXfYf2(Float16, x)
 convert(::Type{Float16}, x::Float32) = truncsfhf2(x)
 
 "convert Float64 to Float16"
-function truncdfhf2(x::Float64)
-    throw(MethodError(truncdfhf2, x))
-end
+truncdfhf2(x::Float64) = truncXfYf2(Float16, x)
 convert(::Type{Float16}, x::Float64) = truncdfhf2(x)
 
 # "convert Float128 to Float16"
-# function trunctfhf2(x :: Float128)
-#    throw(MethodError(trunctfhf2, x))
-# end
+# trunctfhf2(x :: Float128) = truncXfYf2(Float16, x)
 # convert(::Type{Float16}, x::Float128) = trunctfhf2(x)
 
 "convert Float64 to Float32"
-function truncdfsf2(x::Float64)
-    throw(MethodError(truncdfsf2, x))
-end
+truncdfsf2(x::Float64) = truncXfYf2(Float32, x)
 convert(::Type{Float32}, x::Float64) = truncdfsf2(x)
 
 # "convert Float128 to Float32"
-# function trunctfsf2(x :: Float128)
-#    throw(MethodError(trunctfsf2, x))
-# end
+# trunctfsf2(x :: Float128) = truncXfYf2(Float32, x)
 # convert(::Type{Float32}, x::Float128) = trunctfsf2(x)
 
 # "convert Float128 to Float64"
-# function trunctfdf2(x :: Float128)
-#    throw(MethodError(trunctfdf2, x))
-# end
+# trunctfdf2(x :: Float128) = truncXfYf2(Float32, x)
 # convert(::Type{Float64}, x::Float128) = trunctfdf2(x)
 
 ###
@@ -196,48 +170,6 @@ end
 convert(::Type{Float64}, x::UInt128) = floatuntidf(x)
 
 # Names[RTLIB::UINTTOFP_I128_F128] = "__floatuntitf";
-
-
-###
-# helpers
-###
-
-# Float32 -> Float16 algorithm from:
-#   "Fast Half Float Conversion" by Jeroen van der Zijp
-#   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
-
-const basetable = Array{UInt16}(512)
-const shifttable = Array{UInt8}(512)
-
-for i = 0:255
-    e = i - 127
-    if e < -24  # Very small numbers map to zero
-        basetable[i|0x000+1] = 0x0000
-        basetable[i|0x100+1] = 0x8000
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
-    elseif e < -14  # Small numbers map to denorms
-        basetable[i|0x000+1] = (0x0400>>(-e-14))
-        basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-        shifttable[i|0x000+1] = -e-1
-        shifttable[i|0x100+1] = -e-1
-    elseif e <= 15  # Normal numbers just lose precision
-        basetable[i|0x000+1] = ((e+15)<<10)
-        basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
-    elseif e < 128  # Large numbers map to Infinity
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
-    else  # Infinity and NaN's stay Infinity and NaN's
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
-    end
-end
 end
 
 # RTLIB.register(RTLIB.extenddftf2, Float128, Tuple{Float64}, "__extenddftf2")
