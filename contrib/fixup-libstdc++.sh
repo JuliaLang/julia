@@ -19,14 +19,14 @@ fi
 find_shlib ()
 {
     if [ -f "$1" ]; then
-        ldd "$1" | grep $2 | cut -d' ' -f3 | xargs
+        ldd "$1" | grep "$2" | cut -d' ' -f3 | xargs
     fi
 }
 
 # Discover libstdc++ location and name
 LIBSTD=$(find_shlib "$libdir/libjulia.so" "libstdc++.so")
-LIBSTD_NAME=$(basename $LIBSTD)
-LIBSTD_DIR=$(dirname $LIBSTD)
+LIBSTD_NAME=$(basename "$LIBSTD")
+LIBSTD_DIR=$(dirname "$LIBSTD")
 
 if [ ! -f "$private_libdir/$LIBSTD_NAME" ] && [ -f "$LIBSTD_DIR/$LIBSTD_NAME" ]; then
     cp -v "$LIBSTD_DIR/$LIBSTD_NAME" "$private_libdir"
