@@ -30,9 +30,9 @@ find_shlib ()
 {
     if [ -f "$private_libdir/lib$1.$SHLIB_EXT" ]; then
         if [ "$UNAME" = "Linux" ]; then
-            ldd "$private_libdir/lib$1.$SHLIB_EXT" | grep $2 | cut -d' ' -f3 | xargs
+            ldd "$private_libdir/lib$1.$SHLIB_EXT" | grep "$2" | cut -d' ' -f3 | xargs
         elif [ "$UNAME" = "Darwin" ]; then
-            otool -L "$private_libdir/lib$1.$SHLIB_EXT" | grep $2 | cut -d' ' -f1 | xargs
+            otool -L "$private_libdir/lib$1.$SHLIB_EXT" | grep "$2" | cut -d' ' -f1 | xargs
         fi
     fi
 }
@@ -40,9 +40,9 @@ find_shlib ()
 # First, discover all the places where libgfortran/libgcc is, as well as their true SONAMES
 for lib in arpack openlibm openspecfun lapack; do
     if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgfortran) 2>/dev/null)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgcc_s) 2>/dev/null)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libquadmath) 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname "$(find_shlib $lib libgfortran)" 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname "$(find_shlib $lib libgcc_s)" 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname "$(find_shlib $lib libquadmath)" 2>/dev/null)"
     fi
 done
 
@@ -61,7 +61,7 @@ for namext in $NAMEXTS; do
             cp -v "$dir/lib$namext" "$private_libdir"
             chmod 755 "$private_libdir/lib$namext"
             if [ "$UNAME" = "Darwin" ]; then
-                install_name_tool -id @rpath/lib$namext "$private_libdir/lib$namext"
+                install_name_tool -id @rpath/lib"$namext" "$private_libdir/lib$namext"
             fi
         fi
     done
@@ -70,9 +70,9 @@ done
 # Add possible internal directories to LIBGFORTRAN_DIRS
 for lib in gfortran.3 quadmath.0 gcc_s.1 ; do
     if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgfortran) 2>/dev/null)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgcc_s) 2>/dev/null)"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libquadmath) 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname "$(find_shlib $lib libgfortran)" 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname "$(find_shlib $lib libgcc_s)" 2>/dev/null)"
+        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname "$(find_shlib $lib libquadmath)" 2>/dev/null)"
     fi
 done
 
@@ -82,23 +82,23 @@ echo "Found traces of libgfortran/libgcc in $LIBGFORTRAN_DIRS"
 
 # Do the private_libdir libraries
 if [ "$UNAME" = "Darwin" ]; then
-    cd $private_libdir
+    cd "$private_libdir" || exit
     for file in openlibm quadmath.0 gfortran.3 openblas arpack lapack openspecfun; do
-        for dylib in $(ls lib$file*.dylib* 2>/dev/null); do
+        for dylib in lib$file*.dylib*; do
             for dir in $LIBGFORTRAN_DIRS; do
-                install_name_tool -change "$dir/libgfortran.3.dylib" @rpath/libgfortran.3.dylib $dylib
-                install_name_tool -change "$dir/libquadmath.0.dylib" @rpath/libquadmath.0.dylib $dylib
-                install_name_tool -change "$dir/libgcc_s.1.dylib" @rpath/libgcc_s.1.dylib $dylib
+                install_name_tool -change "$dir/libgfortran.3.dylib" @rpath/libgfortran.3.dylib "$dylib"
+                install_name_tool -change "$dir/libquadmath.0.dylib" @rpath/libquadmath.0.dylib "$dylib"
+                install_name_tool -change "$dir/libgcc_s.1.dylib" @rpath/libgcc_s.1.dylib "$dylib"
             done
         done
     done
 fi
 
 if [ "$UNAME" = "Linux" ]; then
-    cd $private_libdir
+    cd "$private_libdir" || exit
     for file in openlibm quadmath gfortran openblas arpack lapack openspecfun; do
-        for dylib in $(ls lib$file*.so* 2>/dev/null); do
-            patchelf --set-rpath \$ORIGIN $dylib
+        for dylib in lib$file*.so*; do
+            patchelf --set-rpath \$ORIGIN "$dylib"
         done
     done
 fi
