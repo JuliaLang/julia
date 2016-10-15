@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# usage: jldownload [<output-filename>] <url>
+# usage: jldownload.sh [<output-filename>] <url>
 #
 
 CACHE_HOST=https://cache.julialang.org
