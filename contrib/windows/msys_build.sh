@@ -19,12 +19,12 @@ checksum_download() {
   f=$1
   url=$2
   if [ -e "$f" ]; then
-    deps/tools/jlchecksum "$f" 2> /dev/null && return
+    deps/tools/jlchecksum.sh "$f" 2> /dev/null && return
     echo "Checksum for '$f' changed, download again." >&2
   fi
   echo "Downloading '$f'"
   $curlflags -O "$url"
-  deps/tools/jlchecksum "$f"
+  deps/tools/jlchecksum.sh "$f"
 }
 
 # If ARCH environment variable not set, choose based on uname -m
