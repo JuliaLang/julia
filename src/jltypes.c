@@ -3132,7 +3132,7 @@ int jl_args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap)
     if (changed) {
         JL_GC_PUSH1(&newtta);
         int ret;
-        if (type_eqv_(b, newtta))
+        if (type_eqv_(b, (jl_value_t*)newtta))
             ret = swap;
         else if (swap)
             ret = jl_args_morespecific_(b, (jl_value_t*)newtta);
