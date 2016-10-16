@@ -1021,4 +1021,6 @@ end))
 
 @deprecate ipermutedims(A::AbstractArray,p) permutedims(A, invperm(p))
 
+@deprecate is (===)
+
 # End deprecations scheduled for 0.6

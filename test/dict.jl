@@ -342,18 +342,18 @@ end
 let
     a = Dict("foo"  => 0.0, "bar" => 42.0)
     b = Dict("フー" => 17, "バー" => 4711)
-    @test is(typeof(merge(a, b)), Dict{String,Float64})
+    @test typeof(merge(a, b)) === Dict{String,Float64}
 end
 
 # issue 9295
 let
     d = Dict()
-    @test is(push!(d, 'a' => 1), d)
+    @test push!(d, 'a' => 1) === d
     @test d['a'] == 1
-    @test is(push!(d, 'b' => 2, 'c' => 3), d)
+    @test push!(d, 'b' => 2, 'c' => 3) === d
     @test d['b'] == 2
     @test d['c'] == 3
-    @test is(push!(d, 'd' => 4, 'e' => 5, 'f' => 6), d)
+    @test push!(d, 'd' => 4, 'e' => 5, 'f' => 6) === d
     @test d['d'] == 4
     @test d['e'] == 5
     @test d['f'] == 6
@@ -444,13 +444,13 @@ let d = ImmutableDict{String, String}(),
     @test (k1 => v2) in d3
     @test (k1 => v1) in d4
     @test (k1 => v2) in d4
-    @test !in(k2 => "value2", d4, is)
-    @test in(k2 => v2, d4, is)
+    @test !in(k2 => "value2", d4, ===)
+    @test in(k2 => v2, d4, ===)
     @test in(k2 => NaN, dnan, isequal)
-    @test in(k2 => NaN, dnan, is)
+    @test in(k2 => NaN, dnan, ===)
     @test !in(k2 => NaN, dnan, ==)
-    @test !in(k2 => 1, dnum, is)
-    @test in(k2 => 1.0, dnum, is)
+    @test !in(k2 => 1, dnum, ===)
+    @test in(k2 => 1.0, dnum, ===)
     @test !in(k2 => 1, dnum, <)
     @test in(k2 => 0, dnum, <)
     @test get(d1, "key1", :default) === v1

@@ -339,7 +339,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 
 JL_CALLABLE(jl_f_is)
 {
-    JL_NARGS(is, 2, 2);
+    JL_NARGS(===, 2, 2);
     if (args[0] == args[1])
         return jl_true;
     return jl_egal(args[0],args[1]) ? jl_true : jl_false;
@@ -1114,7 +1114,7 @@ static void add_builtin_func(const char *name, jl_fptr_t fptr)
 
 void jl_init_primitives(void)
 {
-    add_builtin_func("is", jl_f_is);
+    add_builtin_func("===", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("sizeof", jl_f_sizeof);
     add_builtin_func("issubtype", jl_f_issubtype);

@@ -453,10 +453,10 @@ instance of such types::
     type NoFields
     end
 
-    julia> is(NoFields(), NoFields())
+    julia> NoFields() === NoFields()
     true
 
-The ``is`` function confirms that the "two" constructed instances of
+The ``===`` function confirms that the "two" constructed instances of
 ``NoFields`` are actually one and the same. Singleton types are
 described in further detail `below <#man-singleton-types>`_.
 

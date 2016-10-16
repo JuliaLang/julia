@@ -1185,7 +1185,7 @@ end
 function A_mul_Bc{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv})
     cm = common()
 
-    if !is(A,B)
+    if A !== B
         aa1 = transpose_(B, 2)
         ## result of ssmult will have stype==0, contain numerical values and be sorted
         return ssmult(A, aa1, 0, true, true)
@@ -1205,7 +1205,7 @@ end
 
 function Ac_mul_B(A::Sparse, B::Sparse)
     aa1 = transpose_(A, 2)
-    if is(A,B)
+    if A === B
         return A_mul_Bc(aa1, aa1)
     end
     ## result of ssmult will have stype==0, contain numerical values and be sorted

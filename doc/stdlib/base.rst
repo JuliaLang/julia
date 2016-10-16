@@ -237,8 +237,7 @@ Getting Around
 All Objects
 -----------
 
-.. function:: is(x, y) -> Bool
-              ===(x,y) -> Bool
+.. function:: ===(x,y) -> Bool
               ≡(x,y) -> Bool
 
    .. Docstring generated from Julia source

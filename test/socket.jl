@@ -300,7 +300,7 @@ let
 
         t0 = TCPSocket()
         t = t0
-        @assert is(t,t0)
+        @assert t === t0
 
         try
             t = connect(addr)
@@ -308,7 +308,7 @@ let
             close(srv)
         end
 
-        test = !is(t,t0)
+        test = t !== t0
         close(t)
 
         return test

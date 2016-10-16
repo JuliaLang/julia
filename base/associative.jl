@@ -8,7 +8,7 @@ haskey(d::Associative, k) = in(k,keys(d))
 
 function in(p::Pair, a::Associative, valcmp=(==))
     v = get(a,p[1],secret_table_token)
-    if !is(v, secret_table_token)
+    if v !== secret_table_token
         valcmp(v, p[2]) && return true
     end
     return false
@@ -57,8 +57,7 @@ function next(v::ValueIterator, state)
     n[1][2], n[2]
 end
 
-in(k, v::KeyIterator) = !is(get(v.dict, k, secret_table_token),
-                            secret_table_token)
+in(k, v::KeyIterator) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 
 """
@@ -259,7 +258,7 @@ end
 
 function getindex(t::Associative, key)
     v = get(t, key, secret_table_token)
-    if is(v, secret_table_token)
+    if v === secret_table_token
         throw(KeyError(key))
     end
     return v
@@ -324,7 +323,7 @@ end
 
 function pop!(t::ObjectIdDict, key::ANY)
     val = pop!(t, key, secret_table_token)
-    !is(val,secret_table_token) ? val : throw(KeyError(key))
+    val !== secret_table_token ? val : throw(KeyError(key))
 end
 
 function delete!(t::ObjectIdDict, key::ANY)

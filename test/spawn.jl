@@ -234,7 +234,7 @@ yield()
         redirect_stdout(OLD_STDOUT)
         close(f)
         @test "Hello World\n" == readstring(fname)
-        @test is(OLD_STDOUT,STDOUT)
+        @test OLD_STDOUT === STDOUT
         rm(fname)
     end
 end

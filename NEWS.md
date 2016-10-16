@@ -57,6 +57,8 @@ Deprecated or removed
 
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).
 
+  * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).
+
 Julia v0.5.0 Release Notes
 ==========================
 
@@ -673,6 +675,7 @@ Language tooling improvements
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
 [#17546]: https://github.com/JuliaLang/julia/issues/17546
 [#17668]: https://github.com/JuliaLang/julia/issues/17668
+[#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
