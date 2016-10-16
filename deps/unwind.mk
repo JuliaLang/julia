@@ -67,7 +67,7 @@ $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled: $(BUILDDIR)/libosxunwi
 	$(MAKE) -C $(dir $<) $(OSXUNWIND_FLAGS)
 	echo 1 > $@
 
-$(build_prefix)/manifest/osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled | $(build_shlibdir) $(build_prefix)/manifest
+$(build_prefix)/manifest/osxunwind: $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/build-compiled | $(build_libdir) $(build_shlibdir) $(build_includedir) $(build_prefix)/manifest
 	cp $(dir $<)/libosxunwind.a $(build_libdir)/libosxunwind.a
 	cp $(dir $<)/libosxunwind.$(SHLIB_EXT) $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
 	cp -R $(dir $<)/include/* $(build_includedir)
