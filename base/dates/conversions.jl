@@ -91,7 +91,7 @@ today() = Date(now())
 
 Returns a `DateTime` corresponding to the user's system time as UTC/GMT.
 """
-now(::Type{UTC}) = unix2datetime(time())
+now(::Type{UTC}) = time()
 
 """
     rata2datetime(days) -> DateTime
