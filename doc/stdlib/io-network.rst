@@ -534,13 +534,24 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Print ``args`` using C ``printf()`` style format specification string. Optionally, an :obj:`IOStream` may be passed as the first argument to redirect output.
+   Print ``args`` using C ``printf()`` style format specification string, with some caveats: ``Inf`` and ``NaN`` are printed consistently as 'Inf' and 'NaN' for flags %a, %A, %e, %E, %f, %F, %g, and %G.
+
+   Optionally, an :obj:`IOStream` may be passed as the first argument to redirect output.
+
+   **Examples**
+
+   .. code-block:: julia
+
+       julia> @printf( "%f %F %f %F", Inf, Inf, NaN, NaN )
+       Inf Inf NaN NaN
 
 .. function:: @sprintf("%Fmt", args...)
 
    .. Docstring generated from Julia source
 
    Return ``@printf`` formatted output as string.
+
+   **Examples**
 
    .. code-block:: julia
 
