@@ -161,6 +161,25 @@ end
 
 Compute the Cholesky factorization of a positive definite matrix `A`
 and return the UpperTriangular matrix `U` such that `A = U'U`.
+
+**Example**
+
+```jldoctest
+julia> A = [1. 2.; 2. 50.]
+2×2 Array{Float64,2}:
+ 1.0   2.0
+ 2.0  50.0
+
+julia> U = chol(A)
+2×2 UpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  2.0
+  ⋅   6.78233
+
+julia> U'U
+2×2 Array{Float64,2}:
+ 1.0   2.0
+ 2.0  50.0
+```
 """
 function chol(A::AbstractMatrix)
     ishermitian(A) || non_hermitian_error("chol")
@@ -172,6 +191,13 @@ end
     chol(x::Number) -> y
 
 Compute the square root of a non-negative number `x`.
+
+**Example**
+
+```jldoctest
+julia> chol(16)
+4.0
+```
 """
 chol(x::Number, args...) = _chol!(x, nothing)
 
@@ -203,6 +229,19 @@ The same as `cholfact`, but saves space by overwriting the input `A`, instead
 of creating a copy. An `InexactError` exception is thrown if the factorisation
 produces a number not representable by the element type of `A`, e.g. for
 integer types.
+
+**Example**
+
+```jldoctest
+julia> A = [1 2; 2 50]
+2×2 Array{Int64,2}:
+ 1   2
+ 2  50
+
+ julia> cholfact!(A)
+ ERROR: InexactError()
+  ...
+```
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
     ishermitian(A) || non_hermitian_error("cholfact!")
@@ -267,6 +306,8 @@ The default is to use `:U`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
 The following functions are available for `Cholesky` objects: `size`, `\\`, `inv`, `det`.
 A `PosDefException` exception is thrown in case the matrix is not positive definite.
+
+**Example**
 
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
