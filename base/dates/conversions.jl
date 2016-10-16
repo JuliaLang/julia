@@ -23,56 +23,35 @@ Base.convert(::Type{DateTime},dt::Date) = DateTime(UTM(value(dt)*86400000))
 Base.convert(::Type{Date},dt::DateTime) = Date(UTD(days(dt)))
 
 """
-    convert{T<:Real}(::Type{T}, dt::DateTime) -> T
-Converts a DateTime value `dt` to a number of type `T`. The returned value corresponds to the number of Rata Die milliseconds since epoch.
-See `convert(DateTime, x::Real)` for inverse.
-"""
-Base.convert{R<:Real}(::Type{R},x::DateTime) = convert(R,value(x))
-"""
-    convert{T<:Real}(::Type{T}, dt::Date) -> T
-Converts a Date value `dt` to a number of type `T`. The returned value corresponds to the number of Rata Die days since epoch.
-See `convert(Date, x::Real)` for inverse.
-"""
-Base.convert{R<:Real}(::Type{R},x::Date)     = convert(R,value(x))
-"""
-    convert{T<:Real}(::Type{DateTime}, x::T) -> DateTime
-Converts a number of type `T` to a DateTime. `x` should be the number of Rata Die milliseconds since epoch.
-See `convert(Int64,dt::DateTime)` for inverse.
-"""
-Base.convert{R<:Real}(::Type{DateTime}, x::R) = DateTime(UTM(x))
-"""
     convert{T<:Real}(::Type{Date}, x::T) -> Date
 Converts a number of type `T` to a Date. `x` should be the number of Rata Die days since epoch.
 See `convert(Int64,dt::Date)` for inverse.
 """
 Base.convert{R<:Real}(::Type{Date}, x::R) = Date(UTD(x))
 
-### External Conversions
+
+ComputerTime(sec::Int) = ComputerTime(sec, 0)
+
+function Base.convert(::Type{DateTime}, ht::HumanTime)
+   DateTime(ht.year+1900,ht.month+1,ht.mday,ht.hour,ht.min,ht.sec)
+end
+
+function Base.convert(::Type{DateTime}, ht::ComputerTime)
+   DateTime(ht.year+1900,ht.month+1,ht.mday,ht.hour,ht.min,ht.sec)
+end
+
+function Base.convert(::Type{HumanTime}, ct::ComputerTime)
+    sec = ct.sec
+    ht = HumanTime()
+    # TODO: add support for UTC via gmtime_r()
+    ccall(:localtime_r, Ptr{HumanTime}, (Ptr{Int}, Ptr{HumanTime}), &sec, &ht)
+    return tm
+end
+
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
 
-"""
-    unix2datetime(x) -> DateTime
-
-Takes the number of seconds since unix epoch `1970-01-01T00:00:00` and converts to the
-corresponding `DateTime`.
-"""
-function unix2datetime(x)
-    rata = UNIXEPOCH + round(Int64, Int64(1000) * x)
-    return DateTime(UTM(rata))
-end
-
-function Base.convert(::Type{DateTime}, tv::Libc.TimeVal)
-    tm = Libc.TmStruct(tv.sec)
-    return DateTime(tm.year+1900,tm.month+1,tm.mday,tm.hour,tm.min,tm.sec,div(tv.usec,1000))
-end
-
-"""
-    datetime2unix(dt::DateTime) -> Float64
-
-Takes the given `DateTime` and returns the number of seconds
-since the unix epoch `1970-01-01T00:00:00` as a `Float64`.
-"""
-datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH)/1000.0
+# Note, there is a timezone issue here: DateTimes are in local time, but ComputerTimes need to be converted to UTC
+Base.convert(::Type{ComputerTime}, dt::DateTime) = ComputerTime( (value(dt) - UNIXEPOCH)/1000.0 )
 
 """
     now() -> DateTime
@@ -88,13 +67,6 @@ function now() = convert(DateTime, Libc.TimeVal() )
 Returns the date portion of `now()`.
 """
 today() = Date(now())
-
-"""
-    now(::Type{UTC}) -> DateTime
-
-Returns a `DateTime` corresponding to the user's system time as UTC/GMT.
-"""
-now(::Type{UTC}) = time()
 
 """
     rata2datetime(days) -> DateTime
