@@ -240,3 +240,36 @@ Base.isless(x::Date,y::Date) = isless(value(x),value(y))
 Base.isless(x::DateTime,y::DateTime) = isless(value(x),value(y))
 Base.isless(x::TimeType,y::TimeType) = isless(promote(x,y)...)
 ==(x::TimeType,y::TimeType) = ===(promote(x,y)...)
+
+immutable ComputerTime
+   sec::Int64
+   usec::Int64
+end
+
+"""
+    HumanTime
+
+Time in a broken-down format, with fields `sec`, `min`, `hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`.
+"""
+type TmStruct
+    sec::Int32
+    min::Int32
+    hour::Int32
+    mday::Int32
+    month::Int32
+    year::Int32
+    wday::Int32
+    yday::Int32
+    isdst::Int32
+    # on some platforms the struct is 14 words, even though 9 are specified
+    _10::Int32
+    _11::Int32
+    _12::Int32
+    _13::Int32
+    _14::Int32
+
+    TmStruct(sec, min, hour, mday, month, year, wday, yday, isdst) =
+        new(sec, min, hour, mday, month, year, wday, yday, isdst, 0,0,0,0,0)
+    TmStruct() = new(0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+end
+
