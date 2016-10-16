@@ -251,7 +251,7 @@ end
 
 Time in a broken-down format, with fields `sec`, `min`, `hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`.
 """
-type TmStruct
+type HumanTime
     sec::Int32
     min::Int32
     hour::Int32
@@ -268,8 +268,8 @@ type TmStruct
     _13::Int32
     _14::Int32
 
-    TmStruct(sec, min, hour, mday, month, year, wday, yday, isdst) =
+    HumanTime(sec, min, hour, mday, month, year, wday, yday, isdst) =
         new(sec, min, hour, mday, month, year, wday, yday, isdst, 0,0,0,0,0)
-    TmStruct() = new(0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+    HumanTime() = new(0,0,0,0,0,0,0,0,0,0,0,0,0,0)
 end
 
