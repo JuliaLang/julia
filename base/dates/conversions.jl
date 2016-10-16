@@ -21,6 +21,7 @@ DateTime(dt::TimeType) = convert(DateTime,dt)
 
 Base.convert(::Type{DateTime},dt::Date) = DateTime(UTM(value(dt)*86400000))
 Base.convert(::Type{Date},dt::DateTime) = Date(UTD(days(dt)))
+
 """
     convert{T<:Real}(::Type{T}, dt::DateTime) -> T
 Converts a DateTime value `dt` to a number of type `T`. The returned value corresponds to the number of Rata Die milliseconds since epoch.
@@ -59,6 +60,12 @@ function unix2datetime(x)
     rata = UNIXEPOCH + round(Int64, Int64(1000) * x)
     return DateTime(UTM(rata))
 end
+
+function Base.convert(::Type{DateTime}, tv::Libc.TimeVal)
+    tm = Libc.TmStruct(tv.sec)
+    return DateTime(tm.year+1900,tm.month+1,tm.mday,tm.hour,tm.min,tm.sec,div(tv.usec,1000))
+end
+
 """
     datetime2unix(dt::DateTime) -> Float64
 
@@ -73,11 +80,7 @@ datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH)/1000.0
 Returns a `DateTime` corresponding to the user's system time including the system timezone
 locale.
 """
-function now()
-    tv = Libc.TimeVal()
-    tm = Libc.TmStruct(tv.sec)
-    return DateTime(tm.year+1900,tm.month+1,tm.mday,tm.hour,tm.min,tm.sec,div(tv.usec,1000))
-end
+function now() = convert(DateTime, Libc.TimeVal() )
 
 """
     today() -> Date
