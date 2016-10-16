@@ -40,6 +40,9 @@ immutable StatStruct
     ctime   :: DateTime
 end
 
+mtime(buf) = ccall(:jl_stat_mtime, Dates.ComputerTime, (Ptr{UInt8},), buf)
+ctime(buf) = ccall(:jl_stat_ctime, Dates.ComputerTime, (Ptr{UInt8},), buf)
+
 StatStruct() = StatStruct(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 
 StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
@@ -53,8 +56,8 @@ StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
-    convert(DateTime, mtime(buff) ),
-    convert(DateTime, ctime(buff) )
+    convert(DateTime, mtime(buf) ),
+    convert(DateTime, ctime(buf) )
 )
 
 show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=$(oct(filemode(st),6)), size=$(filesize(st)))")
