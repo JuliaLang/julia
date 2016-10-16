@@ -46,5 +46,5 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
             ccall(:mktime, Int, (Ptr{TmStruct},), &tm)
         end
     end
-    return Dates.unix2datetime(tm)
+    return convert(DateTime, tm)
 end
