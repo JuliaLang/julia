@@ -272,7 +272,7 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    filter!(x->!((isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)), ex.args)
+    filter!(x->!((isa(x,Expr) && x.head === :line) || isa(x,LineNumberNode)), ex.args)
     for subex in ex.args
         remove_linenums!(subex)
     end

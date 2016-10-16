@@ -93,7 +93,7 @@ macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
 function toq()
     t1 = time_ns()
     timers = get(task_local_storage(), :TIMERS, ())
-    if is(timers,())
+    if timers === ()
         error("toc() without tic()")
     end
     t0 = timers[1]::UInt64

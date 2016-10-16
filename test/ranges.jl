@@ -144,7 +144,7 @@ end
 
 r = 0.0:0.01:1.0
 @test (r[30] in r)
-r = (-4*Int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
+r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
 @test (3 in r)
 @test (3.0 in r)
 

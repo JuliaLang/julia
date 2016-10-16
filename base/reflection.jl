@@ -166,7 +166,7 @@ argument is [`current_module()`](:func:`current_module`).
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
-# return an integer such that object_id(x)==object_id(y) if is(x,y)
+# return an integer such that object_id(x)==object_id(y) if x===y
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 immutable DataTypeLayout
@@ -468,7 +468,7 @@ function visit(f, mc::TypeMapLevel)
     nothing
 end
 function visit(f, d::TypeMapEntry)
-    while !is(d, nothing)
+    while d !== nothing
         f(d.func)
         d = d.next
     end

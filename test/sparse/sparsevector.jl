@@ -248,8 +248,8 @@ end
 let x = spv_x1
     xc = copy(x)
     @test isa(xc, SparseVector{Float64,Int})
-    @test !is(x.nzind, xc.nzval)
-    @test !is(x.nzval, xc.nzval)
+    @test x.nzind !== xc.nzval
+    @test x.nzval !== xc.nzval
     @test exact_equal(x, xc)
 end
 
@@ -618,7 +618,7 @@ let x = spv_x1, x2 = spv_x2
 
     # real & imag
 
-    @test is(real(x), x)
+    @test real(x) === x
     @test exact_equal(imag(x), spzeros(Float64, length(x)))
 
     xcp = complex(x, x2)
@@ -727,7 +727,7 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
     # axpy!
     for c in [1.0, -1.0, 2.0, -2.0]
         y = full(x)
-        @test is(Base.axpy!(c, x2, y), y)
+        @test Base.axpy!(c, x2, y) === y
         @test y == full(x2 * c + x)
     end
 
@@ -744,10 +744,10 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
         @test exact_equal(x / 2.5, SparseVector(x.n, x.nzind, x.nzval / 2.5))
 
         xc = copy(x)
-        @test is(scale!(xc, 2.5), xc)
+        @test scale!(xc, 2.5) === xc
         @test exact_equal(xc, sx)
         xc = copy(x)
-        @test is(scale!(2.5, xc), xc)
+        @test scale!(2.5, xc) === xc
         @test exact_equal(xc, sx)
     end
 
@@ -780,7 +780,7 @@ let A = randn(9, 16), x = sprand(16, 0.7)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
         rr = α*A*xf + β*y
-        @test is(A_mul_B!(α, A, x, β, y), y)
+        @test A_mul_B!(α, A, x, β, y) === y
         @test y ≈ rr
     end
     y = A*x
@@ -793,7 +793,7 @@ let A = randn(16, 9), x = sprand(16, 0.7)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
         rr = α*A'xf + β*y
-        @test is(At_mul_B!(α, A, x, β, y), y)
+        @test At_mul_B!(α, A, x, β, y) === y
         @test y ≈ rr
     end
     y = At_mul_B(A, x)
@@ -809,7 +809,7 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
         rr = α*Af*xf + β*y
-        @test is(A_mul_B!(α, A, x, β, y), y)
+        @test A_mul_B!(α, A, x, β, y) === y
         @test y ≈ rr
     end
     y = SparseArrays.densemv(A, x)
@@ -823,7 +823,7 @@ let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
         rr = α*Af'xf + β*y
-        @test is(At_mul_B!(α, A, x, β, y), y)
+        @test At_mul_B!(α, A, x, β, y) === y
         @test y ≈ rr
     end
     y = SparseArrays.densemv(A, x; trans='T')
