@@ -16,7 +16,7 @@ time_ns() = ccall(:jl_hrtime, UInt64, ())
 # This type must be kept in sync with the C struct in src/gc.h
 immutable GC_Num
     allocd      ::Int64 # GC internal
-    deferred_alloc::Int64
+    deferred_alloc::Int64 # GC internal
     freed       ::Int64 # GC internal
     malloc      ::UInt64
     realloc     ::UInt64
@@ -46,10 +46,14 @@ immutable GC_Diff
     full_sweep  ::Int64 # Number of GC full collection
 end
 
+gc_total_bytes(gc_num::GC_Num) =
+    (gc_num.allocd + gc_num.deferred_alloc +
+     Int64(gc_num.collect) + Int64(gc_num.total_allocd))
+
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
-    old_allocd = old.allocd + Int64(old.collect) + Int64(old.total_allocd)
-    new_allocd = new.allocd + Int64(new.collect) + Int64(new.total_allocd)
+    old_allocd = gc_total_bytes(old)
+    new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd - old_allocd,
                    Int64(new.malloc       - old.malloc),
                    Int64(new.realloc      - old.realloc),
