@@ -202,7 +202,7 @@ end
 
 Converts a `TmStruct` struct to a number of seconds since the epoch.
 """
-time(tm::TmStruct) = ccall(:mktime, Int, (Ptr{TmStruct},), &tm) |> Float64 |> Dates.unix2datetime
+time(tm::TmStruct) = ccall(:mktime, Int, (Ptr{TmStruct},), &tm) |> Dates.unix2datetime
 time() = Dates.unix2datetime(ccall(:jl_clock_now, Float64, ()))
 
 ## process-related functions ##
