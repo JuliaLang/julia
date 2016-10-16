@@ -53,7 +53,7 @@ StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
     ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf),
     ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
+    ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf) |> Dates.unix2datetime,
     ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf) |> Dates.unix2datetime,
 )
 
