@@ -36,10 +36,7 @@ function Base.convert(::Type{DateTime}, ht::HumanTime)
    DateTime(ht.year+1900,ht.month+1,ht.mday,ht.hour,ht.min,ht.sec)
 end
 
-function Base.convert(::Type{DateTime}, ht::ComputerTime)
-   DateTime(ht.year+1900,ht.month+1,ht.mday,ht.hour,ht.min,ht.sec)
-end
-
+# Timezone issue: HumanTimes are in local time, but ComputerTimes are in UTC
 function Base.convert(::Type{HumanTime}, ct::ComputerTime)
     sec = ct.sec
     ht = HumanTime()
@@ -50,7 +47,7 @@ end
 
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
 
-# Note, there is a timezone issue here: DateTimes are in local time, but ComputerTimes need to be converted to UTC
+# Timezone issue: DateTimes are in local time, but ComputerTimes need to be converted to UTC
 Base.convert(::Type{ComputerTime}, dt::DateTime) = ComputerTime( (value(dt) - UNIXEPOCH)/1000.0 )
 
 function now(::Type{ComputerTime})
@@ -58,6 +55,10 @@ function now(::Type{ComputerTime})
     status = ccall(:jl_gettimeofday, Cint, (Ref{ComputerTime},), ct)
     status != 0 && error("unable to determine current time: ", status)
     return ct[]
+end
+
+function Base.convert(::Type{DateTime}, ct::ComputerTime)
+   convert(DateTime, convert(ct, HumanTime) ) + Milliseconds( fld(ct.usec, 1000) )
 end
 
 """
