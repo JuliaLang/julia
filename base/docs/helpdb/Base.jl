@@ -3340,8 +3340,8 @@ Compute the Dawson function (scaled imaginary error function) of `x`, defined by
 dawson
 
 """
-    \$(x, y)
+    xor(x, y)
 
 Bitwise exclusive or.
 """
-Base.:$(x, y)
+Base.xor(x, y)

@@ -162,7 +162,7 @@ const hash_0_imag = hash(0, h_imag)
 function hash(z::Complex, h::UInt)
     # TODO: with default argument specialization, this would be better:
     # hash(real(z), h $ hash(imag(z), h $ h_imag) $ hash(0, h $ h_imag))
-    hash(real(z), h $ hash(imag(z), h_imag) $ hash_0_imag)
+    hash(real(z), xor(h, hash(imag(z), h_imag), hash_0_imag))
 end
 
 ## generic functions of complex numbers ##

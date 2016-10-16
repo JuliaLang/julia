@@ -26,10 +26,10 @@ const ≣ = isequal # convenient for comparing NaNs
 @test false | true  == true
 @test true  | true  == true
 
-@test false $ false == false
-@test true  $ false == true
-@test false $ true  == true
-@test true  $ true  == false
+@test xor(false, false) == false
+@test xor(true,  false) == true
+@test xor(false, true)  == true
+@test xor(true,  true)  == false
 
 # the bool operator
 @test Bool(false) == false

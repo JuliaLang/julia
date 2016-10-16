@@ -498,9 +498,9 @@ function broadcast_bitarrays(scalarf, bitf, A::AbstractArray{Bool}, B::AbstractA
     return F
 end
 
-biteq(a::UInt64, b::UInt64) = ~a $ b
+biteq(a::UInt64, b::UInt64) = xor(~a, b)
 bitlt(a::UInt64, b::UInt64) = ~a & b
-bitneq(a::UInt64, b::UInt64) = a $ b
+bitneq(a::UInt64, b::UInt64) = xor(a, b)
 bitle(a::UInt64, b::UInt64) = ~a | b
 
 .==(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(==, biteq, A, B)

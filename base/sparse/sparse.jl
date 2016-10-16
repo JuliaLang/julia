@@ -6,7 +6,7 @@ using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular, PosDefException
 
-import Base: +, -, *, \, &, |, $, .+, .-, .*, ./, .\, .^, .<, .!=, ==
+import Base: +, -, *, \, &, |, xor, .+, .-, .*, ./, .\, .^, .<, .!=, ==
 import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!
 import Base: A_mul_Bc, A_mul_Bt, Ac_mul_Bc, At_mul_Bt
 import Base: At_ldiv_B, Ac_ldiv_B, A_ldiv_B!

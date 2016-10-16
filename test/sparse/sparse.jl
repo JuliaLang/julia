@@ -1494,8 +1494,8 @@ let
     @test A13024 | B13024 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
     @test typeof(A13024 | B13024) == SparseMatrixCSC{Bool,Int}
 
-    @test A13024 $ B13024 == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
-    @test typeof(A13024 $ B13024) == SparseMatrixCSC{Bool,Int}
+    @test xor(A13024, B13024) == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
+    @test typeof(xor(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
     @test max(A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
     @test typeof(max(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
@@ -1503,7 +1503,7 @@ let
     @test min(A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
     @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    for op in (+, -, &, |, $)
+    for op in (+, -, &, |, xor)
         @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
     end
     for op in (max, min)

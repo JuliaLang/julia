@@ -303,7 +303,7 @@ for (Fun, func) in [(:IdFun, :identity),
                     (:ConjFun, :conj),
                     (:AndFun, :&),
                     (:OrFun, :|),
-                    (:XorFun, :$),
+                    (:XorFun, :xor),
                     (:AddFun, :+),
                     (:DotAddFun, :.+),
                     (:SubFun, :-),
@@ -1021,6 +1021,9 @@ eval(Multimedia, :(macro textmime(mime)
 end))
 
 @deprecate ipermutedims(A::AbstractArray,p) permutedims(A, invperm(p))
+
+# 18696
+@deprecate ($) xor
 
 @deprecate is (===)
 
