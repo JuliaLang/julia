@@ -4621,6 +4621,25 @@ let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
     @test b[1] == b[end] == "sdf"
 end
 
+# issue #17255, take `deferred_alloc` into account
+# when calculating total allocation size.
+@noinline function f17255(n)
+    gc_enable(false)
+    b0 = Base.gc_bytes()
+    local a
+    for i in 1:n
+        a, t, allocd = @timed [Ref(1) for i in 1:1000]
+        @test allocd > 0
+        b1 = Base.gc_bytes()
+        if b1 < b0
+            return false, a
+        end
+    end
+    return true, a
+end
+@test f17255(10000)[1]
+gc_enable(true)
+
 # issue #18710
 bad_tvars{T}() = 1
 @test isa(@which(bad_tvars()), Method)
