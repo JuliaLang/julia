@@ -36,8 +36,8 @@ immutable StatStruct
     size    :: Int64
     blksize :: Int64
     blocks  :: Int64
-    mtime   :: Float64
-    ctime   :: Float64
+    mtime   :: DateTime
+    ctime   :: DateTime
 end
 
 StatStruct() = StatStruct(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
