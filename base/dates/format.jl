@@ -46,5 +46,5 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
             ccall(:mktime, Int, (Ptr{HumanTime},), &tm)
         end
     end
-    return convert(DateTime, tm)
+    return tm
 end
