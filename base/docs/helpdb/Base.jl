@@ -1620,18 +1620,6 @@ write results to `r`.
 sumabs2!
 
 """
-    @sprintf("%Fmt", args...)
-
-Return `@printf` formatted output as string.
-
-    julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
-
-    julia> println(s)
-    this is a test            34.6
-"""
-:@sprintf
-
-"""
     tanh(x)
 
 Compute hyperbolic tangent of `x`.
@@ -2425,15 +2413,6 @@ Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` c
 `setfield!(a, :b, c)`.
 """
 setfield!
-
-"""
-    @printf([io::IOStream], "%Fmt", args...)
-
-Print `args` using C `printf()` style format specification string.
-Optionally, an [`IOStream`](:obj:`IOStream`)
-may be passed as the first argument to redirect output.
-"""
-:@printf
 
 """
     countlines(io,[eol::Char])
