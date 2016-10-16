@@ -53,13 +53,22 @@ const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00
 # Note, there is a timezone issue here: DateTimes are in local time, but ComputerTimes need to be converted to UTC
 Base.convert(::Type{ComputerTime}, dt::DateTime) = ComputerTime( (value(dt) - UNIXEPOCH)/1000.0 )
 
+function now(::Type{ComputerTime})
+    ct = Ref{ComputerTime}()
+    status = ccall(:jl_gettimeofday, Cint, (Ref{ComputerTime},), ct)
+    status != 0 && error("unable to determine current time: ", status)
+    return ct[]
+end
+
 """
     now() -> DateTime
 
 Returns a `DateTime` corresponding to the user's system time including the system timezone
 locale.
 """
-function now() = convert(DateTime, Libc.TimeVal() )
+function now() = convert(DateTime, now(ComputerTime) )
+    
+
 
 """
     today() -> Date
