@@ -192,7 +192,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
             ccall(:mktime, Int, (Ptr{TmStruct},), &tm)
         end
     end
-    return tm |> Dates.unix2datetime
+    return Dates.unix2datetime(tm)
 end
 
 # system date in seconds
