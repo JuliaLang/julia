@@ -11,7 +11,7 @@ let a=[1.0:n;]
    A=Diagonal(a)
    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
        debug && println("newtype is $(newtype)")
-       @test full(convert(newtype, A)) == full(A)
+       @test Array(convert(newtype, A)) == Array(A)
    end
 
    for isupper in (true, false)
@@ -19,60 +19,60 @@ let a=[1.0:n;]
        A=Bidiagonal(a, [1.0:n-1;], isupper)
        for newtype in [Bidiagonal, Tridiagonal, Matrix]
            debug && println("newtype is $(newtype)")
-           @test full(convert(newtype, A)) == full(A)
-           @test full(newtype(A)) == full(A)
+           @test Array(convert(newtype, A)) == Array(A)
+           @test Array(newtype(A)) == Array(A)
        end
        @test_throws ArgumentError convert(SymTridiagonal, A)
        tritype = isupper ? UpperTriangular : LowerTriangular
-       @test full(tritype(A)) == full(A)
+       @test Array(tritype(A)) == Array(A)
 
        A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
        for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
            debug && println("newtype is $(newtype)")
-           @test full(convert(newtype, A)) == full(A)
-           @test full(newtype(A)) == full(A)
+           @test Array(convert(newtype, A)) == Array(A)
+           @test Array(newtype(A)) == Array(A)
        end
-       @test full(tritype(A)) == full(A)
+       @test Array(tritype(A)) == Array(A)
    end
 
    A = SymTridiagonal(a, [1.0:n-1;])
    for newtype in [Tridiagonal, Matrix]
-       @test full(convert(newtype, A)) == full(A)
+       @test Array(convert(newtype, A)) == Array(A)
    end
    for newtype in [Diagonal, Bidiagonal]
        @test_throws ArgumentError convert(newtype,A)
    end
    A = SymTridiagonal(a, zeros(n-1))
-   @test full(convert(Bidiagonal,A)) == full(A)
+   @test Array(convert(Bidiagonal,A)) == Array(A)
 
    A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
-       @test full(convert(newtype, A)) == full(A)
+       @test Array(convert(newtype, A)) == Array(A)
    end
    A = Tridiagonal(ones(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
    for newtype in [SymTridiagonal, Matrix]
-       @test full(convert(newtype, A)) == full(A)
+       @test Array(convert(newtype, A)) == Array(A)
    end
    for newtype in [Diagonal, Bidiagonal]
        @test_throws ArgumentError convert(newtype,A)
    end
    A = Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)) #not morally Diagonal
-   @test full(convert(Bidiagonal, A)) == full(A)
+   @test Array(convert(Bidiagonal, A)) == Array(A)
    A = UpperTriangular(Tridiagonal(zeros(n-1), [1.0:n;], ones(n-1)))
-   @test full(convert(Bidiagonal, A)) == full(A)
+   @test Array(convert(Bidiagonal, A)) == Array(A)
    A = Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)) #not morally Diagonal
-   @test full(convert(Bidiagonal, A)) == full(A)
+   @test Array(convert(Bidiagonal, A)) == Array(A)
    A = LowerTriangular(Tridiagonal(ones(n-1), [1.0:n;], zeros(n-1)))
-   @test full(convert(Bidiagonal, A)) == full(A)
+   @test Array(convert(Bidiagonal, A)) == Array(A)
    @test_throws ArgumentError convert(SymTridiagonal,A)
 
-   A = LowerTriangular(full(Diagonal(a))) #morally Diagonal
+   A = LowerTriangular(Array(Diagonal(a))) #morally Diagonal
    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, LowerTriangular, Matrix]
-       @test full(convert(newtype, A)) == full(A)
+       @test Array(convert(newtype, A)) == Array(A)
    end
-   A = UpperTriangular(full(Diagonal(a))) #morally Diagonal
+   A = UpperTriangular(Array(Diagonal(a))) #morally Diagonal
    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, UpperTriangular, Matrix]
-       @test full(convert(newtype, A)) == full(A)
+       @test Array(convert(newtype, A)) == Array(A)
    end
    A = UpperTriangular(triu(rand(n,n)))
    for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
@@ -88,26 +88,26 @@ let a=[1.0:n;]
        for type2 in Spectypes
            B = convert(type1,A)
            C = convert(type2,A)
-           @test full(B + C) ≈ full(A + A)
-           @test full(B - C) ≈ full(A - A)
+           @test Array(B + C) ≈ Array(A + A)
+           @test Array(B - C) ≈ Array(A - A)
        end
    end
    B = SymTridiagonal(a, ones(n-1))
    for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
-       @test full(B + convert(Spectype,A)) ≈ full(B + A)
-       @test full(convert(Spectype,A) + B) ≈ full(B + A)
-       @test full(B - convert(Spectype,A)) ≈ full(B - A)
-       @test full(convert(Spectype,A) - B) ≈ full(A - B)
+       @test Array(B + convert(Spectype,A)) ≈ Array(B + A)
+       @test Array(convert(Spectype,A) + B) ≈ Array(B + A)
+       @test Array(B - convert(Spectype,A)) ≈ Array(B - A)
+       @test Array(convert(Spectype,A) - B) ≈ Array(A - B)
    end
 
    C = rand(n,n)
    for TriType in [Base.LinAlg.UnitLowerTriangular, Base.LinAlg.UnitUpperTriangular, UpperTriangular, LowerTriangular]
        D = TriType(C)
        for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
-           @test full(D + convert(Spectype,A)) ≈ full(D + A)
-           @test full(convert(Spectype,A) + D) ≈ full(A + D)
-           @test full(D - convert(Spectype,A)) ≈ full(D - A)
-           @test full(convert(Spectype,A) - D) ≈ full(A - D)
+           @test Array(D + convert(Spectype,A)) ≈ Array(D + A)
+           @test Array(convert(Spectype,A) + D) ≈ Array(A + D)
+           @test Array(D - convert(Spectype,A)) ≈ Array(D - A)
+           @test Array(convert(Spectype,A) - D) ≈ Array(A - D)
        end
    end
 end
@@ -118,11 +118,11 @@ for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base
     atri = typ(a)
     b = rand(n,n)
     qrb = qrfact(b,Val{true})
-    @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
-    @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
+    @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Array(atri) * qrb[:Q]'
+    @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ Array(atri) * qrb[:Q]'
     qrb = qrfact(b,Val{false})
-    @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
-    @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
+    @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ Array(atri) * qrb[:Q]'
+    @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ Array(atri) * qrb[:Q]'
 end
 
 # Test that concatenations of combinations of special and other matrix types yield sparse arrays

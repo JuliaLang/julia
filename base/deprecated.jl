@@ -815,7 +815,7 @@ function convert(::Type{Base.LinAlg.UnitUpperTriangular}, A::Diagonal)
     if !all(A.diag .== one(eltype(A)))
         throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
     end
-    Base.LinAlg.UnitUpperTriangular(full(A))
+    Base.LinAlg.UnitUpperTriangular(Array(A))
 end
 function convert(::Type{Base.LinAlg.UnitLowerTriangular}, A::Diagonal)
     depwarn(string("`convert(::Type{UnitLowerTriangular}, A::Diagonal)` and other methods ",
@@ -825,7 +825,7 @@ function convert(::Type{Base.LinAlg.UnitLowerTriangular}, A::Diagonal)
     if !all(A.diag .== one(eltype(A)))
         throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
     end
-    Base.LinAlg.UnitLowerTriangular(full(A))
+    Base.LinAlg.UnitLowerTriangular(Array(A))
 end
 function convert(::Type{LowerTriangular}, A::Bidiagonal)
     depwarn(string("`convert(::Type{LowerTriangular}, A::Bidiagonal)` and other methods ",
@@ -833,7 +833,7 @@ function convert(::Type{LowerTriangular}, A::Bidiagonal)
         "Consider calling the `LowerTriangular` constructor directly (`LowerTriangular(A)`) ",
         "instead."), :convert)
     if !A.isupper
-        LowerTriangular(full(A))
+        LowerTriangular(Array(A))
     else
         throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
     end
@@ -844,7 +844,7 @@ function convert(::Type{UpperTriangular}, A::Bidiagonal)
         "Consider calling the `UpperTriangular` constructor directly (`UpperTriangular(A)`) ",
         "instead."), :convert)
     if A.isupper
-        UpperTriangular(full(A))
+        UpperTriangular(Array(A))
     else
         throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
     end

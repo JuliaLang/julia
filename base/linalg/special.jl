@@ -56,14 +56,14 @@ function convert(::Type{Tridiagonal}, A::SymTridiagonal)
 end
 
 function convert(::Type{Diagonal}, A::AbstractTriangular)
-    if full(A) != diagm(diag(A))
+    if Array(A) != diagm(diag(A))
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
     end
     Diagonal(diag(A))
 end
 
 function convert(::Type{Bidiagonal}, A::AbstractTriangular)
-    fA = full(A)
+    fA = Array(A)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1)
         return Bidiagonal(diag(A), diag(fA,1), true)
     elseif fA == diagm(diag(A)) + diagm(diag(fA, -1), -1)
@@ -76,7 +76,7 @@ end
 convert(::Type{SymTridiagonal}, A::AbstractTriangular) = convert(SymTridiagonal, convert(Tridiagonal, A))
 
 function convert(::Type{Tridiagonal}, A::AbstractTriangular)
-    fA = full(A)
+    fA = Array(A)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1) + diagm(diag(fA, -1), -1)
         return Tridiagonal(diag(fA, -1), diag(A), diag(fA,1))
     else
@@ -138,12 +138,12 @@ for op in (:+, :-)
     end
     for matrixtype in (:SymTridiagonal,:Tridiagonal,:Bidiagonal,:Matrix)
         @eval begin
-            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(full(A), B)
-            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, full(B))
+            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(Array(A), B)
+            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, Array(B))
         end
     end
 end
 
 A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
 A_mul_Bc!(A::AbstractTriangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
+A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(Array(A), B)

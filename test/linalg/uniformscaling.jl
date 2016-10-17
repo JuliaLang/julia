@@ -98,10 +98,10 @@ B = bitrand(2,2)
                 else
                     T = LowerTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
                 if atype == "Array"
@@ -109,10 +109,10 @@ B = bitrand(2,2)
                 else
                     T = LinAlg.UnitLowerTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
                 if atype == "Array"
@@ -120,10 +120,10 @@ B = bitrand(2,2)
                 else
                     T = UpperTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
                 if atype == "Array"
@@ -131,10 +131,10 @@ B = bitrand(2,2)
                 else
                     T = LinAlg.UnitUpperTriangular(view(randn(3,3), 1:3, 1:3))
                 end
-                @test @inferred(T + J) == full(T) + J
-                @test @inferred(J + T) == J + full(T)
-                @test @inferred(T - J) == full(T) - J
-                @test @inferred(J - T) == J - full(T)
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
                 @test @inferred(T\I) == inv(T)
 
                 @test @inferred(I\A) == A

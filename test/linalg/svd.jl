@@ -36,7 +36,7 @@ a2img  = randn(n,n)/2
         @testset "singular value decomposition" begin
             @test usv[:S] === svdvals(usv)
             @test usv[:U] * (Diagonal(usv[:S]) * usv[:Vt]) ≈ a
-            @test full(usv) ≈ a
+            @test Array(usv) ≈ a
             @test usv[:Vt]' ≈ usv[:V]
             @test_throws KeyError usv[:Z]
             b = rand(eltya,n)

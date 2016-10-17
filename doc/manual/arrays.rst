@@ -762,7 +762,7 @@ into a sparse matrix using the :func:`sparse` function:
             [4, 4]  =  1.0
             [5, 5]  =  1.0
 
-You can go in the other direction using the :func:`full` function. The
+You can go in the other direction using the :func:`convert` function. The
 :func:`issparse` function can be used to query if a matrix is sparse.
 
 .. doctest::
@@ -808,7 +808,7 @@ reference.
 +----------------------------------------+----------------------------------+--------------------------------------------+
 | :func:`speye(n) <speye>`               | :func:`eye(n) <eye>`             | Creates a *n*-by-*n* identity matrix.      |
 +----------------------------------------+----------------------------------+--------------------------------------------+
-| :func:`full(S) <full>`                 | :func:`sparse(A) <sparse>`       | Interconverts between dense                |
+| :func:`Array(S) <convert>`             | :func:`sparse(A) <sparse>`       | Interconverts between dense                |
 |                                        |                                  | and sparse formats.                        |
 +----------------------------------------+----------------------------------+--------------------------------------------+
 | :func:`sprand(m,n,d) <sprand>`         | :func:`rand(m,n) <rand>`         | Creates a *m*-by-*n* random matrix (of     |
