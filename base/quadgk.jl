@@ -87,33 +87,37 @@ rulekey(T,n) = (T,n)
 # integration with the order-n Kronrod rule and weights of type Tw,
 # with absolute tolerance abstol and relative tolerance reltol,
 # with maxevals an approximate maximum number of f evaluations.
-function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
-    if eltype(s) <: Real # check for infinite or semi-infinite intervals
+function do_quadgk{Tw, Ts}(f, s::Vector{Ts}, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
+    if Ts <: Real # check for infinite or semi-infinite intervals
         s1 = s[1]; s2 = s[end]; inf1 = isinf(s1); inf2 = isinf(s2)
         if inf1 || inf2
             if inf1 && inf2 # x = t/(1-t^2) coordinate transformation
-                return do_quadgk(t -> begin t2 = t*t; den = 1 / (1 - t2);
+                return do_quadgk_no_inf(t -> begin t2 = t*t; den = 1 / (1 - t2);
                                             f(t*den) * (1+t2)*den*den; end,
                                  map(x -> isinf(x) ? copysign(one(x), x) : 2x / (1+hypot(1,2x)), s),
                                  n, Tw, abstol, reltol, maxevals, nrm)
             end
-            s0::eltype(s),si = inf1 ? (s2,s1) : (s1,s2)
+            s0::Ts,si::Ts = inf1 ? (s2,s1) : (s1,s2)
             if si < 0 # x = s0 - t/(1-t)
-                return do_quadgk(t -> begin den = 1 / (1 - t);
+                return do_quadgk_no_inf(t -> begin den = 1 / (1 - t);
                                             f(s0 - t*den) * den*den; end,
                                  reverse!(map(x -> 1 / (1 + 1 / (s0 - x)), s)),
                                  n, Tw, abstol, reltol, maxevals, nrm)
             else # x = s0 + t/(1-t)
-                return do_quadgk(t -> begin den = 1 / (1 - t);
+                return do_quadgk_no_inf(t -> begin den = 1 / (1 - t);
                                             f(s0 + t*den) * den*den; end,
                                  map(x -> 1 / (1 + 1 / (x - s0)), s),
                                  n, Tw, abstol, reltol, maxevals, nrm)
             end
         end
     end
+    return do_quadgk_no_inf(f,s, n, Tw, abstol, reltol, maxevals, nrm)
 
+end
+
+function do_quadgk_no_inf{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
     key = rulekey(Tw,n)
-    x::Vector{Tw}, w::Vector{Tw}, gw::Vector{Tw} = haskey(rulecache, key) ? rulecache[key] :
+    x,w,gw = haskey(rulecache, key) ? rulecache[key] :
        (rulecache[key] = kronrod(Tw, n))
     segs = Segment[]
     for i in 1:length(s) - 1
@@ -221,7 +225,14 @@ transformation is performed internally to map the infinite interval to a finite 
 """
 # generic version: determine precision from a combination of
 # all the integration-segment endpoints
-quadgk(f, a, b, c...; kws...) = quadgk(f, promote(float(a),float(b),c...)...; kws...)
+function quadgk(f, a, b, c...; kws...)
+    T = promote_type(typeof(float(a)), typeof(b))
+    for x in c
+        T = promote_type(T, typeof(x))
+    end
+    cT = map(T, c)
+    quadgk(f, convert(T, a), convert(T, b), cT...; kws...)
+end
 
 ###########################################################################
 # Gauss-Kronrod integration-weight computation for arbitrary floating-point
