@@ -9,9 +9,10 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-            - kalakris-cmake
+            - george-edison55-precise-backports
           packages:
             - cmake
+            - cmake-data
             - bar
             - time
             - binutils
@@ -30,9 +31,10 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-            - kalakris-cmake
+            - george-edison55-precise-backports
           packages:
             - cmake
+            - cmake-data
             - bar
             - time
             - g++-5

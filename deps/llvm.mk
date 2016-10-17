@@ -113,7 +113,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
 LLVM_FLAGS += --enable-shared
-LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON
+LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 # NOTE: starting with LLVM 3.8, all symbols are exported
 ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
 LLVM_CMAKE += -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
@@ -444,6 +444,7 @@ $(eval $(call LLVM_PATCH,llvm-3.7.1_3)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib)) # Remove for 3.9
+$(eval $(call LLVM_PATCH,llvm-3.8.0_winshlibcmake))
 $(eval $(call LLVM_PATCH,llvm-nodllalias)) # Remove for 3.9
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
@@ -461,6 +462,7 @@ else ifeq ($(LLVM_VER_SHORT),3.9)
 $(eval $(call LLVM_PATCH,llvm-rL279933-ppc-atomicrmw-lowering)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-r282182)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-3.8.0_winshlibcmake))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
