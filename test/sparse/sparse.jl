@@ -661,38 +661,6 @@ end
         end
     end
 
-    @testset "spones" begin
-        let A = 2. * speye(5,5)
-            @test full(spones(A)) == eye(full(A))
-        end
-    end
-
-    @testset "Factorization tests" begin
-        let
-            A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
-            A = A + A'
-            @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
-            A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
-            A = A*A'
-            @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
-            A = spdiagm(rand(5)) + sprandn(5,5,0.2)
-            A = A + A.'
-            @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
-            A = spdiagm(rand(5)) + sprandn(5,5,0.2)
-            A = A*A.'
-            @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
-            @test factorize(triu(A)) == triu(A)
-            @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-            @test factorize(tril(A)) == tril(A)
-            @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-            @test !Base.USE_GPL_LIBS || factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
-            @test_throws ErrorException chol(A)
-            @test_throws ErrorException lu(A)
-            @test_throws ErrorException eig(A)
-            @test_throws ErrorException inv(A)
-        end
-    end
-
     @testset "Issue #13792, use sparse triangular solvers for sparse triangular solves" begin
         let
             n = 100
@@ -1690,6 +1658,38 @@ end
         @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
     end
     @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
+end
+
+@testset "spones" begin
+    let A = 2. * speye(5,5)
+        @test full(spones(A)) == eye(full(A))
+    end
+end
+
+@testset "Factorization tests" begin
+    let
+        A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+        A = A + A'
+        @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+        A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
+        A = A*A'
+        @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+        A = spdiagm(rand(5)) + sprandn(5,5,0.2)
+        A = A + A.'
+        @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+        A = spdiagm(rand(5)) + sprandn(5,5,0.2)
+        A = A*A.'
+        @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+        @test factorize(triu(A)) == triu(A)
+        @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+        @test factorize(tril(A)) == tril(A)
+        @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
+        @test !Base.USE_GPL_LIBS || factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
+        @test_throws ErrorException chol(A)
+        @test_throws ErrorException lu(A)
+        @test_throws ErrorException eig(A)
+        @test_throws ErrorException inv(A)
+    end
 end
 
 @testset "issparse for specialized matrix types" begin
