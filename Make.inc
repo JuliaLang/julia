@@ -694,7 +694,7 @@ endif
 
 # File name of make binary-dist result
 ifeq ($(JULIA_BINARYDIST_FILENAME),)
-DIST_OS:=$(OS)
+DIST_OS:=$(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 ifeq (WINNT,$(OS))
 DIST_OS:=win
 endif
