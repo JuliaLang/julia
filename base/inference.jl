@@ -2002,9 +2002,7 @@ function finish(me::InferenceState)
     const_api = false
     ispure = me.src.pure
     inferred = me.src
-    # Do not emit `jlcall_api == 2` if coverage is enabled so that we don't
-    # need to add coverage support to the `jl_call_method_internal` fast path
-    if !do_coverage && const_ret && inferred_const !== nothing
+    if const_ret && inferred_const !== nothing
         if !ispure && length(me.src.code) < 10
             ispure = true
             for stmt in me.src.code
@@ -2020,9 +2018,14 @@ function finish(me::InferenceState)
                 end
             end
         end
-        if ispure
+        if ispure && !do_coverage
             # use constant calling convention
             inferred = inferred_const
+            # Do not emit `jlcall_api == 2` if coverage is enabled
+            # so that we don't need to add coverage support
+            # to the `jl_call_method_internal` fast path
+            # Still set pure flag to make sure `inference` tests pass
+            # and to possibly enable more optimization in the future
             const_api = true
         end
         me.src.pure = ispure
