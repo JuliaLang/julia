@@ -4518,6 +4518,14 @@ function f18054()
 end
 cfunction(f18054, Cint, ())
 
+# issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
+dummy18996() = return nothing
+function main18986()
+    cfunction(dummy18986, Void, ())
+    ccall((:dummy2, "this_is_a_nonexisting_library"), Void, ())
+end
+@test_throws ErrorException main18986()
+
 # issue #18085
 f18085(a,x...) = (0,)
 for (f,g) in ((:asin,:sin), (:acos,:cos))

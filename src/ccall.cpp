@@ -1646,8 +1646,15 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             }
             if (jl_is_tuple_type(fargt) && jl_is_leaf_type(fargt)) {
                 frt = jl_tparam0(frt);
+                Value *llvmf = NULL;
                 JL_TRY {
-                    Value *llvmf = prepare_call(jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt));
+                    llvmf = jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt);
+                }
+                JL_CATCH {
+                    llvmf = NULL;
+                }
+                if (llvmf) {
+                    llvmf = prepare_call(llvmf);
                     // make sure to emit any side-effects that may have been part of the original expression
                     emit_expr(args[4], ctx);
                     emit_expr(args[6], ctx);
@@ -1655,8 +1662,6 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     JL_GC_POP();
                     return mark_or_box_ccall_result(emit_bitcast(llvmf, lrt),
                                                     retboxed, args[2], rt, static_rt, ctx);
-                }
-                JL_CATCH {
                 }
             }
         }
