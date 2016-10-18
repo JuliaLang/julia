@@ -63,7 +63,18 @@ SRCS += anticodegen
 LLVM_LIBS := support
 endif
 
-HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h timing.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
+# headers are used for dependency tracking, while public headers will be part of the dist
+HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h timing.h)
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_threads.h)
+ifeq ($(USE_SYSTEM_LIBUV),0)
+ifeq ($(OS),WINNT)
+HEADERS += $(build_includedir)/tree.h
+PUBLIC_HEADERS += $(build_includedir)/tree.h
+endif
+HEADERS += $(LIBUV_INC)/uv.h
+PUBLIC_HEADERS += $(LIBUV_INC)/uv*
+endif
+PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)))
 
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
@@ -106,7 +117,7 @@ endif
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
-release debug: %: libjulia-%
+release debug: %: libjulia-% $(PUBLIC_HEADER_TARGETS)
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -122,6 +133,14 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONF
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+
+# public header rules
+define install_public_header
+TARGET = $(build_includedir)/julia/$(notdir $(1))
+$$(TARGET): $(1)
+	$(INSTALL_F) $$^ $(build_includedir)/julia/
+endef
+$(foreach HEADER,$(PUBLIC_HEADERS),$(eval $(call install_public_header,$(HEADER))))
 
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
 
