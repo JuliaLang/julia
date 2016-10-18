@@ -55,11 +55,6 @@ result, and algorithms that resize their result incrementally.
 iteratorsize(x) = iteratorsize(typeof(x))
 iteratorsize(::Type) = HasLength()  # HasLength is the default
 
-and_iteratorsize{T}(isz::T, ::T) = isz
-and_iteratorsize(::HasLength, ::HasShape) = HasLength()
-and_iteratorsize(::HasShape, ::HasLength) = HasLength()
-and_iteratorsize(a, b) = SizeUnknown()
-
 abstract IteratorEltype
 immutable EltypeUnknown <: IteratorEltype end
 immutable HasEltype <: IteratorEltype end
@@ -80,9 +75,6 @@ values.
 """
 iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
-
-and_iteratoreltype{T}(iel::T, ::T) = iel
-and_iteratoreltype(a, b) = EltypeUnknown()
 
 iteratorsize{T<:AbstractArray}(::Type{T}) = HasShape()
 iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
