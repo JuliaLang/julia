@@ -785,11 +785,13 @@ end
         $(Expr(:meta, :inline))
         @nexprs $N d->(I_d = I[d])
 
+        idxlens = @ncall $N index_lengths B I0 d->I[d]
+
         f0 = indexoffset(I0)+1
-        l0 = size(X, 1)
+        l0 = idxlens[1]
 
         gap_lst_1 = 0
-        @nexprs $N d->(gap_lst_{d+1} = size(X, d+1))
+        @nexprs $N d->(gap_lst_{d+1} = idxlens[d+1])
         stride = 1
         ind = f0
         @nexprs $N d->begin
@@ -801,7 +803,6 @@ end
 
         storeind = 1
         Xc, Bc = X.chunks, B.chunks
-        idxlens = @ncall $N index_lengths B I0 d->I[d]
         @nloops($N, i, d->(1:idxlens[d+1]),
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
