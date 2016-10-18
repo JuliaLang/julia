@@ -967,6 +967,7 @@ export
     take,
     drop,
     cycle,
+    ncycle,
     repeated,
 
 # object identity and equality
