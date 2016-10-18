@@ -305,12 +305,6 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 #endif
 }
 
-#elif defined(_CPU_ARM_)
-// platforms on which libunwind may be broken
-
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) { return 0; }
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) { return 0; }
-
 #else
 // stacktrace using libunwind
 
