@@ -247,6 +247,63 @@ for (k1, k2, T) in Task(gen_getindex_data)
     @check_bit_operation getindex(b1, k1, k2, 1) T
 end
 
+b1 = bitrand(s1, s2, s3, s4)
+
+function gen_getindex_data4()
+    m1, m2, m3, m4 = (:, :, :, :)
+    produce((m1, m2, m3, m4, BitArray{4}))
+
+    m1, m2, m3, m4 = (2, :, :, :)
+    produce((m1, m2, m3, m4, BitArray{3}))
+    m1, m2, m3, m4 = (:, 2, :, :)
+    produce((m1, m2, m3, m4, BitArray{3}))
+    m1, m2, m3, m4 = (:, :, 2, :)
+    produce((m1, m2, m3, m4, BitArray{3}))
+    m1, m2, m3, m4 = (:, :, :, 2)
+    produce((m1, m2, m3, m4, BitArray{3}))
+
+    m1, m2, m3, m4 = (2, :, :, 2)
+    produce((m1, m2, m3, m4, BitArray{2}))
+    m1, m2, m3, m4 = (:, 2, :, 2)
+    produce((m1, m2, m3, m4, BitArray{2}))
+    m1, m2, m3, m4 = (:, :, 2, 2)
+    produce((m1, m2, m3, m4, BitArray{2}))
+    m1, m2, m3, m4 = (2, :, 2, :)
+    produce((m1, m2, m3, m4, BitArray{2}))
+    m1, m2, m3, m4 = (:, 2, 2, :)
+    produce((m1, m2, m3, m4, BitArray{2}))
+    m1, m2, m3, m4 = (2, 2, :, :)
+    produce((m1, m2, m3, m4, BitArray{2}))
+
+    m1, m2, m3, m4 = (:, 2, 2, 2)
+    produce((m1, m2, m3, m4, BitArray{1}))
+    m1, m2, m3, m4 = (2, :, 2, 2)
+    produce((m1, m2, m3, m4, BitArray{1}))
+    m1, m2, m3, m4 = (2, 2, :, 2)
+    produce((m1, m2, m3, m4, BitArray{1}))
+    m1, m2, m3, m4 = (2, 2, 2, :)
+    produce((m1, m2, m3, m4, BitArray{1}))
+
+    m1, m2, m3, m4 = (2:3, 2, 1:2, :)
+    produce((m1, m2, m3, m4, BitArray{3}))
+    m1, m2, m3, m4 = (:, 3:7, 3:3, 6)
+    produce((m1, m2, m3, m4, BitArray{3}))
+    m1, m2, m3, m4 = (4, 3:7, 2:2, 2)
+    produce((m1, m2, m3, m4, BitArray{2}))
+    m1, m2, m3, m4 = (1:2, 5, 1, 2:7)
+    produce((m1, m2, m3, m4, BitArray{2}))
+
+    m1, m2, m3, m4 = (2:3, 2:7, 1:2, 4:6)
+    produce((m1, m2, m3, m4, BitArray{4}))
+end
+
+for (k1, k2, k3, k4, T) in Task(gen_getindex_data4)
+    #println(typeof(k1), " ", typeof(k2), " ", typeof(k3), " ", typeof(k4), " ", T) # uncomment to debug
+    @check_bit_operation getindex(b1, k1, k2, k3, k4) T
+end
+
+b1 = bitrand(n1, n2)
+
 function gen_setindex_data()
     m1, m2 = rand_m1m2()
     produce((rand(Bool), m1, m2))
@@ -293,6 +350,82 @@ x = rand(Bool)
 b2 = bitrand(1, m2, 1)
 @check_bit_operation setindex!(b1, x, m1, 1:m2, 1)  BitMatrix
 @check_bit_operation setindex!(b1, b2, m1, 1:m2, 1) BitMatrix
+
+b1 = bitrand(s1, s2, s3, s4)
+
+function gen_setindex_data4()
+    m1, m2, m3, m4 = (:, :, :, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1, s2, s3, s4), m1, m2, m3, m4))
+
+    m1, m2, m3, m4 = (2, :, :, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s2, s3, s4), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (:, 2, :, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1, s3, s4), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (:, :, 2, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1, s2, s4), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (:, :, :, 2)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1, s2, s3), m1, m2, m3, m4))
+
+    m1, m2, m3, m4 = (2, :, :, 2)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s2, s3), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (:, 2, :, 2)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1, s3), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (:, :, 2, 2)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1, s2), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (2, :, 2, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s2, s4), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (:, 2, 2, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1, s4), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (2, 2, :, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s3, s4), m1, m2, m3, m4))
+
+    m1, m2, m3, m4 = (:, 2, 2, 2)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (2, :, 2, 2)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s2), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (2, 2, :, 2)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s3), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (2, 2, 2, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s4), m1, m2, m3, m4))
+
+    m1, m2, m3, m4 = (2:3, 2, 1:2, :)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(2, 2, s4), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (:, 3:7, 3:3, 6)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(s1, 5, 1), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (4, 3:7, 2:2, 2)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(5, 1), m1, m2, m3, m4))
+    m1, m2, m3, m4 = (1:2, 5, 1, 2:7)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(2, 6), m1, m2, m3, m4))
+
+    m1, m2, m3, m4 = (2:3, 2:7, 1:2, 4:6)
+    produce((rand(Bool), m1, m2, m3, m4))
+    produce((bitrand(2, 6, 2, 3), m1, m2, m3, m4))
+end
+
+for (b2, k1, k2, k3, k4) in Task(gen_setindex_data4)
+    # println(typeof(b2), " ", typeof(k1), " ", typeof(k2), " ", typeof(k3), " ", typeof(k4)) # uncomment to debug
+    @check_bit_operation setindex!(b1, b2, k1, k2, k3, k4) BitArray{4}
+end
+
 
 for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
     for p2 = [rand(1:v1) 1 63 64 65 191 192 193]
