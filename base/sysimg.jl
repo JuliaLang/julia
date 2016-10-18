@@ -111,7 +111,7 @@ include("c.jl")
 include("hashing.jl")
 include("rounding.jl")
 importall .Rounding
-include("rtlib.jl")
+include("rtlib/RTLIB.jl")
 include("float.jl") # depends on rtlib
 include("complex.jl")
 include("rational.jl")

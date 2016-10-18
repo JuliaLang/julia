@@ -14,10 +14,18 @@ register(f::Function, rtype::ANY, argt::ANY, name::String) =
     ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring),
           f, rtype, argt, name)
 
-include("rtlib/fp_util.jl")
-include("rtlib/fp_extend.jl")
-include("rtlib/fp_trunc.jl")
-include("rtlib/fp_fixint.jl")
+# Check if relative include is available
+if isdefined(Base, :INCLUDE_STATE) && Base.INCLUDE_STATE == 1
+    include("rtlib/fp_util.jl")
+    include("rtlib/fp_extend.jl")
+    include("rtlib/fp_trunc.jl")
+    include("rtlib/fp_fixint.jl")
+else
+    include("fp_util.jl")
+    include("fp_extend.jl")
+    include("fp_trunc.jl")
+    include("fp_fixint.jl")
+end
 
 # All these function names are enumerated in lib/CodeGen/TargetLoweringBase.cpp
 # right now we don't have a good way of getting at this information.
