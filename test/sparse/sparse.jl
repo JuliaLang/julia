@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
 @test issparse(sparse(ones(5,5)))
 @test !issparse(ones(5,5))
 @test Base.SparseArrays.indtype(sparse(ones(Int8,2),ones(Int8,2),rand(2))) == Int8
@@ -15,6 +13,8 @@ using Base.Test
 @test_throws ArgumentError sparse([1,2,4], [1,2,3], [1,2,3], 3, 3)
 @test_throws ArgumentError sparse([1,2,3], [1,2,4], [1,2,3], 3, 3)
 @test isequal(sparse(Int[], Int[], Int[], 0, 0), SparseMatrixCSC(0, 0, Int[1], Int[], Int[]))
+@test sparse(Any[1,2,3], Any[1,2,3], Any[1,1,1]) == sparse([1,2,3], [1,2,3], [1,1,1])
+@test sparse(Any[1,2,3], Any[1,2,3], Any[1,1,1], 5, 4) == sparse([1,2,3], [1,2,3], [1,1,1], 5, 4)
 
 # check matrix operations
 se33 = speye(3)
@@ -465,8 +465,7 @@ end
 @test maximum(sparse(-ones(3,3))) == -1
 @test minimum(sparse(ones(3,3))) == 1
 
-# Test unary functions with specialized broadcast over SparseMatrixCSCs
-let
+@testset "Unary functions" begin
     A = sprand(5, 15, 0.5)
     C = A + im*A
     Afull = full(A)
@@ -1626,4 +1625,13 @@ end
 # Row indexing a SparseMatrixCSC with non-Int integer type
 let A = sparse(UInt32[1,2,3], UInt32[1,2,3], [1.0,2.0,3.0])
     @test A[1,1:3] == A[1,:] == [1,0,0]
+end
+
+# Check that `broadcast` methods specialized for unary operations over
+# `SparseMatrixCSC`s are called. (Issue #18705.)
+let
+    A = spdiagm(1.0:5.0)
+    @test isa(sin.(A), SparseMatrixCSC) # representative for _unary_nz2z_z2z class
+    @test isa(abs.(A), SparseMatrixCSC) # representative for _unary_nz2nz_z2z class
+    @test isa(exp.(A), Array) # representative for _unary_nz2nz_z2nz class
 end

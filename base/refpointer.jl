@@ -1,5 +1,19 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    Ref{T}
+
+An object that safely references data of type `T`. This type is guaranteed to point to
+valid, Julia-allocated memory of the correct type. The underlying data is protected from
+freeing by the garbage collector as long as the `Ref` itself is referenced.
+
+When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
+converted to a native pointer to the data it references.
+
+There is no invalid (NULL) `Ref`.
+"""
+Ref
+
 # C NUL-terminated string pointers; these can be used in ccall
 # instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
 # a check for embedded NUL chars in the string (to avoid silent truncation).

@@ -1637,7 +1637,8 @@ JL_DLLEXPORT int jl_gc_is_enabled(void)
 JL_DLLEXPORT int64_t jl_gc_total_bytes(void)
 {
     // Sync this logic with `base/util.jl:GC_Diff`
-    return gc_num.total_allocd + gc_num.allocd + gc_num.interval;
+    return (gc_num.total_allocd + gc_num.deferred_alloc +
+            gc_num.allocd + gc_num.interval);
 }
 JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void)
 {

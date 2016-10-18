@@ -19,7 +19,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/perf)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
@@ -189,7 +189,7 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/abstractarray.jl \
 		base/array.jl \
 		base/bool.jl \
-		base/dict.jl \
+		base/associative.jl \
 		base/error.jl \
 		base/essentials.jl \
 		base/generator.jl \
@@ -198,7 +198,6 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/inference.jl \
 		base/int.jl \
 		base/intset.jl \
-		base/iterator.jl \
 		base/nofloat_hashing.jl \
 		base/number.jl \
 		base/operators.jl \
@@ -453,10 +452,9 @@ ifneq ($(OS), WINNT)
 endif
 ifeq ($(OS), Linux)
 	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir) $(DESTDIR)$(private_libdir)
-	# We need to bundle ca certs on linux now that we're using libgit2 with ssl
-ifeq ($(shell [ -e $(shell openssl version -d | cut -d '"' -f 2)/cert.pem ] && echo exists),exists)
-	-cp $(shell openssl version -d | cut -d '"' -f 2)/cert.pem $(DESTDIR)$(datarootdir)/julia/
-endif
+
+	# Copy over any bundled ca certs we picked up from the system during buildi
+	-cp $(build_datarootdir)/julia/cert.pem $(DESTDIR)$(datarootdir)/julia/
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
 	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.

@@ -39,9 +39,11 @@ perhaps somewhat counterintuitively, often significantly simplify them.
 Describing Julia in the lingo of `type
 systems <https://en.wikipedia.org/wiki/Type_system>`_, it is: dynamic,
 nominative and parametric. Generic types can be parameterized,
-and the hierarchical relationships
-between types are explicitly declared, rather than implied by compatible
-structure. One particularly distinctive feature of Julia's type system
+and the hierarchical relationships between types are `explicitly
+declared <https://en.wikipedia.org/wiki/Nominal_type_system>`_,
+rather than `implied by compatible structure
+<https://en.wikipedia.org/wiki/Structural_type_system>`_.
+One particularly distinctive feature of Julia's type system
 is that concrete types may not subtype each other: all concrete types
 are final and may only have abstract types as their supertypes. While
 this might at first seem unduly restrictive, it has many beneficial
@@ -324,7 +326,7 @@ cannot be declared to be any smaller than eight bits.
 The types :obj:`Bool`, :class:`Int8` and :class:`UInt8` all have identical
 representations: they are eight-bit chunks of memory. Since Julia's type
 system is nominative, however, they are not interchangeable despite
-having identical structure. Another fundamental difference between them
+having identical structure. A fundamental difference between them
 is that they have different supertypes: :obj:`Bool`'s direct supertype is
 :class:`Integer`, :class:`Int8`'s is :obj:`Signed`, and :class:`UInt8`'s is :obj:`Unsigned`.
 All other differences between :obj:`Bool`, :class:`Int8`, and :class:`UInt8` are
@@ -451,10 +453,10 @@ instance of such types::
     type NoFields
     end
 
-    julia> is(NoFields(), NoFields())
+    julia> NoFields() === NoFields()
     true
 
-The ``is`` function confirms that the "two" constructed instances of
+The ``===`` function confirms that the "two" constructed instances of
 ``NoFields`` are actually one and the same. Singleton types are
 described in further detail `below <#man-singleton-types>`_.
 
@@ -1336,7 +1338,7 @@ HTML display of ``Polar`` objects, with superscripts and italics, via:
 .. testcode::
 
     Base.show{T}(io::IO, ::MIME"text/html", z::Polar{T}) =
-        println(io, "<code>Polar{$T}<code> complex number: ",
+        println(io, "<code>Polar{$T}</code> complex number: ",
                 z.r, " <i>e</i><sup>", z.Θ, " <i>i</i></sup>")
 
 A ``Polar`` object will then display automatically using HTML in an environment
@@ -1346,11 +1348,11 @@ output if you want:
 .. doctest::
 
    julia> show(STDOUT, "text/html", Polar(3.0,4.0))
-   <code>Polar{Float64}<code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
+   <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup>
 
 .. raw:: html
 
-   <p>An HTML renderer would display this as: <code>Polar{Float64}<code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p>
+   <p>An HTML renderer would display this as: <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p>
 
 .. _man-val-trick:
 
@@ -1508,9 +1510,8 @@ default value as a second argument to :func:`get`:
     julia> get(Nullable(1.0), 0.0)
     1.0
 
-Note that this default value will automatically be converted to the type of
-the :obj:`Nullable` object that you attempt to access using the :func:`get` function.
-For example, in the code shown above the value ``0`` would be automatically
-converted to a :class:`Float64` value before being returned. The presence of default
-replacement values makes it easy to use the :func:`get` function to write
-type-stable code that interacts with sources of potentially missing values.
+.. tip::
+
+    Make sure the type of the default value passed to :func:`get` and that of the
+    :obj:`Nullable` object match to avoid type instability, which could hurt
+    performance. Use :func:`convert` manually if needed.

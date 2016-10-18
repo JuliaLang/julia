@@ -74,10 +74,16 @@ end
 """
     names(x::Module, all::Bool=false, imported::Bool=false)
 
-Get an array of the names exported by a `Module`, with optionally more `Module` globals
-according to the additional parameters.
+Get an array of the names exported by a `Module`, excluding deprecated names.
+If `all` is true, then the list also includes non-exported names defined in the module,
+deprecated names, and compiler-generated names.
+If `imported` is true, then names explicitly imported from other modules
+are also included.
+
+As a special case, all names defined in `Main` are considered \"exported\",
+since it is not idiomatic to explicitly export names from `Main`.
 """
-names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported))
+names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Cint,Cint), m, all, imported))
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -149,7 +155,7 @@ Determine the module containing the definition of a `DataType`.
 """
 datatype_module(t::DataType) = t.name.module
 
-isconst(s::Symbol) = ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
+isconst(s::Symbol) = ccall(:jl_is_const, Cint, (Ptr{Void}, Any), C_NULL, s) != 0
 
 """
     isconst([m::Module], s::Symbol) -> Bool
@@ -158,9 +164,9 @@ Determine whether a global is declared `const` in a given `Module`. The default 
 argument is [`current_module()`](:func:`current_module`).
 """
 isconst(m::Module, s::Symbol) =
-    ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
+    ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
-# return an integer such that object_id(x)==object_id(y) if is(x,y)
+# return an integer such that object_id(x)==object_id(y) if x===y
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 immutable DataTypeLayout
@@ -280,7 +286,7 @@ enumerated types (see `@enum`).
 function instances end
 
 # subtypes
-function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
+function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Module}())
     push!(visited, m)
     for s in names(m, true)
         if isdefined(m, s) && !isdeprecated(m, s)
@@ -462,7 +468,7 @@ function visit(f, mc::TypeMapLevel)
     nothing
 end
 function visit(f, d::TypeMapEntry)
-    while !is(d, nothing)
+    while d !== nothing
         f(d.func)
         d = d.next
     end
@@ -583,7 +589,7 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     asts = []
     for x in _methods(f, types, -1)
         meth = func_for_method_checked(x[3], types)
-        (code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, !optimize)
+        (code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, optimize)
         code === nothing && error("inference not successful") # Inference disabled?
         push!(asts, uncompressed_ast(meth, code) => ty)
     end
@@ -631,7 +637,7 @@ function which(f::ANY, t::ANY)
             error("no method found for the specified argument types")
         end
         meth = m.func::Method
-        if ccall(:jl_has_call_ambiguities, Int32, (Any, Any), tt, meth) != 0
+        if ccall(:jl_has_call_ambiguities, Cint, (Any, Any), tt, meth) != 0
             error("method match is ambiguous for the specified argument types")
         end
         return meth

@@ -1126,7 +1126,7 @@ end
 @test 1+1.5 == 2.5
 @test 1.5+1 == 2.5
 @test 1+1.5+2 == 4.5
-@test is(typeof(convert(Complex{Int16},1)),Complex{Int16})
+@test isa(convert(Complex{Int16},1), Complex{Int16})
 @test Complex(1,2)+1 == Complex(2,2)
 @test Complex(1,2)+1.5 == Complex(2.5,2.0)
 @test 1/Complex(2,2) == Complex(.25,-.25)
@@ -2376,6 +2376,7 @@ end
 @test widen(1.5f0) === 1.5
 @test widen(Int32(42)) === Int64(42)
 @test widen(Int8) === Int32
+@test widen(Int64) === Int128
 @test widen(Float32) === Float64
 @test widen(Float16) === Float32
 ## Note: this should change to e.g. Float128 at some point
@@ -2456,6 +2457,13 @@ end
 @test_throws InexactError convert(Int8, typemax(UInt64))
 @test_throws InexactError convert(Int16, typemax(UInt64))
 @test_throws InexactError convert(Int, typemax(UInt64))
+
+# issue #14549
+for T in (Int8, Int16, UInt8, UInt16)
+    for F in (Float32,Float64)
+        @test_throws InexactError convert(T, F(200000.0))
+    end
+end
 
 let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
@@ -2848,3 +2856,5 @@ let types = (Base.BitInteger_types..., BigInt, Bool)
         end
     end
 end
+
+@test !isempty(complex(1,2))

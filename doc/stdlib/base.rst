@@ -237,8 +237,7 @@ Getting Around
 All Objects
 -----------
 
-.. function:: is(x, y) -> Bool
-              ===(x,y) -> Bool
+.. function:: ===(x,y) -> Bool
               ≡(x,y) -> Bool
 
    .. Docstring generated from Julia source
@@ -832,7 +831,56 @@ Nullables
 
    .. Docstring generated from Julia source
 
-   Is the ``Nullable`` object ``x`` null, i.e. missing a value?
+   Return whether or not ``x`` is null for :obj:`Nullable` ``x``\ ; return ``false`` for all other ``x``\ .
+
+   .. doctest::
+
+       julia> x = Nullable(1, false)
+       Nullable{Int64}(1)
+
+       julia> isnull(x)
+       false
+
+       julia> x = Nullable(1, true)
+       Nullable{Int64}()
+
+       julia> isnull(x)
+       true
+
+       julia> x = 1
+       1
+
+       julia> isnull(x)
+       false
+
+.. function:: unsafe_get(x)
+
+   .. Docstring generated from Julia source
+
+   Return the value of ``x`` for :obj:`Nullable` ``x``\ ; return ``x`` for all other ``x``\ .
+
+   This method does not check whether or not ``x`` is null before attempting to access the value of ``x`` for ``x::Nullable`` (hence "unsafe").
+
+   .. doctest::
+
+       julia> x = Nullable(1)
+       Nullable{Int64}(1)
+
+       julia> unsafe_get(x)
+       1
+
+       julia> x = Nullable{String}()
+       Nullable{String}()
+
+       julia> unsafe_get(x)
+       ERROR: UndefRefError: access to undefined reference
+        in unsafe_get(::Nullable{String}) at ./REPL[4]:1
+
+       julia> x = 1
+       1
+
+       julia> unsafe_get(x)
+       1
 
 System
 ------
@@ -1407,7 +1455,9 @@ Reflection
 
    .. Docstring generated from Julia source
 
-   Get an array of the names exported by a ``Module``\ , with optionally more ``Module`` globals according to the additional parameters.
+   Get an array of the names exported by a ``Module``\ , excluding deprecated names. If ``all`` is true, then the list also includes non-exported names defined in the module, deprecated names, and compiler-generated names. If ``imported`` is true, then names explicitly imported from other modules are also included.
+
+   As a special case, all names defined in ``Main`` are considered "exported", since it is not idiomatic to explicitly export names from ``Main``\ .
 
 .. function:: nfields(x::DataType) -> Int
 
@@ -1516,6 +1566,36 @@ Internals
    .. Docstring generated from Julia source
 
    Takes the expression ``x`` and returns an equivalent expression with all macros removed (expanded).
+
+.. function:: @macroexpand
+
+   .. Docstring generated from Julia source
+
+   Return equivalent expression with all macros removed (expanded).
+
+   There is a subtle difference between ``@macroexpand`` and ``macroexpand`` in that expansion takes place in different contexts. This is best seen in the following example:
+
+   .. doctest::
+
+       julia> module M
+                  macro m()
+                      1
+                  end
+                  function f()
+                     (@macroexpand(@m), macroexpand(:(@m)))
+                  end
+              end
+       M
+
+       julia> macro m()
+                 2
+              end
+       @m (macro with 1 method)
+
+       julia> M.f()
+       (1,2)
+
+   With ``@macroexpand`` the expression expands where ``@macroexpand`` appears in the code (module ``M`` in the example). With ``macroexpand`` the expression expands in the current module where the code was finally called (REPL in the example). Note that when calling ``macroexpand`` or ``@macroexpand`` directly from the REPL, both of these contexts coincide, hence there is no difference.
 
 .. function:: expand(x)
 

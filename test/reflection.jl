@@ -167,6 +167,7 @@ not_const = 1
 
 module TestMod7648
 using Base.Test
+import Base.convert
 export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
 
 const c7648 = 8
@@ -210,6 +211,9 @@ let
     @test Set(names(TestMod7648, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                 :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
                                                 :Foo7648, :eval, Symbol("#eval")])
+    @test Set(names(TestMod7648, true, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
+                                                      :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
+                                                      :Foo7648, :eval, Symbol("#eval"), :convert])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
@@ -232,11 +236,11 @@ let
     @test TestMod7648.TestModSub9475 == @which a9475
 end
 
-@test_throws ArgumentError which(is, Tuple{Int, Int})
-@test_throws ArgumentError code_typed(is, Tuple{Int, Int})
-@test_throws ArgumentError code_llvm(is, Tuple{Int, Int})
-@test_throws ArgumentError code_native(is, Tuple{Int, Int})
-@test_throws ArgumentError Base.return_types(is, Tuple{Int, Int})
+@test_throws ArgumentError which(===, Tuple{Int, Int})
+@test_throws ArgumentError code_typed(===, Tuple{Int, Int})
+@test_throws ArgumentError code_llvm(===, Tuple{Int, Int})
+@test_throws ArgumentError code_native(===, Tuple{Int, Int})
+@test_throws ArgumentError Base.return_types(===, Tuple{Int, Int})
 
 module TestingExported
 using Base.Test
@@ -573,3 +577,25 @@ end
 @test counter18434 == 1
 @which get_A18434()(1, y=2)
 @test counter18434 == 2
+
+# PR #18888: code_typed shouldn't cache if not optimizing
+let
+    f18888() = return nothing
+    m = first(methods(f18888, Tuple{}))
+    @test m.specializations == nothing
+    ft = typeof(f18888)
+
+    code_typed(f18888, Tuple{}; optimize=false)
+    @test m.specializations != nothing  # uncached, but creates the specializations entry
+    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
+    @test !isdefined(code, :inferred)
+
+    code_typed(f18888, Tuple{}; optimize=true)
+    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
+    @test isdefined(code, :inferred)
+end
+
+# Issue #18883, code_llvm/code_native for generated functions
+@generated f18883() = nothing
+@test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
+@test !isempty(sprint(io->code_native(io, f18883, Tuple{})))

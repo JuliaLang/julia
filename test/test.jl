@@ -30,12 +30,6 @@ a[1,1,1,1,1] = 10
 
 @test rand() != rand()
 
-# Test printing of Pass results
-# Pass - constant
-@test contains(sprint(show, @test true), "Expression: true")
-# Pass - expression
-@test contains(sprint(show, @test 10 == 2*5), "Evaluated: 10 == 10")
-@test contains(sprint(show, @test !false), "Expression: !false")
 # Pass - exception
 @test contains(sprint(show, @test_throws ErrorException error()),
                 "Thrown: ErrorException")
@@ -66,7 +60,7 @@ end
 @test contains(sprint(show, fails[4]), "Unexpected Pass")
 
 # Test printing of a TestSetException
-tse_str = sprint(show, Test.TestSetException(1,2,3,4))
+tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}()))
 @test contains(tse_str, "1 passed")
 @test contains(tse_str, "2 failed")
 @test contains(tse_str, "3 errored")
@@ -75,11 +69,15 @@ tse_str = sprint(show, Test.TestSetException(1,2,3,4))
 @test Test.finish(Test.FallbackTestSet()) !== nothing
 
 OLD_STDOUT = STDOUT
+OLD_STDERR = STDERR
 catch_out = IOStream("")
-rd, wr = redirect_stdout()
+catch_err = IOStream("")
+rde, wre = redirect_stderr()
+rdo, wro = redirect_stdout()
 
-# Check that the fallback test set throws immediately
-@test_throws ErrorException (@test 1 == 2)
+# test that FallbackTestSet will throw immediately
+cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=error test_exec.jl`
+@test !success(pipeline(cmd))
 
 @testset "no errors" begin
     @test true
@@ -92,73 +90,100 @@ end
     end
 end
 
-try @testset "outer" begin
-    @testset "inner1" begin
+@testset "testset types" begin
+    ts = @testset "@testset should return the testset" begin
         @test true
-        @test false
-        @test 1 == 1
-        @test 2 == :foo
-        @test 3 == 3
-        @testset "d" begin
+    end
+    @test typeof(ts) == Base.Test.DefaultTestSet
+    @test typeof(ts.results[1]) == Base.Test.Pass
+    tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
+        @test true
+    end
+    @test length(tss) == 3
+    @test typeof(tss[1]) == Base.Test.DefaultTestSet
+    @test typeof(tss[1].results[1]) == Base.Test.Pass
+end
+@testset "accounting" begin
+    local ts
+    try ts = @testset "outer" begin
+        @testset "inner1" begin
+            @test true
+            @test false
+            @test 1 == 1
+            @test 2 == :foo
+            @test 3 == 3
+            @testset "d" begin
+                @test 4 == 4
+            end
+            @testset begin
+                @test :blank != :notblank
+            end
+        end
+        @testset "inner1" begin
+            @test 1 == 1
+            @test 2 == 2
+            @test 3 == :bar
             @test 4 == 4
-        end
-        @testset begin
-            @test :blank != :notblank
-        end
-    end
-    @testset "inner1" begin
-        @test 1 == 1
-        @test 2 == 2
-        @test 3 == :bar
-        @test 4 == 4
-        @test_throws ErrorException 1+1
-        @test_throws ErrorException error()
-        @test_throws RemoteException error()
-        @testset "errrrr" begin
-            @test "not bool"
-            @test error()
+            @test_throws ErrorException 1+1
+            @test_throws ErrorException error()
+            @test_throws RemoteException error()
+            @testset "errrrr" begin
+                @test "not bool"
+                @test error()
+            end
+
+            error("exceptions in testsets should be caught")
+            @test 1 == 1 # this test will not be run
         end
 
-        error("exceptions in testsets should be caught")
-        @test 1 == 1 # this test will not be run
-    end
-
-    @testset "loop with desc" begin
-        @testset "loop1 $T" for T in (Float32, Float64)
-            @test 1 == T(1)
+        @testset "loop with desc" begin
+            @testset "loop1 $T" for T in (Float32, Float64)
+                @test 1 == T(1)
+            end
+        end
+        @testset "loops without desc" begin
+            @testset for T in (Float32, Float64)
+                @test 1 == T(1)
+            end
+            @testset for T in (Float32, Float64), S in (Int32,Int64)
+                @test S(1) == T(1)
+            end
+        end
+        srand(123)
+        @testset "some loops fail" begin
+            @testset for i in 1:5
+                @test i <= rand(1:10)
+            end
+            # should add 3 errors and 3 passing tests
+            @testset for i in 1:6
+                iseven(i) || error("error outside of test")
+                @test true # only gets run if the above passed
+            end
         end
     end
-    @testset "loops without desc" begin
-        @testset for T in (Float32, Float64)
-            @test 1 == T(1)
-        end
-        @testset for T in (Float32, Float64), S in (Int32,Int64)
-            @test S(1) == T(1)
-        end
+    # These lines shouldn't be called
+    redirect_stdout(OLD_STDOUT)
+    error("No exception was thrown!")
+    catch ex
+        #redirect_stdout(OLD_STDOUT)
+        #redirect_stderr(OLD_STDERR)
+        #@show ex
     end
-    srand(123)
-    @testset "some loops fail" begin
-        @testset for i in 1:5
-            @test i <= rand(1:10)
-        end
-        # should add 3 errors and 3 passing tests
-        @testset for i in 1:6
-            iseven(i) || error("error outside of test")
-            @test true # only gets run if the above passed
-        end
+    @testset "ts results" begin
+        @test isa(ts, Test.DefaultTestSet)
+        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Base.Test.get_test_counts(ts)
+        total_pass   = passes + c_passes
+        total_fail   = fails  + c_fails
+        total_error  = errors + c_errors
+        total_broken = broken + c_broken
+        @test total_pass   == 24
+        @test total_fail   == 6
+        @test total_error  == 6
+        @test total_broken == 0
     end
+    ts.anynonpass = false
+    deleteat!(Base.Test.get_testset().results,1)
 end
-# These lines shouldn't be called
-redirect_stdout(OLD_STDOUT)
-error("No exception was thrown!")
-catch ex
-    @test isa(ex, Test.TestSetException)
-    @test ex.pass   == 24
-    @test ex.fail   == 6
-    @test ex.error  == 6
-    @test ex.broken == 0
-end
-
 # Test @test_approx_eq
 # TODO
 @test isapprox(.1+.1+.1, .3)
@@ -229,6 +254,7 @@ end
 
 # now we're done running tests with DefaultTestSet so we can go back to STDOUT
 redirect_stdout(OLD_STDOUT)
+redirect_stderr(OLD_STDERR)
 
 # import the methods needed for defining our own testset type
 import Base.Test: record, finish

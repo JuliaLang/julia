@@ -137,7 +137,7 @@ Mathematical Operators
         1  2
         3  4
 
-       julia> A . [1 2]
+       julia> A .\ [1 2]
        2×2 Array{Float64,2}:
         1.0       1.0
         0.333333  0.5
@@ -454,14 +454,6 @@ Mathematical Operators
    .. Docstring generated from Julia source
 
    Not-equals comparison operator. Always gives the opposite answer as ``==``\ . New types should generally not implement this, and rely on the fallback definition ``!=(x,y) = !(x==y)`` instead.
-
-.. _===:
-.. function:: ===(x, y)
-              ≡(x,y)
-
-   .. Docstring generated from Julia source
-
-   See the :func:`is` operator.
 
 .. _!==:
 .. function:: !==(x, y)
@@ -1364,6 +1356,24 @@ Mathematical Functions
 
    The overflow protection may impose a perceptible performance penalty.
 
+.. function:: Base.add_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x+y``\ , with the flag ``f`` indicating whether overflow has occurred.
+
+.. function:: Base.sub_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x-y``\ , with the flag ``f`` indicating whether overflow has occurred.
+
+.. function:: Base.mul_with_overflow(x, y) -> (r, f)
+
+   .. Docstring generated from Julia source
+
+   Calculates ``r = x*y``\ , with the flag ``f`` indicating whether overflow has occurred.
+
 .. function:: abs2(x)
 
    .. Docstring generated from Julia source
@@ -1433,11 +1443,13 @@ Mathematical Functions
        julia> isqrt(5)
        2
 
-.. function:: cbrt(x)
+.. function:: cbrt(x::Real)
 
    .. Docstring generated from Julia source
 
-   Return :math:`x^{1/3}`\ .  The prefix operator ``∛`` is equivalent to ``cbrt``\ .
+   Return the cube root of ``x``\ , i.e. :math:`x^{1/3}`\ . Negative values are accepted (returning the negative real root when :math:`x < 0`\ ).
+
+   The prefix operator ``∛`` is equivalent to ``cbrt``\ .
 
    .. doctest::
 

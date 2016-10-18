@@ -122,7 +122,7 @@ function eval_user_input(ast::ANY, show_value)
                 ast = expand(ast)
                 value = eval(Main, ast)
                 eval(Main, Expr(:(=), :ans, Expr(:call, ()->value)))
-                if !is(value,nothing) && show_value
+                if value!==nothing && show_value
                     if have_color
                         print(answer_color())
                     end
@@ -167,7 +167,7 @@ function parse_input_line(s::String; filename::String="none")
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{UInt8},Csize_t,Int32,Int32),
     #                   s, sizeof(s), pos-1, 1)
-    # if !is(ex,())
+    # if ex!==()
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr

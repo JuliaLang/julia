@@ -1174,6 +1174,23 @@ function _printf(macroname, io, fmt, args)
     Expr(:let, blk)
 end
 
+"""
+    @printf([io::IOStream], "%Fmt", args...)
+
+Print `args` using C `printf()` style format specification string, with some caveats:
+`Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
+`%e`, `%E`, `%f`, `%F`, `%g`, and `%G`.
+
+Optionally, an [`IOStream`](:obj:`IOStream`)
+may be passed as the first argument to redirect output.
+
+# Examples
+
+```jldoctest
+julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
+Inf Inf NaN NaN\n
+```
+"""
 macro printf(args...)
     isempty(args) && throw(ArgumentError("@printf: called with no arguments"))
     if isa(args[1], AbstractString) || is_str_expr(args[1])
@@ -1185,6 +1202,20 @@ macro printf(args...)
     end
 end
 
+"""
+    @sprintf("%Fmt", args...)
+
+Return `@printf` formatted output as string.
+
+# Examples
+
+```jldoctest
+julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
+
+julia> println(s)
+this is a test            34.6
+```
+"""
 macro sprintf(args...)
     isempty(args) && throw(ArgumentError("@sprintf: called with zero arguments"))
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||

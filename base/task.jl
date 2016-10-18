@@ -83,7 +83,7 @@ istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
-    if is(t.storage, nothing)
+    if t.storage === nothing
         t.storage = ObjectIdDict()
     end
     (t.storage)::ObjectIdDict
@@ -124,7 +124,7 @@ end
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
     if !istaskdone(t)
-        if is(t.donenotify, nothing)
+        if t.donenotify === nothing
             t.donenotify = Condition()
         end
     end
@@ -289,7 +289,7 @@ sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWN
 
 function sync_end()
     spawns = get(task_local_storage(), :SPAWNS, ())
-    if is(spawns,())
+    if spawns === ()
         error("sync_end() without sync_begin()")
     end
     refs = spawns[1]
@@ -334,7 +334,7 @@ end
 
 function sync_add(r)
     spawns = get(task_local_storage(), :SPAWNS, ())
-    if !is(spawns,())
+    if spawns !== ()
         push!(spawns[1], r)
         if isa(r, Task)
             tls_r = get_task_tls(r)

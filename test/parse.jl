@@ -26,7 +26,7 @@ let
         ex1 = parse(ex1); ex2 = parse(ex2)
         @test ex1.head === :call && (ex1.head === ex2.head)
         @test ex1.args[2] === 5 && ex2.args[2] === 5
-        @test is(eval(Main, ex1.args[1]), eval(Main, ex2.args[1]))
+        @test eval(Main, ex1.args[1]) === eval(Main, ex2.args[1])
         @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
     end
 end
@@ -173,17 +173,17 @@ macro f(args...) end; @f ""
 @test_throws ParseError parse("(1 2)") # issue #15248
 
 # integer parsing
-@test is(parse(Int32,"0",36),Int32(0))
-@test is(parse(Int32,"1",36),Int32(1))
-@test is(parse(Int32,"9",36),Int32(9))
-@test is(parse(Int32,"A",36),Int32(10))
-@test is(parse(Int32,"a",36),Int32(10))
-@test is(parse(Int32,"B",36),Int32(11))
-@test is(parse(Int32,"b",36),Int32(11))
-@test is(parse(Int32,"F",36),Int32(15))
-@test is(parse(Int32,"f",36),Int32(15))
-@test is(parse(Int32,"Z",36),Int32(35))
-@test is(parse(Int32,"z",36),Int32(35))
+@test parse(Int32,"0",36) === Int32(0)
+@test parse(Int32,"1",36) === Int32(1)
+@test parse(Int32,"9",36) === Int32(9)
+@test parse(Int32,"A",36) === Int32(10)
+@test parse(Int32,"a",36) === Int32(10)
+@test parse(Int32,"B",36) === Int32(11)
+@test parse(Int32,"b",36) === Int32(11)
+@test parse(Int32,"F",36) === Int32(15)
+@test parse(Int32,"f",36) === Int32(15)
+@test parse(Int32,"Z",36) === Int32(35)
+@test parse(Int32,"z",36) === Int32(35)
 
 @test parse(Int,"0") == 0
 @test parse(Int,"-0") == 0
@@ -810,4 +810,24 @@ if test + test == test
 end
 ```.head == :if
 
+end
+
+# issue 18756
+module Mod18756
+type Type
+end
+end
+@test method_exists(Mod18756.Type, ())
+
+# issue 18002
+@test parse("typealias a (Int)") == Expr(:typealias, :a, :Int)
+@test parse("typealias b (Int,)") == Expr(:typealias, :b, Expr(:tuple, :Int))
+@test parse("typealias Foo{T} Bar{T}") == Expr(:typealias, Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
+
+# don't insert push_loc for filename `none` at the top level
+let ex = expand(parse("""
+begin
+    x = 1
+end"""))
+    @test !any(x->(x == Expr(:meta, :push_loc, :none)), ex.args)
 end

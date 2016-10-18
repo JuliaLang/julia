@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Base.Checked: add_with_overflow, mul_with_overflow
+
 ## string to integer functions ##
 
 function parse{T<:Integer}(::Type{T}, c::Char, base::Integer=36)
@@ -54,11 +56,6 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     return sgn, base, j
 end
 
-safe_add{T<:Integer}(n1::T, n2::T) = ((n2 > 0) ? (n1 > (typemax(T) - n2)) : (n1 < (typemin(T) - n2))) ? Nullable{T}() : Nullable{T}(n1 + n2)
-safe_mul{T<:Integer}(n1::T, n2::T) = ((n2 >   0) ? ((n1 > div(typemax(T),n2)) || (n1 < div(typemin(T),n2))) :
-                                      (n2 <  -1) ? ((n1 > div(typemin(T),n2)) || (n1 < div(typemax(T),n2))) :
-                                      ((n2 == -1) && n1 == typemin(T))) ? Nullable{T}() : Nullable{T}(n1 * n2)
-
 function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{T}()
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
@@ -108,13 +105,12 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::I
         end
         (T <: Signed) && (d *= sgn)
 
-        safe_n = safe_mul(n, base)
-        isnull(safe_n) || (safe_n = safe_add(get(safe_n), d))
-        if isnull(safe_n)
+        n, ov_mul = mul_with_overflow(n, base)
+        n, ov_add = add_with_overflow(n, d)
+        if ov_mul | ov_add
             raise && throw(OverflowError())
             return _n
         end
-        n = get(safe_n)
         (i > endpos) && return Nullable{T}(n)
         c, i = next(s,i)
     end
@@ -180,7 +176,7 @@ function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=tru
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{UInt8}, Csize_t, Int32, Int32),
                     bstr, sizeof(bstr), pos-1, greedy ? 1:0)
-    if raise && isa(ex,Expr) && is(ex.head,:error)
+    if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
     if ex === ()

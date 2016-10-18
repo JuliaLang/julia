@@ -329,7 +329,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
         return dta->name == dtb->name && compare_svec(dta->parameters, dtb->parameters);
     }
     if (dt->mutabl) return 0;
-    size_t sz = dt->size;
+    size_t sz = jl_datatype_size(dt);
     if (sz == 0) return 1;
     size_t nf = jl_datatype_nfields(dt);
     if (nf == 0)
@@ -339,7 +339,7 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 
 JL_CALLABLE(jl_f_is)
 {
-    JL_NARGS(is, 2, 2);
+    JL_NARGS(===, 2, 2);
     if (args[0] == args[1])
         return jl_true;
     return jl_egal(args[0],args[1]) ? jl_true : jl_false;
@@ -359,7 +359,7 @@ JL_CALLABLE(jl_f_sizeof)
         jl_datatype_t *dx = (jl_datatype_t*)x;
         if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type)
             jl_error("type does not have a canonical binary representation");
-        if (!(dx->name->names == jl_emptysvec && dx->size > 0)) {
+        if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
             // names===() and size > 0  =>  bitstype, size always known
             if (dx->abstract || !jl_is_leaf_type(x))
                 jl_error("argument is an abstract type; size is indeterminate");
@@ -432,7 +432,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t
     return ret;
 }
 
-static jl_function_t *jl_append_any_func;
+jl_function_t *jl_append_any_func;
 
 JL_CALLABLE(jl_f__apply)
 {
@@ -468,7 +468,7 @@ JL_CALLABLE(jl_f__apply)
         else {
             if (jl_append_any_func == NULL) {
                 jl_append_any_func =
-                    (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("append_any"));
+                    (jl_function_t*)jl_get_global(jl_top_module, jl_symbol("append_any"));
                 if (jl_append_any_func == NULL) {
                     // error if append_any not available
                     JL_TYPECHK(apply, tuple, jl_typeof(args[i]));
@@ -807,7 +807,7 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
     char *bstr = str+offset;
     char *pend = bstr+len;
     char *tofree = NULL;
-    int err = 0;
+    int hasvalue = 0;
 
     errno = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
@@ -827,28 +827,28 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
     double out = jl_strtod_c(bstr, &p);
 
     if (errno==ERANGE && (out==0 || out==HUGE_VAL || out==-HUGE_VAL)) {
-        err = 1;
+        hasvalue = 0;
     }
     else if (p == bstr) {
-        err = 1;
+        hasvalue = 0;
     }
     else {
         // Deal with case where the substring might be something like "1 ",
         // which is OK, and "1 X", which we don't allow.
-        err = substr_isspace(p, pend) ? 0 : 1;
+        hasvalue = substr_isspace(p, pend) ? 1 : 0;
     }
 
     if (__unlikely(tofree))
         free(tofree);
 
-    jl_nullable_float64_t ret = {(uint8_t)err, out};
+    jl_nullable_float64_t ret = {(uint8_t)hasvalue, out};
     return ret;
 }
 
 JL_DLLEXPORT int jl_substrtod(char *str, size_t offset, size_t len, double *out)
 {
     jl_nullable_float64_t nd = jl_try_substrtod(str, offset, len);
-    if (0 == nd.isnull) {
+    if (0 != nd.hasvalue) {
         *out = nd.value;
         return 0;
     }
@@ -866,7 +866,7 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
     char *bstr = str+offset;
     char *pend = bstr+len;
     char *tofree = NULL;
-    int err = 0;
+    int hasvalue = 0;
 
     errno = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
@@ -890,28 +890,28 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
 #endif
 
     if (errno==ERANGE && (out==0 || out==HUGE_VALF || out==-HUGE_VALF)) {
-        err = 1;
+        hasvalue = 0;
     }
     else if (p == bstr) {
-        err = 1;
+        hasvalue = 0;
     }
     else {
         // Deal with case where the substring might be something like "1 ",
         // which is OK, and "1 X", which we don't allow.
-        err = substr_isspace(p, pend) ? 0 : 1;
+        hasvalue = substr_isspace(p, pend) ? 1 : 0;
     }
 
     if (__unlikely(tofree))
         free(tofree);
 
-    jl_nullable_float32_t ret = {(uint8_t)err, out};
+    jl_nullable_float32_t ret = {(uint8_t)hasvalue, out};
     return ret;
 }
 
 JL_DLLEXPORT int jl_substrtof(char *str, int offset, size_t len, float *out)
 {
     jl_nullable_float32_t nf = jl_try_substrtof(str, offset, len);
-    if (0 == nf.isnull) {
+    if (0 != nf.hasvalue) {
         *out = nf.value;
         return 0;
     }
@@ -1114,7 +1114,7 @@ static void add_builtin_func(const char *name, jl_fptr_t fptr)
 
 void jl_init_primitives(void)
 {
-    add_builtin_func("is", jl_f_is);
+    add_builtin_func("===", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("sizeof", jl_f_sizeof);
     add_builtin_func("issubtype", jl_f_issubtype);

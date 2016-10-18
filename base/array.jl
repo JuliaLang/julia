@@ -2,6 +2,17 @@
 
 ## array.jl: Dense arrays
 
+## Type aliases for convenience ##
+
+typealias AbstractVector{T} AbstractArray{T,1}
+typealias AbstractMatrix{T} AbstractArray{T,2}
+typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
+typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
+typealias DimOrInd Union{Integer, AbstractUnitRange}
+typealias IntOrInd Union{Int, AbstractUnitRange}
+typealias DimsOrInds{N} NTuple{N,DimOrInd}
+typealias NeedsShaping Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
+
 typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union{Vector{T}, Matrix{T}}
@@ -13,6 +24,16 @@ typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 ## Basic functions ##
 
 import Core: arraysize, arrayset, arrayref
+
+vect() = Array{Any,1}(0)
+vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+
+function vect(X...)
+    T = promote_typeof(X...)
+    #T[ X[i] for i=1:length(X) ]
+    # TODO: this is currently much faster. should figure out why. not clear.
+    return copy!(Array{T,1}(length(X)), X)
+end
 
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
@@ -455,7 +476,7 @@ setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, conve
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
-    is(A, I) && (I = copy(I))
+    A === I && (I = copy(I))
     for i in I
         A[i] = x
     end
@@ -464,10 +485,10 @@ end
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     setindex_shape_check(X, length(I))
     count = 1
-    if is(X,A)
+    if X === A
         X = copy(X)
-        is(I,A) && (I = X::typeof(I))
-    elseif is(I,A)
+        I===A && (I = X::typeof(I))
+    elseif I === A
         I = copy(I)
     end
     for i in I
@@ -877,6 +898,19 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
               a, b, min(length(a),length(b)))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
+end
+
+# use memcmp for == on bit integer types
+function =={T<:BitInteger,N}(a::Array{T,N}, b::Array{T,N})
+    size(a) == size(b) && 0 == ccall(
+        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a))
+end
+
+# this is ~20% faster than the generic implementation above for very small arrays
+function =={T<:BitInteger}(a::Array{T,1}, b::Array{T,1})
+    len = length(a)
+    len == length(b) && 0 == ccall(
+        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
 end
 
 function reverse(A::AbstractVector, s=1, n=length(A))

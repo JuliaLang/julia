@@ -16,7 +16,7 @@ time_ns() = ccall(:jl_hrtime, UInt64, ())
 # This type must be kept in sync with the C struct in src/gc.h
 immutable GC_Num
     allocd      ::Int64 # GC internal
-    deferred_alloc::Int64
+    deferred_alloc::Int64 # GC internal
     freed       ::Int64 # GC internal
     malloc      ::UInt64
     realloc     ::UInt64
@@ -46,10 +46,14 @@ immutable GC_Diff
     full_sweep  ::Int64 # Number of GC full collection
 end
 
+gc_total_bytes(gc_num::GC_Num) =
+    (gc_num.allocd + gc_num.deferred_alloc +
+     Int64(gc_num.collect) + Int64(gc_num.total_allocd))
+
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
-    old_allocd = old.allocd + Int64(old.collect) + Int64(old.total_allocd)
-    new_allocd = new.allocd + Int64(new.collect) + Int64(new.total_allocd)
+    old_allocd = gc_total_bytes(old)
+    new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd - old_allocd,
                    Int64(new.malloc       - old.malloc),
                    Int64(new.realloc      - old.realloc),
@@ -93,7 +97,7 @@ macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
 function toq()
     t1 = time_ns()
     timers = get(task_local_storage(), :TIMERS, ())
-    if is(timers,())
+    if timers === ()
         error("toc() without tic()")
     end
     t0 = timers[1]::UInt64
@@ -302,7 +306,7 @@ end
 function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...)
     buf = IOBuffer()
     have_color && print(buf, get(text_colors, color, color_normal))
-    try f(buf, args...)
+    try f(IOContext(buf, io), args...)
     finally
         have_color && print(buf, color_normal)
         print(io, takebuf_string(buf))

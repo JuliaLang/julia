@@ -494,6 +494,13 @@ end
 
 @test [(i,j) for i=1:3 for j=1:i if j>1] == [(2,2), (3,2), (3,3)]
 
+# issue #18707
+@test [(q,d,n,p) for q = 0:25:100
+                 for d = 0:10:100-q
+                 for n = 0:5:100-q-d
+                 for p = 100-q-d-n
+                 if p < n < d < q] == [(50,30,15,5), (50,30,20,0), (50,40,10,0), (75,20,5,0)]
+
 # partition(c, n)
 let v = collect(Base.partition([1,2,3,4,5], 1))
     @test all(i->v[i][1] == i, v)

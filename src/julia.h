@@ -273,6 +273,7 @@ typedef struct _jl_method_instance_t {
     jl_value_t *rettype; // return type for fptr
     jl_svec_t *sparam_vals; // the values for the tvars, indexed by def->sparam_syms
     jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == 2, or null
+    jl_value_t *inferred_const; // inferred constant return value, or null
     jl_method_t *def; // method this is specialized from, null if this is a toplevel thunk
     uint8_t inInference; // flags to tell if inference is running on this function
     uint8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
@@ -767,6 +768,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
 #define jl_field_count(st)     jl_svec_len(((jl_datatype_t*)st)->types)
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
+#define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
 
 // inline version with strong type check to detect typos in a `->name` chain
@@ -871,14 +873,14 @@ STATIC_INLINE int jl_is_bitstype(void *v)
     return (jl_is_datatype(v) && jl_is_immutable(v) &&
             ((jl_datatype_t*)(v))->layout &&
             jl_datatype_nfields(v) == 0 &&
-            ((jl_datatype_t*)(v))->size > 0);
+            jl_datatype_size(v) > 0);
 }
 
 STATIC_INLINE int jl_is_structtype(void *v)
 {
     return (jl_is_datatype(v) &&
             (jl_field_count(v) > 0 ||
-             ((jl_datatype_t*)(v))->size == 0) &&
+             jl_datatype_size(v) == 0) &&
             !((jl_datatype_t*)(v))->abstract);
 }
 
@@ -895,7 +897,7 @@ STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)
 
 STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
 {
-    return (!d->abstract && d->size == 0 && d != jl_sym_type && d->name != jl_array_typename &&
+    return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
             d->uid != 0 && (d->name->names == jl_emptysvec || !d->mutabl));
 }
 
@@ -1737,12 +1739,12 @@ JL_DLLEXPORT const char *jl_git_commit(void);
 
 // nullable struct representations
 typedef struct {
-    uint8_t isnull;
+    uint8_t hasvalue;
     double value;
 } jl_nullable_float64_t;
 
 typedef struct {
-    uint8_t isnull;
+    uint8_t hasvalue;
     float value;
 } jl_nullable_float32_t;
 

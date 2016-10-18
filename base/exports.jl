@@ -27,6 +27,7 @@ export
 # Types
     AbstractChannel,
     AbstractMatrix,
+    AbstractSet,
     AbstractUnitRange,
     AbstractVector,
     AbstractVecOrMat,
@@ -531,7 +532,6 @@ export
     indmin,
     invperm,
     ipermute!,
-    ipermutedims,
     isassigned,
     isperm,
     issorted,
@@ -1052,6 +1052,7 @@ export
     expand,
     gensym,
     macroexpand,
+    @macroexpand,
     parse,
 
 # help and reflection
@@ -1324,6 +1325,7 @@ export
 
 # nullable types
     isnull,
+    unsafe_get,
 
 # Macros
     # parser internal

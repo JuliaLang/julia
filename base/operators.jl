@@ -100,7 +100,6 @@ generally not implement this, and rely on the fallback definition `!=(x,y) = !(x
 const ≠ = !=
 
 """
-    is(x, y) -> Bool
     ===(x,y) -> Bool
     ≡(x,y) -> Bool
 
@@ -108,16 +107,16 @@ Determine whether `x` and `y` are identical, in the sense that no program could 
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
 numbers) by contents at the bit level. This function is sometimes called `egal`.
 """
-is
-const ≡ = is
+===
+const ≡ = ===
 
 """
     !==(x, y)
     ≢(x,y)
 
-Equivalent to `!is(x, y)`.
+Equivalent to `!(x === y)`.
 """
-!==(x,y) = !is(x,y)
+!==(x,y) = !(x===y)
 const ≢ = !==
 
 """
@@ -963,6 +962,11 @@ reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
 length(p::Pair) = 2
+
+convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
+function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
+    convert(A, x[1]) => convert(B, x[2])
+end
 
 # some operators not defined yet
 global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛

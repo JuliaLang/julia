@@ -893,12 +893,14 @@ the arguments are known, but the function is not yet compiled.
 Instead of performing some calculation or action, a generated function
 declaration returns a quoted expression which then forms the body for the
 method corresponding to the types of the arguments. When called, the body
-expression is compiled (or fetched from a cache, on subsequent calls) and
-only the returned expression - not the code that generated it - is evaluated.
+expression is first evaluated and compiled,
+then the returned expression is compiled and run.
+To make this efficient, the result is often cached.
+And to make this inferable, only a limited subset of the language is usable.
 Thus, generated functions provide a flexible framework to move work from
-run-time to compile-time.
+run-time to compile-time, at the expense of greater restrictions on the allowable constructs.
 
-When defining generated functions, there are three main differences to
+When defining generated functions, there are four main differences to
 ordinary functions:
 
 1. You annotate the function declaration with the ``@generated`` macro.
@@ -906,10 +908,17 @@ ordinary functions:
    this is a generated function.
 
 2. In the body of the generated function you only have access to the
-   *types* of the arguments, not their values.
+   *types* of the arguments -- not their values -- and any function that
+   was defined *before* the definition of the generated function.
 
 3. Instead of calculating something or performing some action, you return
    a *quoted expression* which, when evaluated, does what you want.
+
+4. Generated functions must not have any side-effects or examine any non-constant
+   global state (including, for example, IO, locks, or non-local dictionaries).
+   In other words, they must be completely pure.
+   Due to an implementation limitation,
+   this also means that they currently cannot define a closure or untyped generator.
 
 It's easiest to illustrate this with an example. We can declare a generated
 function ``foo`` as
@@ -917,13 +926,13 @@ function ``foo`` as
 .. doctest::
 
     julia> @generated function foo(x)
-               println(x)
-               return :(x*x)
+               Core.println(x)
+               return :(x * x)
            end
     foo (generic function with 1 method)
 
-Note that the body returns a quoted expression, namely ``:(x*x)``, rather
-than just the value of ``x*x``.
+Note that the body returns a quoted expression, namely ``:(x * x)``, rather
+than just the value of ``x * x``.
 
 From the caller's perspective, they are very similar to regular functions;
 in fact, you don't have to know if you're calling a regular or generated
@@ -958,31 +967,35 @@ used?
     julia> foo(4)
     16
 
-Note that there is no printout of :obj:`Int64`. The body of the generated
-function is only executed *once* (not entirely true, see note below) when
-the method for that specific set of argument types is compiled. After that,
-the expression returned from the generated function on the first invocation
-is re-used as the method body.
+Note that there is no printout of :obj:`Int64`. We can see that the body
+of the generated function was only executed once here,
+for the specific set of argument types, and the result was cached.
+After that, for this example, the expression returned from the generated
+function on the first invocation was re-used as the method body.
+However, the actual caching behavior is an implementation-defined performance optimization,
+so it is invalid to depend too closely on this behavior.
 
-The reason for the disclaimer above is that the number of times a generated
-function is generated is really an implementation detail; it *might* be only
-once, but it *might* also be more often. As a consequence, you should
-*never* write a generated function with side effects - when, and how often,
-the side effects occur is undefined. (This is true for macros too - and just
-like for macros, the use of :func:`eval` in a generated function is a sign that
+The number of times a generated function is generated *might* be only once,
+but it *might* also be more often, or appear to not happen at all.
+As a consequence, you should *never* write a generated function with side effects - when,
+and how often, the side effects occur is undefined.
+(This is true for macros too - and just like for macros,
+the use of :func:`eval` in a generated function is a sign that
 you're doing something the wrong way.)
+However, unlike macros, the runtime system cannot correctly handle a call to
+:func:`eval`, so it is disallowed.
 
 The example generated function ``foo`` above did not do anything a normal
-function ``foo(x)=x*x`` could not do, except printing the type on the
-first invocation (and incurring a higher compile-time cost). However, the
-power of a generated function lies in its ability to compute different quoted
-expression depending on the types passed to it:
+function ``foo(x) = x * x`` could not do (except printing the type on the
+first invocation, and incurring higher overhead).
+However, the power of a generated function lies in its ability to compute
+different quoted expressions depending on the types passed to it:
 
 .. doctest::
 
    julia> @generated function bar(x)
               if x <: Integer
-                  return :(x^2)
+                  return :(x ^ 2)
               else
                   return :(x)
               end
@@ -991,13 +1004,14 @@ expression depending on the types passed to it:
 
    julia> bar(4)
    16
+
    julia> bar("baz")
    "baz"
 
-(although of course this contrived example is easily implemented using
-multiple dispatch...)
+(although of course this contrived example would be more easily implemented
+using multiple dispatch...)
 
-We can, of course, abuse this to produce some interesting behavior:
+Abusing this will corrupt the runtime system and cause undefined behavior:
 
 .. doctest::
 
@@ -1011,13 +1025,8 @@ We can, of course, abuse this to produce some interesting behavior:
    baz (generic function with 1 method)
 
 
-Since the body of the generated function is non-deterministic, its behavior
-is undefined; the expression returned on the *first* invocation will be
-used for *all* subsequent invocations with the same type (again, with the
-exception covered by the disclaimer above). When we call the generated
-function with ``x`` of a new type, :func:`rand` will be called again to
-see which method body to use for the new type. In this case, for one
-*type* out of ten, ``baz(x)`` will return the string ``"boo!"``.
+Since the body of the generated function is non-deterministic, its behavior,
+*and the behavior of all subsequent code* is undefined.
 
 *Don't copy these examples!*
 
@@ -1025,15 +1034,43 @@ These examples are hopefully helpful to illustrate how generated functions
 work, both in the definition end and at the call site; however, *don't
 copy them*, for the following reasons:
 
-* the ``foo`` function has side-effects, and it is undefined exactly when,
+* the ``foo`` function has side-effects (the call to ``Core.println``), and it is undefined exactly when,
   how often or how many times these side-effects will occur
 * the ``bar`` function solves a problem that is better solved with multiple
-  dispatch - defining ``bar(x) = x`` and ``bar(x::Integer) = x^2`` will do
+  dispatch - defining ``bar(x) = x`` and ``bar(x::Integer) = x ^ 2`` will do
   the same thing, but it is both simpler and faster.
 * the ``baz`` function is pathologically insane
 
-Instead, now that we have a better understanding for how generated functions
-work, let's use them to build some more advanced functionality...
+Note that the set of operations that should not be attempted in a generated function
+is unbounded, and the runtime system can currently only detect a subset of
+the invalid operations. There are many other operations that will simply
+corrupt the runtime system without notification, usually in subtle
+ways not obviously connected to the bad definition.
+Because the function generator is run during inference,
+it must respect all of the limitations of that code.
+
+Some operations that should not be attempted include:
+
+1. Caching of native pointers.
+
+2. Interacting with the contents or methods of Core.Inference in any way.
+
+3. Observing any mutable state.
+
+   - Inference on the generated function may be run at *any* time,
+     including while your code is attempting to observe or mutate this state.
+
+4. Taking any locks: C code you call out to may use locks internally,
+   (for example, it is not problematic to call ``malloc``,
+   even though most implementations require locks internally)
+   but don't attempt to hold or acquire any while executing Julia code.
+
+5. Calling any function that is defined after the body of the generated function.
+   This condition is relaxed for incrementally-loaded precompiled modules to
+   allow calling any function in the module.
+
+Alright, now that we have a better understanding of how generated functions
+work, let's use them to build some more advanced (and valid) functionality...
 
 An advanced example
 ~~~~~~~~~~~~~~~~~~~
@@ -1055,11 +1092,11 @@ possible implementation is the following::
 The same thing can be done using recursion::
 
     sub2ind_rec(dims::Tuple{}) = 1
-    sub2ind_rec(dims::Tuple{},i1::Integer, I::Integer...) =
-        i1==1 ? sub2ind_rec(dims,I...) : throw(BoundsError())
-    sub2ind_rec(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer) = i1
-    sub2ind_rec(dims::Tuple{Integer,Vararg{Integer}}, i1::Integer, I::Integer...) =
-        i1 + dims[1]*(sub2ind_rec(tail(dims),I...)-1)
+    sub2ind_rec(dims::Tuple{}, i1::Integer, I::Integer...) =
+        i1 == 1 ? sub2ind_rec(dims, I...) : throw(BoundsError())
+    sub2ind_rec(dims::Tuple{Integer, Vararg{Integer}}, i1::Integer) = i1
+    sub2ind_rec(dims::Tuple{Integer, Vararg{Integer}}, i1::Integer, I::Integer...) =
+        i1 + dims[1] * (sub2ind_rec(tail(dims), I...) - 1)
 
 Both these implementations, although different, do essentially the same
 thing: a runtime loop over the dimensions of the array, collecting the
@@ -1076,8 +1113,8 @@ that calculates the index:
 
     @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
         ex = :(I[$N] - 1)
-        for i = N-1:-1:1
-            ex = :(I[$i] - 1 + dims[$i]*$ex)
+        for i = (N - 1):-1:1
+            ex = :(I[$i] - 1 + dims[$i] * $ex)
         end
         return :($ex + 1)
     end
@@ -1090,15 +1127,15 @@ function:
 .. doctest::
 
    julia> @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
-              sub2ind_gen_impl(dims, I...)
+              return sub2ind_gen_impl(dims, I...)
           end
    sub2ind_gen (generic function with 1 method)
 
    julia> function sub2ind_gen_impl{N}(dims::Type{NTuple{N}}, I...)
               length(I) == N || return :(error("partial indexing is unsupported"))
               ex = :(I[$N] - 1)
-              for i = N-1:-1:1
-                  ex = :(I[$i] - 1 + dims[$i]*$ex)
+              for i = (N - 1):-1:1
+                  ex = :(I[$i] - 1 + dims[$i] * $ex)
               end
               return :($ex + 1)
           end

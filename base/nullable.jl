@@ -3,7 +3,7 @@
 immutable NullException <: Exception
 end
 
-Nullable{T}(value::T, isnull::Bool=false) = Nullable{T}(value, isnull)
+Nullable{T}(value::T, hasvalue::Bool=true) = Nullable{T}(value, hasvalue)
 Nullable() = Nullable{Union{}}()
 
 eltype{T}(::Type{Nullable{T}}) = T
@@ -53,16 +53,75 @@ otherwise, returns `y` if provided, or throws a `NullException` if not.
 """
 @inline function get{S,T}(x::Nullable{S}, y::T)
     if isbits(S)
-        ifelse(x.isnull, y, x.value)
+        ifelse(isnull(x), y, x.value)
     else
-        x.isnull ? y : x.value
+        isnull(x) ? y : x.value
     end
 end
 
-get(x::Nullable) = x.isnull ? throw(NullException()) : x.value
+get(x::Nullable) = isnull(x) ? throw(NullException()) : x.value
 
-isnull(x::Nullable) = x.isnull
+"""
+    unsafe_get(x)
 
+Return the value of `x` for [`Nullable`](:obj:`Nullable`) `x`; return `x` for
+all other `x`.
+
+This method does not check whether or not `x` is null before attempting to
+access the value of `x` for `x::Nullable` (hence "unsafe").
+
+```jldoctest
+julia> x = Nullable(1)
+Nullable{Int64}(1)
+
+julia> unsafe_get(x)
+1
+
+julia> x = Nullable{String}()
+Nullable{String}()
+
+julia> unsafe_get(x)
+ERROR: UndefRefError: access to undefined reference
+ in unsafe_get(::Nullable{String}) at ./REPL[4]:1
+
+julia> x = 1
+1
+
+julia> unsafe_get(x)
+1
+```
+"""
+unsafe_get(x::Nullable) = x.value
+unsafe_get(x) = x
+
+"""
+    isnull(x)
+
+Return whether or not `x` is null for [`Nullable`](:obj:`Nullable`) `x`; return
+`false` for all other `x`.
+
+```jldoctest
+julia> x = Nullable(1, false)
+Nullable{Int64}(1)
+
+julia> isnull(x)
+false
+
+julia> x = Nullable(1, true)
+Nullable{Int64}()
+
+julia> isnull(x)
+true
+
+julia> x = 1
+1
+
+julia> isnull(x)
+false
+```
+"""
+isnull(x::Nullable) = !x.hasvalue
+isnull(x) = false
 
 ## Operators
 
@@ -107,15 +166,15 @@ and `false` if one is null but not the other: nulls are considered equal.
 """
 @inline function isequal{S,T}(x::Nullable{S}, y::Nullable{T})
     if null_safe_op(isequal, S, T)
-        (x.isnull & y.isnull) | (!x.isnull & !y.isnull & isequal(x.value, y.value))
+        (isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & isequal(x.value, y.value))
     else
-        (x.isnull & y.isnull) || (!x.isnull & !y.isnull && isequal(x.value, y.value))
+        (isnull(x) & isnull(y)) || (!isnull(x) & !isnull(y) && isequal(x.value, y.value))
     end
 end
 
 isequal(x::Nullable{Union{}}, y::Nullable{Union{}}) = true
-isequal(x::Nullable{Union{}}, y::Nullable) = y.isnull
-isequal(x::Nullable, y::Nullable{Union{}}) = x.isnull
+isequal(x::Nullable{Union{}}, y::Nullable) = isnull(y)
+isequal(x::Nullable, y::Nullable{Union{}}) = isnull(x)
 
 null_safe_op{S<:NullSafeTypes,
              T<:NullSafeTypes}(::typeof(isless), ::Type{S}, ::Type{T}) = true
@@ -135,22 +194,22 @@ another null.
 @inline function isless{S,T}(x::Nullable{S}, y::Nullable{T})
     # NULL values are sorted last
     if null_safe_op(isless, S, T)
-        (!x.isnull & y.isnull) | (!x.isnull & !y.isnull & isless(x.value, y.value))
+        (!isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & isless(x.value, y.value))
     else
-        (!x.isnull & y.isnull) || (!x.isnull & !y.isnull && isless(x.value, y.value))
+        (!isnull(x) & isnull(y)) || (!isnull(x) & !isnull(y) && isless(x.value, y.value))
     end
 end
 
 isless(x::Nullable{Union{}}, y::Nullable{Union{}}) = false
 isless(x::Nullable{Union{}}, y::Nullable) = false
-isless(x::Nullable, y::Nullable{Union{}}) = !x.isnull
+isless(x::Nullable, y::Nullable{Union{}}) = !isnull(x)
 
 ==(x::Nullable, y::Nullable) = throw(NullException())
 
 const nullablehash_seed = UInt === UInt64 ? 0x932e0143e51d0171 : 0xe51d0171
 
 function hash(x::Nullable, h::UInt)
-    if x.isnull
+    if isnull(x)
         return h + nullablehash_seed
     else
         return hash(x.value, h + nullablehash_seed)

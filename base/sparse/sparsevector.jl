@@ -96,7 +96,7 @@ Duplicates are combined using the `combine` function, which defaults to
 `+` if no `combine` argument is provided, unless the elements of `V` are Booleans
 in which case `combine` defaults to `|`.
 """
-function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv}, combine::Function)
+function sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector, combine::Function)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
     len = 0
@@ -106,37 +106,37 @@ function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv},
             len = i
         end
     end
-    _sparsevector!(collect(Ti, I), collect(Tv, V), len, combine)
+    _sparsevector!(collect(I), collect(V), len, combine)
 end
 
-function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv}, len::Integer, combine::Function)
+function sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector, len::Integer, combine::Function)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
-    maxi = convert(Ti, len)
     for i in I
-        1 <= i <= maxi || throw(ArgumentError("An index is out of bound."))
+        1 <= i <= len || throw(ArgumentError("An index is out of bound."))
     end
-    _sparsevector!(collect(Ti, I), collect(Tv, V), len, combine)
+    _sparsevector!(collect(I), collect(V), len, combine)
 end
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Number, AbstractVector}) =
+sparsevec(I::AbstractVector, V::Union{Number, AbstractVector}, args...) =
+    sparsevec(Vector{Int}(I), V, args...)
+
+sparsevec(I::AbstractVector, V::Union{Number, AbstractVector}) =
     sparsevec(I, V, +)
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Number, AbstractVector},
-    len::Integer) =
+sparsevec(I::AbstractVector, V::Union{Number, AbstractVector}, len::Integer) =
     sparsevec(I, V, len, +)
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Bool, AbstractVector{Bool}}) =
+sparsevec(I::AbstractVector, V::Union{Bool, AbstractVector{Bool}}) =
     sparsevec(I, V, |)
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Bool, AbstractVector{Bool}},
-    len::Integer) =
+sparsevec(I::AbstractVector, V::Union{Bool, AbstractVector{Bool}}, len::Integer) =
     sparsevec(I, V, len, |)
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, combine::Function) =
+sparsevec(I::AbstractVector, v::Number, combine::Function) =
     sparsevec(I, fill(v, length(I)), combine)
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, len::Integer, combine::Function) =
+sparsevec(I::AbstractVector, v::Number, len::Integer, combine::Function) =
     sparsevec(I, fill(v, length(I)), len, combine)
 
 
@@ -1415,7 +1415,7 @@ function _spdot(f::Function,
 end
 
 function dot{Tx<:Number,Ty<:Number}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty})
-    is(x, y) && return sumabs2(x)
+    x === y && return sumabs2(x)
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
 

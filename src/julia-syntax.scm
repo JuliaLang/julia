@@ -185,8 +185,8 @@
                                                                 val))))
                          `(,(car body) ,@meta
                            ,(if (return? val)
-                                `(return (call (top convert) ,rett ,(cadr val)))
-                                `(call (top convert) ,rett ,val)))
+                                `(return ,(convert-for-type-decl (cadr val) rett))
+                                (convert-for-type-decl val rett)))
                          (let ((R (make-ssavalue)))
                            `(,(car body) ,@meta
                              (= ,R ,rett)
@@ -403,13 +403,10 @@
                                              (lambda (x) (eq? x v))
                                              vals))
                                 keynames))
-         ;; 1-element list of function's line number node, or empty if none
-         (lno  (if (and (pair? (cdr body))
-                        (pair? (cadr body)) (eq? (caadr body) 'line))
-                   (list (cadr body))
-                   '()))
-         ;; body statements, minus line number node
-         (stmts (if (null? lno) (cdr body) (cddr body)))
+         ;; list of function's initial line number and meta nodes (empty if none)
+         (prologue (extract-method-prologue body))
+         ;; body statements
+         (stmts (cdr body))
          (positional-sparams
           (filter (lambda (s)
                     (let ((name (if (symbol? s) s (cadr s))))
@@ -434,12 +431,12 @@
         ,(method-def-expr-
           name positional-sparams (append pargl vararg)
           `(block
-            ,@lno
+            ,@prologue
             ,@(if (not ordered-defaults)
                   '()
                   (append! (map (lambda (kwname) `(local ,kwname)) keynames)
                            (map make-assignment keynames vals)))
-            ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
+            ;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
             (return (call ,mangled
                           ,@(if ordered-defaults keynames vals)
                           ,@(if (null? restkw) '() (list empty-vector-any))
@@ -463,7 +460,6 @@
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
           `(block
-            ,@lno
             ,@stmts) isstaged rett)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
@@ -550,13 +546,16 @@
         ,(if (or (not (symbol? name)) (is-call-name? name))
              '(null) name)))))
 
+;; prologue includes line number node and eventual meta nodes
+(define (extract-method-prologue body)
+  (if (pair? body)
+      (take-while (lambda (e)
+                    (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'meta))))
+                  (cdr body))
+      '()))
+
 (define (optional-positional-defs name sparams req opt dfl body isstaged overall-argl rett)
-  ;; prologue includes line number node and eventual meta nodes
-  (let ((prologue (if (pair? body)
-                      (take-while (lambda (e)
-                                    (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'meta))))
-                                  (cdr body))
-                      '())))
+  (let ((prologue (extract-method-prologue body)))
     `(block
       ,@(map (lambda (n)
                (let* ((passed (append req (list-head opt n)))
@@ -715,12 +714,12 @@
 (define (ctor-signature name params bounds method-params sig)
   (if (null? params)
       (if (null? method-params)
-          (cons `(call (|::| (curly Type ,name)) ,@sig)
+          (cons `(call (|::| (curly (core Type) ,name)) ,@sig)
                 params)
-          (cons `(call (curly (|::| (curly Type ,name)) ,@method-params) ,@sig)
+          (cons `(call (curly (|::| (curly (core Type) ,name)) ,@method-params) ,@sig)
                 params))
       (if (null? method-params)
-          (cons `(call (curly (|::| (curly Type (curly ,name ,@params)))
+          (cons `(call (curly (|::| (curly (core Type) (curly ,name ,@params)))
                               ,@(map (lambda (p b) `(<: ,p ,b)) params bounds))
                        ,@sig)
                 params)
@@ -729,7 +728,7 @@
                                                  (gensy)
                                                  p))
                                  params)))
-            (cons `(call (curly (|::| (curly Type (curly ,name ,@new-params)))
+            (cons `(call (curly (|::| (curly (core Type) (curly ,name ,@new-params)))
                                 ,@(map (lambda (p b) `(<: ,p ,b)) new-params bounds)
                                 ,@method-params)
                          ,@sig)
@@ -1925,7 +1924,11 @@
                   (expand-forms
                    (receive
                     (kws args) (separate kwarg? (cdddr e))
-                    (lower-kw-call f (append kws (cdr (caddr e))) args))))
+                    (let ((kws (append kws (cdr (caddr e)))))
+                      (if (null? kws)
+                          ;; empty parameters block; issue #18845
+                          `(call ,f ,@args)
+                          (lower-kw-call f kws args))))))
                  ((any kwarg? (cddr e))
                   ;; (call f ... (kw a b) ...)
                   (expand-forms
@@ -3058,7 +3061,7 @@ f(x) = yt(x)
 ;; only possible returned values.
 (define (compile-body e vi lam)
   (let ((code '())
-        (filename #f)
+        (filename 'none)
         (first-line #t)
         (rett #f)
         (arg-map #f)          ;; map arguments to new names if they are assigned

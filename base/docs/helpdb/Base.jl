@@ -498,14 +498,6 @@ ERROR: argument is an abstract type; size is indeterminate
 sizeof(::Type)
 
 """
-    ===(x, y)
-    ≡(x,y)
-
-See the [`is`](:func:`is`) operator.
-"""
-Base.:(===)
-
-"""
     ReadOnlyMemoryError()
 
 An operation tried to write to memory that is read-only.
@@ -1467,13 +1459,6 @@ julia> log2(10)
 log2
 
 """
-    isnull(x)
-
-Is the `Nullable` object `x` null, i.e. missing a value?
-"""
-isnull
-
-"""
     abs2(x)
 
 Squared absolute value of `x`.
@@ -1633,18 +1618,6 @@ Sum squared absolute values of elements of `A` over the singleton dimensions of 
 write results to `r`.
 """
 sumabs2!
-
-"""
-    @sprintf("%Fmt", args...)
-
-Return `@printf` formatted output as string.
-
-    julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
-
-    julia> println(s)
-    this is a test            34.6
-"""
-:@sprintf
 
 """
     tanh(x)
@@ -2442,15 +2415,6 @@ Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` c
 setfield!
 
 """
-    @printf([io::IOStream], "%Fmt", args...)
-
-Print `args` using C `printf()` style format specification string.
-Optionally, an [`IOStream`](:obj:`IOStream`)
-may be passed as the first argument to redirect output.
-"""
-:@printf
-
-"""
     countlines(io,[eol::Char])
 
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
@@ -2470,7 +2434,7 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> A .\ [1 2]
+julia> A .\\ [1 2]
 2×2 Array{Float64,2}:
  1.0       1.0
  0.333333  0.5
@@ -2630,22 +2594,6 @@ Throw an object without changing the current exception backtrace. The default ar
 the current exception (if called within a `catch` block).
 """
 rethrow
-
-"""
-    reprmime(mime, x)
-
-Returns an `AbstractString` or `Vector{UInt8}` containing the representation of `x` in the
-requested `mime` type, as written by `show` (throwing a `MethodError` if no appropriate
-`show` is available). An `AbstractString` is returned for MIME types with textual
-representations (such as `"text/html"` or `"application/postscript"`), whereas binary data
-is returned as `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
-treats a given `mime` type as text.)
-
-As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
-`Vector{UInt8}` (for binary MIME types), the `reprmime` function assumes that `x` is already
-in the requested `mime` format and simply returns `x`.
-"""
-reprmime
 
 """
     !(x)
@@ -3082,14 +3030,6 @@ Return `true` if `A` is a subset of or equal to `S`.
 issubset
 
 """
-    stringmime(mime, x)
-
-Returns an `AbstractString` containing the representation of `x` in the requested `mime`
-type. This is similar to [`reprmime`](:func:`reprmime`) except that binary data is base64-encoded as an ASCII string.
-"""
-stringmime
-
-"""
     zero(x)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
@@ -3269,13 +3209,6 @@ Quit (or control-D at the prompt). The default exit code is zero, indicating tha
 processes completed successfully.
 """
 exit
-
-"""
-    istextmime(m::MIME)
-
-Determine whether a MIME type is text data.
-"""
-istextmime
 
 """
     skipchars(stream, predicate; linecomment::Char)

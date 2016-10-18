@@ -36,7 +36,7 @@ cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
 macro generated(f)
     isa(f, Expr) || error("invalid syntax; @generated must be used with a function definition")
-    if is(f.head, :function) || (isdefined(:length) && is(f.head, :(=)) && length(f.args) == 2 && f.args[1].head == :call)
+    if f.head === :function || (isdefined(:length) && f.head === :(=) && length(f.args) == 2 && f.args[1].head == :call)
         f.head = :stagedfunction
         return Expr(:escape, f)
     else
@@ -63,7 +63,13 @@ function tuple_type_tail(T::DataType)
     return Tuple{argtail(T.parameters...)...}
 end
 
-isvarargtype(t::ANY) = isa(t, DataType) && is((t::DataType).name, Vararg.name)
+tuple_type_cons{S}(::Type{S}, ::Type{Union{}}) = Union{}
+function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+    @_pure_meta
+    Tuple{S, T.parameters...}
+end
+
+isvarargtype(t::ANY) = isa(t, DataType) && (t::DataType).name === Vararg.name
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
 unwrapva(t::ANY) = isvarargtype(t) ? t.parameters[1] : t
 
@@ -231,3 +237,5 @@ function vector_any(xs::ANY...)
     end
     a
 end
+
+isempty(itr) = done(itr, start(itr))

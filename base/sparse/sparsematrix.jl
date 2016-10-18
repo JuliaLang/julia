@@ -499,6 +499,9 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V:
     end
 end
 
+sparse(I::AbstractVector, J::AbstractVector, V::AbstractVector, m::Integer, n::Integer, combine) =
+    sparse(AbstractVector{Int}(I), AbstractVector{Int}(J), V, m, n, combine)
+
 """
     sparse!{Tv,Ti<:Integer}(
         I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv},
@@ -1397,7 +1400,7 @@ such that `broadcast(::typeof(fc), A::SparseMatrixCSC) = fp(fc, A)`.
 macro _enumerate_childmethods(fp, fcs...)
     fcexps = Expr(:block)
     for fc in fcs
-        push!(fcexps.args, :( broadcast(::typeof($(esc(fc))), A::SparseMatrixCSC) = $(esc(fp))($(esc(fc)), A) ) )
+        push!(fcexps.args, :( $(esc(:broadcast))(::typeof($(esc(fc))), A::SparseMatrixCSC) = $(esc(fp))($(esc(fc)), A) ) )
     end
     return fcexps
 end

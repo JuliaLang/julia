@@ -1070,8 +1070,8 @@ end
 isopen(s::BufferStream) = s.is_open
 function close(s::BufferStream)
     s.is_open = false
-    notify(s.r_c; all=true)
-    notify(s.close_c; all=true)
+    notify(s.r_c)
+    notify(s.close_c)
     nothing
 end
 uvfinalize(s::BufferStream) = nothing
@@ -1103,7 +1103,7 @@ start_reading(s::BufferStream) = nothing
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
     rv = unsafe_write(s.buffer, p, nb)
-    !(s.buffer_writes) && notify(s.r_c; all=true)
+    !(s.buffer_writes) && notify(s.r_c)
     return rv
 end
 
@@ -1114,4 +1114,4 @@ end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes=true; s)
-flush(s::BufferStream) = (notify(s.r_c; all=true); nothing)
+flush(s::BufferStream) = (notify(s.r_c); nothing)

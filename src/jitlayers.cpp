@@ -508,7 +508,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
             else if (!(isIntrinsicFunction(F) ||
                        findUnmangledSymbol(F->getName()) ||
                        SectionMemoryManager::getSymbolAddressInProcess(
-                           F->getName()))) {
+                           getMangledName(F->getName())))) {
                 std::cerr << "FATAL ERROR: "
                           << "Symbol \"" << F->getName().str() << "\""
                           << "not found";

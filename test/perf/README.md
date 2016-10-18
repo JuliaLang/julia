@@ -34,7 +34,7 @@ suites:
 - `kernel`: Performance tests used to track real-world code examples
   that previously ran slowly.
 - `shootout` Tracks the performance of tests taken from the
-  [Debian shootout](http://shootout.alioth.debian.org/) performance
+  [Computer Language Benchmarks Game](http://benchmarksgame.alioth.debian.org/) performance
   tests.
 - `sort`: Performance tests of sorting algorithms.
 - `spell` Performance tests of
@@ -70,4 +70,3 @@ Package dependencies
 - JSON
 - DataStructures
 - SortingAlgorithms
-

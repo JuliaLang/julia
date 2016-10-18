@@ -143,6 +143,16 @@ function confuse_declname_parsing()
 end
 confuse_declname_parsing()
 
+# Test for proper mangling of external (C) functions
+function call_jl_errno()
+    llvmcall(
+    (""" declare i32 @jl_errno()""",
+    """
+    %r = call i32 @jl_errno()
+    ret i32 %r
+    """),Int32,Tuple{})
+end
+call_jl_errno()
 
 module ObjLoadTest
     using Base: Test, llvmcall, @ccallable

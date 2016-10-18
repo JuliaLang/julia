@@ -765,3 +765,13 @@ let A17811 = Integer[]
     @test I == Any[1]
     @test isa(map(abs, A17811), Array{Any,1})
 end
+
+#copymutable for itrs
+@test Base.copymutable((1,2,3)) == [1,2,3]
+
+#sub2ind for empty tuple
+@test sub2ind(()) == 1
+
+#to_shape
+@test Base.to_shape(()) === ()
+@test Base.to_shape(1) === 1

@@ -19,7 +19,7 @@ types = [
 # Nullable{T}() = new(true)
 for T in types
     x = Nullable{T}()
-    @test x.isnull === true
+    @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
     @test eltype(x) === T
@@ -28,28 +28,28 @@ end
 # Nullable{T}(value::T) = new(false, value)
 for T in types
     x = Nullable{T}(zero(T))
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
     x = Nullable{T}(one(T))
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === one(T)
     @test eltype(x) === T
 end
 
-# Nullable{T}(value::T, isnull::Bool) = new(isnull, value)
+# Nullable{T}(value::T, hasvalue::Bool) = new(hasvalue, value)
 for T in types
-    x = Nullable{T}(zero(T),false)
-    @test x.isnull === false
+    x = Nullable{T}(zero(T), true)
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
-    x = Nullable{T}(zero(T),true)
-    @test x.isnull === true
+    x = Nullable{T}(zero(T), false)
+    @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
     @test eltype(x) === T
@@ -64,13 +64,13 @@ end
 for T in types
     v = zero(T)
     x = Nullable(v)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === v
 
     v = one(T)
     x = Nullable(v)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === v
 end
@@ -161,13 +161,49 @@ for T in types
     @test get(x3, zero(T)) === one(T)
 end
 
-# isnull(x::Nullable)
 for T in types
+    # unsafe_get(x::Nullable)
+    x1 = Nullable{T}()
+    x2 = Nullable(zero(T))
+    x3 = Nullable(one(T))
+    a = rand(T)
+    x4 = Nullable(a)
+
+    @test isa(unsafe_get(x1), T)
+    @test unsafe_get(x2) === zero(T)
+    @test unsafe_get(x3) === one(T)
+    @test unsafe_get(x4) === a
+
+    # unsafe_get(x)
+    x2 = zero(T)
+    x3 = one(T)
+    x4 = rand(T)
+
+    @test unsafe_get(x2) === zero(T)
+    @test unsafe_get(x3) === one(T)
+    @test unsafe_get(x4) === x4
+end
+
+@test_throws UndefRefError unsafe_get(Nullable())
+@test_throws UndefRefError unsafe_get(Nullable{String}())
+@test_throws UndefRefError unsafe_get(Nullable{Array}())
+
+for T in types
+    # isnull(x::Nullable)
     x1 = Nullable{T}()
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
 
     @test isnull(x1) === true
+    @test isnull(x2) === false
+    @test isnull(x3) === false
+
+    # isnull(x)
+    x1 = zero(T)
+    x2 = one(T)
+    x3 = rand(T)
+
+    @test isnull(x1) === false
     @test isnull(x2) === false
     @test isnull(x3) === false
 end
@@ -276,9 +312,9 @@ for S in TestTypes, T in TestTypes
         @test isequal(Nullable(u), Nullable(u)) === true
         @test isequal(Nullable(v), Nullable(v)) === true
 
-        @test isequal(Nullable(u), Nullable(v, true)) === false
-        @test isequal(Nullable(u, true), Nullable(v)) === false
-        @test isequal(Nullable(u, true), Nullable(v, true)) === true
+        @test isequal(Nullable(u), Nullable(v, false)) === false
+        @test isequal(Nullable(u, false), Nullable(v)) === false
+        @test isequal(Nullable(u, false), Nullable(v, false)) === true
 
         @test isequal(Nullable(u), Nullable{T}()) === false
         @test isequal(Nullable{S}(), Nullable(v)) === false
@@ -296,9 +332,9 @@ for S in TestTypes, T in TestTypes
             @test isless(Nullable(u), Nullable(u)) === false
             @test isless(Nullable(v), Nullable(v)) === false
 
-            @test isless(Nullable(u), Nullable(v, true)) === true
-            @test isless(Nullable(u, true), Nullable(v)) === false
-            @test isless(Nullable(u, true), Nullable(v, true)) === false
+            @test isless(Nullable(u), Nullable(v, false)) === true
+            @test isless(Nullable(u, false), Nullable(v)) === false
+            @test isless(Nullable(u, false), Nullable(v, false)) === false
 
             @test isless(Nullable(u), Nullable{T}()) === true
             @test isless(Nullable{S}(), Nullable(v)) === false

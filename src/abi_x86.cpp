@@ -37,24 +37,23 @@
 //===----------------------------------------------------------------------===//
 
 
-typedef bool AbiState;
-AbiState default_abi_state = 0;
+struct ABI_x86Layout : AbiLayout {
 
-inline bool is_complex64(jl_datatype_t *dt)
+inline bool is_complex64(jl_datatype_t *dt) const
 {
     return jl_complex_type != NULL && jl_is_datatype(dt) &&
         ((jl_datatype_t*)dt)->name == jl_complex_type->name &&
         jl_tparam0(dt) == (jl_value_t*)jl_float32_type;
 }
 
-inline bool is_complex128(jl_datatype_t *dt)
+inline bool is_complex128(jl_datatype_t *dt) const
 {
     return jl_complex_type != NULL && jl_is_datatype(dt) &&
         ((jl_datatype_t*)dt)->name == jl_complex_type->name &&
         jl_tparam0(dt) == (jl_value_t*)jl_float64_type;
 }
 
-bool use_sret(AbiState *state, jl_datatype_t *dt)
+bool use_sret(jl_datatype_t *dt) override
 {
     size_t size = jl_datatype_size(dt);
     if (size == 0)
@@ -64,7 +63,7 @@ bool use_sret(AbiState *state, jl_datatype_t *dt)
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
+void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
 {
     size_t size = jl_datatype_size(dt);
     if (is_complex64(dt) || is_complex128(dt) || (jl_is_bitstype(dt) && size <= 8))
@@ -72,7 +71,7 @@ void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
     *byRef = true;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
 {
     if (!isret)
         return NULL;
@@ -82,7 +81,4 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
     return NULL;
 }
 
-bool need_private_copy(jl_value_t *ty, bool byRef)
-{
-    return false;
-}
+};

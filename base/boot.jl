@@ -140,7 +140,7 @@ export
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
+    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa, typeassert,
@@ -148,8 +148,6 @@ export
     applicable, invoke,
     # constants
     nothing, Main
-
-const (===) = is
 
 typealias AnyVector Array{Any,1}
 
@@ -178,7 +176,7 @@ bitstype 64  UInt64  <: Unsigned
 bitstype 128 Int128  <: Signed
 bitstype 128 UInt128 <: Unsigned
 
-if is(Int,Int64)
+if Int === Int64
     typealias UInt UInt64
 else
     typealias UInt UInt32
@@ -313,6 +311,9 @@ typealias NTuple{N,T} Tuple{Vararg{T,N}}
 # primitive array constructors
 (::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+(::Type{Array{T,1}}){T}(d::NTuple{1,Int}) = Array{T,1}(getfield(d,1))
+(::Type{Array{T,2}}){T}(d::NTuple{2,Int}) = Array{T,2}(getfield(d,1), getfield(d,2))
+(::Type{Array{T,3}}){T}(d::NTuple{3,Int}) = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
 (::Type{Array{T,N}}){T,N}(d::Vararg{Int, N}) = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
 (::Type{Array{T,1}}){T}(m::Int) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)

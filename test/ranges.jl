@@ -144,7 +144,7 @@ end
 
 r = 0.0:0.01:1.0
 @test (r[30] in r)
-r = (-4*Int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
+r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
 @test (3 in r)
 @test (3.0 in r)
 
@@ -390,6 +390,10 @@ for T = (Float32, Float64)
         a = prevfloat(a)
     end
 end
+
+# linspace with 1 or 0 elements (whose step length is NaN)
+@test issorted(linspace(1,1,0))
+@test issorted(linspace(1,1,1))
 
 # near-equal ranges
 @test 0.0:0.1:1.0 != 0.0f0:0.1f0:1.0f0

@@ -144,7 +144,7 @@ JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_tupletype_
 
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t *type)
 {
-    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(mt->defs, type, NULL, 2, /*subtype*/0, /*offs*/0);
+    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(mt->defs, type, NULL, 1, /*subtype*/0, /*offs*/0);
     if (!sf)
         return jl_nothing;
     return sf->func.value;
@@ -218,7 +218,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *li, int force)
     return src;
 }
 
-JL_DLLEXPORT void jl_set_lambda_rettype(jl_method_instance_t *li, jl_value_t *rettype, jl_value_t *const_api, jl_value_t *inferred)
+JL_DLLEXPORT void jl_set_lambda_rettype(jl_method_instance_t *li, jl_value_t *rettype, int32_t const_flags, jl_value_t *inferred_const, jl_value_t *inferred)
 {
     // changing rettype changes the llvm signature,
     // so clear all of the llvm state at the same time
@@ -230,8 +230,14 @@ JL_DLLEXPORT void jl_set_lambda_rettype(jl_method_instance_t *li, jl_value_t *re
     jl_gc_wb(li, rettype);
     li->inferred = inferred;
     jl_gc_wb(li, inferred);
-    if (const_api == jl_true)
+    if (const_flags & 1) {
+        assert(const_flags & 2);
         li->jlcall_api = 2;
+    }
+    if (const_flags & 2) {
+        li->inferred_const = inferred_const;
+        jl_gc_wb(li, inferred_const);
+    }
 }
 
 static int jl_is_uninferred(jl_method_instance_t *li)
@@ -513,7 +519,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
             continue;
         if (decl_i == jl_ANY_flag) {
             // don't specialize on slots marked ANY
-            if (elt != (jl_value_t*)jl_any_type)
+            if (elt != (jl_value_t*)jl_any_type && elt != jl_ANY_flag)
                 return 0;
             continue;
         }
@@ -829,7 +835,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype
     sig = join_tsig(tt, entry->sig);
     jl_method_instance_t *nf;
     if (!cache) {
-        nf = jl_get_specialized(m, sig, env); // TODO: should be jl_specializations_get_linfo
+        nf = jl_specializations_get_linfo(m, sig, env);
     }
     else {
         nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, entry, env, allow_exec);
@@ -1219,8 +1225,11 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t *li)
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;
                 li->inferred = def->unspecialized->inferred;
-                li->jlcall_api = 2;
                 jl_gc_wb(li, li->inferred);
+                li->inferred_const = def->unspecialized->inferred_const;
+                if (li->inferred_const)
+                    jl_gc_wb(li, li->inferred_const);
+                li->jlcall_api = 2;
                 return li->functionObjectsDecls;
             }
             if (def->unspecialized->fptr) {

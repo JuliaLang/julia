@@ -42,6 +42,7 @@ if false
 end
 
 ## Load essential files and libraries
+include("ctypes.jl")
 include("essentials.jl")
 include("base.jl")
 include("generator.jl")
@@ -79,9 +80,9 @@ end
 Symbol(x...) = Symbol(string(x...))
 
 # array structures
+include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
-include("array.jl")
 
 # Array convenience converting constructors
 (::Type{Array{T}}){T}(m::Integer) = Array{T,1}(Int(m))
@@ -125,6 +126,7 @@ include("reduce.jl")
 include("reshapedarray.jl")
 include("bitarray.jl")
 include("intset.jl")
+include("associative.jl")
 include("dict.jl")
 include("set.jl")
 include("iterator.jl")

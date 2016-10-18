@@ -1,31 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## Type aliases for convenience ##
-
-typealias AbstractVector{T} AbstractArray{T,1}
-typealias AbstractMatrix{T} AbstractArray{T,2}
-typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
-typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
-typealias DimOrInd Union{Integer, AbstractUnitRange}
-typealias IntOrInd Union{Int, AbstractUnitRange}
-typealias DimsOrInds{N} NTuple{N,DimOrInd}
-typealias NeedsShaping Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
-
-macro _inline_pure_meta()
-    Expr(:meta, :inline, :pure)
-end
-
 ## Basic functions ##
-
-vect() = Array{Any,1}(0)
-vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
-
-function vect(X...)
-    T = promote_typeof(X...)
-    #T[ X[i] for i=1:length(X) ]
-    # TODO: this is currently much faster. should figure out why. not clear.
-    copy!(Array{T,1}(length(X)), X)
-end
 
 """
     size(A::AbstractArray, [dim...])
@@ -1039,7 +1014,7 @@ function typed_vcat{T}(::Type{T}, V::AbstractVector...)
     for Vk in V
         n += length(Vk)
     end
-    a = similar(full(V[1]), T, n)
+    a = similar(V[1], T, n)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -1067,7 +1042,7 @@ function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(full(A[1]), T, nrows, ncols)
+    B = similar(A[1], T, nrows, ncols)
     pos = 1
     if dense
         for k=1:nargs
@@ -1099,7 +1074,7 @@ function typed_vcat{T}(::Type{T}, A::AbstractMatrix...)
             throw(ArgumentError("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
         end
     end
-    B = similar(full(A[1]), T, nrows, ncols)
+    B = similar(A[1], T, nrows, ncols)
     pos = 1
     for k=1:nargs
         Ak = A[k]
@@ -1328,7 +1303,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractMatrix.
         a += rows[i]
     end
 
-    out = similar(full(as[1]), T, nr, nc)
+    out = similar(as[1], T, nr, nc)
 
     a = 1
     r = 1
