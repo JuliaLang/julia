@@ -540,8 +540,8 @@ end
 function __init__()
     # Look for OpenSSL env variable for CA bundle (linux only)
     # windows and macOS use the OS native security backends
-    old_ssl_cert_dir = get(ENV, "SSL_CERT_DIR", "")
-    old_ssl_cert_file = get(ENV, "SSL_CERT_FILE", "")
+    old_ssl_cert_dir = Base.get(ENV, "SSL_CERT_DIR", "")
+    old_ssl_cert_file = Base.get(ENV, "SSL_CERT_FILE", "")
     @static if is_linux()
         cert_loc = if "SSL_CERT_DIR" in keys(ENV)
             ENV["SSL_CERT_DIR"]
@@ -561,10 +561,10 @@ function __init__()
     end
 
     @static if is_linux()
-        if old_ssl_cert_dir != get(ENV, "SSL_CERT_DIR", "")
+        if old_ssl_cert_dir != Base.get(ENV, "SSL_CERT_DIR", "")
             ENV["SSL_CERT_DIR"] = old_ssl_cert_dir
         end
-        if old_ssl_cert_file != get(ENV, "SSL_CERT_FILE", "")
+        if old_ssl_cert_file != Base.get(ENV, "SSL_CERT_FILE", "")
             ENV["SSL_CERT_FILE"] = old_ssl_cert_file
         end
     end
