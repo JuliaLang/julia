@@ -36,13 +36,15 @@ entries = Any[("Code point(s)", "Character(s)", "Tab completion sequence(s)", "U
 maxlen = [map(length, entries[1])...]
 
 # Prepend a non-breakable space to combining characters
+# (ranges obtained from https://en.wikipedia.org/wiki/Combining_character)
 function fix_combining_chars(uni)
     u = uni[1]
     isc = ('\u0300' ≤ u ≤ '\u036F') ||
+          ('\u1AB0' ≤ u ≤ '\u1AFF') ||
           ('\u1DC0' ≤ u ≤ '\u1DFF') ||
           ('\u20D0' ≤ u ≤ '\u20FF') ||
           ('\uFE20' ≤ u ≤ '\uFE2F')
-    return string(isc ? "\u00A0" : "",  uni)
+    return isc ? string('\u00A0', uni) : uni
 end
 
 for (chars, inputs) in sort!([x for x in vals], by=first)
