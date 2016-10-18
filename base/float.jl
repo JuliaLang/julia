@@ -504,6 +504,8 @@ isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
 isinf(x::Real) = !isnan(x) & !isfinite(x)
+isinf{T<:Union{Float16,Float32,Float64}}(x::T) = (reinterpret(Unsigned, x) & ~sign_mask(T)) == exponent_mask(T)
+
 
 ## hashing small, built-in numeric types ##
 
