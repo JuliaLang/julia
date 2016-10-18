@@ -1126,7 +1126,7 @@ end
 @test 1+1.5 == 2.5
 @test 1.5+1 == 2.5
 @test 1+1.5+2 == 4.5
-@test is(typeof(convert(Complex{Int16},1)),Complex{Int16})
+@test isa(convert(Complex{Int16},1), Complex{Int16})
 @test Complex(1,2)+1 == Complex(2,2)
 @test Complex(1,2)+1.5 == Complex(2.5,2.0)
 @test 1/Complex(2,2) == Complex(.25,-.25)

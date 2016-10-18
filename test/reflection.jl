@@ -236,11 +236,11 @@ let
     @test TestMod7648.TestModSub9475 == @which a9475
 end
 
-@test_throws ArgumentError which(is, Tuple{Int, Int})
-@test_throws ArgumentError code_typed(is, Tuple{Int, Int})
-@test_throws ArgumentError code_llvm(is, Tuple{Int, Int})
-@test_throws ArgumentError code_native(is, Tuple{Int, Int})
-@test_throws ArgumentError Base.return_types(is, Tuple{Int, Int})
+@test_throws ArgumentError which(===, Tuple{Int, Int})
+@test_throws ArgumentError code_typed(===, Tuple{Int, Int})
+@test_throws ArgumentError code_llvm(===, Tuple{Int, Int})
+@test_throws ArgumentError code_native(===, Tuple{Int, Int})
+@test_throws ArgumentError Base.return_types(===, Tuple{Int, Int})
 
 module TestingExported
 using Base.Test

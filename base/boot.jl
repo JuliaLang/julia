@@ -140,7 +140,7 @@ export
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
+    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa, typeassert,
@@ -148,8 +148,6 @@ export
     applicable, invoke,
     # constants
     nothing, Main
-
-const (===) = is
 
 typealias AnyVector Array{Any,1}
 
@@ -178,7 +176,7 @@ bitstype 64  UInt64  <: Unsigned
 bitstype 128 Int128  <: Signed
 bitstype 128 UInt128 <: Unsigned
 
-if is(Int,Int64)
+if Int === Int64
     typealias UInt UInt64
 else
     typealias UInt UInt32

@@ -157,7 +157,7 @@ function symdiff!(s::IntSet, ns)
 end
 
 function copy!(to::IntSet, from::IntSet)
-    if is(to, from)
+    if to === from
         return to
     else
         empty!(to)

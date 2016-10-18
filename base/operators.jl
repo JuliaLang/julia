@@ -100,7 +100,6 @@ generally not implement this, and rely on the fallback definition `!=(x,y) = !(x
 const ≠ = !=
 
 """
-    is(x, y) -> Bool
     ===(x,y) -> Bool
     ≡(x,y) -> Bool
 
@@ -108,16 +107,16 @@ Determine whether `x` and `y` are identical, in the sense that no program could 
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
 numbers) by contents at the bit level. This function is sometimes called `egal`.
 """
-is
-const ≡ = is
+===
+const ≡ = ===
 
 """
     !==(x, y)
     ≢(x,y)
 
-Equivalent to `!is(x, y)`.
+Equivalent to `!(x === y)`.
 """
-!==(x,y) = !is(x,y)
+!==(x,y) = !(x===y)
 const ≢ = !==
 
 """

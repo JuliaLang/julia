@@ -291,7 +291,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     if verbose
         println(io,         "Environment:")
         for (k,v) in ENV
-            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)), nothing)
+            if match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)) !== nothing
                 println(io, "  $(k) = $(v)")
             end
         end
@@ -498,7 +498,7 @@ function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
             !isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && any(u -> is(u,t), x.types))
+           (isa(x,Union) && isa(t,DataType) && any(u -> u===t, x.types))
 end
 
 # `methodswith` -- shows a list of methods using the type given

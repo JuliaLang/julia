@@ -476,7 +476,7 @@ setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, conve
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
-    is(A, I) && (I = copy(I))
+    A === I && (I = copy(I))
     for i in I
         A[i] = x
     end
@@ -485,10 +485,10 @@ end
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     setindex_shape_check(X, length(I))
     count = 1
-    if is(X,A)
+    if X === A
         X = copy(X)
-        is(I,A) && (I = X::typeof(I))
-    elseif is(I,A)
+        I===A && (I = X::typeof(I))
+    elseif I === A
         I = copy(I)
     end
     for i in I

@@ -849,7 +849,7 @@ JL_DLLEXPORT void jl_get_system_hooks(void)
 
 void jl_get_builtins(void)
 {
-    jl_builtin_throw = core("throw");           jl_builtin_is = core("is");
+    jl_builtin_throw = core("throw");           jl_builtin_is = core("===");
     jl_builtin_typeof = core("typeof");         jl_builtin_sizeof = core("sizeof");
     jl_builtin_issubtype = core("issubtype");   jl_builtin_isa = core("isa");
     jl_builtin_typeassert = core("typeassert"); jl_builtin__apply = core("_apply");
