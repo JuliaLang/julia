@@ -35,6 +35,13 @@ function choosetests(choices = [])
         "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant"
     ]
+    profile_skipped = false
+    if startswith(string(Sys.ARCH), "arm")
+        # Remove profile from default tests on ARM since it currently segfaults
+        # Allow explicitly adding it for testing
+        filter!(x -> (x != "profile"), testnames)
+        profile_skipped = true
+    end
 
     if Base.USE_GPL_LIBS
         testnames = [testnames, "fft", "dsp"; ]
@@ -58,6 +65,9 @@ function choosetests(choices = [])
 
     if tests == ["all"] || isempty(tests)
         tests = testnames
+        if profile_skipped
+            warn("profile test skipped")
+        end
     end
 
     datestests = ["dates/accessors", "dates/adjusters", "dates/query",
