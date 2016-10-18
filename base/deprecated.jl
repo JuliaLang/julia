@@ -1023,4 +1023,14 @@ end))
 
 @deprecate is (===)
 
+@deprecate_binding Filter    Iterators.Filter
+@deprecate_binding Zip       Iterators.Zip
+@deprecate filter(flt, itr)  Iterators.filter(flt, itr)
+@deprecate_binding rest      Iterators.rest
+@deprecate_binding countfrom Iterators.countfrom
+@deprecate_binding take      Iterators.take
+@deprecate_binding drop      Iterators.drop
+@deprecate_binding cycle     Iterators.cycle
+@deprecate_binding repeated  Iterators.repeated
+
 # End deprecations scheduled for 0.6

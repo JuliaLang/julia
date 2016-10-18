@@ -22,6 +22,7 @@
    sort
    pkg
    dates
+   iterators
    test
    c
    libc
