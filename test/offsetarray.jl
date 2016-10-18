@@ -42,6 +42,20 @@ S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # LinearSlow
 @test A[1, [4,3]] == S[1, [4,3]] == [4,2]
 @test A[:, :] == S[:, :] == A
 
+A_3_3 = OffsetArray(Array{Int}(3,3), (-2,-1))
+A_3_3[:, :] = reshape(1:9, 3, 3)
+for i = 1:9 @test A_3_3[i] == i end
+A_3_3[-1:1, 0:2] = reshape(1:9, 3, 3)
+for i = 1:9 @test A_3_3[i] == i end
+A_3_3[:, :] = 1:9
+for i = 1:9 @test A_3_3[i] == i end
+A_3_3[-1:1, 0:2] = 1:9
+for i = 1:9 @test A_3_3[i] == i end
+A_3_3[:] = 1:9
+for i = 1:9 @test A_3_3[i] == i end
+A_3_3[1:9] = 1:9
+for i = 1:9 @test A_3_3[i] == i end
+
 # CartesianIndexing
 @test A[CartesianIndex((0,3))] == S[CartesianIndex((0,3))] == 1
 @test_throws BoundsError A[CartesianIndex(1,1)]
