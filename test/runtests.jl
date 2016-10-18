@@ -1484,12 +1484,14 @@ for T in types
     @test isnull(y) === false
     @test isa(x.value, T)
     @test eltype(x) === T
+    @test eltype(y) === Any
 
     x = @compat Nullable{T}(one(T), false)
     y = @compat Nullable{Any}(one(T), false)
     @test isnull(x) === true
     @test isnull(y) === true
     @test eltype(x) === T
+    @test eltype(y) === Any
 
     x = @compat Nullable(one(T), false)
     @test isnull(x) === true
