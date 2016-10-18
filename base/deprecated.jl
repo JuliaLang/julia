@@ -1023,6 +1023,7 @@ end))
 
 @deprecate is (===)
 
+
 @deprecate_binding Filter    Iterators.Filter
 @deprecate_binding Zip       Iterators.Zip
 @deprecate filter(flt, itr)  Iterators.filter(flt, itr)
@@ -1035,5 +1036,26 @@ end))
 
 # NOTE: Deprecation of Channel{T}() is implemented in channels.jl.
 # To be removed from there when 0.6 deprecations are removed.
+
+# Not exported, but probably better to have deprecations anyway
+function reduced_dims(::Tuple{}, d::Int)
+    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    ()
+end
+reduced_dims(::Tuple{}, region) = ()
+function reduced_dims(dims::Dims, region)
+    Base.depwarn("`reduced_dims` is deprecated for Dims-tuples; pass `indices` instead", :reduced_dims)
+    map(last, reduced_dims(map(n->OneTo(n), dims), region))
+end
+
+function reduced_dims0(::Tuple{}, d::Int)
+    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    ()
+end
+reduced_dims0(::Tuple{}, region) = ()
+function reduced_dims0(dims::Dims, region)
+    Base.depwarn("`reduced_dims0` is deprecated for Dims-tuples; pass `indices` instead", :reduced_dims0)
+    map(last, reduced_dims0(map(n->OneTo(n), dims), region))
+end
 
 # End deprecations scheduled for 0.6
