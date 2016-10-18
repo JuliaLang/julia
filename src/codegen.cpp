@@ -3854,6 +3854,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     else
         builder.CreateRet(r);
 
+    builder.SetCurrentDebugLocation(noDbg);
+    builder.ClearInsertionPoint();
+
     jl_finalize_module(M, true);
 
     return cw_proto;
