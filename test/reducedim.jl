@@ -20,7 +20,7 @@ for region in Any[
     1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4),
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
     # println("region = $region")
-    r = fill(NaN, Base.reduced_dims(size(Areduc), region))
+    r = fill(NaN, map(length, Base.reduced_dims(indices(Areduc), region)))
     @test sum!(r, Areduc) ≈ safe_sum(Areduc, region)
     @test prod!(r, Areduc) ≈ safe_prod(Areduc, region)
     @test maximum!(r, Areduc) ≈ safe_maximum(Areduc, region)
@@ -62,7 +62,7 @@ end
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
 Breduc = rand(64, 3)
-r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
+r = fill(NaN, map(length, Base.reduced_dims(indices(Breduc), 1)))
 @test sum!(r, Breduc) ≈ safe_sum(Breduc, 1)
 @test sumabs!(r, Breduc) ≈ safe_sumabs(Breduc, 1)
 @test sumabs2!(r, Breduc) ≈ safe_sumabs2(Breduc, 1)
