@@ -144,20 +144,16 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 // However, since the detection of the static version in `ifunc`
 // is not guaranteed to be reliable, we still need to fallback to the wrapper
 // version as the symbol address if we didn't find the static version in `ifunc`.
-#if defined(__GLIBC__) && (defined(_CPU_X86_64_) || defined(_CPU_X86_) || \
-                          ((defined(_CPU_AARCH64_) || defined(_CPU_ARM_)) && \
-                            __GNUC__ >= 6))
-// Only enable this on architectures that are tested.
-// For example, GCC doesn't seem to support the `ifunc` attribute on power yet.
-#  if __GLIBC_PREREQ(2, 12)
+#if defined(__GLIBC__) && defined(JULIA_HAS_IFUNC_SUPPORT)
+// Make sure both the compiler and the glibc supports it.
+// Only enable this on known working glibc versions.
+#  if (defined(_CPU_X86_) || defined(_CPU_X86_64_)) && __GLIBC_PREREQ(2, 12)
+#    define JL_TLS_USE_IFUNC
+#  elif (defined(_CPU_ARM_) || defined(_CPU_AARCH64_)) && __GLIBC_PREREQ(2, 18)
+// This is the oldest tested version that supports ifunc.
 #    define JL_TLS_USE_IFUNC
 #  endif
-#endif
-// Disable ifunc on clang <= 3.8 since it is not supported
-#if defined(JL_TLS_USE_IFUNC) && defined(__clang__)
-#  if __clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8)
-#    undef JL_TLS_USE_IFUNC
-#  endif
+// TODO: PPC probably supports ifunc on some glibc versions too
 #endif
 // fallback provided for embedding
 static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fallback(void)
