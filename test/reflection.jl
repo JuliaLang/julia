@@ -594,3 +594,8 @@ let
     code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
     @test isdefined(code, :inferred)
 end
+
+# Issue #18883, code_llvm/code_native for generated functions
+@generated f18883() = nothing
+@test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
+@test !isempty(sprint(io->code_native(io, f18883, Tuple{})))
