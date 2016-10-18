@@ -7,14 +7,12 @@ macro testintersect(args...)
     _testintersect(args...)
 end
 
-function _testintersect(a, b, result, cmp=:is)
+function _testintersect(a, b, result, cmp=(===))
     quote
         @test $(esc(cmp))(typeintersect($(esc(a)), $(esc(b))), $(esc(result)))
         @test $(esc(cmp))(typeintersect($(esc(b)), $(esc(a))), $(esc(result)))
     end
 end
-
-isnot(x,y) = !is(x,y)
 
 # basic type relationships
 @test Int8 <: Integer
@@ -47,7 +45,7 @@ isnot(x,y) = !is(x,y)
 @test !(Type{Tuple{}} <: Type{Tuple{Vararg}})
 @test !(Type{Tuple{}} <: Type{NTuple{TypeVar(:N,true)}})
 let T = TypeVar(:T,true)
-    @testintersect(Array{Bottom},AbstractArray{T}, Bottom, isnot)
+    @testintersect(Array{Bottom},AbstractArray{T}, Bottom, !==)
     @testintersect(Tuple{Type{Ptr{UInt8}},Ptr{Bottom}},
                   Tuple{Type{Ptr{T}},Ptr{T}}, Bottom)
     @test !(Type{T} <: TypeVar)
@@ -63,7 +61,7 @@ let T = TypeVar(:T,true)
 
     @testintersect(Tuple{T, AbstractArray{T}},Tuple{Any, Array{Number,1}},
                   Tuple{Number, Array{Number,1}}, isequal)
-    @testintersect(Tuple{Array{T}, Array{T}}, Tuple{Array, Array{Any}}, Bottom, isnot)
+    @testintersect(Tuple{Array{T}, Array{T}}, Tuple{Array, Array{Any}}, Bottom, !==)
     f47{T}(x::Vector{Vector{T}}) = 0
     @test_throws MethodError f47(Array{Vector}(0))
     @test f47(Array{Vector{Int}}(0)) == 0
@@ -116,11 +114,11 @@ end
 @testintersect(Type{Function},Union,Bottom)
 @testintersect(Type{Int32}, DataType, Type{Int32})
 @test !(Type <: TypeVar)
-@testintersect(DataType, Type, Bottom, isnot)
-@testintersect(Union, Type, Bottom, isnot)
-@testintersect(DataType, Type{Int}, Bottom, isnot)
-@testintersect(DataType, Type{TypeVar(:T,Int)}, Bottom, isnot)
-@testintersect(DataType, Type{TypeVar(:T,Integer)}, Bottom, isnot)
+@testintersect(DataType, Type, Bottom, !==)
+@testintersect(Union, Type, Bottom, !==)
+@testintersect(DataType, Type{Int}, Bottom, !==)
+@testintersect(DataType, Type{TypeVar(:T,Int)}, Bottom, !==)
+@testintersect(DataType, Type{TypeVar(:T,Integer)}, Bottom, !==)
 
 @testintersect(Tuple{Vararg{Int}}, Tuple{Vararg{Bool}}, Tuple{})
 @testintersect(Type{Tuple{Vararg{Int}}}, Type{Tuple{Vararg{Bool}}}, Bottom)
@@ -135,8 +133,8 @@ end
 
 # Vararg{T,N}
 let N = TypeVar(:N,true)
-    @test is(Bottom,typeintersect(Tuple{Array{Int,N},Vararg{Int,N}}, Tuple{Vector{Int},Real,Real,Real}))
-    @test is(Bottom,typeintersect(Tuple{Vector{Int},Real,Real,Real}, Tuple{Array{Int,N},Vararg{Int,N}}))
+    @test Bottom === typeintersect(Tuple{Array{Int,N},Vararg{Int,N}}, Tuple{Vector{Int},Real,Real,Real})
+    @test Bottom === typeintersect(Tuple{Vector{Int},Real,Real,Real}, Tuple{Array{Int,N},Vararg{Int,N}})
     @test Tuple{Int,Vararg{Int,2}} == Tuple{Int,Int,Int}
     @test Tuple{Int,Vararg{Int,2}} === Tuple{Int,Int,Int}
     @test Tuple{Any, Any} === Tuple{Vararg{Any,2}}
@@ -298,8 +296,8 @@ let
 end
 
 # typejoin with Vararg{T,N}
-@test is(typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}), Tuple{Int,Int,Vararg{Int}})
-@test is(typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}), Tuple{Vararg{Int}})
+@test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
+@test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -322,23 +320,23 @@ abstract Sup_{A,B}
 abstract Qux_{T} <: Sup_{Qux_{Int},T}
 
 @test Qux_{Int}.super <: Sup_
-@test is(Qux_{Int}, Qux_{Int}.super.parameters[1])
-@test is(Qux_{Int}.super.parameters[2], Int)
+@test ===(Qux_{Int}, Qux_{Int}.super.parameters[1])
+@test ===(Qux_{Int}.super.parameters[2], Int)
 @test Qux_{Char}.super <: Sup_
-@test is(Qux_{Int}, Qux_{Char}.super.parameters[1])
-@test is(Qux_{Char}.super.parameters[2], Char)
+@test ===(Qux_{Int}, Qux_{Char}.super.parameters[1])
+@test ===(Qux_{Char}.super.parameters[2], Char)
 
 @test Qux_.super.parameters[1].super <: Sup_
-@test is(Qux_{Int}, Qux_.super.parameters[1].super.parameters[1])
-@test is(Int, Qux_.super.parameters[1].super.parameters[2])
+@test ===(Qux_{Int}, Qux_.super.parameters[1].super.parameters[1])
+@test ===(Int, Qux_.super.parameters[1].super.parameters[2])
 
 type Foo_{T} x::Foo_{Int} end
 
-@test is(Foo_.types[1], Foo_{Int})
-@test is(Foo_.types[1].types[1], Foo_{Int})
+@test ===(Foo_.types[1], Foo_{Int})
+@test ===(Foo_.types[1].types[1], Foo_{Int})
 
 type Circ_{T} x::Circ_{T} end
-@test is(Circ_{Int}, Circ_{Int}.types[1])
+@test ===(Circ_{Int}, Circ_{Int}.types[1])
 
 abstract Sup2a_
 abstract Sup2b_{A <: Sup2a_, B} <: Sup2a_
@@ -360,13 +358,13 @@ type Node{T}
     v::Vector{Node}
 end
 
-@test is(Node{Int}.types[1].parameters[1], Node)
+@test ===(Node{Int}.types[1].parameters[1], Node)
 
 type Node2{T}
     v::Vector{Node2{T}}
 end
 
-@test is(Node2{Int}.types[1].parameters[1], Node2{Int})
+@test ===(Node2{Int}.types[1].parameters[1], Node2{Int})
 
 type FooFoo{A,B} y::FooFoo{A} end
 
@@ -433,11 +431,11 @@ sptest1{T,S}(x::T, y::S) = 43
 @test sptest1(1,"b") == 43
 
 sptest2{T}(x::T) = T
-@test is(sptest2(:a),Symbol)
+@test ===(sptest2(:a),Symbol)
 
 sptest3{T}(x::T) = y->T
 let m = sptest3(:a)
-    @test is(m(0),Symbol)
+    @test ===(m(0),Symbol)
 end
 
 sptest4{T}(x::T, y::T) = 42
@@ -696,8 +694,8 @@ let
     f{T}(a::Vector{Vector{T}}) = a
     g{T}(a::Vector{Vector{T}}) = a
     a = Vector{Int}[]
-    @test is(f(a), a)
-    @test is(g(a), a)
+    @test ===(f(a), a)
+    @test ===(g(a), a)
 end
 
 type _AA{T}; a::T; end
@@ -706,7 +704,7 @@ let
     local g, a
     g{T}(a::_AA{_AA{T}}) = a
     a = _AA(_AA(1))
-    @test is(g(a),a)
+    @test ===(g(a),a)
 end
 
 # Method specificity
@@ -1559,7 +1557,7 @@ abstract IT4805{N, T}
 let
     T = TypeVar(:T,Int,true)
     N = TypeVar(:N,true)
-    @testintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}, Bottom, isnot)
+    @testintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}, Bottom, !==)
 end
 
 let
@@ -3295,7 +3293,7 @@ end
 
 const const_array_int1 = Array{Int}
 const const_array_int2 = Array{Int}
-test_eq_array_int() = is(const_array_int1, const_array_int2)
+test_eq_array_int() = ===(const_array_int1, const_array_int2)
 @test test_eq_array_int()
 
 # object_id of haspadding field
@@ -3406,14 +3404,14 @@ g13261() = f13261()
 # issue 13432
 @noinline function f13432(x)
     offset = x ? Base.Bottom : 1
-    return is(offset, Base.Bottom)
+    return ===(offset, Base.Bottom)
 end
 @test f13432(true) == true
 @test f13432(false) == false
 @noinline function f13432b(x)
     a = x ? 1 : 1.0
     b = x ? 1 : 1.0f0
-    return is(a, b)
+    return ===(a, b)
 end
 @test f13432b(true) == true
 @test f13432b(false) == false

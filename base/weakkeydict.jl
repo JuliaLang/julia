@@ -33,7 +33,7 @@ end
 function getkey{K}(wkh::WeakKeyDict{K}, kk, default)
     return lock(wkh) do
         k = getkey(wkh.ht, kk, secret_table_token)
-        is(k, secret_table_token) && return default
+        k === secret_table_token && return default
         return k.value::K
     end
 end

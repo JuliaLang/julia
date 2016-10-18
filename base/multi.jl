@@ -589,7 +589,7 @@ which optimizes the data written out depending on the receiving process id.
 function worker_id_from_socket(s)
     w = get(map_sock_wrkr, s, nothing)
     if isa(w,Worker)
-        if is(s, w.r_stream) || is(s, w.w_stream)
+        if s === w.r_stream || s === w.w_stream
             return w.id
         end
     end
@@ -1241,7 +1241,7 @@ close(rr::RemoteChannel) = call_on_owner(close_ref, rr)
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
-    if is(msg, :call_fetch) || isa(value, RemoteException)
+    if msg === :call_fetch || isa(value, RemoteException)
         val = value
     else
         val = :OK
@@ -2066,7 +2066,7 @@ macro parallel(args...)
     else
         throw(ArgumentError("wrong number of arguments to @parallel"))
     end
-    if !isa(loop,Expr) || !is(loop.head,:for)
+    if !isa(loop,Expr) || loop.head !== :for
         error("malformed @parallel loop")
     end
     var = loop.args[1].args[1]
