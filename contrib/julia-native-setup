@@ -1,0 +1,83 @@
+#! /bin/bash
+
+# This script 'julia-native-setup' creates an optimized version of Julia's
+# system image for a particular CPU type. Together with the script
+# 'julia-native', this makes it quite easy to maintain a single Julia
+# installation on a heterogeneous cluster that has a common file system.
+#
+# Background:
+#
+# CPU types are e.g. "Westmere", "SandyBridge", or "Haswell". Newer CPU types
+# have additional instructions that lead to faster code. Under ideal
+# circumstances, e.g. SandyBridge can be twice as fast as Westmere, or Haswell
+# can be twice as fast as SandyBridge. On the other hand, e.g. Westmere CPUs
+# cannot run code that contains SandyBridge instructions. In real life,
+# performance differences will be smaller. However, it is generally a good idea
+# to target the CPU where the actual code is running, especially in a language
+# like Julia that compiles code just in time.
+#
+# To find out what CPU a particular machine has, look at the "Sys.cpu_name"
+# constant in Julia, or run "julia -e 'println(Sys.cpu_name)'" from a shell.
+# Note that different LLVM versions might use different names for the same CPU
+# type.
+#
+# Instructions:
+#
+# 1. Install Julia in such a way that it works on every machine of the cluster.
+# This usually requires either building Julia on a machine with the oldest CPU
+# type, or explicitly setting "JULIA_CPU_TARGET".
+#
+# 2. For each CPU type, run 'julia-native-setup' once, on a machine with this
+# CPU type. This creates an optimized version of Julia's system image for this
+# CPU type. (Note: This script cannot run in parallel.)
+#
+# 3. To run Julia, use the script 'julia-native' instead of plain 'julia'. This
+# script detects the machine's CPU type, and then executes Julia with the
+# optimized system image.
+
+
+
+# Get the name of the directory in which this script lives
+# See <http://stackoverflow.com/questions/59895>
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Get the current host's CPU type for LLVM
+CPU=$("$DIR/julia" -e 'println(Sys.cpu_name)')
+if [[ -z $CPU ]]; then
+    echo "Could not determine CPU type; aborting"
+    exit 1
+fi
+
+# Determine the system image name for this host
+ORIGIMG="$DIR/../lib/julia/sys"
+SYSIMG="$ORIGIMG-$CPU"
+SUFFIX=
+for suf in so dylib; do
+    if [[ -e $ORIGIMG.$suf ]]; then
+        SUFFIX=$suf
+        break
+    fi
+done
+if [[ -z $SUFFIX ]]; then
+    echo "Could not determine shared library suffix; aborting"
+    exit 1
+fi
+if [[ ! -e $ORIGIMG.$SUFFIX ]]; then
+    echo "Could not find original Julia system image; aborting"
+    exit 1
+fi
+
+# Create the specialized system image if necessary
+if [[ $SYSIMG.$SUFFIX -ot $ORIGIMG.$SUFFIX ]]; then
+    echo "Julia's system image for $CPU CPUs is outdated or does not exist."
+    echo "Creating the image; this may take several minutes..."
+    "$DIR/julia" "$DIR/../share/julia/build_sysimg.jl" "$SYSIMG" "$CPU" --force
+fi
+if [[ ! -e $SYSIMG.$SUFFIX ]]; then
+    echo "Could not find native Julia system image; aborting"
+    exit 1
+fi
+
+echo "Done setting up the Julia system image for $CPU CPUs."
+echo "Use 'julia-native' to run Julia with this image."
+exit 0

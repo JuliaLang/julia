@@ -377,6 +377,11 @@ endif
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
+ifneq ($(OS),WINNT)
+	# Copy in scripts to manage native system images
+	$(INSTALL_M) $(JULIAHOME)/contrib/julia-native-setup $(DESTDIR)$(bindir)
+	$(INSTALL_M) $(JULIAHOME)/contrib/julia-native $(DESTDIR)$(bindir)
+endif
 	# Copy in standalone julia-config script
 	$(INSTALL_M) $(JULIAHOME)/contrib/julia-config.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
