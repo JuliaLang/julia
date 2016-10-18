@@ -135,12 +135,13 @@ $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLV
 	@$(call PRINT_CC, $(CXX) $(shell $(LLVM_CONFIG_HOST) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 # public header rules
-define install_public_header
+$(eval $(call dir_target,$(build_includedir)/julia))
+define public_header_target
 TARGET = $(build_includedir)/julia/$(notdir $(1))
-$$(TARGET): $(1)
+$$(TARGET): $(1) | $(build_includedir)/julia
 	$(INSTALL_F) $$^ $(build_includedir)/julia/
 endef
-$(foreach HEADER,$(PUBLIC_HEADERS),$(eval $(call install_public_header,$(HEADER))))
+$(foreach HEADER,$(PUBLIC_HEADERS),$(eval $(call public_header_target,$(HEADER))))
 
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
 
