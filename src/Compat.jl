@@ -613,6 +613,9 @@ function _compat(ex::Expr)
         elseif VERSION < v"0.5.0-dev+4340" && length(ex.args) > 3 &&
                 istopsymbol(withincurly(ex.args[1]), :Base, :show)
             ex = rewrite_show(ex)
+        elseif VERSION < v"0.6.0-dev.826" && length(ex.args) == 3 && # julia#18510
+                istopsymbol(withincurly(ex.args[1]), :Base, :Nullable)
+            ex = Expr(:call, f, ex.args[2], Expr(:call, :(Compat._Nullable_field2), ex.args[3]))
         end
         if VERSION < v"0.5.0-dev+4305"
             rewrite_iocontext!(ex)
@@ -1655,6 +1658,25 @@ if VERSION < v"0.5.0-dev+4677"
 
     Base.cholfact(A::HermOrSym, T::Type) = cholfact(A.data, Symbol(A.uplo), T)
     Base.cholfact!(A::HermOrSym, T::Type) = cholfact!(A.data, Symbol(A.uplo), T)
+end
+
+# julia#18510
+if VERSION < v"0.6.0-dev.826"
+    _Nullable_field2(x) = !x
+else
+    _Nullable_field2(x) = x
+end
+
+# julia#18484
+if VERSION < v"0.6.0-dev.848"
+    unsafe_get(x::Nullable) = x.value
+    unsafe_get(x) = x
+    export unsafe_get
+    if VERSION < v"0.4.0-dev+656" # so "nullable.jl" is included
+        isnull(x) = false
+    else
+        Base.isnull(x) = false
+    end
 end
 
 end # module

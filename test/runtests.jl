@@ -1455,3 +1455,57 @@ for A in (Hermitian(randn(5,5) + 10I),
     @test F[:U]'F[:U]  ≈ A[F[:p], F[:p]]
     @test F[:L]*F[:L]' ≈ A[F[:p], F[:p]]
 end
+
+types = [
+    Bool,
+    Float16,
+    Float32,
+    Float64,
+    Int128,
+    Int16,
+    Int32,
+    Int64,
+    Int8,
+    UInt16,
+    UInt32,
+    UInt64,
+    UInt8,
+]
+for T in types
+    # julia#18510, Nullable constructors
+    x = @compat Nullable(one(T), true)
+    @test isnull(x) === false
+    @test isa(x.value, T)
+    @test eltype(x) === T
+
+    x = @compat Nullable{T}(one(T), true)
+    y = @compat Nullable{Any}(one(T), true)
+    @test isnull(x) === false
+    @test isnull(y) === false
+    @test isa(x.value, T)
+    @test eltype(x) === T
+    @test eltype(y) === Any
+
+    x = @compat Nullable{T}(one(T), false)
+    y = @compat Nullable{Any}(one(T), false)
+    @test isnull(x) === true
+    @test isnull(y) === true
+    @test eltype(x) === T
+    @test eltype(y) === Any
+
+    x = @compat Nullable(one(T), false)
+    @test isnull(x) === true
+    @test eltype(x) === T
+
+    x = @compat Nullable{T}()
+    @test isnull(x) === true
+    @test eltype(x) === T
+
+    # julia#18484, generic isnull, unsafe_get
+    a = one(T)
+    x = @compat Nullable(a, true)
+    @test isequal(unsafe_get(x), a)
+
+    x = @compat Nullable{Array{T}}()
+    @test_throws UndefRefError unsafe_get(x)
+end
