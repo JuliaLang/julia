@@ -17,6 +17,7 @@ register(f::Function, rtype::ANY, argt::ANY, name::String) =
 include("rtlib/fp_util.jl")
 include("rtlib/fp_extend.jl")
 include("rtlib/fp_trunc.jl")
+include("rtlib/fp_fixint.jl")
 
 # All these function names are enumerated in lib/CodeGen/TargetLoweringBase.cpp
 # right now we don't have a good way of getting at this information.
@@ -68,15 +69,43 @@ convert(::Type{Float32}, x::Float64) = truncdfsf2(x)
 ###
 # Conversion between integers and floats
 ###
-# Names[RTLIB::FPTOSINT_F32_I32] = "__fixsfsi";
-# Names[RTLIB::FPTOSINT_F32_I64] = "__fixsfdi";
-# Names[RTLIB::FPTOSINT_F32_I128] = "__fixsfti";
-# Names[RTLIB::FPTOSINT_F64_I32] = "__fixdfsi";
-# Names[RTLIB::FPTOSINT_F64_I64] = "__fixdfdi";
-# Names[RTLIB::FPTOSINT_F64_I128] = "__fixdfti";
-# Names[RTLIB::FPTOSINT_F128_I32] = "__fixtfsi";
-# Names[RTLIB::FPTOSINT_F128_I64] = "__fixtfdi";
-# Names[RTLIB::FPTOSINT_F128_I128] = "__fixtfti";
+
+"convert Float32 to Int32"
+fixsfsi(x::Float32) = fixint(Int32, x)
+convert(::Type{Int32}, x::Float32) = fixsfsi(x)
+
+"convert Float32 to Int64"
+fixsfdi(x::Float32) = fixint(Int64, x)
+convert(::Type{Int64}, x::Float32) = fixsfdi(x)
+
+"convert Float32 to Int64"
+fixsfti(x::Float32) = fixint(Int128, x)
+convert(::Type{Int128}, x::Float32) = fixsfti(x)
+
+"convert Float64 to Int32"
+fixdfsi(x::Float64) = fixint(Int32, x)
+convert(::Type{Int32}, x::Float64) = fixdfsi(x)
+
+"convert Float64 to Int64"
+fixdfdi(x::Float64) = fixint(Int64, x)
+convert(::Type{Int64}, x::Float64) = fixdfdi(x)
+
+"convert Float64 to Int64"
+fixdfti(x::Float64) = fixint(Int128, x)
+convert(::Type{Int128}, x::Float64) = fixdfti(x)
+
+# "convert Float128 to Int32"
+# fixtfsi(x::Float128) = fixint(Int32, x)
+# convert(::Type{Int32}, x::Float128) = fixtfsi(x)
+
+# "convert Float128 to Int64"
+# fixtfdi(x::Float128) = fixint(Int64, x)
+# convert(::Type{Int64}, x::Float128) = fixtfdi(x)
+
+# "convert Float128 to Int64"
+# fixtfti(x::Float128) = fixint(Int128, x)
+# convert(::Type{Int128}, x::Float128) = fixtfti(x)
+
 # Names[RTLIB::FPTOUINT_F32_I32] = "__fixunssfsi";
 # Names[RTLIB::FPTOUINT_F32_I64] = "__fixunssfdi";
 # Names[RTLIB::FPTOUINT_F32_I128] = "__fixunssfti";
@@ -187,6 +216,16 @@ RTLIB.register(RTLIB.truncdfhf2, Float16, Tuple{Float64}, "__truncdfhf2")
 RTLIB.register(RTLIB.truncdfsf2, Float32, Tuple{Float64}, "__truncdfsf2")
 # RTLIB.register(RTLIB.trunctfsf2, Float32, Tuple{Float128}, "__trunctfsf2")
 # RTLIB.register(RTLIB.trunctfdf2, Float64, Tuple{Float128}, "__trunctfdf2")
+
+RTLIB.register(RTLIB.fixsfsi, Int32, Tuple{Float32}, "__fixsfsi")
+RTLIB.register(RTLIB.fixsfdi, Int64, Tuple{Float32}, "__fixsfdi")
+RTLIB.register(RTLIB.fixsfti, Int128, Tuple{Float32}, "__fixsfti")
+RTLIB.register(RTLIB.fixdfsi, Int32, Tuple{Float64}, "__fixdfsi")
+RTLIB.register(RTLIB.fixdfdi, Int64, Tuple{Float64}, "__fixdfdi")
+RTLIB.register(RTLIB.fixdfti, Int128, Tuple{Float64}, "__fixdfti")
+# RTLIB.register(RTLIB.fixtfsi, Int32, Tuple{Float128}, "__fixtfsi")
+# RTLIB.register(RTLIB.fixtfdi, Int64, Tuple{Float128}, "__fixtfdi")
+# RTLIB.register(RTLIB.fixtfti, Int128, Tuple{Float128}, "__fixtfti")
 
 RTLIB.register(RTLIB.floattisf, Float32, Tuple{Int128}, "__floattisf")
 RTLIB.register(RTLIB.floattidf, Float64, Tuple{Int128}, "__floattidf")
