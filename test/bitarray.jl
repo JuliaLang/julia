@@ -132,6 +132,18 @@ end
 
 timesofar("utils")
 
+## Constructors from iterables ##
+
+for g in ((x%7==3 for x = 1:v1),
+          (x%7==3 for x = 1:v1 if x>5),
+          ((x+y)%5==2 for x = 1:n1, y = 1:n2),
+          ((x+y+z+t)%5==2 for x = 1:s2, y = 1:s2, z = 1:s3, t = 1:s4),
+          ((x+y)%5==2 for x = 1:n1 for y = 1:n2))
+    @test BitArray(g) == BitArray(collect(g))
+end
+
+timesofar("constructors")
+
 ## Indexing ##
 
 # 0d

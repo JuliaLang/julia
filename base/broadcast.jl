@@ -3,7 +3,8 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, tail, OneTo, to_shape
+using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
+            _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 import Base: broadcast
 export broadcast!, bitbroadcast, dotview
@@ -118,13 +119,6 @@ map_newindexer(shape, ::Tuple{}) = (), ()
     keep, Idefault = newindexer(shape, A1)
     (keep, keeps...), (Idefault, Idefaults...)
 end
-
-# For output BitArrays
-const bitcache_chunks = 64 # this can be changed
-const bitcache_size = 64 * bitcache_chunks # do not change this
-
-dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
-    Base.copy_to_bitarray_chunks!(Bc, ((bind - 1) << 6) + 1, C, 1, min(bitcache_size, (length(Bc)-bind+1) << 6))
 
 @inline _broadcast_getindex(A, I) = _broadcast_getindex(containertype(A), A, I)
 @inline _broadcast_getindex(::Type{Any}, A, I) = A
