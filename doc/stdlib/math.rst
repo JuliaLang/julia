@@ -461,7 +461,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``!is(x, y)``\ .
+   Equivalent to ``!(x === y)``\ .
 
 .. _<:
 .. function:: <(x, y)
