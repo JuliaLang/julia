@@ -352,6 +352,16 @@ function copy_to_bitarray_chunks!{T<:Real}(Bc::Vector{UInt64}, pos_d::Int, C::Ar
     end
 end
 
+# auxiliary definitions used when filling a BitArray via a Vector{Bool} cache
+# (e.g. when constructing from an iterable, or in broadcast!)
+
+const bitcache_chunks = 64 # this can be changed
+const bitcache_size = 64 * bitcache_chunks # do not change this
+
+dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
+    copy_to_bitarray_chunks!(Bc, ((bind - 1) << 6) + 1, C, 1, min(bitcache_size, (length(Bc)-bind+1) << 6))
+
+
 ## custom iterator ##
 start(B::BitArray) = 0
 next(B::BitArray, i::Int) = (B.chunks[_div64(i)+1] & (UInt64(1)<<_mod64(i)) != 0, i+1)
@@ -561,6 +571,90 @@ convert{T,N}(::Type{AbstractArray{T,N}}, B::BitArray{N}) = convert(Array{T,N}, B
 
 reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
 reinterpret{N}(B::BitArray, dims::NTuple{N,Int}) = reshape(B, dims)
+
+## Constructors from generic iterables ##
+
+BitArray{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
+
+BitArray(itr) = gen_bitarray(iteratorsize(itr), itr)
+
+# generic constructor from an iterable without compile-time info
+# (we pass start(itr) explicitly to avoid a type-instability with filters)
+gen_bitarray(isz::IteratorSize, itr) = gen_bitarray_from_itr(itr, start(itr))
+
+# generic iterable with known shape
+function gen_bitarray(::HasShape, itr)
+    B = BitArray(size(itr))
+    for (I,x) in zip(CartesianRange(indices(itr)), itr)
+        B[I] = x
+    end
+    return B
+end
+
+# generator with known shape or length
+function gen_bitarray(::HasShape, itr::Generator)
+    B = BitArray(size(itr))
+    return fill_bitarray_from_itr!(B, itr, start(itr))
+end
+function gen_bitarray(::HasLength, itr)
+    n = length(itr)
+    B = BitArray(n)
+    return fill_bitarray_from_itr!(B, itr, start(itr))
+end
+
+gen_bitarray(::IsInfinite, itr) =  throw(ArgumentError("infinite-size iterable used in BitArray constructor"))
+
+# The aux functions gen_bitarray_from_itr and fill_bitarray_from_itr! both
+# use a Vector{Bool} cache for performance reasons
+
+function gen_bitarray_from_itr(itr, st)
+    B = empty!(BitArray(bitcache_size))
+    C = Vector{Bool}(bitcache_size)
+    Bc = B.chunks
+    ind = 1
+    cind = 1
+    while !done(itr, st)
+        x, st = next(itr, st)
+        @inbounds C[ind] = x
+        ind += 1
+        if ind > bitcache_size
+            resize!(B, length(B) + bitcache_size)
+            dumpbitcache(Bc, cind, C)
+            cind += bitcache_chunks
+            ind = 1
+        end
+    end
+    if ind > 1
+        @inbounds C[ind:bitcache_size] = false
+        resize!(B, length(B) + ind - 1)
+        dumpbitcache(Bc, cind, C)
+    end
+    return B
+end
+
+function fill_bitarray_from_itr!(B::BitArray, itr, st)
+    n = length(B)
+    C = Vector{Bool}(bitcache_size)
+    Bc = B.chunks
+    ind = 1
+    cind = 1
+    while !done(itr, st)
+        x, st = next(itr, st)
+        @inbounds C[ind] = x
+        ind += 1
+        if ind > bitcache_size
+            dumpbitcache(Bc, cind, C)
+            cind += bitcache_chunks
+            ind = 1
+        end
+    end
+    if ind > 1
+        @inbounds C[ind:bitcache_size] = false
+        dumpbitcache(Bc, cind, C)
+    end
+    return B
+end
+
 
 ## Indexing: getindex ##
 
