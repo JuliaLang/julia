@@ -254,7 +254,7 @@ static Type *T_pppint8;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
-MDNode *tbaa_gcframe;           // GC frame
+static MDNode *tbaa_gcframe;    // GC frame
 // LLVM should have enough info for alias analysis of non-gcframe stack slot
 // this is mainly a place holder for `jl_cgval_t::tbaa`
 static MDNode *tbaa_stack;      // stack slot
@@ -270,7 +270,7 @@ static MDNode *tbaa_arrayptr;       // The pointer inside a jl_array_t
 static MDNode *tbaa_arraysize;      // A size in a jl_array_t
 static MDNode *tbaa_arraylen;       // The len in a jl_array_t
 static MDNode *tbaa_arrayflags;     // The flags in a jl_array_t
-MDNode *tbaa_const;             // Memory that is immutable by the time LLVM can see it
+static MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
 
 // Basic DITypes
 #if JL_LLVM_VERSION >= 30700
@@ -5085,7 +5085,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
 
 // --- initialization ---
 
-static MDNode *tbaa_make_child( const char *name, MDNode *parent, bool isConstant=false )
+MDNode *tbaa_make_child(const char *name, MDNode *parent, bool isConstant=false)
 {
     MDNode *n = mbuilder->createTBAANode(name,parent,isConstant);
 #if JL_LLVM_VERSION < 30600
@@ -6228,9 +6228,4 @@ extern "C" void jl_dump_llvm_value(void *v)
 extern "C" void jl_dump_llvm_type(void *v)
 {
     ((Type*)v)->dump(); putchar('\n');
-}
-
-extern "C" JL_DLLEXPORT
-LLVMValueRef jl_get_tbaa_gcframe() {
-    return wrap(MetadataAsValue::get(jl_LLVMContext, tbaa_gcframe));
 }

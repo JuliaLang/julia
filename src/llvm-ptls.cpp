@@ -16,6 +16,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/MDBuilder.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -26,22 +27,22 @@
 
 using namespace llvm;
 
+extern MDNode *tbaa_make_child(const char *name, MDNode *parent, bool isConstant=false);
+
 namespace {
 
 struct LowerPTLS: public ModulePass {
     static char ID;
-    LowerPTLS(bool _imaging_mode=false, MDNode *_tbaa_const=nullptr)
+    LowerPTLS(bool _imaging_mode=false)
         : ModulePass(ID),
-          imaging_mode(_imaging_mode),
-          tbaa_const(_tbaa_const)
+          imaging_mode(_imaging_mode)
     {}
 
 private:
     bool imaging_mode;
-    MDNode *tbaa_const; // One `LLVMContext` only
     bool runOnModule(Module &M) override;
     void runOnFunction(LLVMContext &ctx, Module &M, Function *F,
-                       Function *ptls_getter, Type *T_ppjlvalue);
+                       Function *ptls_getter, Type *T_ppjlvalue, MDNode *tbaa_const);
 };
 
 static void ensure_global(const char *name, Type *t, Module &M,
@@ -69,7 +70,7 @@ static void ensure_global(const char *name, Type *t, Module &M,
 }
 
 void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
-                              Function *ptls_getter, Type *T_ppjlvalue)
+                              Function *ptls_getter, Type *T_ppjlvalue, MDNode *tbaa_const)
 {
     CallInst *ptlsStates = NULL;
     for (auto I = F->getEntryBlock().begin(), E = F->getEntryBlock().end();
@@ -167,6 +168,10 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
 
 bool LowerPTLS::runOnModule(Module &M)
 {
+    MDBuilder mbuilder(M.getContext());
+    MDNode *tbaa_root = mbuilder.createTBAARoot("jtbaa");
+    MDNode *tbaa_const = tbaa_make_child("jtbaa_const", tbaa_root, true);
+
     Function *ptls_getter = M.getFunction("jl_get_ptls_states");
     if (!ptls_getter)
         return true;
@@ -183,7 +188,7 @@ bool LowerPTLS::runOnModule(Module &M)
     for (auto F = M.begin(), E = M.end(); F != E; ++F) {
         if (F->isDeclaration())
             continue;
-        runOnFunction(ctx, M, &*F, ptls_getter, T_ppjlvalue);
+        runOnFunction(ctx, M, &*F, ptls_getter, T_ppjlvalue, tbaa_const);
     }
 #ifndef JULIA_ENABLE_THREADING
     ptls_getter->eraseFromParent();
@@ -199,15 +204,12 @@ static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
 
 } // anonymous namespace
 
-Pass *createLowerPTLSPass(bool imaging_mode, MDNode *tbaa_const)
+Pass *createLowerPTLSPass(bool imaging_mode)
 {
-    assert(tbaa_const);
-    return new LowerPTLS(imaging_mode, tbaa_const);
+    return new LowerPTLS(imaging_mode);
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMAddLowerPTLSPass(LLVMPassManagerRef PM, LLVMValueRef V, int imaging_mode) {
-    auto *MD = cast<MetadataAsValue>(unwrap(V));
-    auto *tbaa_gcframe = cast<MDNode>(MD->getMetadata());
-    unwrap(PM)->add(createLowerPTLSPass(imaging_mode != 0, tbaa_gcframe));
+void LLVMAddLowerPTLSPass(LLVMPassManagerRef PM, int imaging_mode) {
+    unwrap(PM)->add(createLowerPTLSPass(imaging_mode != 0));
 }
