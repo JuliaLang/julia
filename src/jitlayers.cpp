@@ -106,7 +106,7 @@ void addOptimizationPasses(legacy::PassManager *PM)
 void addOptimizationPasses(PassManager *PM)
 #endif
 {
-    PM->add(createLowerGCFramePass(tbaa_gcframe));
+    PM->add(createLowerGCFramePass());
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass());
 #endif
@@ -122,7 +122,7 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(llvm::createMemorySanitizerPass(true));
 #endif
     if (jl_options.opt_level == 0) {
-        PM->add(createLowerPTLSPass(imaging_mode, tbaa_const));
+        PM->add(createLowerPTLSPass(imaging_mode));
         return;
     }
 #if JL_LLVM_VERSION >= 30700
@@ -156,7 +156,7 @@ void addOptimizationPasses(PassManager *PM)
 #endif
     // Let the InstCombine pass remove the unnecessary load of
     // safepoint address first
-    PM->add(createLowerPTLSPass(imaging_mode, tbaa_const));
+    PM->add(createLowerPTLSPass(imaging_mode));
     PM->add(createSROAPass());                 // Break up aggregate allocas
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
@@ -455,8 +455,8 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
         addOptimizationPasses(&PM);
     }
     else {
-        PM.add(createLowerGCFramePass(tbaa_gcframe));
-        PM.add(createLowerPTLSPass(imaging_mode, tbaa_const));
+        PM.add(createLowerGCFramePass());
+        PM.add(createLowerPTLSPass(imaging_mode));
     }
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");

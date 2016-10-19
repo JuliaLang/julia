@@ -18,6 +18,7 @@
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #endif
+#include <llvm/IR/MDBuilder.h>
 
 #include <vector>
 #include <queue>
@@ -34,6 +35,8 @@
 #endif
 
 using namespace llvm;
+
+extern MDNode *tbaa_make_child(const char *name, MDNode *parent, bool isConstant=false);
 
 namespace {
 
@@ -1131,15 +1134,12 @@ void JuliaGCAllocator::allocate_frame()
 
 struct LowerGCFrame: public ModulePass {
     static char ID;
-    LowerGCFrame(MDNode *_tbaa_gcframe=nullptr)
-        : ModulePass(ID),
-          tbaa_gcframe(_tbaa_gcframe)
+    LowerGCFrame() : ModulePass(ID)
     {}
 
 private:
-    MDNode *tbaa_gcframe; // One `LLVMContext` only
     void runOnFunction(Module *M, Function &F, Function *ptls_getter,
-                       Type *T_pjlvalue);
+                       Type *T_pjlvalue, MDNode *tbaa_gcframe);
     bool runOnModule(Module &M) override;
 };
 
@@ -1176,6 +1176,10 @@ static void ensure_enter_function(Module &M)
 
 bool LowerGCFrame::runOnModule(Module &M)
 {
+    MDBuilder mbuilder(M.getContext());
+    MDNode *tbaa_root = mbuilder.createTBAARoot("jtbaa");
+    MDNode *tbaa_gcframe = tbaa_make_child("jtbaa_gcframe", tbaa_root);
+
     Function *ptls_getter = M.getFunction("jl_get_ptls_states");
     ensure_enter_function(M);
     FunctionType *functype = nullptr;
@@ -1189,7 +1193,7 @@ bool LowerGCFrame::runOnModule(Module &M)
     for (auto F = M.begin(), E = M.end(); F != E; ++F) {
         if (F->isDeclaration())
             continue;
-        runOnFunction(&M, *F, ptls_getter, T_pjlvalue);
+        runOnFunction(&M, *F, ptls_getter, T_pjlvalue, tbaa_gcframe);
     }
 
     // Cleanup for GC frame lowering.
@@ -1202,7 +1206,7 @@ bool LowerGCFrame::runOnModule(Module &M)
 }
 
 void LowerGCFrame::runOnFunction(Module *M, Function &F, Function *ptls_getter,
-                                 Type *T_pjlvalue)
+                                 Type *T_pjlvalue, MDNode *tbaa_gcframe)
 {
     CallInst *ptlsStates = nullptr;
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
@@ -1241,15 +1245,12 @@ void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id
 }
 #endif
 
-Pass *createLowerGCFramePass(MDNode *tbaa_gcframe)
+Pass *createLowerGCFramePass()
 {
-    assert(tbaa_gcframe);
-    return new LowerGCFrame(tbaa_gcframe);
+    return new LowerGCFrame();
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMAddLowerGCFramePass(LLVMPassManagerRef PM, LLVMValueRef V) {
-    auto *MD = cast<MetadataAsValue>(unwrap(V));
-    auto *tbaa_gcframe = cast<MDNode>(MD->getMetadata());
-    unwrap(PM)->add(createLowerGCFramePass(tbaa_gcframe));
+void LLVMAddLowerGCFramePass(LLVMPassManagerRef PM) {
+    unwrap(PM)->add(createLowerGCFramePass());
 }
