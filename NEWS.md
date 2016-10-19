@@ -53,6 +53,9 @@ Library improvements
     `countfrom`, `take`, `drop`, `cycle`, `repeated`, `product`, `flatten`, `partition`) have been
     moved to the module `Base.Iterators` ([#18839]).
 
+  * BitArrays can now be constructed from arbitrary iterables, in particular from generator expressions,
+    e.g. BitArray(isodd(x) for x = 1:100) [#19018].
+
 Compiler/Runtime improvements
 -----------------------------
 
