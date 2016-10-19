@@ -15,6 +15,7 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/LegacyPassManager.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -202,4 +203,11 @@ Pass *createLowerPTLSPass(bool imaging_mode, MDNode *tbaa_const)
 {
     assert(tbaa_const);
     return new LowerPTLS(imaging_mode, tbaa_const);
+}
+
+extern "C" JL_DLLEXPORT
+void LLVMAddLowerPTLSPass(LLVMPassManagerRef PM, LLVMValueRef V, int imaging_mode) {
+    auto *MD = cast<MetadataAsValue>(unwrap(V));
+    auto *tbaa_gcframe = cast<MDNode>(MD->getMetadata());
+    unwrap(PM)->add(createLowerPTLSPass(imaging_mode != 0, tbaa_gcframe));
 }

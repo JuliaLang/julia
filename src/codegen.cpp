@@ -81,6 +81,13 @@
 #include <llvm/Analysis/Verifier.h>
 #endif
 
+// C API
+#if JL_LLVM_VERSION >= 30800
+#include <llvm-c/Types.h>
+#else
+#include <llvm-c/Core.h>
+#endif
+
 // for configuration options
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/CommandLine.h>
@@ -6221,4 +6228,9 @@ extern "C" void jl_dump_llvm_value(void *v)
 extern "C" void jl_dump_llvm_type(void *v)
 {
     ((Type*)v)->dump(); putchar('\n');
+}
+
+extern "C" JL_DLLEXPORT
+LLVMValueRef jl_get_tbaa_gcframe() {
+    return wrap(MetadataAsValue::get(jl_LLVMContext, tbaa_gcframe));
 }
