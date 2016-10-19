@@ -606,7 +606,7 @@ All mathematical operations and functions are supported for arrays
 
    .. Docstring generated from Julia source
 
-   Broadcasts the arrays, tuples and/or scalars ``As`` to a container of the appropriate type and dimensions. In this context, anything that is not a subtype of ``AbstractArray`` or ``Tuple`` is considered a scalar. The resulting container is stablished by the following rules:
+   Broadcasts the arrays, tuples and/or scalars ``As`` to a container of the appropriate type and dimensions. In this context, anything that is not a subtype of ``AbstractArray`` or ``Tuple`` is considered a scalar. The resulting container is established by the following rules:
 
    * If all the arguments are scalars, it returns a scalar.
    * If the arguments are tuples and zero or more scalars, it returns a tuple.
