@@ -15,15 +15,21 @@ bitcheck(x) = true
 function check_bitop(ret_type, func, args...)
     r1 = func(args...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...)
-    @test isa(r1, ret_type)
+    ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, r1
+    ret_type ≢ nothing && @test isa(r1, ret_type)
     @test tc(r1, r2)
-    @test isequal(r1, convert(ret_type, r2))
+    @test isequal(r1, ret_type ≡ nothing ? r2 : convert(ret_type, r2))
     @test bitcheck(r1)
 end
 
 macro check_bit_operation(ex, ret_type)
     @assert Meta.isexpr(ex, :call)
     Expr(:call, :check_bitop, esc(ret_type), map(esc,ex.args)...)
+end
+
+macro check_bit_operation(ex)
+    @assert Meta.isexpr(ex, :call)
+    Expr(:call, :check_bitop, nothing, map(esc,ex.args)...)
 end
 
 let t0 = time()
@@ -108,6 +114,8 @@ for (sz,T) in allsizes
     @check_bit_operation copy!(b2, u1) T
 end
 
+# copy!
+
 for n in [1; 1023:1025]
     b1 = falses(n)
     for m in [1; 10; 1023:1025]
@@ -130,11 +138,44 @@ for n in [1; 1023:1025]
     end
 end
 
-@test_throws BoundsError size(trues(5),0)
+@test_throws BoundsError size(trues(5), 0)
+
+# reshape and resize!
+
+b1 = bitrand(n1, n2)
+@check_bit_operation reshape(b1, (n2,n1)) BitMatrix
+@test_throws DimensionMismatch reshape(b1, (1,n1))
+b1 = bitrand(s1, s2, s3, s4)
+@check_bit_operation reshape(b1, (s3,s1,s2,s4)) BitArray{4}
+@test_throws DimensionMismatch reshape(b1, (1,n1))
+
+b1 = bitrand(v1)
+@test_throws BoundsError resize!(b1, -1)
+@check_bit_operation resize!(b1, v1 ÷ 2) BitVector
+gr(b) = (resize!(b, v1)[(v1÷2):end] = 1; b)
+@check_bit_operation gr(b1) BitVector
+
+# sizeof (issue #7515)
+@test sizeof(BitArray(64)) == 8
+@test sizeof(BitArray(65)) == 16
 
 timesofar("utils")
 
-## Constructors from iterables ##
+## Constructors ##
+
+# non-Int dims constructors
+
+b1 = BitArray(Int32(v1))
+b2 = BitArray(Int64(v1))
+@test size(b1) == size(b2)
+
+for c in [trues, falses]
+    b1 = c(Int32(v1))
+    b2 = c(Int64(v1))
+    @test b1 == b2
+end
+
+# constructors from iterables
 
 for g in ((x%7==3 for x = 1:v1),
           (x%7==3 for x = 1:v1 if x>5),
@@ -143,6 +184,10 @@ for g in ((x%7==3 for x = 1:v1),
           ((x+y)%5==2 for x = 1:n1 for y = 1:n2))
     @test BitArray(g) == BitArray(collect(g))
 end
+
+# one
+@test Array(one(BitMatrix(2,2))) == eye(2,2)
+@test_throws DimensionMismatch one(BitMatrix(2,3))
 
 timesofar("constructors")
 
@@ -738,6 +783,13 @@ b0 = falses(0)
 @check_bit_operation (!)(b0)  BitVector
 @check_bit_operation (-)(b0)  Vector{Int}
 @check_bit_operation sign(b0) BitVector
+
+# flipbits!
+
+b1 = bitrand(n1, n2)
+i1 = Array(b1)
+@test flipbits!(b1) == ~i1
+@test bitcheck(b1)
 
 timesofar("unary arithmetic")
 
@@ -1411,96 +1463,42 @@ b1 = bitrand(s1, s2)
 b2 = bitrand(s3, s4)
 @check_bit_operation kron(b1, b2) BitMatrix
 
-#b1 = bitrand(v1)
-#@check_bit_operation diff(b1) Vector{Int}
-#b1 = bitrand(n1, n2)
-#@check_bit_operation diff(b1) Vector{Int}
+b1 = bitrand(v1)
+@check_bit_operation diff(b1) Vector{Int}
+b1 = bitrand(n1, n2)
+@check_bit_operation diff(b1) Matrix{Int}
 
-timesofar("linalg")
+b1 = bitrand(n1, n1)
+@check_bit_operation svd(b1)
+@check_bit_operation qr(b1)
 
-# issue #7515
-@test sizeof(BitArray(64)) == 8
-@test sizeof(BitArray(65)) == 16
+b1 = bitrand(v1)
+@check_bit_operation gradient(b1)
+@check_bit_operation gradient(b1, 1.0)
 
-#one
-@test Array(one(BitMatrix(2,2))) == eye(2,2)
-@test_throws DimensionMismatch one(BitMatrix(2,3))
+b1 = bitrand(v1)
+@check_bit_operation diagm(b1) BitMatrix
+b1 = bitrand(n1, n2)
+@test_throws DimensionMismatch diagm(b1)
 
-#reshape
-a = trues(2,5)
-b = reshape(a,(5,2))
-@test b == trues(5,2)
-@test_throws DimensionMismatch reshape(a, (1,5))
-
-#resize!
-
-a = trues(5)
-@test_throws BoundsError resize!(a,-1)
-resize!(a, 3)
-@test a == trues(3)
-resize!(a, 5)
-@test a == append!(trues(3),falses(2))
-
-#flipbits!
-
-a = trues(5,5)
-flipbits!(a)
-@test a == falses(5,5)
+b1 = bitrand(n1, n1)
+@check_bit_operation diag(b1)
 
 # findmax, findmin
-a = trues(0)
-@test_throws ArgumentError findmax(a)
-@test_throws ArgumentError findmin(a)
 
-a = falses(6)
-@test findmax(a) == (false,1)
-a = trues(6)
-@test findmin(a) == (true,1)
-a = BitArray([1,0,1,1,0])
-@test findmin(a) == (false,2)
-@test findmax(a) == (true,1)
-a = BitArray([0,0,1,1,0])
-@test findmin(a) == (false,1)
-@test findmax(a) == (true,3)
+b1 = trues(0)
+@test_throws ArgumentError findmax(b1)
+@test_throws ArgumentError findmin(b1)
 
-#qr and svd
+for b1 in [falses(v1), trues(v1),
+           BitArray([1,0,1,1,0]),
+           BitArray([0,0,1,1,0]),
+           bitrand(v1)]
+    @check_bit_operation findmin(b1)
+    @check_bit_operation findmax(b1)
+end
 
-A = bitrand(10,10)
-uA = Array(A)
-@test svd(A) == svd(uA)
-@test qr(A) == qr(uA)
-
-#gradient
-A = bitrand(10)
-fA = Array(A)
-@test gradient(A) == gradient(fA)
-@test gradient(A,1.0) == gradient(fA,1.0)
-
-#diag and diagm
-
-v = bitrand(10)
-uv = Array(v)
-@test Array(diagm(v)) == diagm(uv)
-v = bitrand(10,2)
-uv = Array(v)
-@test_throws DimensionMismatch diagm(v)
-
-B = bitrand(10,10)
-uB = Array(B)
-@test diag(uB) == Array(diag(B))
-
-# test non-Int dims constructor
-A = BitArray(Int32(10))
-B = BitArray(Int64(10))
-@test A == B
-
-A = trues(Int32(10))
-B = trues(Int64(10))
-@test A == B
-
-A = falses(Int32(10))
-B = falses(Int64(10))
-@test A == B
+timesofar("linalg")
 
 ## I/O ##
 
