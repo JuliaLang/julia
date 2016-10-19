@@ -42,8 +42,18 @@ endif
 
 # We need to bundle ca certs on linux now that we're using libgit2 with ssl
 ifeq ($(OS),Linux)
-ifeq ($(shell [ -e $(shell openssl version -d | cut -d '"' -f 2)/cert.pem ] && echo exists),exists)
-CERTFILE=$(shell openssl version -d | cut -d '"' -f 2)/cert.pem
+OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)
+# This certfile location observed on Ubuntu 14.04
+ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/cert.pem
+endif
+# This certfile location observed on Debian 7
+ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
+endif
+# This certfile location observed on openSUSE Leap 42.1
+ifeq ($(shell [ -e $(OPENSSL_DIR)/ca-bundle.pem ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/ca-bundle.pem
 endif
 endif
 

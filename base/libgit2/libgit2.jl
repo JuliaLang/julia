@@ -540,6 +540,8 @@ end
 function __init__()
     # Look for OpenSSL env variable for CA bundle (linux only)
     # windows and macOS use the OS native security backends
+    old_ssl_cert_dir = Base.get(ENV, "SSL_CERT_DIR", nothing)
+    old_ssl_cert_file = Base.get(ENV, "SSL_CERT_FILE", nothing)
     @static if is_linux()
         cert_loc = if "SSL_CERT_DIR" in keys(ENV)
             ENV["SSL_CERT_DIR"]
@@ -556,6 +558,23 @@ function __init__()
     err > 0 || throw(ErrorException("error initializing LibGit2 module"))
     atexit() do
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+    end
+
+    @static if is_linux()
+        if old_ssl_cert_dir != Base.get(ENV, "SSL_CERT_DIR", "")
+            if old_ssl_cert_dir === nothing
+                delete!(ENV, "SSL_CERT_DIR")
+            else
+                ENV["SSL_CERT_DIR"] = old_ssl_cert_dir
+            end
+        end
+        if old_ssl_cert_file != Base.get(ENV, "SSL_CERT_FILE", "")
+            if old_ssl_cert_file === nothing
+                delete!(ENV, "SSL_CERT_FILE")
+            else
+                ENV["SSL_CERT_FILE"] = old_ssl_cert_file
+            end
+        end
     end
 end
 
