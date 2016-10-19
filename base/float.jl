@@ -500,8 +500,13 @@ isnan{T<:IEEEFloat}(x::T) = (reinterpret(Unsigned, x) & ~sign_mask(T)) > exponen
 isnan(x::AbstractFloat) = x != x
 isnan(x::Real) = false
 
+"""
+    isfinite(f) -> Bool
+
+Test whether a floating point number is finite, i.e. that `f` is neither infinite or not a number.
+"""
+isfinite{T<:IEEEFloat}(x::T) = (reinterpret(Unsigned, x) & exponent_mask(T)) != exponent_mask(T)
 isfinite(x::AbstractFloat) = x - x == 0
-isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
