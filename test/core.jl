@@ -3739,7 +3739,8 @@ end
 
 # issue #13229
 module I13229
-    using Base.Test
+using Base.Test
+if !startswith(string(Sys.ARCH), "arm")
     global z = 0
     @timed @profile for i = 1:5
         function f(x)
@@ -3748,6 +3749,9 @@ module I13229
         global z = f(i)
     end
     @test z == 10
+else
+    warn("@profile test skipped")
+end
 end
 
 # issue #15186
