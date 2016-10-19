@@ -1715,7 +1715,7 @@ static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_val
             arraylist_push(&flagref_list, (void*)pos);
         }
     }
-    jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, HT_NOTFOUND); // no loc, since if dt is replaced, then dt->instance would be also
+    jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)HT_NOTFOUND); // no loc, since if dt is replaced, then dt->instance would be also
     jl_set_typeof(v, dt);
     return v;
 }
@@ -2540,7 +2540,7 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
     return t;
 }
 
-static void jl_update_backref_list(jl_value_t *old, jl_value_t *new, size_t start)
+static void jl_update_backref_list(jl_value_t *old, jl_value_t *_new, size_t start)
 {
     // update the backref list
     size_t j = start;
@@ -2550,9 +2550,9 @@ static void jl_update_backref_list(jl_value_t *old, jl_value_t *new, size_t star
         jl_value_t *v = loc ? *loc : (jl_value_t*)backref_list.items[offs];
         if ((jl_value_t*)v == old) { // same item, update this entry
             if (loc)
-                *loc = (jl_value_t*)new;
+                *loc = (jl_value_t*)_new;
             if (offs > 0)
-                backref_list.items[offs] = new;
+                backref_list.items[offs] = _new;
             // delete this item from the flagref list, so it won't be re-encountered later
             flagref_list.len -= 2;
             if (j >= flagref_list.len)
@@ -2572,10 +2572,10 @@ jl_method_t *jl_recache_method(jl_method_t *m, size_t start)
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
-    jl_method_t *new = (jl_method_t*)jl_methtable_lookup(mt, sig);
-    assert(new && jl_is_method(new));
-    jl_update_backref_list((jl_value_t*)m, (jl_value_t*)new, start);
-    return new;
+    jl_method_t *_new = (jl_method_t*)jl_methtable_lookup(mt, sig);
+    assert(_new && jl_is_method(_new));
+    jl_update_backref_list((jl_value_t*)m, (jl_value_t*)_new, start);
+    return _new;
 }
 
 jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_t start)
@@ -2592,9 +2592,9 @@ jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)m->sig, (jl_value_t*)argtypes, &env, m->tvars);
     assert(ti != jl_bottom_type); (void)ti;
-    jl_method_instance_t *new = jl_specializations_get_linfo(m, argtypes, env);
-    jl_update_backref_list((jl_value_t*)li, (jl_value_t*)new, start);
-    return new;
+    jl_method_instance_t *_new = jl_specializations_get_linfo(m, argtypes, env);
+    jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
+    return _new;
 }
 
 static void jl_recache_types(void)
@@ -2603,14 +2603,14 @@ static void jl_recache_types(void)
     while (i < flagref_list.len) {
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
         int offs = (int)(intptr_t)flagref_list.items[i++];
-        jl_value_t *new, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+        jl_value_t *_new, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
         if (jl_is_method(o)) {
             // lookup the real Method based on the placeholder sig
-            new = (jl_value_t*)jl_recache_method((jl_method_t*)o, i);
+            _new = (jl_value_t*)jl_recache_method((jl_method_t*)o, i);
         }
         else if (jl_is_method_instance(o)) {
             // lookup the real MethodInstance based on the placeholder specTypes
-            new = (jl_value_t*)jl_recache_method_instance((jl_method_instance_t*)o, i);
+            _new = (jl_value_t*)jl_recache_method_instance((jl_method_instance_t*)o, i);
         }
         else {
             jl_value_t *v;
@@ -2648,9 +2648,9 @@ static void jl_recache_types(void)
             continue;
         }
         if (loc)
-            *loc = new;
+            *loc = _new;
         if (offs > 0)
-            backref_list.items[offs] = new;
+            backref_list.items[offs] = _new;
     }
 }
 
