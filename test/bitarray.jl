@@ -7,7 +7,7 @@ tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
 tc{T}(r1::T, r2::T) = true
 tc(r1,r2) = false
 
-bitcheck(b::BitArray) = length(b.chunks) == 0 || (b.chunks[end] == b.chunks[end] & Base._msk_end(b))
+bitcheck(b::BitArray) = Base._check_bitarray_consistency(b)
 bitcheck(x) = true
 
 function check_bitop(ret_type, func, args...)
