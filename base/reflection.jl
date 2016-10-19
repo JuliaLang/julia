@@ -587,9 +587,10 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     end
     types = to_tuple_type(types)
     asts = []
+    params = Core.Inference.InferenceParams()
     for x in _methods(f, types, -1)
         meth = func_for_method_checked(x[3], types)
-        (code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, optimize)
+        (code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
         code === nothing && error("inference not successful") # Inference disabled?
         push!(asts, uncompressed_ast(meth, code) => ty)
     end
@@ -603,9 +604,10 @@ function return_types(f::ANY, types::ANY=Tuple)
     end
     types = to_tuple_type(types)
     rt = []
+    params = Core.Inference.InferenceParams()
     for x in _methods(f, types, -1)
         meth = func_for_method_checked(x[3], types)
-        ty = Core.Inference.typeinf_type(meth, x[1], x[2])
+        ty = Core.Inference.typeinf_type(meth, x[1], x[2], true, params)
         ty === nothing && error("inference not successful") # Inference disabled?
         push!(rt, ty)
     end
