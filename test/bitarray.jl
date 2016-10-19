@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+module BitArrayTests
+
 using Base.Test
 
 tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(x->tc(x...), [zip(r1,r2)...])
@@ -1547,3 +1549,5 @@ let fname = ""
 end
 
 timesofar("I/O")
+
+end # module
