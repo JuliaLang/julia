@@ -2259,6 +2259,15 @@ end
 # BitArray I/O
 
 write(s::IO, B::BitArray) = write(s, B.chunks)
-read!(s::IO, B::BitArray) = read!(s, B.chunks)
+function read!(s::IO, B::BitArray)
+    n = length(B)
+    Bc = B.chunks
+    nc = length(read!(s, Bc))
+    if length(Bc) > 0 && Bc[end] & _msk_end(n) ≠ Bc[end]
+        Bc[end] &= _msk_end(n) # ensure that the BitArray is not broken
+        throw(DimensionMismatch("read mismatch, found non-zero bits after BitArray length"))
+    end
+    return B
+end
 
 sizeof(B::BitArray) = sizeof(B.chunks)

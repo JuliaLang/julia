@@ -1499,3 +1499,51 @@ B = trues(Int64(10))
 A = falses(Int32(10))
 B = falses(Int64(10))
 @test A == B
+
+## I/O ##
+
+b1 = bitrand(v1)
+b1[v1 ÷ 2 + 1] = true
+b1[end] = true
+let fname = ""
+    try
+        fname = tempname()
+        open(fname, "w") do f
+            write(f, b1)
+        end
+        b2 = falses(v1)
+        read!(fname, b2)
+        @test bitcheck(b2)
+        @test b1 == b2
+        b2 = falses(v1 ÷ 10, 10)
+        read!(fname, b2)
+        @test bitcheck(b2)
+        @test reshape(b1, v1 ÷ 10, 10) == b2
+        b2 = falses(v1 + 65)
+        @test bitcheck(b2)
+        @test_throws EOFError read!(fname, b2)
+        @test bitcheck(b2)
+        b2 = falses(v1 ÷ 2)
+        @test_throws DimensionMismatch read!(fname, b2)
+        @test bitcheck(b2)
+        b2 = falses(v1 - 1)
+        @test_throws DimensionMismatch read!(fname, b2)
+        @test bitcheck(b2)
+
+        b1 = BitArray(0)
+        open(fname, "w") do f
+            write(f, b1)
+        end
+        b2 = BitArray(0)
+        read!(fname, b2)
+        @test b1 == b2
+        @test bitcheck(b2)
+        b2 = trues(1)
+        @test_throws EOFError read!(fname, b2)
+        @test bitcheck(b2)
+    finally
+         isfile(fname) && rm(fname)
+    end
+end
+
+timesofar("I/O")
