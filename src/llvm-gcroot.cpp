@@ -11,6 +11,7 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Intrinsics.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #if JL_LLVM_VERSION >= 30600
@@ -1244,4 +1245,11 @@ Pass *createLowerGCFramePass(MDNode *tbaa_gcframe)
 {
     assert(tbaa_gcframe);
     return new LowerGCFrame(tbaa_gcframe);
+}
+
+extern "C" JL_DLLEXPORT
+void LLVMAddLowerGCFramePass(LLVMPassManagerRef PM, LLVMValueRef V) {
+    auto *MD = cast<MetadataAsValue>(unwrap(V));
+    auto *tbaa_gcframe = cast<MDNode>(MD->getMetadata());
+    unwrap(PM)->add(createLowerGCFramePass(tbaa_gcframe));
 }
