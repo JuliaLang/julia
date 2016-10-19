@@ -534,7 +534,7 @@
                   #\newline
                   (if *deperror* "ERROR:" "WARNING:") " deprecated syntax \"" what "\""
                   (if (or (not s) (eq? current-filename 'none))
-                      ""
+                      (string " in module: " (deparse (current-julia-module)))
                       (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
                   "."
                   (if (equal? instead "")
