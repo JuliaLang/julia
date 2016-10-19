@@ -215,3 +215,81 @@ function hash(x::Nullable, h::UInt)
         return hash(x.value, h + nullablehash_seed)
     end
 end
+
+# Unary operators
+
+# Note this list does not include sqrt since it can raise a DomainError
+for op in (+, -, abs, abs2)
+    null_safe_op{T<:NullSafeTypes}(::typeof(op), ::Type{T}) = true
+    null_safe_op{S<:NullSafeTypes,
+                 T<:NullSafeTypes}(::typeof(op), ::Type{Complex{S}}, ::Type{Complex{T}}) = true
+    null_safe_op{S<:NullSafeTypes,
+                 T<:NullSafeTypes}(::typeof(op), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
+end
+
+null_safe_op{T<:NullSafeInts}(::typeof(~), ::Type{T}) = true
+null_safe_op(::typeof(!), ::Type{Bool}) = true
+
+for op in (:+, :-, :!, :~, :abs, :abs2, :sqrt, :cbrt)
+    @eval begin
+        @inline function $op{S}(x::Nullable{S})
+            R = promote_op($op, S)
+            if null_safe_op($op, S)
+                Nullable{R}($op(x.value), !isnull(x))
+            else
+                isnull(x) ? Nullable{R}() :
+                            Nullable{R}($op(x.value))
+            end
+        end
+        $op(x::Nullable{Union{}}) = Nullable()
+    end
+end
+
+# These can only be defined after cbrt above
+null_safe_op{T<:NullSafeTypes}(::typeof(cbrt), ::Type{T}) = true
+null_safe_op{S<:NullSafeTypes,
+             T<:NullSafeTypes}(::typeof(cbrt), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
+
+# Binary operators
+
+# Note this list does not include ^, ÷ and %
+# Operations between signed and unsigned types are not safe: promotion to unsigned
+# gives an InexactError for negative numbers
+for op in (+, -, *, /, &, |, <<, >>, >>>,
+           scalarmin, scalarmax)
+    # to fix ambiguities
+    null_safe_op{S<:NullSafeFloats,
+                 T<:NullSafeFloats}(::typeof(op), ::Type{S}, ::Type{T}) = true
+    null_safe_op{S<:NullSafeSignedInts,
+                 T<:NullSafeSignedInts}(::typeof(op), ::Type{S}, ::Type{T}) = true
+    null_safe_op{S<:NullSafeUnsignedInts,
+                 T<:NullSafeUnsignedInts}(::typeof(op), ::Type{S}, ::Type{T}) = true
+end
+for op in (+, -, *, /)
+    null_safe_op{S<:NullSafeSignedInts,
+                 T<:NullSafeSignedInts}(::typeof(op), ::Type{Complex{S}}, ::Type{Complex{T}}) = true
+    null_safe_op{S<:NullSafeSignedInts,
+                 T<:NullSafeSignedInts}(::typeof(op), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
+    null_safe_op{S<:NullSafeUnsignedInts,
+                 T<:NullSafeUnsignedInts}(::typeof(op), ::Type{Complex{S}}, ::Type{Complex{T}}) = true
+    null_safe_op{S<:NullSafeUnsignedInts,
+                 T<:NullSafeUnsignedInts}(::typeof(op), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
+end
+
+for op in (:+, :-, :*, :/, :%, :÷, :&, :|, :^, :<<, :>>, :(>>>),
+           :scalarmin, :scalarmax)
+    @eval begin
+        @inline function $op{S,T}(x::Nullable{S}, y::Nullable{T})
+            R = promote_op($op, S, T)
+            if null_safe_op($op, S, T)
+                Nullable{R}($op(x.value, y.value), !(isnull(x) | isnull(y)))
+            else
+                (isnull(x) | isnull(y)) ? Nullable{R}() :
+                                          Nullable{R}($op(x.value, y.value))
+            end
+        end
+        $op(x::Nullable{Union{}}, y::Nullable{Union{}}) = Nullable()
+        $op{S}(x::Nullable{Union{}}, y::Nullable{S}) = Nullable{S}()
+        $op{S}(x::Nullable{S}, y::Nullable{Union{}}) = Nullable{S}()
+    end
+end
