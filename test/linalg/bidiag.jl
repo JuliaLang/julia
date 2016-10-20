@@ -61,12 +61,12 @@ srand(1)
         @testset "Constructor and basic properties" begin
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
-            @test full(T) == diagm(dv) + diagm(ev, isupper?1:-1)
-            @test Bidiagonal(full(T), isupper) == T
+            @test Array(T) == diagm(dv) + diagm(ev, isupper?1:-1)
+            @test Bidiagonal(Array(T), isupper) == T
             @test big(T) == T
-            @test full(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, isupper?1:-1))
-            @test full(real(T)) == real(diagm(dv)) + real(diagm(ev, isupper?1:-1))
-            @test full(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper?1:-1))
+            @test Array(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, isupper?1:-1))
+            @test Array(real(T)) == real(diagm(dv)) + real(diagm(ev, isupper?1:-1))
+            @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper?1:-1))
         end
         z = zeros(elty, n)
 
@@ -100,7 +100,7 @@ srand(1)
             @test_throws ArgumentError triu!(Bidiagonal(dv,ev,'U'),n+1)
         end
 
-        Tfull = full(T)
+        Tfull = Array(T)
         @testset "Linear solves" begin
             if relty <: AbstractFloat
                 c = convert(Matrix{elty}, randn(n,n))
@@ -189,7 +189,7 @@ srand(1)
 
         @testset "Singular systems" begin
             if (elty <: BlasReal)
-                @test full(svdfact(T)) ≈ full(svdfact!(copy(Tfull)))
+                @test AbstractArray(svdfact(T)) ≈ AbstractArray(svdfact!(copy(Tfull)))
                 @test svdvals(Tfull) ≈ svdvals(T)
                 u1, d1, v1 = svd(Tfull)
                 u2, d2, v2 = svd(T)
@@ -212,9 +212,9 @@ srand(1)
                 dv = convert(Vector{elty}, relty <: AbstractFloat ? randn(n) : rand(1:10, n))
                 ev = convert(Vector{elty}, relty <: AbstractFloat ? randn(n-1) : rand(1:10, n-1))
                 T2 = Bidiagonal(dv, ev, isupper2)
-                Tfull2 = full(T2)
+                Tfull2 = Array(T2)
                 for op in (+, -, *)
-                    @test full(op(T, T2)) ≈ op(Tfull, Tfull2)
+                    @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
             end
         end
@@ -240,7 +240,7 @@ end
     B = rand(Float64,10,10)
     C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
     @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
-    @test promote(B,A) == (B,convert(Matrix{Float64},full(A)))
+    @test promote(B,A) == (B, convert(Matrix{Float64}, A))
     @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
 end
 
@@ -279,14 +279,14 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
             b = Bidiagonal(randn(1,1), true)
             st = SymTridiagonal(randn(1,1))
             for x in (b, st)
-                @test full(fill!(x, val)) == fill!(full(x), val)
+                @test Array(fill!(x, val)) == fill!(Array(x), val)
             end
             b = Bidiagonal(randn(2,2), true)
             st = SymTridiagonal(randn(3), randn(2))
             t = Tridiagonal(randn(3,3))
             for x in (b, t, st)
                 @test_throws ArgumentError fill!(x, val)
-                @test full(fill!(x, 0)) == fill!(full(x), 0)
+                @test Array(fill!(x, 0)) == fill!(Array(x), 0)
             end
         end
     end
