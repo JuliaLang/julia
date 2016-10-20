@@ -26,6 +26,18 @@ static Value *prepare_call(Value *Callee)
 }
 
 
+// --- language feature checks ---
+
+// branch on whether a language feature is enabled or not
+#define JL_FEAT_TEST(ctx, feature) ((ctx)->params->feature)
+
+// require a language feature to be enabled
+#define JL_FEAT_REQUIRE(ctx, feature) \
+    if (!JL_FEAT_TEST(ctx, feature)) \
+        jl_errorf("%s for %s:%d requires the " #feature " language feature, which is disabled", \
+                  __FUNCTION__, (ctx)->file.str().c_str(), *(ctx)->line);
+
+
 // --- string constants ---
 static StringMap<GlobalVariable*> stringConstants;
 static Value *stringConstPtr(IRBuilder<> &builder, const std::string &txt)
@@ -660,6 +672,7 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 static void raise_exception(Value *exc, jl_codectx_t *ctx,
                             BasicBlock *contBB=nullptr)
 {
+    JL_FEAT_REQUIRE(ctx, runtime);
 #if JL_LLVM_VERSION >= 30700
     builder.CreateCall(prepare_call(jlthrow_func), { exc });
 #else
@@ -1566,6 +1579,9 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
 // allocation for known size object
 static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt)
 {
+    JL_FEAT_REQUIRE(ctx, dynamic_alloc);
+    JL_FEAT_REQUIRE(ctx, runtime);
+
     int osize;
     int offset = jl_gc_classify_pools(static_size, &osize);
     Value *ptls_ptr = emit_bitcast(ctx->ptlsStates, T_pint8);

@@ -1261,7 +1261,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t *li)
     decls = li->functionObjectsDecls;
     if (decls.functionObject != NULL || li->jlcall_api == 2)
         return decls;
-    return jl_compile_linfo(li, src);
+    return jl_compile_linfo(li, src, &jl_default_cgparams);
 }
 
 // compile-time method lookup
@@ -1310,7 +1310,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     if (jl_is_uninferred(li))
         src = jl_type_infer(li, 0);
     if (li->jlcall_api != 2)
-        jl_compile_linfo(li, src);
+        jl_compile_linfo(li, src, &jl_default_cgparams);
     return 1;
 }
 
@@ -1550,7 +1550,7 @@ static void _compile_all_deq(jl_array_t *found)
                 linfo->fptr = (jl_fptr_t)(uintptr_t)-1;
         }
         else {
-            jl_compile_linfo(linfo, src);
+            jl_compile_linfo(linfo, src, &jl_default_cgparams);
             assert(linfo->functionObjectsDecls.functionObject != NULL);
         }
     }

@@ -188,7 +188,7 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t *li, int force);
 jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *F);
-jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t *li, jl_code_info_t *src);
+jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t *li, jl_code_info_t *src, jl_cgparams_t *params);
 jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t *li);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
