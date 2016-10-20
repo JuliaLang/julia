@@ -2440,6 +2440,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     jl_serialize_lambdas_from_mod(&s, jl_main_module);
     jl_serialize_value(&s, NULL); // signal end of lambdas
     jl_finalize_serializer(&s); // done with f
+    serializer_worklist = NULL;
 
     jl_gc_enable(en);
     htable_reset(&backref_table, 0);
@@ -2506,10 +2507,10 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
     assert(t->uid != 0);
     // delete / replace any other usages of this type in the backref list
     // with the newly constructed object
-    size_t j = start;
-    while (j < flagref_list.len) {
-        jl_value_t **loc = (jl_value_t**)flagref_list.items[j];
-        int offs = (int)(intptr_t)flagref_list.items[j + 1];
+    size_t i = start;
+    while (i < flagref_list.len) {
+        jl_value_t **loc = (jl_value_t**)flagref_list.items[i + 0];
+        int offs = (int)(intptr_t)flagref_list.items[i + 1];
         jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
         if ((jl_value_t*)dt == o) {
             if (t != dt) {
@@ -2527,90 +2528,28 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt, size_t start, jl_value_
             }
         }
         else {
-            j += 2;
+            i += 2;
             continue;
         }
         // delete this item from the flagref list, so it won't be re-encountered later
         flagref_list.len -= 2;
-        if (j >= flagref_list.len)
+        if (i >= flagref_list.len)
             break;
-        flagref_list.items[j + 0] = flagref_list.items[flagref_list.len + 0];
-        flagref_list.items[j + 1] = flagref_list.items[flagref_list.len + 1];
+        flagref_list.items[i + 0] = flagref_list.items[flagref_list.len + 0];
+        flagref_list.items[i + 1] = flagref_list.items[flagref_list.len + 1];
     }
     return t;
-}
-
-static void jl_update_backref_list(jl_value_t *old, jl_value_t *_new, size_t start)
-{
-    // update the backref list
-    size_t j = start;
-    while (j < flagref_list.len) {
-        jl_value_t **loc = (jl_value_t**)flagref_list.items[j];
-        int offs = (int)(intptr_t)flagref_list.items[j + 1];
-        jl_value_t *v = loc ? *loc : (jl_value_t*)backref_list.items[offs];
-        if ((jl_value_t*)v == old) { // same item, update this entry
-            if (loc)
-                *loc = (jl_value_t*)_new;
-            if (offs > 0)
-                backref_list.items[offs] = _new;
-            // delete this item from the flagref list, so it won't be re-encountered later
-            flagref_list.len -= 2;
-            if (j >= flagref_list.len)
-                break;
-            flagref_list.items[j + 0] = flagref_list.items[flagref_list.len + 0];
-            flagref_list.items[j + 1] = flagref_list.items[flagref_list.len + 1];
-        }
-        else {
-            j += 2;
-        }
-    }
-}
-
-jl_method_t *jl_recache_method(jl_method_t *m, size_t start)
-{
-    jl_datatype_t *sig = jl_recache_type(m->sig, start, NULL);
-    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
-    jl_methtable_t *mt = ftype->name->mt;
-    jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
-    jl_method_t *_new = (jl_method_t*)jl_methtable_lookup(mt, sig);
-    assert(_new && jl_is_method(_new));
-    jl_update_backref_list((jl_value_t*)m, (jl_value_t*)_new, start);
-    return _new;
-}
-
-jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_t start)
-{
-    assert(jl_is_datatype(li->def));
-    jl_datatype_t *sig = jl_recache_type((jl_datatype_t*)li->def, start, NULL);
-    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
-    jl_methtable_t *mt = ftype->name->mt;
-    jl_method_t *m = (jl_method_t*)jl_methtable_lookup(mt, sig);
-    assert(m && jl_is_method(m));
-
-    jl_datatype_t *argtypes = jl_recache_type(li->specTypes, start, NULL);
-    jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
-    jl_svec_t *env = jl_emptysvec;
-    jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)m->sig, (jl_value_t*)argtypes, &env, m->tvars);
-    assert(ti != jl_bottom_type); (void)ti;
-    jl_method_instance_t *_new = jl_specializations_get_linfo(m, argtypes, env);
-    jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
-    return _new;
 }
 
 static void jl_recache_types(void)
 {
     size_t i = 0;
     while (i < flagref_list.len) {
-        jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
-        int offs = (int)(intptr_t)flagref_list.items[i++];
-        jl_value_t *_new, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
-        if (jl_is_method(o)) {
-            // lookup the real Method based on the placeholder sig
-            _new = (jl_value_t*)jl_recache_method((jl_method_t*)o, i);
-        }
-        else if (jl_is_method_instance(o)) {
-            // lookup the real MethodInstance based on the placeholder specTypes
-            _new = (jl_value_t*)jl_recache_method_instance((jl_method_instance_t*)o, i);
+        jl_value_t **loc = (jl_value_t**)flagref_list.items[i + 0];
+        int offs = (int)(intptr_t)flagref_list.items[i + 1];
+        jl_value_t *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+        if (jl_is_method(o) || jl_is_method_instance(o)) {
+            i += 2;
         }
         else {
             jl_value_t *v;
@@ -2619,17 +2558,18 @@ static void jl_recache_types(void)
                 dt = (jl_datatype_t*)o;
                 v = dt->instance;
                 assert(dt->uid == -1);
-                t = jl_recache_type(dt, i, NULL);
+                t = jl_recache_type(dt, i + 2, NULL);
             }
             else {
                 dt = (jl_datatype_t*)jl_typeof(o);
                 v = o;
                 assert(dt->instance);
-                t = jl_recache_type(dt, i, v);
+                t = jl_recache_type(dt, i + 2, v);
             }
             assert(dt);
             if (t != dt) {
-                jl_set_typeof(dt, (void*)(intptr_t)0x10); // invalidate the old value to help catch errors
+                assert(!type_in_worklist(t));
+                jl_set_typeof(dt, (void*)(intptr_t)0x10); // invalidate the old datatype to help catch errors
                 if ((jl_value_t*)dt == o) {
                     if (loc)
                         *loc = (jl_value_t*)t;
@@ -2645,7 +2585,93 @@ static void jl_recache_types(void)
                         backref_list.items[offs] = t->instance;
                 }
             }
-            continue;
+            // delete this item from the flagref list, so it won't be re-encountered later
+            flagref_list.len -= 2;
+            if (i >= flagref_list.len)
+                break;
+            flagref_list.items[i + 0] = flagref_list.items[flagref_list.len + 0];
+            flagref_list.items[i + 1] = flagref_list.items[flagref_list.len + 1];
+        }
+    }
+}
+
+static void jl_update_backref_list(jl_value_t *old, jl_value_t *_new, size_t start)
+{
+    // update the backref list
+    size_t i = start;
+    while (i < flagref_list.len) {
+        jl_value_t **loc = (jl_value_t**)flagref_list.items[i + 0];
+        int offs = (int)(intptr_t)flagref_list.items[i + 1];
+        jl_value_t *v = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+        if ((jl_value_t*)v == old) { // same item, update this entry
+            if (loc)
+                *loc = (jl_value_t*)_new;
+            if (offs > 0)
+                backref_list.items[offs] = _new;
+            // delete this item from the flagref list, so it won't be re-encountered later
+            flagref_list.len -= 2;
+            if (i >= flagref_list.len)
+                break;
+            flagref_list.items[i + 0] = flagref_list.items[flagref_list.len + 0];
+            flagref_list.items[i + 1] = flagref_list.items[flagref_list.len + 1];
+        }
+        else {
+            i += 2;
+        }
+    }
+}
+
+jl_method_t *jl_recache_method(jl_method_t *m, size_t start)
+{
+    jl_datatype_t *sig = m->sig;
+    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
+    jl_methtable_t *mt = ftype->name->mt;
+    jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
+    jl_method_t *_new = (jl_method_t*)jl_methtable_lookup(mt, sig);
+    assert(_new && jl_is_method(_new));
+    jl_update_backref_list((jl_value_t*)m, (jl_value_t*)_new, start);
+    return _new;
+}
+
+jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_t start)
+{
+    assert(jl_is_datatype(li->def));
+    jl_datatype_t *sig = (jl_datatype_t*)li->def;
+    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
+    jl_methtable_t *mt = ftype->name->mt;
+    jl_method_t *m = (jl_method_t*)jl_methtable_lookup(mt, sig);
+    assert(m && jl_is_method(m));
+
+    jl_datatype_t *argtypes = li->specTypes;
+    jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
+    jl_svec_t *env = jl_emptysvec;
+    jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)m->sig, (jl_value_t*)argtypes, &env, m->tvars);
+    //assert(ti != jl_bottom_type); (void)ti;
+    if (ti == jl_bottom_type)
+        env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
+    jl_method_instance_t *_new = jl_specializations_get_linfo(m, argtypes, env);
+    jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
+    return _new;
+}
+
+static void jl_recache_other(void)
+{
+    size_t i = 0;
+    while (i < flagref_list.len) {
+        jl_value_t **loc = (jl_value_t**)flagref_list.items[i + 0];
+        int offs = (int)(intptr_t)flagref_list.items[i + 1];
+        jl_value_t *_new, *o = loc ? *loc : (jl_value_t*)backref_list.items[offs];
+        i += 2;
+        if (jl_is_method(o)) {
+            // lookup the real Method based on the placeholder sig
+            _new = (jl_value_t*)jl_recache_method((jl_method_t*)o, i);
+        }
+        else if (jl_is_method_instance(o)) {
+            // lookup the real MethodInstance based on the placeholder specTypes
+            _new = (jl_value_t*)jl_recache_method_instance((jl_method_instance_t*)o, i);
+        }
+        else {
+            assert(0);
         }
         if (loc)
             *loc = _new;
@@ -2699,6 +2725,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     jl_array_t *restored = NULL;
     jl_array_t *init_order = NULL;
     restored = (jl_array_t*)jl_deserialize_value(&s, (jl_value_t**)&restored);
+    serializer_worklist = restored;
 
     // get list of external generic functions
     linkedlist_t external_methods;
@@ -2711,9 +2738,11 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     // at this point, the AST is fully reconstructed, but still completely disconnected
     // now all of the interconnects will be created
     jl_recache_types(); // make all of the types identities correct
+    jl_recache_other(); // make all of the other objects identities correct
     init_order = jl_finalize_deserializer(&s, tracee_list); // done with f and s
     jl_insert_methods(&external_methods); // hook up methods of external generic functions
     free_linkedlist(external_methods.next);
+    serializer_worklist = NULL;
 
     JL_GC_PUSH2(&init_order, &restored);
     jl_gc_enable(en);
