@@ -1320,6 +1320,7 @@ export
 # nullable types
     isnull,
     unsafe_get,
+    lift
 
 # Macros
     # parser internal
