@@ -120,14 +120,14 @@ end
 # print elapsed time, return expression value
 const _mem_units = ["byte", "KB", "MB", "GB", "TB", "PB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
-function prettyprint_getunits(value, numunits, factor)
-    if value == 0 || value == 1
+function prettyprint_getunits(value, num_units, factor)
+    if value == 0
         return (value, 1)
     end
-    unit = ceil(Int, log(value) / log(factor))
-    unit = min(numunits, unit)
-    number = value/factor^(unit-1)
-    return number, unit
+    unit = ceil(Int, log(value + 1) / log(factor))
+    unit = min(num_units, unit)
+    number = value / factor^(unit - 1)
+    number, unit
 end
 
 function padded_nonzero_print(value,str)
