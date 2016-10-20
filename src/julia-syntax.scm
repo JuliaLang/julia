@@ -2999,9 +2999,9 @@ f(x) = yt(x)
                      ,(if exists
                           '(null)
                           (convert-assignment name mk-closure fname lam interp)))))))
-          ((lambda)  ;; should only happen inside (thunk ...)
+          ((lambda)  ;; happens inside (thunk ...) and generated function bodies
 	   (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
-		     (car (lam:vinfo e)))
+		     (list-tail (car (lam:vinfo e)) (length (lam:args e))))
            `(lambda ,(cadr e)
               (,(clear-capture-bits (car (lam:vinfo e)))
                () ,@(cddr (lam:vinfo e)))
