@@ -54,7 +54,7 @@ If `A` is a matrix and `b` is a vector, then `scale!(A,b)` scales each column `i
 thrown if the scaling produces a number not representable by the element type of `A`,
 e.g. for integer types.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [1 2; 3 4]
@@ -91,7 +91,7 @@ scale!(s::Number, X::AbstractArray) = generic_scale!(s, X)
 
 Compute the cross product of two 3-vectors.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [0;1;0]
@@ -120,7 +120,7 @@ cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[
 
 Upper triangle of a matrix.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = ones(4,4)
@@ -145,7 +145,7 @@ triu(M::AbstractMatrix) = triu!(copy(M))
 
 Lower triangle of a matrix.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = ones(4,4)
@@ -170,7 +170,7 @@ tril(M::AbstractMatrix) = tril!(copy(M))
 
 Returns the upper triangle of `M` starting from the `k`th superdiagonal.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = ones(4,4)
@@ -202,7 +202,7 @@ triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
 
 Returns the lower triangle of `M` starting from the `k`th superdiagonal.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = ones(4,4)
@@ -253,7 +253,7 @@ diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 Finite difference operator of matrix or vector `A`. If `A` is a matrix,
 compute the finite difference over a dimension `dim` (default `1`).
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [2 4; 6 16]
@@ -286,7 +286,7 @@ gradient(F::AbstractVector) = gradient(F, [1:length(F);])
 Compute differences along vector `F`, using `h` as the spacing between points. The default
 spacing is one.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [2,4,6,8];
@@ -488,7 +488,7 @@ For vectors, `p` can assume any numeric value (even though not all values produc
 mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
 in `abs(A)`, whereas `norm(A, -Inf)` returns the smallest.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> v = [3;-2;6]
@@ -508,7 +508,7 @@ For matrices, the matrix norm induced by the vector `p`-norm is used, where vali
 `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices, `p=2` is currently not
 implemented.) Use [`vecnorm`](:func:`vecnorm`) to compute the Frobenius norm.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 -2 -3; 2 3 -1]
@@ -595,7 +595,7 @@ dot(x::Number, y::Number) = vecdot(x, y)
 
 Compute the dot product. For complex vectors, the first vector is conjugated.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> dot([1; 1], [2; 3])
@@ -632,7 +632,7 @@ rank(x::Number) = x==0 ? 0 : 1
 
 Matrix trace. Sums the diagonal elements of `M`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -665,7 +665,7 @@ Matrix inverse. Computes matrix `N` such that
 Computed by solving the left-division
 `N = M \\ I`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> M = [2 5; 1 3]
@@ -703,7 +703,7 @@ When `A` is sparse, a similar polyalgorithm is used. For indefinite matrices, th
 factorization does not use pivoting during the numerical factorization and therefore the
 procedure can fail even for invertible matrices.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 0; 1 -2]; B = [32; -4];
@@ -768,7 +768,7 @@ condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))
 
 Test whether a matrix is symmetric.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -808,7 +808,7 @@ issymmetric(x::Number) = x == x
 
 Test whether a matrix is Hermitian.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -848,7 +848,7 @@ ishermitian(x::Number) = (x == conj(x))
 
 Test whether a matrix is upper triangular.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -883,7 +883,7 @@ end
 
 Test whether a matrix is lower triangular.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -918,7 +918,7 @@ end
 
 Test whether a matrix is diagonal.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -1100,7 +1100,7 @@ end
 
 Matrix determinant.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> M = [1 0; 2 2]
@@ -1186,7 +1186,7 @@ end
 Normalize the vector `v` with respect to the `p`-norm.
 See also [`normalize!`](:func:`normalize!`) and [`vecnorm`](:func:`vecnorm`).
 
-**Example**
+# Example
 
 ```jldoctest
 julia> a = [1,2,4];

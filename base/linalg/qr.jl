@@ -208,7 +208,7 @@ Returns `w`, a unit vector in the direction of `v`, and
 See also [`normalize`](:func:`normalize`), [`normalize!`](:func:`normalize!`),
 and [`LinAlg.qr!](:func:`LinAlg.qr!`).
 
-**Example**
+# Example
 
 ```jldoctest
 julia> v = [1; 2]

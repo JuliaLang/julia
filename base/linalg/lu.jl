@@ -116,16 +116,13 @@ The relationship between `F` and `A` is
 | [`logabsdet`](:func:`logabsdet`) | ✓    | ✓                      |
 | [`size`](:func:`size`)           | ✓    | ✓                      |
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [4 3; 6 3]
 2×2 Array{Int64,2}:
  4  3
  6  3
-
-julia> lufact(A)
-Base.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)
 
 julia> F = lufact(A)
 Base.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)
@@ -169,7 +166,7 @@ By default, pivoting is used. This can be overridden by passing
 
 See also [`lufact`](:func:`lufact`).
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]

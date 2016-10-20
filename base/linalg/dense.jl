@@ -46,7 +46,7 @@ isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); ispos
 
 Test whether a matrix is positive definite.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 2; 2 50]
@@ -83,7 +83,7 @@ vecnorm2{T<:BlasFloat}(x::Union{Array{T},StridedVector{T}}) =
 Returns the upper triangle of `M` starting from the `k`th superdiagonal,
 overwriting `M` in the process.
 
-**Example**
+# Example
 ```jldoctest
 julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
 5×5 Array{Int64,2}:
@@ -126,7 +126,7 @@ triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 Returns the lower triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in
 the process.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
@@ -192,7 +192,7 @@ end
 
 A [`Range`](:class:`Range`) giving the indices of the `k`th diagonal of the matrix `M`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
@@ -213,7 +213,7 @@ diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 The `k`th diagonal of a matrix, as a vector.
 Use [`diagm`](:func:`diagm`) to construct a diagonal matrix.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
@@ -235,7 +235,7 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 Construct a matrix by placing `v` on the `k`th diagonal.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> diagm([1,2,3],1)
@@ -269,7 +269,7 @@ end
 
 Kronecker tensor product of two vectors or two matrices.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -277,17 +277,17 @@ julia> A = [1 2; 3 4]
  1  2
  3  4
 
-julia> B = [1 1; 1 1]
-2×2 Array{Int64,2}:
- 1  1
- 1  1
+julia> B = [im 1; 1 -im]
+2×2 Array{Complex{Int64},2}:
+ 0+1im  1+0im
+ 1+0im  0-1im
 
 julia> kron(A, B)
-4×4 Array{Int64,2}:
- 1  1  2  2
- 1  1  2  2
- 3  3  4  4
- 3  3  4  4
+4×4 Array{Complex{Int64},2}:
+ 0+1im  1+0im  0+2im  2+0im
+ 1+0im  0-1im  2+0im  0-2im
+ 0+3im  3+0im  0+4im  4+0im
+ 3+0im  0-3im  4+0im  0-4im
 ```
 """
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
@@ -338,7 +338,7 @@ used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 [^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](http://dx.doi.org/10.1137/090768539)
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = eye(2, 2)
@@ -576,7 +576,7 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = Array(Bidiagonal(ones(5, 5), true))
@@ -692,7 +692,7 @@ inverting dense ill-conditioned matrices in a least-squares sense,
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
-**Example**
+# Example
 
 ```jldoctest
 julia> M = [1.5 1.3; 1.2 1.9]
@@ -765,7 +765,7 @@ end
 
 Basis for nullspace of `M`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> M = [1 0 0; 0 1 0; 0 0 0]

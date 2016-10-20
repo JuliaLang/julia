@@ -75,7 +75,7 @@ before the eigenvector calculation. The option `permute=true` permutes the matri
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm. The default is `true` for both options.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
@@ -114,7 +114,7 @@ See [`eigfact`](:func:`eigfact`) for details on the
 and the `permute` and `scale` keyword arguments.
 The eigenvectors are returned columnwise.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
@@ -140,7 +140,7 @@ for [`eigfact`](:func:`eigfact`).
 For [`SymTridiagonal`](:class:`SymTridiagonal`) matrices, if the optional vector of
 eigenvalues `eigvals` is specified, returns the specific corresponding eigenvectors.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
@@ -190,7 +190,7 @@ Note that if the eigenvalues of `A` are complex,
 this method will fail, since complex numbers cannot
 be sorted.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [0 im; -im 0]
@@ -232,7 +232,7 @@ Note that if the eigenvalues of `A` are complex,
 this method will fail, since complex numbers cannot
 be sorted.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [0 im; -im 0]
@@ -319,7 +319,7 @@ Computes generalized eigenvalues (`D`) and vectors (`V`) of `A` with respect to 
 `eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the
 factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is recommended.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 0; 0 -1]
@@ -367,7 +367,7 @@ end
 
 Computes the generalized eigenvalues of `A` and `B`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 0; 0 -1]
@@ -397,7 +397,7 @@ end
 Returns a matrix `M` whose columns are the generalized eigenvectors of `A` and `B`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.)
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 0; 0 -1]
