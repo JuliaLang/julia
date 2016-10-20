@@ -12,7 +12,7 @@ end
 
 An object of type `UniformScaling`, representing an identity matrix of any size.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> ones(5, 6) * I == ones(5, 6)

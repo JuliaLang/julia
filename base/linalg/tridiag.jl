@@ -22,7 +22,7 @@ respectively. The result is of type `SymTridiagonal` and provides efficient spec
 eigensolvers, but may be converted into a regular matrix with
 [`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short).
 
-**Example**
+# Example
 
 ```jldoctest
 julia> dv = [1; 2; 3; 4]
@@ -357,7 +357,7 @@ solvers, but may be converted into a regular matrix with
 [`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> dl = [1; 2; 3]
@@ -408,7 +408,7 @@ end
 returns a `Tridiagonal` array based on (abstract) matrix `A`, using its first lower diagonal,
 main diagonal, and first upper diagonal.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]

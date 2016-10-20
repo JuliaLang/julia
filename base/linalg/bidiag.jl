@@ -21,7 +21,7 @@ and provides efficient specialized linear solvers, but may be converted into a r
 matrix with [`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short). `ev`'s length
 must be one less than the length of `dv`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> dv = [1; 2; 3; 4]
@@ -64,7 +64,7 @@ and provides efficient specialized linear solvers, but may be converted into a r
 matrix with [`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short). `ev`'s
 length must be one less than the length of `dv`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> dv = [1; 2; 3; 4]
@@ -117,7 +117,7 @@ end
 Construct a `Bidiagonal` matrix from the main diagonal of `A` and
 its first super- (if `isupper=true`) or sub-diagonal (if `isupper=false`).
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]

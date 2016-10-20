@@ -162,7 +162,7 @@ end
 Compute the Cholesky factorization of a positive definite matrix `A`
 and return the UpperTriangular matrix `U` such that `A = U'U`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1. 2.; 2. 50.]
@@ -192,7 +192,7 @@ end
 
 Compute the square root of a non-negative number `x`.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> chol(16)
@@ -230,7 +230,7 @@ of creating a copy. An `InexactError` exception is thrown if the factorisation
 produces a number not representable by the element type of `A`, e.g. for
 integer types.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [1 2; 2 50]
@@ -307,7 +307,7 @@ The triangular Cholesky factor can be obtained from the factorization `F` with: 
 The following functions are available for `Cholesky` objects: `size`, `\\`, `inv`, `det`.
 A `PosDefException` exception is thrown in case the matrix is not positive definite.
 
-**Example**
+# Example
 
 ```jldoctest
 julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
