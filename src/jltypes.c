@@ -1628,53 +1628,6 @@ JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
 }
 #endif
 
-jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
-                                          jl_svec_t **penv, jl_svec_t *tvars)
-{
-    int sza = jl_subtype_env_size(a);
-    int szb = jl_subtype_env_size(b);
-    int sz = 0;
-    jl_value_t **env = (jl_value_t**)alloca((sza>szb?sza:szb)*sizeof(jl_value_t*));
-    jl_value_t *ans = NULL;
-    if (jl_subtype_env(a, b, env, szb)) {
-        ans = a;
-        sz = szb;
-    }
-    else if (jl_subtype_env(b, a, env, sza)) {
-        ans = b;
-        sz = sza;
-    }
-    else if (jl_is_leaf_type(a) || jl_is_leaf_type(b)) {
-        return jl_bottom_type;
-    }
-    if (ans == NULL) {
-        ans = b;
-        sz = szb;
-        int i=0;
-        while (jl_is_unionall(b)) {
-            env[i++] = (jl_value_t*)((jl_unionall_t*)b)->var;
-            b = ((jl_unionall_t*)b)->body;
-        }
-    }
-    jl_svec_t *e = jl_alloc_svec(sz);
-    *penv = e;
-    int i;
-    for(i=0; i < sz; i++)
-        jl_svecset(e, i, env[i]);
-    return ans;
-}
-
-JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
-{
-    if (jl_subtype(a, b))
-        return a;
-    if (jl_subtype(b, a))
-        return b;
-    if (jl_is_leaf_type(a) || jl_is_leaf_type(b))
-        return jl_bottom_type;
-    return b;
-}
-
 // --- type instantiation and cache ---
 #if 0
 static int extensionally_same_type(jl_value_t *a, jl_value_t *b)
@@ -2074,6 +2027,12 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p
 {
     jl_typeenv_t env = { u->var, p, NULL };
     return inst_type_w_(u->body, &env, NULL, 1);
+}
+
+jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val)
+{
+    jl_typeenv_t env = { var, val, NULL };
+    return inst_type_w_(t, &env, NULL, 1);
 }
 
 jl_value_t *jl_unwrap_unionall(jl_value_t *v)
