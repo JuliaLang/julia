@@ -45,32 +45,6 @@ function init_load_path()
     #push!(LOAD_CACHE_PATH, abspath(JULIA_HOME, "..", "lib", "julia")) #TODO: add a builtin location?
 end
 
-# initialize the local proc network address / port
-function init_bind_addr()
-    opts = JLOptions()
-    if opts.bindto != C_NULL
-        bind_to = split(unsafe_string(opts.bindto), ":")
-        bind_addr = string(parse(IPAddr, bind_to[1]))
-        if length(bind_to) > 1
-            bind_port = parse(Int,bind_to[2])
-        else
-            bind_port = 0
-        end
-    else
-        bind_port = 0
-        try
-            bind_addr = string(getipaddr())
-        catch
-            # All networking is unavailable, initialize bind_addr to the loopback address
-            # Will cause an exception to be raised only when used.
-            bind_addr = "127.0.0.1"
-        end
-    end
-    global LPROC
-    LPROC.bind_addr = bind_addr
-    LPROC.bind_port = UInt16(bind_port)
-end
-
 function early_init()
     global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
@@ -88,21 +62,6 @@ end
 A string containing the full path to the directory containing the `julia` executable.
 """
 :JULIA_HOME
-
-function init_parallel()
-    start_gc_msgs_task()
-    atexit(terminate_all_workers)
-
-    init_bind_addr()
-
-    # start in "head node" mode, if worker, will override later.
-    global PGRP
-    global LPROC
-    LPROC.id = 1
-    cluster_cookie(randstring(HDR_COOKIE_LEN))
-    assert(isempty(PGRP.workers))
-    register_worker(LPROC)
-end
 
 const atexit_hooks = []
 

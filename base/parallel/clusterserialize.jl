@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import .Serializer: known_object_data, object_number, serialize_cycle, deserialize_cycle, writetag,
+import Base.Serializer: known_object_data, object_number, serialize_cycle, deserialize_cycle, writetag,
                       __deserialized_types__, serialize_typename, deserialize_typename,
-                      TYPENAME_TAG, object_numbers
+                      TYPENAME_TAG, object_numbers, reset_state
 
 type ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I

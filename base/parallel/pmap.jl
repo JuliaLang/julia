@@ -21,10 +21,10 @@ for details.
 """
 function pgenerate(p::WorkerPool, f, c)
     if length(p) == 0
-        return AsyncGenerator(f, c; ntasks=()->nworkers(p))
+        return Base.AsyncGenerator(f, c; ntasks=()->nworkers(p))
     end
     batches = batchsplit(c, min_batch_count = length(p) * 3)
-    return Iterators.flatten(AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
+    return Iterators.flatten(Base.AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
 end
 pgenerate(p::WorkerPool, f, c1, c...) = pgenerate(p, a->f(a...), zip(c1, c...))
 pgenerate(f, c) = pgenerate(default_worker_pool(), f, c)
@@ -118,7 +118,7 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
             f = wrap_on_error(f, on_error)
         end
 
-        return collect(AsyncGenerator(f, c; ntasks=()->nworkers(p)))
+        return collect(Base.AsyncGenerator(f, c; ntasks=()->nworkers(p)))
     else
         batches = batchsplit(c, min_batch_count = length(p) * 3,
                                 max_batch_size = batch_size)
@@ -133,7 +133,7 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
             f = wrap_on_error(f, (x,e)->BatchProcessingError(x,e); capture_data=true)
         end
         f = wrap_batch(f, p, on_error)
-        results = collect(Iterators.flatten(AsyncGenerator(f, batches; ntasks=()->nworkers(p))))
+        results = collect(Iterators.flatten(Base.AsyncGenerator(f, batches; ntasks=()->nworkers(p))))
         if (on_error !== nothing) || (retry_n > 0)
             process_batch_errors!(p, f_orig, results, on_error, retry_on, retry_n, retry_max_delay)
         end

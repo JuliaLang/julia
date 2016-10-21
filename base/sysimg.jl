@@ -274,11 +274,8 @@ importall .Enums
 include("serialize.jl")
 importall .Serializer
 include("channels.jl")
-include("clusterserialize.jl")
-include("multi.jl")
-include("workerpool.jl")
-include("pmap.jl")
-include("managers.jl")
+include("parallel/Parallel.jl")
+importall .Parallel
 include("asyncmap.jl")
 
 # code loading
@@ -383,7 +380,7 @@ function __init__()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
-    init_parallel()
+    Parallel.init_parallel()
     init_threadcall()
 end
 
