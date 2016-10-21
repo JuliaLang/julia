@@ -777,6 +777,18 @@ end
 # Test asyncmap
 @test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
 
+# check whether shape is retained
+a=rand(2,2)
+b=asyncmap(identity, a)
+@test a == b
+@test size(a) == size(b)
+
+# check with an iterator that does not implement size()
+c=Channel(32); foreach(i->put!(c,i), 1:10); close(c)
+b=asyncmap(identity, c)
+@test Int[1:10...] == b
+@test size(b) == (10,)
+
 # CachingPool tests
 wp = CachingPool(workers())
 @test [1:100...] == pmap(wp, x->x, 1:100)
