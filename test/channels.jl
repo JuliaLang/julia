@@ -61,6 +61,21 @@ results=[]
 end
 @test sum(results) == 15
 
+# Test channel iterator with done() being called multiple times
+# This needs to be explicitly tested since `take!` is called
+# in `done()` and not `next()`
+c=Channel(32); foreach(i->put!(c,i), 1:10); close(c)
+s=start(c)
+@test done(c,s) == false
+res = Int[]
+while !done(c,s)
+    @test done(c,s) == false
+    v,s = next(c,s)
+    push!(res,v)
+end
+@test res == Int[1:10...]
+
+
 # Testing timedwait on multiple channels
 @sync begin
     rr1 = Channel(1)
