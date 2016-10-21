@@ -54,6 +54,7 @@ end
 
 notify_error(c::Condition, err) = notify(c, err, true, true)
 
+n_waiters(c::Condition) = length(c.waitq)
 
 # schedule an expression to run asynchronously, with minimal ceremony
 """

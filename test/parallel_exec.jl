@@ -512,66 +512,6 @@ workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 # @parallel reduction should work even with very short ranges
 @test @parallel(+, for i=1:2; i; end) == 3
 
-# Testing timedwait on multiple channels
-@sync begin
-    rr1 = Channel()
-    rr2 = Channel()
-    rr3 = Channel()
-
-    callback() = all(map(isready, [rr1, rr2, rr3]))
-    # precompile functions which will be tested for execution time
-    @test !callback()
-    @test timedwait(callback, 0.0) === :timed_out
-
-    @async begin sleep(0.5); put!(rr1, :ok) end
-    @async begin sleep(1.0); put!(rr2, :ok) end
-    @async begin sleep(2.0); put!(rr3, :ok) end
-
-    tic()
-    timedwait(callback, 1.0)
-    et=toq()
-    # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
-    try
-        @test (et >= 1.0) && (et <= 1.5)
-        @test !isready(rr3)
-    catch
-        warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
-    end
-    @test isready(rr1)
-end
-
-# Test multiple concurrent put!/take! on a channel
-function testcpt()
-    c = Channel()
-    size = 0
-    inc() = size += 1
-    dec() = size -= 1
-    @sync for i = 1:10^4
-        @async (sleep(rand()); put!(c, i); inc())
-        @async (sleep(rand()); take!(c); dec())
-    end
-    @test size == 0
-end
-testcpt()
-
-# Test multiple "for" loops waiting on the same channel which
-# is closed after adding a few elements.
-c=Channel()
-results=[]
-@sync begin
-    for i in 1:20
-        @async for i in c
-            push!(results, i)
-        end
-    end
-    sleep(1.0)
-    for i in 1:5
-        put!(c,i)
-    end
-    close(c)
-end
-@test sum(results) == 15
-
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
@@ -593,7 +533,7 @@ num_small_requests = 10000
 
 # test parallel sends of large arrays from multiple tasks to the same remote worker
 ntasks = 10
-rr_list = [Channel() for x in 1:ntasks]
+rr_list = [Channel(32) for x in 1:ntasks]
 a = ones(2*10^5)
 for rr in rr_list
     @async let rr=rr
