@@ -124,7 +124,7 @@ function prettyprint_getunits(value, num_units, factor)
     if value == 0
         return (value, 1)
     end
-    unit = ceil(Int, log(value + 1) / log(factor))
+    unit = ceil(Int, log(factor, value + 1))
     unit = min(num_units, unit)
     number = value / factor^(unit - 1)
     number, unit
