@@ -122,13 +122,13 @@ const _mem_units = ["byte", "KB", "MB", "GB", "TB", "PB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
 function prettyprint_getunits(value, num_units, factor)
     unit_idx = 1
-
-    while value >= factor && unit_idx < num_units
-        value /= factor
+    v::Float64 = value
+    while v >= factor && unit_idx < num_units
+        v /= factor
         unit_idx += 1
     end
 
-    value, unit_idx
+    v, unit_idx
 end
 
 function padded_nonzero_print(value,str)
