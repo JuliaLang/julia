@@ -121,13 +121,14 @@ end
 const _mem_units = ["byte", "KB", "MB", "GB", "TB", "PB"]
 const _cnt_units = ["", " k", " M", " G", " T", " P"]
 function prettyprint_getunits(value, num_units, factor)
-    if value == 0
-        return (value, 1)
+    unit_idx = 1
+
+    while value >= factor && unit_idx < num_units
+        value /= factor
+        unit_idx += 1
     end
-    unit = ceil(Int, log(factor, value + 1))
-    unit = min(num_units, unit)
-    number = value / factor^(unit - 1)
-    number, unit
+
+    value, unit_idx
 end
 
 function padded_nonzero_print(value,str)
