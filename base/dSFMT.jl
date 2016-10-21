@@ -115,19 +115,19 @@ function dsfmt_jump_add!(dest::Vector{UInt64}, src::Vector{UInt64})
     while i <= N-diff
         j = i*2-1
         p = j + diff*2
-        dest[j]   = xor(dest[j],   src[p])
-        dest[j+1] = xor(dest[j+1], src[p+1])
+        dest[j]   ⊻= src[p]
+        dest[j+1] ⊻= src[p+1]
         i += 1
     end
     while i <= N
         j = i*2-1
         p = j + (diff - N)*2
-        dest[j]   = xor(dest[j],   src[p])
-        dest[j+1] = xor(dest[j+1], src[p+1])
+        dest[j]   ⊻= src[p]
+        dest[j+1] ⊻= src[p+1]
         i += 1
     end
-    dest[N*2+1] = xor(dest[N*2+1], src[N*2+1])
-    dest[N*2+2] = xor(dest[N*2+2], src[N*2+2])
+    dest[N*2+1] ⊻= src[N*2+1]
+    dest[N*2+2] ⊻= src[N*2+2]
     return dest
 end
 

@@ -164,7 +164,7 @@ end
 @test ~BigInt(123) == -124
 @test BigInt(123) & BigInt(234) == 106
 @test BigInt(123) | BigInt(234) == 251
-@test xor(BigInt(123), BigInt(234)) == 145
+@test BigInt(123) ⊻ BigInt(234) == 145
 
 @test gcd(BigInt(48), BigInt(180)) == 12
 @test lcm(BigInt(48), BigInt(180)) == 720

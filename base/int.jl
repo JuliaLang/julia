@@ -76,7 +76,7 @@ flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
 flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
 flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
 
-copysign(x::Signed, y::Signed)  = flipsign(x, xor(x,y))
+copysign(x::Signed, y::Signed)  = flipsign(x, x ⊻ y)
 copysign(x::Signed, y::Float16) = copysign(x, reinterpret(Int16,y))
 copysign(x::Signed, y::Float32) = copysign(x, reinterpret(Int32,y))
 copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
@@ -149,7 +149,7 @@ rem{T<:BitUnsigned64}(x::T, y::T) = box(T,checked_urem_int(unbox(T,x),unbox(T,y)
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 function fld{T<:Integer}(x::T, y::T)
     d = div(x,y)
-    d - (signbit(xor(x,y)) & (d*y!=x))
+    d - (signbit(x ⊻ y) & (d*y!=x))
 end
 
 # cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)

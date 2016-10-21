@@ -1023,7 +1023,11 @@ end))
 @deprecate ipermutedims(A::AbstractArray,p) permutedims(A, invperm(p))
 
 # 18696
-@deprecate ($) xor
+function ($)(x, y)
+    depwarn("`x \$ y` is deprecated.  use `xor(x, y)` or `x ⊻ y` instead.", :$)
+    xor(x, y)
+end
+export $
 
 @deprecate is (===)
 

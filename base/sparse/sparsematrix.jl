@@ -904,7 +904,7 @@ function _ispermutationvalid_permute!{Ti<:Integer,Tp<:Integer}(perm::AbstractVec
     n = length(perm)
     checkspace[1:n] = 0
     for k in perm
-        (0 < k ≤ n) && ((checkspace[k] = xor(checkspace[k], 1)) == 1) || return false
+        (0 < k ≤ n) && ((checkspace[k] ⊻= 1) == 1) || return false
     end
     return true
 end

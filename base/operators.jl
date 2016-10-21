@@ -267,6 +267,8 @@ identity(x) = x
 (|)(x::Integer) = x
 xor(x::Integer) = x
 
+const ⊻ = xor
+
 # foldl for argument lists. expand recursively up to a point, then
 # switch to a loop. this allows small cases like `a+b+c+d` to be inlined
 # efficiently, without a major slowdown for `+(x...)` when `x` is big.
@@ -1042,6 +1044,7 @@ export
     ∪,
     √,
     ∛,
+    ⊻,
     colon,
     hcat,
     vcat,
@@ -1055,6 +1058,6 @@ import ..this_module: !, !=, xor, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, .
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ⊻
 
 end

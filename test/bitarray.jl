@@ -1119,7 +1119,7 @@ let b1 = trues(v1)
     for i = 3:(v1-1), j = 2:i
         submask = b1 << (v1-j+1)
         @test findnext((b1 >> i) | submask, j) == i+1
-        @test findnextnot(xor(~(b1 >> i), submask), j) == i+1
+        @test findnextnot((~(b1 >> i)) ⊻ submask, j) == i+1
     end
 end
 
@@ -1276,7 +1276,7 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
 
     @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == b1 & b2
     @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == b1 | b2
-    @test map(xor, b1, b2) == map((x,y)->xor(x,y), b1, b2) == xor(b1, b2)
+    @test map(⊻, b1, b2) == map((x,y)->x⊻y, b1, b2) == b1 ⊻ b2 == xor(b1, b2)
 
     @test map(^, b1, b2) == map((x,y)->x^y, b1, b2) == b1 .^ b2
     @test map(*, b1, b2) == map((x,y)->x*y, b1, b2) == b1 .* b2
@@ -1301,7 +1301,7 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
 
     @test map!(&, b, b1, b2) == map!((x,y)->x&y, b, b1, b2) == b1 & b2 == b
     @test map!(|, b, b1, b2) == map!((x,y)->x|y, b, b1, b2) == b1 | b2 == b
-    @test map!(xor, b, b1, b2) == map!((x,y)->xor(x,y), b, b1, b2) == xor(b1, b2) == b
+    @test map!(⊻, b, b1, b2) == map!((x,y)->x⊻y, b, b1, b2) == b1 ⊻ b2 == xor(b1, b2) == b
 
     @test map!(^, b, b1, b2) == map!((x,y)->x^y, b, b1, b2) == b1 .^ b2 == b
     @test map!(*, b, b1, b2) == map!((x,y)->x*y, b, b1, b2) == b1 .* b2 == b

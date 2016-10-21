@@ -393,10 +393,10 @@ function significand{T<:AbstractFloat}(x::T)
     if xe == 0 # x is subnormal
         x == 0 && return x
         xs = xu & sign_mask(T)
-        xu = xor(xu, xs)
+        xu ⊻= xs
         m = leading_zeros(xu)-exponent_bits(T)
         xu <<= m
-        xu = xor(xu, xs)
+        xu ⊻= xs
     elseif xe == exponent_mask(T) # NaN or Inf
         return x
     end
@@ -419,7 +419,7 @@ function frexp{T<:AbstractFloat}(x::T)
         xs == 0 && return x, 0 # +-0
         m = unsigned(leading_zeros(xs) - exponent_bits(T))
         xs <<= m
-        xu = xor(xs, (xu & sign_mask(T)))
+        xu = xs ⊻ (xu & sign_mask(T))
         k = 1 - signed(m)
     end
     k -= (exponent_bias(T) - 1)

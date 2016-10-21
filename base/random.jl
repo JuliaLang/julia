@@ -324,7 +324,7 @@ rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float32}) =
 
 function rand(r::MersenneTwister, ::Type{UInt64})
     reserve(r, 2)
-    xor(rand_ui52_raw_inbounds(r) << 32, rand_ui52_raw_inbounds(r))
+    rand_ui52_raw_inbounds(r) << 32 ⊻ rand_ui52_raw_inbounds(r)
 end
 
 function rand(r::MersenneTwister, ::Type{UInt128})
@@ -447,7 +447,7 @@ function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Ty
     A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
     @inbounds for i in 1:n128
         u = A128[i]
-        u = xor(u, u << 26)
+        u ⊻= u << 26
         # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
         # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
         # the bits needing to be random are
@@ -488,17 +488,17 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
         i = 0
         @inbounds while n-i >= 5
             u = A[i+=1]
-            A[n] = xor(A[n], u << 48)
-            A[n-1] = xor(A[n-1], u << 36)
-            A[n-2] = xor(A[n-2], u << 24)
-            A[n-3] = xor(A[n-3], u << 12)
-            n -= 4
+            A[n]    ⊻= u << 48
+            A[n-=1] ⊻= u << 36
+            A[n-=1] ⊻= u << 24
+            A[n-=1] ⊻= u << 12
+            n-=1
         end
     end
     if n > 0
         u = rand_ui2x52_raw(r)
         for i = 1:n
-            @inbounds A[i] = xor(A[i], u << 12*i)
+            @inbounds A[i] ⊻= u << 12*i
         end
     end
     A

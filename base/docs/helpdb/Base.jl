@@ -3341,6 +3341,7 @@ dawson
 
 """
     xor(x, y)
+    ⊻(x, y)
 
 Bitwise exclusive or.
 """

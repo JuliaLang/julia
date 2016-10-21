@@ -194,7 +194,7 @@ function convert{T<:Signed}(::Type{T}, x::BigInt)
     else
         0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
         y = x % T
-        xor(x.size > 0, y > 0) && throw(InexactError()) # catch overflow
+        (x.size > 0) ⊻ (y > 0) && throw(InexactError()) # catch overflow
         y
     end
 end
