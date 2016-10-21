@@ -257,7 +257,7 @@ CROSS_COMPILE:=
 HOSTCC = $(CC)
 else
 HOSTCC := gcc
-override OPENBLAS_DYNAMIC_ARCH := 1
+OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
@@ -640,11 +640,11 @@ endif
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
-override LLVM_VER:=3.9.0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=POWER8
+LLVM_VER:=3.9.0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=POWER8
 # GCC doesn't do -march= on ppc64le
-override MARCH=
+MARCH=
 endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
@@ -656,11 +656,11 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
 
-override LLVM_VER:=3.8.1
-override USE_BLAS64:=0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=ARMV7
-override USE_SYSTEM_LIBM:=1
+LLVM_VER:=3.8.1
+USE_BLAS64:=0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV7
+USE_SYSTEM_LIBM:=1
 endif
 
 # Set MARCH-specific flags
