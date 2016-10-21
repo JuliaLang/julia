@@ -54,7 +54,7 @@ Library improvements
     moved to the module `Base.Iterators` ([#18839]).
 
   * BitArrays can now be constructed from arbitrary iterables, in particular from generator expressions,
-    e.g. BitArray(isodd(x) for x = 1:100) [#19018].
+    e.g. `BitArray(isodd(x) for x = 1:100)` ([#19018]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -687,3 +687,5 @@ Language tooling improvements
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
+[#18839]: https://github.com/JuliaLang/julia/issues/18839
+[#19018]: https://github.com/JuliaLang/julia/issues/19018
