@@ -448,6 +448,7 @@ $(eval $(call LLVM_PATCH,llvm-3.7.1_3)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib)) # Remove for 3.9
+$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
 $(eval $(call LLVM_PATCH,llvm-nodllalias)) # Remove for 3.9
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
@@ -467,6 +468,7 @@ $(eval $(call LLVM_PATCH,llvm-rL279933-ppc-atomicrmw-lowering)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-r282182)) # Remove for 4.0
 endif
 $(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib)) # Remove for 4.0
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
