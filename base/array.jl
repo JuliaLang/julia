@@ -1637,7 +1637,25 @@ end
 
 ## Filter ##
 
-# given a function returning a boolean and an array, return matching elements
+"""
+    filter(function, collection)
+
+Return a copy of `collection`, removing elements for which `function` is `false`. For
+associative collections, the function is passed two arguments (key and value).
+
+```jldocttest
+julia> a = 1:10
+1:10
+
+julia> filter(isodd, a)
+5-element Array{Int64,1}:
+ 1
+ 3
+ 5
+ 7
+ 9
+```
+"""
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
 function filter!(f, a::Vector)
