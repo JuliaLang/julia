@@ -6,7 +6,7 @@ function dot(x::BitVector, y::BitVector)
     s = 0
     xc = x.chunks
     yc = y.chunks
-    @inbounds for i = 1 : length(xc)
+    @inbounds for i = 1:length(xc)
         s += count_ones(xc[i] & yc[i])
     end
     s
@@ -166,7 +166,7 @@ end
 function istriu(A::BitMatrix)
     m, n = size(A)
     for j = 1:min(n,m-1)
-        stride = (j-1)*m
+        stride = (j-1) * m
         nonzero_chunks(A.chunks, stride+j+1, stride+m) && return false
     end
     return true
@@ -176,7 +176,7 @@ function istril(A::BitMatrix)
     m, n = size(A)
     (m == 0 || n == 0) && return true
     for j = 2:n
-        stride = (j-1)*m
+        stride = (j-1) * m
         nonzero_chunks(A.chunks, stride+1, stride+min(j-1,m)) && return false
     end
     return true
@@ -187,10 +187,10 @@ function findmax(a::BitArray)
     m, mi = false, 1
     ti = 1
     ac = a.chunks
-    for i=1:length(ac)
+    for i = 1:length(ac)
         @inbounds k = trailing_zeros(ac[i])
         ti += k
-        k==64 || return (true, ti)
+        k == 64 || return (true, ti)
     end
     return m, mi
 end
@@ -203,11 +203,11 @@ function findmin(a::BitArray)
     for i = 1:length(ac)-1
         @inbounds k = trailing_ones(ac[i])
         ti += k
-        k==64 || return (false, ti)
+        k == 64 || return (false, ti)
     end
     l = Base._mod64(length(a)-1) + 1
     @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
     ti += k
-    k==l || return (false, ti)
+    k == l || return (false, ti)
     return m, mi
 end

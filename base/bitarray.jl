@@ -41,7 +41,7 @@ BitArray{N}(dims::NTuple{N,Int}) = BitArray{N}(dims...)
 typealias BitVector BitArray{1}
 typealias BitMatrix BitArray{2}
 
-(::Type{BitVector})() = BitArray{1}(0)
+BitVector() = BitArray{1}(0)
 
 ## utility functions ##
 
@@ -821,9 +821,7 @@ end
 function append!(B::BitVector, items::BitVector)
     n0 = length(B)
     n1 = length(items)
-    if n1 == 0
-        return B
-    end
+    n1 == 0 && return B
     Bc = B.chunks
     k0 = length(Bc)
     k1 = num_bit_chunks(n0 + n1)
@@ -842,9 +840,7 @@ append!(A::Vector{Bool}, items::BitVector) = append!(A, Array(items))
 function prepend!(B::BitVector, items::BitVector)
     n0 = length(B)
     n1 = length(items)
-    if n1 == 0
-        return B
-    end
+    n1 == 0 && return B
     Bc = B.chunks
     k0 = length(Bc)
     k1 = num_bit_chunks(n0 + n1)
@@ -1375,59 +1371,52 @@ function (.^)(x::Number, B::BitArray)
     reshape([ B[i] ? u : z for i = 1:length(B) ], size(B))
 end
 function (.^)(B::BitArray, x::Integer)
-    if x == 0
-        return trues(size(B))
-    elseif x < 0
-        throw(DomainError())
-    else
-        return copy(B)
-    end
+    x == 0 && return trues(size(B))
+    x < 0 && throw(DomainError())
+    return copy(B)
 end
 function (.^){T<:Number}(B::BitArray, x::T)
-    if x == 0
-        return ones(typeof(true ^ x), size(B))
-    elseif T <: Real && x > 0
-        return convert(Array{T}, B)
+    x == 0 && return ones(typeof(true ^ x), size(B))
+    T <: Real && x > 0 && return convert(Array{T}, B)
+
+    z = nothing
+    u = nothing
+    zerr = nothing
+    uerr = nothing
+    try
+        z = false^x
+    catch err
+        zerr = err
+    end
+    try
+        u = true^x
+    catch err
+        uerr = err
+    end
+    if zerr === nothing && uerr === nothing
+        t = promote_type(typeof(z), typeof(u))
+    elseif zerr === nothing
+        t = typeof(z)
     else
-        z = nothing
-        u = nothing
-        zerr = nothing
-        uerr = nothing
-        try
-            z = false^x
-        catch err
-            zerr = err
-        end
-        try
-            u = true^x
-        catch err
-            uerr = err
-        end
-        if zerr === nothing && uerr === nothing
-            t = promote_type(typeof(z), typeof(u))
-        elseif zerr === nothing
-            t = typeof(z)
-        else
-            t = typeof(u)
-        end
-        F = Array{t}(size(B))
-        for i = 1:length(B)
-            if B[i]
-                if uerr === nothing
-                    F[i] = u
-                else
-                    throw(uerr)
-                end
+        t = typeof(u)
+    end
+    F = Array{t}(size(B))
+    for i = 1:length(B)
+        if B[i]
+            if uerr === nothing
+                F[i] = u
             else
-                if zerr === nothing
-                    F[i] = z
-                else
-                    throw(zerr)
-                end
+                throw(uerr)
+            end
+        else
+            if zerr === nothing
+                F[i] = z
+            else
+                throw(zerr)
             end
         end
-        return F
     end
+    return F
 end
 
 (.*)(x::Bool, B::BitArray) = x & B
@@ -1465,15 +1454,15 @@ function slicedim(A::BitArray, d::Integer, i::Integer)
 
     l = 1
 
-    if M==1
-        for j=0:stride:(N-stride)
+    if M == 1
+        for j = 0:stride:(N-stride)
             B[l] = A[j + index_offset]
             l += 1
         end
     else
-        for j=0:stride:(N-stride)
+        for j = 0:stride:(N-stride)
             offs = j + index_offset
-            for k=0:(M-1)
+            for k = 0:(M-1)
                 B[l] = A[offs + k]
                 l += 1
             end
@@ -1486,9 +1475,7 @@ function flipdim(A::BitArray, d::Integer)
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
-    if sd == 1
-        return copy(A)
-    end
+    sd == 1 && return copy(A)
 
     B = similar(A)
 
@@ -1556,9 +1543,7 @@ function reverse!(B::BitVector)
     # └───────────────┴───────┘└───────────────┴───────┘└───────────────┴───────┘
 
     n = length(B)
-    if n == 0
-        return B
-    end
+    n == 0 && return B
 
     k = _mod64(n+63) + 1
     h = 64 - k
@@ -1640,9 +1625,7 @@ end
 Performs a left rotation operation in-place on `B`.
 `i` controls how far to rotate the bits.
 """
-function rol!(B::BitVector, i::Integer)
-    return rol!(B, B, i)
-end
+rol!(B::BitVector, i::Integer) = rol!(B, B, i)
 
 """
     rol(B::BitVector, i::Integer) -> BitVector
@@ -1685,9 +1668,7 @@ julia> rol(A,5)
   true
 ```
 """
-function rol(B::BitVector, i::Integer)
-    return rol!(similar(B), B, i)
-end
+rol(B::BitVector, i::Integer) = rol!(similar(B), B, i)
 
 """
     ror!(dest::BitVector, src::BitVector, i::Integer) -> BitVector
@@ -1713,9 +1694,7 @@ end
 Performs a right rotation operation in-place on `B`.
 `i` controls how far to rotate the bits.
 """
-function ror!(B::BitVector, i::Integer)
-    return ror!(B, B, i)
-end
+ror!(B::BitVector, i::Integer) = ror!(B, B, i)
 
 """
     ror(B::BitVector, i::Integer) -> BitVector
@@ -1758,9 +1737,7 @@ julia> ror(A,5)
   true
 ```
 """
-function ror(B::BitVector, i::Integer)
-    return ror!(similar(B), B, i)
-end
+ror(B::BitVector, i::Integer) = ror!(similar(B), B, i)
 
 ## countnz & find ##
 
@@ -1868,7 +1845,7 @@ function findprev(B::BitArray, start::Integer)
             return (chunk_start-1) << 6 + (64 - leading_zeros(Bc[chunk_start] & mask))
         end
 
-        for i = chunk_start-1:-1:1
+        for i = (chunk_start-1):-1:1
             if Bc[i] != 0
                 return (i-1) << 6 + (64 - leading_zeros(Bc[i]))
             end
@@ -2043,19 +2020,24 @@ map!(f::typeof(>), dest::BitArray, A::BitArray, B::BitArray) = map!(BitChunkFunc
 function map!(f::Union{typeof(identity), typeof(~)}, dest::BitArray, A::BitArray)
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
     isempty(A) && return dest
-    for i=1:length(A.chunks)-1
-        dest.chunks[i] = f(A.chunks[i])
+    destc = dest.chunks
+    Ac = A.chunks
+    for i = 1:(length(Ac)-1)
+        destc[i] = f(Ac[i])
     end
-    dest.chunks[end] = f(A.chunks[end]) & _msk_end(A)
+    destc[end] = f(Ac[end]) & _msk_end(A)
     dest
 end
 function map!(f::Union{BitChunkFunctor, typeof(&), typeof(|), typeof($)}, dest::BitArray, A::BitArray, B::BitArray)
     size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
     isempty(A) && return dest
-    for i=1:length(A.chunks)-1
-        dest.chunks[i] = f(A.chunks[i], B.chunks[i])
+    destc = dest.chunks
+    Ac = A.chunks
+    Bc = B.chunks
+    for i = 1:(length(Ac)-1)
+        destc[i] = f(Ac[i], Bc[i])
     end
-    dest.chunks[end] = f(A.chunks[end], B.chunks[end]) & _msk_end(A)
+    destc[end] = f(Ac[end], Bc[end]) & _msk_end(A)
     dest
 end
 
@@ -2133,7 +2115,6 @@ function transpose(B::BitMatrix)
     nc = length(Bc)
 
     for i = 1:8:l1
-
         msk8_1 = UInt64(0xff)
         if (l1 < i + 7)
             msk8_1 >>>= i + 7 - l1
@@ -2161,9 +2142,8 @@ ctranspose(B::BitArray) = transpose(B)
 function hcat(B::BitVector...)
     height = length(B[1])
     for j = 2:length(B)
-        if length(B[j]) != height
+        length(B[j]) == height ||
             throw(DimensionMismatch("dimensions must match"))
-        end
     end
     M = BitArray(height, length(B))
     for j = 1:length(B)
@@ -2195,9 +2175,8 @@ function hcat(A::Union{BitMatrix,BitVector}...)
         Aj = A[j]
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
-        if size(Aj, 1) != nrows
+        size(Aj, 1) == nrows ||
             throw(DimensionMismatch("row lengths must match"))
-        end
     end
 
     B = BitArray(nrows, ncols)
@@ -2217,9 +2196,8 @@ function vcat(A::BitMatrix...)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
-        if size(A[j], 2) != ncols
+        size(A[j], 2) == ncols ||
             throw(DimensionMismatch("column lengths must match"))
-        end
     end
     B = BitArray(nrows, ncols)
     Bc = B.chunks
@@ -2256,9 +2234,8 @@ function cat(catdim::Integer, X::Union{BitArray, Integer}...)
 
     if catdim > d_max + 1
         for i = 1:nargs
-            if dimsX[1] != dimsX[i]
+            dimsX[1] == dimsX[i] ||
                 throw(DimensionMismatch("all inputs must have same dimensions when concatenating along a higher dimension"))
-            end
         end
     elseif nargs >= 2
         for d = 1:d_max
