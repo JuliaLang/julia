@@ -311,18 +311,6 @@ General Parallel Computing Support
    * ``pmap(f, c; retry_n=1)`` and ``asyncmap(retry(remote(f)),c)``
    * ``pmap(f, c; retry_n=1, on_error=e->e)`` and ``asyncmap(x->try retry(remote(f))(x) catch e; e end, c)``
 
-.. function:: remotecall(f, id::Integer, args...; kwargs...) -> Future
-
-   .. Docstring generated from Julia source
-
-   Call a function ``f`` asynchronously on the given arguments on the specified process. Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``f``\ .
-
-.. function:: Base.process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
-
-   .. Docstring generated from Julia source
-
-   Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two ``IO`` objects, one for incoming messages and the other for messages addressed to the remote worker. If ``incoming`` is ``true``\ , the remote peer initiated the connection. Whichever of the pair initiates the connection sends the cluster cookie and its Julia version number to perform the authentication handshake.
-
 .. function:: RemoteException(captured)
 
    .. Docstring generated from Julia source
@@ -378,6 +366,12 @@ General Parallel Computing Support
    * ``Future``\ : Wait for and get the value of a Future. The fetched value is cached locally. Further calls to ``fetch`` on the same reference return the cached value. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
    * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are same as for a ``Future`` .
 
+.. function:: remotecall(f, id::Integer, args...; kwargs...) -> Future
+
+   .. Docstring generated from Julia source
+
+   Call a function ``f`` asynchronously on the given arguments on the specified process. Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``f``\ .
+
 .. function:: remotecall_wait(f, id::Integer, args...; kwargs...)
 
    .. Docstring generated from Julia source
@@ -389,6 +383,20 @@ General Parallel Computing Support
    .. Docstring generated from Julia source
 
    Perform ``fetch(remotecall(...))`` in one message. Keyword arguments, if any, are passed through to ``f``\ . Any remote exceptions are captured in a ``RemoteException`` and thrown.
+
+.. function:: remote_do(f, id::Integer, args...; kwargs...) -> nothing
+
+   .. Docstring generated from Julia source
+
+   Executes ``f`` on worker ``id`` asynchronously. Unlike ``remotecall``\ , it does not store the result of computation, nor is there a way to wait for its completion.
+
+   A successfull invocation indicates that the request has been accepted for execution on the remote node.
+
+   While consecutive remotecalls to the same worker are serialized in the order they are invoked, the order of executions on the remote worker is undetermined. For example, ``remote_do(f1, 2); remotecall(f2, 2); remote_do(f3, 2)`` will serialize the call to ``f1``\ , followed by ``f2`` and ``f3`` in that order. However, it is not guaranteed that ``f1`` is executed before ``f3`` on worker 2.
+
+   Any exceptions thrown by ``f`` are printed to STDERR on the remote worker.
+
+   Keyword arguments, if any, are passed through to ``f``\ .
 
 .. function:: put!(rr::RemoteChannel, args...)
 
@@ -468,23 +476,29 @@ General Parallel Computing Support
 
    Returns a lambda that executes function ``f`` on an available worker using ``remotecall_fetch``\ .
 
-.. function:: remotecall(f, pool::AbstractWorkerPool, args...; kwargs...)
+.. function:: remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
    .. Docstring generated from Julia source
 
-   Call ``f(args...; kwargs...)`` on one of the workers in ``pool``\ . Returns a ``Future``\ .
+   WorkerPool variant of ``remotecall(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall`` on it.
 
-.. function:: remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...)
-
-   .. Docstring generated from Julia source
-
-   Call ``f(args...; kwargs...)`` on one of the workers in ``pool``\ . Waits for completion, returns a ``Future``\ .
-
-.. function:: remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...)
+.. function:: remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
    .. Docstring generated from Julia source
 
-   Call ``f(args...; kwargs...)`` on one of the workers in ``pool``\ . Waits for completion and returns the result.
+   WorkerPool variant of ``remotecall_wait(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall_wait`` on it.
+
+.. function:: remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) -> result
+
+   .. Docstring generated from Julia source
+
+   WorkerPool variant of ``remotecall_fetch(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall_fetch`` on it.
+
+.. function:: remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) -> nothing
+
+   .. Docstring generated from Julia source
+
+   WorkerPool variant of ``remote_do(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remote_do`` on it.
 
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
@@ -979,4 +993,10 @@ between processes. It is possible for Cluster Managers to provide a different tr
    .. Docstring generated from Julia source
 
    Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id ``pid``\ , specified by ``config`` and return a pair of ``IO`` objects. Messages from ``pid`` to current process will be read off ``instrm``\ , while messages to be sent to ``pid`` will be written to ``outstrm``\ . The custom transport implementation must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)`` sets up TCP/IP socket connections in-between workers.
+
+.. function:: Base.process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
+
+   .. Docstring generated from Julia source
+
+   Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two ``IO`` objects, one for incoming messages and the other for messages addressed to the remote worker. If ``incoming`` is ``true``\ , the remote peer initiated the connection. Whichever of the pair initiates the connection sends the cluster cookie and its Julia version number to perform the authentication handshake.
 
