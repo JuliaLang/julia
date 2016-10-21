@@ -16,7 +16,7 @@ const char *jl_timing_names[(int)JL_TIMING_LAST] =
 #undef X
     };
 
-extern "C" void jl_print_timings(void)
+void jl_print_timings(void)
 {
     uint64_t total_time = 0;
     for (int i = 0; i < JL_TIMING_LAST; i++) {
@@ -29,36 +29,38 @@ extern "C" void jl_print_timings(void)
     }
 }
 
-extern "C" void jl_init_timing(void)
+void jl_init_timing(void)
 {
-    jl_root_timing = new jl_timing_block_t();
+    jl_root_timing = (jl_timing_block_t*)malloc(sizeof(jl_timing_block_t));
+    _jl_timing_block_init(jl_root_timing, JL_TIMING_ROOT);
+    jl_root_timing->prev = NULL;
 }
 
-extern "C" void jl_destroy_timing(void)
+void jl_destroy_timing(void)
 {
-    if (jl_root_task)
-        delete jl_root_task->timing_stack;
+    _jl_timing_block_destroy(jl_root_timing);
+    free(jl_root_timing);
 }
 
-extern "C" jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block)
+jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block)
 {
-    cur_block->~jl_timing_block_t();
+    _jl_timing_block_destroy(cur_block);
     return cur_block->prev;
 }
 
-extern "C" void jl_timing_block_start(jl_timing_block_t *cur_block)
+void jl_timing_block_start(jl_timing_block_t *cur_block)
 {
-    cur_block->start(rdtscp());
+    _jl_timing_block_start(cur_block, rdtscp());
 }
 
-extern "C" void jl_timing_block_stop(jl_timing_block_t *cur_block)
+void jl_timing_block_stop(jl_timing_block_t *cur_block)
 {
-    cur_block->stop(rdtscp());
+    _jl_timing_block_stop(cur_block, rdtscp());
 }
 
 #else
 
-extern "C" void jl_init_timing(void) { }
-extern "C" void jl_destroy_timing(void) { }
+void jl_init_timing(void) { }
+void jl_destroy_timing(void) { }
 
 #endif
