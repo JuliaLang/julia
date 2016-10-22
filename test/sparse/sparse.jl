@@ -1635,3 +1635,12 @@ let
     @test isa(abs.(A), SparseMatrixCSC) # representative for _unary_nz2nz_z2z class
     @test isa(exp.(A), Array) # representative for _unary_nz2nz_z2nz class
 end
+
+# Check that `broadcast` methods specialized for unary operations over
+# `SparseMatrixCSC`s determine a reasonable return element type. (Issue #18974.)
+let
+    A = spdiagm(Int64(1):Int64(4))
+    @test isa(eltype(expm1.(A)), Float64) # representative for _unary_nz2nz_z2z class
+    @test isa(eltype(exp.(A)), Float64) # representative for _unary_nz2nz_z2nz class
+    @test isa(eltype(sin.(A)), Float64) # representative for _unary_nz2z_z2z class
+end
