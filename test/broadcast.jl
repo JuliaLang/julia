@@ -366,3 +366,10 @@ let
     g() = (a = 1; Base.Broadcast._broadcast_type(x -> x + a, 1.0))
     @test @inferred(g()) === Float64
 end
+
+# Ref as 0-dimensional array for broadcast
+@test (-).(C_NULL, C_NULL)::UInt == 0
+@test (+).(1, Ref(2)) == fill(3)
+@test (+).(Ref(1), Ref(2)) == fill(3)
+@test (+).([[0,2], [1,3]], [1,-1]) == [[1,3], [0,2]]
+@test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
