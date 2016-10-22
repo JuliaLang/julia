@@ -209,8 +209,8 @@ function next(itr::AsyncGenerator, state::AsyncGeneratorState)
     return (r, state)
 end
 
-iteratorsize(::Type{AsyncGenerator}) = SizeUnknown()
-
+iteratorsize(itr::AsyncGenerator) = iteratorsize(itr.collector.enumerator)
+size(itr::AsyncGenerator) = size(itr.collector.enumerator)
 
 """
     asyncmap(f, c...) -> collection
