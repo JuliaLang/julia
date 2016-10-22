@@ -27,7 +27,9 @@ end
 # logic for deciding the resulting container type
 containertype(x) = containertype(typeof(x))
 containertype(::Type) = Any
+containertype{T<:Ptr}(::Type{T}) = Any
 containertype{T<:Tuple}(::Type{T}) = Tuple
+containertype{T<:Ref}(::Type{T}) = Array
 containertype{T<:AbstractArray}(::Type{T}) = Array
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
@@ -46,6 +48,7 @@ broadcast_indices(A) = broadcast_indices(containertype(A), A)
 broadcast_indices(::Type{Any}, A) = ()
 broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::Type{Array}, A) = indices(A)
+broadcast_indices(::Type{Array}, A::Ref) = ()
 @inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
@@ -118,6 +121,7 @@ map_newindexer(shape, ::Tuple{}) = (), ()
 end
 
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(containertype(A), A, I)
+Base.@propagate_inbounds _broadcast_getindex(::Type{Array}, A::Ref, I) = A[]
 Base.@propagate_inbounds _broadcast_getindex(::Type{Any}, A, I) = A
 Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 
