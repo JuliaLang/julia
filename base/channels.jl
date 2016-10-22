@@ -179,11 +179,19 @@ eltype{T}(::Type{Channel{T}}) = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
-start{T}(c::Channel{T}) = Ref{Nullable{T}}()
-function done(c::Channel, state::Ref)
+type ChannelState{T}
+    hasval::Bool
+    val::T
+    ChannelState(x) = new(x)
+end
+
+start{T}(c::Channel{T}) = ChannelState{T}(false)
+function done(c::Channel, state::ChannelState)
     try
         # we are waiting either for more data or channel to be closed
-        state[] = take!(c)
+        state.hasval && return false
+        state.val = take!(c)
+        state.hasval = true
         return false
     catch e
         if isa(e, InvalidStateException) && e.state==:closed
@@ -193,6 +201,6 @@ function done(c::Channel, state::Ref)
         end
     end
 end
-next{T}(c::Channel{T}, state) = (v=get(state[]); state[]=nothing; (v, state))
+next{T}(c::Channel{T}, state) = (v=state.val; state.hasval=false; (v, state))
 
 iteratorsize{C<:Channel}(::Type{C}) = SizeUnknown()
