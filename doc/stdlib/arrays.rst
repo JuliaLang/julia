@@ -343,7 +343,7 @@ Constructors
         1  1
 
 .. function:: BitArray(dims::Integer...)
-.. function:: BitArray{N}(dims::NTuple{N,Int})
+              BitArray{N}(dims::NTuple{N,Int})
 
    .. Docstring generated from Julia source
 
