@@ -51,13 +51,19 @@ may be helpful for displaying the backtrace in a human-readable format.
 
 # Example
 
-```
-f(x) = try
-    sqrt(x)
-catch y
-    bt = catch_backtrace()
-    showerror(STDOUT, y, bt)
-end
+```jldoctest
+julia> f(x) = try
+           sqrt(x)
+       catch y
+           bt = catch_backtrace()
+           showerror(STDOUT, y, bt)
+       end;
+
+julia> f(-1)
+DomainError:
+ in f(::Int64) at ./REPL[24]:2
+ in eval(::Module, ::Any) at ./boot.jl:236
+ ...
 ```
 """
 catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())

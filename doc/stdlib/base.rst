@@ -1201,14 +1201,20 @@ Errors
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       f(x) = try
-           sqrt(x)
-       catch y
-           bt = catch_backtrace()
-           showerror(STDOUT, y, bt)
-       end
+       julia> f(x) = try
+                  sqrt(x)
+              catch y
+                  bt = catch_backtrace()
+                  showerror(STDOUT, y, bt)
+              end;
+
+       julia> f(-1)
+       DomainError:
+        in f(::Int64) at ./REPL[24]:2
+        in eval(::Module, ::Any) at ./boot.jl:236
+        ...
 
 .. function:: assert(cond)
 
