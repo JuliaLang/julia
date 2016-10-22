@@ -144,7 +144,7 @@ julia> b = ["e","d","b","c","a"]
  "a"
 
 julia> c = zip(a,b)
-Base.Zip2{UnitRange{Int64},Array{String,1}}(1:5,String["e","d","b","c","a"])
+Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5,String["e","d","b","c","a"])
 
 julia> length(c)
 5
@@ -303,7 +303,7 @@ julia> collect(a)
   9
  11
 
-julia> collect(take(a,3))
+julia> collect(Iterators.take(a,3))
 3-element Array{Int64,1}:
  1
  3
@@ -358,7 +358,7 @@ julia> collect(a)
   9
  11
 
-julia> collect(drop(a,4))
+julia> collect(Iterators.drop(a,4))
 2-element Array{Int64,1}:
   9
  11
@@ -439,7 +439,7 @@ An iterator that generates the value `x` forever. If `n` is specified, generates
 many times (equivalent to `take(repeated(x), n)`).
 
 ```jldoctest
-julia> a = repeated([1 2], 4);
+julia> a = Iterators.repeated([1 2], 4);
 
 julia> collect(a)
 4-element Array{Array{Int64,2},1}:
@@ -528,7 +528,7 @@ a tuple whose `i`th element comes from the `i`th argument iterator. The first it
 changes the fastest. Example:
 
 ```jldoctest
-julia> collect(product(1:2,3:5))
+julia> collect(Iterators.product(1:2,3:5))
 6-element Array{Tuple{Int64,Int64},1}:
  (1,3)
  (2,3)
@@ -609,7 +609,7 @@ elements of those iterators.
 Put differently, the elements of the argument iterator are concatenated. Example:
 
 ```jldoctest
-julia> collect(flatten((1:2, 8:9)))
+julia> collect(Iterators.flatten((1:2, 8:9)))
 4-element Array{Int64,1}:
  1
  2
@@ -662,7 +662,7 @@ end
 Iterate over a collection `n` elements at a time.
 
 ```jldoctest
-julia> collect(partition([1,2,3,4,5], 2))
+julia> collect(Iterators.partition([1,2,3,4,5], 2))
 3-element Array{Array{Int64,1},1}:
  [1,2]
  [3,4]
