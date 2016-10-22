@@ -305,15 +305,16 @@ end
 """
     broadcast(f, As...)
 
-Broadcasts the arrays, tuples and/or scalars `As` to a container of the
+Broadcasts the arrays, tuples, `Ref` and/or scalars `As` to a container of the
 appropriate type and dimensions. In this context, anything that is not a
-subtype of `AbstractArray` or `Tuple` is considered a scalar. The resulting
-container is established by the following rules:
+subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple` is considered
+a scalar. The resulting container is established by the following rules:
 
  - If all the arguments are scalars, it returns a scalar.
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
- - If there is at least an array in the arguments, it returns an array
-   (and treats tuples as 1-dimensional arrays) expanding singleton dimensions.
+ - If there is at least an array or a `Ref` in the arguments, it returns an array
+   (and treats any `Ref` as a 0-dimensional array of its contents and any tuple
+   as a 1-dimensional array) expanding singleton dimensions.
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
@@ -355,10 +356,15 @@ julia> abs.((1, -2))
 julia> broadcast(+, 1.0, (0, -2.0))
 (1.0,-1.0)
 
-julia> broadcast(+, 1.0, (0, -2.0), [1])
+julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 2-element Array{Float64,1}:
  2.0
  0.0
+
+julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
+2-element Array{Array{Int64,1},1}:
+ [1,1]
+ [2,2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
 4-element Array{String,1}:
