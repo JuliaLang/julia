@@ -156,7 +156,7 @@ end
     let # svds test
         A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], [2.0, -1.0, 6.1, 7.0, 1.5])
         S1 = svds(A, nsv = 2)
-        S2 = svd(full(A))
+        S2 = svd(Array(A))
 
         ## singular values match:
         @test S1[1][:S] ≈ S2[2][1:2]
@@ -201,7 +201,7 @@ end
     let # complex svds test
         A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp.(im*[2.0:2:10;]))
         S1 = svds(A, nsv = 2)
-        S2 = svd(full(A))
+        S2 = svd(Array(A))
 
         ## singular values match:
         @test S1[1][:S] ≈ S2[2][1:2]
