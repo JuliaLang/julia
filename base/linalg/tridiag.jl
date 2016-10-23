@@ -19,7 +19,8 @@ end
 
 Construct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal,
 respectively. The result is of type `SymTridiagonal` and provides efficient specialized
-eigensolvers, but may be converted into a regular matrix with [`full`](:func:`full`).
+eigensolvers, but may be converted into a regular matrix with
+[`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short).
 """
 SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(dv, ev)
 
@@ -328,7 +329,8 @@ end
 
 Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal,
 respectively.  The result is of type `Tridiagonal` and provides efficient specialized linear
-solvers, but may be converted into a regular matrix with [`full`](:func:`full`).
+solvers, but may be converted into a regular matrix with
+[`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
 """
 # Basic constructor takes in three dense vectors of same type
