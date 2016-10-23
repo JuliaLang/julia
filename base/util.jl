@@ -139,7 +139,7 @@ end
 
 function time_print(elapsedtime, bytes, gctime, allocs)
     @printf("%10.6f seconds", elapsedtime/1e9)
-    if bytes != 0 || allocs != 0
+    if bytes != 0 && allocs != 0
         bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
         allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
         if ma == 1
