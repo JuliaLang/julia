@@ -132,7 +132,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Constructs an upper (``isupper=true``\ ) or lower (``isupper=false``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . ``ev``\ 's length must be one less than the length of ``dv``\ .
+   Constructs an upper (``isupper=true``\ ) or lower (``isupper=false``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`convert` (or ``Array(_)`` for short). ``ev``\ 's length must be one less than the length of ``dv``\ .
 
    **Example**
 
@@ -147,7 +147,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Constructs an upper (``uplo='U'``\ ) or lower (``uplo='L'``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . ``ev``\ 's length must be one less than the length of ``dv``\ .
+   Constructs an upper (``uplo='U'``\ ) or lower (``uplo='L'``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`convert` (or ``Array(_)`` for short). ``ev``\ 's length must be one less than the length of ``dv``\ .
 
    **Example**
 
@@ -722,7 +722,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Hessenberg decomposition of ``A`` and return a ``Hessenberg`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``\ . When ``Q`` is extracted, the resulting type is the ``HessenbergQ`` object, and may be converted to a regular matrix with :func:`full`\ .
+   Compute the Hessenberg decomposition of ``A`` and return a ``Hessenberg`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``\ . When ``Q`` is extracted, the resulting type is the ``HessenbergQ`` object, and may be converted to a regular matrix with :func:`convert`  (or ``Array(_)`` for short).
 
 .. function:: hessfact!(A) -> Hessenberg
 
