@@ -73,9 +73,11 @@ LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_TAR_EXT)
 endif
 endif # LLVM_VER != svn
 
-LLVM_CXXFLAGS := $(CXXFLAGS)
-LLVM_CPPFLAGS := $(CPPFLAGS)
-LLVM_LDFLAGS := $(LDFLAGS)
+# Allow adding LLVM specific flags
+LLVM_CFLAGS += $(CFLAGS)
+LLVM_CXXFLAGS += $(CXXFLAGS)
+LLVM_CPPFLAGS += $(CPPFLAGS)
+LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_TARGETS := host
 LLVM_TARGET_FLAGS := --enable-targets=$(LLVM_TARGETS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
@@ -165,20 +167,18 @@ $(error LLVM_SANITIZE=1 with USE_LLVM_SHLIB=1 requires LLVM_USE_CMAKE=1)
 endif
 endif
 ifeq ($(SANITIZE_MEMORY),1)
-LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=memory -fsanitize-memory-track-origins"
+LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
 LLVM_FLAGS += --disable-terminfo
 else
-LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=address"
+LLVM_CFLAGS += -fsanitize=address
 LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="Address"
 endif
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
-else
-LLVM_CC :=
 endif # LLVM_SANITIZE
 
 ifeq ($(LLVM_LTO),1)
@@ -190,7 +190,10 @@ ifneq ($(LLVM_CXXFLAGS),)
 LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 endif # LLVM_CXXFLAGS
-LLVM_MFLAGS += $(LLVM_CC)
+ifneq ($(LLVM_CFLAGS),)
+LLVM_FLAGS += CFLAGS="$(LLVM_CFLAGS)"
+LLVM_MFLAGS += CFLAGS="$(LLVM_CFLAGS)"
+endif # LLVM_CFLAGS
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-R$(build_libdir) -lc++ -lc++abi
@@ -207,6 +210,10 @@ ifneq ($(LLVM_LDFLAGS),)
 LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
 LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
 endif
+LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
+	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)" \
+	-DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
+	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
 
 ifeq ($(BUILD_LLVM_CLANG),1)
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
@@ -294,11 +301,11 @@ $(LLVM_SRC_DIR)/projects/libcxxabi/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxxa
 $(LLVM_BUILD_DIR)/libcxx-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxx $(LLVM_SRC_DIR)/projects/libcxxabi
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LLVM_SRC_DIR)/projects/libcxxabi/include" $(LLVM_SRC_DIR)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LLVM_SRC_DIR)/projects/libcxxabi/include" $(LLVM_SRC_DIR)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="$(LDFLAGS) -L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)"
 $(LLVM_BUILD_DIR)/libcxxabi-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_SRC_DIR)/projects/libcxx
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-        $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LLVM_SRC_DIR)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LLVM_SRC_DIR)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS) -std=c++11"
 $(LLVM_BUILD_DIR)/libcxxabi-build/lib/libc++abi.so.1.0: $(LLVM_BUILD_DIR)/libcxxabi-build/Makefile $(LLVM_SRC_DIR)/projects/libcxxabi/.git/HEAD
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxxabi-build
 	touch -c $@
@@ -504,7 +511,7 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(LLVM_SRC_DIR)/configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS)
+		$(LLVM_SRC_DIR)/configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
