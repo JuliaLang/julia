@@ -24,6 +24,10 @@ This section lists changes that do not have deprecation warnings.
   * `broadcast` now handles tuples, and treats any argument that is not a tuple
     or an array as a "scalar" ([#16986]).
 
+  * `using` and `import` now only loads on the calling process. Use `@everywhere using ModName` or
+    `@everywhere import ModName` to load a module/package on all processes.
+
+
 Library improvements
 --------------------
 

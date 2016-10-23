@@ -186,8 +186,7 @@ Relative and absolute module paths
 
 Given the statement ``using Foo``, the system looks for ``Foo``
 within ``Main``. If the module does not exist, the system
-attempts to ``require("Foo")``, which typically results in loading
-code from an installed package.
+attempts to load code, typically from an installed package.
 
 However, some modules contain submodules, which means you sometimes
 need to access a module that is not directly available in ``Main``.
@@ -221,7 +220,8 @@ Module file paths
 -----------------
 
 The global variable LOAD_PATH contains the directories Julia searches for
-modules when calling ``require``. It can be extended using ``push!``::
+modules when using ``using`` (or ``import``) is invoked.
+It can be extended using ``push!``::
 
     push!(LOAD_PATH, "/Path/To/My/Module/")
 
@@ -272,8 +272,8 @@ For file dependencies, a change is determined by examining whether the modificat
 of each file loaded by ``include`` or added explicity by ``include_dependency`` is unchanged,
 or equal to the modification time truncated to the nearest second
 (to accommodate systems that can't copy mtime with sub-second accuracy).
-It also takes into account whether the path to the file chosen by the search logic in ``require``
-matches the path that had created the precompile file.
+It also takes into account whether the path to the file chosen by the search logic (during
+module/package loading) matches the path that had created the precompile file.
 
 It also takes into account the set of dependencies already loaded into the current process
 and won't recompile those modules, even if their files change or disappear,
@@ -312,7 +312,7 @@ into a full-compilation process.
 
 In particular, if you define a ``function __init__()`` in a module,
 then Julia will call ``__init__()`` immediately *after* the module is
-loaded (e.g., by ``import``, ``using``, or ``require``) at runtime for
+loaded (e.g., by ``import`` or ``using``) at runtime for
 the *first* time (i.e., ``__init__`` is only called once, and only
 after all statements in the module have been executed). Because it is
 called after the module is fully imported, any submodules or other

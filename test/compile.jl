@@ -120,7 +120,7 @@ try
     # the module doesn't reload from the image:
     t = redirected_stderr("WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition ")
     try
-        @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
+        @test isa(Base._require_from_serialized(Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
     finally
         close(STDERR)
         redirect_stderr(olderr)
