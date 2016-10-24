@@ -16,7 +16,7 @@ end
 # map on ranges should evaluate first value only once (#4453)
 let io=IOBuffer(3)
     map(x->print(io,x), 1:2)
-    @test takebuf_string(io)=="12"
+    @test String(take!(io))=="12"
 end
 
 # map over Bottom[] should return Bottom[]

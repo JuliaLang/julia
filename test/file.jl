@@ -22,7 +22,7 @@ let err = nothing
     catch err
         io = IOBuffer()
         showerror(io, err)
-        @test startswith(takebuf_string(io), "SystemError (with $file): mkdir:")
+        @test startswith(String(take!(io)), "SystemError (with $file): mkdir:")
     end
 end
 

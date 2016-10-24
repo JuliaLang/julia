@@ -309,7 +309,7 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
     try f(IOContext(buf, io), args...)
     finally
         have_color && print(buf, color_normal)
-        print(io, takebuf_string(buf))
+        print(io, String(take!(buf)))
     end
 end
 

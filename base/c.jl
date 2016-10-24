@@ -167,7 +167,7 @@ transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, 
 function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
-    takebuf_array(buf)
+    take!(buf)
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, src.data)

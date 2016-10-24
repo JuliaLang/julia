@@ -12,7 +12,7 @@ function docstrings_equal(d1, d2)
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
-    takebuf_string(io1) == takebuf_string(io2)
+    String(take!(io1)) == String(take!(io2))
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
 
@@ -21,7 +21,7 @@ function docstring_startswith(d1, d2)
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
-    startswith(takebuf_string(io1), takebuf_string(io2))
+    startswith(String(take!(io1)), String(take!(io2)))
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
@@ -783,7 +783,7 @@ three :: Float64
 let d = @doc Undocumented.f
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
-    @test startswith(takebuf_string(io),"""
+    @test startswith(String(take!(io)),"""
     No documentation found.
 
     `$(curmod_prefix)Undocumented.f` is a `Function`.
@@ -793,7 +793,7 @@ end
 let d = @doc Undocumented.undocumented
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
-    @test startswith(takebuf_string(io), """
+    @test startswith(String(take!(io)), """
     No documentation found.
 
     `$(curmod_prefix)Undocumented.undocumented` is a `Function`.

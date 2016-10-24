@@ -1112,4 +1112,8 @@ end)
 
 Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching(::_FDWatcher) should not be used", :stop_watching)
 
+# #19088
+@deprecate takebuf_array take!
+@deprecate takebuf_string(b) String(take!(b))
+
 # End deprecations scheduled for 0.6

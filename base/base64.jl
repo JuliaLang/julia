@@ -176,7 +176,7 @@ function base64encode(f::Function, args...)
     b = Base64EncodePipe(s)
     f(b, args...)
     close(b)
-    takebuf_string(s)
+    String(take!(s))
 end
 base64encode(x...) = base64encode(write, x...)
 

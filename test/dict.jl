@@ -270,7 +270,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
         s = IOBuffer()
         io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
         Base.show(io, MIME("text/plain"), d)
-        out = split(takebuf_string(s),'\n')
+        out = split(String(take!(s)),'\n')
         for line in out[2:end]
             @test strwidth(line) <= cols
         end
@@ -280,7 +280,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
             s = IOBuffer()
             io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
             Base.show(io, MIME("text/plain"), f(d))
-            out = split(takebuf_string(s),'\n')
+            out = split(String(take!(s)),'\n')
             for line in out[2:end]
                 @test strwidth(line) <= cols
             end

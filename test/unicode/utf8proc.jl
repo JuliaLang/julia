@@ -297,5 +297,5 @@ let str = ascii("This is a test")
     io = IOBuffer()
     show(io, g)
     check = "length-14 GraphemeIterator{String} for \"$str\""
-    @test takebuf_string(io) == check
+    @test String(take!(io)) == check
 end

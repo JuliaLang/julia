@@ -75,9 +75,9 @@ end
 let f =IOBuffer(),
     x = split("1 2 3")
     @test write(f, x) == 3
-    @test takebuf_string(f) == "123"
+    @test String(take!(f)) == "123"
     @test invoke(write, Tuple{IO, AbstractArray}, f, x) == 3
-    @test takebuf_string(f) == "123"
+    @test String(take!(f)) == "123"
 end
 
 # issue #7248

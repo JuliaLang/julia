@@ -733,7 +733,7 @@ end
 
 function read(stream::LibuvStream)
     wait_readnb(stream, typemax(Int))
-    return takebuf_array(stream.buffer)
+    return take!(stream.buffer)
 end
 
 function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
@@ -778,7 +778,7 @@ function readavailable(this::LibuvStream)
     wait_readnb(this, 1)
     buf = this.buffer
     @assert buf.seekable == false
-    return takebuf_array(buf)
+    return take!(buf)
 end
 
 function readuntil(this::LibuvStream, c::UInt8)
@@ -838,7 +838,7 @@ function flush(s::LibuvStream)
     end
     buf = get(s.sendbuf)
     if nb_available(buf) > 0
-        arr = takebuf_array(buf)        # Array of UInt8s
+        arr = take!(buf)        # Array of UInt8s
         uv_write(s, arr)
     end
     return
