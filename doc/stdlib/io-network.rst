@@ -97,17 +97,11 @@ General I/O
 
    Create an ``IOBuffer``\ , which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
-.. function:: takebuf_array(b::IOBuffer)
+.. function:: take!(b::IOBuffer)
 
    .. Docstring generated from Julia source
 
    Obtain the contents of an ``IOBuffer`` as an array, without copying. Afterwards, the ``IOBuffer`` is reset to its initial state.
-
-.. function:: takebuf_string(b::IOBuffer)
-
-   .. Docstring generated from Julia source
-
-   Obtain the contents of an ``IOBuffer`` as a string, without copying. Afterwards, the ``IOBuffer`` is reset to its initial state.
 
 .. function:: fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
 

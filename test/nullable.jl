@@ -83,24 +83,24 @@ for (i, T) in enumerate(types)
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
     show(io1, x1)
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}()", T)
+    @test String(take!(io1)) == @sprintf("Nullable{%s}()", T)
     show(io1, x2)
     showcompact(io2, get(x2))
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}(%s)", T, takebuf_string(io2))
+    @test String(take!(io1)) == @sprintf("Nullable{%s}(%s)", T, String(take!(io2)))
     show(io1, x3)
     showcompact(io2, get(x3))
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}(%s)", T, takebuf_string(io2))
+    @test String(take!(io1)) == @sprintf("Nullable{%s}(%s)", T, String(take!(io2)))
 
     a1 = [x2]
     show(IOContext(io1, compact=false), a1)
     show(IOContext(io2, compact=false), x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 
     show(io1, a1)
     show(IOContext(io2, compact=true), x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 end
 
 module NullableTestEnum
@@ -110,7 +110,7 @@ const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 io = IOBuffer()
 @enum TestEnum a b
 show(io, Nullable(a))
-Base.Test.@test takebuf_string(io) == "Nullable{$(curmod_prefix)TestEnum}(a)"
+Base.Test.@test String(take!(io)) == "Nullable{$(curmod_prefix)TestEnum}(a)"
 end
 
 # showcompact(io::IO, x::Nullable)
@@ -121,19 +121,19 @@ for (i, T) in enumerate(types)
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
     showcompact(io1, x1)
-    @test takebuf_string(io1) == "#NULL"
+    @test String(take!(io1)) == "#NULL"
     showcompact(io1, x2)
     showcompact(io2, get(x2))
-    @test takebuf_string(io1) == takebuf_string(io2)
+    @test String(take!(io1)) == String(take!(io2))
     showcompact(io1, x3)
     showcompact(io2, get(x3))
-    @test takebuf_string(io1) == takebuf_string(io2)
+    @test String(take!(io1)) == String(take!(io2))
 
     a1 = [x2]
     showcompact(io1, a1)
     showcompact(io2, x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 end
 
 # get(x::Nullable)

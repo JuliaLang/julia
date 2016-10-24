@@ -315,7 +315,7 @@ let f17314 = x -> x < 0 ? false : x
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects
-    @test takebuf_array(io) == [0x31,0x32,0x33,0x34,0x35]
+    @test take!(io) == [0x31,0x32,0x33,0x34,0x35]
 end
 
 # Issue 18176

@@ -646,7 +646,7 @@ function respond(f, repl, main; pass_empty = false)
         if !ok
             return transition(s, :abort)
         end
-        line = takebuf_string(buf)
+        line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
             val, bt = send_to_backend(f(line), backend(repl))
@@ -840,7 +840,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 return
             end
             edit_insert(sbuffer, input)
-            input = takebuf_string(sbuffer)
+            input = String(take!(sbuffer))
             oldpos = start(input)
             firstline = true
             isprompt_paste = false

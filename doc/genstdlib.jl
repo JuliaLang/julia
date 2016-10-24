@@ -150,7 +150,7 @@ function getdoc(state::State, file::AbstractString, input::Vector)
         println(b, line[(n + 1):end])
     end
     # The signature may contain `\` characaters, which must be unescaped.
-    signature = unescape_string(rstrip(takebuf_string(b)))
+    signature = unescape_string(rstrip(String(take!(b))))
     # Splice the correct docstring into the output after the signature.
     if haskey(state.validdocs, signature)
         # Push the rst text for the docstring into the output.
@@ -189,7 +189,7 @@ function indent(str::AbstractString, indent = 4)
     for line in split(str, '\n')
         println(buf, " "^indent, line)
     end
-    takebuf_string(buf)
+    String(take!(buf))
 end
 
 function validdocstr(markdown::Base.Markdown.MD)

@@ -331,7 +331,7 @@ function complete_methods(ex_org::Expr)
         # Check if the method's type signature intersects the input types
         if typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{}
             show(io, method, kwtype=kwtype)
-            push!(out, takebuf_string(io))
+            push!(out, String(take!(io)))
         end
     end
     return out

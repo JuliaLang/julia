@@ -16,17 +16,17 @@ end
 # Tags
 create_serialization_stream() do s
     Serializer.writetag(s, Serializer.sertag(Bool))
-    @test takebuf_array(s)[end] == UInt8(Serializer.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
     Serializer.write_as_tag(s, Serializer.sertag(Bool))
-    @test takebuf_array(s)[end] == UInt8(Serializer.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
     Serializer.write_as_tag(s, Serializer.sertag(Symbol))
-    data = takebuf_array(s)
+    data = take!(s)
     @test data[end-1] == 0x00
     @test data[end] == UInt8(Serializer.sertag(Symbol))
 end
@@ -387,7 +387,7 @@ end
 using .Shell, .Instance1
 io = IOBuffer()
 serialize(io, foo)
-str = takebuf_string(io)
+str = String(take!(io))
 @test isempty(search(str, "Instance1"))
 @test !isempty(search(str, "Shell"))
 

@@ -365,7 +365,7 @@ function f13127()
     buf = IOBuffer()
     f() = 1
     show(buf, f)
-    takebuf_string(buf)
+    String(take!(buf))
 end
 @test f13127() == "$(curmod_prefix)f"
 
@@ -468,7 +468,7 @@ function test_mt(f, str)
     defs = first(mt)
     io = IOBuffer()
     show(io, defs)
-    strio = takebuf_string(io)
+    strio = String(take!(io))
     strio = split(strio, " at")[1]
     @test strio[1:length(str)] == str
 end
@@ -521,9 +521,9 @@ end
 let io = IOBuffer()
     x = [1, 2]
     showcompact(io, x)
-    @test takebuf_string(io) == "[1,2]"
+    @test String(take!(io)) == "[1,2]"
     showcompact(IOContext(io, :compact=>true), x)
-    @test takebuf_string(io) == "[1,2]"
+    @test String(take!(io)) == "[1,2]"
 end
 
 # PR 17117

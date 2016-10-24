@@ -13,7 +13,7 @@ type IOStream <: IO
     IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1)
 end
 # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
-# in the case where we takebuf it.
+# in the case where we take! it.
 function IOStream(name::AbstractString, finalize::Bool)
     buf = zeros(UInt8,sizeof_ios_t)
     x = IOStream(name, buf)
@@ -218,11 +218,8 @@ function write(s::IOStream, c::Char)
 end
 read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), s.ios))
 
-takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, Ref{String}, (Ptr{Void},), s.ios)
-
-takebuf_array(s::IOStream) =
-    ccall(:jl_takebuf_array, Vector{UInt8}, (Ptr{Void},), s.ios)
+take!(s::IOStream) =
+    ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
 
 function takebuf_raw(s::IOStream)
     sz = position(s)

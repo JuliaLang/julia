@@ -52,7 +52,7 @@ u = SubString(str, 3, 6)
 @test length(u)==2
 b = IOBuffer()
 write(b, u)
-@test takebuf_string(b) == "\u2200\u2222"
+@test String(take!(b)) == "\u2200\u2222"
 
 @test_throws ArgumentError SubString(str, 4, 5)
 @test_throws BoundsError next(u, 0)
@@ -70,14 +70,14 @@ u = SubString(str, 4, 3)
 @test length(u)==0
 b = IOBuffer()
 write(b, u)
-@test takebuf_string(b) == ""
+@test String(take!(b)) == ""
 
 str = "føøbar"
 u = SubString(str, 10, 10)
 @test length(u)==0
 b = IOBuffer()
 write(b, u)
-@test takebuf_string(b) == ""
+@test String(take!(b)) == ""
 
 # search and SubString (issue #5679)
 str = "Hello, world!"

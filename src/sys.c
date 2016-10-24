@@ -233,7 +233,7 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
 
 // --- buffer manipulation ---
 
-JL_DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
+JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
 {
     size_t n;
     jl_array_t *a;
@@ -244,19 +244,10 @@ JL_DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
         ios_trunc(s, 0);
     }
     else {
-        char *b = ios_takebuf(s, &n);
+        char *b = ios_take_buffer(s, &n);
         a = jl_ptr_to_array_1d(jl_array_uint8_type, b, n-1, 1);
     }
     return a;
-}
-
-JL_DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s)
-{
-    jl_array_t *a = jl_takebuf_array(s);
-    JL_GC_PUSH1(&a);
-    jl_value_t *str = jl_array_to_string(a);
-    JL_GC_POP();
-    return str;
 }
 
 // the returned buffer must be manually freed. To determine the size,
@@ -286,7 +277,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         ios_setbuf(&dest, (char*)a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
         if (dest.buf != a->data) {
-            a = jl_takebuf_array(&dest);
+            a = jl_take_buffer(&dest);
         }
         else {
 #ifdef STORE_ARRAY_LEN

@@ -117,33 +117,33 @@ end
 # show
 io = IOBuffer()
 show(io, v)
-str = takebuf_string(io)
+str = String(take!(io))
 show(io, v0)
-@test str == takebuf_string(io)
+@test str == String(take!(io))
 show(io, A)
-str = takebuf_string(io)
+str = String(take!(io))
 @test str == "[1 3; 2 4]"
 show(io, S)
-str = takebuf_string(io)
+str = String(take!(io))
 @test str == "[1 3; 2 4]"
 show(io, MIME("text/plain"), A)
-strs = split(strip(takebuf_string(io)), '\n')
+strs = split(strip(String(take!(io))), '\n')
 @test strs[2] == " 1  3"
 @test strs[3] == " 2  4"
 v = OffsetArray(rand(3), (-2,))
 show(io, v)
-str = takebuf_string(io)
+str = String(take!(io))
 show(io, parent(v))
-@test str == takebuf_string(io)
+@test str == String(take!(io))
 smry = summary(v)
 @test contains(smry, "OffsetArray{Float64,1")
 @test contains(smry, "with indices -1:1")
 function cmp_showf(printfunc, io, A)
     ioc = IOContext(io, limit=true, compact=true)
     printfunc(ioc, A)
-    str1 = takebuf_string(io)
+    str1 = String(take!(io))
     printfunc(ioc, parent(A))
-    str2 = takebuf_string(io)
+    str2 = String(take!(io))
     @test str1 == str2
 end
 cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&cols fit
@@ -163,9 +163,9 @@ targets2 = ["(1.0,1.0)",
 for n = 0:4
     a = OffsetArray(ones(Float64,ntuple(d->1,n)), ntuple(identity,n))
     show(IOContext(io, limit=true), MIME("text/plain"), a)
-    @test takebuf_string(io) == targets1[n+1]
+    @test String(take!(io)) == targets1[n+1]
     show(IOContext(io, limit=true), MIME("text/plain"), (a,a))
-    @test takebuf_string(io) == targets2[n+1]
+    @test String(take!(io)) == targets2[n+1]
 end
 
 # Similar

@@ -117,10 +117,10 @@ end
 
 let x = ["\"hello\"", "world\""], io = IOBuffer()
     writedlm(io, x, quotes=false)
-    @test takebuf_string(io) == "\"hello\"\nworld\"\n"
+    @test String(take!(io)) == "\"hello\"\nworld\"\n"
 
     writedlm(io, x)
-    @test takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
+    @test String(take!(io)) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
 end
 
 # test comments

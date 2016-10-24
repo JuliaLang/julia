@@ -553,7 +553,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     break
                 end
                 i += 1
-                print(io, takebuf_string(line[1]))
+                print(io, String(take!(line[1])))
             end
         end
     end

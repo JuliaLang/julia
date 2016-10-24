@@ -643,9 +643,9 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
             writedlm_cell(pb, a[i, j], dlm, quotes)
             j == lastc ? write(pb,'\n') : print(pb,dlm)
         end
-        (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
+        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
     end
-    write(io, takebuf_array(pb))
+    write(io, take!(pb))
     nothing
 end
 
@@ -677,9 +677,9 @@ function writedlm(io::IO, itr, dlm; opts...)
     pb = PipeBuffer()
     for row in itr
         writedlm_row(pb, row, dlm, quotes)
-        (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
+        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
     end
-    write(io, takebuf_array(pb))
+    write(io, take!(pb))
     nothing
 end
 
