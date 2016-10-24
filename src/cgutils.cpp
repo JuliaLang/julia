@@ -123,7 +123,14 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     }
     if (jl_is_bitstype(jt)) {
         uint64_t SizeInBits = jl_datatype_nbits(jdt);
-    #if JL_LLVM_VERSION >= 30700
+    #if JL_LLVM_VERSION >= 40000
+        llvm::DIType *t = dbuilder->createBasicType(
+                jl_symbol_name(jdt->name->name),
+                SizeInBits,
+                llvm::dwarf::DW_ATE_unsigned);
+        jdt->ditype = t;
+        return t;
+    #elif JL_LLVM_VERSION >= 30700
         llvm::DIType *t = dbuilder->createBasicType(
                 jl_symbol_name(jdt->name->name),
                 SizeInBits,
