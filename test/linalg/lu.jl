@@ -36,7 +36,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     if eltya <: BlasFloat
         num = rand(eltya)
         @test lu(num) == (one(eltya),num,1)
-        @test full(lufact(num)) ≈ eltya[num]
+        @test AbstractArray(lufact(num)) ≈ eltya[num]
     end
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
@@ -68,7 +68,7 @@ debug && println("(Automatic) Square LU decomposition")
                 @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
                 @test norm(a*(lua\c) - c, 1) < ε*κ*n # c is a vector
                 @test norm(a'*(lua'\c) - c, 1) < ε*κ*n # c is a vector
-                @test full(lua) ≈ a
+                @test AbstractArray(lua) ≈ a
                 if eltya <: Real && eltyb <: Real
                     @test norm(a.'*(lua.'\b) - b,1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a.'*(lua.'\c) - c,1) < ε*κ*n
@@ -81,13 +81,13 @@ debug && println("(Automatic) Square LU decomposition")
         end
 
 debug && println("Tridiagonal LU")
-        κd    = cond(full(d),1)
+        κd    = cond(Array(d),1)
         lud   = lufact(d)
         @test lufact(lud) == lud
         @test_throws KeyError lud[:Z]
-        @test lud[:L]*lud[:U] ≈ lud[:P]*full(d)
-        @test lud[:L]*lud[:U] ≈ full(d)[lud[:p],:]
-        @test full(lud) ≈ d
+        @test lud[:L]*lud[:U] ≈ lud[:P]*Array(d)
+        @test lud[:L]*lud[:U] ≈ Array(d)[lud[:p],:]
+        @test AbstractArray(lud) ≈ d
         f = zeros(eltyb, n+1)
         @test_throws DimensionMismatch lud\f
         @test_throws DimensionMismatch lud.'\f
@@ -102,17 +102,17 @@ debug && println("Tridiagonal LU")
 
                 @test norm(d*(lud\b) - b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                 if eltya <: Real
-                    @test norm((lud.'\b) - full(d.')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                    @test norm((lud.'\b) - Array(d.')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                 end
                 if eltya <: Complex
-                    @test norm((lud'\b) - full(d')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                    @test norm((lud'\b) - Array(d')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                 end
             end
         end
         if eltya <: BlasFloat && eltyb <: BlasFloat
             e = rand(eltyb,n,n)
             @test norm(e/lud - e/d,1) < ε*κ*n^2
-            @test norm((lud.'\e') - full(d.')\e',1) < ε*κd*n^2
+            @test norm((lud.'\e') - Array(d.')\e',1) < ε*κd*n^2
             #test singular
             du = rand(eltya,n-1)
             dl = rand(eltya,n-1)
@@ -136,11 +136,11 @@ end
 
 # test conversion routine
 a = Tridiagonal(rand(9),rand(10),rand(9))
-fa = full(a)
+fa = Array(a)
 falu = lufact(fa)
 alu = lufact(a)
 falu = convert(typeof(falu),alu)
-@test full(alu) == fa
+@test AbstractArray(alu) == fa
 
 # Test rational matrices
 ## Integrate in general tests when more linear algebra is implemented in julia
