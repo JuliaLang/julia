@@ -26,7 +26,7 @@
         "a"
 
        julia> c = zip(a,b)
-       Base.Zip2{UnitRange{Int64},Array{String,1}}(1:5,String["e","d","b","c","a"])
+       Base.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5,String["e","d","b","c","a"])
 
        julia> length(c)
        5
@@ -83,7 +83,7 @@
          9
         11
 
-       julia> collect(take(a,3))
+       julia> collect(Iterators.take(a,3))
        3-element Array{Int64,1}:
         1
         3
@@ -109,7 +109,7 @@
          9
         11
 
-       julia> collect(drop(a,4))
+       julia> collect(Iterators.drop(a,4))
        2-element Array{Int64,1}:
          9
         11
@@ -128,7 +128,7 @@
 
    .. doctest::
 
-       julia> a = repeated([1 2], 4);
+       julia> a = Iterators.repeated([1 2], 4);
 
        julia> collect(a)
        4-element Array{Array{Int64,2},1}:
@@ -145,7 +145,7 @@
 
    .. doctest::
 
-       julia> collect(product(1:2,3:5))
+       julia> collect(Iterators.product(1:2,3:5))
        6-element Array{Tuple{Int64,Int64},1}:
         (1,3)
         (2,3)
@@ -162,7 +162,7 @@
 
    .. doctest::
 
-       julia> collect(flatten((1:2, 8:9)))
+       julia> collect(Iterators.flatten((1:2, 8:9)))
        4-element Array{Int64,1}:
         1
         2
@@ -177,7 +177,7 @@
 
    .. doctest::
 
-       julia> collect(partition([1,2,3,4,5], 2))
+       julia> collect(Iterators.partition([1,2,3,4,5], 2))
        3-element Array{Array{Int64,1},1}:
         [1,2]
         [3,4]
