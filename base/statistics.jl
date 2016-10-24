@@ -24,12 +24,12 @@ function mean(f::Callable, iterable)
     return total/count
 end
 mean(iterable) = mean(identity, iterable)
-mean(f::Callable, A::AbstractArray) = sum(f, A) / length(A)
-mean(A::AbstractArray) = sum(A) / length(A)
+mean(f::Callable, A::AbstractArray) = sum(f, A) / _length(A)
+mean(A::AbstractArray) = sum(A) / _length(A)
 
 function mean!{T}(R::AbstractArray{T}, A::AbstractArray)
     sum!(R, A; init=true)
-    scale!(R, length(R) / length(A))
+    scale!(R, _length(R) / _length(A))
     return R
 end
 
@@ -140,7 +140,7 @@ function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, 
 end
 
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
-    n = length(A)
+    n = _length(A)
     n == 0 && return convert(real(momenttype(T)), NaN)
     n == 1 && return convert(real(momenttype(T)), abs2(A[1] - m)/(1 - Int(corrected)))
     return centralize_sumabs2(A, m) / (n - Int(corrected))
@@ -150,7 +150,7 @@ function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corre
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
-        rn = div(length(A), length(R)) - Int(corrected)
+        rn = div(_length(A), _length(R)) - Int(corrected)
         scale!(centralize_sumabs2!(R, A, m), convert(S, 1/rn))
     end
     return R
@@ -282,7 +282,7 @@ stdm(iterable, m::Number; corrected::Bool=true) =
 _conj{T<:Real}(x::AbstractArray{T}) = x
 _conj(x::AbstractArray) = conj(x)
 
-_getnobs(x::AbstractVector, vardim::Int) = length(x)
+_getnobs(x::AbstractVector, vardim::Int) = _length(x)
 _getnobs(x::AbstractMatrix, vardim::Int) = size(x, vardim)
 
 function _getnobs(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int)
@@ -309,11 +309,11 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
 
 # covzm (with centered data)
 
-covzm(x::AbstractVector, corrected::Bool=true) = unscaled_covzm(x) / (length(x) - Int(corrected))
+covzm(x::AbstractVector, corrected::Bool=true) = unscaled_covzm(x) / (_length(x) - Int(corrected))
 covzm(x::AbstractMatrix, vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - Int(corrected)))
 covzm(x::AbstractVector, y::AbstractVector, corrected::Bool=true) =
-    unscaled_covzm(x, y) / (length(x) - Int(corrected))
+    unscaled_covzm(x, y) / (_length(x) - Int(corrected))
 covzm(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - Int(corrected)))
 
@@ -568,16 +568,18 @@ function median!{T}(v::AbstractVector{T})
             isnan(x) && return x
         end
     end
-    n = length(v)
+    inds = indices(v, 1)
+    n = length(inds)
+    mid = div(first(inds)+last(inds),2)
     if isodd(n)
-        return middle(select!(v,div(n+1,2)))
+        return middle(select!(v,mid))
     else
-        m = select!(v, div(n,2):div(n,2)+1)
+        m = select!(v, mid:mid+1)
         return middle(m[1], m[2])
     end
 end
 median!{T}(v::AbstractArray{T}) = median!(vec(v))
-median{T}(v::AbstractArray{T}) = median!(copy!(Array{T,1}(length(v)), v))
+median{T}(v::AbstractArray{T}) = median!(copy!(Array{T,1}(_length(v)), v))
 
 """
     median(v[, region])
