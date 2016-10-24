@@ -32,7 +32,7 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
     julia> example()
     11-element Array{StackFrame,1}:
       in example() at none:1
-      in eval(::Module, ::Any) at boot.jl:234
+      in eval(::Module, ::Any) at boot.jl:236
       ...
 
     julia> @noinline child() = stacktrace()
@@ -74,7 +74,7 @@ Each :obj:`StackFrame` contains the function name, file name, line number, lambd
 .. doctest::
 
     julia> top_frame = stacktrace()[1]
-     in eval(::Module, ::Any) at boot.jl:234
+     in eval(::Module, ::Any) at boot.jl:236
 
     julia> top_frame.func
     :eval
@@ -83,7 +83,7 @@ Each :obj:`StackFrame` contains the function name, file name, line number, lambd
     Symbol("./boot.jl")
 
     julia> top_frame.line
-    234
+    236
 
     julia> top_frame.linfo
     Nullable{MethodInstance}(MethodInstance for eval(::Module, ::Any))
@@ -123,7 +123,7 @@ helpful in many places, the most obvious application is in error handling and de
     julia> example()
     11-element Array{StackFrame,1}:
       in example() at none:4
-      in eval(::Module, ::Any) at boot.jl:234
+      in eval(::Module, ::Any) at boot.jl:236
       ...
 
 You may notice that in the example above the first stack frame points points at line 4,

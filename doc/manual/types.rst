@@ -765,14 +765,14 @@ each field:
     ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
     This may have arisen from a call to the constructor Point{Float64}(...),
     since type constructors fall back to convert methods.
-     in Point{Float64}(::Float64) at ./sysimg.jl:53
+     in Point{Float64}(::Float64) at ./sysimg.jl:66
      ...
 
     julia> Point{Float64}(1.0,2.0,3.0)
     ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
     Closest candidates are:
       Point{Float64}{T}(::Any, ::Any) at none:3
-      Point{Float64}{T}(::Any) at sysimg.jl:53
+      Point{Float64}{T}(::Any) at sysimg.jl:66
      ...
 
 Only one default constructor is generated for parametric types, since
