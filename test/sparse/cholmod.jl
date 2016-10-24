@@ -660,3 +660,13 @@ A = sprandn(5,5,0.4) |> t -> t't + I
 B = complex(randn(5,2), randn(5,2))
 @test cholfact(A)\B ≈ A\B
 
+# Make sure that ldltfact performs an LDLt (Issue #19032)
+let m = 400, n = 500
+    A = sprandn(m, n, .2)
+    M = [speye(n) A'; A -speye(m)]
+    b = M*ones(m + n)
+    F = ldltfact(M)
+    s = unsafe_load(get(F.p))
+    @test s.is_super == 0
+    @test F\b ≈ ones(m + n)
+end
