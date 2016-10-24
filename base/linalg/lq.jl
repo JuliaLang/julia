@@ -53,7 +53,7 @@ convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
 convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
 convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
 convert(::Type{Array}, A::LQ) = convert(Matrix, A)
-full(A::LQ) = convert(Array, A)
+full(A::LQ) = convert(AbstractArray, A)
 
 ctranspose{T}(A::LQ{T}) = QR{T,typeof(A.factors)}(A.factors', A.τ)
 
