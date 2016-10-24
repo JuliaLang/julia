@@ -5,7 +5,7 @@
 @test Base.SparseArrays.indtype(sparse(ones(Int8,2),ones(Int8,2),rand(2))) == Int8
 
 # check sparse matrix construction
-@test isequal(full(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
+@test isequal(Array(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
 @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
 @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
 @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2,3], 0, 1)
@@ -22,8 +22,8 @@ do33 = ones(3)
 @test isequal(se33 * se33, se33)
 
 # check sparse binary op
-@test all(full(se33 + convert(SparseMatrixCSC{Float32,Int32}, se33)) == 2*eye(3))
-@test all(full(se33 * convert(SparseMatrixCSC{Float32,Int32}, se33)) == eye(3))
+@test all(Array(se33 + convert(SparseMatrixCSC{Float32,Int32}, se33)) == 2*eye(3))
+@test all(Array(se33 * convert(SparseMatrixCSC{Float32,Int32}, se33)) == eye(3))
 
 # check horiz concatenation
 @test all([se33 se33] == sparse([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 5, 6], ones(6)))
@@ -52,7 +52,7 @@ se33_i32 = speye(Int32, 3, 3)
 # check mixed sparse-dense concatenation
 sz33 = spzeros(3, 3)
 de33 = eye(3)
-@test  all([se33 de33; sz33 se33] == full([se33 se33; sz33 se33 ]))
+@test  all([se33 de33; sz33 se33] == Array([se33 se33; sz33 se33 ]))
 
 # check splicing + concatenation on
 # random instances, with nested vcat
@@ -66,9 +66,9 @@ end
 a116 = copy(reshape(1:16, 4, 4))
 s116 = sparse(a116)
 p = [4, 1, 2, 3, 2]
-@test full(s116[p,:]) == a116[p,:]
-@test full(s116[:,p]) == a116[:,p]
-@test full(s116[p,p]) == a116[p,p]
+@test Array(s116[p,:]) == a116[p,:]
+@test Array(s116[:,p]) == a116[:,p]
+@test Array(s116[p,p]) == a116[p,p]
 
 # sparse assign
 p = [4, 1, 3]
@@ -97,16 +97,16 @@ end
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = rand(5)
-    @test maximum(abs.(a*b - full(a)*b)) < 100*eps()
+    @test maximum(abs.(a*b - Array(a)*b)) < 100*eps()
 end
 
 # sparse matrix * BitArray
 A = sprand(5,5,0.2)
 B = trues(5)
-@test A*B ≈ full(A)*B
+@test A*B ≈ Array(A)*B
 B = trues(5,5)
-@test A*B ≈ full(A)*B
-@test B*A ≈ B*full(A)
+@test A*B ≈ Array(A)*B
+@test B*A ≈ B*Array(A)
 
 # complex matrix-vector multiplication and left-division
 if Base.USE_GPL_LIBS
@@ -117,93 +117,93 @@ for i = 1:5
     d = randn(5) + im*randn(5)
     α = rand(Complex128)
     β = rand(Complex128)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(A_mul_B!(similar(b), a, b) - full(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-    @test (maximum(abs.(A_mul_B!(similar(c), a, c) - full(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-    @test (maximum(abs.(At_mul_B!(similar(b), a, b) - full(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-    @test (maximum(abs.(At_mul_B!(similar(c), a, c) - full(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
-    @test (maximum(abs.((a'*c + d) - (full(a)'*c + d))) < 1000*eps())
-    @test (maximum(abs.((α*a.'*c + β*d) - (α*full(a).'*c + β*d))) < 1000*eps())
-    @test (maximum(abs.((a.'*c + d) - (full(a).'*c + d))) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(A_mul_B!(similar(b), a, b) - Array(a)*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+    @test (maximum(abs.(A_mul_B!(similar(c), a, c) - Array(a)*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+    @test (maximum(abs.(At_mul_B!(similar(b), a, b) - Array(a).'*b)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+    @test (maximum(abs.(At_mul_B!(similar(c), a, c) - Array(a).'*c)) < 100*eps()) # for compatibility with present matmul API. Should go away eventually.
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
+    @test (maximum(abs.((a'*c + d) - (Array(a)'*c + d))) < 1000*eps())
+    @test (maximum(abs.((α*a.'*c + β*d) - (α*Array(a).'*c + β*d))) < 1000*eps())
+    @test (maximum(abs.((a.'*c + d) - (Array(a).'*c + d))) < 1000*eps())
     c = randn(6) + im*randn(6)
     @test_throws DimensionMismatch α*a.'*c + β*c
     @test_throws DimensionMismatch α*a.'*ones(5) + β*c
 
     a = speye(5) + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
     b = randn(5,3)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
     a = speye(5) + tril(0.1*sprandn(5, 5, 0.2))
     b = randn(5,3) + im*randn(5,3)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
     a = speye(5) + tril(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
     b = randn(5,3)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
     a = speye(5) + triu(0.1*sprandn(5, 5, 0.2))
     b = randn(5,3) + im*randn(5,3)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
     a = speye(5) + triu(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
     b = randn(5,3)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
     a = speye(5) + triu(0.1*sprandn(5, 5, 0.2))
     b = randn(5,3) + im*randn(5,3)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
     a = spdiagm(randn(5)) + im*spdiagm(randn(5))
     b = randn(5,3)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
     b = randn(5,3) + im*randn(5,3)
-    @test (maximum(abs.(a*b - full(a)*b)) < 100*eps())
-    @test (maximum(abs.(a'b - full(a)'b)) < 100*eps())
-    @test (maximum(abs.(a.'b - full(a).'b)) < 100*eps())
-    @test (maximum(abs.(a\b - full(a)\b)) < 1000*eps())
-    @test (maximum(abs.(a'\b - full(a')\b)) < 1000*eps())
-    @test (maximum(abs.(a.'\b - full(a.')\b)) < 1000*eps())
+    @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
+    @test (maximum(abs.(a'b - Array(a)'b)) < 100*eps())
+    @test (maximum(abs.(a.'b - Array(a).'b)) < 100*eps())
+    @test (maximum(abs.(a\b - Array(a)\b)) < 1000*eps())
+    @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
+    @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 end
 end
 
@@ -211,24 +211,24 @@ end
 for i = 1:5
     a = sprand(10, 5, 0.7)
     b = sprand(5, 15, 0.3)
-    @test maximum(abs.(a*b - full(a)*full(b))) < 100*eps()
-    @test maximum(abs.(Base.SparseArrays.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
-    @test maximum(abs.(Base.SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
-    @test full(kron(a,b)) == kron(full(a), full(b))
-    @test full(kron(full(a),b)) == kron(full(a), full(b))
-    @test full(kron(a,full(b))) == kron(full(a), full(b))
+    @test maximum(abs.(a*b - Array(a)*Array(b))) < 100*eps()
+    @test maximum(abs.(Base.SparseArrays.spmatmul(a,b,sortindices=:sortcols) - Array(a)*Array(b))) < 100*eps()
+    @test maximum(abs.(Base.SparseArrays.spmatmul(a,b,sortindices=:doubletranspose) - Array(a)*Array(b))) < 100*eps()
+    @test Array(kron(a,b)) == kron(Array(a), Array(b))
+    @test Array(kron(Array(a),b)) == kron(Array(a), Array(b))
+    @test Array(kron(a,Array(b))) == kron(Array(a), Array(b))
     c = sparse(rand(Float32,5,5))
     d = sparse(rand(Float64,5,5))
-    @test full(kron(c,d)) == kron(full(c),full(d))
+    @test Array(kron(c,d)) == kron(Array(c),Array(d))
     f = Diagonal(rand(5))
-    @test full(a*f) == full(a)*f
-    @test full(f*b) == f*full(b)
+    @test Array(a*f) == Array(a)*f
+    @test Array(f*b) == f*Array(b)
 end
 
 # scale and scale!
 sA = sprandn(3, 7, 0.5)
 sC = similar(sA)
-dA = full(sA)
+dA = Array(sA)
 b = randn(7)
 @test dA * Diagonal(b) == sA * Diagonal(b)
 @test dA * Diagonal(b) == scale!(sC, sA, b)
@@ -288,8 +288,8 @@ end
 
 # conj
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
-@test full(conj.(cA)) == conj(full(cA))
-@test full(conj!(copy(cA))) == conj(full(cA))
+@test Array(conj.(cA)) == conj(Array(cA))
+@test Array(conj!(copy(cA))) == conj(Array(cA))
 
 # Test SparseMatrixCSC [c]transpose[!] and permute[!] methods
 let smalldim = 5, largedim = 10, nzprob = 0.4
@@ -329,19 +329,19 @@ let smalldim = 5, largedim = 10, nzprob = 0.4
         A = sprand(m, n, nzprob)
         At = transpose(A)
         # transpose[!]
-        fullAt = transpose(full(A))
+        fullAt = transpose(Array(A))
         @test transpose(A) == fullAt
         @test transpose!(similar(At), A) == fullAt
         # ctranspose[!]
         C = A + im*A/2
-        fullCh = ctranspose(full(C))
+        fullCh = ctranspose(Array(C))
         @test ctranspose(C) == fullCh
         @test ctranspose!(similar(sparse(fullCh)), C) == fullCh
         # permute[!]
         p = randperm(m)
         q = randperm(n)
-        fullPAQ = full(A)[p,q]
-        @test permute(A, p, q) == sparse(full(A[p,q]))
+        fullPAQ = Array(A)[p,q]
+        @test permute(A, p, q) == sparse(Array(A[p,q]))
         @test permute!(similar(A), A, p, q) == fullPAQ
         @test permute!(similar(A), A, p, q, similar(At)) == fullPAQ
         @test permute!(copy(A), p, q) == fullPAQ
@@ -352,19 +352,19 @@ end
 
 # transpose of SubArrays
 A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
-@test  transpose(full(A)) == full(transpose(A))
-@test ctranspose(full(A)) == full(ctranspose(A))
+@test  transpose(Array(A)) == Array(transpose(A))
+@test ctranspose(Array(A)) == Array(ctranspose(A))
 
 # exp
 A = sprandn(5,5,0.2)
-@test e.^A ≈ e.^full(A)
+@test e.^A ≈ e.^Array(A)
 
 # reductions
 pA = sparse(rand(3, 7))
 
 for arr in (se33, sA, pA)
     for f in (sum, prod, minimum, maximum, var)
-        farr = full(arr)
+        farr = Array(arr)
         @test f(arr) ≈ f(farr)
         @test f(arr, 1) ≈ f(farr, 1)
         @test f(arr, 2) ≈ f(farr, 2)
@@ -402,9 +402,9 @@ for f in (sum, prod, minimum, maximum, var)
 end
 
 # spdiagm
-@test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==
+@test Array(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==
                        [1.0  0.0  0.0; 1.0  1.0  0.0;  0.0  1.0  0.0]
-@test full(spdiagm(ones(2), -1, 3, 3)) == diagm(ones(2), -1)
+@test Array(spdiagm(ones(2), -1, 3, 3)) == diagm(ones(2), -1)
 
 # issue #4986, reinterpret
 sfe22 = speye(Float64, 2)
@@ -421,7 +421,7 @@ K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 
 # https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ
 A = speye(Bool, 5)
-@test find(A) == find(x -> x == true, A) == find(full(A))
+@test find(A) == find(x -> x == true, A) == find(Array(A))
 
 
 # issue #5824
@@ -468,28 +468,28 @@ end
 @testset "Unary functions" begin
     A = sprand(5, 15, 0.5)
     C = A + im*A
-    Afull = full(A)
-    Cfull = full(C)
+    Afull = Array(A)
+    Cfull = Array(C)
     # Test representatives of [unary functions that map zeros to zeros and may map nonzeros to zeros]
-    @test sin.(Afull) == full(sin.(A))
-    @test tan.(Afull) == full(tan.(A)) # should be redundant with sin test
-    @test ceil.(Afull) == full(ceil.(A))
-    @test floor.(Afull) == full(floor.(A)) # should be redundant with ceil test
-    @test real.(Afull) == full(real.(A))
-    @test imag.(Afull) == full(imag.(A))
-    @test real.(Cfull) == full(real.(C))
-    @test imag.(Cfull) == full(imag.(C))
+    @test sin.(Afull) == Array(sin.(A))
+    @test tan.(Afull) == Array(tan.(A)) # should be redundant with sin test
+    @test ceil.(Afull) == Array(ceil.(A))
+    @test floor.(Afull) == Array(floor.(A)) # should be redundant with ceil test
+    @test real.(Afull) == Array(real.(A))
+    @test imag.(Afull) == Array(imag.(A))
+    @test real.(Cfull) == Array(real.(C))
+    @test imag.(Cfull) == Array(imag.(C))
     # Test representatives of [unary functions that map zeros to zeros and nonzeros to nonzeros]
-    @test expm1.(Afull) == full(expm1.(A))
-    @test abs.(Afull) == full(abs.(A))
-    @test abs2.(Afull) == full(abs2.(A))
-    @test abs.(Cfull) == full(abs.(C))
-    @test abs2.(Cfull) == full(abs2.(C))
+    @test expm1.(Afull) == Array(expm1.(A))
+    @test abs.(Afull) == Array(abs.(A))
+    @test abs2.(Afull) == Array(abs2.(A))
+    @test abs.(Cfull) == Array(abs.(C))
+    @test abs2.(Cfull) == Array(abs2.(C))
     # Test representatives of [unary functions that map both zeros and nonzeros to nonzeros]
-    @test cos.(Afull) == full(cos.(A))
+    @test cos.(Afull) == Array(cos.(A))
     # Test representatives of remaining vectorized-nonbroadcast unary functions
-    @test ceil(Int, Afull) == full(ceil(Int, A))
-    @test floor(Int, Afull) == full(floor(Int, A))
+    @test ceil(Int, Afull) == Array(ceil(Int, A))
+    @test floor(Int, Afull) == Array(floor(Int, A))
     # Tests of real, imag, abs, and abs2 for SparseMatrixCSC{Int,X}s previously elsewhere
     for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
         R = rand(T[1:100;], 2, 2)
@@ -527,42 +527,42 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     @test ss116[:,:] == copy(ss116)
 
     # range indexing
-    @test full(ss116[i,:]) == aa116[i,:]
-    @test full(ss116[:,j]) == aa116[:,j]
-    @test full(ss116[i,1:2:end]) == aa116[i,1:2:end]
-    @test full(ss116[1:2:end,j]) == aa116[1:2:end,j]
-    @test full(ss116[i,end:-2:1]) == aa116[i,end:-2:1]
-    @test full(ss116[end:-2:1,j]) == aa116[end:-2:1,j]
+    @test Array(ss116[i,:]) == aa116[i,:]
+    @test Array(ss116[:,j]) == aa116[:,j]
+    @test Array(ss116[i,1:2:end]) == aa116[i,1:2:end]
+    @test Array(ss116[1:2:end,j]) == aa116[1:2:end,j]
+    @test Array(ss116[i,end:-2:1]) == aa116[i,end:-2:1]
+    @test Array(ss116[end:-2:1,j]) == aa116[end:-2:1,j]
     # float-range indexing is not supported
 
     # sorted vector indexing
-    @test full(ss116[i,[3:2:end-3;]]) == aa116[i,[3:2:end-3;]]
-    @test full(ss116[[3:2:end-3;],j]) == aa116[[3:2:end-3;],j]
-    @test full(ss116[i,[end-3:-2:1;]]) == aa116[i,[end-3:-2:1;]]
-    @test full(ss116[[end-3:-2:1;],j]) == aa116[[end-3:-2:1;],j]
+    @test Array(ss116[i,[3:2:end-3;]]) == aa116[i,[3:2:end-3;]]
+    @test Array(ss116[[3:2:end-3;],j]) == aa116[[3:2:end-3;],j]
+    @test Array(ss116[i,[end-3:-2:1;]]) == aa116[i,[end-3:-2:1;]]
+    @test Array(ss116[[end-3:-2:1;],j]) == aa116[[end-3:-2:1;],j]
 
     # unsorted vector indexing with repetition
     p = [4, 1, 2, 3, 2, 6]
-    @test full(ss116[p,:]) == aa116[p,:]
-    @test full(ss116[:,p]) == aa116[:,p]
-    @test full(ss116[p,p]) == aa116[p,p]
+    @test Array(ss116[p,:]) == aa116[p,:]
+    @test Array(ss116[:,p]) == aa116[:,p]
+    @test Array(ss116[p,p]) == aa116[p,p]
 
     # bool indexing
     li = bitrand(size(aa116,1))
     lj = bitrand(size(aa116,2))
-    @test full(ss116[li,j]) == aa116[li,j]
-    @test full(ss116[li,:]) == aa116[li,:]
-    @test full(ss116[i,lj]) == aa116[i,lj]
-    @test full(ss116[:,lj]) == aa116[:,lj]
-    @test full(ss116[li,lj]) == aa116[li,lj]
+    @test Array(ss116[li,j]) == aa116[li,j]
+    @test Array(ss116[li,:]) == aa116[li,:]
+    @test Array(ss116[i,lj]) == aa116[i,lj]
+    @test Array(ss116[:,lj]) == aa116[:,lj]
+    @test Array(ss116[li,lj]) == aa116[li,lj]
 
     # empty indices
     for empty in (1:0, Int[])
-        @test full(ss116[empty,:]) == aa116[empty,:]
-        @test full(ss116[:,empty]) == aa116[:,empty]
-        @test full(ss116[empty,lj]) == aa116[empty,lj]
-        @test full(ss116[li,empty]) == aa116[li,empty]
-        @test full(ss116[empty,empty]) == aa116[empty,empty]
+        @test Array(ss116[empty,:]) == aa116[empty,:]
+        @test Array(ss116[:,empty]) == aa116[:,empty]
+        @test Array(ss116[empty,lj]) == aa116[empty,lj]
+        @test Array(ss116[li,empty]) == aa116[li,empty]
+        @test Array(ss116[empty,empty]) == aa116[empty,empty]
     end
 
     # out of bounds indexing
@@ -592,7 +592,7 @@ S1290 = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
     S1290[end] = 3
     @test S1290[end] == (S1290[1] + S1290[2,2])
     @test 6 == sum(diag(S1290))
-    @test full(S1290)[[3,1],1] == full(S1290[[3,1],1])
+    @test Array(S1290)[[3,1],1] == Array(S1290[[3,1],1])
 # end
 
 
@@ -744,8 +744,8 @@ let A = speye(Int, 5), I=1:10, X=reshape([trues(10); falses(15)],5,5)
 end
 
 let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprand(Bool, 50, 30, 0.2)
-    FS = full(S)
-    FI = full(I)
+    FS = Array(S)
+    FI = Array(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
     @test sum(S[FI]) + sum(S[!FI]) == sum(S)
 
@@ -869,7 +869,7 @@ let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
 end
 
 # indmax, indmin, findmax, findmin
-let S = sprand(100,80, 0.5), A = full(S)
+let S = sprand(100,80, 0.5), A = Array(S)
     @test indmax(S) == indmax(A)
     @test indmin(S) == indmin(A)
     @test findmin(S) == findmin(A)
@@ -879,7 +879,7 @@ let S = sprand(100,80, 0.5), A = full(S)
     end
 end
 
-let S = spzeros(10,8), A = full(S)
+let S = spzeros(10,8), A = Array(S)
     @test indmax(S) == indmax(A) == 1
     @test indmin(S) == indmin(A) == 1
 end
@@ -1060,7 +1060,7 @@ end
 
 # issue #9917
 @test sparse([]') == reshape(sparse([]), 1, 0)
-@test full(sparse([])) == zeros(0)
+@test Array(sparse([])) == zeros(0)
 @test_throws BoundsError sparse([])[1]
 @test_throws BoundsError sparse([])[1] = 1
 x = speye(100)
@@ -1081,22 +1081,22 @@ end
 # test sparse constructors from special matrices
 T = Tridiagonal(randn(4),randn(5),randn(4))
 S = sparse(T)
-@test norm(full(T) - full(S)) == 0.0
+@test norm(Array(T) - Array(S)) == 0.0
 T = SymTridiagonal(randn(5),rand(4))
 S = sparse(T)
-@test norm(full(T) - full(S)) == 0.0
+@test norm(Array(T) - Array(S)) == 0.0
 B = Bidiagonal(randn(5),randn(4),true)
 S = sparse(B)
-@test norm(full(B) - full(S)) == 0.0
+@test norm(Array(B) - Array(S)) == 0.0
 B = Bidiagonal(randn(5),randn(4),false)
 S = sparse(B)
-@test norm(full(B) - full(S)) == 0.0
+@test norm(Array(B) - Array(S)) == 0.0
 
 # promotion in spdiagm
 @test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
 
 #Test broadcasting of sparse matrixes
-let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = full(A), BF = full(B), C = sparse(CF)
+let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), CF = rand(10,10), AF = Array(A), BF = Array(B), C = sparse(CF)
     @test A .* B == AF .* BF
     @test A[1,:] .* B == AF[1,:] .* BF
     @test A[:,1] .* B == AF[:,1] .* BF
@@ -1188,18 +1188,18 @@ A = speye(5)
 @test size(similar(A,Complex128,Int8)) == (5,5)
 @test typeof(similar(A,Complex128,Int8)) == SparseMatrixCSC{Complex128,Int8}
 @test similar(A,Complex128,(6,6)) == spzeros(Complex128,6,6)
-@test convert(Matrix,A) == full(A)
+@test convert(Matrix,A) == Array(A)
 
 # test float
 A = sprand(Bool, 5,5,0.0)
 @test eltype(float(A)) == Float64  # issue #11658
 A = sprand(Bool, 5,5,0.2)
-@test float(A) == float(full(A))
+@test float(A) == float(Array(A))
 
 # test sparsevec
 A = sparse(ones(5,5))
-@test all(full(sparsevec(A)) .== ones(25))
-@test all(full(sparsevec([1:5;],1)) .== ones(5))
+@test all(Array(sparsevec(A)) .== ones(25))
+@test all(Array(sparsevec([1:5;],1)) .== ones(5))
 @test_throws ArgumentError sparsevec([1:5;], [1:4;])
 
 #test sparse
@@ -1284,11 +1284,11 @@ A[1,2] = 1
 
 # triu/tril
 A = sprand(5,5,0.2)
-AF = full(A)
-@test full(triu(A,1)) == triu(AF,1)
-@test full(tril(A,1)) == tril(AF,1)
-@test full(triu!(copy(A), 2)) == triu(AF,2)
-@test full(tril!(copy(A), 2)) == tril(AF,2)
+AF = Array(A)
+@test Array(triu(A,1)) == triu(AF,1)
+@test Array(tril(A,1)) == tril(AF,1)
+@test Array(triu!(copy(A), 2)) == triu(AF,2)
+@test Array(tril!(copy(A), 2)) == tril(AF,2)
 @test_throws BoundsError tril(A,6)
 @test_throws BoundsError tril(A,-6)
 @test_throws BoundsError triu(A,6)
@@ -1396,10 +1396,10 @@ nonzeros(A1)[2:5]=0
 
 # UniformScaling
 A = sprandn(10,10,0.5)
-@test A + I == full(A) + I
-@test I + A == I + full(A)
-@test A - I == full(A) - I
-@test I - A == I - full(A)
+@test A + I == Array(A) + I
+@test I + A == I + Array(A)
+@test A - I == Array(A) - I
+@test I - A == I - Array(A)
 
 # Test error path if triplet vectors are not all the same length (#12177)
 @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
@@ -1427,23 +1427,23 @@ end
 Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
 Ar = sprandn(10,10,.1)
 Ai = ceil(Int,Ar*100)
-@test norm(Ac,1) ≈ norm(full(Ac),1)
-@test norm(Ac,Inf) ≈ norm(full(Ac),Inf)
-@test vecnorm(Ac) ≈ vecnorm(full(Ac))
-@test norm(Ar,1) ≈ norm(full(Ar),1)
-@test norm(Ar,Inf) ≈ norm(full(Ar),Inf)
-@test vecnorm(Ar) ≈ vecnorm(full(Ar))
-@test norm(Ai,1) ≈ norm(full(Ai),1)
-@test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
-@test vecnorm(Ai) ≈ vecnorm(full(Ai))
+@test norm(Ac,1) ≈ norm(Array(Ac),1)
+@test norm(Ac,Inf) ≈ norm(Array(Ac),Inf)
+@test vecnorm(Ac) ≈ vecnorm(Array(Ac))
+@test norm(Ar,1) ≈ norm(Array(Ar),1)
+@test norm(Ar,Inf) ≈ norm(Array(Ar),Inf)
+@test vecnorm(Ar) ≈ vecnorm(Array(Ar))
+@test norm(Ai,1) ≈ norm(Array(Ai),1)
+@test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
+@test vecnorm(Ai) ≈ vecnorm(Array(Ai))
 Ai = trunc(Int,Ar*100)
-@test norm(Ai,1) ≈ norm(full(Ai),1)
-@test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
-@test vecnorm(Ai) ≈ vecnorm(full(Ai))
+@test norm(Ai,1) ≈ norm(Array(Ai),1)
+@test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
+@test vecnorm(Ai) ≈ vecnorm(Array(Ai))
 Ai = round(Int,Ar*100)
-@test norm(Ai,1) ≈ norm(full(Ai),1)
-@test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
-@test vecnorm(Ai) ≈ vecnorm(full(Ai))
+@test norm(Ai,1) ≈ norm(Array(Ai),1)
+@test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
+@test vecnorm(Ai) ≈ vecnorm(Array(Ai))
 
 # test sparse matrix cond
 A = sparse(reshape([1.0],1,1))
@@ -1452,10 +1452,10 @@ Ar = sprandn(20,20,.5)
 @test cond(A,1) == 1.0
 # For a discussion of the tolerance, see #14778
 if Base.USE_GPL_LIBS
-    @test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(full(Ar)), 1) < 3
-    @test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(full(Ac)), 1) < 3
-    @test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(full(Ar)), Inf) < 3
-    @test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(full(Ac)), Inf) < 3
+    @test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(Array(Ar)), 1) < 3
+    @test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(Array(Ac)), 1) < 3
+    @test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(Array(Ar)), Inf) < 3
+    @test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(Array(Ac)), Inf) < 3
 end
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
@@ -1471,9 +1471,9 @@ Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
 Ar = sprandn(20,20,.5)
 Ari = ceil(Int64,100*Ar)
 if Base.USE_GPL_LIBS
-    @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
-    @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
-    @test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(Array(Ac)),1) 1e-4
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(Array(Aci)),1) 1e-4
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(Array(Ar)),1) 1e-4
     @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
     @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
 end
@@ -1504,35 +1504,35 @@ let
     @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
     for op in (+, -, &, |, $)
-        @test op(A13024, B13024) == op(full(A13024), full(B13024))
+        @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
     end
     for op in (max, min)
-        @test op(A13024, B13024) == op.(full(A13024), full(B13024))
+        @test op(A13024, B13024) == op.(Array(A13024), Array(B13024))
     end
 end
 
 let A = 2. * speye(5,5)
-    @test full(spones(A)) == eye(full(A))
+    @test Array(spones(A)) == eye(Array(A))
 end
 
 let
     A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     A = A + A'
-    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     A = A*A'
-    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(Array(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2)
     A = A + A.'
-    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2)
     A = A*A.'
-    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(Array(A))))
     @test factorize(triu(A)) == triu(A)
     @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
     @test factorize(tril(A)) == tril(A)
     @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-    @test !Base.USE_GPL_LIBS || factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
+    @test !Base.USE_GPL_LIBS || factorize(A[:,1:4])\ones(size(A,1)) ≈ Array(A[:,1:4])\ones(size(A,1))
     @test_throws ErrorException chol(A)
     @test_throws ErrorException lu(A)
     @test_throws ErrorException eig(A)
@@ -1565,12 +1565,12 @@ let
     @test issparse(LinAlg.UnitLowerTriangular(m))
     @test issparse(UpperTriangular(m))
     @test issparse(LinAlg.UnitUpperTriangular(m))
-    @test issparse(Symmetric(full(m))) == false
-    @test issparse(Hermitian(full(m))) == false
-    @test issparse(LowerTriangular(full(m))) == false
-    @test issparse(LinAlg.UnitLowerTriangular(full(m))) == false
-    @test issparse(UpperTriangular(full(m))) == false
-    @test issparse(LinAlg.UnitUpperTriangular(full(m))) == false
+    @test issparse(Symmetric(Array(m))) == false
+    @test issparse(Hermitian(Array(m))) == false
+    @test issparse(LowerTriangular(Array(m))) == false
+    @test issparse(LinAlg.UnitLowerTriangular(Array(m))) == false
+    @test issparse(UpperTriangular(Array(m))) == false
+    @test issparse(LinAlg.UnitUpperTriangular(Array(m))) == false
 end
 
 let
