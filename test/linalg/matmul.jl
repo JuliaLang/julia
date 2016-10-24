@@ -389,3 +389,30 @@ let
         @test_throws DimensionMismatch A_mul_B!(full43, full43, tri44)
     end
 end
+
+# #18218
+module TestPR18218
+    using Base.Test
+    import Base.*, Base.+, Base.zero
+    immutable TypeA
+        x::Int
+    end
+    Base.convert(::Type{TypeA}, x::Int) = TypeA(x)
+    immutable TypeB
+        x::Int
+    end
+    immutable TypeC
+        x::Int
+    end
+    Base.convert(::Type{TypeC}, x::Int) = TypeC(x)
+    zero(c::TypeC) = TypeC(0)
+    zero(::Type{TypeC}) = TypeC(0)
+    (*)(x::Int, a::TypeA) = TypeB(x*a.x)
+    (*)(a::TypeA, x::Int) = TypeB(a.x*x)
+    (+)(a::Union{TypeB,TypeC}, b::Union{TypeB,TypeC}) = TypeC(a.x+b.x)
+    A = TypeA[1 2; 3 4]
+    b = [1, 2]
+    d = A * b
+    @test typeof(d) == Vector{TypeC}
+    @test d == TypeC[5, 11]
+end
