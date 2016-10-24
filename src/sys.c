@@ -250,15 +250,6 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
     return a;
 }
 
-// the returned buffer must be manually freed. To determine the size,
-// call position(s) before using this function.
-JL_DLLEXPORT void *jl_takebuf_raw(ios_t *s)
-{
-    size_t sz;
-    void *buf = ios_takebuf(s, &sz);
-    return buf;
-}
-
 JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 {
     jl_array_t *a;

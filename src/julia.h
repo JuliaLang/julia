@@ -1585,7 +1585,6 @@ JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
 JL_DLLEXPORT int jl_sizeof_ios_t(void);
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
-JL_DLLEXPORT void *jl_takebuf_raw(ios_t *s);
 JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 typedef struct {
