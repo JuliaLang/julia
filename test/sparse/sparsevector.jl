@@ -29,8 +29,8 @@ end
 # full
 
 for (x, xf) in [(spv_x1, x1_full)]
-    @test isa(full(x), Vector{Float64})
-    @test full(x) == xf
+    @test isa(Array(x), Vector{Float64})
+    @test Array(x) == xf
 end
 
 ### Show
@@ -181,7 +181,7 @@ let x = sprand(100, 0.5)
     r = x[I]
     @test isa(r, SparseVector{Float64,Int})
     @test all(nonzeros(r) .!= 0.0)
-    @test full(r) == full(x)[I]
+    @test Array(r) == Array(x)[I]
 end
 
 # setindex
@@ -236,7 +236,7 @@ end
 # find and findnz tests
 @test find(spv_x1) == find(x1_full)
 @test findnz(spv_x1) == (find(x1_full), filter(x->x!=0, x1_full))
-let xc = SparseVector(8, [2, 3, 5], [1.25, 0, -0.75]), fc = full(xc)
+let xc = SparseVector(8, [2, 3, 5], [1.25, 0, -0.75]), fc = Array(xc)
     @test find(xc) == find(fc)
     @test findnz(xc) == ([2, 5], [1.25, -0.75])
 end
@@ -384,11 +384,11 @@ let x = spv_x1, xf = x1_full
 
     xm = convert(SparseMatrixCSC, x)
     @test isa(xm, SparseMatrixCSC{Float64,Int})
-    @test full(xm) == reshape(xf, 8, 1)
+    @test Array(xm) == reshape(xf, 8, 1)
 
     xm = convert(SparseMatrixCSC{Float32}, x)
     @test isa(xm, SparseMatrixCSC{Float32,Int})
-    @test full(xm) == reshape(convert(Vector{Float32}, xf), 8, 1)
+    @test Array(xm) == reshape(convert(Vector{Float32}, xf), 8, 1)
 end
 
 
@@ -408,15 +408,15 @@ let m = 80, n = 100
     @test nnz(H) == tnnz
     Hr = zeros(m, n)
     for j = 1:n
-        Hr[:,j] = full(A[j])
+        Hr[:,j] = Array(A[j])
     end
-    @test full(H) == Hr
+    @test Array(H) == Hr
 
     V = vcat(A...)
     @test isa(V, SparseVector{Float64,Int})
     @test length(V) == m * n
     Vr = vec(Hr)
-    @test full(V) == Vr
+    @test Array(V) == Vr
 end
 
 # Test that concatenations of combinations of sparse vectors with various other
@@ -458,7 +458,7 @@ end
 ## sparsemat: combinations with sparse matrix
 
 let S = sprand(4, 8, 0.5)
-    Sf = full(S)
+    Sf = Array(S)
     @assert isa(Sf, Matrix{Float64})
 
     # get a single column
@@ -466,84 +466,84 @@ let S = sprand(4, 8, 0.5)
         col = S[:, j]
         @test isa(col, SparseVector{Float64,Int})
         @test length(col) == size(S,1)
-        @test full(col) == Sf[:,j]
+        @test Array(col) == Sf[:,j]
     end
 
     # Get a reshaped vector
     v = S[:]
     @test isa(v, SparseVector{Float64,Int})
     @test length(v) == length(S)
-    @test full(v) == Sf[:]
+    @test Array(v) == Sf[:]
 
     # Get a linear subset
     for i=0:length(S)
         v = S[1:i]
         @test isa(v, SparseVector{Float64,Int})
         @test length(v) == i
-        @test full(v) == Sf[1:i]
+        @test Array(v) == Sf[1:i]
     end
     for i=1:length(S)+1
         v = S[i:end]
         @test isa(v, SparseVector{Float64,Int})
         @test length(v) == length(S) - i + 1
-        @test full(v) == Sf[i:end]
+        @test Array(v) == Sf[i:end]
     end
     for i=0:div(length(S),2)
         v = S[1+i:end-i]
         @test isa(v, SparseVector{Float64,Int})
         @test length(v) == length(S) - 2i
-        @test full(v) == Sf[1+i:end-i]
+        @test Array(v) == Sf[1+i:end-i]
     end
 end
 
 let r = [1,10], S = sparse(r, r, r)
-    Sf = full(S)
+    Sf = Array(S)
     @assert isa(Sf, Matrix{Int})
 
     inds = [1,1,1,1,1,1]
     v = S[inds]
     @test isa(v, SparseVector{Int,Int})
     @test length(v) == length(inds)
-    @test full(v) == Sf[inds]
+    @test Array(v) == Sf[inds]
 
     inds = [2,2,2,2,2,2]
     v = S[inds]
     @test isa(v, SparseVector{Int,Int})
     @test length(v) == length(inds)
-    @test full(v) == Sf[inds]
+    @test Array(v) == Sf[inds]
 
     # get a single column
     for j = 1:size(S,2)
         col = S[:, j]
         @test isa(col, SparseVector{Int,Int})
         @test length(col) == size(S,1)
-        @test full(col) == Sf[:,j]
+        @test Array(col) == Sf[:,j]
     end
 
     # Get a reshaped vector
     v = S[:]
     @test isa(v, SparseVector{Int,Int})
     @test length(v) == length(S)
-    @test full(v) == Sf[:]
+    @test Array(v) == Sf[:]
 
     # Get a linear subset
     for i=0:length(S)
         v = S[1:i]
         @test isa(v, SparseVector{Int,Int})
         @test length(v) == i
-        @test full(v) == Sf[1:i]
+        @test Array(v) == Sf[1:i]
     end
     for i=1:length(S)+1
         v = S[i:end]
         @test isa(v, SparseVector{Int,Int})
         @test length(v) == length(S) - i + 1
-        @test full(v) == Sf[i:end]
+        @test Array(v) == Sf[i:end]
     end
     for i=0:div(length(S),2)
         v = S[1+i:end-i]
         @test isa(v, SparseVector{Int,Int})
         @test length(v) == length(S) - 2i
-        @test full(v) == Sf[1+i:end-i]
+        @test Array(v) == Sf[1+i:end-i]
     end
 end
 
@@ -552,10 +552,10 @@ end
 ### Data
 
 rnd_x0 = sprand(50, 0.6)
-rnd_x0f = full(rnd_x0)
+rnd_x0f = Array(rnd_x0)
 
 rnd_x1 = sprand(50, 0.7) * 4.0
-rnd_x1f = full(rnd_x1)
+rnd_x1f = Array(rnd_x1)
 
 spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])
 spv_x2 = SparseVector(8, [1, 2, 6, 7], [3.25, 4.0, -5.5, -6.0])
@@ -582,10 +582,10 @@ let x = spv_x1, x2 = x2 = spv_x2
     @test exact_equal(x - x2, xb)
     @test exact_equal(x2 - x, -xb)
 
-    @test full(x) + x2 == full(xa)
-    @test full(x) - x2 == full(xb)
-    @test x + full(x2) == full(xa)
-    @test x - full(x2) == full(xb)
+    @test Array(x) + x2 == Array(xa)
+    @test Array(x) - x2 == Array(xb)
+    @test x + Array(x2) == Array(xa)
+    @test x - Array(x2) == Array(xb)
 
     # multiplies
     xm = SparseVector(8, [2, 6], [5.0, -19.25])
@@ -593,8 +593,8 @@ let x = spv_x1, x2 = x2 = spv_x2
     @test exact_equal(x .* x2, xm)
     @test exact_equal(x2 .* x, xm)
 
-    @test full(x) .* x2 == full(xm)
-    @test x .* full(x2) == full(xm)
+    @test Array(x) .* x2 == Array(xm)
+    @test x .* Array(x2) == Array(xm)
 
     # max & min
     @test exact_equal(max(x, x), x)
@@ -634,7 +634,7 @@ function check_nz2z_z2z{T}(f::Function, x::SparseVector{T}, xf::Vector{T})
     isa(r, AbstractSparseVector) || error("$f(x) is not a sparse vector.")
     eltype(r) == R || error("$f(x) results in eltype = $(eltype(r)), expect $R")
     all(r.nzval .!= 0) || error("$f(x) contains zeros in nzval.")
-    full(r) == f.(xf) || error("Incorrect results found in $f(x).")
+    Array(r) == f.(xf) || error("Incorrect results found in $f(x).")
 end
 
 for f in [floor, ceil, trunc, round]
@@ -721,14 +721,14 @@ end
 ### BLAS Level-1
 
 let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
-    xf = full(x)
-    xf2 = full(x2)
+    xf = Array(x)
+    xf2 = Array(x2)
 
     # axpy!
     for c in [1.0, -1.0, 2.0, -2.0]
-        y = full(x)
+        y = Array(x)
         @test Base.axpy!(c, x2, y) === y
-        @test y == full(x2 * c + x)
+        @test y == Array(x2 * c + x)
     end
 
     # scale
@@ -757,15 +757,15 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
         @test dot(x2, x2) == sumabs2(x2)
         @test dot(x, x2) ≈ dv
         @test dot(x2, x) ≈ dv
-        @test dot(full(x), x2) ≈ dv
-        @test dot(x, full(x2)) ≈ dv
+        @test dot(Array(x), x2) ≈ dv
+        @test dot(x, Array(x2)) ≈ dv
     end
 end
 
 let x = complex(sprand(32, 0.6), sprand(32, 0.6)),
     y = complex(sprand(32, 0.6), sprand(32, 0.6))
-    xf = full(x)::Vector{Complex128}
-    yf = full(y)::Vector{Complex128}
+    xf = Array(x)::Vector{Complex128}
+    yf = Array(y)::Vector{Complex128}
     @test dot(x, x) ≈ dot(xf, xf)
     @test dot(x, y) ≈ dot(xf, yf)
 end
@@ -776,7 +776,7 @@ end
 ## dense A * sparse x -> dense y
 
 let A = randn(9, 16), x = sprand(16, 0.7)
-    xf = full(x)
+    xf = Array(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
         rr = α*A*xf + β*y
@@ -789,7 +789,7 @@ let A = randn(9, 16), x = sprand(16, 0.7)
 end
 
 let A = randn(16, 9), x = sprand(16, 0.7)
-    xf = full(x)
+    xf = Array(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
         rr = α*A'xf + β*y
@@ -804,8 +804,8 @@ end
 ## sparse A * sparse x -> dense y
 
 let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7)
-    Af = full(A)
-    xf = full(x)
+    Af = Array(A)
+    xf = Array(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
         rr = α*Af*xf + β*y
@@ -818,8 +818,8 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7)
 end
 
 let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
-    Af = full(A)
-    xf = full(x)
+    Af = Array(A)
+    xf = Array(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
         rr = α*Af'xf + β*y
@@ -834,9 +834,9 @@ end
 let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     x = complex(sprandn(8, 0.6), sprandn(8, 0.6)),
     x2 = complex(sprandn(7, 0.75), sprandn(7, 0.75))
-    Af = full(A)
-    xf = full(x)
-    x2f = full(x2)
+    Af = Array(A)
+    xf = Array(x)
+    x2f = Array(x2)
     @test SparseArrays.densemv(A, x; trans='N') ≈ Af * xf
     @test SparseArrays.densemv(A, x2; trans='T') ≈ Af.' * x2f
     @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
@@ -845,39 +845,39 @@ end
 ## sparse A * sparse x -> sparse y
 
 let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
-    Af = full(A)
-    xf = full(x)
-    x2f = full(x2)
+    Af = Array(A)
+    xf = Array(x)
+    x2f = Array(x2)
 
     y = A*x
     @test isa(y, SparseVector{Float64,Int})
     @test all(nonzeros(y) .!= 0.0)
-    @test full(y) ≈ Af * xf
+    @test Array(y) ≈ Af * xf
 
     y = At_mul_B(A, x2)
     @test isa(y, SparseVector{Float64,Int})
     @test all(nonzeros(y) .!= 0.0)
-    @test full(y) ≈ Af'x2f
+    @test Array(y) ≈ Af'x2f
 end
 
 let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     x = complex(sprandn(8, 0.6), sprandn(8, 0.6)),
     x2 = complex(sprandn(7, 0.75), sprandn(7, 0.75))
-    Af = full(A)
-    xf = full(x)
-    x2f = full(x2)
+    Af = Array(A)
+    xf = Array(x)
+    x2f = Array(x2)
 
     y = A*x
     @test isa(y, SparseVector{Complex128,Int})
-    @test full(y) ≈ Af * xf
+    @test Array(y) ≈ Af * xf
 
     y = At_mul_B(A, x2)
     @test isa(y, SparseVector{Complex128,Int})
-    @test full(y) ≈ Af.' * x2f
+    @test Array(y) ≈ Af.' * x2f
 
     y = Ac_mul_B(A, x2)
     @test isa(y, SparseVector{Complex128,Int})
-    @test full(y) ≈ Af'x2f
+    @test Array(y) ≈ Af'x2f
 end
 
 # left-division operations involving triangular matrices and sparse vectors (#14005)
@@ -1018,7 +1018,7 @@ end
 sv = sparse(1:10)
 sm = convert(SparseMatrixCSC, sv)
 sv[1] = 0
-@test full(sm)[2:end] == collect(2:10)
+@test Array(sm)[2:end] == collect(2:10)
 
 # Ensure that sparsevec with all-zero values returns an array of zeros
 @test sparsevec([1,2,3],[0,0,0]) == [0,0,0]
@@ -1044,8 +1044,8 @@ s14013 = sparse([10.0 0.0 30.0; 0.0 1.0 0.0])
 a14013 = [10.0 0.0 30.0; 0.0 1.0 0.0]
 @test s14013 == a14013
 @test vec(s14013) == s14013[:] == a14013[:]
-@test full(s14013)[1,:] == s14013[1,:] == a14013[1,:] == [10.0, 0.0, 30.0]
-@test full(s14013)[2,:] == s14013[2,:] == a14013[2,:] == [0.0, 1.0, 0.0]
+@test Array(s14013)[1,:] == s14013[1,:] == a14013[1,:] == [10.0, 0.0, 30.0]
+@test Array(s14013)[2,:] == s14013[2,:] == a14013[2,:] == [0.0, 1.0, 0.0]
 
 # Issue 14046
 s14046 = sprand(5, 1.0)
@@ -1077,9 +1077,9 @@ for Tv in [Float32, Float64, Int64, Int32, Complex128]
             sparr = Sp(arr)
             fillval = rand(Tv)
             fill!(sparr, fillval)
-            @test full(sparr) == fillval * ones(arr)
+            @test Array(sparr) == fillval * ones(arr)
             fill!(sparr, 0)
-            @test full(sparr) == zeros(arr)
+            @test Array(sparr) == zeros(arr)
         end
     end
 end
