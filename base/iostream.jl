@@ -221,12 +221,6 @@ read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), 
 take!(s::IOStream) =
     ccall(:jl_take_buffer, Vector{UInt8}, (Ptr{Void},), s.ios)
 
-function takebuf_raw(s::IOStream)
-    sz = position(s)
-    buf = ccall(:jl_takebuf_raw, Ptr{UInt8}, (Ptr{Void},), s.ios)
-    return buf, sz
-end
-
 function readuntil(s::IOStream, delim::UInt8)
     ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
 end
