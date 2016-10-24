@@ -4429,6 +4429,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
             jl_varinfo_t &varinfo = ctx.slots[i];
             if (varinfo.isArgument || s == compiler_temp_sym || s == unused_sym)
                 continue;
+            // LLVM 4.0: Assume the variable has default alignment
 #if JL_LLVM_VERSION >= 30800
             varinfo.dinfo = dbuilder.createAutoVariable(
 #else
