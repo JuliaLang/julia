@@ -73,6 +73,10 @@ $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: $(SRCD
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-openssl-hang.patch
 	echo 1 > $@
 
+$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-mbedtls-writer-fix.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
+	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-writer-fix.patch
+	echo 1 > $@
+
 $(build_datarootdir)/julia/cert.pem: $(CERTFILE)
 	mkdir -p $(build_datarootdir)/julia
 	-cp $(CERTFILE) $@
@@ -81,7 +85,8 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-mbedtls.patch-applied \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied \
 	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied \
-	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied
+	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied \
+	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-mbedtls-writer-fix.patch-applied
 
 ifneq ($(CERTFILE),)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem
