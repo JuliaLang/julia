@@ -291,14 +291,14 @@ such an invalid byte index, an error is thrown:
     ERROR: UnicodeError: invalid character index
      in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:67
      in next at ./strings/string.jl:92 [inlined]
-     in getindex(::String, ::Int64) at ./strings/basic.jl:70
+     in getindex(::String, ::Int64) at ./strings/basic.jl:71
      ...
 
     julia> s[3]
     ERROR: UnicodeError: invalid character index
      in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:67
      in next at ./strings/string.jl:92 [inlined]
-     in getindex(::String, ::Int64) at ./strings/basic.jl:70
+     in getindex(::String, ::Int64) at ./strings/basic.jl:71
      ...
 
     julia> s[4]
@@ -554,7 +554,7 @@ contained in a string:
     julia> contains("Xylophon", 'o')
     ERROR: MethodError: no method matching contains(::String, ::Char)
     Closest candidates are:
-      contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:682
+      contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:640
       contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:366
      ...
 
