@@ -582,7 +582,7 @@ spv_x2 = SparseVector(8, [1, 2, 6, 7], [3.25, 4.0, -5.5, -6.0])
 
 ### Arithmetic operations
 
-let x = spv_x1, x2 = x2 = spv_x2
+let x = spv_x1, x2 = spv_x2
     # negate
     @test exact_equal(-x, SparseVector(8, [2, 5, 6], [-1.25, 0.75, -3.5]))
 
