@@ -15,7 +15,11 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
+#if JL_LLVM_VERSION >= 30700
 #include <llvm/IR/LegacyPassManager.h>
+#else
+#include <llvm/PassManager.h>
+#endif
 #include <llvm/IR/MDBuilder.h>
 
 #include "julia.h"
