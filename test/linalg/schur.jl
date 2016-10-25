@@ -36,6 +36,7 @@ aimg  = randn(n,n)/2
         @test sort(imag(f[:values])) ≈ sort(imag(d))
         @test istriu(f[:Schur]) || eltype(a)<:Real
         @test AbstractArray(f) ≈ a
+        @test Array(f) ≈ a
         @test_throws KeyError f[:A]
 
         @testset "Reorder Schur" begin
