@@ -310,6 +310,13 @@ I,J,N = findnz(z)
 @test find(x->x>0, h) == [-1,1]
 @test find(x->x<0, h) == [-2,0]
 @test find(x->x==0, h) == [2]
+@test mean(A_3_3) == median(A_3_3) == 5
+@test mean(x->2x, A_3_3) == 10
+@test mean(A_3_3, 1) == median(A_3_3, 1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
+@test mean(A_3_3, 2) == median(A_3_3, 2) == OffsetArray([4,5,6]'', (A_3_3.offsets[1],0))
+@test var(A_3_3) == 7.5
+@test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
+@test std(A_3_3, 2) == OffsetArray([3,3,3]'', (A_3_3.offsets[1],0))
 
 @test_approx_eq vecnorm(v) vecnorm(parent(v))
 @test_approx_eq vecnorm(A) vecnorm(parent(A))
