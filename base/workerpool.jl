@@ -101,27 +101,37 @@ function remotecall_pool(rc_f, f, pool::AbstractWorkerPool, args...; kwargs...)
 end
 
 """
-    remotecall(f, pool::AbstractWorkerPool, args...; kwargs...)
+    remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
-Call `f(args...; kwargs...)` on one of the workers in `pool`. Returns a `Future`.
+WorkerPool variant of `remotecall(f, pid, ....)`. Waits for and takes a free worker from `pool` and performs a `remotecall` on it.
 """
 remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall, f, pool, args...; kwargs...)
 
 
 """
-    remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...)
+    remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
-Call `f(args...; kwargs...)` on one of the workers in `pool`. Waits for completion, returns a `Future`.
+WorkerPool variant of `remotecall_wait(f, pid, ....)`. Waits for and takes a free worker from `pool` and
+performs a `remotecall_wait` on it.
 """
 remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall_wait, f, pool, args...; kwargs...)
 
 
 """
-    remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...)
+    remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) -> result
 
-Call `f(args...; kwargs...)` on one of the workers in `pool`. Waits for completion and returns the result.
+WorkerPool variant of `remotecall_fetch(f, pid, ....)`. Waits for and takes a free worker from `pool` and
+performs a `remotecall_fetch` on it.
 """
 remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall_fetch, f, pool, args...; kwargs...)
+
+"""
+    remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) -> nothing
+
+WorkerPool variant of `remote_do(f, pid, ....)`. Waits for and takes a free worker from `pool` and
+performs a `remote_do` on it.
+"""
+remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remote_do, f, pool, args...; kwargs...)
 
 """
     default_worker_pool()

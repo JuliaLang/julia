@@ -1199,6 +1199,7 @@ export
     remotecall,
     remotecall_fetch,
     remotecall_wait,
+    remote_do,
     rmprocs,
     take!,
     timedwait,
