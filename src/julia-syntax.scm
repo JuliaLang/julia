@@ -985,7 +985,6 @@
                     `(scope-block
                       (block
                        (local ,(car binds))
-                       (newvar ,(decl-var (car binds)))
                        ,blk))))
              ((and (length= (car binds) 3)
                    (eq? (caar binds) '=))
@@ -1003,13 +1002,11 @@
                                        (scope-block
                                         (block
                                          (local ,(cadar binds))
-                                         (newvar ,vname)
                                          (= ,vname ,tmp)
                                          ,blk)))))
                             `(scope-block
                               (block
                                (local ,(cadar binds))
-                               (newvar ,vname)
                                (= ,vname ,(caddar binds))
                                ,blk))))))
                ((and (pair? (cadar binds))
@@ -1027,7 +1024,6 @@
                         `(scope-block
                           (block
                            (local ,name)
-                           (newvar ,name)
                            ,asgn
                            ,blk)))))
                ;; (a, b, c, ...) = rhs
@@ -1038,7 +1034,6 @@
                         `(scope-block
                           (block
                            ,@(map (lambda (v) `(local ,v)) vars)
-                           ,@(map (lambda (v) `(newvar ,(decl-var v))) vars)
                            ,(car binds)
                            ,blk)))))
                (else (error "invalid let syntax"))))
@@ -2745,7 +2740,7 @@ f(x) = yt(x)
                                (memq (car e) '(quote top core line inert local unnecessary
                                                meta inbounds boundscheck simdloop
                                                implicit-global global globalref
-                                               const newvar = null method call))))
+                                               const = null method call))))
                          (lam:body lam))))
                (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
                                          leading)))
@@ -2826,18 +2821,9 @@ f(x) = yt(x)
              (if (ssavalue? var)
                  `(= ,var ,rhs)
                  (convert-assignment var rhs fname lam interp))))
-          ((newvar)
+          ((local) ;; convert local declarations to newvar statements
            (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
-                 `(= ,(cadr e) (call (core Box)))
-                 e)))
-          ((local)
-           (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
-             (if (and vi (vinfo:asgn vi) (vinfo:capt vi)
-                      ;; avoid redundant box for vars with newvar nodes
-                      (not (expr-contains-p (lambda (x) (and (length= x 2)
-                                                             (eq? (car x) 'newvar) (eq? (cadr x) (cadr e))))
-                                            (lam:body lam))))
                  `(= ,(cadr e) (call (core Box)))
                  `(newvar ,(cadr e)))))
           ((const)
