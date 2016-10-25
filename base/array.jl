@@ -443,7 +443,7 @@ done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
 getindex(A::Array, i1::Real) = arrayref(A, to_index(i1))
-getindex(A::Array, i1::Real, i2::Real, I::Real...) = arrayref(A, to_index(i1), to_index(i2), to_indexes(I...)...) # TODO: REMOVE FOR #14770
+getindex(A::Array, i1::Real, i2::Real, I::Real...) = (@_inline_meta; arrayref(A, to_index(i1), to_index(i2), to_indexes(I...)...)) # TODO: REMOVE FOR #14770
 
 # Faster contiguous indexing using copy! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
