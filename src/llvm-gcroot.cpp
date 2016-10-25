@@ -11,7 +11,11 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Intrinsics.h>
+#if JL_LLVM_VERSION >= 30700
 #include <llvm/IR/LegacyPassManager.h>
+#else
+#include <llvm/PassManager.h>
+#endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #if JL_LLVM_VERSION >= 30600
