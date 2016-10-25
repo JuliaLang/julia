@@ -120,6 +120,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
             x = Ts\vv
             @test x ≈ invFsv
             @test Array(AbstractArray(Tldlt)) ≈ Fs
+            @test Array(Array(Tldlt)) ≈ Fs
         end
 
         # similar
