@@ -598,6 +598,20 @@ end
               local x = 1
               end")) == Expr(:error, "variable \"x\" declared both local and global")
 
+@test expand(parse("let
+              local x = 2
+              local x = 1
+              end")) == Expr(:error, "local \"x\" declared twice")
+
+@test expand(parse("let x
+                  local x = 1
+              end")) == Expr(:error, "local \"x\" declared twice")
+
+@test expand(parse("let x = 2
+                  local x = 1
+              end")) == Expr(:error, "local \"x\" declared twice")
+
+
 # make sure front end can correctly print values to error messages
 let ex = expand(parse("\"a\"=1"))
     @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
