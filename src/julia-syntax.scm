@@ -909,9 +909,9 @@
          (rett (if dcl (caddr name) 'Any))
          (name (if dcl (cadr name) name)))
     (cond ((and (length= e 2) (symbol? name))
-	   (if (or (eq? name 'true) (eq? name 'false))
-	       (error (string "invalid function name \"" name "\"")))
-	   `(method ,name))
+           (if (or (eq? name 'true) (eq? name 'false))
+               (error (string "invalid function name \"" name "\"")))
+           `(method ,name))
           ((not (pair? name))                  e)
           ((eq? (car name) 'tuple)
            (expand-forms `(-> ,name ,(caddr e))))
@@ -2869,12 +2869,12 @@ f(x) = yt(x)
                         (if (eqv? (string.char (string name) 0) #\@)
                             (error "macro definition not allowed inside a local scope"))))
              (if lam2
-		 (begin
-		   ;; mark all non-arguments as assigned, since locals that are never assigned
-		   ;; need to be handled the same as those that are (i.e., boxed).
-		   (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
-			     (list-tail (car (lam:vinfo lam2)) (length (lam:args lam2))))
-		   (lambda-optimize-vars! lam2)))
+                 (begin
+                   ;; mark all non-arguments as assigned, since locals that are never assigned
+                   ;; need to be handled the same as those that are (i.e., boxed).
+                   (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
+                             (list-tail (car (lam:vinfo lam2)) (length (lam:args lam2))))
+                   (lambda-optimize-vars! lam2)))
              (if (not local) ;; not a local function; will not be closure converted to a new type
                  (cond (short e)
                        ((null? cvs)
@@ -3000,8 +3000,8 @@ f(x) = yt(x)
                           '(null)
                           (convert-assignment name mk-closure fname lam interp)))))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
-	   (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
-		     (list-tail (car (lam:vinfo e)) (length (lam:args e))))
+           (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
+                     (list-tail (car (lam:vinfo e)) (length (lam:args e))))
            `(lambda ,(cadr e)
               (,(clear-capture-bits (car (lam:vinfo e)))
                () ,@(cddr (lam:vinfo e)))
@@ -3366,9 +3366,9 @@ f(x) = yt(x)
 
             ;; top level expressions returning values
             ((abstract_type bits_type composite_type thunk toplevel module)
-	     (emit e)
+             (emit e)
              (if tail (emit-return '(null)))
-	     '(null))
+             '(null))
 
             ;; other top level expressions and metadata
             ((import importall using export line meta inbounds boundscheck simdloop)
