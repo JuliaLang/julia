@@ -54,6 +54,7 @@ debug && println("(Automatic) Square LU decomposition")
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a
         @test a * inv(lua) ≈ eye(n)
+        @test Array(lua) ≈ a
         let Bs = b, Cs = c
             for atype in ("Array", "SubArray")
                 if atype == "Array"
@@ -88,6 +89,7 @@ debug && println("Tridiagonal LU")
         @test lud[:L]*lud[:U] ≈ lud[:P]*Array(d)
         @test lud[:L]*lud[:U] ≈ Array(d)[lud[:p],:]
         @test AbstractArray(lud) ≈ d
+        @test Array(lud) ≈ d
         f = zeros(eltyb, n+1)
         @test_throws DimensionMismatch lud\f
         @test_throws DimensionMismatch lud.'\f
