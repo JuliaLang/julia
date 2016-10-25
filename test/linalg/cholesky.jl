@@ -62,24 +62,32 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test all(x -> x ≈ √apos, cholfact(apos).factors)
     @test_throws ArgumentError chol(-one(eltya))
 
-    if eltya <: Real
+    if eltya <: BlasReal || eltya == BigFloat
         capds = cholfact(apds)
         @test inv(capds)*apds ≈ eye(n)
         @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
-    else
+        capds2 = cholfact!(copy(apds))
+        @test Array(capds2) ≈ Array(capds)
+    elseif eltya <: BlasComplex
         capdh = cholfact(apdh)
         @test inv(capdh)*apdh ≈ eye(n)
         @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        @test Array(cholfact!(copy(apdh))) ≈ Array(capdh)
+        @test Array(cholfact!(Array(apdh))) ≈ Array(capdh)
+    end
+    if eltya == Int
+        @test_throws ArgumentError cholfact!(apds, Val{true})
+        @test_throws ArgumentError cholfact!(apdh, Val{true})
     end
 
     # test chol of 2x2 Strang matrix
     S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
     U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
-    @test full(chol(S)) ≈ full(U)
+    @test Array(chol(S)) ≈ Array(U)
 
     #lower Cholesky factor
     lapd = cholfact(apd, :L)
-    @test full(lapd) ≈ apd
+    @test Array(lapd) ≈ apd
     l = lapd[:L]
     @test l*l' ≈ apd
     @test triu(capd.factors) ≈ lapd[:U]
@@ -118,12 +126,12 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         if isreal(apd)
             @test apd*inv(cpapd) ≈ eye(n)
         end
-        @test full(cpapd) ≈ apd
+        @test Array(cpapd) ≈ apd
         #getindex
         @test_throws KeyError cpapd[:Z]
 
         @test size(cpapd) == size(apd)
-        @test full(copy(cpapd)) ≈ apd
+        @test Array(copy(cpapd)) ≈ apd
         @test det(cpapd) ≈ det(apd)
         @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
     end
@@ -174,9 +182,9 @@ begin
     # Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices
 
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg._chol!(X*X', LowerTriangular))
-    U = full(Base.LinAlg._chol!(X*X', UpperTriangular))
-    XX = full(X*X')
+    L = Array(Base.LinAlg._chol!(X*X', LowerTriangular))
+    U = Array(Base.LinAlg._chol!(X*X', UpperTriangular))
+    XX = Array(X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
     @test sum(sum(norm, U'*U - XX)) < eps()
@@ -190,8 +198,8 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    @test full(cholfact(A)[:L]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
-    @test full(cholfact(A)[:U]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
+    @test Array(cholfact(A)[:L]) ≈ Array(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
+    @test Array(cholfact(A)[:U]) ≈ Array(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
 end
 
 # Test up- and downdates
@@ -204,6 +212,9 @@ let A = complex(randn(10,5), randn(10, 5)), v = complex(randn(5), randn(5))
         G = cholfact(BcB, uplo)
         @test LinAlg.lowrankupdate(F, v)[uplo] ≈ G[uplo]
         @test LinAlg.lowrankdowndate(G, v)[uplo] ≈ F[uplo]
+
+        @test_throws DimensionMismatch LinAlg.lowrankupdate(F, v[1:end-1])
+        @test_throws DimensionMismatch LinAlg.lowrankdowndate(G, v[1:end-1])
     end
 end
 
