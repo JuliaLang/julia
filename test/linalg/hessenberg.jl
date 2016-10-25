@@ -24,6 +24,7 @@ let n = 10
             @test size(H[:Q]) == size(A)
             @test_throws KeyError H[:Z]
             @test AbstractArray(H) ≈ A
+            @test Array(H) ≈ A
             @test (H[:Q] * H[:H]) * H[:Q]' ≈ A
             @test (H[:Q]' *A) * H[:Q] ≈ H[:H]
             #getindex for HessenbergQ
