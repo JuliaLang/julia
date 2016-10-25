@@ -1044,7 +1044,7 @@ function reduced_dims(::Tuple{}, d::Int)
 end
 reduced_dims(::Tuple{}, region) = ()
 function reduced_dims(dims::Dims, region)
-    Base.depwarn("`reduced_dims` is deprecated for Dims-tuples; pass `indices` instead", :reduced_dims)
+    Base.depwarn("`reduced_dims` is deprecated for Dims-tuples; pass `indices` to `reduced_indices` instead", :reduced_dims)
     map(last, reduced_dims(map(n->OneTo(n), dims), region))
 end
 
@@ -1054,8 +1054,18 @@ function reduced_dims0(::Tuple{}, d::Int)
 end
 reduced_dims0(::Tuple{}, region) = ()
 function reduced_dims0(dims::Dims, region)
-    Base.depwarn("`reduced_dims0` is deprecated for Dims-tuples; pass `indices` instead", :reduced_dims0)
+    Base.depwarn("`reduced_dims0` is deprecated for Dims-tuples; pass `indices` to `reduced_indices0` instead", :reduced_dims0)
     map(last, reduced_dims0(map(n->OneTo(n), dims), region))
+end
+
+function reduced_dims(a::AbstractArray, region)
+    Base.depwarn("`reduced_dims` is deprecated in favor of `reduced_indices`", :reduced_dims)
+    to_shape(reduced_indices(a, region))  # to_shape keeps the return-type consistent, when it's possible to do so
+end
+
+function reduced_dims0(a::AbstractArray, region)
+    Base.depwarn("`reduced_dims0` is deprecated in favor of `reduced_indices0`", :reduced_dims)
+    to_shape(reduced_indices0(a, region))
 end
 
 # #18218
