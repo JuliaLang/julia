@@ -50,13 +50,13 @@ bimg  = randn(n,2)/2
                     @test size(lqa[:Q],3) == 1
                     @test Base.LinAlg.getq(lqa) == lqa[:Q]
                     @test_throws KeyError lqa[:Z]
-                    @test full(lqa') ≈ a'
+                    @test Array(lqa') ≈ a'
                     @test lqa * lqa' ≈ a * a'
                     @test lqa' * lqa ≈ a' * a
-                    @test q*full(q, thin = false)' ≈ eye(eltya,n)
+                    @test q*full(q, thin=false)' ≈ eye(eltya,n)
                     @test l*q ≈ a
-                    @test full(lqa) ≈ a
-                    @test full(copy(lqa)) ≈ a
+                    @test Array(lqa) ≈ a
+                    @test Array(copy(lqa)) ≈ a
                 end
                 @testset "Binary ops" begin
                     @test_approx_eq_eps a*(lqa\b) b 3000ε
@@ -81,11 +81,11 @@ bimg  = randn(n,2)/2
         @testset "Matmul with LQ factorizations" begin
             lqa = lqfact(a[:,1:n1])
             l,q = lqa[:L], lqa[:Q]
-            @test full(q)*full(q)' ≈ eye(eltya,n1)
-            @test (full(q,thin=false)'*full(q,thin=false))[1:n1,:] ≈ eye(eltya,n1,n)
-            @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-            @test Ac_mul_B!(q,full(q)) ≈ eye(eltya,n1)
-            @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
+            @test Array(q)*Array(q)' ≈ eye(eltya,n1)
+            @test (full(q, thin=false)'*full(q, thin=false))[1:n1, :] ≈ eye(eltya, n1, n)
+            @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1), q)
+            @test Ac_mul_B!(q, Array(q)) ≈ eye(eltya, n1)
+            @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1), q)
             @test_throws BoundsError size(q,-1)
         end
     end
