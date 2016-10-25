@@ -45,6 +45,7 @@ aimg  = randn(n,n)/2
             @test inv(a) ≈ inv(f)
             @test eigvals(f) === f[:values]
             @test eigvecs(f) === f[:vectors]
+            @test Array(f) ≈ a
 
             num_fact = eigfact(one(eltya))
             @test num_fact.values[1] == one(eltya)
