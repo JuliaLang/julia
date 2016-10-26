@@ -226,7 +226,7 @@ end
     cholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky
 
 The same as `cholfact`, but saves space by overwriting the input `A`, instead
-of creating a copy. An `InexactError` exception is thrown if the factorisation
+of creating a copy. An `InexactError` exception is thrown if the factorization
 produces a number not representable by the element type of `A`, e.g. for
 integer types.
 
@@ -277,7 +277,7 @@ cholfact!{T<:Real,S}(A::RealHermSymComplexHerm{T,S}, ::Type{Val{true}};
 
 The same as `cholfact`, but saves space by overwriting the input `A`, instead
 of creating a copy. An `InexactError` exception is thrown if the
-factorisation produces a number not representable by the element type of `A`,
+factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0)
