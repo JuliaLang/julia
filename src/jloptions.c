@@ -510,9 +510,15 @@ restart_switch:
         case 'r':
             {
                 int rpc = strtol(optarg, &endptr, 10);
-                if (optarg == endptr || *endptr != 0)
+                if (errno != 0 || optarg == endptr) {
                     jl_errorf("julia: -r,--region-pg-cnt=<n> must be an integer >= 64");
-                jl_options.region_pg_cnt = (size_t)rpc;
+                } else if (*endptr == 'm') {
+                    jl_options.region_pg_cnt = 64 * rpc;
+                } else if (*endptr == 'g') {
+                    jl_options.region_pg_cnt = 65536 * rpc;
+                } else {
+                    jl_errorf("julia: -r,--region-pg-cnt=<n> Invalid unit provided. Valid units are 'm' (mega) and 'g' (giga). For example '10m'");
+                }
             }
             break;
         default:
