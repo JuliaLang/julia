@@ -647,11 +647,15 @@ Run a command object, constructed with backticks. Throws an error if anything go
 including the process exiting with a non-zero status.
 """
 function run(cmds::AbstractCmd, args...)
-    if isempty(cmds.exec) # Issue 19094
-        throw(ArgumentError("Empty command cannot be run"))
+    try
+        ps = spawn(cmds, spawn_opts_inherit(args...)...)
+        success(ps) ? nothing : pipeline_error(ps)
+    catch exc
+        if isa(exc, BoundsError)
+            throw(ArgumentError("Empty command cannot be run"))
+        end
+        rethrow()
     end
-    ps = spawn(cmds, spawn_opts_inherit(args...)...)
-    success(ps) ? nothing : pipeline_error(ps)
 end
 
 const SIGPIPE = 13
