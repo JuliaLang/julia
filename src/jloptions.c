@@ -51,7 +51,8 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // output-o
                             NULL, // output-ji
                             0, // incremental
-                            0 // image_file_specified
+                            0, // image_file_specified
+                            0  // region-pg-cnt
 };
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
@@ -146,7 +147,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_use_compilecache,
            opt_incremental
     };
-    static const char* const shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O:g:";
+    static const char* const shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O:g:r:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -181,6 +182,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "polly",           required_argument, 0, opt_polly },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
+        { "region-pg-cnt",   required_argument, 0, 'r' },
         // hidden command line options
         { "worker",          required_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
@@ -504,6 +506,14 @@ restart_switch:
                 jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_OFF;
             else
                 jl_errorf("julia: invalid argument to --handle-signals (%s)", optarg);
+            break;
+        case 'r':
+            {
+                int rpc = strtol(optarg, &endptr, 10);
+                if (optarg == endptr || *endptr != 0)
+                    jl_errorf("julia: -r,--region-pg-cnt=<n> must be an integer >= 64");
+                jl_options.region_pg_cnt = (size_t)rpc;
+            }
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
