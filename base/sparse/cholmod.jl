@@ -1460,7 +1460,7 @@ function ldltfact(A::Sparse; shift::Real=0.0,
 
     # Makes it an LDLt
     unsafe_store!(common_final_ll, 0)
-    # Really make sure it's an LDLt by avoiding supernodal factorisation
+    # Really make sure it's an LDLt by avoiding supernodal factorization
     unsafe_store!(common_supernodal, 0)
 
     # Compute the symbolic factorization
