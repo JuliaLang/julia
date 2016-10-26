@@ -2253,7 +2253,9 @@ for (Bsig, A1sig, A2sig, gbb, funcname) in
         global $funcname
         function $funcname(f::Function, B::$Bsig, A1::$A1sig, A2::$A2sig)
             func       = @get! cache  f  gen_broadcast_function_sparse($gbb, f, ($A1sig) <: SparseMatrixCSC)
-            eval(Expr(:call, () -> func(B, A1, A2))) # need eval because func was just created by gen_broadcast_function_sparse
+            # need eval because func was just created by gen_broadcast_function_sparse
+            # TODO: convert this to a generated function
+            eval(current_module(), Expr(:body, Expr(:return, Expr(:call, QuoteNode(func), QuoteNode(B), QuoteNode(A1), QuoteNode(A2)))))
             return B
         end
     end  # let broadcast_cache
