@@ -31,20 +31,20 @@ Library improvements
 
   * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
 
-  * The REPL now supports something called *prompt pasting*.
+  * The REPL now supports something called *prompt pasting* ([#17599]).
     This activates when pasting text that starts with `julia> ` into the REPL.
     In that case, only expressions starting with `julia> ` are parsed, the rest are removed.
     This makes it possible to paste a chunk of code that has been copied from a REPL session
     without having to scrub away prompts and outputs.
     This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
 
-  * The function `print_with_color` can now take a color represented by an integer between 0 and 255 inclusive as its first argument.
+  * The function `print_with_color` can now take a color represented by an integer between 0 and 255 inclusive as its first argument ([#18473]).
     For a number to color mapping please refer to [this chart](https://upload.wikimedia.org/wikipedia/en/1/15/Xterm_256color_chart.svg).
     It is also possible to use numbers as colors in environment variables that customizes colors in the REPL.
     For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
     Please note that not all terminals support 256 colors.
 
-  * The default color for info messages has been changed from blue to cyan.
+  * The default color for info messages has been changed from blue to cyan ([#18442]).
     This can be changed back to the original color by setting the environment variable `JULIA_INFO_COLOR` to `"blue"`.
     One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
     For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
@@ -681,11 +681,14 @@ Language tooling improvements
 [#17404]: https://github.com/JuliaLang/julia/issues/17404
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
 [#17546]: https://github.com/JuliaLang/julia/issues/17546
+[#17599]: https://github.com/JuliaLang/julia/issues/17599
 [#17668]: https://github.com/JuliaLang/julia/issues/17668
 [#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
+[#18442]: https://github.com/JuliaLang/julia/issues/18442
+[#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
