@@ -511,7 +511,7 @@ restart_switch:
             {
                 int rpc = strtol(optarg, &endptr, 10);
                 if (errno != 0 || optarg == endptr) {
-                    jl_errorf("julia: -r,--region-pg-cnt=<n> must be an integer >= 64");
+                    jl_errorf("julia: -r,--region-pg-cnt=<n> must be an integer >= 1");
                 } else if (*endptr == 'm') {
                     jl_options.region_pg_cnt = 64 * rpc;
                 } else if (*endptr == 'g') {
