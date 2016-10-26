@@ -421,17 +421,43 @@ function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
 end
 
 function det(C::Cholesky)
-    dd = one(eltype(C))
-    for i in 1:size(C.factors,1); dd *= abs2(C.factors[i,i]) end
+    dd = one(real(eltype(C)))
+    for i in 1:size(C.factors,1)
+        dd *= real(C.factors[i,i])^2
+    end
     dd
 end
 
-det(C::CholeskyPivoted) = C.rank < size(C.factors, 1) ? real(zero(eltype(C))) : prod(abs2.(diag(C.factors)))
-
 function logdet(C::Cholesky)
-    dd = zero(eltype(C))
-    for i in 1:size(C.factors,1); dd += log(C.factors[i,i]) end
+    dd = zero(real(eltype(C)))
+    for i in 1:size(C.factors,1)
+        dd += log(real(C.factors[i,i]))
+    end
     dd + dd # instead of 2.0dd which can change the type
+end
+
+function det(C::CholeskyPivoted)
+    if C.rank < size(C.factors, 1)
+        return zero(real(eltype(C)))
+    else
+        dd = one(real(eltype(C)))
+        for i in 1:size(C.factors,1)
+            dd *= real(C.factors[i,i])^2
+        end
+        return dd
+    end
+end
+
+function logdet(C::CholeskyPivoted)
+    if C.rank < size(C.factors, 1)
+        return real(eltype(C))(-Inf)
+    else
+        dd = zero(real(eltype(C)))
+        for i in 1:size(C.factors,1)
+            dd += log(real(C.factors[i,i]))
+        end
+        return dd + dd # instead of 2.0dd which can change the type
+    end
 end
 
 inv!{T<:BlasFloat,S<:StridedMatrix}(C::Cholesky{T,S}) =

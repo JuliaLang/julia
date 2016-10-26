@@ -50,7 +50,7 @@ bimg  = randn(n,2)/2
 
                 @testset "(Automatic) Bunch-Kaufman factor of indefinite matrix" begin
                     bc1 = factorize(asym)
-                     @test logabsdet(bc1)[1] ≈ log(abs(det(bc1)))
+                    @test logabsdet(bc1)[1] ≈ log(abs(det(bc1)))
                     if eltya <: Real
                         @test logabsdet(bc1)[2] == sign(det(bc1))
                     else
