@@ -564,7 +564,7 @@ Types
 
        julia> sizeof(Base.LinAlg.LU)
        ERROR: argument is an abstract type; size is indeterminate
-        in sizeof(::Type{T}) at ./essentials.jl:99
+        in sizeof(::Type{T}) at ./essentials.jl:89
         ...
 
 .. function:: eps(T)

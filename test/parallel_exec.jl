@@ -1067,6 +1067,15 @@ let
     @test_throws RemoteException fetch(ref)
 end
 
+# Test calling @everywhere from a module not defined on the workers
+module LocalBar
+    bar() = @everywhere new_bar()=myid()
+end
+LocalBar.bar()
+for p in procs()
+    @test p == remotecall_fetch(new_bar, p)
+end
+
 # Test addprocs enable_threaded_blas parameter
 
 const get_num_threads = function() # anonymous so it will be serialized when called
