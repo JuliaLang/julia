@@ -1933,7 +1933,9 @@ static jl_value_t *read_verify_mod_list(ios_t *s)
         name[len] = '\0';
         uint64_t uuid = read_uint64(s);
         jl_sym_t *sym = jl_symbol(name);
-        jl_module_t *m = (jl_module_t*)jl_get_global(jl_main_module, sym);
+        jl_module_t *m = NULL;
+        if (jl_binding_resolved_p(jl_main_module, sym))
+            m = (jl_module_t*)jl_get_global(jl_main_module, sym);
         if (!m) {
             static jl_value_t *require_func = NULL;
             if (!require_func)
