@@ -16,6 +16,15 @@ macro assertnonsingular(A, info)
    :(($info)==0 ? $A : throw(SingularException($info)))
 end
 
+function logdet(F::Factorization)
+    d, s = logabsdet(F)
+    return d + log(s)
+end
+
+function det(F::Factorization)
+    d, s = logabsdet(F)
+    return exp(d)*s
+end
 
 ### General promotion rules
 convert{T}(::Type{Factorization{T}}, F::Factorization{T}) = F
