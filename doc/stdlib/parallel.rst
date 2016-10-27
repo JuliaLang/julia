@@ -583,7 +583,7 @@ General Parallel Computing Support
        foo = 1
        @eval @everywhere bar=$foo
 
-   The expression is only evaluated under ``Main`` irrespective of where ``@everywhere`` is called from. For example :
+   The expression is evaluated under ``Main`` irrespective of where ``@everywhere`` is called from. For example :
 
    .. code-block:: julia
 

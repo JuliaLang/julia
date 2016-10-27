@@ -1973,7 +1973,7 @@ Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variabl
     foo = 1
     @eval @everywhere bar=\$foo
 
-The expression is only evaluated under `Main` irrespective of where `@everywhere` is called from.
+The expression is evaluated under `Main` irrespective of where `@everywhere` is called from.
 For example :
 
     module FooBar
