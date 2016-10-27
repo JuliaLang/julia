@@ -789,6 +789,12 @@ b=asyncmap(identity, c)
 @test Int[1:10...] == b
 @test size(b) == (10,)
 
+# check with an iterator that has only implements length()
+len_iter = (1,2,3,4,5)
+@test Base.iteratorsize(len_iter) == Base.HasLength()
+@test asyncmap(identity, len_iter) == Any[1,2,3,4,5]
+
+
 # CachingPool tests
 wp = CachingPool(workers())
 @test [1:100...] == pmap(wp, x->x, 1:100)
