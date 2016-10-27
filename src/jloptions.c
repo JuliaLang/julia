@@ -515,7 +515,7 @@ restart_switch:
         case opt_config_gc_region_size:
             {
                 int s = strtol(optarg, &endptr, 10);
-                if (errno != 0 || optarg == endptr || *(endptr + 1) != 0) {
+                if (optarg == endptr || *(endptr + 1) != 0) {
                     jl_errorf("julia: --config.gc.region.size=<n> must be an integer > 1 followed by a unit which can be one of 'M' (Mega) or 'G' (Giga). For example, '10M'");
                 } else if (*endptr == 'M') {
                     jl_options.region_pg_cnt = 64 * s;
