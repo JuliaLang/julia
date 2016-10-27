@@ -170,12 +170,12 @@ the following code::
 Starting Julia with ``julia -p 2``, you can use this to verify the following:
 
 - :func:`include("DummyModule.jl") <include>` loads the file on just a single process (whichever one executes the statement).
-- ``@everywhere import DummyModule`` causes the module to be loaded on all processes. However, it is not brought into scope on
-  any of the processes.
+- ``@everywhere import DummyModule`` causes the module to be loaded on all processes. Only the module (not its exports) is
+  brought into scope on all processes.
 - As long as ``DummyModule`` is loaded on process 2, commands like ::
 
-    using DummyModule               # Load and bring into scope locally.
-    @everywhere import DummyModule  # Only load everywhere
+    using DummyModule               # Load and bring module and module exports into scope locally.
+    @everywhere import DummyModule  # Load and bring module (not exports) into scope everywhere.
     rr = RemoteChannel(2)
     put!(rr, MyType(7))
 

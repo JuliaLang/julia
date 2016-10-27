@@ -220,7 +220,7 @@ Module file paths
 -----------------
 
 The global variable LOAD_PATH contains the directories Julia searches for
-modules when using ``using`` (or ``import``) is invoked.
+modules when ``using`` (or ``import``) is invoked.
 It can be extended using ``push!``::
 
     push!(LOAD_PATH, "/Path/To/My/Module/")
