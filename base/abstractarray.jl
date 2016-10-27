@@ -193,7 +193,7 @@ function isassigned(a::AbstractArray, i::Int...)
 end
 
 # used to compute "end" for last index
-function trailingsize(A::AbstractArray, n)
+function trailingsize(A, n)
     s = 1
     for i=n:ndims(A)
         s *= size(A,i)
