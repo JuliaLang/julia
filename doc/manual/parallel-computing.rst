@@ -44,8 +44,14 @@ wait for a remote call to finish by calling :func:`wait` on the returned
 :class:`Future`, and you can obtain the full value of the result using
 :func:`fetch`.
 
-On the other hand :class:`RemoteChannel` s are rewritable. For example, multiple processes
+On the other hand, :class:`RemoteChannel` s are rewritable. For example, multiple processes
 can co-ordinate their processing by referencing the same remote :class:`Channel`\ .
+
+Each process has an associated identifier. The process providing the interactive Julia prompt
+always has an ``id`` equal to 1.
+The processes used by default for parallel operations are referred to as "workers".
+When there is only one process, process 1 is considered a worker. Otherwise, workers are
+considered to be all processes other than process 1.
 
 Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
@@ -70,7 +76,7 @@ The first argument to :func:`remotecall` is the function to call.
 Most parallel programming in Julia does not reference specific processes
 or the number of processes available, but :func:`remotecall` is
 considered a low-level interface providing finer control. The second
-argument to :func:`remotecall` is the index of the process
+argument to :func:`remotecall` is the ``id`` of the process
 that will do the work, and the remaining arguments will be passed
 to the function being called.
 
@@ -190,12 +196,8 @@ A file can also be preloaded on multiple processes at startup, and a driver scri
 
     julia -p <n> -L file1.jl -L file2.jl driver.jl
 
-Each process has an associated identifier. The process providing the interactive Julia prompt
-always has an ``id`` equal to 1, as would the Julia process running the driver script in the
-example above.
-The processes used by default for parallel operations are referred to as "workers".
-When there is only one process, process 1 is considered a worker. Otherwise, workers are
-considered to be all processes other than process 1.
+The Julia process running the driver script in the example above has an ``id`` equal to 1,
+just like a process providing an interactive prompt.
 
 The base Julia installation has in-built support for two types of clusters:
 
@@ -303,7 +305,7 @@ performed in.
 Notice that our use of this pattern with ``count_heads`` can be
 generalized. We used two explicit :obj:`@spawn` statements, which limits
 the parallelism to two processes. To run on any number of processes,
-we can use a *parallel for loop*, which can be written in Julia like
+we can use a *parallel for loop*, which can be written in Julia using :obj:`@parallel` like
 this::
 
     nheads = @parallel (+) for i=1:200000000
@@ -661,7 +663,7 @@ Now let's compare three different versions, one that runs in a single process::
 
    advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1)
 
-one that uses ``@parallel``::
+one that uses :obj:`@parallel`::
 
    function advection_parallel!(q, u)
        for t = 1:size(q,3)-1
