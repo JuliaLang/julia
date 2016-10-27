@@ -524,6 +524,9 @@ restart_switch:
                 } else {
                     jl_errorf("julia: --config.gc.region.size=<n> Invalid unit provided. Valid units are 'M' (Mega) and 'G' (Giga). For example '10M'");
                 }
+                if (jl_options.region_pg_cnt <= MIN_REGION_PG_COUNT) {
+                    jl_errorf("julia: --config.gc.region.size=<n> GC region size must be greater than 1 MB");
+                }
             }
             break;
         default:

@@ -24,7 +24,7 @@ static size_t current_pg_count = 0;
 
 void jl_gc_init_page(void)
 {
-    if (jl_options.region_pg_cnt >= MIN_REGION_PG_COUNT) {
+    if (jl_options.region_pg_cnt > MIN_REGION_PG_COUNT) {
         region_pg_cnt = jl_options.region_pg_cnt;
     }
 #ifndef _OS_WINDOWS_
