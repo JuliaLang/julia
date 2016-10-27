@@ -5,7 +5,7 @@ $(eval $(call git-external,openlibm,OPENLIBM,Makefile,libopenlibm.$(SHLIB_EXT),$
 
 OPENLIBM_OBJ_TARGET := $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_OBJ_SOURCE := $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/libopenlibm.$(SHLIB_EXT)
-OPENLIBM_FLAGS := ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+OPENLIBM_FLAGS := ARCH="$(ARCH)" REAL_ARCH="$(MARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 $(OPENLIBM_OBJ_SOURCE): $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/Makefile
 	$(MAKE) -C $(dir $<) $(OPENLIBM_FLAGS) $(MAKE_COMMON)
