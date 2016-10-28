@@ -72,14 +72,8 @@ datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH)/1000.0
 
 Returns the date portion of `now()`.
 """
-today() = Date(convert(DateTime, now()))
+today() = Date(Base.now())
 
-"""
-    now(::Type{UTC}) -> DateTime
-
-Returns a `DateTime` corresponding to the user's system time as UTC/GMT.
-"""
-now(::Type{UTC}) = unix2datetime(time())
 
 """
     rata2datetime(days) -> DateTime
@@ -123,9 +117,3 @@ function Base.convert(::Type{DateTime}, c::Libc.ComputerTime)
     extra = Millisecond( round( c.microseconds / 1000 ) )
     base + extra
 end
-
-function Base.string(c::Libc.ComputerTime)
-    string( convert( DateTime, c) ) * " UTC"
-end
-
-Base.show(io::IO, x::Libc.ComputerTime) = print(io,string(x))

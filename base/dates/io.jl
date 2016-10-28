@@ -336,3 +336,9 @@ end
 function format(Y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
     return reshape([Dates.format(y,df) for y in Y], size(Y))
 end
+
+function Base.string(c::Libc.ComputerTime)
+    string( convert( DateTime, c) ) * " UTC"
+end
+
+Base.show(io::IO, x::Libc.ComputerTime) = print(io,string(x))

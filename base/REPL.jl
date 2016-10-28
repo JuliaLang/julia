@@ -416,7 +416,7 @@ function add_history(hist::REPLHistoryProvider, s)
     push!(hist.history, str)
     hist.history_file === nothing && return
     entry = """
-    # time: $( string( now() ) )
+    # time: $( now() )
     # mode: $mode
     $(replace(str, r"^"ms, "\t"))
     """
