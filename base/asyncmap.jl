@@ -209,8 +209,11 @@ function next(itr::AsyncGenerator, state::AsyncGeneratorState)
     return (r, state)
 end
 
+# pass-through iterator traits to the iterable
+# on which the mapping function is being applied
 iteratorsize(itr::AsyncGenerator) = iteratorsize(itr.collector.enumerator)
 size(itr::AsyncGenerator) = size(itr.collector.enumerator)
+length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 
 """
     asyncmap(f, c...) -> collection
