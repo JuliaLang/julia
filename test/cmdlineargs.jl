@@ -29,7 +29,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     @test success(`$exename --home=$JULIA_HOME`)
 
     # --config-gc-region-size
-    @test success(`$exename --config-gc-region-size=4G`)
+    @test success(`$exename --config-gc-region-size=256M`)
 
     # --eval
     @test  success(`$exename -e "exit(0)"`)
