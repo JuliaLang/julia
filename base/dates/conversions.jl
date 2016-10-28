@@ -127,6 +127,5 @@ end
 function Base.string(c::Libc.ComputerTime)
     string( convert( DateTime, c) ) * " UTC"
 end
-show
 
 Base.show(io::IO, x::Libc.ComputerTime) = print(io,string(x))
