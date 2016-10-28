@@ -4416,6 +4416,10 @@ Base.convert(::Type{Int}, ::A1090) = "hey"
 f1090()::Int = A1090()
 @test_throws TypeError f1090()
 
+# issue #19106
+function f19106()::Void end
+@test f19106() === nothing
+
 # issue #16783
 function f16783()
     T = UInt32

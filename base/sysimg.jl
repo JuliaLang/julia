@@ -176,7 +176,7 @@ include("version.jl")
 
 # system & environment
 include("libc.jl")
-using .Libc: getpid, gethostname, now, ComputerTime
+using .Libc: getpid, gethostname, now, ComputerTime, time
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")

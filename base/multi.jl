@@ -1123,6 +1123,26 @@ function remote_do(f, w::Worker, args...; kwargs...)
     nothing
 end
 
+
+"""
+    remote_do(f, id::Integer, args...; kwargs...) -> nothing
+
+Executes `f` on worker `id` asynchronously. Unlike `remotecall`, it does not store the
+result of computation, nor is there a way to wait for its completion.
+
+A successful invocation indicates that the request has been accepted for execution on
+the remote node.
+
+While consecutive remotecalls to the same worker are serialized in the order they are
+invoked, the order of executions on the remote worker is undetermined. For example,
+`remote_do(f1, 2); remotecall(f2, 2); remote_do(f3, 2)` will serialize the call
+to `f1`, followed by `f2` and `f3` in that order. However, it is not guaranteed that `f1`
+is executed before `f3` on worker 2.
+
+Any exceptions thrown by `f` are printed to `STDERR` on the remote worker.
+
+Keyword arguments, if any, are passed through to `f`.
+"""
 remote_do(f, id::Integer, args...; kwargs...) = remote_do(f, worker_from_id(id), args...; kwargs...)
 
 # have the owner of rr call f on it
@@ -1937,14 +1957,15 @@ macro fetchfrom(p, expr)
 end
 
 """
-    @everywhere
+    @everywhere expr
 
-Execute an expression on all processes. Errors on any of the processes are collected into a
+Execute an expression under Main everywhere. Equivalent to calling
+`eval(Main, expr)` on all processes. Errors on any of the processes are collected into a
 `CompositeException` and thrown. For example :
 
     @everywhere bar=1
 
-will define `bar` under module `Main` on all processes.
+will define `Main.bar` on all processes.
 
 Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variables. Prefixing
 `@everywhere` with `@eval` allows us to broadcast local variables using interpolation :
@@ -1952,25 +1973,35 @@ Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variabl
     foo = 1
     @eval @everywhere bar=\$foo
 
+The expression is evaluated under `Main` irrespective of where `@everywhere` is called from.
+For example :
 
+    module FooBar
+        foo() = @everywhere bar()=myid()
+    end
+    FooBar.foo()
+
+will result in `Main.bar` being defined on all processes and not `FooBar.bar`.
 """
 macro everywhere(ex)
     quote
         sync_begin()
-        thunk = ()->(eval(Main,$(Expr(:quote,ex))); nothing)
         for pid in workers()
-            async_run_thunk(()->remotecall_fetch(thunk, pid))
+            async_run_thunk(()->remotecall_fetch(eval_ew_expr, pid, $(Expr(:quote,ex))))
             yield() # ensure that the remotecall_fetch has been started
         end
 
-        # execute locally last.
+        # execute locally last as we do not want local execution to block serialization
+        # of the request to remote nodes.
         if nprocs() > 1
-            async_run_thunk(thunk)
+            async_run_thunk(()->eval_ew_expr($(Expr(:quote,ex))))
         end
 
         sync_end()
     end
 end
+
+eval_ew_expr(ex) = (eval(Main, ex); nothing)
 
 # Statically split range [1,N] into equal sized chunks for np processors
 function splitrange(N::Int, np::Int)

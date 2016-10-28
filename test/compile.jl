@@ -16,6 +16,15 @@ function redirected_stderr(expected)
     return t
 end
 
+Foo_module = :Foo4b3a94a1a081a8cb
+FooBase_module = :FooBase4b3a94a1a081a8cb
+@eval module ConflictingBindings
+    export $Foo_module, $FooBase_module
+    $Foo_module = 232
+    $FooBase_module = 9134
+end
+using ConflictingBindings
+
 # this environment variable would affect some error messages being tested below
 # so we disable it for the tests below
 withenv( "JULIA_DEBUG_LOADING" => nothing ) do
@@ -25,15 +34,24 @@ dir = mktempdir()
 dir2 = mktempdir()
 insert!(LOAD_PATH, 1, dir)
 insert!(Base.LOAD_CACHE_PATH, 1, dir)
-Foo_module = :Foo4b3a94a1a081a8cb
 try
     Foo_file = joinpath(dir, "$Foo_module.jl")
+    FooBase_file = joinpath(dir, "$FooBase_module.jl")
 
+    write(FooBase_file,
+          """
+          __precompile__(true)
+
+          module $FooBase_module
+          end
+          """)
     write(Foo_file,
           """
           __precompile__(true)
 
           module $Foo_module
+              using $FooBase_module
+
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
               include_dependency("foo.jl")
@@ -127,7 +145,7 @@ try
     end
     wait(t)
 
-    let Foo = eval(Main, Foo_module)
+    let Foo = getfield(Main, Foo_module)
         @test Foo.foo(17) == 18
         @test Foo.Bar.bar(17) == 19
 
@@ -140,8 +158,8 @@ try
         @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test sort(modules) == map(s -> (s, Base.module_uuid(eval(s))),
-                                   [:Base, :Core, :Main])
+        @test sort(modules) == Any[(s, Base.module_uuid(getfield(Foo, s))) for s in
+                                   [:Base, :Core, FooBase_module, :Main]]
         @test deps == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2

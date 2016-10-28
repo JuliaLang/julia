@@ -5,7 +5,8 @@ module Libc
 import Base: transcode
 
 export FILE, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time, transcode, ComputerTime
+    errno, strerror, flush_cstdio, systemsleep, time, transcode, ComputerTime,
+    now, time
 
 if is_windows()
     export GetLastError, FormatMessage
@@ -119,6 +120,15 @@ function now()
     status != 0 && error("unable to determine current time: ", status)
     return tv[]
 end
+
+"""
+    time(c::ComputerTime)
+
+Converts a `ComputerTime` to a number of seconds since the epoch. Defaults to
+current time.
+"""
+time(c::ComputerTime) = c.seconds + c.microseconds / 10^6
+time() = time(now())
 
 
 ## process-related functions ##

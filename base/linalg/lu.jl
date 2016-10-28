@@ -211,9 +211,9 @@ At_ldiv_Bt(A::LU, B::StridedVecOrMat) = At_ldiv_B(A, transpose(B))
 Ac_ldiv_Bc{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, ctranspose(B)) A.info
 Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, ctranspose(B))
 
-function det{T,S}(A::LU{T,S})
+function det{T}(A::LU{T})
     n = checksquare(A)
-    A.info > 0 && return zero(typeof(A.factors[1]))
+    A.info > 0 && return zero(T)
     P = one(T)
     c = 0
     @inbounds for i = 1:n
@@ -226,8 +226,9 @@ function det{T,S}(A::LU{T,S})
     return P * s
 end
 
-function logabsdet{T,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
+function logabsdet{T}(A::LU{T})  # return log(abs(det)) and sign(det)
     n = checksquare(A)
+    A.info > 0 && return log(zero(real(T))), log(one(T))
     c = 0
     P = one(T)
     abs_det = zero(real(T))
@@ -241,11 +242,6 @@ function logabsdet{T,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     end
     s = ifelse(isodd(c), -one(real(T)), one(real(T))) * P
     abs_det, s
-end
-
-function logdet(A::LU)
-    d, s = logabsdet(A)
-    return d + log(s)
 end
 
 inv!{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(A.factors, A.ipiv) A.info
