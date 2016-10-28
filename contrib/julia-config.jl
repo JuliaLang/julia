@@ -16,7 +16,11 @@ function imagePath()
 end
 
 function libDir()
-    abspath(dirname(Libdl.dlpath("libjulia")))
+    return if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        dirname(abspath(Libdl.dlpath("libjulia-debug")))
+    else
+        dirname(abspath(Libdl.dlpath("libjulia")))
+    end
 end
 
 function includeDir()
@@ -49,10 +53,15 @@ function ldflags()
 end
 
 function ldlibs()
-    if is_unix()
-        return replace("""-Wl,-rpath,$(libDir()) -ljulia""","\\","\\\\")
+    libname = if ccall(:jl_is_debugbuild, Cint, ()) != 0
+        "julia-debug"
     else
-        return "-ljulia -lopenlibm"
+        "julia"
+    end
+    if is_unix()
+        return replace("""-Wl,-rpath,$(libDir()) -l$libname""","\\","\\\\")
+    else
+        return "-l$libname -lopenlibm"
     end
 end
 
