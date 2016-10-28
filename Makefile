@@ -295,7 +295,7 @@ endif
 endif
 ifeq ($(USE_SYSTEM_LLVM),0)
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS += LLVM
+JL_PRIVATE_LIBS += LLVM LTO
 endif
 endif
 ifeq ($(OS),Darwin)
