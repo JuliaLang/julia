@@ -118,15 +118,15 @@ epoch `-4713-11-24T12:00:00` as a `Float64`.
 """
 datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH)/86400000.0
 
-function Base.convert(::Type{DateTime}, c::ComputerTime)
+function Base.convert(::Type{DateTime}, c::Libc.ComputerTime)
     base = unix2datetime(c.seconds)
     extra = Millisecond( round( c.microseconds / 1000 ) )
     base + extra
 end
 
-function Base.string(c::ComputerTime)
+function Base.string(c::Libc.ComputerTime)
     string( convert( DateTime, c) ) * " UTC"
 end
 show
 
-Base.show(io::IO, x::ComputerTime) = print(io,string(x))
+Base.show(io::IO, x::Libc.ComputerTime) = print(io,string(x))

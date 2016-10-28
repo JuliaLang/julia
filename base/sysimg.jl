@@ -176,7 +176,7 @@ include("version.jl")
 
 # system & environment
 include("libc.jl")
-using .Libc: getpid, gethostname, now
+using .Libc: getpid, gethostname, now, ComputerTime
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
@@ -355,7 +355,7 @@ importall .Profile
 
 # dates
 include("dates/Dates.jl")
-import .Dates: Date, DateTime, now
+import .Dates: Date, DateTime
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
