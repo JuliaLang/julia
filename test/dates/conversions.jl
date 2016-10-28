@@ -44,16 +44,8 @@
 @test Dates.julian2datetime(2452695.625) == Dates.DateTime(2003,2,25,3)
 @test Dates.datetime2julian(Dates.DateTime(2013,12,3,21)) == 2456630.375
 
-@test typeof(Dates.now()) <: Dates.DateTime
+@test typeof(Base.now()) <: Libc.ComputerTime
 @test typeof(Dates.today()) <: Dates.Date
-@test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
-
-if is_apple()
-    withenv("TZ" => "UTC") do
-        @test abs(Dates.now() - now(Dates.UTC)) < Dates.Second(1)
-    end
-end
-@test abs(Dates.now() - now(Dates.UTC)) < Dates.Hour(16)
 
 # Issue #9171, #9169
 let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14*24), Dates.Minute(14*24*60), Dates.Second(14*24*60*60), Dates.Millisecond(14*24*60*60*1000)]
@@ -103,4 +95,3 @@ b = Dates.Date(2000)
 @test convert(Date,730120) == b
 @test convert(Date,730120.0) == b
 @test convert(Date,Int32(730120)) == b
-
