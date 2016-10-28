@@ -53,7 +53,7 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - **FreeBSD**
 - **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER (little-endian) is available too.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER8 (little-endian) has been added recently.
 
 <a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
