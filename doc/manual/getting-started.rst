@@ -122,6 +122,8 @@ those available for the ``perl`` and ``ruby`` programs:
      --startup-file={yes|no}   Load ~/.juliarc.jl
      --handle-signals={yes|no} Enable or disable Julia's default signal handlers
 
+     --config-gc-region-size={N}  Set the garbage collector's region size
+
      -e, --eval <expr>         Evaluate <expr>
      -E, --print <expr>        Evaluate and show <expr>
      -L, --load <file>         Load <file> immediately on all processors

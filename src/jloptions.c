@@ -69,7 +69,7 @@ static const char opts[]  =
     " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n\n"
 
     // config options
-    " --config-gc-region-size={N}     Set the GC region size\n\n"
+    " --config-gc-region-size={N}     Set the garbage collector's region size\n\n"
 
     // actions
     " -e, --eval <expr>         Evaluate <expr>\n"
