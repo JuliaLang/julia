@@ -1667,7 +1667,7 @@ typedef struct {
     const char *outputji;
     int8_t incremental;
     int8_t image_file_specified;
-    int region_pg_cnt;
+    int32_t region_pg_cnt;
 } jl_options_t;
 
 extern JL_DLLEXPORT jl_options_t jl_options;
