@@ -865,7 +865,7 @@ to_index(i) = throw(ArgumentError("invalid index: $i"))
 
 to_indexes() = ()
 to_indexes(i1) = (to_index(i1),)
-to_indexes(i1, I...) = (to_index(i1), to_indexes(I...)...)
+to_indexes(i1, I...) = (@_inline_meta; (to_index(i1), to_indexes(I...)...))
 
 # Addition/subtraction of ranges
 for f in (:+, :-)

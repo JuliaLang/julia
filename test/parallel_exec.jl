@@ -789,6 +789,12 @@ b=asyncmap(identity, c)
 @test Int[1:10...] == b
 @test size(b) == (10,)
 
+# check with an iterator that has only implements length()
+len_iter = (1,2,3,4,5)
+@test Base.iteratorsize(len_iter) == Base.HasLength()
+@test asyncmap(identity, len_iter) == Any[1,2,3,4,5]
+
+
 # CachingPool tests
 wp = CachingPool(workers())
 @test [1:100...] == pmap(wp, x->x, 1:100)
@@ -822,7 +828,7 @@ if DoFullTest
     println("Testing exception printing on remote worker from a `remote_do` call")
     println("Please ensure the remote error and backtrace is displayed on screen")
 
-    Base.remote_do(id_other) do
+    remote_do(id_other) do
         throw(ErrorException("TESTING EXCEPTION ON REMOTE DO. PLEASE IGNORE"))
     end
     sleep(0.5)  # Give some time for the above error to be printed
@@ -967,7 +973,7 @@ function test_f_args(result, args...; kwargs...)
     @test remotecall_fetch(args...; kwargs...) == result
 
     # A visual test - remote_do should NOT print any errors
-    !isa(args[2], WorkerPool) && Base.remote_do(args...; kwargs...)
+    remote_do(args...; kwargs...)
 end
 
 for tid in [id_other, id_me, Base.default_worker_pool()]
@@ -977,6 +983,15 @@ for tid in [id_other, id_me, Base.default_worker_pool()]
     test_f_args(13, f_args, tid, 1; kw1=4, kw2=8)
     test_f_args(15, f_args, tid, 1, 2; kw1=4, kw2=8)
 end
+
+# Test remote_do
+f=Future(id_me)
+remote_do(fut->put!(fut, myid()), id_me, f)
+@test fetch(f) == id_me
+
+f=Future(id_other)
+remote_do(fut->put!(fut, myid()), id_other, f)
+@test fetch(f) == id_other
 
 # github PR #14456
 n = DoFullTest ? 6 : 5
@@ -1056,6 +1071,15 @@ let
     @test remotecall_fetch(()->:test,2) == :test
     ref = remotecall(bad_thunk, 2)
     @test_throws RemoteException fetch(ref)
+end
+
+# Test calling @everywhere from a module not defined on the workers
+module LocalBar
+    bar() = @everywhere new_bar()=myid()
+end
+LocalBar.bar()
+for p in procs()
+    @test p == remotecall_fetch(new_bar, p)
 end
 
 # Test addprocs enable_threaded_blas parameter

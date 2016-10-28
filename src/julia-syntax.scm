@@ -3380,7 +3380,7 @@ f(x) = yt(x)
                           ;; strip filenames out of non-initial line nodes
                           (emit `(line ,(cadr e)))))
                      ((and (eq? (car e) 'meta) (length> e 2) (eq? (cadr e) 'ret-type))
-                      (assert (not value))
+                      (assert (or (not value) tail))
                       (assert (not rett))
                       (set! rett (caddr e)))
                      (else

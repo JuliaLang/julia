@@ -50,6 +50,12 @@ bimg  = randn(n,2)/2
 
                 @testset "(Automatic) Bunch-Kaufman factor of indefinite matrix" begin
                     bc1 = factorize(asym)
+                    @test logabsdet(bc1)[1] ≈ log(abs(det(bc1)))
+                    if eltya <: Real
+                        @test logabsdet(bc1)[2] == sign(det(bc1))
+                    else
+                        @test logabsdet(bc1)[2] ≈ sign(det(bc1))
+                    end
                     @test inv(bc1)*asym ≈ eye(n)
                     @test_approx_eq_eps asym*(bc1\b) b 1000ε
                     @testset for rook in (false, true)
@@ -66,6 +72,9 @@ bimg  = randn(n,2)/2
                 @testset "Bunch-Kaufman factors of a pos-def matrix" begin
                     @testset for rook in (false, true)
                         bc2 = bkfact(apd, :U, issymmetric(apd), rook)
+                        @test_approx_eq logdet(bc2) log(det(bc2))
+                        @test_approx_eq logabsdet(bc2)[1] log(abs(det(bc2)))
+                        @test logabsdet(bc2)[2] == sign(det(bc2))
                         @test inv(bc2)*apd ≈ eye(n)
                         @test_approx_eq_eps apd * (bc2\b) b 150000ε
                         @test ishermitian(bc2) == !issymmetric(bc2)
@@ -104,6 +113,7 @@ end
     end
 end
 
+
 # test example due to @timholy in PR 15354
 let
     A = rand(6,5); A = complex(A'*A) # to avoid calling the real-lhs-complex-rhs method
@@ -112,3 +122,6 @@ let
     v5 = view(v6, 1:5)
     @test F\v5 == F\v6[1:5]
 end
+
+@test_throws DomainError logdet(bkfact([-1 -1; -1 1]))
+@test logabsdet(bkfact([8 4; 4 2]))[1] == -Inf

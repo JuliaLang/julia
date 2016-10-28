@@ -20,8 +20,15 @@ for f in (:-, :~, :conj, :sign)
     @eval begin
         function ($f)(A::AbstractArray)
             F = similar(A)
-            for (iF, iA) in zip(eachindex(F), eachindex(A))
-                F[iF] = ($f)(A[iA])
+            RF, RA = eachindex(F), eachindex(A)
+            if RF == RA
+                for i in RA
+                    F[i] = ($f)(A[i])
+                end
+            else
+                for (iF, iA) in zip(RF, RA)
+                   F[iF] = ($f)(A[iA])
+                end
             end
             return F
         end
@@ -35,8 +42,15 @@ imag(A::AbstractArray) = reshape([ imag(x) for x in A ], size(A))
 
 function !(A::AbstractArray{Bool})
     F = similar(A)
-    for (iF, iA) in zip(eachindex(F), eachindex(A))
-        F[iF] = !A[iA]
+    RF, RA = eachindex(F), eachindex(A)
+    if RF == RA
+        for i in RA
+            F[i] = !A[i]
+        end
+    else
+        for (iF, iA) in zip(RF, RA)
+            F[iF] = !A[iA]
+        end
     end
     return F
 end
@@ -62,8 +76,15 @@ function _elementwise(op, ::Type{Any}, A::AbstractArray, B::AbstractArray)
 end
 function _elementwise{T}(op, ::Type{T}, A::AbstractArray, B::AbstractArray)
     F = similar(A, T, promote_shape(A, B))
-    for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-        @inbounds F[iF] = op(A[iA], B[iB])
+    RF, RA, RB  = eachindex(F), eachindex(A), eachindex(B)
+    if RF == RA == RB
+        for i in RA
+            @inbounds F[i] = op(A[i], B[i])
+        end
+    else
+        for (iF, iA, iB) in zip(RF, RA, RB)
+            @inbounds F[iF] = op(A[iA], B[iB])
+        end
     end
     return F
 end
@@ -75,8 +96,15 @@ for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem,
             S = promote_array_type($f, typeof(A), T, R)
             S === Any && return [($f)(A, b) for b in B]
             F = similar(B, S)
-            for (iF, iB) in zip(eachindex(F), eachindex(B))
-                @inbounds F[iF] = ($f)(A, B[iB])
+            RF, RB = eachindex(F), eachindex(B)
+            if RF == RB
+                for i in RB
+                    @inbounds F[i] = ($f)(A, B[i])
+                end
+            else
+                for (iF, iB) in zip(RF, RB)
+                    @inbounds F[iF] = ($f)(A, B[iB])
+                end
             end
             return F
         end
@@ -85,8 +113,15 @@ for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem,
             S = promote_array_type($f, typeof(B), T, R)
             S === Any && return [($f)(a, B) for a in A]
             F = similar(A, S)
-            for (iF, iA) in zip(eachindex(F), eachindex(A))
-                @inbounds F[iF] = ($f)(A[iA], B)
+            RF, RA = eachindex(F), eachindex(A)
+            if RF == RA
+                for i in RA
+                    @inbounds F[i] = ($f)(A[i], B)
+                end
+            else
+                for (iF, iA) in zip(RF, RA)
+                    @inbounds F[iF] = ($f)(A[iA], B)
+                end
             end
             return F
         end
@@ -420,9 +455,17 @@ function transposeblock!(f,B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,off
     end
     return B
 end
+
 function ccopy!(B, A)
-    for (i,j) = zip(eachindex(B),eachindex(A))
-        B[i] = ctranspose(A[j])
+    RB, RA = eachindex(B), eachindex(A)
+    if RB == RA
+        for i = RB
+            B[i] = ctranspose(A[i])
+        end
+    else
+        for (i,j) = zip(RB, RA)
+            B[i] = ctranspose(A[j])
+        end
     end
 end
 
