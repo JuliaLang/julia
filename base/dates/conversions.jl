@@ -72,7 +72,7 @@ datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH)/1000.0
 
 Returns the date portion of `now()`.
 """
-today() = Date(convert(DateTime, now())
+today() = Date(convert(DateTime, now()))
 
 """
     now(::Type{UTC}) -> DateTime
