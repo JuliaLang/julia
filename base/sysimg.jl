@@ -171,15 +171,15 @@ importall .Base64
 # nullable types
 include("nullable.jl")
 
-# version
-include("version.jl")
-
 # system & environment
 include("libc.jl")
 using .Libc: getpid, gethostname, now, ComputerTime, time
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
+
+# version
+include("version.jl")
 
 # Scheduling
 include("libuv.jl")
