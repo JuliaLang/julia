@@ -121,8 +121,8 @@ Tasks
 
    Other constructors:
 
-   * ``Channel()``\ : equivalent to ``Channel{Any}(32)`` (deprecated)
-   * ``Channel(sz::Int)``\ : equivalent to ``Channel{Any}(sz)``
+   * ``Channel(Inf)``\ : equivalent to ``Channel{Any}(typemax(Int))``
+   * ``Channel(sz)``\ : equivalent to ``Channel{Any}(sz)``
 
 .. function:: put!(c::Channel, v)
 
@@ -1001,3 +1001,4 @@ between processes. It is possible for Cluster Managers to provide a different tr
    .. Docstring generated from Julia source
 
    Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two ``IO`` objects, one for incoming messages and the other for messages addressed to the remote worker. If ``incoming`` is ``true``\ , the remote peer initiated the connection. Whichever of the pair initiates the connection sends the cluster cookie and its Julia version number to perform the authentication handshake.
+

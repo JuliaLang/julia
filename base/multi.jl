@@ -1195,7 +1195,6 @@ Waits and fetches a value from `x` depending on the type of `x`:
   is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
 * `RemoteChannel`: Wait for and get the value of a remote reference. Exceptions raised are
   same as for a `Future` .
-* `Channel` : Wait for and get the first available item from the channel.
 
 Does not remove the item fetched.
 """
