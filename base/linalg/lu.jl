@@ -115,6 +115,21 @@ The relationship between `F` and `A` is
 | [`logdet`](:func:`logdet`)       | ✓    | ✓                      |
 | [`logabsdet`](:func:`logabsdet`) | ✓    | ✓                      |
 | [`size`](:func:`size`)           | ✓    | ✓                      |
+
+# Example
+
+```jldoctest
+julia> A = [4 3; 6 3]
+2×2 Array{Int64,2}:
+ 4  3
+ 6  3
+
+julia> F = lufact(A)
+Base.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)
+
+julia> F[:L] * F[:U] == A[F[:p], :]
+true
+```
 """
 function lufact{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}})
     S = typeof(zero(T)/one(T))
@@ -150,6 +165,26 @@ By default, pivoting is used. This can be overridden by passing
 `Val{false}` for the second argument.
 
 See also [`lufact`](:func:`lufact`).
+
+# Example
+
+```jldoctest
+julia> A = [4. 3.; 6. 3.]
+2×2 Array{Float64,2}:
+ 4.0  3.0
+ 6.0  3.0
+
+julia> L, U, p = lu(A)
+(
+[1.0 0.0; 0.666667 1.0],
+<BLANKLINE>
+[6.0 3.0; 0.0 1.0],
+<BLANKLINE>
+[2,1])
+
+julia> A[p, :] == L * U
+true
+```
 """
 function lu(A::AbstractMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
     F = lufact(A, pivot)

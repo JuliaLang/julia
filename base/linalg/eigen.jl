@@ -74,6 +74,25 @@ For general nonsymmetric matrices it is possible to specify how the matrix is ba
 before the eigenvector calculation. The option `permute=true` permutes the matrix to become
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
 make rows and columns more equal in norm. The default is `true` for both options.
+
+# Example
+
+```jldoctest
+julia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0,3.0,18.0],[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
+
+julia> F[:values]
+3-element Array{Float64,1}:
+  1.0
+  3.0
+ 18.0
+
+julia> F[:vectors]
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+```
 """
 function eigfact{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
@@ -94,6 +113,8 @@ See [`eigfact`](:func:`eigfact`) for details on the
 `irange`, `vl`, and `vu` arguments
 and the `permute` and `scale` keyword arguments.
 The eigenvectors are returned columnwise.
+
+# Example
 
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
@@ -118,6 +139,16 @@ for [`eigfact`](:func:`eigfact`).
 
 For [`SymTridiagonal`](:class:`SymTridiagonal`) matrices, if the optional vector of
 eigenvalues `eigvals` is specified, returns the specific corresponding eigenvectors.
+
+# Example
+
+```jldoctest
+julia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+3×3 Array{Float64,2}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+```
 """
 eigvecs(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true) =
     eigvecs(eigfact(A, permute=permute, scale=scale))
@@ -159,6 +190,8 @@ Note that if the eigenvalues of `A` are complex,
 this method will fail, since complex numbers cannot
 be sorted.
 
+# Example
+
 ```jldoctest
 julia> A = [0 im; -im 0]
 2×2 Array{Complex{Int64},2}:
@@ -175,8 +208,8 @@ julia> A = [0 im; -1 0]
 
 julia> eigmax(A)
 ERROR: DomainError:
- in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:186
- in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:184
+ in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:219
+ in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:217
  ...
 ```
 """
@@ -199,6 +232,8 @@ Note that if the eigenvalues of `A` are complex,
 this method will fail, since complex numbers cannot
 be sorted.
 
+# Example
+
 ```jldoctest
 julia> A = [0 im; -im 0]
 2×2 Array{Complex{Int64},2}:
@@ -215,8 +250,8 @@ julia> A = [0 im; -1 0]
 
 julia> eigmin(A)
 ERROR: DomainError:
- in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:226
- in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:224
+ in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:261
+ in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:259
  ...
 ```
 """
@@ -284,6 +319,8 @@ Computes generalized eigenvalues (`D`) and vectors (`V`) of `A` with respect to 
 `eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the
 factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is recommended.
 
+# Example
+
 ```jldoctest
 julia> A = [1 0; 0 -1]
 2×2 Array{Int64,2}:
@@ -330,6 +367,8 @@ end
 
 Computes the generalized eigenvalues of `A` and `B`.
 
+# Example
+
 ```jldoctest
 julia> A = [1 0; 0 -1]
 2×2 Array{Int64,2}:
@@ -357,6 +396,8 @@ end
 
 Returns a matrix `M` whose columns are the generalized eigenvectors of `A` and `B`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.)
+
+# Example
 
 ```jldoctest
 julia> A = [1 0; 0 -1]
