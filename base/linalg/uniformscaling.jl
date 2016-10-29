@@ -11,6 +11,18 @@ end
     I
 
 An object of type `UniformScaling`, representing an identity matrix of any size.
+
+# Example
+
+```jldoctest
+julia> ones(5, 6) * I == ones(5, 6)
+true
+
+julia> [1 2im 3; 1im 2 3] * I
+2×3 Array{Complex{Int64},2}:
+ 1+0im  0+2im  3+0im
+ 0+1im  2+0im  3+0im
+```
 """
 const I = UniformScaling(1)
 

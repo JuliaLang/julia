@@ -21,13 +21,35 @@ and provides efficient specialized linear solvers, but may be converted into a r
 matrix with [`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short). `ev`'s length
 must be one less than the length of `dv`.
 
-**Example**
+# Example
 
-```julia
-dv = rand(5)
-ev = rand(4)
-Bu = Bidiagonal(dv, ev, true) #e is on the first superdiagonal
-Bl = Bidiagonal(dv, ev, false) #e is on the first subdiagonal
+```jldoctest
+julia> dv = [1; 2; 3; 4]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> ev = [7; 8; 9]
+3-element Array{Int64,1}:
+ 7
+ 8
+ 9
+
+ julia> Bu = Bidiagonal(dv, ev, true) # ev is on the first superdiagonal
+ 4×4 Bidiagonal{Int64}:
+  1  7  ⋅  ⋅
+  ⋅  2  8  ⋅
+  ⋅  ⋅  3  9
+  ⋅  ⋅  ⋅  4
+
+ julia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal
+ 4×4 Bidiagonal{Int64}:
+  1  ⋅  ⋅  ⋅
+  7  2  ⋅  ⋅
+  ⋅  8  3  ⋅
+  ⋅  ⋅  9  4
 ```
 """
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) = Bidiagonal{T}(collect(dv), collect(ev), isupper)
@@ -42,13 +64,35 @@ and provides efficient specialized linear solvers, but may be converted into a r
 matrix with [`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short). `ev`'s
 length must be one less than the length of `dv`.
 
-**Example**
+# Example
 
-```julia
-dv = rand(5)
-ev = rand(4)
-Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal
-Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal
+```jldoctest
+julia> dv = [1; 2; 3; 4]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> ev = [7; 8; 9]
+3-element Array{Int64,1}:
+ 7
+ 8
+ 9
+
+julia> Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal
+4×4 Bidiagonal{Int64}:
+ 1  7  ⋅  ⋅
+ ⋅  2  8  ⋅
+ ⋅  ⋅  3  9
+ ⋅  ⋅  ⋅  4
+
+julia> Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal
+4×4 Bidiagonal{Int64}:
+ 1  ⋅  ⋅  ⋅
+ 7  2  ⋅  ⋅
+ ⋅  8  3  ⋅
+ ⋅  ⋅  9  4
 ```
 """
 #Convert from BLAS uplo flag to boolean internal
@@ -73,12 +117,29 @@ end
 Construct a `Bidiagonal` matrix from the main diagonal of `A` and
 its first super- (if `isupper=true`) or sub-diagonal (if `isupper=false`).
 
-**Example**
+# Example
 
-```julia
-A = rand(5,5)
-Bu = Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A
-Bl = Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A
+```jldoctest
+julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
+4×4 Array{Int64,2}:
+ 1  1  1  1
+ 2  2  2  2
+ 3  3  3  3
+ 4  4  4  4
+
+julia> Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A
+4×4 Bidiagonal{Int64}:
+ 1  1  ⋅  ⋅
+ ⋅  2  2  ⋅
+ ⋅  ⋅  3  3
+ ⋅  ⋅  ⋅  4
+
+julia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A
+4×4 Bidiagonal{Int64}:
+ 1  ⋅  ⋅  ⋅
+ 2  2  ⋅  ⋅
+ ⋅  3  3  ⋅
+ ⋅  ⋅  4  4
 ```
 """
 Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper?1:-1), isupper)

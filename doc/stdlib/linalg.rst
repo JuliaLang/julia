@@ -19,6 +19,15 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix multiplication.
 
+   **Example**
+
+   .. doctest::
+
+       julia> [1 1; 0 1] * [1 0; 1 1]
+       2×2 Array{Int64,2}:
+        2  1
+        1  1
+
 .. function:: \\(A, B)
 
    .. Docstring generated from Julia source
@@ -29,12 +38,36 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    When ``A`` is sparse, a similar polyalgorithm is used. For indefinite matrices, the ``LDLt`` factorization does not use pivoting during the numerical factorization and therefore the procedure can fail even for invertible matrices.
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1 0; 1 -2]; B = [32; -4];
+
+       julia> X = A \ B
+       2-element Array{Float64,1}:
+        32.0
+        18.0
+
+       julia> A * X == B
+       true
+
 .. function:: dot(x, y)
               ⋅(x,y)
 
    .. Docstring generated from Julia source
 
    Compute the dot product. For complex vectors, the first vector is conjugated.
+
+   **Example**
+
+   .. doctest::
+
+       julia> dot([1; 1], [2; 3])
+       5
+
+       julia> dot([im; im], [1; 1])
+       0 - 2im
 
 .. function:: vecdot(x, y)
 
@@ -48,6 +81,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Compute the cross product of two 3-vectors.
+
+   **Example**
 
    .. doctest::
 
@@ -101,12 +136,25 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    If ``factorize`` is called on a Hermitian positive-definite matrix, for instance, then ``factorize`` will return a Cholesky factorization.
 
-   Example:
+   **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       A = diagm(rand(5)) + diagm(rand(4),1); #A is really bidiagonal
-       factorize(A) #factorize will check to see that A is already factorized
+       julia> A = Array(Bidiagonal(ones(5, 5), true))
+       5×5 Array{Float64,2}:
+        1.0  1.0  0.0  0.0  0.0
+        0.0  1.0  1.0  0.0  0.0
+        0.0  0.0  1.0  1.0  0.0
+        0.0  0.0  0.0  1.0  1.0
+        0.0  0.0  0.0  0.0  1.0
+
+       julia> factorize(A) # factorize will check to see that A is already factorized
+       5×5 Bidiagonal{Float64}:
+        1.0  1.0   ⋅    ⋅    ⋅
+         ⋅   1.0  1.0   ⋅    ⋅
+         ⋅    ⋅   1.0  1.0   ⋅
+         ⋅    ⋅    ⋅   1.0  1.0
+         ⋅    ⋅    ⋅    ⋅   1.0
 
    This returns a ``5×5 Bidiagonal{Float64}``\ , which can now be passed to other linear algebra functions (e.g. eigensolvers) which will use specialized methods for ``Bidiagonal`` types.
 
@@ -122,11 +170,41 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Constructs a matrix from the diagonal of ``A``\ .
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1 2 3; 4 5 6; 7 8 9]
+       3×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+        7  8  9
+
+       julia> Diagonal(A)
+       3×3 Diagonal{Int64}:
+        1  ⋅  ⋅
+        ⋅  5  ⋅
+        ⋅  ⋅  9
+
 .. function:: Diagonal(V::AbstractVector)
 
    .. Docstring generated from Julia source
 
    Constructs a matrix with ``V`` as its diagonal.
+
+   **Example**
+
+   .. doctest::
+
+       julia> V = [1; 2]
+       2-element Array{Int64,1}:
+        1
+        2
+
+       julia> Diagonal(V)
+       2×2 Diagonal{Int64}:
+        1  ⋅
+        ⋅  2
 
 .. function:: Bidiagonal(dv, ev, isupper::Bool)
 
@@ -136,12 +214,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       dv = rand(5)
-       ev = rand(4)
-       Bu = Bidiagonal(dv, ev, true) #e is on the first superdiagonal
-       Bl = Bidiagonal(dv, ev, false) #e is on the first subdiagonal
+       julia> dv = [1; 2; 3; 4]
+       4-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+
+       julia> ev = [7; 8; 9]
+       3-element Array{Int64,1}:
+        7
+        8
+        9
+
+        julia> Bu = Bidiagonal(dv, ev, true) # ev is on the first superdiagonal
+        4×4 Bidiagonal{Int64}:
+         1  7  ⋅  ⋅
+         ⋅  2  8  ⋅
+         ⋅  ⋅  3  9
+         ⋅  ⋅  ⋅  4
+
+        julia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal
+        4×4 Bidiagonal{Int64}:
+         1  ⋅  ⋅  ⋅
+         7  2  ⋅  ⋅
+         ⋅  8  3  ⋅
+         ⋅  ⋅  9  4
 
 .. function:: Bidiagonal(dv, ev, uplo::Char)
 
@@ -151,12 +251,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       dv = rand(5)
-       ev = rand(4)
-       Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal
-       Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal
+       julia> dv = [1; 2; 3; 4]
+       4-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+
+       julia> ev = [7; 8; 9]
+       3-element Array{Int64,1}:
+        7
+        8
+        9
+
+       julia> Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal
+       4×4 Bidiagonal{Int64}:
+        1  7  ⋅  ⋅
+        ⋅  2  8  ⋅
+        ⋅  ⋅  3  9
+        ⋅  ⋅  ⋅  4
+
+       julia> Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal
+       4×4 Bidiagonal{Int64}:
+        1  ⋅  ⋅  ⋅
+        7  2  ⋅  ⋅
+        ⋅  8  3  ⋅
+        ⋅  ⋅  9  4
 
 .. function:: Bidiagonal(A, isupper::Bool)
 
@@ -166,11 +288,28 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       A = rand(5,5)
-       Bu = Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A
-       Bl = Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A
+       julia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]
+       4×4 Array{Int64,2}:
+        1  1  1  1
+        2  2  2  2
+        3  3  3  3
+        4  4  4  4
+
+       julia> Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A
+       4×4 Bidiagonal{Int64}:
+        1  1  ⋅  ⋅
+        ⋅  2  2  ⋅
+        ⋅  ⋅  3  3
+        ⋅  ⋅  ⋅  4
+
+       julia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A
+       4×4 Bidiagonal{Int64}:
+        1  ⋅  ⋅  ⋅
+        2  2  ⋅  ⋅
+        ⋅  3  3  ⋅
+        ⋅  ⋅  4  4
 
 .. function:: SymTridiagonal(dv, ev)
 
@@ -178,11 +317,65 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with :func:`convert` (or ``Array(_)`` for short).
 
+   **Example**
+
+   .. doctest::
+
+       julia> dv = [1; 2; 3; 4]
+       4-element Array{Int64,1}:
+        1
+        2
+        3
+        4
+
+       julia> ev = [7; 8; 9]
+       3-element Array{Int64,1}:
+        7
+        8
+        9
+
+       julia> SymTridiagonal(dv, ev)
+       4×4 SymTridiagonal{Int64}:
+        1  7  ⋅  ⋅
+        7  2  8  ⋅
+        ⋅  8  3  9
+        ⋅  ⋅  9  4
+
 .. function:: Tridiagonal(dl, d, du)
 
    .. Docstring generated from Julia source
 
    Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`convert` (or ``Array(_)`` for short). The lengths of ``dl`` and ``du`` must be one less than the length of ``d``\ .
+
+   **Example**
+
+   .. doctest::
+
+       julia> dl = [1; 2; 3]
+       3-element Array{Int64,1}:
+        1
+        2
+        3
+
+       julia> du = [4; 5; 6]
+       3-element Array{Int64,1}:
+        4
+        5
+        6
+
+       julia> d = [7; 8; 9; 0]
+       4-element Array{Int64,1}:
+        7
+        8
+        9
+        0
+
+       julia> Tridiagonal(dl, d, du)
+       4×4 Tridiagonal{Int64}:
+        7  4  ⋅  ⋅
+        1  8  5  ⋅
+        ⋅  2  9  6
+        ⋅  ⋅  3  0
 
 .. function:: Symmetric(A, uplo=:U)
 
@@ -192,12 +385,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       A = randn(10,10)
-       Supper = Symmetric(A)
-       Slower = Symmetric(A,:L)
-       eigfact(Supper)
+       julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
+       5×5 Array{Int64,2}:
+        1  0  2  0  3
+        0  4  0  5  0
+        6  0  7  0  8
+        0  9  0  1  0
+        2  0  3  0  4
+
+       julia> Supper = Symmetric(A)
+       5×5 Symmetric{Int64,Array{Int64,2}}:
+        1  0  2  0  3
+        0  4  0  5  0
+        2  0  7  0  8
+        0  5  0  1  0
+        3  0  8  0  4
+
+       julia> Slower = Symmetric(A, :L)
+       5×5 Symmetric{Int64,Array{Int64,2}}:
+        1  0  6  0  2
+        0  4  0  9  0
+        6  0  7  0  3
+        0  9  0  1  0
+        2  0  3  0  4
+
+       julia> eigfact(Supper)
+       Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-2.72015,0.440875,7.72015,14.526],[-0.302016 -2.22045e-16 … 1.11022e-16 0.248524; -6.67755e-16 0.596931 … -0.802293 1.93069e-17; … ; 8.88178e-16 -0.802293 … -0.596931 0.0; 0.772108 8.93933e-16 … 0.0 0.630015])
 
    ``eigfact`` will use a method specialized for matrices known to be symmetric. Note that ``Supper`` will not be equal to ``Slower`` unless ``A`` is itself symmetric (e.g. if ``A == A.'``\ ).
 
@@ -209,12 +424,28 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    **Example**
 
-   .. code-block:: julia
+   .. doctest::
 
-       A = randn(10,10)
-       Hupper = Hermitian(A)
-       Hlower = Hermitian(A,:L)
-       eigfact(Hupper)
+       julia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];
+
+       julia> Hupper = Hermitian(A)
+       5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:
+        1+0im  0+0im  2+2im  0+0im  3-3im
+        0+0im  4+0im  0+0im  5+0im  0+0im
+        2-2im  0+0im  7+0im  0+0im  8+8im
+        0+0im  5+0im  0+0im  1+0im  0+0im
+        3+3im  0+0im  8-8im  0+0im  4+0im
+
+       julia> Hlower = Hermitian(A, :L)
+       5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:
+        1+0im  0+0im  6+6im  0+0im  2-2im
+        0+0im  4+0im  0+0im  9+0im  0+0im
+        6-6im  0+0im  7+0im  0+0im  3+3im
+        0+0im  9+0im  0+0im  1+0im  0+0im
+        2+2im  0+0im  3-3im  0+0im  4+0im
+
+       julia> eigfact(Hupper)
+       Base.LinAlg.Eigen{Complex{Float64},Float64,Array{Complex{Float64},2},Array{Float64,1}}([-8.32069,-2.72015,3.1496,7.72015,17.1711],Complex{Float64}[-0.231509+0.392692im -4.16334e-17+5.55112e-17im … -2.77556e-17-1.11022e-16im -0.129023-0.00628656im; 0.0+0.0im -0.532524+0.269711im … -0.521035+0.610079im 0.0+0.0im; … ; 0.0-1.38778e-17im 0.715729-0.362501im … -0.387666+0.453917im 0.0-6.93889e-18im; 0.67898-0.0im 0.0+0.0im … 0.0+0.0im -0.661651-0.0im])
 
    ``eigfact`` will use a method specialized for matrices known to be Hermitian. Note that ``Hupper`` will not be equal to ``Hlower`` unless ``A`` is itself Hermitian (e.g. if ``A == A'``\ ).
 
@@ -225,6 +456,26 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Compute the LU factorization of ``A``\ , such that ``A[p,:] = L*U``\ . By default, pivoting is used. This can be overridden by passing ``Val{false}`` for the second argument.
 
    See also :func:`lufact`\ .
+
+   **Example**
+
+   .. doctest::
+
+       julia> A = [4. 3.; 6. 3.]
+       2×2 Array{Float64,2}:
+        4.0  3.0
+        6.0  3.0
+
+       julia> L, U, p = lu(A)
+       (
+       [1.0 0.0; 0.666667 1.0],
+       <BLANKLINE>
+       [6.0 3.0; 0.0 1.0],
+       <BLANKLINE>
+       [2,1])
+
+       julia> A[p, :] == L * U
+       true
 
 .. function:: lufact(A [,pivot=Val{true}]) -> F::LU
 
@@ -271,6 +522,21 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    +--------------------+--------+--------------------------+
    | :func:`size`       | ✓      | ✓                        |
    +--------------------+--------+--------------------------+
+
+   **Example**
+
+   .. doctest::
+
+       julia> A = [4 3; 6 3]
+       2×2 Array{Int64,2}:
+        4  3
+        6  3
+
+       julia> F = lufact(A)
+       Base.LinAlg.LU{Float64,Array{Float64,2}}([4.0 3.0; 1.5 -1.5],[1,2],0)
+
+       julia> F[:L] * F[:U] == A[F[:p], :]
+       true
 
 .. function:: lufact(A::SparseMatrixCSC) -> F::UmfpackLU
 
@@ -324,17 +590,72 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the Cholesky factorization of a positive definite matrix ``A`` and return the UpperTriangular matrix ``U`` such that ``A = U'U``\ .
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1. 2.; 2. 50.]
+       2×2 Array{Float64,2}:
+        1.0   2.0
+        2.0  50.0
+
+       julia> U = chol(A)
+       2×2 UpperTriangular{Float64,Array{Float64,2}}:
+        1.0  2.0
+         ⋅   6.78233
+
+       julia> U'U
+       2×2 Array{Float64,2}:
+        1.0   2.0
+        2.0  50.0
+
 .. function:: chol(x::Number) -> y
 
    .. Docstring generated from Julia source
 
    Compute the square root of a non-negative number ``x``\ .
 
+   **Example**
+
+   .. doctest::
+
+       julia> chol(16)
+       4.0
+
 .. function:: cholfact(A, [uplo::Symbol,] Val{false}) -> Cholesky
 
    .. Docstring generated from Julia source
 
    Compute the Cholesky factorization of a dense symmetric positive definite matrix ``A`` and return a ``Cholesky`` factorization. The matrix ``A`` can either be a ``Symmetric`` or ``Hermitian`` ``StridedMatrix`` or a *perfectly* symmetric or Hermitian ``StridedMatrix``\ . In the latter case, the optional argument ``uplo`` may be ``:L`` for using the lower part or ``:U`` for the upper part of ``A``\ . The default is to use ``:U``\ . The triangular Cholesky factor can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``Cholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ . A ``PosDefException`` exception is thrown in case the matrix is not positive definite.
+
+   **Example**
+
+   .. doctest::
+
+       julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+       3×3 Array{Float64,2}:
+          4.0   12.0  -16.0
+         12.0   37.0  -43.0
+        -16.0  -43.0   98.0
+
+       julia> C = cholfact(A)
+       Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
+       [2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
+
+       julia> C[:U]
+       3×3 UpperTriangular{Float64,Array{Float64,2}}:
+        2.0  6.0  -8.0
+         ⋅   1.0   5.0
+         ⋅    ⋅    3.0
+
+       julia> C[:L]
+       3×3 LowerTriangular{Float64,Array{Float64,2}}:
+         2.0   ⋅    ⋅
+         6.0  1.0   ⋅
+        -8.0  5.0  3.0
+
+       julia> C[:L] * C[:U] == A
+       true
 
 .. function:: cholfact(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted
 
@@ -373,6 +694,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    The same as ``cholfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
+
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1 2; 2 50]
+       2×2 Array{Int64,2}:
+        1   2
+        2  50
+
+        julia> cholfact!(A)
+        ERROR: InexactError()
+         ...
 
 .. function:: cholfact!(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted
 
@@ -453,6 +787,21 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Computes the polar decomposition of a vector. Returns ``w``\ , a unit vector in the direction of ``v``\ , and ``r``\ , the norm of ``v``\ .
 
    See also :func:`normalize`\ , :func:`normalize!`\ , and :func:`LinAlg.qr!`\ .
+
+   **Example**
+
+   .. doctest::
+
+       julia> v = [1; 2]
+       2-element Array{Int64,1}:
+        1
+        2
+
+       julia> w, r = qr(v)
+       ([0.447214,0.894427],2.23606797749979)
+
+       julia> w*r == v
+       true
 
 .. function:: LinAlg.qr!(v::AbstractVector) -> w, r
 
@@ -586,6 +935,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes eigenvalues (``D``\ ) and eigenvectors (``V``\ ) of ``A``\ . See :func:`eigfact` for details on the ``irange``\ , ``vl``\ , and ``vu`` arguments and the ``permute`` and ``scale`` keyword arguments. The eigenvectors are returned columnwise.
 
+   **Example**
+
    .. doctest::
 
        julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
@@ -601,6 +952,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Computes generalized eigenvalues (``D``\ ) and vectors (``V``\ ) of ``A`` with respect to ``B``\ .
 
    ``eig`` is a wrapper around :func:`eigfact`\ , extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
+
+   **Example**
 
    .. doctest::
 
@@ -638,6 +991,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the largest eigenvalue of ``A``\ . The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of ``A`` are complex, this method will fail, since complex numbers cannot be sorted.
 
+   **Example**
+
    .. doctest::
 
        julia> A = [0 im; -im 0]
@@ -655,8 +1010,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
        julia> eigmax(A)
        ERROR: DomainError:
-        in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:186
-        in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:184
+        in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:219
+        in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:217
         ...
 
 .. function:: eigmin(A; permute::Bool=true, scale::Bool=true)
@@ -664,6 +1019,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Returns the smallest eigenvalue of ``A``\ . The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of ``A`` are complex, this method will fail, since complex numbers cannot be sorted.
+
+   **Example**
 
    .. doctest::
 
@@ -682,8 +1039,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
        julia> eigmin(A)
        ERROR: DomainError:
-        in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:226
-        in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:224
+        in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:261
+        in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:259
         ...
 
 .. function:: eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
@@ -693,6 +1050,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Returns a matrix ``M`` whose columns are the eigenvectors of ``A``\ . (The ``k``\ th eigenvector can be obtained from the slice ``M[:, k]``\ .) The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`\ .
 
    For :class:`SymTridiagonal` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
+
+   **Example**
+
+   .. doctest::
+
+       julia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+       3×3 Array{Float64,2}:
+        1.0  0.0  0.0
+        0.0  1.0  0.0
+        0.0  0.0  1.0
 
 .. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
@@ -705,6 +1072,25 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    If ``A`` is :class:`Symmetric`\ , :class:`Hermitian` or :class:`SymTridiagonal`\ , it is possible to calculate only a subset of the eigenvalues by specifying either a :class:`UnitRange` ``irange`` covering indices of the sorted eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries of the eigenvalues.
 
    For general nonsymmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
+
+   **Example**
+
+   .. doctest::
+
+       julia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+       Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0,3.0,18.0],[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
+
+       julia> F[:values]
+       3-element Array{Float64,1}:
+         1.0
+         3.0
+        18.0
+
+       julia> F[:vectors]
+       3×3 Array{Float64,2}:
+        1.0  0.0  0.0
+        0.0  1.0  0.0
+        0.0  0.0  1.0
 
 .. function:: eigfact(A, B) -> GeneralizedEigen
 
@@ -736,6 +1122,25 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the Schur factorization of the matrix ``A``\ . The (quasi) triangular Schur factor can be obtained from the ``Schur`` object ``F`` with either ``F[:Schur]`` or ``F[:T]`` and the orthogonal/unitary Schur vectors can be obtained with ``F[:vectors]`` or ``F[:Z]`` such that ``A = F[:vectors]*F[:Schur]*F[:vectors]'``\ . The eigenvalues of ``A`` can be obtained with ``F[:values]``\ .
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]
+       3×3 Array{Float64,2}:
+        -2.0  1.0   3.0
+         2.0  1.0  -1.0
+        -7.0  2.0   7.0
+
+       julia> F = schurfact(A)
+       Base.LinAlg.Schur{Float64,Array{Float64,2}}([2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999],[0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522],Complex{Float64}[2.0+8.28447e-6im,2.0-8.28447e-6im,1.99999+0.0im])
+
+       julia> F[:vectors] * F[:Schur] * F[:vectors]'
+       3×3 Array{Float64,2}:
+        -2.0  1.0   3.0
+         2.0  1.0  -1.0
+        -7.0  2.0   7.0
+
 .. function:: schurfact!(A::StridedMatrix) -> F::Schur
 
    .. Docstring generated from Julia source
@@ -749,6 +1154,30 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Computes the Schur factorization of the matrix ``A``\ . The methods return the (quasi) triangular Schur factor ``T`` and the orthogonal/unitary Schur vectors ``Z`` such that ``A = Z*T*Z'``\ . The eigenvalues of ``A`` are returned in the vector ``λ``\ .
 
    See ``schurfact``\ .
+
+   **Example**
+
+   .. doctest::
+
+       julia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]
+       3×3 Array{Float64,2}:
+        -2.0  1.0   3.0
+         2.0  1.0  -1.0
+        -7.0  2.0   7.0
+
+       julia> T, Z, lambda = schur(A)
+       (
+       [2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999],
+       <BLANKLINE>
+       [0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522],
+       <BLANKLINE>
+       Complex{Float64}[2.0+8.28447e-6im,2.0-8.28447e-6im,1.99999+0.0im])
+
+       julia> Z * T * Z'
+       3×3 Array{Float64,2}:
+        -2.0  1.0   3.0
+         2.0  1.0  -1.0
+        -7.0  2.0   7.0
 
 .. function:: ordschur(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
 
@@ -826,6 +1255,27 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    If ``thin=true`` (default), a thin SVD is returned. For a :math:`M \times N` matrix ``A``\ , ``U`` is :math:`M \times M` for a full SVD (``thin=false``\ ) and :math:`M \times \min(M, N)` for a thin SVD.
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+       4×5 Array{Float64,2}:
+        1.0  0.0  0.0  0.0  2.0
+        0.0  0.0  3.0  0.0  0.0
+        0.0  0.0  0.0  0.0  0.0
+        0.0  2.0  0.0  0.0  0.0
+
+       julia> F = svdfact(A)
+       Base.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],[3.0,2.23607,2.0,0.0],[-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
+
+       julia> F[:U] * diagm(F[:S]) * F[:Vt]
+       4×5 Array{Float64,2}:
+        1.0  0.0  0.0  0.0  2.0
+        0.0  0.0  3.0  0.0  0.0
+        0.0  0.0  0.0  0.0  0.0
+        0.0  2.0  0.0  0.0  0.0
+
 .. function:: svdfact!(A, [thin=true]) -> SVD
 
    .. Docstring generated from Julia source
@@ -844,11 +1294,54 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``svd`` is a wrapper around :func:`svdfact(A)`\ , extracting all parts of the ``SVD`` factorization to a tuple. Direct use of ``svdfact`` is therefore more efficient.
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+       4×5 Array{Float64,2}:
+        1.0  0.0  0.0  0.0  2.0
+        0.0  0.0  3.0  0.0  0.0
+        0.0  0.0  0.0  0.0  0.0
+        0.0  2.0  0.0  0.0  0.0
+
+       julia> U, S, V = svd(A)
+       (
+       [0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],
+       <BLANKLINE>
+       [3.0,2.23607,2.0,0.0],
+       [-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
+
+       julia> U*diagm(S)*V'
+       4×5 Array{Float64,2}:
+        1.0  0.0  0.0  0.0  2.0
+        0.0  0.0  3.0  0.0  0.0
+        0.0  0.0  0.0  0.0  0.0
+        0.0  2.0  0.0  0.0  0.0
+
 .. function:: svdvals(A)
 
    .. Docstring generated from Julia source
 
    Returns the singular values of ``A``\ .
+
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+       4×5 Array{Float64,2}:
+        1.0  0.0  0.0  0.0  2.0
+        0.0  0.0  3.0  0.0  0.0
+        0.0  0.0  0.0  0.0  0.0
+        0.0  2.0  0.0  0.0  0.0
+
+       julia> svdvals(A)
+       4-element Array{Float64,1}:
+        3.0
+        2.23607
+        2.0
+        0.0
 
 .. function:: svdvals!(A)
 
@@ -965,6 +1458,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Upper triangle of a matrix.
 
+   **Example**
+
    .. doctest::
 
        julia> a = ones(4,4)
@@ -986,6 +1481,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal.
+
+   **Example**
 
    .. doctest::
 
@@ -1022,11 +1519,33 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
 
+   **Example**
+
+   .. doctest::
+
+       julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
+       5×5 Array{Int64,2}:
+        1  2  3  4  5
+        1  2  3  4  5
+        1  2  3  4  5
+        1  2  3  4  5
+        1  2  3  4  5
+
+       julia> triu!(M, 1)
+       5×5 Array{Int64,2}:
+        0  2  3  4  5
+        0  0  3  4  5
+        0  0  0  4  5
+        0  0  0  0  5
+        0  0  0  0  0
+
 .. function:: tril(M)
 
    .. Docstring generated from Julia source
 
    Lower triangle of a matrix.
+
+   **Example**
 
    .. doctest::
 
@@ -1049,6 +1568,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal.
+
+   **Example**
 
    .. doctest::
 
@@ -1085,11 +1606,33 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the lower triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
 
+   **Example**
+
+   .. doctest::
+
+       julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
+       5×5 Array{Int64,2}:
+        1  2  3  4  5
+        1  2  3  4  5
+        1  2  3  4  5
+        1  2  3  4  5
+        1  2  3  4  5
+
+       julia> tril!(M, 2)
+       5×5 Array{Int64,2}:
+        1  2  3  0  0
+        1  2  3  4  0
+        1  2  3  4  5
+        1  2  3  4  5
+        1  2  3  4  5
+
 .. function:: diagind(M, k::Integer=0)
 
    .. Docstring generated from Julia source
 
    A :class:`Range` giving the indices of the ``k``\ th diagonal of the matrix ``M``\ .
+
+   **Example**
 
    .. doctest::
 
@@ -1107,6 +1650,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    The ``k``\ th diagonal of a matrix, as a vector. Use :func:`diagm` to construct a diagonal matrix.
+
+   **Example**
 
    .. doctest::
 
@@ -1127,6 +1672,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a matrix by placing ``v`` on the ``k``\ th diagonal.
 
+   **Example**
+
    .. doctest::
 
        julia> diagm([1,2,3],1)
@@ -1144,6 +1691,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Scale an array ``A`` by a scalar ``b`` overwriting ``A`` in-place.
 
    If ``A`` is a matrix and ``b`` is a vector, then ``scale!(A,b)`` scales each column ``i`` of ``A`` by ``b[i]`` (similar to ``A*Diagonal(b)``\ ), while ``scale!(b,A)`` scales each row ``i`` of ``A`` by ``b[i]`` (similar to ``Diagonal(b)*A``\ ), again operating in-place on ``A``\ . An ``InexactError`` exception is thrown if the scaling produces a number not representable by the element type of ``A``\ , e.g. for integer types.
+
+   **Example**
 
    .. doctest::
 
@@ -1177,6 +1726,36 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`convert` (or ``Array(_)`` for short). The lengths of ``dl`` and ``du`` must be one less than the length of ``d``\ .
 
+   **Example**
+
+   .. doctest::
+
+       julia> dl = [1; 2; 3]
+       3-element Array{Int64,1}:
+        1
+        2
+        3
+
+       julia> du = [4; 5; 6]
+       3-element Array{Int64,1}:
+        4
+        5
+        6
+
+       julia> d = [7; 8; 9; 0]
+       4-element Array{Int64,1}:
+        7
+        8
+        9
+        0
+
+       julia> Tridiagonal(dl, d, du)
+       4×4 Tridiagonal{Int64}:
+        7  4  ⋅  ⋅
+        1  8  5  ⋅
+        ⋅  2  9  6
+        ⋅  ⋅  3  0
+
 .. function:: rank(M[, tol::Real])
 
    .. Docstring generated from Julia source
@@ -1191,7 +1770,35 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, ``norm(A, Inf)`` returns the largest value in ``abs(A)``\ , whereas ``norm(A, -Inf)`` returns the smallest.
 
+   **Example**
+
+   .. doctest::
+
+       julia> v = [3;-2;6]
+       3-element Array{Int64,1}:
+         3
+        -2
+         6
+
+       julia> norm(v)
+       7.0
+
+       julia> norm(v, Inf)
+       6.0
+
    For matrices, the matrix norm induced by the vector ``p``\ -norm is used, where valid values of ``p`` are ``1``\ , ``2``\ , or ``Inf``\ . (Note that for sparse matrices, ``p=2`` is currently not implemented.) Use :func:`vecnorm` to compute the Frobenius norm.
+
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1 -2 -3; 2 3 -1]
+       2×3 Array{Int64,2}:
+        1  -2  -3
+        2   3  -1
+
+       julia> norm(A, Inf)
+       6.0
 
 .. function:: vecnorm(A, [p::Real=2])
 
@@ -1212,6 +1819,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Normalize the vector ``v`` with respect to the ``p``\ -norm. See also :func:`normalize!` and :func:`vecnorm`\ .
+
+   **Example**
 
    .. doctest::
 
@@ -1254,6 +1863,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix trace. Sums the diagonal elements of ``M``\ .
 
+   **Example**
+
    .. doctest::
 
        julia> A = [1 2; 3 4]
@@ -1269,6 +1880,18 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Matrix determinant.
+
+   **Example**
+
+   .. doctest::
+
+       julia> M = [1 0; 2 2]
+       2×2 Array{Int64,2}:
+        1  0
+        2  2
+
+       julia> det(M)
+       2.0
 
 .. function:: logdet(M)
 
@@ -1288,6 +1911,23 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix inverse. Computes matrix ``N`` such that ``M * N = I``\ , where ``I`` is the identity matrix. Computed by solving the left-division ``N = M \ I``\ .
 
+   **Example**
+
+   .. doctest::
+
+       julia> M = [2 5; 1 3]
+       2×2 Array{Int64,2}:
+        2  5
+        1  3
+
+       julia> N = inv(M)
+       2×2 Array{Float64,2}:
+         3.0  -5.0
+        -1.0   2.0
+
+       julia> M*N == N*M == eye(2)
+       true
+
 .. function:: pinv(M[, tol::Real])
 
    .. Docstring generated from Julia source
@@ -1299,6 +1939,25 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The optimal choice of ``tol`` varies both with the value of ``M`` and the intended application of the pseudoinverse. The default value of ``tol`` is ``eps(real(float(one(eltype(M)))))*maximum(size(A))``\ , which is essentially machine epsilon for the real part of a matrix element multiplied by the larger matrix dimension. For inverting dense ill-conditioned matrices in a least-squares sense, ``tol = sqrt(eps(real(float(one(eltype(M))))))`` is recommended.
 
    For more information, see [issue8859]_, [B96]_, [S84]_, [KY88]_.
+
+   **Example**
+
+   .. doctest::
+
+       julia> M = [1.5 1.3; 1.2 1.9]
+       2×2 Array{Float64,2}:
+        1.5  1.3
+        1.2  1.9
+
+       julia> N = pinv(M)
+       2×2 Array{Float64,2}:
+         1.47287   -1.00775
+        -0.930233   1.16279
+
+       julia> M * N
+       2×2 Array{Float64,2}:
+        1.0          -2.22045e-16
+        4.44089e-16   1.0
 
    .. [issue8859] Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
 
@@ -1313,6 +1972,22 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Basis for nullspace of ``M``\ .
+
+   **Example**
+
+   .. doctest::
+
+       julia> M = [1 0 0; 0 1 0; 0 0 0]
+       3×3 Array{Int64,2}:
+        1  0  0
+        0  1  0
+        0  0  0
+
+       julia> nullspace(M)
+       3×1 Array{Float64,2}:
+        0.0
+        0.0
+        1.0
 
 .. function:: repmat(A, m::Int, n::Int=1)
 
@@ -1375,6 +2050,27 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Kronecker tensor product of two vectors or two matrices.
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1 2; 3 4]
+       2×2 Array{Int64,2}:
+        1  2
+        3  4
+
+       julia> B = [im 1; 1 -im]
+       2×2 Array{Complex{Int64},2}:
+        0+1im  1+0im
+        1+0im  0-1im
+
+       julia> kron(A, B)
+       4×4 Array{Complex{Int64},2}:
+        0+1im  1+0im  0+2im  2+0im
+        1+0im  0-1im  2+0im  0-2im
+        0+3im  3+0im  0+4im  4+0im
+        3+0im  0-3im  4+0im  0-4im
+
 .. function:: blkdiag(A...)
 
    .. Docstring generated from Julia source
@@ -1416,6 +2112,20 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. [H05] Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. `doi:10.1137/090768539 <http://dx.doi.org/10.1137/090768539>`_
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = eye(2, 2)
+       2×2 Array{Float64,2}:
+        1.0  0.0
+        0.0  1.0
+
+       julia> expm(A)
+       2×2 Array{Float64,2}:
+        2.71828  0.0
+        0.0      2.71828
+
 .. function:: logm(A::StridedMatrix)
 
    .. Docstring generated from Julia source
@@ -1456,6 +2166,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Test whether a matrix is symmetric.
 
+   **Example**
+
    .. doctest::
 
        julia> a = [1 2; 2 -1]
@@ -1480,6 +2192,18 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Test whether a matrix is positive definite.
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1 2; 2 50]
+       2×2 Array{Int64,2}:
+        1   2
+        2  50
+
+       julia> isposdef(A)
+       true
+
 .. function:: isposdef!(A) -> Bool
 
    .. Docstring generated from Julia source
@@ -1491,6 +2215,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Test whether a matrix is lower triangular.
+
+   **Example**
 
    .. doctest::
 
@@ -1516,6 +2242,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Test whether a matrix is upper triangular.
 
+   **Example**
+
    .. doctest::
 
        julia> a = [1 2; 2 -1]
@@ -1540,6 +2268,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Test whether a matrix is diagonal.
 
+   **Example**
+
    .. doctest::
 
        julia> a = [1 2; 2 -1]
@@ -1563,6 +2293,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Test whether a matrix is Hermitian.
+
+   **Example**
 
    .. doctest::
 
@@ -1805,6 +2537,8 @@ according to the usual Julia convention.
    .. Docstring generated from Julia source
 
    Calculates the matrix-matrix or matrix-vector product :math:`A⋅B` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ . Note that ``Y`` must not be aliased with either ``A`` or ``B``\ .
+
+   **Example**
 
    .. doctest::
 
@@ -2208,6 +2942,18 @@ for ``Float64``, ``Float32``, ``Complex128``, and ``Complex64`` arrays.
    .. Docstring generated from Julia source
 
    An object of type ``UniformScaling``\ , representing an identity matrix of any size.
+
+   **Example**
+
+   .. doctest::
+
+       julia> ones(5, 6) * I == ones(5, 6)
+       true
+
+       julia> [1 2im 3; 1im 2 3] * I
+       2×3 Array{Complex{Int64},2}:
+        1+0im  0+2im  3+0im
+        0+1im  2+0im  3+0im
 
 LAPACK Functions
 ----------------

@@ -131,7 +131,7 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
-**Example**
+# Example
 
 ```julia
 X = sprand(10, 5, 0.2)
@@ -342,7 +342,7 @@ iterations derived from [`eigs`](:func:`eigs`).
 * `nmult`: Number of matrix--vector products used.
 * `resid`: Final residual vector.
 
-**Example**
+# Example
 
 ```julia
 X = sprand(10, 5, 0.2)

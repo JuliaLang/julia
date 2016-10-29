@@ -45,6 +45,18 @@ isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); ispos
     isposdef(A) -> Bool
 
 Test whether a matrix is positive definite.
+
+# Example
+
+```jldoctest
+julia> A = [1 2; 2 50]
+2×2 Array{Int64,2}:
+ 1   2
+ 2  50
+
+julia> isposdef(A)
+true
+```
 """
 isposdef{T}(A::AbstractMatrix{T}) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
@@ -70,6 +82,25 @@ vecnorm2{T<:BlasFloat}(x::Union{Array{T},StridedVector{T}}) =
 
 Returns the upper triangle of `M` starting from the `k`th superdiagonal,
 overwriting `M` in the process.
+
+# Example
+```jldoctest
+julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
+5×5 Array{Int64,2}:
+ 1  2  3  4  5
+ 1  2  3  4  5
+ 1  2  3  4  5
+ 1  2  3  4  5
+ 1  2  3  4  5
+
+julia> triu!(M, 1)
+5×5 Array{Int64,2}:
+ 0  2  3  4  5
+ 0  0  3  4  5
+ 0  0  0  4  5
+ 0  0  0  0  5
+ 0  0  0  0  0
+```
 """
 function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
@@ -94,6 +125,26 @@ triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 
 Returns the lower triangle of `M` starting from the `k`th superdiagonal, overwriting `M` in
 the process.
+
+# Example
+
+```jldoctest
+julia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]
+5×5 Array{Int64,2}:
+ 1  2  3  4  5
+ 1  2  3  4  5
+ 1  2  3  4  5
+ 1  2  3  4  5
+ 1  2  3  4  5
+
+julia> tril!(M, 2)
+5×5 Array{Int64,2}:
+ 1  2  3  0  0
+ 1  2  3  4  0
+ 1  2  3  4  5
+ 1  2  3  4  5
+ 1  2  3  4  5
+```
 """
 function tril!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
@@ -141,6 +192,8 @@ end
 
 A [`Range`](:class:`Range`) giving the indices of the `k`th diagonal of the matrix `M`.
 
+# Example
+
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -159,6 +212,8 @@ diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 
 The `k`th diagonal of a matrix, as a vector.
 Use [`diagm`](:func:`diagm`) to construct a diagonal matrix.
+
+# Example
 
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
@@ -179,6 +234,8 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
     diagm(v, k::Integer=0)
 
 Construct a matrix by placing `v` on the `k`th diagonal.
+
+# Example
 
 ```jldoctest
 julia> diagm([1,2,3],1)
@@ -211,6 +268,27 @@ end
     kron(A, B)
 
 Kronecker tensor product of two vectors or two matrices.
+
+# Example
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> B = [im 1; 1 -im]
+2×2 Array{Complex{Int64},2}:
+ 0+1im  1+0im
+ 1+0im  0-1im
+
+julia> kron(A, B)
+4×4 Array{Complex{Int64},2}:
+ 0+1im  1+0im  0+2im  2+0im
+ 1+0im  0-1im  2+0im  0-2im
+ 0+3im  3+0im  0+4im  4+0im
+ 3+0im  0-3im  4+0im  0-4im
+```
 """
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
     R = Array{promote_type(T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
@@ -260,6 +338,19 @@ used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 [^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](http://dx.doi.org/10.1137/090768539)
 
+# Example
+
+```jldoctest
+julia> A = eye(2, 2)
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+
+julia> expm(A)
+2×2 Array{Float64,2}:
+ 2.71828  0.0
+ 0.0      2.71828
+```
 """
 expm{T<:BlasFloat}(A::StridedMatrix{T}) = expm!(copy(A))
 expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
@@ -485,10 +576,24 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.
 
-Example:
-```julia
-A = diagm(rand(5)) + diagm(rand(4),1); #A is really bidiagonal
-factorize(A) #factorize will check to see that A is already factorized
+# Example
+
+```jldoctest
+julia> A = Array(Bidiagonal(ones(5, 5), true))
+5×5 Array{Float64,2}:
+ 1.0  1.0  0.0  0.0  0.0
+ 0.0  1.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  1.0  0.0
+ 0.0  0.0  0.0  1.0  1.0
+ 0.0  0.0  0.0  0.0  1.0
+
+julia> factorize(A) # factorize will check to see that A is already factorized
+5×5 Bidiagonal{Float64}:
+ 1.0  1.0   ⋅    ⋅    ⋅
+  ⋅   1.0  1.0   ⋅    ⋅
+  ⋅    ⋅   1.0  1.0   ⋅
+  ⋅    ⋅    ⋅   1.0  1.0
+  ⋅    ⋅    ⋅    ⋅   1.0
 ```
 This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
 (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
@@ -587,6 +692,25 @@ inverting dense ill-conditioned matrices in a least-squares sense,
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
+# Example
+
+```jldoctest
+julia> M = [1.5 1.3; 1.2 1.9]
+2×2 Array{Float64,2}:
+ 1.5  1.3
+ 1.2  1.9
+
+julia> N = pinv(M)
+2×2 Array{Float64,2}:
+  1.47287   -1.00775
+ -0.930233   1.16279
+
+julia> M * N
+2×2 Array{Float64,2}:
+ 1.0          -2.22045e-16
+ 4.44089e-16   1.0
+```
+
 [^issue8859]: Issue 8859, "Fix least squares", https://github.com/JuliaLang/julia/pull/8859
 
 [^B96]: Åke Björck, "Numerical Methods for Least Squares Problems",  SIAM Press, Philadelphia, 1996, "Other Titles in Applied Mathematics", Vol. 51. [doi:10.1137/1.9781611971484](http://epubs.siam.org/doi/book/10.1137/1.9781611971484)
@@ -640,6 +764,22 @@ end
     nullspace(M)
 
 Basis for nullspace of `M`.
+
+# Example
+
+```jldoctest
+julia> M = [1 0 0; 0 1 0; 0 0 0]
+3×3 Array{Int64,2}:
+ 1  0  0
+ 0  1  0
+ 0  0  0
+
+julia> nullspace(M)
+3×1 Array{Float64,2}:
+ 0.0
+ 0.0
+ 1.0
+```
 """
 function nullspace{T}(A::StridedMatrix{T})
     m, n = size(A)
