@@ -507,6 +507,9 @@ function setup_stdio(anon::Function, stdio::StdIOSet)
 end
 
 function spawn(cmd::Cmd, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+    if isempty(cmd.exec)
+        throw(ArgumentError("cannot spawn empty command"))
+    end
     loop = eventloop()
     pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3])
     setup_stdio(stdios) do in, out, err
@@ -647,15 +650,8 @@ Run a command object, constructed with backticks. Throws an error if anything go
 including the process exiting with a non-zero status.
 """
 function run(cmds::AbstractCmd, args...)
-    try
-        ps = spawn(cmds, spawn_opts_inherit(args...)...)
-        success(ps) ? nothing : pipeline_error(ps)
-    catch exc
-        if isa(exc, BoundsError)
-            throw(ArgumentError("Empty command cannot be run"))
-        end
-        rethrow()
-    end
+    ps = spawn(cmds, spawn_opts_inherit(args...)...)
+    success(ps) ? nothing : pipeline_error(ps)
 end
 
 const SIGPIPE = 13
