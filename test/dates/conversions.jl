@@ -44,7 +44,7 @@
 @test Dates.julian2datetime(2452695.625) == Dates.DateTime(2003,2,25,3)
 @test Dates.datetime2julian(Dates.DateTime(2013,12,3,21)) == 2456630.375
 
-@test typeof( Base.now() ) <: Libc.ComputerTime
+@test typeof( Base.now() ) <: Libc.MicrosecondTime
 @test typeof( Dates.today() ) <: Date
 @test typeof( convert(DateTime, Base.now() ) ) <: DateTime
 @test typeof( string( Base.now() ) ) <: AbstractString

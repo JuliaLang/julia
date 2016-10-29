@@ -173,7 +173,7 @@ include("nullable.jl")
 
 # system & environment
 include("libc.jl")
-using .Libc: getpid, gethostname, now, ComputerTime, time
+using .Libc: getpid, gethostname, now, MicrosecondTime, time
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")

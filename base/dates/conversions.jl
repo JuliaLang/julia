@@ -112,7 +112,7 @@ epoch `-4713-11-24T12:00:00` as a `Float64`.
 """
 datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH)/86400000.0
 
-function Base.convert(::Type{DateTime}, c::Libc.ComputerTime)
+function Base.convert(::Type{DateTime}, c::Libc.MicrosecondTime)
     base = unix2datetime(c.seconds)
     extra = Millisecond( round( c.microseconds / 1000 ) )
     base + extra

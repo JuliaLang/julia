@@ -5,7 +5,7 @@ module Libc
 import Base: transcode
 
 export FILE, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time, transcode, ComputerTime,
+    errno, strerror, flush_cstdio, systemsleep, time, transcode, MicrosecondTime,
     now, time
 
 if is_windows()
@@ -99,12 +99,12 @@ else
 end
 
 """
-    ComputerTime
+    MicrosecondTime
 
 A type with two fields: whole `seconds` since epoch and additional
 `microseconds`
 """
-immutable ComputerTime
+immutable MicrosecondTime
    seconds::Int64
    microseconds::Int64
 end
@@ -112,22 +112,22 @@ end
 """
     now()
 
-Return the `ComputerTime` of the current time in UTC.
+Return the `MicrosecondTime` of the current time in UTC.
 """
 function now()
-    tv = Ref{ComputerTime}()
-    status = ccall(:jl_gettimeofday, Cint, (Ref{ComputerTime},), tv)
+    tv = Ref{MicrosecondTime}()
+    status = ccall(:jl_gettimeofday, Cint, (Ref{MicrosecondTime},), tv)
     status != 0 && error("unable to determine current time: ", status)
     return tv[]
 end
 
 """
-    time(c::ComputerTime)
+    time(c::MicrosecondTime)
 
-Converts a `ComputerTime` to a number of seconds since the epoch. Defaults to
+Converts a `MicrosecondTime` to a number of seconds since the epoch. Defaults to
 current time.
 """
-time(c::ComputerTime) = c.seconds + c.microseconds / 10^6
+time(c::MicrosecondTime) = c.seconds + c.microseconds / 10^6
 time() = time(now())
 
 
