@@ -29,7 +29,8 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     @test success(`$exename --home=$JULIA_HOME`)
 
     # --config-gc-region-size
-    @test success(`$exename --config-gc-region-size=256M`)
+    @test readchomp(`$exename -E "Int(Base.JLOptions().region_pg_cnt)"`) == "0"
+    @test readchomp(`$exename -E "Int(Base.JLOptions().region_pg_cnt)" --config-gc-region-size=256M`) == "16384"
 
     # --eval
     @test  success(`$exename -e "exit(0)"`)
