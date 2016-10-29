@@ -1007,6 +1007,7 @@ export
 # dates
     Date,
     DateTime,
+    ComputerTime,
     now,
 
 # errors
