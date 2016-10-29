@@ -951,13 +951,6 @@ The text is assumed to be encoded in UTF-8.
 eachline
 
 """
-    complex(r, [i])
-
-Convert real numbers or arrays to complex. `i` defaults to zero.
-"""
-complex
-
-"""
     Mmap.Anonymous(name, readonly, create)
 
 Create an `IO`-like object for creating zeroed-out mmapped-memory that is not tied to a file
@@ -3128,14 +3121,6 @@ Given an index `i` in `reverse(v)`, return the corresponding index in `v` so tha
 Unicode string.)
 """
 reverseind
-
-"""
-    float(x)
-
-Convert a number, array, or string to a `AbstractFloat` data type. For numeric data, the
-smallest suitable `AbstractFloat` type is used. Converts strings to `Float64`.
-"""
-float
 
 """
     signbit(x)
