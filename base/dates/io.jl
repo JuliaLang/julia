@@ -337,8 +337,5 @@ function format(Y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
     return reshape([Dates.format(y,df) for y in Y], size(Y))
 end
 
-function Base.string(c::Libc.MicrosecondTime)
-    string( convert( DateTime, c) ) * " UTC"
-end
-
-Base.show(io::IO, x::Libc.MicrosecondTime) = print(io,string(x))
+Base.string(m::Libc.MicrosecondTime) = string( convert( DateTime, m) ) * " UTC"
+Base.show(io::IO, m::Libc.MicrosecondTime) = print(io, string(m) )

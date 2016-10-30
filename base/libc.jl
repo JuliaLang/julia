@@ -122,14 +122,13 @@ function now()
 end
 
 """
-    time(c::MicrosecondTime)
+    time(c::MicrosecondTime = now() )
 
-Converts a `MicrosecondTime` to a number of seconds since the epoch. Defaults to
-current time.
+Converts a `MicrosecondTime` to a number of seconds since the epoch.
+
+Defaults to current time.
 """
-time(c::MicrosecondTime) = c.seconds + c.microseconds / 10^6
-time() = time(now())
-
+time(m::MicrosecondTime = now() ) = m.seconds + m.microseconds / 10^6
 
 ## process-related functions ##
 
