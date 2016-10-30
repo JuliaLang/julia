@@ -395,15 +395,14 @@ int main(void)
 {
     printf("/* Pregenerated tables for crc32c.c, produced by compiling with -DGEN_CRC32C_TABLES. */\n"
            "#if POLY != 0x%x\n#  error \"tables generated for different polynomial\"\n#endif\n\n", POLY);
-
     crc32c_init_sw();
     print_array("crc32c_table", 8, 256, &crc32c_table[0][0]);
-
     crc32c_init_hw();
     printf("\n#ifdef HW_CRC\n");
     print_array("crc32c_long", 4, 256, &crc32c_long[0][0]);
     print_array("crc32c_short", 4, 256, &crc32c_short[0][0]);
     printf("#endif /* HW_CRC */\n");
+    return 0;
 }
 
 #endif /* GEN_CRC32C_TABLES */
