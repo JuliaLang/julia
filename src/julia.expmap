@@ -16,7 +16,6 @@
     rec_backtrace;
     julia_*;
     libsupport_init;
-    localtime_r;
     memhash;
     memhash32;
     memhash32_seed;

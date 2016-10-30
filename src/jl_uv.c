@@ -289,17 +289,6 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     return error;
 }
 
-#ifdef _OS_WINDOWS_
-#include <time.h>
-JL_DLLEXPORT struct tm *localtime_r(const time_t *t, struct tm *tm)
-{
-    struct tm *tmp = localtime(t); //localtime is reentrant on windows
-    if (tmp)
-        *tm = *tmp;
-    return tmp;
-}
-#endif
-
 JL_DLLEXPORT uv_loop_t *jl_global_event_loop(void)
 {
     return jl_io_loop;
