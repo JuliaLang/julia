@@ -72,7 +72,7 @@ datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH)/1000.0
 
 Returns the date portion of `now()`.
 """
-today() = Date(Base.now())
+today() = Date( convert(DateTime, Base.now() ) )
 
 
 """
