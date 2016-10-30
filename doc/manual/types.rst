@@ -410,6 +410,7 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
 
     julia> Foo((), 23.5, 1)
     ERROR: InexactError()
+     in convert(::Type{Int64}, ::Float64) at ./float.jl:637
      in Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
      ...
 
