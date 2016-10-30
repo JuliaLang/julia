@@ -403,7 +403,7 @@ int main(void)
     printf("\n#ifdef HW_CRC\n");
     print_array("crc32c_long", 4, 256, &crc32c_long[0][0]);
     print_array("crc32c_short", 4, 256, &crc32c_short[0][0]);
-    printf("\n#endif /* HW_CRC */\n");
+    printf("#endif /* HW_CRC */\n");
 }
 
 #endif /* GEN_CRC32C_TABLES */
