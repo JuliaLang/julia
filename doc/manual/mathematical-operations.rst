@@ -408,11 +408,13 @@ The following examples show the different forms.
 
     julia> Int8(3.14)
     ERROR: InexactError()
+     in convert(::Type{Int8}, ::Float64) at ./float.jl:616
      in Int8(::Float64) at ./sysimg.jl:66
      ...
 
     julia> Int8(128.0)
     ERROR: InexactError()
+     in convert(::Type{Int8}, ::Float64) at ./float.jl:616
      in Int8(::Float64) at ./sysimg.jl:66
      ...
 

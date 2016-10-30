@@ -58,7 +58,7 @@ has four (concrete) subtypes:
 .. doctest::
 
     julia> subtypes(AbstractFloat)
-    4-element Array{Any,1}:
+    4-element Array{DataType,1}:
      BigFloat
      Float16
      Float32
@@ -103,12 +103,14 @@ variable assignments:
 
 .. doctest::
 
-   julia> expand( :(f() = 1) )
-   :(begin
-           $(Expr(:method, :f))
-           $(Expr(:method, :f, :((Core.svec)((Core.apply_type)(Tuple,(Core.Typeof)(f)),(Core.svec)())), Toplevel MethodInstance thunk, false))
-           return f
-       end)
+    julia> expand( :(f() = 1) )
+    :(begin
+            $(Expr(:method, :f))
+            $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)),(Core.svec)())), CodeInfo(:(begin  # none, line 1:
+            return 1
+        end)), false))
+            return f
+        end)
 
 .. rubric:: Intermediate and compiled representations
 

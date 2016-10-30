@@ -311,7 +311,7 @@ are included, including those not visible in the current module.
 
 ```jldoctest
 julia> subtypes(Integer)
-4-element Array{Any,1}:
+4-element Array{DataType,1}:
  BigInt
  Bool
  Signed

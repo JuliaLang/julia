@@ -256,6 +256,8 @@ Basic functions
 
    Check that a matrix is square, then return its common dimension. For multiple arguments, return a vector.
 
+   **Example**
+
    .. doctest::
 
        julia> A = ones(4,4); B = zeros(5,5);
@@ -1579,6 +1581,8 @@ Array functions
 
    Finite difference operator of matrix or vector ``A``\ . If ``A`` is a matrix, compute the finite difference over a dimension ``dim`` (default ``1``\ ).
 
+   **Example**
+
    .. doctest::
 
        julia> a = [2 4; 6 16]
@@ -1596,6 +1600,8 @@ Array functions
    .. Docstring generated from Julia source
 
    Compute differences along vector ``F``\ , using ``h`` as the spacing between points. The default spacing is one.
+
+   **Example**
 
    .. doctest::
 
