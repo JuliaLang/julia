@@ -381,7 +381,7 @@ All Objects
 
        julia> convert(Int, 3.5)
        ERROR: InexactError()
-        in convert(::Type{Int64}, ::Float64) at ./int.jl:330
+        in convert(::Type{Int64}, ::Float64) at ./float.jl:637
         ...
 
    If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return the closest value to ``x`` representable by ``T``\ .
@@ -508,7 +508,7 @@ Types
    .. doctest::
 
        julia> subtypes(Integer)
-       4-element Array{Any,1}:
+       4-element Array{DataType,1}:
         BigInt
         Bool
         Signed
@@ -564,7 +564,7 @@ Types
 
        julia> sizeof(Base.LinAlg.LU)
        ERROR: argument is an abstract type; size is indeterminate
-        in sizeof(::Type{T}) at ./essentials.jl:89
+        in sizeof(::Type{T}) at ./essentials.jl:99
         ...
 
 .. function:: eps(T)
@@ -896,7 +896,8 @@ Nullables
 
        julia> unsafe_get(x)
        ERROR: UndefRefError: access to undefined reference
-        in unsafe_get(::Nullable{String}) at ./REPL[4]:1
+        in unsafe_get(::Nullable{String}) at ./nullable.jl:123
+        ...
 
        julia> x = 1
        1

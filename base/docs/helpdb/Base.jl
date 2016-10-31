@@ -482,7 +482,7 @@ If `T` is not a bitstype, an error is thrown.
 ```jldoctest
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
- in sizeof(::Type{T}) at ./essentials.jl:89
+ in sizeof(::Type{T}) at ./essentials.jl:99
  ...
 ```
 """
@@ -2836,7 +2836,7 @@ julia> convert(Int, 3.0)
 
 julia> convert(Int, 3.5)
 ERROR: InexactError()
- in convert(::Type{Int64}, ::Float64) at ./int.jl:330
+ in convert(::Type{Int64}, ::Float64) at ./float.jl:637
  ...
 ```
 
