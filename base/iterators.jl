@@ -510,13 +510,9 @@ changes the fastest. Example:
 
 ```jldoctest
 julia> collect(Iterators.product(1:2,3:5))
-6-element Array{Tuple{Int64,Int64},1}:
- (1,3)
- (2,3)
- (1,4)
- (2,4)
- (1,5)
- (2,5)
+2×3 Array{Tuple{Int64,Int64},2}:
+ (1,3)  (1,4)  (1,5)
+ (2,3)  (2,4)  (2,5)
 ```
 """
 product(a, b) = Prod2(a, b)
