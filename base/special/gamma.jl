@@ -610,16 +610,22 @@ end
 
 
 # Converting types that we can convert, and not ones we can not
+# Float16, and Float32 and their Complex equivalents can be converted to Float64
+# and results converted back. Similar for BitIntegers (eg Int32), but no converting back.
+# Otherwise, we need to make things use their own `float` converting methods
+# and in those cases, we do not convert back either as we assume
+# they also implement their own versions of the functions, with the correct return types.
+# Otherwise, if they do not implement their version of the functions we 
+# manually throw a `MethodError`.
+# This case occurs, when calling `float` on a type does not change its type,
+# as it is already a `float`, and would have hit own method, if one had existed.
+
+
 # If we really cared about single precision, we could make a faster
 # Float32 version by truncating the Stirling series at a smaller cutoff.
 # and if we really cared about half precision, we could make a faster
 # Float16 version, by using a precomputed table look-up.
 
-# Float16, and Float32 and their Complex equivalents can be converted to Float64
-# and results converted back. Similar for BitIntegers (eg Int32), but no converting back
-# Otherwise, we need to make things use their own `float` converting methods
-# and in those cases, we do not convert back either as we assume
-# they also implement there own versions of the functions
 
 
 ofpromotedtype(as::Tuple, c) = convert(promote_type(typeof.(as)...), c)
