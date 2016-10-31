@@ -199,7 +199,7 @@ for deprecatedfunc in [:combinations, :factorial, :prevprod, :levicivita,
     @eval begin
         $deprecatedfunc(args...) = error(string($deprecatedfunc, args,
             " has been moved to the package Combinatorics.jl.\n",
-            "Run Pkg.add(\"Combinatorics\") to install Combinatorics on Julia v0.5-"))
+            "Run Pkg.add(\"Combinatorics\") to install Combinatorics on Julia v0.5 and later."))
         export $deprecatedfunc
     end
 end
@@ -209,7 +209,7 @@ for deprecatedfunc in [:isprime, :primes, :primesmask, :factor]
     @eval begin
         $deprecatedfunc(args...) = error(string($deprecatedfunc, args,
             " has been moved to the package Primes.jl.\n",
-            "Run Pkg.add(\"Primes\") to install Primes on Julia v0.5-"))
+            "Run Pkg.add(\"Primes\") to install Primes on Julia v0.5 and later, and then run `using Primes`."))
         export $deprecatedfunc
     end
 end
