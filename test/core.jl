@@ -3020,9 +3020,13 @@ function func8283 end
 @test_throws MethodError func8283()
 
 # issue #11243
-let a = [Pair(1,2), Pair("a","b")]
-    @test typeof(a) == Vector{Pair}
-    @test typeof(a) <: Vector{Pair}
+type Type11243{A, B}
+    x::A
+    y::B
+end
+let a = [Type11243(1,2), Type11243("a","b")]
+    @test typeof(a) == Vector{Type11243}
+    @test typeof(a) <: Vector{Type11243}
 end
 
 # issue #11065, #1571
