@@ -900,7 +900,7 @@ for f in (
         # base/special/bessel.jl
         :airyprime, :airyai, :airyaiprime, :airybi, :airybiprime,
         :airy, :airyx, :besselj0, :besselj1, :bessely0, :bessely1,
-        # base/math.jl
+        # base/Math.jl
         :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2,
         :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
         #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
@@ -911,7 +911,7 @@ for f in (
         )
     @eval @dep_vectorize_1arg Number $f
 end
-# base/fastmath.jl
+# base/FastMath.jl
 for f in ( :acos_fast, :acosh_fast, :angle_fast, :asin_fast, :asinh_fast,
             :atan_fast, :atanh_fast, :cbrt_fast, :cis_fast, :cos_fast,
             :cosh_fast, :exp10_fast, :exp2_fast, :exp_fast, :expm1_fast,
@@ -923,7 +923,7 @@ for f in (
         :invdigamma, # base/special/gamma.jl
         :erfinc, :erfcinv, # base/special/erf.jl
         :trunc, :floor, :ceil, :round, # base/floatfuncs.jl
-        :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
+        :rad2deg, :deg2rad, :exponent, :significand, # base/Math.jl
         :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
         )
     @eval @dep_vectorize_1arg Real $f
@@ -970,7 +970,7 @@ for f in (
     )
     @eval @dep_vectorize_2arg Number $f
 end
-# base/fastmath.jl
+# base/FastMath.jl
 for f in (:pow_fast, :atan2_fast, :hypot_fast, :max_fast, :min_fast, :minmax_fast)
     eval(FastMath, :(Base.@dep_vectorize_2arg Number $f))
 end

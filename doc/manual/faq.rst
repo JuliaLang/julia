@@ -247,7 +247,7 @@ Certain operations make mathematical sense but result in errors::
 
     julia> sqrt(-2.0)
     ERROR: DomainError
-     in sqrt at math.jl:128
+     in sqrt at Math.jl:128
 
     julia> 2^-5
     ERROR: DomainError

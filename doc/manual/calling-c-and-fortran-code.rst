@@ -993,7 +993,7 @@ The second argument to :func:`ccall` can optionally be a calling convention
 specifier (immediately preceding return type). Without any specifier,
 the platform-default C calling convention is used. Other supported
 conventions are: ``stdcall``, ``cdecl``, ``fastcall``, and ``thiscall``.
-For example (from ``base/libc.jl``) we see the same ``gethostname`` :func:`ccall` as above,
+For example (from ``base/Libc.jl``) we see the same ``gethostname`` :func:`ccall` as above,
 but with the correct signature for Windows::
 
     hn = Array{UInt8}(256)

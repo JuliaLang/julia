@@ -192,7 +192,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 }
 
 // Check whether v is a scalar for purposes of inlining fused-broadcast
-// arguments when lowering; should agree with broadcast.jl on what is a
+// arguments when lowering; should agree with Broadcast.jl on what is a
 // scalar.  When in doubt, return false, since this is only an optimization.
 // (TODO: update after #16966 is resolved.)
 value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)

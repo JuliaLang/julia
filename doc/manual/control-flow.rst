@@ -666,7 +666,7 @@ negative real value:
     julia> sqrt(-1)
     ERROR: DomainError:
     sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
-     in sqrt(::Int64) at ./math.jl:278
+     in sqrt(::Int64) at ./Math.jl:278
      ...
 
 You may define your own exceptions in the following way:

@@ -72,8 +72,8 @@ exception is thrown::
       Expression: foo("f") == 20
        Evaluated: 1 == 20
     ERROR: There was an error during testing
-     in record at test.jl:268
-     in do_test at test.jl:191
+     in record at Test.jl:268
+     in do_test at Test.jl:191
 
 If the condition could not be evaluated because an exception was thrown,
 which occurs in this case because :func:`length` is not defined for
@@ -85,11 +85,11 @@ symbols, an ``Error`` object is returned and an exception is thrown::
       Expression: foo(:cat) == 1
       MethodError: `length` has no method matching length(::Symbol)
        in foo at none:1
-       in anonymous at test.jl:159
-       in do_test at test.jl:180
+       in anonymous at Test.jl:159
+       in do_test at Test.jl:180
     ERROR: There was an error during testing
-     in record at test.jl:268
-     in do_test at test.jl:191
+     in record at Test.jl:268
+     in do_test at Test.jl:191
 
 If we expect that evaluating an expression *should* throw an exception,
 then we can use :func:`@test_throws` to check that this occurs::
@@ -177,14 +177,14 @@ the details for the failed test sets will be shown::
     Arrays: Test Failed
       Expression: foo(ones(4)) == 15
        Evaluated: 16 == 15
-     in record at test.jl:297
-     in do_test at test.jl:191
+     in record at Test.jl:297
+     in do_test at Test.jl:191
     Test Summary: | Pass  Fail  Total
     Foo Tests     |    3     1      4
       Animals     |    2            2
       Arrays      |    1     1      2
     ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
-     in finish at test.jl:362
+     in finish at Test.jl:362
 
 
 Other Test Macros
@@ -206,15 +206,15 @@ argument indicating the relative tolerance)::
   ERROR: test failed: 1 isapprox 0.999999
    in expression: 1 ≈ 0.999999
    in error at error.jl:21
-   in default_handler at test.jl:30
-   in do_test at test.jl:53
+   in default_handler at Test.jl:30
+   in do_test at Test.jl:53
 
   julia> @test_approx_eq 1. 0.999999999
   ERROR: assertion failed: |1.0 - 0.999999999| < 2.220446049250313e-12
     1.0 = 1.0
     0.999999999 = 0.999999999
-   in test_approx_eq at test.jl:75
-   in test_approx_eq at test.jl:80
+   in test_approx_eq at Test.jl:75
+   in test_approx_eq at Test.jl:80
 
   julia> @test_approx_eq 1. 0.9999999999999
 
@@ -226,7 +226,7 @@ argument indicating the relative tolerance)::
     0.999 = 0.999
     difference = 0.0010000000000000009 > 0.001
    in error at error.jl:22
-   in test_approx_eq at test.jl:68
+   in test_approx_eq at Test.jl:68
 
 Note that these macros will fail immediately, and are not compatible
 with :func:`@testset`, so using ``@test isapprox`` is encouraged when

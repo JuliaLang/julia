@@ -2,7 +2,7 @@
 
 ## object-oriented Regex interface ##
 
-include("pcre.jl")
+include("PCRE.jl")
 
 const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK

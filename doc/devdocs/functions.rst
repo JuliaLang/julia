@@ -309,7 +309,7 @@ A "replaced module" is one that satisfies the condition
 has taken its name and place.
 
 Another type inference worst case was triggered by the following code from
-quadgk.jl::
+QuadGK.jl::
 
     function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
         if eltype(s) <: Real # check for infinite or semi-infinite intervals

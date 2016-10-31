@@ -124,7 +124,7 @@ body.args = ast.code
 end
 
 
-# tests to fully cover functions in base/meta.jl
+# tests to fully cover functions in base/Meta.jl
 module MetaJLtest
 
 using Base.Test
