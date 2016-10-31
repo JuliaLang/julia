@@ -7,9 +7,10 @@
  * Modified for use in libjulia:
  *    - exported function renamed to jl_crc32c, DLL exports added.
  *    - removed main() function
- *    - changed crc32c_table initialization to a single jl_crc23_init(0) call.
+ *    - changed initialization to a single jl_crc23_init(0) call.
  *    - protect sse code with #ifdef (correct architecture and compiler)
  *    - added header file
+ *    - precompute crc32c tables and store in a generated .c file
  */
 
 /*
@@ -51,34 +52,18 @@
 /* CRC-32C (iSCSI) polynomial in reversed bit order. */
 #define POLY 0x82f63b78
 
-/* Table for a quadword-at-a-time software crc. */
-static uint32_t crc32c_table[8][256];
+/* Block sizes for three-way parallel crc computation.  LONG and SHORT must
+   both be powers of two.  The associated string constants must be set
+   accordingly, for use in constructing the assembler instructions. */
+#define LONG 8192
+#define LONGx1 "8192"
+#define LONGx2 "16384"
+#define SHORT 256
+#define SHORTx1 "256"
+#define SHORTx2 "512"
 
-/* Construct table for software CRC-32C calculation. */
-static void crc32c_init_sw(void)
-{
-    uint32_t n, crc, k;
-
-    for (n = 0; n < 256; n++) {
-        crc = n;
-        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
-        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
-        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
-        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
-        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
-        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
-        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
-        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
-        crc32c_table[0][n] = crc;
-    }
-    for (n = 0; n < 256; n++) {
-        crc = crc32c_table[0][n];
-        for (k = 1; k < 8; k++) {
-            crc = crc32c_table[0][crc & 0xff] ^ (crc >> 8);
-            crc32c_table[k][n] = crc;
-        }
-    }
-}
+#ifndef GEN_CRC32C_TABLES
+#include "crc32c-tables.c"
 
 /* Table-driven software version as a fall-back.  This is about 15 times slower
    than using the hardware instructions.  This computes a little-endian
@@ -117,118 +102,11 @@ static uint32_t crc32c_sw(uint32_t crci, const void *buf, size_t len)
 
 #ifdef HW_CRC
 
-/* Multiply a matrix times a vector over the Galois field of two elements,
-   GF(2).  Each element is a bit in an unsigned integer.  mat must have at
-   least as many entries as the power of two for most significant one bit in
-   vec. */
-static inline uint32_t gf2_matrix_times(uint32_t *mat, uint32_t vec)
-{
-    uint32_t sum;
-
-    sum = 0;
-    while (vec) {
-        if (vec & 1)
-            sum ^= *mat;
-        vec >>= 1;
-        mat++;
-    }
-    return sum;
-}
-
-/* Multiply a matrix by itself over GF(2).  Both mat and square must have 32
-   rows. */
-static inline void gf2_matrix_square(uint32_t *square, uint32_t *mat)
-{
-    int n;
-
-    for (n = 0; n < 32; n++)
-        square[n] = gf2_matrix_times(mat, mat[n]);
-}
-
-/* Construct an operator to apply len zeros to a crc.  len must be a power of
-   two.  If len is not a power of two, then the result is the same as for the
-   largest power of two less than len.  The result for len == 0 is the same as
-   for len == 1.  A version of this routine could be easily written for any
-   len, but that is not needed for this application. */
-static void crc32c_zeros_op(uint32_t *even, size_t len)
-{
-    int n;
-    uint32_t row;
-    uint32_t odd[32];       /* odd-power-of-two zeros operator */
-
-    /* put operator for one zero bit in odd */
-    odd[0] = POLY;              /* CRC-32C polynomial */
-    row = 1;
-    for (n = 1; n < 32; n++) {
-        odd[n] = row;
-        row <<= 1;
-    }
-
-    /* put operator for two zero bits in even */
-    gf2_matrix_square(even, odd);
-
-    /* put operator for four zero bits in odd */
-    gf2_matrix_square(odd, even);
-
-    /* first square will put the operator for one zero byte (eight zero bits),
-       in even -- next square puts operator for two zero bytes in odd, and so
-       on, until len has been rotated down to zero */
-    do {
-        gf2_matrix_square(even, odd);
-        len >>= 1;
-        if (len == 0)
-            return;
-        gf2_matrix_square(odd, even);
-        len >>= 1;
-    } while (len);
-
-    /* answer ended up in odd -- copy to even */
-    for (n = 0; n < 32; n++)
-        even[n] = odd[n];
-}
-
-/* Take a length and build four lookup tables for applying the zeros operator
-   for that length, byte-by-byte on the operand. */
-static void crc32c_zeros(uint32_t zeros[][256], size_t len)
-{
-    uint32_t n;
-    uint32_t op[32];
-
-    crc32c_zeros_op(op, len);
-    for (n = 0; n < 256; n++) {
-        zeros[0][n] = gf2_matrix_times(op, n);
-        zeros[1][n] = gf2_matrix_times(op, n << 8);
-        zeros[2][n] = gf2_matrix_times(op, n << 16);
-        zeros[3][n] = gf2_matrix_times(op, n << 24);
-    }
-}
-
 /* Apply the zeros operator table to crc. */
-static inline uint32_t crc32c_shift(uint32_t zeros[][256], uint32_t crc)
+static inline uint32_t crc32c_shift(const uint32_t zeros[][256], uint32_t crc)
 {
     return zeros[0][crc & 0xff] ^ zeros[1][(crc >> 8) & 0xff] ^
         zeros[2][(crc >> 16) & 0xff] ^ zeros[3][crc >> 24];
-}
-
-/* Block sizes for three-way parallel crc computation.  LONG and SHORT must
-   both be powers of two.  The associated string constants must be set
-   accordingly, for use in constructing the assembler instructions. */
-#define LONG 8192
-#define LONGx1 "8192"
-#define LONGx2 "16384"
-#define SHORT 256
-#define SHORTx1 "256"
-#define SHORTx2 "512"
-
-/* Tables for hardware crc that shift a crc by LONG and SHORT zeros. */
-static uint32_t crc32c_long[4][256];
-static uint32_t crc32c_short[4][256];
-
-/* Initialize tables for shifting crcs. */
-static void crc32c_init_hw(void)
-{
-    crc32c_zeros(crc32c_long, LONG);
-    crc32c_zeros(crc32c_short, SHORT);
 }
 
 /* Compute CRC-32C using the Intel hardware instruction. */
@@ -350,11 +228,7 @@ JL_DLLEXPORT void jl_crc32c_init(int force_sw)
         sse42 = 0; /* useful for testing purposes */
     else
         SSE42(sse42);
-    if (sse42)
-        crc32c_init_hw();
-    else
 #endif
-        crc32c_init_sw();
 }
 
 /* Compute a CRC-32C.  If the crc32 instruction is available, use the hardware
@@ -367,3 +241,172 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const void *buf, size_t len)
 #endif
     crc32c_sw(crc, buf, len);
 }
+
+/*****************************************************************************/
+/*****************************************************************************/
+/*****************************************************************************/
+
+/* Compile with -DGEN_CRC32C_TABLES to generate header file containing
+   precomputed hardware and software tables */
+
+#else /* ifdef GEN_CRC32C_TABLES */
+
+/* Table for a quadword-at-a-time software crc. */
+static uint32_t crc32c_table[8][256];
+
+/* Construct table for software CRC-32C calculation. */
+static void crc32c_init_sw(void)
+{
+    uint32_t n, crc, k;
+
+    for (n = 0; n < 256; n++) {
+        crc = n;
+        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
+        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
+        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
+        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
+        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
+        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
+        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
+        crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
+        crc32c_table[0][n] = crc;
+    }
+    for (n = 0; n < 256; n++) {
+        crc = crc32c_table[0][n];
+        for (k = 1; k < 8; k++) {
+            crc = crc32c_table[0][crc & 0xff] ^ (crc >> 8);
+            crc32c_table[k][n] = crc;
+        }
+    }
+}
+
+/* Tables for hardware crc that shift a crc by LONG and SHORT zeros. */
+static uint32_t crc32c_long[4][256];
+static uint32_t crc32c_short[4][256];
+
+/* Multiply a matrix times a vector over the Galois field of two elements,
+   GF(2).  Each element is a bit in an unsigned integer.  mat must have at
+   least as many entries as the power of two for most significant one bit in
+   vec. */
+static inline uint32_t gf2_matrix_times(uint32_t *mat, uint32_t vec)
+{
+    uint32_t sum;
+
+    sum = 0;
+    while (vec) {
+        if (vec & 1)
+            sum ^= *mat;
+        vec >>= 1;
+        mat++;
+    }
+    return sum;
+}
+
+/* Multiply a matrix by itself over GF(2).  Both mat and square must have 32
+   rows. */
+static inline void gf2_matrix_square(uint32_t *square, uint32_t *mat)
+{
+    int n;
+
+    for (n = 0; n < 32; n++)
+        square[n] = gf2_matrix_times(mat, mat[n]);
+}
+
+/* Construct an operator to apply len zeros to a crc.  len must be a power of
+   two.  If len is not a power of two, then the result is the same as for the
+   largest power of two less than len.  The result for len == 0 is the same as
+   for len == 1.  A version of this routine could be easily written for any
+   len, but that is not needed for this application. */
+static void crc32c_zeros_op(uint32_t *even, size_t len)
+{
+    int n;
+    uint32_t row;
+    uint32_t odd[32];       /* odd-power-of-two zeros operator */
+
+    /* put operator for one zero bit in odd */
+    odd[0] = POLY;              /* CRC-32C polynomial */
+    row = 1;
+    for (n = 1; n < 32; n++) {
+        odd[n] = row;
+        row <<= 1;
+    }
+
+    /* put operator for two zero bits in even */
+    gf2_matrix_square(even, odd);
+
+    /* put operator for four zero bits in odd */
+    gf2_matrix_square(odd, even);
+
+    /* first square will put the operator for one zero byte (eight zero bits),
+       in even -- next square puts operator for two zero bytes in odd, and so
+       on, until len has been rotated down to zero */
+    do {
+        gf2_matrix_square(even, odd);
+        len >>= 1;
+        if (len == 0)
+            return;
+        gf2_matrix_square(odd, even);
+        len >>= 1;
+    } while (len);
+
+    /* answer ended up in odd -- copy to even */
+    for (n = 0; n < 32; n++)
+        even[n] = odd[n];
+}
+
+/* Take a length and build four lookup tables for applying the zeros operator
+   for that length, byte-by-byte on the operand. */
+static void crc32c_zeros(uint32_t zeros[][256], size_t len)
+{
+    uint32_t n;
+    uint32_t op[32];
+
+    crc32c_zeros_op(op, len);
+    for (n = 0; n < 256; n++) {
+        zeros[0][n] = gf2_matrix_times(op, n);
+        zeros[1][n] = gf2_matrix_times(op, n << 8);
+        zeros[2][n] = gf2_matrix_times(op, n << 16);
+        zeros[3][n] = gf2_matrix_times(op, n << 24);
+    }
+}
+
+/* Initialize tables for shifting crcs. */
+static void crc32c_init_hw(void)
+{
+    crc32c_zeros(crc32c_long, LONG);
+    crc32c_zeros(crc32c_short, SHORT);
+}
+
+#include <stdio.h>
+
+static void print_array(const char *name, int m, int n, const uint32_t *a)
+{
+    int i, j;
+    printf("static const uint32_t %s[%d][%d] = {\n", name, m, n);
+    for (i = 0; i < m; ++i) {
+        printf("    { %u", a[i*n+0]);
+        for (j = 1; j < n; ++j) printf(",%u", a[i*n+j]);
+        printf(" }%s", i == m-1 ? "\n" : ",\n");
+    }
+    printf("};\n");
+}
+
+int main(void)
+{
+    printf("/* Pregenerated tables for crc32c.c, produced by compiling with -DGEN_CRC32C_TABLES. */\n"
+           "#if POLY != 0x%x\n#  error \"tables generated for different polynomial\"\n#endif\n\n", POLY);
+    crc32c_init_sw();
+    print_array("crc32c_table", 8, 256, &crc32c_table[0][0]);
+    crc32c_init_hw();
+    printf("\n#ifdef HW_CRC\n");
+    print_array("crc32c_long", 4, 256, &crc32c_long[0][0]);
+    print_array("crc32c_short", 4, 256, &crc32c_short[0][0]);
+    printf("#endif /* HW_CRC */\n");
+    return 0;
+}
+
+#endif /* GEN_CRC32C_TABLES */
+
+/*****************************************************************************/
+/*****************************************************************************/
+/*****************************************************************************/
