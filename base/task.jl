@@ -137,6 +137,40 @@ function wait(t::Task)
     return t.result
 end
 
+"""
+    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+
+Waits till `testcb` returns `true` or for `secs` seconds, whichever is earlier.
+`testcb` is polled every `pollint` seconds.
+"""
+function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    pollint > 0 || throw(ArgumentError("cannot set pollint to $pollint seconds"))
+    start = time()
+    done = Channel(1)
+    timercb(aw) = begin
+        try
+            if testcb()
+                put!(done, :ok)
+            elseif (time() - start) > secs
+                put!(done, :timed_out)
+            end
+        catch e
+            put!(done, :error)
+        finally
+            isready(done) && close(aw)
+        end
+    end
+
+    if !testcb()
+        t = Timer(timercb, pollint, pollint)
+        ret = fetch(done)
+        close(t)
+    else
+        ret = :ok
+    end
+    ret
+end
+
 suppress_excp_printing(t::Task) = isa(t.storage, ObjectIdDict) ? get(get_task_tls(t), :SUPPRESS_EXCEPTION_PRINTING, false) : false
 
 # runtime system hook called when a task finishes
