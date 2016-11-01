@@ -442,7 +442,7 @@ let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
     mmime = stringmime("text/plain", li.def)
 
     @test lrepr == lmime == "MethodInstance for getfield(...)"
-    @test mrepr == mmime == "getfield(...)"
+    @test mrepr == mmime == "getfield(...) in Core"
 end
 
 
