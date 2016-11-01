@@ -30,7 +30,7 @@ function pfd_tst_reads(idx, intvl)
     t_elapsed = toq()
     @test !evt.timedout
     @test evt.readable
-    @test is_windows() ? evt.writable : !evt.writable
+    @test evt.writable
 
     # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
     # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
