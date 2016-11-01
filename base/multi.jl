@@ -1188,13 +1188,15 @@ fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
 """
     fetch(x)
 
-Waits and fetches a value from `x` depending on the type of `x`. Does not remove the item fetched:
+Waits and fetches a value from `x` depending on the type of `x`:
 
 * `Future`: Wait for and get the value of a Future. The fetched value is cached locally.
   Further calls to `fetch` on the same reference return the cached value. If the remote value
   is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
 * `RemoteChannel`: Wait for and get the value of a remote reference. Exceptions raised are
   same as for a `Future` .
+
+Does not remove the item fetched.
 """
 fetch(x::ANY) = x
 
@@ -2134,7 +2136,7 @@ end
 """
     timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
-Waits till `testcb` returns `true` or for `secs` seconds, whichever is earlier.
+Waits until `testcb` returns `true` or for `secs` seconds, whichever is earlier.
 `testcb` is polled every `pollint` seconds.
 """
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)

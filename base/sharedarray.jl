@@ -15,7 +15,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # Local shmem map.
     s::Array{T,N}
 
-    # idx of current workers pid into the pids vector, 0 if this shared array is not mapped locally.
+    # idx of current worker's pid in the pids vector, 0 if this shared array is not mapped locally.
     pidx::Int
 
     # the local partition into the array when viewed as a single dimensional array.
@@ -254,15 +254,16 @@ end
 """
     procs(S::SharedArray)
 
-Get the vector of processes that have mapped the shared array.
+Get the vector of processes mapping the shared array.
 """
 procs(S::SharedArray) = S.pids
 
 """
     indexpids(S::SharedArray)
 
-Returns the index of the current worker into the `pids` vector, i.e., the list of workers
-mapping the SharedArray
+Returns the current worker's index in the list of workers
+mapping the SharedArray (i.e. in the same list returned by `procs(S)`), or
+0 if the SharedArray is not mapped locally.
 """
 indexpids(S::SharedArray) = S.pidx
 
