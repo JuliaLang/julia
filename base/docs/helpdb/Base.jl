@@ -1415,22 +1415,6 @@ julia> endof([1,2,4])
 endof
 
 """
-    Channel{T}(sz::Int)
-
-Constructs a `Channel` with an internal buffer that can hold a maximum of `sz` objects
-of type `T`. `put!` calls on a full channel block until an object is removed with `take!`.
-
-`Channel(0)` constructs an unbuffered channel. `put!` blocks until a matching `take!` is called.
-And vice-versa.
-
-Other constructors:
-
-- `Channel(Inf)` - equivalent to `Channel{Any}(typemax(Int))`
-- `Channel(sz)` equivalent to `Channel{Any}(sz)`
-"""
-Channel
-
-"""
     next(iter, state) -> item, state
 
 For a given iterable object and iteration state, return the current item and the next iteration state.

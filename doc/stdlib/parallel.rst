@@ -121,8 +121,8 @@ Tasks
 
    Other constructors:
 
-   * ``Channel(Inf)`` - equivalent to ``Channel{Any}(typemax(Int))``
-   * ``Channel(sz)`` equivalent to ``Channel{Any}(sz)``
+   * ``Channel(Inf)``\ : equivalent to ``Channel{Any}(typemax(Int))``
+   * ``Channel(sz)``\ : equivalent to ``Channel{Any}(sz)``
 
 .. function:: put!(c::Channel, v)
 
@@ -361,10 +361,12 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Waits and fetches a value from ``x`` depending on the type of ``x``\ . Does not remove the item fetched:
+   Waits and fetches a value from ``x`` depending on the type of ``x``\ :
 
    * ``Future``\ : Wait for and get the value of a Future. The fetched value is cached locally. Further calls to ``fetch`` on the same reference return the cached value. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
    * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are same as for a ``Future`` .
+
+   Does not remove the item fetched.
 
 .. function:: remotecall(f, id::Integer, args...; kwargs...) -> Future
 
@@ -504,7 +506,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Waits till ``testcb`` returns ``true`` or for ``secs`` seconds, whichever is earlier. ``testcb`` is polled every ``pollint`` seconds.
+   Waits until ``testcb`` returns ``true`` or for ``secs`` seconds, whichever is earlier. ``testcb`` is polled every ``pollint`` seconds.
 
 .. function:: @spawn
 
@@ -672,7 +674,7 @@ Shared Arrays
 
    .. Docstring generated from Julia source
 
-   Get the vector of processes that have mapped the shared array.
+   Get the vector of processes mapping the shared array.
 
 .. function:: sdata(S::SharedArray)
 
@@ -684,7 +686,7 @@ Shared Arrays
 
    .. Docstring generated from Julia source
 
-   Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping the SharedArray
+   Returns the current worker's index in the list of workers mapping the SharedArray (i.e. in the same list returned by ``procs(S)``\ ), or 0 if the SharedArray is not mapped locally.
 
 .. function:: localindexes(S::SharedArray)
 

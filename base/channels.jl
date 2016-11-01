@@ -2,6 +2,20 @@
 
 abstract AbstractChannel
 
+"""
+    Channel{T}(sz::Int)
+
+Constructs a `Channel` with an internal buffer that can hold a maximum of `sz` objects
+of type `T`. `put!` calls on a full channel block until an object is removed with `take!`.
+
+`Channel(0)` constructs an unbuffered channel. `put!` blocks until a matching `take!` is called.
+And vice-versa.
+
+Other constructors:
+
+* `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
+* `Channel(sz)`: equivalent to `Channel{Any}(sz)`
+"""
 type Channel{T} <: AbstractChannel
     cond_take::Condition    # waiting for data to become available
     cond_put::Condition     # waiting for a writeable slot
