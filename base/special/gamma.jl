@@ -615,7 +615,7 @@ end
 # Otherwise, we need to make things use their own `float` converting methods
 # and in those cases, we do not convert back either as we assume
 # they also implement their own versions of the functions, with the correct return types.
-# Otherwise, if they do not implement their version of the functions we 
+# Otherwise, if they do not implement their version of the functions we
 # manually throw a `MethodError`.
 # This case occurs, when calling `float` on a type does not change its type,
 # as it is already a `float`, and would have hit own method, if one had existed.
