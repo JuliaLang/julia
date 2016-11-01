@@ -404,7 +404,7 @@ let
         function bar()
             x = 100
         end
-    bar()
+        bar()
         x
     end
     @test foo() === convert(Int8,100)
@@ -4658,3 +4658,101 @@ gc_enable(true)
 bad_tvars{T}() = 1
 @test isa(@which(bad_tvars()), Method)
 @test_throws MethodError bad_tvars()
+
+# issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
+contains_Box(e::GlobalRef) = (e.name === :Box)
+contains_Box(e::ANY) = false
+contains_Box(e::Expr) = any(contains_Box, e.args)
+
+function let_noBox()
+    local x
+    for i = 1:2
+        if i == 1
+            x = 21
+        end
+        let x = x
+            return () -> x
+        end
+    end
+end
+function let_Box1()
+    local x
+    for i = 1:2
+        if i == 1
+            x = 22
+        end
+        let y = x
+            return () -> x
+        end
+    end
+end
+function let_Box2()
+    local x
+    for i = 1:2
+        if i == 1
+            x = 23
+        end
+        let x = x
+            # In the future, this may change to no-Box if lowering improves
+            return () -> x
+            x = 43
+        end
+    end
+end
+function let_Box3()
+    local x
+    for i = 1:2
+        if i == 1
+            x = 24
+        end
+        let y
+            # In the future, this may change to no-Box if lowering improves
+            y = x
+            return () -> x
+        end
+    end
+end
+function let_Box4()
+    local x, g
+    for i = 1:2
+        if i == 1
+            x = 25
+        end
+        let x = x
+            g = () -> x
+            x = 44
+        end
+        @test x == 25
+        return g
+    end
+end
+function let_Box5()
+    local x, g, h
+    for i = 1:2
+        if i == 1
+            x = 25
+        end
+        let x = x
+            g = () -> (x = 46)
+            h = () -> x
+        end
+        @test x == 25
+        @test h() == 25
+        @test g() == 46
+        @test h() == 46
+        @test x == 25
+        return g
+    end
+end
+@test any(contains_Box, (@code_lowered let_Box1()).code)
+@test any(contains_Box, (@code_lowered let_Box2()).code)
+@test any(contains_Box, (@code_lowered let_Box3()).code)
+@test any(contains_Box, (@code_lowered let_Box4()).code)
+@test any(contains_Box, (@code_lowered let_Box5()).code)
+@test !any(contains_Box, (@code_lowered let_noBox()).code)
+@test let_Box1()() == 22
+@test let_Box2()() == 23
+@test let_Box3()() == 24
+@test let_Box4()() == 44
+@test let_Box5()() == 46
+@test let_noBox()() == 21
