@@ -363,15 +363,15 @@ let err_str,
     sp = Base.source_path()
     sn = basename(sp)
 
-    @test sprint(show, which(Symbol, Tuple{})) == "Symbol() at $sp:$(method_defs_lineno + 0)"
-    @test sprint(show, which(:a, Tuple{})) == "(::Symbol)() at $sp:$(method_defs_lineno + 1)"
-    @test sprint(show, which(EightBitType, Tuple{})) == "EightBitType() at $sp:$(method_defs_lineno + 2)"
-    @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) == "(::EightBitType)() at $sp:$(method_defs_lineno + 3)"
-    @test sprint(show, which(EightBitTypeT, Tuple{})) == "(::Type{EightBitTypeT})() at $sp:$(method_defs_lineno + 4)"
-    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{EightBitTypeT{T}}){T}() at $sp:$(method_defs_lineno + 5)"
-    @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::EightBitTypeT)() at $sp:$(method_defs_lineno + 6)"
-    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) at boot.jl:")
-    @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::FunctionLike)() at $sp:$(method_defs_lineno + 7)")
+    @test sprint(show, which(Symbol, Tuple{})) == "Symbol() in Main at $sp:$(method_defs_lineno + 0)"
+    @test sprint(show, which(:a, Tuple{})) == "(::Symbol)() in Main at $sp:$(method_defs_lineno + 1)"
+    @test sprint(show, which(EightBitType, Tuple{})) == "EightBitType() in Main at $sp:$(method_defs_lineno + 2)"
+    @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) == "(::EightBitType)() in Main at $sp:$(method_defs_lineno + 3)"
+    @test sprint(show, which(EightBitTypeT, Tuple{})) == "(::Type{EightBitTypeT})() in Main at $sp:$(method_defs_lineno + 4)"
+    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{EightBitTypeT{T}}){T}() in Main at $sp:$(method_defs_lineno + 5)"
+    @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::EightBitTypeT)() in Main at $sp:$(method_defs_lineno + 6)"
+    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) in Core at boot.jl:")
+    @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::FunctionLike)() in Main at $sp:$(method_defs_lineno + 7)")
     @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
     @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
 

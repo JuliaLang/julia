@@ -110,7 +110,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
             join(io, kwargs, ", ", ", ")
         end
     end
-    print(io, ")")
+    print(io, ") in ", m.module)
     if line > 0
         print(io, " at ", file, ":", line)
     end
