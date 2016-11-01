@@ -36,14 +36,17 @@ const rulecache = AnyDict( (Float64,7) => # precomputed in 100-bit arith.
      4.1795918367346938775510204081658e-01]) )
 
 # integration segment (a,b), estimated integral I, and estimated error E
-immutable Segment{T1<:Number, T2, T3<:Real}
-    a::T1
-    b::T1
-    I::T2
-    E::T3
+immutable Segment{Ts<:Number, Tf, Te<:Real}
+    a::Ts
+    b::Ts
+    I::Tf
+    E::Te
 end
 isless(i::Segment, j::Segment) = isless(i.E, j.E)
 
+segment_type{Ts, Tf<:Number, Te<:Real}(::Type{Ts}, ::Type{Tf}, ::Type{Te}) = Segment{Ts, Tf, Te}
+segment_type{Ts, Tx<:Number, N, Te<:Real}(::Type{Ts}, ::Type{Array{Tx, N}}, ::Type{Te}) = Segment{Ts, Array{Tx, N}, Te}
+segment_type(::Type, ::Type, ::Type) = Segment
 
 # Internal routine: approximately integrate f(x) over the interval (a,b)
 # by evaluating the integration rule (x,w,gw). Return a Segment.
@@ -87,7 +90,7 @@ rulekey(T,n) = (T,n)
 # integration with the order-n Kronrod rule and weights of type Tw,
 # with absolute tolerance abstol and relative tolerance reltol,
 # with maxevals an approximate maximum number of f evaluations.
-function do_quadgk{F, Tw, Ts}(f::F, s::Vector{Ts}, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
+function do_quadgk{F, Ts, Tw}(f::F, s::Vector{Ts}, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
     if Ts <: Real # check for infinite or semi-infinite intervals
         s1 = s[1]; s2 = s[end]; inf1 = isinf(s1); inf2 = isinf(s2)
         if inf1 || inf2
@@ -115,11 +118,18 @@ function do_quadgk{F, Tw, Ts}(f::F, s::Vector{Ts}, n, ::Type{Tw}, abstol, reltol
 
 end
 
-function do_quadgk_no_inf{F,Tw}(f::F, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
+
+function do_quadgk_no_inf{F, Ts, Tw, Fn}(f::F, s::Vector{Ts}, n, ::Type{Tw}, abstol, reltol, maxevals, nrm::Fn)
+    Tf = Base.promote_op(f, Ts)
+    _do_quadgk_no_inf(f, s, n, Tw, segment_type(Ts, Tf, Base.promote_op(nrm, Tf)), abstol, reltol, maxevals, nrm)
+end
+
+
+function _do_quadgk_no_inf{F, Tw, Tsegs}(f::F, s, n, ::Type{Tw}, ::Type{Tsegs}, abstol, reltol, maxevals, nrm)
     key = rulekey(Tw,n)
     x::Vector{Tw},w::Vector{Tw},gw::Vector{Tw} = haskey(rulecache, key) ? rulecache[key] :
        (rulecache[key] = kronrod(Tw, n))
-    segs = [Segment(evalrule(f, s[1],s[2], x,w,gw, nrm))]
+    segs = Tsegs[Segment(evalrule(f, s[1],s[2], x,w,gw, nrm))]
     for i in 2:length(s) - 1
         heappush!(segs, evalrule(f, s[i],s[i+1], x,w,gw, nrm), Reverse)
     end
@@ -225,14 +235,7 @@ transformation is performed internally to map the infinite interval to a finite 
 """
 # generic version: determine precision from a combination of
 # all the integration-segment endpoints
-function quadgk{F}(f::F, a, b, c...; kws...)
-    T = promote_type(typeof(float(a)), typeof(b))
-    for x in c
-        T = promote_type(T, typeof(x))
-    end
-    cT = map(T, c)
-    quadgk(f, convert(T, a), convert(T, b), cT...; kws...)
-end
+quadgk{F}(f::F, a, b, c...; kws...) = quadgk(f, promote(float(a),float(b),c...)...; kws...)
 
 ###########################################################################
 # Gauss-Kronrod integration-weight computation for arbitrary floating-point
