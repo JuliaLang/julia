@@ -12,7 +12,7 @@ export
 
 import Base: @handle_as, wait, close, uvfinalize, eventloop, notify_error, stream_wait,
     _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close,
-    associate_julia_struct, disassociate_julia_struct
+    associate_julia_struct, disassociate_julia_struct, |
 if is_windows()
     import Base.WindowsRawSocket
 end
@@ -45,12 +45,17 @@ const FD_TIMEDOUT = 8
 
 isreadable(f::FDEvent) = f.readable
 iswritable(f::FDEvent) = f.writable
-FDEvent() = FDEvent(false, false, false)
+FDEvent() = FDEvent(false, false, false, false)
 FDEvent(flags::Integer) = FDEvent((flags & UV_READABLE) != 0,
                                   (flags & UV_WRITABLE) != 0,
                                   (flags & UV_DISCONNECT) != 0,
                                   (flags & FD_TIMEDOUT) != 0)
 fdtimeout() = FDEvent(false, false, false, true)
+|(a::FDEvent, b::FDEvent) =
+    FDEvent(a.readable | b.readable,
+            a.writable | b.writable,
+            a.disconnect | b.disconnect,
+            a.timedout | b.timedout)
 
 type FileMonitor
     handle::Ptr{Void}
@@ -363,10 +368,11 @@ function wait(fdw::FDWatcher)
     return wait(fdw.watcher, readable = fdw.readable, writable = fdw.writable)
 end
 function wait(fdw::_FDWatcher; readable=true, writable=true)
-    events = FDEvent(fdw.events)
+    events = FDEvent()
     while true
         if isa(events, FDEvent)
             events = events::FDEvent
+            events |= FDEvent(fdw.events)
             haveevent = false
             if readable && isreadable(events)
                 fdw.events &= ~UV_READABLE
