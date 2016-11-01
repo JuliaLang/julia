@@ -43,7 +43,7 @@ static jl_value_t *deser_symbols[256];
 // left shift by 1
 // (not used in MODE_AST)
 static htable_t backref_table;
-int backref_table_numel;
+static int backref_table_numel;
 static arraylist_t backref_list;
 
 // list of (jl_value_t **loc, size_t pos) entries
@@ -68,7 +68,7 @@ htable_t edges_map;
 
 // list of modules being deserialized with __init__ methods
 // (not used in MODE_AST)
-jl_array_t *jl_module_init_order;
+extern jl_array_t *jl_module_init_order;
 
 // hash of definitions for predefined function pointers
 static htable_t fptr_to_id;
@@ -209,272 +209,6 @@ static void write_float64(ios_t *s, double x)
 #define jl_serialize_value(s, v) jl_serialize_value_((s), (jl_value_t*)(v), 0)
 static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal);
 static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc);
-static char *sysimg_gvars_base = NULL;
-static const int32_t *sysimg_gvars_offsets = NULL;
-static const char *sysimg_fvars_base = NULL;
-static const int32_t *sysimg_fvars_offsets = NULL;
-
-static inline jl_value_t **sysimg_gvars(size_t idx)
-{
-    return (jl_value_t**)(sysimg_gvars_base + sysimg_gvars_offsets[idx]);
-}
-
-static inline const void *sysimg_fvars(const char *base, size_t idx)
-{
-    return base + sysimg_fvars_offsets[idx];
-}
-
-#ifdef HAVE_CPUID
-extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
-#endif
-
-extern int globalUnique;
-static void *jl_sysimg_handle = NULL;
-static uint64_t sysimage_base = 0;
-
-JL_DLLEXPORT int jl_running_on_valgrind(void)
-{
-    return RUNNING_ON_VALGRIND;
-}
-
-static void jl_load_sysimg_so(void)
-{
-#ifndef _OS_WINDOWS_
-    Dl_info dlinfo;
-#endif
-    int imaging_mode = jl_generating_output() && !jl_options.incremental;
-    // in --build mode only use sysimg data, not precompiled native code
-    if (!imaging_mode && jl_options.use_precompiled==JL_OPTIONS_USE_PRECOMPILED_YES) {
-        sysimg_gvars_base = (char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base");
-        sysimg_gvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
-                                                        "jl_sysimg_gvars_offsets");
-        sysimg_fvars_base = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_fvars_base");
-        sysimg_fvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
-                                                        "jl_sysimg_fvars_offsets");
-        globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
-#ifdef JULIA_ENABLE_THREADING
-        size_t tls_getter_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
-                                                   "jl_ptls_states_getter_idx");
-        *sysimg_gvars(tls_getter_idx - 1) =
-            (jl_value_t*)(uintptr_t)jl_get_ptls_states_getter();
-        size_t tls_offset_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
-                                                   "jl_tls_offset_idx");
-        *sysimg_gvars(tls_offset_idx - 1) =
-            (jl_value_t*)(uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
-#endif
-        const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
-        if (strcmp(cpu_target,jl_options.cpu_target) != 0)
-            jl_error("Julia and the system image were compiled for different architectures.\n"
-                     "Please delete or regenerate sys.{so,dll,dylib}.");
-#ifdef HAVE_CPUID
-        uint32_t info[4];
-        jl_cpuid((int32_t*)info, 1);
-        if (strcmp(cpu_target, "native") == 0) {
-            if (!RUNNING_ON_VALGRIND) {
-                uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
-                if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
-                    jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
-            }
-        }
-        else if (strcmp(cpu_target,"core2") == 0) {
-            int HasSSSE3 = (info[2] & 1<<9);
-            if (!HasSSSE3)
-                jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
-                         "Please delete or regenerate sys.{so,dll,dylib}.");
-        }
-#endif
-
-#ifdef _OS_WINDOWS_
-        sysimage_base = (intptr_t)jl_sysimg_handle;
-#else
-        if (dladdr((void*)sysimg_gvars_base, &dlinfo) != 0) {
-            sysimage_base = (intptr_t)dlinfo.dli_fbase;
-        }
-        else {
-            sysimage_base = 0;
-        }
-#endif
-    }
-    const char *sysimg_data = (const char*)jl_dlsym(jl_sysimg_handle, "jl_system_image_data");
-    size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
-    jl_restore_system_image_data(sysimg_data, len);
-}
-
-static jl_value_t *jl_deserialize_gv(jl_serializer_state *s, jl_value_t *v)
-{
-    // Restore the GlobalVariable reference to this jl_value_t via the sysimg_gvars table
-    int32_t gvname_index = read_int32(s->s)-1;
-    if (sysimg_gvars_base != NULL && gvname_index >= 0 && s->mode == MODE_SYSTEM_IMAGE) {
-        *sysimg_gvars(gvname_index) = v;
-    }
-    return v;
-}
-
-static void jl_serialize_gv(jl_serializer_state *s, jl_value_t *v)
-{
-    // write the index of the literal_pointer_val into the system image
-    write_int32(s->s, jl_get_llvm_gv(v));
-}
-
-static void jl_serialize_globalvals(jl_serializer_state *s)
-{
-    size_t i, len = backref_table.size;
-    void **p = backref_table.table;
-    for(i=0; i < len; i+=2) {
-        char *offs = (char*)p[i+1];
-        if (offs != HT_NOTFOUND) {
-            uintptr_t pos = offs - (char*)HT_NOTFOUND - 1;
-            int32_t gv = jl_get_llvm_gv((jl_value_t*)p[i]);
-            if (gv != 0) {
-                write_int32(s->s, pos + 1);
-                write_int32(s->s, gv);
-            }
-        }
-    }
-    write_int32(s->s, 0);
-}
-
-static void jl_deserialize_globalvals(jl_serializer_state *s)
-{
-    while (1) {
-        intptr_t key = read_int32(s->s);
-        if (key == 0) break;
-        jl_deserialize_gv(s, (jl_value_t*)backref_list.items[key - 1]);
-    }
-}
-
-static void jl_serialize_gv_syms(jl_serializer_state *s, jl_sym_t *v)
-{
-    // since symbols are static, they might not have had a
-    // reference anywhere in the code image other than here
-    void *bp = ptrhash_get(&backref_table, v);
-    if (bp == HT_NOTFOUND) {
-        int32_t gv = jl_get_llvm_gv((jl_value_t*)v);
-        if (gv != 0) {
-            jl_serialize_value(s, v);
-            write_int32(s->s, gv);
-        }
-    }
-    if (v->left) jl_serialize_gv_syms(s, v->left);
-    if (v->right) jl_serialize_gv_syms(s, v->right);
-}
-
-static void jl_serialize_gv_others(jl_serializer_state *s)
-{
-    // ensures all objects referenced in the code have
-    // references in the system image to their global variable
-    // since codegen knows that some integer boxes are static,
-    // they might not have had a reference anywhere in the code
-    // image other than here
-    int32_t i;
-    for (i = -512; i < 512; i++) {
-        jl_value_t *v32 = jl_box_int32(i);
-        void *bp32 = ptrhash_get(&backref_table, v32);
-        if (bp32 == HT_NOTFOUND) {
-            int32_t gv32 = jl_get_llvm_gv(v32);
-            if (gv32 != 0) {
-                jl_serialize_value(s, v32);
-                write_int32(s->s, gv32);
-            }
-        }
-    }
-    for (i = -512; i < 512; i++) {
-        jl_value_t *v64 = jl_box_int64(i);
-        void *bp64 = ptrhash_get(&backref_table, v64);
-        if (bp64 == HT_NOTFOUND) {
-            int32_t gv64 = jl_get_llvm_gv(v64);
-            if (gv64 != 0) {
-                jl_serialize_value(s, v64);
-                write_int32(s->s, gv64);
-            }
-        }
-    }
-    jl_serialize_gv_syms(s, jl_get_root_symbol());
-    jl_serialize_value(s, NULL); // signal the end of this list
-}
-
-static void jl_deserialize_gv_others(jl_serializer_state *s)
-{
-    while (1) {
-        jl_value_t *v = jl_deserialize_value(s, NULL);
-        if (!v) break;
-        jl_deserialize_gv(s, v);
-    }
-}
-
-static struct delayed_fptrs_t {
-    jl_method_instance_t *li;
-    int32_t func;
-    int32_t cfunc;
-} *delayed_fptrs = NULL;
-static size_t delayed_fptrs_n = 0;
-static size_t delayed_fptrs_max = 0;
-static size_t sysimg_fvars_max = 0;
-
-static void jl_delayed_fptrs(jl_method_instance_t *li, int32_t func, int32_t cfunc)
-{
-    // can't restore the fptrs until after the system image is fully restored,
-    // since it will try to decompress the function AST to determine the argument types
-    if (cfunc || func) {
-        if (delayed_fptrs_max < delayed_fptrs_n + 1) {
-            if (delayed_fptrs_max == 0)
-                // current measurements put the number of functions at 4508
-                delayed_fptrs_max = 4096;
-            else
-                delayed_fptrs_max *= 2;
-            delayed_fptrs = (struct delayed_fptrs_t*)realloc(delayed_fptrs, delayed_fptrs_max*sizeof(delayed_fptrs[0])); //assumes sizeof==alignof
-        }
-        delayed_fptrs[delayed_fptrs_n].li = li;
-        delayed_fptrs[delayed_fptrs_n].func = func;
-        delayed_fptrs[delayed_fptrs_n].cfunc = cfunc;
-        delayed_fptrs_n++;
-        if (func > 0 && func > sysimg_fvars_max)
-            sysimg_fvars_max = func;
-        if (cfunc > 0 && cfunc > sysimg_fvars_max)
-            sysimg_fvars_max = cfunc;
-    }
-}
-
-static void jl_update_all_fptrs(void)
-{
-    //jl_printf(JL_STDOUT, "delayed_fptrs_n: %d\n", delayed_fptrs_n);
-    const char *fvars_base = sysimg_fvars_base;
-    if (fvars_base == NULL) {
-        size_t i;
-        for (i = 0; i < delayed_fptrs_n; i++) {
-            jl_method_instance_t *li = delayed_fptrs[i].li;
-            assert(li->jlcall_api && li->jlcall_api != 2);
-            li->jlcall_api = 0;
-        }
-        return;
-    }
-    // jl_fptr_to_llvm needs to decompress some ASTs, therefore this needs to be NULL
-    // to skip trying to restore GlobalVariable pointers in jl_deserialize_gv
-    sysimg_gvars_base = NULL;
-    sysimg_fvars_base = NULL;
-    size_t i;
-    jl_method_instance_t **linfos = (jl_method_instance_t**)malloc(sizeof(jl_method_instance_t*) * sysimg_fvars_max);
-    for (i = 0; i < delayed_fptrs_n; i++) {
-        jl_method_instance_t *li = delayed_fptrs[i].li;
-        assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != 2);
-        int32_t cfunc = delayed_fptrs[i].cfunc - 1;
-        if (cfunc >= 0) {
-            jl_fptr_to_llvm((jl_fptr_t)(uintptr_t)sysimg_fvars(fvars_base, cfunc), li, 1);
-            linfos[cfunc] = li;
-        }
-        int32_t func = delayed_fptrs[i].func - 1;
-        if (func >= 0) {
-            jl_fptr_to_llvm((jl_fptr_t)(uintptr_t)sysimg_fvars(fvars_base, func), li, 0);
-            linfos[func] = li;
-        }
-    }
-    jl_register_fptrs(sysimage_base, fvars_base, sysimg_fvars_offsets, linfos, sysimg_fvars_max);
-    delayed_fptrs_n = 0;
-    delayed_fptrs_max = 0;
-    sysimg_fvars_max = 0;
-    free(delayed_fptrs);
-    delayed_fptrs = NULL;
-}
 
 // --- serialize ---
 
@@ -697,7 +431,6 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
                 jl_serialize_value(s, b->globalref);
                 jl_serialize_value(s, b->owner);
                 write_int8(s->s, (b->deprecated<<3) | (b->constp<<2) | (b->exportp<<1) | (b->imported));
-                jl_serialize_gv(s, (jl_value_t*)b);
             }
         }
     }
@@ -1040,8 +773,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 assert(jlcall_api);
                 // save functionObject pointers
                 write_int8(s->s, jlcall_api);
-                write_int32(s->s, jl_assign_functionID(li->functionObjectsDecls.functionObject));
-                write_int32(s->s, jl_assign_functionID(li->functionObjectsDecls.specFunctionObject));
             }
             else {
                 write_int8(s->s, 0);
@@ -1886,12 +1617,8 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
         li->jlcall_api = -jlcall_api;
     }
     else {
-        int32_t cfunc_llvm, func_llvm;
-        func_llvm = read_int32(s->s);
-        cfunc_llvm = read_int32(s->s);
-        jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
         li->fptr = NULL;
-        li->jlcall_api = jlcall_api;
+        li->jlcall_api = 0;
     }
     li->compile_traced = 0;
     return (jl_value_t*)li;
@@ -1936,7 +1663,6 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
         b->constp = (flags>>2) & 1;
         b->exportp = (flags>>1) & 1;
         b->imported = (flags) & 1;
-        jl_deserialize_gv(s, (jl_value_t*)b);
     }
     size_t i = m->usings.len;
     size_t ni = read_int32(s->s);
@@ -2470,254 +2196,6 @@ static void jl_init_restored_modules(jl_array_t *init_order)
 
 
 // --- entry points ---
-
-// remove cached types not referenced in the stream
-static void jl_prune_type_cache(jl_svec_t *cache)
-{
-    size_t l = jl_svec_len(cache), ins = 0, i;
-    for (i = 0; i < l; i++) {
-        jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL)
-            break;
-        if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(ti) != 0)
-            jl_svecset(cache, ins++, ti);
-        else if (jl_is_datatype(ti)) {
-            jl_value_t *singleton = ((jl_datatype_t*)ti)->instance;
-            if (singleton && (ptrhash_get(&backref_table, singleton) != HT_NOTFOUND || jl_get_llvm_gv(singleton) != 0))
-                jl_svecset(cache, ins++, ti);
-        }
-    }
-    if (i > ins) {
-        memset(&jl_svec_data(cache)[ins], 0, (i - ins) * sizeof(jl_value_t*));
-    }
-}
-
-static void jl_save_system_image_to_stream(ios_t *f)
-{
-    jl_gc_collect(1); // full
-    jl_gc_collect(0); // incremental (sweep finalizers)
-    JL_TIMING(SYSIMG_DUMP);
-    int en = jl_gc_enable(0);
-    htable_reset(&backref_table, 250000);
-    arraylist_new(&reinit_list, 0);
-    backref_table_numel = 0;
-    jl_serializer_state s = {
-        f, MODE_SYSTEM_IMAGE,
-        NULL, NULL,
-        jl_get_ptls_states()
-    };
-    write_int32(f, jl_world_counter);
-
-    // orphan old Base module if present
-    jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
-
-    // empty!(Core.ARGS)
-    if (jl_core_module != NULL) {
-        jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
-        if (args != NULL) {
-            jl_array_del_end(args, jl_array_len(args));
-        }
-    }
-
-    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
-
-    jl_serialize_value(&s, jl_main_module);
-    jl_serialize_value(&s, jl_top_module);
-    jl_serialize_value(&s, jl_typeinf_func);
-    write_uint64(f, jl_typeinf_world);
-
-    // deserialize method tables of builtin types
-    jl_serialize_value(&s, jl_type_typename->mt);
-    jl_serialize_value(&s, jl_intrinsic_type->name->mt);
-    jl_serialize_value(&s, jl_sym_type->name->mt);
-    jl_serialize_value(&s, jl_array_typename->mt);
-    jl_serialize_value(&s, jl_module_type->name->mt);
-
-    jl_prune_type_cache(jl_tuple_typename->cache);
-    jl_prune_type_cache(jl_tuple_typename->linearcache);
-    jl_prune_type_cache(jl_type_typename->cache);
-
-    intptr_t i;
-    for (i = 0; i < builtin_typenames.len; i++) {
-        jl_serialize_value(&s, ((jl_typename_t*)builtin_typenames.items[i])->cache);
-        jl_serialize_value(&s, ((jl_typename_t*)builtin_typenames.items[i])->linearcache);
-    }
-
-    // ensure everything in deser_tag is reassociated with its GlobalValue
-    for (i = 2; i < 255; i++) {
-        jl_serialize_gv(&s, deser_tag[i]);
-    }
-
-    jl_serialize_globalvals(&s);
-    jl_serialize_gv_others(&s); // serialize things that might not have visible gc roots roots with GlobalValue references
-
-    write_int32(f, jl_get_t_uid_ctr());
-    write_int32(f, jl_get_gs_ctr());
-    jl_finalize_serializer(&s); // done with f and s
-
-    htable_reset(&backref_table, 0);
-    arraylist_free(&reinit_list);
-
-    jl_gc_enable(en);
-}
-
-JL_DLLEXPORT void jl_save_system_image(const char *fname)
-{
-    ios_t f;
-    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        jl_errorf("cannot open system image file \"%s\" for writing", fname);
-    }
-    JL_SIGATOMIC_BEGIN();
-    jl_save_system_image_to_stream(&f);
-    ios_close(&f);
-    JL_SIGATOMIC_END();
-}
-
-JL_DLLEXPORT ios_t *jl_create_system_image(void)
-{
-    ios_t *f = (ios_t*)malloc(sizeof(ios_t));
-    ios_mem(f, 1000000);
-    jl_save_system_image_to_stream(f);
-    return f;
-}
-
-extern int jl_boot_file_loaded;
-extern void jl_get_builtins(void);
-extern void jl_get_builtin_hooks(void);
-extern void jl_get_system_hooks(void);
-
-// Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
-JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
-{
-    if (jl_sysimg_handle)
-        return; // embedded target already called jl_set_sysimg_so
-
-    char *dot = (char*) strrchr(fname, '.');
-    int is_ji = (dot && !strcmp(dot, ".ji"));
-
-    // Get handle to sys.so
-    if (!is_ji) // .ji extension => load .ji file only
-        jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW));
-}
-
-// Allow passing in a module handle directly, rather than a path
-JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
-{
-    // set cpu target if unspecified by user and available from sysimg
-    // otherwise default to native.
-    void* *jl_RTLD_DEFAULT_handle_pointer = (void**)jl_dlsym_e(handle, "jl_RTLD_DEFAULT_handle_pointer");
-    if (!jl_RTLD_DEFAULT_handle_pointer || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
-        jl_error("System image file failed consistency check: maybe opened the wrong version?");
-    if (jl_options.cpu_target == NULL)
-        jl_options.cpu_target = (const char *)jl_dlsym(handle, "jl_sysimg_cpu_target");
-    jl_sysimg_handle = handle;
-}
-
-static void jl_restore_system_image_from_stream(ios_t *f)
-{
-    JL_TIMING(SYSIMG_LOAD);
-    jl_ptls_t ptls = jl_get_ptls_states();
-    int en = jl_gc_enable(0);
-    arraylist_new(&backref_list, 250000);
-    jl_serializer_state s = {
-        f, MODE_SYSTEM_IMAGE,
-        NULL, NULL,
-        jl_get_ptls_states()
-    };
-    jl_world_counter = read_int32(f);
-
-    jl_main_module = (jl_module_t*)jl_deserialize_value(&s, NULL);
-    jl_top_module = (jl_module_t*)jl_deserialize_value(&s, NULL);
-    jl_internal_main_module = jl_main_module;
-    jl_typeinf_func = (jl_function_t*)jl_deserialize_value(&s, NULL);
-    jl_typeinf_world = read_uint64(f);
-
-    jl_type_type_mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
-    jl_type_typename->mt = jl_type_type_mt;
-    jl_unionall_type->name->mt = jl_type_type_mt;
-    jl_uniontype_type->name->mt = jl_type_type_mt;
-    jl_datatype_type->name->mt = jl_type_type_mt;
-    jl_intrinsic_type->name->mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
-    jl_sym_type->name->mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
-    jl_array_typename->mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
-    jl_module_type->name->mt = (jl_methtable_t*)jl_deserialize_value(&s, NULL);
-
-    intptr_t i;
-    for (i = 0; i < builtin_typenames.len; i++) {
-        jl_typename_t *tn = (jl_typename_t*)builtin_typenames.items[i];
-        tn->cache = (jl_svec_t*)jl_deserialize_value(&s, NULL); jl_gc_wb(tn, tn->cache);
-        tn->linearcache = (jl_svec_t*)jl_deserialize_value(&s, NULL); jl_gc_wb(tn, tn->linearcache);
-        jl_resort_type_cache(tn->cache);
-    }
-
-    jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
-                                                 jl_symbol("Core"));
-    jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
-                                                 jl_symbol("Base"));
-    ptls->current_module = jl_base_module; // run start_image in Base
-
-    // ensure everything in deser_tag is reassociated with its GlobalValue
-    for (i = 2; i < 255; i++) {
-        jl_deserialize_gv(&s, deser_tag[i]);
-    }
-    jl_deserialize_globalvals(&s);
-    jl_deserialize_gv_others(&s);
-
-    int uid_ctr = read_int32(f);
-    int gs_ctr = read_int32(f);
-    jl_module_init_order = jl_finalize_deserializer(&s, NULL); // done with s and f
-
-    jl_set_t_uid_ctr(uid_ctr);
-    jl_set_gs_ctr(gs_ctr);
-
-    jl_get_builtins();
-    jl_get_builtin_hooks();
-    if (jl_base_module) {
-        jl_get_system_hooks();
-    }
-    jl_boot_file_loaded = 1;
-    jl_init_box_caches();
-
-    //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
-    arraylist_free(&backref_list);
-
-    jl_gc_reset_alloc_count();
-    jl_gc_enable(en);
-    jl_update_all_fptrs();
-}
-
-JL_DLLEXPORT void jl_restore_system_image(const char *fname)
-{
-#ifndef NDEBUG
-    char *dot = fname ? (char*)strrchr(fname, '.') : NULL;
-    int is_ji = (dot && !strcmp(dot, ".ji"));
-    assert((is_ji || jl_sysimg_handle) && "System image file not preloaded");
-#endif
-
-    if (jl_sysimg_handle) {
-        // load the pre-compiled sysimage from jl_sysimg_handle
-        jl_load_sysimg_so();
-    }
-    else {
-        ios_t f;
-        if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
-            jl_errorf("System image file \"%s\" not found.", fname);
-        JL_SIGATOMIC_BEGIN();
-        jl_restore_system_image_from_stream(&f);
-        ios_close(&f);
-        JL_SIGATOMIC_END();
-    }
-}
-
-JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
-{
-    ios_t f;
-    JL_SIGATOMIC_BEGIN();
-    ios_static_buffer(&f, (char*)buf, len);
-    jl_restore_system_image_from_stream(&f);
-    ios_close(&f);
-    JL_SIGATOMIC_END();
-}
 
 JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_code_info_t *code)
 {
