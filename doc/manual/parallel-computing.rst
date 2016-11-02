@@ -455,43 +455,127 @@ points: in this case, when :func:`remotecall_fetch` is called.
 
 Channels
 --------
-The section on Tasks in :ref:`man-control-flow`, discussed the execution of
+The section on Tasks in :ref:`man-control-flow` discussed the execution of
 multiple functions in a co-operative manner. :class:`Channels` can be quite useful
 to pass data between running tasks, particularly those involving I/O operations.
 
 Examples of operations involving I/O include reading/writing to files,
 accessing web services, executing external programs, etc. In all
 these cases, overall execution time can be improved if other tasks can be run
-while a file is being read, or we are waiting for an external service/program to complete.
+while a file is being read, or while waiting for an external service/program to complete.
 
 A channel can be visualized as a pipe, i.e., it has a write end and read end.
-- Multiple writers in different tasks can write to the same channel concurrently via
-  :func:`put!` calls.
+
+- Multiple writers in different tasks can write to the same channel concurrently via :func:`put!`
+  calls.
 - Multiple readers in different tasks can read data concurrently via :func:`take!` calls.
+- As an example::
+
+    # Given Channels c1 and c2,
+    c1 = Channel(32)
+    c2 = Channel(32)
+
+    # and a function `foo()` which reads items from from c1, processes the item read
+    # and writes a result to c2,
+    function foo()
+        while true
+            data = take!(c1)
+            .......             # process data
+            put!(c2, result)    # write out result
+        end
+    end
+
+    # we can schedule `n` instances of `foo()` to be active concurrently.
+    for _ in 1:n
+        @schedule foo()
+    end
+
 - Channels are created via the :class:`Channel{T}(sz)` constructor. The channel will only hold
   objects of type ``T``. If the type is not specified, the channel can hold objects of
   any type. ``sz`` refers to the maximum number of elements that can be held in the channel
-  at any time.
-- If a channel is empty, readers (on a :func:`take!` call) will block till data is available.
-- If a channel is full, writers (on a :func:`put!` call) will block till space becomes available.
+  at any time. For example, ``Channel(32)`` creates a channel that can hold a maximum of 32 objects
+  of any type. A ``Channel{MyType}(64)`` can hold up to 64 objects of ``MyType`` at any time.
+- If a :class:`Channel` is empty, readers (on a :func:`take!` call) will block until data is available.
+- If a :class:`Channel` is full, writers (on a :func:`put!` call) will block until space becomes available.
 - :func:`isready` tests for the presence of any object in the channel, while :func:`wait`
   waits for an object to become available.
-- :func:`close` closes a :class:`Channel`. On a closed :class:`Channel`\, :func:`put!` will fail,
-  while :func:`take!` and :func:`fetch` successfully return any existing values till
-  it is emptied.
+- A :class:`Channel` is in an open state initially. This means that it can be
+  read from and written to freely via :func:`take!` and :func:`put!` calls. :func:`close` closes a :class:`Channel`.
+  On a closed :class:`Channel`, :func:`put!` will fail. For example:
+
+.. doctest::
+
+    julia> c=Channel(2);
+
+    julia> put!(c,1)   # `put!` on an open channel succeeds
+    1
+
+    julia> close(c);
+
+    julia> put!(c,2)   # `put!` on a closed channel throws an exception.
+    ERROR: InvalidStateException("Channel is closed.",:closed)
+    ...
+
+
+- :func:`take!` and :func:`fetch` (which retrieves but does not remove the value) on a closed channel
+  successfully return any existing values until it is emptied. Continuing the above example:
+
+.. doctest::
+
+        julia> fetch(c)     # Any number of `fetch` calls succeed.
+        1
+
+        julia> fetch(c)
+        1
+
+        julia> take!(c)     # The first `take!` removes the value.
+        1
+
+        julia> take!(c)     # No more data available on a closed channel.
+        ERROR: InvalidStateException("Channel is closed.",:closed)
+        ...
+
 
 A :class:`Channel` can be used as an iterable object in a ``for`` loop, in which
 case the loop runs as long as the :class:`Channel` has data or is open. The loop
-variable takes on all values added to the :class:`Channel`. An empty, closed :class:`Channel`
-causes the ``for`` loop to terminate.
+variable takes on all values added to the :class:`Channel`. The ``for`` loop is
+terminated once the :class:`Channel` is closed and emptied.
 
-Consider a simple example using channels for inter-task communication.
-We start 4 tasks to process a single ``jobs`` channel. ``job_id``s
-are written to the channel. Each task in this simulation reads a "job_id",
-waits for a random amout of time and writes back a tuple of job_id and the simulated time to
-the results channel. Finally all the "results" are printed out.
+
+For example, the following would cause the ``for`` loop to wait for more data::
+
+        c=Channel{Int}(10)
+        foreach(i->put!(c, i), 1:3)    # add a few entries
+        data = [i for i in c]
+
+while this will return after reading all data::
 
 .. doctest::
+
+        julia> c=Channel{Int}(10);
+
+        julia> foreach(i->put!(c, i), 1:3);    # add a few entries
+
+        julia> close(c);                       # `for` loops can exit
+
+        julia> data = [i for i in c]
+        3-element Array{Int64,1}:
+        1
+        2
+        3
+
+
+.. _man-channels-example:
+
+Consider a simple example using channels for inter-task communication.
+We start 4 tasks to process data from a single ``jobs`` channel.
+Jobs, identified by an id (``job_id``), are written to the channel.
+Each task in this simulation reads a ``job_id``,
+waits for a random amout of time and writes back a tuple of ``job_id`` and the simulated time to
+the results channel. Finally all the ``results`` are printed out.
+
+::
+
     const jobs = Channel{Int}(32)
     const results = Channel{Tuple}(32)
 
@@ -563,26 +647,31 @@ example of this is provided in ``examples/dictchannel.jl`` which uses a dictiona
 
 Channels and RemoteChannels
 ---------------------------
-- A :class:`Channel` is local to a process.
+- A :class:`Channel` is local to a process. Worker 2 cannot directly refer to a :class:`Channel`
+  on worker 3 and vice-versa. A :class:`RemoteChannel`, however, can put and take values across
+  workers.
 - A :class:`RemoteChannel` can be thought of as a *handle* to a :class:`Channel`.
 - The process id, ``pid``, associated with a :class:`RemoteChannel` identifies the process where
   the backing store, i.e., the backing :class:`Channel` exists.
 - Any process with a reference to a :class:`RemoteChannel` can put and take items from the channel.
-  Data is automtically sent to (or retrieved from) the process a :class:`RemoteChannel` is associated with.
-- Serializing and deserializing a :class:`Channel` also serializes/deserializes any data
-  present in the channel.
-- Serializing and deserializing a :class:`RemoteChannel` only involves the serialization/deserialization
-  of an identifier that uniquely identifies the handle in a cluster.
-- It is not possible to directly access the backing store of a :class:`RemoteChannel`.
+  Data is automatically sent to (or retrieved from) the process a :class:`RemoteChannel` is associated with.
+- Serializing  a :class:`Channel` also serializes any data present in the channel. Deserializing
+  it therefore effectively makes a copy of the original object.
+- On the other hand, serializing a :class:`RemoteChannel` only involves the serialization
+  of an identifier that identifies the location and instance of :class:`Channel` referred to
+  by the handle. A deserialized :class:`RemoteChannel` object (on any worker), therefore
+  also points to the same backing store as the original.
 
-Let us modify the channels example for inter-process communication using remote channels.
+The channels example from above :ref:`man-channels-example` can be modified for
+interprocess communication, as shown below.
 
-We start 4 workers to process a single ``jobs`` remote channel. ``job_id``s
-are written to the channel. Each task in this simulation reads a "job_id",
-waits for a random amout of time and writes back a tuple of job_id, time taken and its own pid to
-the results channel. Finally all the "results" are printed out on the master.
+We start 4 workers to process a single ``jobs`` remote channel. Jobs, identified by an id (``job_id``),
+are written to the channel. Each remotely executing task in this simulation reads a ``job_id``,
+waits for a random amout of time and writes back a tuple of ``job_id``, time taken and its own ``pid`` to
+the results channel. Finally all the ``results`` are printed out on the master process.
 
-.. doctest::
+::
+
     addprocs(4)         # add worker processes
 
     const jobs = RemoteChannel(()->Channel{Int}(32))
