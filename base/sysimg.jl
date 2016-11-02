@@ -67,7 +67,7 @@ include("refpointer.jl")
 (::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
 convert{T<:VecElement}(::Type{T}, arg) = T(arg)
 convert{T<:VecElement}(::Type{T}, arg::T) = arg
-include("checked.jl")
+include("Checked.jl")
 importall .Checked
 
 # Symbol constructors
@@ -105,18 +105,18 @@ Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n)
 
 # numeric operations
 include("hashing.jl")
-include("rounding.jl")
+include("Rounding.jl")
 importall .Rounding
 include("float.jl")
 include("complex.jl")
 include("rational.jl")
-include("multinverses.jl")
+include("MultiplicativeInverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # SIMD loops
-include("simdloop.jl")
+include("SimdLoop.jl")
 importall .SimdLoop
 
 # map-reduce operators
@@ -129,7 +129,7 @@ include("intset.jl")
 include("associative.jl")
 include("dict.jl")
 include("set.jl")
-include("iterators.jl")
+include("Iterators.jl")
 using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
 
@@ -145,7 +145,7 @@ include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl"
 include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
 include("osutils.jl")
 include("c.jl")
-include("sysinfo.jl")
+include("Sys.jl")
 
 if !isdefined(Core, :Inference)
     include("docs/core.jl")
@@ -165,7 +165,7 @@ include("parse.jl")
 include("shell.jl")
 include("regex.jl")
 include("show.jl")
-include("base64.jl")
+include("Base64.jl")
 importall .Base64
 
 # nullable types
@@ -175,9 +175,9 @@ include("nullable.jl")
 include("version.jl")
 
 # system & environment
-include("libc.jl")
+include("Libc.jl")
 using .Libc: getpid, gethostname, time
-include("libdl.jl")
+include("Libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
 
@@ -186,33 +186,33 @@ include("libuv.jl")
 include("event.jl")
 include("task.jl")
 include("lock.jl")
-include("threads.jl")
+include("Threads.jl")
 include("weakkeydict.jl")
 
 # I/O
 include("stream.jl")
 include("socket.jl")
-include("filesystem.jl")
+include("Filesystem.jl")
 importall .Filesystem
 include("process.jl")
-include("multimedia.jl")
+include("Multimedia.jl")
 importall .Multimedia
-include("grisu/grisu.jl")
+include("grisu/Grisu.jl")
 import .Grisu.print_shortest
 include("methodshow.jl")
 
 # core math functions
 include("floatfuncs.jl")
-include("math.jl")
+include("Math.jl")
 importall .Math
 const (√)=sqrt
 const (∛)=cbrt
 
 # multidimensional arrays
-include("cartesian.jl")
+include("Cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
-include("permuteddimsarray.jl")
+include("PermutedDimsArrays.jl")
 using .PermutedDimsArrays
 
 let SOURCE_PATH = ""
@@ -230,20 +230,20 @@ INCLUDE_STATE = 2 # include = _include (from lines above)
 include("reducedim.jl")  # macros in this file relies on string.jl
 
 # basic data structures
-include("ordering.jl")
+include("Order.jl")
 importall .Order
-include("collections.jl")
+include("Collections.jl")
 
 # Combinatorics
-include("sort.jl")
+include("Sort.jl")
 importall .Sort
 
 function deepcopy_internal end
 
 # BigInts and BigFloats
-include("gmp.jl")
+include("GMP.jl")
 importall .GMP
-include("mpfr.jl")
+include("MPFR.jl")
 importall .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
@@ -256,22 +256,22 @@ include("hashing2.jl")
 
 # random number generation
 include("dSFMT.jl")
-include("random.jl")
+include("Random.jl")
 importall .Random
 
 # (s)printf macros
-include("printf.jl")
+include("Printf.jl")
 importall .Printf
 
 # metaprogramming
-include("meta.jl")
+include("Meta.jl")
 
 # enums
 include("Enums.jl")
 importall .Enums
 
 # concurrency and parallelism
-include("serialize.jl")
+include("Serializer.jl")
 importall .Serializer
 include("channels.jl")
 include("clusterserialize.jl")
@@ -285,18 +285,18 @@ include("asyncmap.jl")
 include("loading.jl")
 
 # memory-mapped and shared arrays
-include("mmap.jl")
+include("Mmap.jl")
 import .Mmap
 include("sharedarray.jl")
 
 # utilities - timing, help, edit
-include("datafmt.jl")
+include("DataFmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
 include("replutil.jl")
-include("test.jl")
-include("i18n.jl")
+include("Test.jl")
+include("I18n.jl")
 using .I18n
 
 # frontend
@@ -310,11 +310,11 @@ include("client.jl")
 # misc useful functions & macros
 include("util.jl")
 
-include("broadcast.jl")
+include("Broadcast.jl")
 importall .Broadcast
 
 # dense linear algebra
-include("linalg/linalg.jl")
+include("linalg/LinAlg.jl")
 importall .LinAlg
 const ⋅ = dot
 const × = cross
@@ -326,31 +326,31 @@ include("statistics.jl")
 include("irrationals.jl")
 
 # signal processing
-include("dft.jl")
+include("DFT.jl")
 importall .DFT
-include("dsp.jl")
+include("DSP.jl")
 importall .DSP
 
 # Numerical integration
-include("quadgk.jl")
+include("QuadGK.jl")
 importall .QuadGK
 
 # Fast math
-include("fastmath.jl")
+include("FastMath.jl")
 importall .FastMath
 
 # libgit2 support
-include("libgit2/libgit2.jl")
+include("libgit2/LibGit2.jl")
 
 # package manager
-include("pkg/pkg.jl")
+include("pkg/Pkg.jl")
 
 # Stack frames and traces
-include("stacktraces.jl")
+include("StackTraces.jl")
 importall .StackTraces
 
 # profiler
-include("profile.jl")
+include("Profile.jl")
 importall .Profile
 
 # dates
@@ -358,7 +358,7 @@ include("dates/Dates.jl")
 import .Dates: Date, DateTime, now
 
 # sparse matrices, vectors, and sparse linear algebra
-include("sparse/sparse.jl")
+include("sparse/SparseArrays.jl")
 importall .SparseArrays
 
 # worker threads

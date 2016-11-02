@@ -263,8 +263,8 @@ The mechanism by which Julia picks default sorting algorithms is
 implemented via the ``Base.Sort.defalg`` function. It allows a
 particular algorithm to be registered as the default in all sorting
 functions for specific arrays. For example, here are the two default
-methods from `sort.jl
-<https://github.com/JuliaLang/julia/blob/master/base/sort.jl>`_::
+methods from `Sort.jl
+<https://github.com/JuliaLang/julia/blob/master/base/Sort.jl>`_::
 
     defalg(v::AbstractArray) = MergeSort
     defalg{T<:Number}(v::AbstractArray{T}) = QuickSort

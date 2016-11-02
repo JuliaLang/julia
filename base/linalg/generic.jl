@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## linalg.jl: Some generic Linear Algebra definitions
+## LinAlg.jl: Some generic Linear Algebra definitions
 
 # For better performance when input and output are the same array
 # See https://github.com/JuliaLang/julia/issues/8415#issuecomment-56608729

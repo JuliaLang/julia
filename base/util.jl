@@ -2,7 +2,7 @@
 
 # timing
 
-# time() in libc.jl
+# time() in Libc.jl
 
 # high-resolution relative time, in nanoseconds
 

@@ -209,7 +209,7 @@ clipboard()
 
 # system information
 
-# used by sysinfo.jl
+# used by Sys.jl
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
     tck = Sys.SC_CLK_TCK
     if header

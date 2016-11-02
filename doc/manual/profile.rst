@@ -74,7 +74,7 @@ we'll use the text-based display that comes with the standard library::
           23 client.jl; _start; line: 373
             23 client.jl; run_repl; line: 166
                23 client.jl; eval_user_input; line: 91
-                  23 profile.jl; anonymous; line: 14
+                  23 Profile.jl; anonymous; line: 14
                      8  none; myfunc; line: 2
                       8 dSFMT.jl; dsfmt_gv_fill_array_close_open!; line: 128
                      15 none; myfunc; line: 3
@@ -144,7 +144,7 @@ more samples::
            3121 client.jl; _start; line: 373
             3121 client.jl; run_repl; line: 166
                3121 client.jl; eval_user_input; line: 91
-                  3121 profile.jl; anonymous; line: 1
+                  3121 Profile.jl; anonymous; line: 1
                      848  none; myfunc; line: 2
                       842 dSFMT.jl; dsfmt_gv_fill_array_close_open!; line: 128
                      1510 none; myfunc; line: 3
