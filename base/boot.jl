@@ -158,23 +158,23 @@ abstract Integer  <: Real
 abstract Signed   <: Integer
 abstract Unsigned <: Integer
 
-bitstype 16 Float16 <: AbstractFloat
-bitstype 32 Float32 <: AbstractFloat
-bitstype 64 Float64 <: AbstractFloat
+primitive 16 Float16 <: AbstractFloat
+primitive 32 Float32 <: AbstractFloat
+primitive 64 Float64 <: AbstractFloat
 
-bitstype 8  Bool <: Integer
-bitstype 32 Char
+primitive 8  Bool <: Integer
+primitive 32 Char
 
-bitstype 8   Int8    <: Signed
-bitstype 8   UInt8   <: Unsigned
-bitstype 16  Int16   <: Signed
-bitstype 16  UInt16  <: Unsigned
-bitstype 32  Int32   <: Signed
-bitstype 32  UInt32  <: Unsigned
-bitstype 64  Int64   <: Signed
-bitstype 64  UInt64  <: Unsigned
-bitstype 128 Int128  <: Signed
-bitstype 128 UInt128 <: Unsigned
+primitive 8   Int8    <: Signed
+primitive 8   UInt8   <: Unsigned
+primitive 16  Int16   <: Signed
+primitive 16  UInt16  <: Unsigned
+primitive 32  Int32   <: Signed
+primitive 32  UInt32  <: Unsigned
+primitive 64  Int64   <: Signed
+primitive 64  UInt64  <: Unsigned
+primitive 128 Int128  <: Signed
+primitive 128 UInt128 <: Unsigned
 
 if Int === Int64
     typealias UInt UInt64

@@ -72,10 +72,10 @@ function g end
 abstract AT
 
 "BT"
-bitstype 8 BT
+primitive 8 BT
 
 "BT2"
-bitstype 8 BT2 <: Integer
+primitive 8 BT2 <: Integer
 
 "T"
 struct T <: AT

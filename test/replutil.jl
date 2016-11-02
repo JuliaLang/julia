@@ -314,8 +314,8 @@ let
 end
 
 # Issue #14884
-bitstype 8 EightBitType
-bitstype 8 EightBitTypeT{T}
+primitive 8 EightBitType
+primitive 8 EightBitTypeT{T}
 const struct FunctionLike <: Function; end
 let err_str,
     i = reinterpret(EightBitType, 0x54),

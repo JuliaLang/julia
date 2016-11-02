@@ -1462,7 +1462,7 @@ f4518(x::String, y::Union{Int32,Int64}) = 1
 @test f4518("",1) == 1
 
 # issue #4581
-bitstype 64 Date4581{T}
+primitive 64 Date4581{T}
 let
     x = Core.Intrinsics.box(Date4581{Int}, Core.Intrinsics.unbox(Int64,Int64(1234)))
     xs = Date4581[x]
@@ -1596,7 +1596,7 @@ f5150(T) = Array{Rational{T}}(1)
 
 
 # issue #5165
-bitstype 64 T5165{S}
+primitive 64 T5165{S}
 make_t(x::Int64) = Base.box(T5165{Void}, Base.unbox(Int64, x))
 xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
@@ -1665,7 +1665,7 @@ end
 @test isequal(tighttypes!(Any[Any[1.0,2.0],]), [1,2])
 
 # issue #5142
-bitstype 64 Int5142
+primitive 64 Int5142
 function h5142(a::Bool)
     x=a ? (Int64(0),reinterpret(Int5142,Int64(0))) : (Int64(1),reinterpret(Int5142,Int64(1)))
     x[2]::Int5142
@@ -1684,7 +1684,7 @@ try
     f5142()
 end
 
-bitstype 8 Int5142b
+primitive 8 Int5142b
 function h5142b(a::Int)
     x=((Int8(1),Int8(2)),(reinterpret(Int5142b,Int8(3)),reinterpret(Int5142b,Int8(4))))
     x[a]::Tuple{Int8,Int8}
@@ -1908,7 +1908,7 @@ let
 end
 
 # issue #6387
-bitstype 64 Date6387{C}
+primitive 64 Date6387{C}
 
 struct DateRange6387{C} <: Range{Date6387{C}}
 end
@@ -2426,7 +2426,7 @@ f7221(::AbstractVecOrMat) = 3
 @test f7221(trues(1)) == 2
 
 # test functionality of non-power-of-2 bitstype constants
-bitstype 24 Int24
+primitive 24 Int24
 Int24(x::Int) = Core.Intrinsics.box(Int24,Core.Intrinsics.trunc_int(Int24,Core.Intrinsics.unbox(Int,x)))
 Int(x::Int24) = Core.Intrinsics.box(Int,Core.Intrinsics.zext_int(Int,Core.Intrinsics.unbox(Int24,x)))
 let x,y,f

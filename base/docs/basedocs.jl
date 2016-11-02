@@ -122,8 +122,8 @@ kw"baremodule"
 examples of bits types are integers and floating-point values. Some example built-in
 bits type declarations:
 
-    bitstype 32 Char
-    bitstype 8  Bool <: Integer
+    primitive 32 Char
+    primitive 8  Bool <: Integer
 
 The first parameter indicates how many bits of storage the type requires. Currently,
 only sizes that are multiples of 8 bits are supported. The second parameter gives the
