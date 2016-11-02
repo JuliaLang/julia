@@ -42,7 +42,7 @@ Stack information representing execution context, with the following fields:
   Representation of the pointer to the execution context as returned by `backtrace`.
 
 """
-immutable StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
+const struct StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
     "the name of the function containing the execution context"
     func::Symbol
     "the path to the file containing the execution context"

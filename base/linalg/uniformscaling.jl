@@ -3,7 +3,7 @@
 import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv
 import Base.LinAlg: SingularException
 
-immutable UniformScaling{T<:Number}
+const struct UniformScaling{T<:Number}
     λ::T
 end
 

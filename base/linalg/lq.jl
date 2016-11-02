@@ -2,13 +2,13 @@
 
 # LQ Factorizations
 
-immutable LQ{T,S<:AbstractMatrix} <: Factorization{T}
+const struct LQ{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     LQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
 
-immutable LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+const struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
     LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)

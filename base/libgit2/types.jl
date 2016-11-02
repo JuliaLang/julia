@@ -6,19 +6,19 @@ const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
 
-immutable Oid
+const struct Oid
     val::NTuple{OID_RAWSZ, UInt8}
     Oid(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
 Oid() = Oid(ntuple(i->zero(UInt8), OID_RAWSZ))
 
-immutable TimeStruct
+const struct TimeStruct
     time::Int64     # time in seconds from epoch
     offset::Cint    # timezone offset in minutes
 end
 TimeStruct() = TimeStruct(zero(Int64), zero(Cint))
 
-immutable SignatureStruct
+const struct SignatureStruct
     name::Ptr{UInt8}  # full name of the author
     email::Ptr{UInt8} # email of the author
     when::TimeStruct  # time when the action happened
@@ -27,7 +27,7 @@ SignatureStruct() = SignatureStruct(Ptr{UInt8}(0),
                                     Ptr{UInt8}(0),
                                     TimeStruct())
 
-immutable StrArrayStruct
+const struct StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
 end
@@ -38,7 +38,7 @@ function Base.finalize(sa::StrArrayStruct)
     return sa_ptr[]
 end
 
-immutable Buffer
+const struct Buffer
     ptr::Ptr{Cchar}
     asize::Csize_t
     size::Csize_t
@@ -59,7 +59,7 @@ checkused!(p::Void) = false
 "Resets credentials for another use"
 reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
-immutable CheckoutOptions
+const struct CheckoutOptions
     version::Cuint
 
     checkout_strategy::Cuint
@@ -129,7 +129,7 @@ CheckoutOptions(; checkout_strategy::Cuint = Consts.CHECKOUT_SAFE,
                     perfdata_cb,
                     perfdata_payload)
 
-immutable RemoteCallbacks
+const struct RemoteCallbacks
     version::Cuint
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
@@ -175,7 +175,7 @@ function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractC
 end
 
 if LibGit2.version() >= v"0.24.0"
-    immutable FetchOptions
+    const struct FetchOptions
         version::Cuint
         callbacks::RemoteCallbacks
         prune::Cint
@@ -195,7 +195,7 @@ if LibGit2.version() >= v"0.24.0"
                      download_tags,
                      custom_headers)
 else
-    immutable FetchOptions
+    const struct FetchOptions
         version::Cuint
         callbacks::RemoteCallbacks
         prune::Cint
@@ -213,7 +213,7 @@ else
                      download_tags)
 end
 
-immutable CloneOptions
+const struct CloneOptions
     version::Cuint
     checkout_opts::CheckoutOptions
     fetch_opts::FetchOptions
@@ -247,7 +247,7 @@ CloneOptions(; checkout_opts::CheckoutOptions = CheckoutOptions(),
 
 # git diff option struct
 if LibGit2.version() >= v"0.24.0"
-    immutable DiffOptionsStruct
+    const struct DiffOptionsStruct
         version::Cuint
         flags::UInt32
 
@@ -292,7 +292,7 @@ if LibGit2.version() >= v"0.24.0"
                           old_prefix,
                           new_prefix)
 else
-    immutable DiffOptionsStruct
+    const struct DiffOptionsStruct
         version::Cuint
         flags::UInt32
 
@@ -335,7 +335,7 @@ else
                           new_prefix)
 end
 
-immutable DiffFile
+const struct DiffFile
     id::Oid
     path::Cstring
     size::Int64
@@ -344,7 +344,7 @@ immutable DiffFile
 end
 DiffFile() = DiffFile(Oid(), Cstring_NULL, Int64(0), UInt32(0), UInt16(0))
 
-immutable DiffDelta
+const struct DiffDelta
     status::Cint
     flags::UInt32
     similarity::UInt16
@@ -356,7 +356,7 @@ DiffDelta() = DiffDelta(Cint(0), UInt32(0), UInt16(0), UInt16(0), DiffFile(), Di
 
 # TODO: double check this when libgit2 v0.25.0 is released
 if LibGit2.version() >= v"0.25.0"
-    immutable MergeOptions
+    const struct MergeOptions
         version::Cuint
         flags::Cint
         rename_threshold::Cuint
@@ -385,7 +385,7 @@ if LibGit2.version() >= v"0.25.0"
                      file_favor,
                      file_flags)
 elseif LibGit2.version() >= v"0.24.0"
-    immutable MergeOptions
+    const struct MergeOptions
         version::Cuint
         flags::Cint
         rename_threshold::Cuint
@@ -411,7 +411,7 @@ elseif LibGit2.version() >= v"0.24.0"
                      file_favor,
                      file_flags)
 else
-    immutable MergeOptions
+    const struct MergeOptions
         version::Cuint
         flags::Cint
         rename_threshold::Cuint
@@ -437,7 +437,7 @@ end
 
 
 if LibGit2.version() >= v"0.24.0"
-    immutable PushOptions
+    const struct PushOptions
         version::Cuint
         parallelism::Cint
         callbacks::RemoteCallbacks
@@ -451,7 +451,7 @@ if LibGit2.version() >= v"0.24.0"
                     callbacks,
                     custom_headers)
 else
-    immutable PushOptions
+    const struct PushOptions
         version::Cuint
         parallelism::Cint
         callbacks::RemoteCallbacks
@@ -463,13 +463,13 @@ else
                     callbacks)
 end
 
-immutable IndexTime
+const struct IndexTime
     seconds::Int64
     nanoseconds::Cuint
     IndexTime() = new(zero(Int64), zero(Cuint))
 end
 
-immutable IndexEntry
+const struct IndexEntry
     ctime::IndexTime
     mtime::IndexTime
 
@@ -503,7 +503,7 @@ Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
 
 if LibGit2.version() >= v"0.24.0"
-    immutable RebaseOptions
+    const struct RebaseOptions
         version::Cuint
         quiet::Cint
         inmemory::Cint
@@ -518,7 +518,7 @@ if LibGit2.version() >= v"0.24.0"
                     checkout_opts::CheckoutOptions = CheckoutOptions()) =
         RebaseOptions(one(Cuint), quiet, inmemory, rewrite_notes_ref, merge_opts, checkout_opts)
 else
-    immutable RebaseOptions
+    const struct RebaseOptions
         version::Cuint
         quiet::Cint
         rewrite_notes_ref::Cstring
@@ -530,7 +530,7 @@ else
         RebaseOptions(one(Cuint), quiet, rewrite_notes_ref, checkout_opts)
 end
 
-immutable RebaseOperation
+const struct RebaseOperation
     optype::Cint
     id::Oid
     exec::Cstring
@@ -538,7 +538,7 @@ end
 RebaseOperation() = RebaseOperation(Cint(0), Oid(), Cstring_NULL)
 Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
 
-immutable StatusOptions
+const struct StatusOptions
     version::Cuint
     show::Cint
     flags::Cuint
@@ -555,14 +555,14 @@ StatusOptions(; show::Cint = Consts.STATUS_SHOW_INDEX_AND_WORKDIR,
                   flags,
                   pathspec)
 
-immutable StatusEntry
+const struct StatusEntry
     status::Cuint
     head_to_index::Ptr{DiffDelta}
     index_to_workdir::Ptr{DiffDelta}
 end
 StatusEntry() = StatusEntry(Cuint(0), C_NULL, C_NULL)
 
-immutable FetchHead
+const struct FetchHead
     name::String
     url::String
     oid::Oid
@@ -624,7 +624,7 @@ for (typ, ref, sup, fnc) in (
 end
 
 # Structure has the same layout as SignatureStruct
-type Signature
+struct Signature
     name::String
     email::String
     time::Int64
@@ -688,7 +688,7 @@ end
 import Base.securezero!
 
 "Credentials that support only `user` and `password` parameters"
-type UserPasswordCredentials <: AbstractCredentials
+struct UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
@@ -709,7 +709,7 @@ function securezero!(cred::UserPasswordCredentials)
 end
 
 "SSH credentials type"
-type SSHCredentials <: AbstractCredentials
+struct SSHCredentials <: AbstractCredentials
     user::String
     pass::String
     pubkey::String
@@ -735,7 +735,7 @@ function securezero!(cred::SSHCredentials)
 end
 
 "Credentials that support caching"
-type CachedCredentials <: AbstractCredentials
+struct CachedCredentials <: AbstractCredentials
     cred::Dict{String,AbstractCredentials}
     count::Int            # authentication failure protection count
     CachedCredentials() = new(Dict{String,AbstractCredentials}(),3)

@@ -503,7 +503,7 @@ readstring(s::IO) = String(read(s))
 
 ## high-level iterator interfaces ##
 
-type EachLine
+struct EachLine
     stream::IO
     ondone::Function
     EachLine(stream) = EachLine(stream, ()->nothing)

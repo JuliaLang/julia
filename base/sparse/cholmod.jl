@@ -181,7 +181,7 @@ abstract SuiteSparseStruct
 # time a pointer is returned from CHOLMOD.
 
 # Dense
-immutable C_Dense{T<:VTypes} <: SuiteSparseStruct
+const struct C_Dense{T<:VTypes} <: SuiteSparseStruct
     nrow::Csize_t
     ncol::Csize_t
     nzmax::Csize_t
@@ -192,12 +192,12 @@ immutable C_Dense{T<:VTypes} <: SuiteSparseStruct
     dtype::Cint
 end
 
-type Dense{T<:VTypes} <: DenseMatrix{T}
+struct Dense{T<:VTypes} <: DenseMatrix{T}
     p::Ptr{C_Dense{T}}
 end
 
 # Sparse
-immutable C_Sparse{Tv<:VTypes} <: SuiteSparseStruct
+const struct C_Sparse{Tv<:VTypes} <: SuiteSparseStruct
     nrow::Csize_t
     ncol::Csize_t
     nzmax::Csize_t
@@ -217,7 +217,7 @@ end
 # Corresponds to the exact definition of cholmod_sparse_struct in the library.
 # Useful when reading matrices of unknown type from files as in
 # cholmod_read_sparse
-immutable C_SparseVoid <: SuiteSparseStruct
+const struct C_SparseVoid <: SuiteSparseStruct
     nrow::Csize_t
     ncol::Csize_t
     nzmax::Csize_t
@@ -234,7 +234,7 @@ immutable C_SparseVoid <: SuiteSparseStruct
     packed::Cint
 end
 
-type Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
+struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
     p::Ptr{C_Sparse{Tv}}
     function Sparse(p::Ptr{C_Sparse{Tv}})
         if p == C_NULL
@@ -248,7 +248,7 @@ Sparse{Tv<:VTypes}(p::Ptr{C_Sparse{Tv}}) = Sparse{Tv}(p)
 # Factor
 
 if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
-    immutable C_Factor{Tv<:VTypes} <: SuiteSparseStruct
+    const struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
         n::Csize_t
         minor::Csize_t
         Perm::Ptr{SuiteSparse_long}
@@ -280,7 +280,7 @@ if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
         dtype::Cint
     end
 else
-    immutable C_Factor{Tv<:VTypes} <: SuiteSparseStruct
+    const struct C_Factor{Tv<:VTypes} <: SuiteSparseStruct
         n::Csize_t
         minor::Csize_t
         Perm::Ptr{SuiteSparse_long}
@@ -312,7 +312,7 @@ else
     end
 end
 
-type Factor{Tv} <: Factorization{Tv}
+struct Factor{Tv} <: Factorization{Tv}
     p::Ptr{C_Factor{Tv}}
     function Factor(p::Ptr{C_Factor{Tv}})
         if p == C_NULL
@@ -335,7 +335,7 @@ function get{T<:SuiteSparseStruct}(p::Ptr{T})
 end
 
 # FactorComponent, for encoding particular factors from a factorization
-type FactorComponent{Tv,S} <: AbstractMatrix{Tv}
+struct FactorComponent{Tv,S} <: AbstractMatrix{Tv}
     F::Factor{Tv}
 
     function FactorComponent(F::Factor{Tv})

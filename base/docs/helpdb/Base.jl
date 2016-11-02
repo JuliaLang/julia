@@ -2045,7 +2045,7 @@ BigInt
 Generic equality operator, giving a single `Bool` result. Falls back to `===`. Should be
 implemented for all types with a notion of equality, based on the abstract value that an
 instance represents. For example, all numeric types are compared by numeric value, ignoring
-type. Strings are compared as sequences of characters, ignoring encoding.
+struct. Strings are compared as sequences of characters, ignoring encoding.
 
 Follows IEEE semantics for floating-point numbers.
 
@@ -2663,7 +2663,7 @@ Base.:(.==)
 
 Generate C-callable function pointer from Julia function. Type annotation of the return
 value in the callback function is a must for situations where Julia cannot infer the return
-type automatically.
+struct automatically.
 
 For example:
 

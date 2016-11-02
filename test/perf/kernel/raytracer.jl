@@ -11,7 +11,7 @@
 
 const delta = sqrt(eps(Float64))
 
-immutable Vec
+const struct Vec
     x::Float64
     y::Float64
     z::Float64
@@ -25,19 +25,19 @@ import Base: +, -, *
 dot(a::Vec, b::Vec) = (a.x*b.x + a.y*b.y + a.z*b.z)
 unitize(a::Vec) = (1. / sqrt(dot(a, a)) * a)
 
-type Ray
+struct Ray
     orig::Vec
     dir::Vec
 end
 
-type Hit
+struct Hit
     lambda::Float64
     normal::Vec
 end
 
 abstract Scene
 
-immutable Sphere <: Scene
+const struct Sphere <: Scene
     center::Vec
     radius::Float64
 end
@@ -67,7 +67,7 @@ function intersect(s::Sphere, i::Hit, ray::Ray)
     end
 end
 
-immutable Group <: Scene
+const struct Group <: Scene
     bound::Sphere
     objs::Array{Scene}
 end

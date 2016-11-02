@@ -5,7 +5,7 @@ module TypeTrees
 # Generate a text graphic of Julia modules type tree
 ##
 
-immutable Binding
+const struct Binding
     mod::Module
     sym::Symbol
 end
@@ -13,7 +13,7 @@ Binding(tn::TypeName) = Binding(tn.module, tn.name)
 Base.isless(a::Binding, b::Binding) = isless(a.sym, b.sym)
 
 # The node type holds the type of the current node and a dict of subtypes
-immutable TTNode
+const struct TTNode
     typ::Type
     subtypes::Dict{Binding, TTNode}
 

@@ -14,7 +14,7 @@ Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # This type must be kept in sync with the C struct in src/gc.h
-immutable GC_Num
+const struct GC_Num
     allocd      ::Int64 # GC internal
     deferred_alloc::Int64 # GC internal
     freed       ::Int64 # GC internal
@@ -34,7 +34,7 @@ end
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
 
 # This type is to represent differences in the counters, so fields may be negative
-immutable GC_Diff
+const struct GC_Diff
     allocd      ::Int64 # Bytes allocated
     malloc      ::Int64 # Number of GC aware malloc()
     realloc     ::Int64 # Number of GC aware realloc()
@@ -475,7 +475,7 @@ end
 
 # Windows authentication prompt
 if is_windows()
-    immutable CREDUI_INFO
+    const struct CREDUI_INFO
         cbSize::UInt32
         parent::Ptr{Void}
         pszMessageText::Ptr{UInt16}

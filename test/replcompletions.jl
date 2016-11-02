@@ -3,10 +3,10 @@
 using Base.REPLCompletions
 
 module CompletionFoo
-    type Test_y
+    struct Test_y
         yy
     end
-    type Test_x
+    struct Test_x
         xx :: Test_y
     end
     type_test = Test_x(Test_y(1))

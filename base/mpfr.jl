@@ -61,7 +61,7 @@ julia> big"2.1"
 2.099999999999999999999999999999999999999999999999999999999999999999999999999986
 ```
 """
-type BigFloat <: AbstractFloat
+struct BigFloat <: AbstractFloat
     prec::Clong
     sign::Cint
     exp::Clong

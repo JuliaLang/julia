@@ -524,7 +524,7 @@ D = cat(3, B, B)
 @test unique(D, 3) == cat(3, B)
 
 # With hash collisions
-immutable HashCollision
+const struct HashCollision
     x::Float64
 end
 Base.hash(::HashCollision, h::UInt) = h
@@ -1535,7 +1535,7 @@ module RetTypeDecl
     using Base.Test
     import Base: +, *, .*, convert
 
-    immutable MeterUnits{T,P} <: Number
+    const struct MeterUnits{T,P} <: Number
         val::T
     end
     MeterUnits{T}(val::T, pow::Int) = MeterUnits{T,pow}(val)
@@ -1576,7 +1576,7 @@ end
 ###
 ### LinearSlow workout
 ###
-immutable LinSlowMatrix{T} <: DenseArray{T,2}
+const struct LinSlowMatrix{T} <: DenseArray{T,2}
     data::Matrix{T}
 end
 
@@ -1666,7 +1666,7 @@ x13250[UInt(1):UInt(2)] = 1.0
 @test x13250[2] == 1.0
 @test x13250[3] == 0.0
 
-immutable SquaresVector <: AbstractArray{Int, 1}
+const struct SquaresVector <: AbstractArray{Int, 1}
     count::Int
 end
 Base.size(S::SquaresVector) = (S.count,)
@@ -1732,7 +1732,7 @@ end
 @inferred map(Int8, Int[0])
 
 # make sure @inbounds isn't used too much
-type OOB_Functor{T}; a::T; end
+struct OOB_Functor{T}; a::T; end
 (f::OOB_Functor)(i::Int) = f.a[i]
 let f = OOB_Functor([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
@@ -1809,7 +1809,7 @@ module AutoRetType
 
 using Base.Test
 
-immutable Foo end
+const struct Foo end
 for op in (:+, :*, :÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
     @eval import Base.$(op)
     @eval $(op)(::Foo, ::Foo) = Foo()

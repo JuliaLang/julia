@@ -35,7 +35,7 @@ unsafe_convert{T}(::Type{Ref{T}}, x) = unsafe_convert(Ptr{T}, x)
 
 ### Methods for a Ref object that can store a single value of any type
 
-type RefValue{T} <: Ref{T}
+struct RefValue{T} <: Ref{T}
     x::T
     RefValue() = new()
     RefValue(x) = new(x)
@@ -63,7 +63,7 @@ end
 unsafe_convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 ### Methods for a Ref object that is backed by an array at index i
-immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
+const struct RefArray{T, A<:AbstractArray, R} <: Ref{T}
     x::A
     i::Int
     roots::R # should be either ::Void or ::Any

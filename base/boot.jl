@@ -188,31 +188,31 @@ function Typeof end
 (f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
 
 abstract Exception
-type ErrorException <: Exception
+struct ErrorException <: Exception
     msg::AbstractString
     ErrorException(msg::AbstractString) = new(msg)
 end
-immutable BoundsError        <: Exception
+const struct BoundsError        <: Exception
     a::Any
     i::Any
     BoundsError() = new()
     BoundsError(a::ANY) = new(a)
     BoundsError(a::ANY, i::ANY) = new(a,i)
 end
-immutable DivideError        <: Exception end
-immutable DomainError        <: Exception end
-immutable OverflowError      <: Exception end
-immutable InexactError       <: Exception end
-immutable OutOfMemoryError   <: Exception end
-immutable ReadOnlyMemoryError<: Exception end
-immutable SegmentationFault  <: Exception end
-immutable StackOverflowError <: Exception end
-immutable UndefRefError      <: Exception end
-immutable UndefVarError      <: Exception
+const struct DivideError        <: Exception end
+const struct DomainError        <: Exception end
+const struct OverflowError      <: Exception end
+const struct InexactError       <: Exception end
+const struct OutOfMemoryError   <: Exception end
+const struct ReadOnlyMemoryError<: Exception end
+const struct SegmentationFault  <: Exception end
+const struct StackOverflowError <: Exception end
+const struct UndefRefError      <: Exception end
+const struct UndefVarError      <: Exception
     var::Symbol
 end
-immutable InterruptException <: Exception end
-type TypeError <: Exception
+const struct InterruptException <: Exception end
+struct TypeError <: Exception
     func::Symbol
     context::AbstractString
     expected::Type
@@ -221,7 +221,7 @@ end
 
 abstract DirectIndexString <: AbstractString
 
-immutable String <: AbstractString
+const struct String <: AbstractString
     data::Array{UInt8,1}
     # required to make String("foo") work (#15120):
     String(d::Array{UInt8,1}) = new(d)
@@ -239,7 +239,7 @@ kwfunc(f::ANY) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
 
 kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t.name))
 
-type Box
+struct Box
     contents::Any
     Box(x::ANY) = new(x)
     Box() = new()
@@ -247,7 +247,7 @@ end
 
 # constructors for built-in types
 
-type WeakRef
+struct WeakRef
     value
     WeakRef() = WeakRef(nothing)
     WeakRef(v::ANY) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
@@ -272,7 +272,7 @@ TypeConstructor(p::ANY, t::ANY) =
 
 Void() = nothing
 
-immutable VecElement{T}
+const struct VecElement{T}
     value::T
     VecElement(value::T) = new(value) # disable converting constructor in Core
 end
@@ -354,8 +354,8 @@ atdoc!(λ) = global atdoc = λ
 
 # simple stand-alone print definitions for debugging
 abstract IO
-type CoreSTDOUT <: IO end
-type CoreSTDERR <: IO end
+struct CoreSTDOUT <: IO end
+struct CoreSTDERR <: IO end
 const STDOUT = CoreSTDOUT()
 const STDERR = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Void}), 1, 1)

@@ -14,11 +14,11 @@ abstract ModeState
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
-immutable ModalInterface <: TextInterface
+const struct ModalInterface <: TextInterface
     modes
 end
 
-type MIState
+struct MIState
     interface::ModalInterface
     current_mode
     aborted::Bool
@@ -33,7 +33,7 @@ function show(io::IO, s::MIState)
     print(io, "MI State (", s.current_mode, " active)")
 end
 
-type Prompt <: TextInterface
+struct Prompt <: TextInterface
     prompt
     # A string or function to be printed before the prompt. May not change the length of the prompt.
     # This may be used for changing the color, issuing other terminal escape codes, etc.
@@ -51,12 +51,12 @@ end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
 
-immutable InputAreaState
+const struct InputAreaState
     num_rows::Int64
     curs_row::Int64
 end
 
-type PromptState <: ModeState
+struct PromptState <: ModeState
     terminal
     p::Prompt
     input_buffer::IOBuffer
@@ -77,10 +77,10 @@ end
 abstract HistoryProvider
 abstract CompletionProvider
 
-type EmptyCompletionProvider <: CompletionProvider
+struct EmptyCompletionProvider <: CompletionProvider
 end
 
-type EmptyHistoryProvider <: HistoryProvider
+struct EmptyHistoryProvider <: HistoryProvider
 end
 
 reset_state(::EmptyHistoryProvider) = nothing
@@ -711,7 +711,7 @@ end
 # Redirect a key as if `seq` had been the keysequence instead in a lazy fashion.
 # This is different from the default eager redirect, which only looks at the current and lower
 # layers of the stack.
-immutable KeyAlias
+const struct KeyAlias
     seq::String
     KeyAlias(seq) = new(normalize_key(seq))
 end
@@ -965,7 +965,7 @@ function write_response_buffer(s::PromptState, data)
     refresh_line(s)
 end
 
-type SearchState <: ModeState
+struct SearchState <: ModeState
     terminal
     histprompt
     #rsearch (true) or ssearch (false)
@@ -1009,7 +1009,7 @@ function reset_state(s::SearchState)
     reset_state(s.histprompt.hp)
 end
 
-type HistoryPrompt{T<:HistoryProvider} <: TextInterface
+struct HistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     complete
     keymap_dict::Dict{Char,Any}
@@ -1019,7 +1019,7 @@ end
 HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
-type PrefixSearchState <: ModeState
+struct PrefixSearchState <: ModeState
     terminal
     histprompt
     prefix::String
@@ -1048,7 +1048,7 @@ input_string(s::PrefixSearchState) = String(s.response_buffer)
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
 # for prefix searching
-type PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
+struct PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     parent_prompt::Prompt
     complete

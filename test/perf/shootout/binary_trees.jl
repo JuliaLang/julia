@@ -10,10 +10,10 @@
 
 abstract BTree
 
-type Empty <: BTree
+struct Empty <: BTree
 end
 
-type Node <: BTree
+struct Node <: BTree
     info
     left::BTree
     right::BTree

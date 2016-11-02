@@ -117,7 +117,7 @@ end
 lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
 
 # Temporal Adjusters
-immutable DateFunction
+const struct DateFunction
     f::Function
     # validate boolean, single-arg inner constructor
     function DateFunction(f::ANY, negate::Bool, dt::TimeType)

@@ -400,7 +400,7 @@ end
 
 # Interpolation / Custom types
 
-type Reference
+struct Reference
     ref
 end
 

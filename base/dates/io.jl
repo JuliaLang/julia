@@ -36,20 +36,20 @@ const MONTHTOVALUEABBR = Dict{String,Dict{String,Int}}("english"=>abbrenglish)
 # Date/DateTime Parsing
 abstract Slot{T<:Any}
 
-immutable DelimitedSlot{T<:Any} <: Slot{T}
+const struct DelimitedSlot{T<:Any} <: Slot{T}
     parser::Type{T}
     letter::Char
     width::Int
     transition::Union{Regex,AbstractString}
 end
 
-immutable FixedWidthSlot{T<:Any} <: Slot{T}
+const struct FixedWidthSlot{T<:Any} <: Slot{T}
     parser::Type{T}
     letter::Char
     width::Int
 end
 
-immutable DateFormat
+const struct DateFormat
     slots::Array{Slot,1}
     prefix::AbstractString # optional transition from the start of a string to the 1st slot
     locale::AbstractString
@@ -59,7 +59,7 @@ abstract DayOfWeekSlot
 
 # Slot rules translate letters into types. Note that
 # list of rules can be extended.
-immutable SlotRule
+const struct SlotRule
     rules::Array{Type}
 end
 const SLOT_RULE = SlotRule(Array{Type}(256))

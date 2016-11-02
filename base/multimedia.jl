@@ -11,7 +11,7 @@ export Display, display, pushdisplay, popdisplay, displayable, redisplay,
 # that Julia's dispatch and overloading mechanisms can be used to
 # dispatch show and to add conversions for new types.
 
-immutable MIME{mime} end
+const struct MIME{mime} end
 
 import Base: show, print, string, convert
 MIME(s) = MIME{Symbol(s)}()
@@ -122,7 +122,7 @@ displayable(d::Display, mime::AbstractString) = displayable(d, MIME(mime))
 displayable(mime::AbstractString) = displayable(MIME(mime))
 
 # simplest display, which only knows how to display text/plain
-immutable TextDisplay <: Display
+const struct TextDisplay <: Display
     io::IO
 end
 display(d::TextDisplay, M::MIME"text/plain", x) = show(d.io, M, x)

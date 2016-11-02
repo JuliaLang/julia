@@ -266,7 +266,7 @@ inlineanonymous(base::Symbol, ext) = Symbol(base,'_',ext)
 #    lreplace(:i_d, :d, 3) -> :i_3
 #    lreplace(:i_{d-1}, :d, 3) -> :i_2
 # This follows LaTeX notation.
-immutable LReplace{S<:AbstractString}
+const struct LReplace{S<:AbstractString}
     pat_sym::Symbol
     pat_str::S
     val::Int

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
+const struct Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
@@ -34,7 +34,7 @@ function hessfact{T}(A::StridedMatrix{T})
     return hessfact!(copy_oftype(A, S))
 end
 
-immutable HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+const struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
     τ::Vector{T}
     HessenbergQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)

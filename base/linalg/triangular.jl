@@ -8,7 +8,7 @@ abstract AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} # could be
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
           :UnitUpperTriangular)
     @eval begin
-        immutable $t{T,S<:AbstractMatrix} <: AbstractTriangular{T,S}
+        const struct $t{T,S<:AbstractMatrix} <: AbstractTriangular{T,S}
             data::S
         end
         $t(A::$t) = A

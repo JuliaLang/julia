@@ -287,7 +287,7 @@ reduce(op, a::Number) = a
 
 ## conditions and results of short-circuiting
 
-immutable Predicate{F}
+const struct Predicate{F}
     f::F
 end
 (pred::Predicate)(x) = pred.f(x)::Bool

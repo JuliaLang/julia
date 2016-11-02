@@ -59,7 +59,7 @@ include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","file_constants.jl"))  # inc
 
 abstract AbstractFile <: IO
 
-type File <: AbstractFile
+struct File <: AbstractFile
     open::Bool
     handle::RawFD
     File(fd::RawFD) = new(true, fd)

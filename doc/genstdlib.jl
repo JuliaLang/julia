@@ -9,7 +9,7 @@ const DOCSTRING_DIRECTIVE = r"^(.. (function|type|data):: ).*"
 
 typealias Signature Tuple{Binding, Type}
 
-type State
+struct State
     files      :: Dict{String, Vector{String}}
     validdocs  :: Dict{String, Tuple{Module, Signature, DocStr}}
     baddocs    :: Dict{Signature, Tuple{Module, DocStr}}

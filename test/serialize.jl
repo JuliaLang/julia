@@ -196,7 +196,7 @@ create_serialization_stream() do s
 end
 
 # Array
-type TA1
+struct TA1
     v::UInt8
 end
 create_serialization_stream() do s # small 1d array
@@ -240,7 +240,7 @@ end
 # Objects that have a SubArray as a type in a type-parameter list
 module ArrayWrappers
 
-immutable ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
+const struct ArrayWrapper{T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
 end
 ArrayWrapper{T,N}(data::AbstractArray{T,N}) = ArrayWrapper{T,N,typeof(data)}(data)
@@ -306,7 +306,7 @@ create_serialization_stream() do s # user-defined type array
     @test r.exception === nothing
 end
 
-immutable MyErrorTypeTest <: Exception end
+const struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
     @test_throws MyErrorTypeTest wait(schedule(t))
@@ -391,7 +391,7 @@ str = takebuf_string(io)
 end  # module Test13452
 
 # issue #15163
-type B15163{T}
+struct B15163{T}
     x::Array{T}
 end
 let b = IOBuffer()

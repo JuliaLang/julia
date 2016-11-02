@@ -4,7 +4,7 @@
 # Emphasis
 # ––––––––
 
-type Italic
+struct Italic
     text
 end
 
@@ -14,7 +14,7 @@ function asterisk_italic(stream::IO, md::MD)
     return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
-type Bold
+struct Bold
     text
 end
 
@@ -54,7 +54,7 @@ end
 # Images & Links
 # ––––––––––––––
 
-type Image
+struct Image
     url::String
     alt::String
 end
@@ -73,7 +73,7 @@ function image(stream::IO, md::MD)
     end
 end
 
-type Link
+struct Link
     text
     url::String
 end
@@ -110,7 +110,7 @@ end
 # Punctuation
 # –––––––––––
 
-type LineBreak end
+struct LineBreak end
 
 @trigger '\\' ->
 function linebreak(stream::IO, md::MD)

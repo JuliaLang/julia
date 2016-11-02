@@ -9,10 +9,10 @@ using ..Types
 # representing lines of REQUIRE files
 
 abstract Line
-immutable Comment <: Line
+const struct Comment <: Line
     content::AbstractString
 end
-immutable Requirement <: Line
+const struct Requirement <: Line
     content::AbstractString
     package::AbstractString
     versions::VersionSet

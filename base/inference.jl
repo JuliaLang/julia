@@ -6,7 +6,7 @@ import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstanc
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 7
 
-immutable InferenceParams
+const struct InferenceParams
     # optimization
     inlining::Bool
 
@@ -41,23 +41,23 @@ const Slot_UsedUndef    = 32
 
 #### inference state types ####
 
-immutable NotFound end
+const struct NotFound end
 const NF = NotFound()
 typealias LineNum Int
 typealias VarTable Array{Any,1}
 
-type VarState
+struct VarState
     typ
     undef::Bool
     VarState(typ::ANY, undef::Bool) = new(typ, undef)
 end
 
-immutable Const
+const struct Const
     val
     Const(v::ANY) = new(v)
 end
 
-type InferenceState
+struct InferenceState
     sp::SimpleVector     # static parameters
     label_counter::Int   # index of the current highest label for this function
     mod::Module
@@ -1303,7 +1303,7 @@ end
 
 #### handling for statement-position expressions ####
 
-type StateUpdate
+struct StateUpdate
     var::Union{Slot,SSAValue}
     vtype
     state::VarTable

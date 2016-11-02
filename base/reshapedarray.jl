@@ -2,7 +2,7 @@
 
 using  Base.MultiplicativeInverses: SignedMultiplicativeInverse
 
-immutable ReshapedArray{T,N,P<:AbstractArray,MI<:Tuple{Vararg{SignedMultiplicativeInverse{Int}}}} <: AbstractArray{T,N}
+const struct ReshapedArray{T,N,P<:AbstractArray,MI<:Tuple{Vararg{SignedMultiplicativeInverse{Int}}}} <: AbstractArray{T,N}
     parent::P
     dims::NTuple{N,Int}
     mi::MI
@@ -13,7 +13,7 @@ ReshapedArray{T,N}(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) = Reshaped
 typealias ReshapedArrayLF{T,N,P<:AbstractArray} ReshapedArray{T,N,P,Tuple{}}
 
 # Fast iteration on ReshapedArrays: use the parent iterator
-immutable ReshapedArrayIterator{I,M}
+const struct ReshapedArrayIterator{I,M}
     iter::I
     mi::NTuple{M,SignedMultiplicativeInverse{Int}}
 end
@@ -23,7 +23,7 @@ function _rs_iterator{M}(P, mi::NTuple{M})
     ReshapedArrayIterator{typeof(iter),M}(iter, mi)
 end
 
-immutable ReshapedIndex{T}
+const struct ReshapedIndex{T}
     parentindex::T
 end
 

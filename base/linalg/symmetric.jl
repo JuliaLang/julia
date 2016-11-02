@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 #Symmetric and Hermitian matrices
-immutable Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+const struct Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
@@ -45,7 +45,7 @@ Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-
 Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == A.'`).
 """
 Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A);Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
-immutable Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+const struct Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end

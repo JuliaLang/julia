@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-immutable NullException <: Exception
+const struct NullException <: Exception
 end
 
 """
@@ -166,7 +166,7 @@ Custom types should implement methods for some or all operations `f` when applic
 returning `true` means that the operation may be called on any bit pattern without
 throwing an error (though returning invalid or nonsensical results is not a problem).
 In particular, this means that the operation can be applied on the whole domain of the
-type *and on uninitialized objects*. As a general rule, these properties are only true for
+struct *and on uninitialized objects*. As a general rule, these properties are only true for
 safe operations on `isbits` types.
 
 Types declared as safe can benefit from higher performance for operations on nullable: by

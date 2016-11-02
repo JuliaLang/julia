@@ -27,7 +27,7 @@ abstract AbstractLock
 
 See SpinLock.
 """
-immutable TatasLock <: AbstractLock
+const struct TatasLock <: AbstractLock
     handle::Atomic{Int}
     TatasLock() = new(Atomic{Int}(0))
 end
@@ -86,7 +86,7 @@ end
 
 See RecursiveSpinLock.
 """
-immutable RecursiveTatasLock <: AbstractLock
+const struct RecursiveTatasLock <: AbstractLock
     ownertid::Atomic{Int16}
     handle::Atomic{Int}
     RecursiveTatasLock() = new(Atomic{Int16}(0), Atomic{Int}(0))
@@ -179,7 +179,7 @@ on pthreads, this is a `pthread_mutex_t`.
 
 See also SpinLock for a lighter-weight lock.
 """
-type Mutex <: AbstractLock
+struct Mutex <: AbstractLock
     ownertid::Int16
     handle::Ptr{Void}
     function Mutex()

@@ -6,10 +6,10 @@
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
 The syntax `f(x) [if cond(x)::Bool] for x in iter` is syntax for constructing an instance of this
-type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
+struct. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
 filtering out values where the condition is false.
 """
-immutable Generator{I,F}
+const struct Generator{I,F}
     f::F
     iter::I
 end
@@ -30,10 +30,10 @@ end
 ## iterator traits
 
 abstract IteratorSize
-immutable SizeUnknown <: IteratorSize end
-immutable HasLength <: IteratorSize end
-immutable HasShape <: IteratorSize end
-immutable IsInfinite <: IteratorSize end
+const struct SizeUnknown <: IteratorSize end
+const struct HasLength <: IteratorSize end
+const struct HasShape <: IteratorSize end
+const struct IsInfinite <: IteratorSize end
 
 """
     iteratorsize(itertype::Type) -> IteratorSize
@@ -56,8 +56,8 @@ iteratorsize(x) = iteratorsize(typeof(x))
 iteratorsize(::Type) = HasLength()  # HasLength is the default
 
 abstract IteratorEltype
-immutable EltypeUnknown <: IteratorEltype end
-immutable HasEltype <: IteratorEltype end
+const struct EltypeUnknown <: IteratorEltype end
+const struct HasEltype <: IteratorEltype end
 
 """
     iteratoreltype(itertype::Type) -> IteratorEltype
@@ -70,7 +70,7 @@ Given the type of an iterator, returns one of the following values:
 `HasEltype()` is the default, since iterators are assumed to implement `eltype`.
 
 This trait is generally used to select between algorithms that pre-allocate a specific
-type of result, and algorithms that pick a result type based on the types of yielded
+struct of result, and algorithms that pick a result type based on the types of yielded
 values.
 """
 iteratoreltype(x) = iteratoreltype(typeof(x))

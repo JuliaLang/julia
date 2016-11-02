@@ -43,7 +43,7 @@ abstract MultiplicativeInverse{T}
 #
 # Further details can be found in Hacker's Delight, Chapter 10.
 
-immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
+const struct SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
     divisor::T
     multiplier::T
     addmul::Int8
@@ -88,7 +88,7 @@ immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
 end
 SignedMultiplicativeInverse(x::Signed) = SignedMultiplicativeInverse{typeof(x)}(x)
 
-immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
+const struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
     divisor::T
     multiplier::T
     add::Bool

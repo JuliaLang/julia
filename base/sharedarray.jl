@@ -2,7 +2,7 @@
 
 import .Serializer: serialize_cycle, serialize_type, writetag, UNDEFREF_TAG
 
-type SharedArray{T,N} <: DenseArray{T,N}
+struct SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
     refs::Vector
@@ -116,7 +116,7 @@ SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
     SharedArray(filename::AbstractString, T::Type, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
 
 Construct a `SharedArray` backed by the file `filename`, with element
-type `T` (must be a `bitstype`) and size `dims`, across the processes
+struct `T` (must be a `bitstype`) and size `dims`, across the processes
 specified by `pids` - all of which have to be on the same host. This
 file is mmapped into the host memory, with the following consequences:
 

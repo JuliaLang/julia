@@ -166,7 +166,7 @@ let
 end
 
 # issue #1438
-type I1438T
+struct I1438T
     id
 end
 import Base.hash
@@ -308,7 +308,7 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
 end
 
 # issue #9463
-type Alpha end
+struct Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
     io = Base.IOContext(sbuff, limit=true, displaysize=(10, 20))
@@ -361,7 +361,7 @@ let
 end
 
 # issue #10647
-type T10647{T}; x::T; end
+struct T10647{T}; x::T; end
 let
     a = ObjectIdDict()
     a[1] = a
@@ -475,7 +475,7 @@ end
 
 # issue #15077
 
-immutable MyString <: AbstractString
+const struct MyString <: AbstractString
     str::String
 end
 import Base.==
@@ -526,7 +526,7 @@ let badKeys = [
     end
 end
 
-immutable MyInt <: Integer
+const struct MyInt <: Integer
     val::UInt
 end
 

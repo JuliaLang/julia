@@ -936,7 +936,7 @@ end
 
 # Pair
 
-immutable Pair{A,B}
+const struct Pair{A,B}
     first::A
     second::B
 end

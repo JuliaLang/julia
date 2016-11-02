@@ -96,7 +96,7 @@ function uv_status_string(x)
     return "invalid status"
 end
 
-type PipeEndpoint <: LibuvStream
+struct PipeEndpoint <: LibuvStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
@@ -124,7 +124,7 @@ type PipeEndpoint <: LibuvStream
     end
 end
 
-type PipeServer <: LibuvServer
+struct PipeServer <: LibuvServer
     handle::Ptr{Void}
     status::Int
     connectnotify::Condition
@@ -147,7 +147,7 @@ function PipeServer()
     return init_pipe!(p; readable=true)
 end
 
-type TTY <: LibuvStream
+struct TTY <: LibuvStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
@@ -505,7 +505,7 @@ end
 #  (composed of two half-pipes: .in and .out)
 ##########################################
 
-type Pipe <: AbstractPipe
+struct Pipe <: AbstractPipe
     in::PipeEndpoint # writable
     out::PipeEndpoint # readable
 end
@@ -1056,7 +1056,7 @@ reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
 # BufferStream's are non-OS streams, backed by a regular IOBuffer
-type BufferStream <: LibuvStream
+struct BufferStream <: LibuvStream
     buffer::IOBuffer
     r_c::Condition
     close_c::Condition

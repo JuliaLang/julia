@@ -2,7 +2,7 @@
 
 typealias InnerConfig Dict{Char, Vector{Function}}
 
-type Config
+struct Config
     breaking::Vector{Function}
     regular::Vector{Function}
     inner::InnerConfig

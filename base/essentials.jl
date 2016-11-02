@@ -220,12 +220,12 @@ function isassigned(v::SimpleVector, i::Int)
 end
 
 # index colon
-immutable Colon
+const struct Colon
 end
 const (:) = Colon()
 
 # For passing constants through type inference
-immutable Val{T}
+const struct Val{T}
 end
 
 # used by interpolating quote and some other things in the front end

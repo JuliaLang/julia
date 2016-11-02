@@ -25,7 +25,7 @@ export
     stat,
     uperm
 
-immutable StatStruct
+const struct StatStruct
     device  :: UInt
     inode   :: UInt
     mode    :: UInt

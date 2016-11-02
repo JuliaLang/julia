@@ -28,7 +28,7 @@ Currently supported rounding modes are:
 - [`RoundUp`](:obj:`RoundUp`)
 - [`RoundDown`](:obj:`RoundDown`)
 """
-immutable RoundingMode{T} end
+const struct RoundingMode{T} end
 
 """
     RoundNearest

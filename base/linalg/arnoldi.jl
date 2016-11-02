@@ -284,7 +284,7 @@ end
 ## svds
 ### Restrict operator to BlasFloat because ARPACK only supports that. Loosen restriction
 ### when we switch to our own implementation
-type SVDOperator{T<:BlasFloat,S} <: AbstractArray{T, 2}
+struct SVDOperator{T<:BlasFloat,S} <: AbstractArray{T, 2}
     X::S
     m::Int
     n::Int

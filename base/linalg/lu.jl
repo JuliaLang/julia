@@ -3,7 +3,7 @@
 ####################
 # LU Factorization #
 ####################
-immutable LU{T,S<:AbstractMatrix} <: Factorization{T}
+const struct LU{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     ipiv::Vector{BlasInt}
     info::BlasInt
@@ -87,7 +87,7 @@ lufact{T<:AbstractFloat}(A::Union{AbstractMatrix{T},AbstractMatrix{Complex{T}}},
 Compute the LU factorization of `A`.
 
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
-type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
+struct `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
 pivoting is chosen (default) the element type should also support `abs` and
 `<`.
 

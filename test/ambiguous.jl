@@ -172,7 +172,7 @@ end
 
 # issue #17350
 module Ambig6
-immutable ScaleMinMax{To,From} end
+const struct ScaleMinMax{To,From} end
 map1{To<:Union{Float32,Float64},From<:Real}(mapi::ScaleMinMax{To,From}, val::From) = 1
 map1{To<:Union{Float32,Float64},From<:Real}(mapi::ScaleMinMax{To,From}, val::Union{Real,Complex}) = 2
 end
@@ -180,14 +180,14 @@ end
 @test isempty(detect_ambiguities(Ambig6))
 
 module Ambig7
-immutable T end
+const struct T end
 (::T)(x::Int8, y) = 1
 (::T)(x, y::Int8) = 2
 end
 @test length(detect_ambiguities(Ambig7)) == 1
 
 module Ambig17648
-immutable MyArray{T,N} <: AbstractArray{T,N}
+const struct MyArray{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 

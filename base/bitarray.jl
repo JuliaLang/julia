@@ -4,7 +4,7 @@
 
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
-type BitArray{N} <: DenseArray{Bool, N}
+struct BitArray{N} <: DenseArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
@@ -2000,7 +2000,7 @@ map!(f::typeof(!), dest::BitArray, A::BitArray) = map!(~, dest, A)
 map!(f::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
 map!(f::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)
 
-immutable BitChunkFunctor{F<:Function}
+const struct BitChunkFunctor{F<:Function}
     f::F
 end
 (f::BitChunkFunctor)(x, y) = f.f(x,y)

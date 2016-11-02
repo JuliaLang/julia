@@ -1003,7 +1003,7 @@ end
 @test remotecall_fetch(x->(y->2y)(x)+1, workers()[1], 3) == 7
 
 # issue #16091
-type T16091 end
+struct T16091 end
 wid = workers()[1]
 @test try
     remotecall_fetch(()->T16091, wid)

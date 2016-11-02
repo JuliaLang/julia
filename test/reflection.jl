@@ -71,10 +71,10 @@ tag = Base.have_color ? Base.text_colors[:red] : "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
-type Stable{T,N}
+struct Stable{T,N}
     A::Array{T,N}
 end
-type Unstable{T}
+struct Unstable{T}
     A::Array{T}
 end
 Base.getindex(A::Stable, i) = A.A[i]
@@ -175,7 +175,7 @@ d7648 = 9
 const f7648 = 10
 foo7648(x) = x
 function foo7648_nomethods end
-type Foo7648 end
+struct Foo7648 end
 
     module TestModSub9475
     using Base.Test
@@ -280,7 +280,7 @@ foo13825{T,N}(::Array{T,N}, ::Array, ::Vector) = nothing
 @test startswith(string(first(methods(foo13825))),
                  "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T<:Any,1})")
 
-type TLayout
+struct TLayout
     x::Int8
     y::Int16
     z::Int32
@@ -563,7 +563,7 @@ let
     @test length(b) == 0
 end
 
-type A18434
+struct A18434
 end
 (::Type{A18434})(x; y=1) = 1
 

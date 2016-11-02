@@ -25,10 +25,10 @@ function summary(t::Associative)
     return string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
-immutable KeyIterator{T<:Associative}
+const struct KeyIterator{T<:Associative}
     dict::T
 end
-immutable ValueIterator{T<:Associative}
+const struct ValueIterator{T<:Associative}
     dict::T
 end
 
@@ -275,7 +275,7 @@ push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q
 
 # hashing objects by identity
 
-type ObjectIdDict <: Associative{Any,Any}
+struct ObjectIdDict <: Associative{Any,Any}
     ht::Vector{Any}
     ndel::Int
     ObjectIdDict() = new(Vector{Any}(32), 0)
