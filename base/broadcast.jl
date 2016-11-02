@@ -140,7 +140,8 @@ end
             # extract array values
             @nexprs $nargs i->(@inbounds val_i = _broadcast_getindex(A_i, I_i))
             # call the function and store the result
-            @inbounds B[I] = @ncall $nargs f val
+            result = @ncall $nargs f val
+            @inbounds B[I] = result
         end
     end
 end
