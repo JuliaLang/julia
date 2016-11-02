@@ -110,14 +110,12 @@ timeit("mandel", mandelperf)
 
 pisum = function() {
     t = 0.0
+    a = 1:10000
     for (j in 1:500) {
-        t = 0.0
-        for (k in 1:10000) {
-            t = t + 1.0/(k*k)
-        }
+        t = sum(1/a^2)
     }
     return(t)
-}
+}	
 
 assert(abs(pisum()-1.644834071848065) < 1e-12);
 timeit("pi_sum", pisum, times=1)
