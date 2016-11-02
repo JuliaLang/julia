@@ -521,8 +521,11 @@ hex(n::BigInt) = base(16, n)
 for f in (:bin, :oct, :dec, :hex)
     @eval function ($f)(n::BigInt, pad::Int)
         b = IOBuffer()
-        res = ($f)(n)
+        res = ($f)(abs(n))
         diff = pad - length(res)
+        if n < 0
+            write(b, "-")
+        end
         for _ in 1:diff
             write(b, "0")
         end
