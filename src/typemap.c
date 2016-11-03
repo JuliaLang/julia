@@ -1097,7 +1097,7 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
     jl_value_t *pa = parent;
     while (l != (void*)jl_nothing) {
         if (!l->isleafsig) { // quickly ignore all of the leafsig entries (these were handled by caller)
-            if (jl_args_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig)) {
+            if (jl_type_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig)) {
                 if (l->simplesig == (void*)jl_nothing ||
                     newrec->simplesig != (void*)jl_nothing || !sigs_eq((jl_value_t*)l->sig, (jl_value_t*)newrec->sig, 1)) {
                     // might need to insert multiple entries for a lookup differing only by their simplesig
@@ -1132,7 +1132,7 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
             pnext = &item->next;
             next_parent = (jl_value_t*)item;
             while (l != newrec->next) {
-                if (jl_args_morespecific((jl_value_t*)item->sig, (jl_value_t*)l->sig)) {
+                if (jl_type_morespecific((jl_value_t*)item->sig, (jl_value_t*)l->sig)) {
                     // reinsert item earlier in the list
                     *pitem = next;
                     jl_gc_wb(item_parent, next);
