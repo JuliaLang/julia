@@ -27,6 +27,7 @@
 (define prec-rational    (add-dots '(//)))
 (define prec-power       (add-dots '(^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬)))
 (define prec-decl        '(|::|))
+;; `where`
 (define prec-dot         '(|.|))
 
 (define prec-names '(prec-assignment
@@ -135,12 +136,15 @@
 (define end-symbol #f)
 ; treat newline like ordinary whitespace instead of as a potential separator
 (define whitespace-newline #f)
+; enable parsing `where` with high precedence
+(define where-enabled #t)
 
 (define current-filename 'none)
 
 (define-macro (with-normal-ops . body)
   `(with-bindings ((range-colon-enabled #t)
-                   (space-sensitive #f))
+                   (space-sensitive #f)
+                   (where-enabled #t))
                   ,@body))
 
 (define-macro (without-range-colon . body)
@@ -577,6 +581,22 @@
                         (list 'if ex then (parse-eq* s))))))
           (else ex))))
 
+(define (parse-where-chain s first)
+  (with-bindings ((where-enabled #f))
+   (let loop ((ex first)
+              (t 'where))
+     (if (eq? t 'where)
+         (begin (take-token s)
+                (loop (list 'where ex (parse-comparison s)) (peek-token s)))
+         ex))))
+
+(define (parse-where s)
+  (let ((ex (parse-call s)))
+    (if (and where-enabled
+             (eq? (peek-token s) 'where))
+        (parse-where-chain s ex)
+        ex)))
+
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
       (memv tok '(#\) #\] #\} else elseif catch finally =))))
@@ -926,11 +946,11 @@
   (parse-factor-h s parse-decl is-prec-power?))
 
 (define (parse-decl s)
-  (let loop ((ex (parse-call s)))
+  (let loop ((ex (parse-where s)))
     (let ((t (peek-token s)))
       (case t
         ((|::|) (take-token s)
-         (loop (list t ex (parse-call s))))
+         (loop (list t ex (parse-where s))))
         ((->)   (take-token s)
          ;; -> is unusual: it binds tightly on the left and
          ;; loosely on the right.
@@ -945,7 +965,7 @@
         (begin (take-token s)
                (cond ((let ((next (peek-token s)))
                         (or (closing-token? next) (newline? next))) op)
-                     ((memq op '(& |::|))  (list op (parse-call s)))
+                     ((memq op '(& |::|))  (list op (parse-where s)))
                      (else                 (list op (parse-unary-prefix s)))))
         (parse-atom s))))
 
@@ -958,16 +978,18 @@
         (parse-call-chain s ex #f))))
 
 (define (parse-def s is-func)
-  (let ((ex (parse-unary-prefix s)))
-    (let ((sig (if (or (and is-func (reserved-word? ex)) (initial-reserved-word? ex))
-                   (error (string "invalid name \"" ex "\""))
-                   (parse-call-chain s ex #f))))
-      (if (and is-func
-               (eq? (peek-token s) '|::|))
-          (begin (take-token s)
-                 `(|::| ,sig ,(parse-call s)))
-          sig))))
-
+  (let* ((ex (parse-unary-prefix s))
+         (sig (if (or (and is-func (reserved-word? ex)) (initial-reserved-word? ex))
+                  (error (string "invalid name \"" ex "\""))
+                  (parse-call-chain s ex #f)))
+         (decl-sig
+          (if (and is-func (eq? (peek-token s) '|::|))
+              (begin (take-token s)
+                     `(|::| ,sig ,(parse-call s)))
+              sig)))
+    (if (eq? (peek-token s) 'where)
+        (parse-where-chain s decl-sig)
+        decl-sig)))
 
 (define (deprecated-dict-replacement ex)
   (if (dict-literal? ex)
@@ -1106,6 +1128,17 @@
 (define (parse-subtype-spec s)
   (parse-comparison s))
 
+(define (valid-func-sig? paren sig)
+  (and (pair? sig)
+       (or (eq? (car sig) 'call)
+           (eq? (car sig) 'tuple)
+           (and paren (eq? (car sig) 'block))
+           (and (eq? (car sig) '|::|)
+                (pair? (cadr sig))
+                (eq? (car (cadr sig)) 'call))
+           (and (eq? (car sig) 'where)
+                (valid-func-sig? paren (cadr sig))))))
+
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
   (with-bindings
@@ -1221,12 +1254,7 @@
                                     `(tuple ,sig)
                                     ;; function foo  =>  syntax error
                                     (error (string "expected \"(\" in " word " definition")))
-                                (if (not (and (pair? sig)
-                                              (or (memq (car sig) '(call tuple))
-                                                  (and paren (eq? (car sig) 'block))
-                                                  (and (eq? (car sig) '|::|)
-                                                       (pair? (cadr sig))
-                                                       (eq? (car (cadr sig)) 'call)))))
+                                (if (not (valid-func-sig? paren sig))
                                     (error (string "expected \"(\" in " word " definition"))
                                     sig)))
                      (body  (parse-block s)))
@@ -1247,7 +1275,7 @@
               (parse-subtype-spec s)))
        ((typealias)
         (let ((lhs (with-space-sensitive (parse-call s))))
-              (list 'typealias lhs (parse-arrow s))))
+              (list 'typealias lhs (parse-where s))))
        ((try)
         (let ((try-block (if (memq (require-token s) '(catch finally))
                              '(block)

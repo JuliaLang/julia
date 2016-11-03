@@ -289,6 +289,16 @@ end
 @test repr(:(bitstype A B)) == ":(bitstype A B)"
 @test repr(:(bitstype 100 B)) == ":(bitstype 100 B)"
 
+# `where` syntax
+@test_repr "A where T<:B"
+@test_repr "A where T<:(Array{T} where T<:Real)"
+@test_repr "Array{T} where T<:Array{S} where S<:Real"
+@test_repr "x::Array{T} where T"
+@test_repr "(a::b) where T"
+@test_repr "a::b where T"
+@test_repr "X where (T=1)"
+@test_repr "X where T = 1"
+
 let oldout = STDOUT, olderr = STDERR
     local rdout, wrout, rderr, wrerr, out, err, rd, wr
     try
