@@ -508,8 +508,9 @@ Deprecated or removed
   * Sparse matrix functions `etree`, `ereach`, `csc_permute`, and `symperm` have been moved
     to the [SuiteSparse.jl package](https://github.com/JuliaSparse/SuiteSparse.jl) ([#12231], [#17033]).
 
-  * The no-op `transpose` fallback has been deprecated. Consider introducing suitable
-    `transpose` methods or calling `permutedims(x, [2,1])` ([#13171], [#17075], [#17374]).
+  * The no-op `transpose` fallback for non-numeric arrays has been deprecated. Consider introducing suitable
+    `transpose` methods or calling permutedims(x, (2, 1)) for matrices and reshape(x, 1, length(x)) for
+    vectors.  ([#13171], [#17075], [#17374]).
 
   * The following macros have been deprecated ([#16219]):
     * `@windows` is deprecated in favor of `is_windows()`
