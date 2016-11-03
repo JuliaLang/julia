@@ -1012,6 +1012,15 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, head)
 
+    # `where` syntax
+    elseif head === :where && length(args) == 2
+        parens = 1 <= prec
+        parens && print(io, "(")
+        show_unquoted(io, args[1], indent, operator_precedence(:(::)))
+        print(io, " where ")
+        show_unquoted(io, args[2], indent, 1)
+        parens && print(io, ")")
+
     elseif head === :import || head === :importall || head === :using
         print(io, head)
         first = true
