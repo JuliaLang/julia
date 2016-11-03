@@ -767,7 +767,8 @@ end
 function transpose(x)
     depwarn(string("the no-op `transpose` for non-numeric arrays is deprecated, ",
         "and no specific `transpose` method for $(typeof(x)) exists. Use ",
-        "permutedims(x, (2, 1)) for matrices and reshape(x, 1, length(x)) for vectors."),
+        "permutedims(x, (2, 1)) for matrices and reshape(x, 1, length(x)) for vectors, ",
+        "or write a specific `transpose(x::$(typeof(x)))` method if appropriate."),
         :transpose)
     return x
 end
