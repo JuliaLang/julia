@@ -75,6 +75,8 @@
                  (string "[ " (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") " ]"))
                 ((generator)
                  (string "(" (deparse (cadr e)) " for " (deparse-arglist (cddr e) ", ") ")"))
+                ((where)
+                 (string (deparse (cadr e)) " where " (deparse (caddr e))))
                 (else
                  (string e))))))
 
