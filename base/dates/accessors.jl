@@ -42,8 +42,15 @@ end
 
 # Accessor functions
 value(dt::TimeType) = dt.instant.periods.value
+
+"""
+    days(dt::TimeType) -> Int64
+
+The Rata Die day number: the number of days since `Date("0000-12-31")`.
+"""
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt),86400000)
+
 year(dt::TimeType) = year(days(dt))
 month(dt::TimeType) = month(days(dt))
 week(dt::TimeType) = week(days(dt))

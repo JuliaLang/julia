@@ -204,9 +204,9 @@ function slotformat(slot::Slot{Month},dt,locale)
 end
 function slotformat(slot::Slot{DayOfWeekSlot},dt,locale)
     if slot.letter == 'e'
-        return VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
+        return VALUETODAYOFWEEKABBR[locale][DayOfWeek(dt)]
     else # == 'E'
-        return VALUETODAYOFWEEK[locale][dayofweek(dt)]
+        return VALUETODAYOFWEEK[locale][DayOfWeek(dt)]
     end
 end
 slotformat(slot::Slot{Millisecond},dt,locale) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")

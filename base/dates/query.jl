@@ -4,9 +4,6 @@
 
 ### Core query functions
 
-# Monday = 1....Sunday = 7
-dayofweek(days) = mod1(days,7)
-
 # Number of days in year
 """
     daysinyear(dt::TimeType) -> Int
@@ -20,30 +17,39 @@ const MONTHDAYS = [0,31,59,90,120,151,181,212,243,273,304,334]
 dayofyear(y,m,d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 
 ### Days of the Week
-"""
-    dayofweek(dt::TimeType) -> Int64
-
-Returns the day of the week as an `Int64` with `1 = Monday, 2 = Tuesday, etc.`.
-"""
-dayofweek(dt::TimeType) = dayofweek(days(dt))
-
-const Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday = 1,2,3,4,5,6,7
-const Mon,Tue,Wed,Thu,Fri,Sat,Sun = 1,2,3,4,5,6,7
-const english_daysofweek = Dict(1=>"Monday",2=>"Tuesday",3=>"Wednesday",
-                                4=>"Thursday",5=>"Friday",6=>"Saturday",7=>"Sunday")
-const VALUETODAYOFWEEK = Dict{String,Dict{Int,String}}("english"=>english_daysofweek)
-const english_daysofweekabbr = Dict(1=>"Mon",2=>"Tue",3=>"Wed",
-                                    4=>"Thu",5=>"Fri",6=>"Sat",7=>"Sun")
-const VALUETODAYOFWEEKABBR = Dict{String,Dict{Int,String}}("english"=>english_daysofweekabbr)
-dayname(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dt]
+@enum DayOfWeek Monday=1 Tuesday=2 Wednesday=3 Thursday=4 Friday=5 Saturday=6 Sunday=7
 
 """
-    dayabbr(dt::TimeType; locale="english") -> AbstractString
+    DayOfWeek(n::Integer)
 
-Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
-in the given `locale`.
+An `Enum` with `DayOfWeek(1) == Monday`, `DayOfWeek(2) == Tuesday`, etc. Accepts an
+arbitrary-sized integer, from which days will be computed modulo 7.
+
+```jldoctest
+julia> DayOfWeek(8) == Monday
+true
+```
 """
-dayabbr(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dt]
+DayOfWeek(n::Integer) = convert(DayOfWeek, mod1(n, 7))
+
+"""
+    DayOfWeek(dt::TimeType)
+
+Returns the day of the week of `dt` as an element of the enum `DayOfWeek`.
+"""
+DayOfWeek(dt::TimeType) = DayOfWeek(days(dt))
+
+
+const Mon,Tue,Wed,Thu,Fri,Sat,Sun = Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday
+
+const english_daysofweek = Dict(k => string(k) for k in instances(DayOfWeek))
+const VALUETODAYOFWEEK = Dict{String,Dict{DayOfWeek,String}}("english"=>english_daysofweek)
+
+const english_daysofweekabbr = Dict(k => string(k)[1:3] for k in instances(DayOfWeek))
+const VALUETODAYOFWEEKABBR = Dict{String,Dict{DayOfWeek,String}}("english"=>english_daysofweekabbr)
+
+dayname(dow::DayOfWeek;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dow]
+dayabbr(dow::DayOfWeek;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dow]
 
 """
     dayname(dt::TimeType; locale="english") -> AbstractString
@@ -51,18 +57,24 @@ dayabbr(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[loc
 Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in
 the given `locale`.
 """
-dayname(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dayofweek(dt)]
+dayname(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][DayOfWeek(dt)]
 
-dayabbr(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
+"""
+    dayabbr(dt::TimeType; locale="english") -> AbstractString
+
+Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
+in the given `locale`.
+"""
+dayabbr(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][DayOfWeek(dt)]
 
 # Convenience methods for each day
-ismonday(dt::TimeType) = dayofweek(dt) == Mon
-istuesday(dt::TimeType) = dayofweek(dt) == Tue
-iswednesday(dt::TimeType) = dayofweek(dt) == Wed
-isthursday(dt::TimeType) = dayofweek(dt) == Thu
-isfriday(dt::TimeType) = dayofweek(dt) == Fri
-issaturday(dt::TimeType) = dayofweek(dt) == Sat
-issunday(dt::TimeType) = dayofweek(dt) == Sun
+ismonday(dt::TimeType) = DayOfWeek(dt) == Mon
+istuesday(dt::TimeType) = DayOfWeek(dt) == Tue
+iswednesday(dt::TimeType) = DayOfWeek(dt) == Wed
+isthursday(dt::TimeType) = DayOfWeek(dt) == Thu
+isfriday(dt::TimeType) = DayOfWeek(dt) == Fri
+issaturday(dt::TimeType) = DayOfWeek(dt) == Sat
+issunday(dt::TimeType) = DayOfWeek(dt) == Sun
 
 # i.e. 1st Monday? 2nd Monday? 3rd Wednesday? 5th Sunday?
 """
@@ -71,9 +83,10 @@ issunday(dt::TimeType) = dayofweek(dt) == Sun
 For the day of week of `dt`, returns which number it is in `dt`'s month. So if the day of
 the week of `dt` is Monday, then `1 = First Monday of the month, 2 = Second Monday of the
 month, etc.` In the range 1:5.
+
+See also `daysofweekinmonth`.
 """
-dayofweekofmonth(dt::TimeType) = (d = day(dt); return d < 8 ? 1 :
-    d < 15 ? 2 : d < 22 ? 3 : d < 29 ? 4 : 5)
+dayofweekofmonth(dt::TimeType) = fld1(dayofmonth(dt), 7)
 
 # Total number of a day of week in the month
 # e.g. are there 4 or 5 Mondays in this month?
