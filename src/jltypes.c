@@ -2,8 +2,7 @@
 
 /*
   Types
-  . type predicates (subtype) and type matching
-  . type union and intersection
+  . type union, type cache, instantiation, and specificity
   . builtin type definitions
 */
 #include <stdlib.h>
@@ -301,1391 +300,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     return tu;
 }
 
-// --- type intersection ---
-
-/*
-Simplification of varargs tuple types:
- JL_TUPLE_FIXED: tuples of known length (e.g., JL_VARARG_NONE or JL_VARARG_INT)
- JL_TUPLE_VAR:   tuples of unknown length (e.g., JL_VARARG_BOUND or JL_VARARG_UNBOUND)
-
-In some cases, JL_VARARG_BOUND tuples get described as JL_TUPLE_FIXED,
-if the constraints on length are already known.
-
-lenr = "representation length" (the number of parameters)
-lenf = "full length" (including the Vararg length, if known)
-
-In general, lenf >= lenr-1. The lower bound is achieved only for a Vararg of length 0.
-*/
-typedef enum {
-    JL_TUPLE_FIXED = 0,
-    JL_TUPLE_VAR   = 1
-} jl_tuple_lenkind_t;
-
-typedef struct {
-    jl_value_t **data;
-    size_t n;
-    jl_svec_t *tvars;
-} cenv_t;
-
-// Set the parameters for a single tuple
-// returns lenf, sets kind and lenkind
-static size_t data_vararg_params(jl_value_t **data, size_t lenr, cenv_t *eqc, jl_vararg_kind_t *kind, jl_tuple_lenkind_t *lenkind)
-{
-    size_t lenf = lenr;
-    int i;
-    if (lenr == 0) {
-        *kind = JL_VARARG_NONE;
-        *lenkind = JL_TUPLE_FIXED;
-        return lenf;
-    }
-    *lenkind = JL_TUPLE_VAR;
-    jl_value_t *last = jl_unwrap_unionall(data[lenr-1]);
-    *kind = jl_vararg_kind(last);
-    if (*kind == JL_VARARG_NONE || *kind == JL_VARARG_INT)
-        *lenkind = JL_TUPLE_FIXED;
-    if (*kind == JL_VARARG_INT || *kind == JL_VARARG_BOUND) {
-        // try to set N from eqc parameters
-        jl_value_t *N = jl_tparam1(last);
-        if (!jl_is_long(N) && eqc != NULL) {
-            for (i = 0; i < eqc->n; i+=2)
-                if (eqc->data[i] == N && jl_is_long(eqc->data[i+1])) {
-                    N = eqc->data[i+1];
-                    break;
-                }
-        }
-        if (jl_is_long(N)) {
-            lenf += jl_unbox_long(N)-1;
-            *lenkind = JL_TUPLE_FIXED;
-        }
-    }
-    return lenf;
-}
-
-static size_t tuple_vararg_params(jl_svec_t *a, cenv_t *eqc, jl_vararg_kind_t *kind, jl_tuple_lenkind_t *lenkind)
-{
-    return data_vararg_params(jl_svec_data(a), jl_svec_len(a), eqc, kind, lenkind);
-}
-
-jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
-{
-    if (n == NULL) {
-        if (t == NULL)
-            return (jl_value_t*)jl_vararg_type;
-        return jl_instantiate_unionall(jl_vararg_type, t);
-    }
-    return jl_instantiate_unionall((jl_unionall_t*)jl_instantiate_unionall(jl_vararg_type, t), n);
-}
-
-#if 0
-typedef enum {invariant, covariant} variance_t;
-
-#define MAX_CENV_SIZE 128
-
-STATIC_INLINE int is_bnd(jl_tvar_t *tv, cenv_t *env)
-{
-    if (env->tvars == jl_emptysvec)
-        return tv->bound;
-    if (jl_is_typevar(env->tvars))
-        return (jl_tvar_t*)env->tvars == tv;
-    for(size_t i=0; i < jl_svec_len(env->tvars); i++) {
-        if ((jl_tvar_t*)jl_svecref(env->tvars,i) == tv)
-            return 1;
-    }
-    return 0;
-}
-
-STATIC_INLINE int is_btv(jl_value_t *v)
-{
-    return jl_is_typevar(v) && ((jl_tvar_t*)v)->bound;
-}
-
-static int type_eqv_(jl_value_t *a, jl_value_t *b);
-
-static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allowself)
-{
-    if (!allowself && var == val)
-        return;
-    for(int i=0; i < soln->n; i+=2) {
-        if (soln->data[i]==var &&
-            (soln->data[i+1]==val || (!jl_is_typevar(val) &&
-                                      type_eqv_(soln->data[i+1],val))))
-            return;
-        if (soln->data[i]==val && soln->data[i+1]==var)
-            return;
-    }
-    if (soln->n >= MAX_CENV_SIZE)
-        jl_error("type too large");
-    soln->data[soln->n++] = var;
-    soln->data[soln->n++] = val;
-}
-
-static void extend(jl_value_t *var, jl_value_t *val, cenv_t *soln)
-{
-    extend_(var, val, soln, 0);
-}
-
-static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
-                                     cenv_t *penv, cenv_t *eqc,
-                                     int *recheck_tuple_intersection,
-                                     variance_t var);
-
-static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
-                                   cenv_t *penv, cenv_t *eqc,
-                                   int *recheck_tuple_intersection,
-                                   variance_t var)
-{
-    int eq0 = eqc->n, co0 = penv->n;
-    size_t i, l = jl_svec_len(a->types);
-    // shortcut an easy case: union contains type b
-    if (!jl_is_typevar(b)) {
-        for(i=0; i < l; i++) {
-            if (jl_svecref(a->types,i) == b)
-                return b;
-        }
-    }
-    jl_svec_t *t = jl_alloc_svec(l);
-    JL_GC_PUSH1(&t);
-    for(i=0; i < l; i++) {
-        int eq_l = eqc->n, co_l = penv->n;
-        jl_value_t *ti = jl_type_intersect(jl_svecref(a->types,i), b,
-                                           penv, eqc, recheck_tuple_intersection, var);
-        if (ti == (jl_value_t*)jl_bottom_type) {
-            eqc->n = eq0; penv->n = co0;
-            ti = jl_type_intersect(jl_svecref(a->types,i), b,
-                                   penv, eqc, recheck_tuple_intersection, var);
-            if (ti != (jl_value_t*)jl_bottom_type) {
-                // tvar conflict among union elements; keep the conflicting
-                // constraints rolled back
-                eqc->n = eq0; penv->n = co0;
-            }
-            else {
-                // union element doesn't overlap no matter what.
-                // so remove only its constraints.
-                eqc->n = eq_l; penv->n = co_l;
-            }
-        }
-        jl_svecset(t, i, ti);
-    }
-    // problem: an intermediate union type we make here might be too
-    // complex, even though the final type after typevars are replaced
-    // might be ok.
-    jl_value_t *tu = jl_type_union(t);
-    JL_GC_POP();
-    return tu;
-}
-
-/*
-Tuple intersection
-Stage 1: compute lengths of each tuple
---------------------------------------
-See above
-
-Stage 2: paired length analysis
--------------------------------
-Check and combine lengths.  In cells of the following table,
-- row 1 is the criterion that must be satisfied, or Bottom will be returned
-- row 2 is the allocated length for the output tuple
-- row 3, if present, indicates any additional steps taken at the time
-  of length computation
-
-                             b
-                 FIXED                 VAR
-          |---------------------------------------|
-          | alenf == blenf   |   alenf+1 >= blenr |
-    FIXED |      alenf       |        alenf       |
-          |                  |        bind b?     |
-a         |---------------------------------------|
-          | blenf+1 >= alenr |                    |
-    VAR   |      blenf       |  max(alenr,blenr)  |
-          |      bind a?     |        flag?       |
-          |---------------------------------------|
-
-"bind" is performed if the VAR tuple is of state BOUND, using (for
-the b BOUND case) N == alenf-blenr+1 for b's length parameter N.
-
-"flag" is set if at least one of the tuples is of state BOUND. With
-this, we signify that the intersection of these tuples is going to
-have to be repeated once all lengths are constrained.
-
-Stage 3: slot type intersection
--------------------------------
-Iterate over each slot of the _output_ tuple, intersecting
-corresponding pairs of types.  Any intersection failure causes Bottom
-to be returned, with one exception illustrated by:
-   typeintersect(Tuple{A, Vararg{B}}, Tuple{A, Vararg{C}}) == Tuple{A}
-where typeintersect(B,C) == Bottom.
-*/
-
-static jl_value_t *intersect_tuple(jl_datatype_t *a, jl_datatype_t *b,
-                                   cenv_t *penv, cenv_t *eqc,
-                                   int *recheck_tuple_intersection, // "flag" above
-                                   variance_t var)
-{
-    jl_svec_t *ap = a->parameters, *bp = b->parameters;
-    size_t alenr = jl_svec_len(ap), blenr = jl_svec_len(bp);
-    size_t alenf, blenf;
-    jl_vararg_kind_t akind, bkind;
-    jl_tuple_lenkind_t alenkind, blenkind;
-    int bottom = 0;
-    size_t n;
-    // Stage 1
-    alenf = tuple_vararg_params(ap, eqc, &akind, &alenkind);
-    blenf = tuple_vararg_params(bp, eqc, &bkind, &blenkind);
-    // Stage 2
-    if (alenkind == JL_TUPLE_FIXED && blenkind == JL_TUPLE_FIXED) {
-        bottom = alenf != blenf;
-        n = alenf;
-    }
-    else if (alenkind == JL_TUPLE_FIXED && blenkind == JL_TUPLE_VAR) {
-        bottom = alenf+1 < blenf;
-        n = alenf;
-        if (bkind == JL_VARARG_BOUND)
-            extend(jl_tparam1(jl_svecref(bp, blenr-1)), jl_box_long(alenf-blenr+1), eqc);
-    }
-    else if (alenkind == JL_TUPLE_VAR && blenkind == JL_TUPLE_FIXED) {
-        bottom = blenf+1 < alenf;
-        n = blenf;
-        if (akind == JL_VARARG_BOUND)
-            extend(jl_tparam1(jl_svecref(ap, alenr-1)), jl_box_long(blenf-alenr+1), eqc);
-    }
-    else {
-        n = alenr > blenr ? alenr : blenr;
-        // Do we need to store "at least N" constraints in penv?
-        // Formerly, typeintersect(Tuple{A,Vararg{B}}, NTuple{N,C}) did that
-        if (akind == JL_VARARG_BOUND || bkind == JL_VARARG_BOUND)
-            *recheck_tuple_intersection = 1;
-    }
-    if (bottom) return (jl_value_t*) jl_bottom_type;
-    if (n == 0) return jl_typeof(jl_emptytuple);
-    jl_svec_t *tc = jl_alloc_svec(n);
-    jl_value_t *result = (jl_value_t*)tc;
-    jl_value_t *ce = NULL;
-    JL_GC_PUSH2(&tc, &ce);
-    size_t ai=0, bi=0, ci;
-    jl_value_t *ae=NULL, *be=NULL, *an=NULL, *bn=NULL;
-    int aseq=0, bseq=0;
-    // Stage 3
-    for(ci=0; ci < n; ci++) {
-        if (ai < alenr) {
-            ae = jl_svecref(ap,ai);
-            if (jl_is_vararg_type(ae)) {
-                if (alenkind != JL_TUPLE_FIXED) {
-                    an = jl_tparam1(ae);
-                    aseq = 1;
-                }
-                ae = jl_tparam0(ae);
-            }
-            ai++;
-        }
-        if (bi < blenr) {
-            be = jl_svecref(bp,bi);
-            if (jl_is_vararg_type(be)) {
-                if (blenkind != JL_TUPLE_FIXED) {
-                    bn = jl_tparam1(be);
-                    bseq=1;
-                }
-                be = jl_tparam0(be);
-            }
-            bi++;
-        }
-        assert(ae!=NULL && be!=NULL);
-        ce = jl_type_intersect(ae, be, penv, eqc, recheck_tuple_intersection, var);
-        if (ce == (jl_value_t*)jl_bottom_type) {
-            if (var!=invariant && aseq && bseq) {
-                // (X∩Y)==∅ → (X...)∩(Y...) == ()
-                // We don't need to set bindings here because
-                //   *recheck_tuple_intersection = 1
-                if (n == 1) {
-                    JL_GC_POP();
-                    return (jl_value_t*)jl_typeof(jl_emptytuple);
-                }
-                jl_svec_set_len_unsafe(tc, jl_svec_len(tc) - 1);
-                goto done_intersect_tuple;
-            }
-            JL_GC_POP();
-            return (jl_value_t*)jl_bottom_type;
-        }
-        if (aseq && bseq)
-            ce = (jl_value_t*)jl_wrap_vararg(ce, akind==JL_VARARG_BOUND ? bn : an);
-        jl_svecset(tc, ci, ce);
-    }
- done_intersect_tuple:
-    result = (jl_value_t*)jl_apply_tuple_type(tc);
-    JL_GC_POP();
-    return result;
-}
-
-static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
-                                 cenv_t *penv, cenv_t *eqc,
-                                 int *recheck_tuple_intersection,
-                                 variance_t var)
-{
-    assert(a->name == b->name);
-    assert(jl_svec_len(a->parameters) == jl_svec_len(b->parameters));
-    jl_svec_t *p = jl_alloc_svec(jl_svec_len(a->parameters));
-    JL_GC_PUSH1(&p);
-    jl_value_t *ti;
-    size_t i;
-    for(i=0; i < jl_svec_len(p); i++) {
-        jl_value_t *ap = jl_svecref(a->parameters,i);
-        jl_value_t *bp = jl_svecref(b->parameters,i);
-        if (jl_is_typevar(ap)) {
-            if (var==invariant && jl_is_typevar(bp)) {
-                if (((jl_tvar_t*)ap)->bound != ((jl_tvar_t*)bp)->bound) {
-                    JL_GC_POP();
-                    return (jl_value_t*)jl_bottom_type;
-                }
-                if ((is_unspec(a) && is_bnd((jl_tvar_t*)bp,penv)) ||
-                    (is_bnd((jl_tvar_t*)ap,penv) && is_unspec(b))) {
-                    // Foo{T} and Foo can never be equal since the former
-                    // is always a subtype of the latter
-                    JL_GC_POP();
-                    return (jl_value_t*)jl_bottom_type;
-                }
-            }
-            ti = jl_type_intersect(ap, bp, penv, eqc, recheck_tuple_intersection, invariant);
-            if (bp == (jl_value_t*)jl_bottom_type &&
-                !((jl_tvar_t*)ap)->bound) {
-                // "Union{}" as a type parameter
-                jl_svecset(p, i, ti);
-                continue;
-            }
-        }
-        else if (jl_is_typevar(bp)) {
-            ti = jl_type_intersect(ap, bp, penv, eqc, recheck_tuple_intersection, invariant);
-            if (ap == (jl_value_t*)jl_bottom_type &&
-                !((jl_tvar_t*)bp)->bound) {
-                // "Union{}" as a type parameter
-                jl_svecset(p, i, ti);
-                continue;
-            }
-        }
-        else {
-            int tva = jl_has_typevars_(ap,0);
-            int tvb = jl_has_typevars_(bp,0);
-            if (tva || tvb) {
-                if (jl_subtype_invariant(ap,bp,0) ||
-                    jl_subtype_invariant(bp,ap,0)) {
-                    ti = jl_type_intersect(ap, bp, penv, eqc, recheck_tuple_intersection, invariant);
-                }
-                else {
-                    ti = (jl_value_t*)jl_bottom_type;
-                }
-            }
-            else if (type_eqv_(ap,bp)) {
-                ti = ap;
-                if (ti == (jl_value_t*)jl_bottom_type) {
-                    // "Union{}" as a type parameter
-                    jl_svecset(p, i, ti);
-                    continue;
-                }
-            }
-            else {
-                ti = (jl_value_t*)jl_bottom_type;
-            }
-        }
-        if (ti == (jl_value_t*)jl_bottom_type) {
-            JL_GC_POP();
-            return (jl_value_t*)jl_bottom_type;
-        }
-        jl_svecset(p, i, ti);
-    }
-    if (a->name->wrapper != NULL) {
-        jl_value_t *res = (jl_value_t*)jl_apply_type(a->name->wrapper, jl_svec_data(p), jl_svec_len(p));
-        JL_GC_POP();
-        return res;
-    }
-    assert(0 && "not yet implemented");
-    return NULL;
-}
-
-static long meet_tuple_lengths(long bv, long vv, int *bot)
-{
-    /*
-      do a meet over the lattice of tuple lengths:
-                       >=0
-                        | \
-                        |  0
-                       >=1
-                        | \
-                        |  1
-                       >=2
-                        | \
-                        |  2
-                       ...
-      ">=N" is represented as ~N
-    */
-    if (bv < 0) {
-        if (vv < 0) {
-            if (bv < vv)
-                return bv;
-            else
-                return vv;
-        }
-        else {
-            if (~bv > vv) {
-                *bot = 1;
-                return 0;
-            }
-        }
-    }
-    else {
-        if (vv < 0) {
-            if (~vv > bv) {
-                *bot = 1;
-                return 0;
-            }
-            return bv;
-        }
-        else {
-            if (bv != vv) {
-                *bot = 1;
-                return 0;
-            }
-        }
-    }
-    return vv;
-}
-
-static int match_intersection_mode = 0;
-static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b);
-
-static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
-                                     cenv_t *penv, cenv_t *eqc,
-                                     int *recheck_tuple_intersection,
-                                     variance_t var)
-{
-    jl_value_t *both=NULL;
-    jl_tvar_t *new_b=NULL;
-    JL_GC_PUSH3(&b, &both, &new_b);
-    if (jl_subtype(b, (jl_value_t*)a)) {
-        if (!is_bnd(a,penv)) {
-            JL_GC_POP();
-            return b;
-        }
-    }
-    else if (var==invariant && !jl_has_typevars_(b,0)) {
-        // for typevar a and non-typevar type b, b must be within a's bounds
-        // in invariant contexts.
-        JL_GC_POP();
-        return (jl_value_t*)jl_bottom_type;
-    }
-    else if (jl_subtype((jl_value_t*)a, b)) {
-        /*
-          TODO: get sharper types when the overlap between a typevar and
-          a type is not simple. Ex:
-          tintersect(Type{Array{T,n}}, Type{typevar(:_,Vector)})
-          should give Type{_<:Vector}
-        */
-        if (jl_is_typevar(b)) {
-            if (!is_bnd((jl_tvar_t*)b,penv)) {
-                JL_GC_POP();
-                return (jl_value_t*)a;
-            }
-        }
-        else {
-            if (a->ub == jl_bottom_type) {
-                JL_GC_POP();
-                return jl_bottom_type;
-            }
-            if (!is_bnd(a,penv)) {
-                JL_GC_POP();
-                return (jl_value_t*)a;
-            }
-        }
-    }
-    else {
-        b = jl_type_intersect(a->ub, b, penv, eqc, recheck_tuple_intersection, covariant);
-        if (b == jl_bottom_type) {
-            JL_GC_POP();
-            return b;
-        }
-    }
-    if ((jl_value_t*)a == b) {
-        JL_GC_POP();
-        return b;
-    }
-    if (var == invariant) {
-        if (!jl_has_typevars_(b,0) && !jl_is_typevar(b)) {
-            int i;
-            for(i=0; i < eqc->n; i+=2) {
-                if (eqc->data[i] == (jl_value_t*)a) {
-                    jl_value_t *v = eqc->data[i+1];
-                    if (jl_is_typevar(v))
-                        continue;
-                    if (!jl_types_equal(v, b)) {
-                        JL_GC_POP();
-                        return (jl_value_t*)jl_bottom_type;
-                    }
-                    break;
-                }
-            }
-            if (i >= eqc->n)
-                extend((jl_value_t*)a, b, eqc);
-            JL_GC_POP();
-            return (jl_value_t*)a;
-        }
-        if (jl_is_typevar(b)) {
-            both = meet_tvars(a, (jl_tvar_t*)b);
-            if (both == jl_bottom_type) {
-                JL_GC_POP();
-                return both;
-            }
-            if (!jl_is_typevar(both))
-                both = (jl_value_t*)jl_new_typevar(underscore_sym, jl_bottom_type, both);
-            extend((jl_value_t*)a, both, penv);
-            extend((jl_value_t*)b, both, penv);
-        }
-        if (is_btv(b))
-            extend(b, (jl_value_t*)a, eqc);
-        else
-            extend((jl_value_t*)a, b, eqc);
-    }
-    else {
-        int i;
-        for(i=0; i < penv->n; i+=2) {
-            if (penv->data[i] == (jl_value_t*)a && !jl_is_typevar(penv->data[i+1])) {
-                if (jl_types_equal(b, penv->data[i+1])) {
-                    JL_GC_POP();
-                    return (jl_value_t*)a;
-                }
-                break;
-            }
-        }
-        if (jl_is_typevar(b)) {
-            for(i=0; i < penv->n; i+=2) {
-                if (penv->data[i] == b && !jl_is_typevar(penv->data[i+1])) {
-                    jl_value_t *ti = jl_type_intersection((jl_value_t*)a, penv->data[i+1]);
-                    if (ti == (jl_value_t*)jl_bottom_type) {
-                        JL_GC_POP();
-                        return ti;
-                    }
-                    break;
-                }
-            }
-            for(i=0; i < eqc->n; i+=2) {
-                if (eqc->data[i] == b && !jl_is_typevar(eqc->data[i+1])) {
-                    jl_value_t *ti = jl_type_intersection((jl_value_t*)a, eqc->data[i+1]);
-                    if (ti == (jl_value_t*)jl_bottom_type) {
-                        JL_GC_POP();
-                        return ti;
-                    }
-                    break;
-                }
-            }
-        }
-        extend((jl_value_t*)a, b, penv);
-        if (jl_is_typevar(b)) {
-            JL_GC_POP();
-            return (jl_value_t*)a;
-        }
-        else {
-            new_b = jl_new_typevar(underscore_sym, jl_bottom_type, b);
-            extend((jl_value_t*)new_b, b, penv);
-            extend((jl_value_t*)new_b, (jl_value_t*)a, penv);
-            JL_GC_POP();
-            return (jl_value_t*)new_b;
-        }
-    }
-    JL_GC_POP();
-    return (jl_value_t*)a;
-}
-
-static jl_value_t *approxify_type(jl_datatype_t *dt, jl_svec_t *pp, int *recheck_tuple_intersection)
-{
-    size_t i, l = jl_svec_len(dt->parameters);
-    jl_svec_t *p = jl_alloc_svec(l);
-    JL_GC_PUSH1(&p);
-    for(i=0; i < l; i++) {
-        jl_value_t *el = jl_svecref(dt->parameters, i);
-        if (jl_has_typevars_from(el, pp))
-            jl_svecset(p, i, jl_new_typevar(underscore_sym, jl_bottom_type, el));
-        else
-            jl_svecset(p, i, el);
-    }
-    jl_value_t *nt = jl_apply_type(dt->name->wrapper, jl_svec_data(p), l);
-    JL_GC_POP();
-    return nt;
-}
-
-static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
-                                     cenv_t *penv, cenv_t *eqc,
-                                     int *recheck_tuple_intersection,
-                                     variance_t var)
-{
-    if (jl_is_typector(a))
-        a = (jl_value_t*)((jl_typector_t*)a)->body;
-    if (jl_is_typector(b))
-        b = (jl_value_t*)((jl_typector_t*)b)->body;
-    if (a == b) return a;
-    if (jl_is_typevar(a)) {
-        if (var == covariant && !((jl_tvar_t*)a)->bound)
-            a = ((jl_tvar_t*)a)->ub;
-        else if (a != jl_ANY_flag)
-            return intersect_typevar((jl_tvar_t*)a, b, penv, eqc, recheck_tuple_intersection, var);
-    }
-    if (jl_is_typevar(b)) {
-        if (var == covariant && !((jl_tvar_t*)b)->bound)
-            b = ((jl_tvar_t*)b)->ub;
-        else if (b != jl_ANY_flag)
-            return intersect_typevar((jl_tvar_t*)b, a, penv, eqc, recheck_tuple_intersection, var);
-    }
-    if (a == (jl_value_t*)jl_bottom_type || b == (jl_value_t*)jl_bottom_type)
-        return (jl_value_t*)jl_bottom_type;
-    if (!jl_has_typevars(a) && !jl_has_typevars(b)) {
-        if (jl_subtype(a, b))
-            return a;
-        if (jl_subtype(b, a))
-            return b;
-    }
-    // union
-    if (jl_is_uniontype(a))
-        return intersect_union((jl_uniontype_t*)a, b, penv, eqc, recheck_tuple_intersection, var);
-    if (jl_is_uniontype(b))
-        return intersect_union((jl_uniontype_t*)b, a, penv, eqc, recheck_tuple_intersection, var);
-    if (a == (jl_value_t*)jl_any_type || a == jl_ANY_flag) return b;
-    if (b == (jl_value_t*)jl_any_type || b == jl_ANY_flag) return a;
-    // tuple
-    if (jl_is_tuple_type(a)) {
-        if (jl_is_tuple_type(b)) {
-            return intersect_tuple((jl_datatype_t*)a, (jl_datatype_t*)b, penv, eqc, recheck_tuple_intersection, var);
-        }
-    }
-    if (jl_is_tuple_type(b)) {
-        return jl_type_intersect(b, a, penv, eqc, recheck_tuple_intersection, var);
-    }
-    // tag
-    if (!jl_is_datatype(a) || !jl_is_datatype(b))
-        return (jl_value_t*)jl_bottom_type;
-    jl_datatype_t *tta = (jl_datatype_t*)a;
-    jl_datatype_t *ttb = (jl_datatype_t*)b;
-    if (tta->name == ttb->name)
-        return (jl_value_t*)intersect_tag(tta, ttb, penv, eqc, recheck_tuple_intersection, var);
-    jl_datatype_t *super = NULL;
-    jl_datatype_t *sub = NULL;
-    jl_value_t *env = NULL;
-    jl_value_t *p = NULL;
-    jl_value_t *temp3 = NULL;
-    JL_GC_PUSH5(&super, &sub, &env, &p, &temp3);
-    while (tta != jl_any_type) {
-        if (tta->name == ttb->name) {
-            sub = (jl_datatype_t*)a;
-            super = (jl_datatype_t*)b;
-            break;
-        }
-        tta = tta->super;
-    }
-    if (sub == NULL) {
-        tta = (jl_datatype_t*)a;
-        while (ttb != jl_any_type) {
-            if (tta->name == ttb->name) {
-                sub = (jl_datatype_t*)b;
-                super = (jl_datatype_t*)a;
-                break;
-            }
-            ttb = ttb->super;
-        }
-        if (sub == NULL) {
-            JL_GC_POP();
-            return (jl_value_t*)jl_bottom_type;
-        }
-    }
-
-    if (sub->super == jl_type_type && jl_is_type_type((jl_value_t*)super)) {
-        // subtypes of Type like DataType do not constrain the type
-        // parameter, and yet contain Type instances with a more specific
-        // parameter (like Type{Int}). This is a special case.
-        jl_value_t *tp0 = jl_tparam0(super);
-        if (jl_is_typevar(tp0) || (jl_value_t*)sub == jl_typeof(tp0)) {
-            JL_GC_POP();
-            return (jl_value_t*)super;
-        }
-        JL_GC_POP();
-        return (jl_value_t*)jl_bottom_type;
-    }
-
-    /*
-      issue #6387
-      Say we have
-
-      type DateRange{C} <: Range{Date{C}}; end
-
-      and
-
-      vcat{T}(r::Range{T}) = ...
-
-      Then inferring vcat(::DateRange) concludes that T==Date{C}, but it should
-      conclude T<:Date{C}. The core problem seems to be that in moving from a
-      type to its supertype, we drop the environment that binds C --- we
-      forget that C is a variable in Range{Date{C}}. For now I work around this
-      by rewriting this type to Range{_<:Date{C}}, effectively tagging type
-      parameters that are variable due to the extra (dropped) environment.
-    */
-    /*
-    if (var == covariant &&
-        sub == (jl_datatype_t*)sub->name->wrapper &&
-        jl_has_typevars_from((jl_value_t*)sub->super, ((jl_datatype_t*)sub->name->primary)->parameters))
-        env = approxify_type((jl_datatype_t*)sub->super, ((jl_datatype_t*)sub->name->primary)->parameters, recheck_tuple_intersection);
-    else
-    */
-        env = (jl_value_t*)sub->super;
-    super = (jl_datatype_t*)jl_type_intersect((jl_value_t*)env, (jl_value_t*)super, penv, eqc, recheck_tuple_intersection, var);
-
-    if ((jl_value_t*)super == jl_bottom_type) {
-        JL_GC_POP();
-        return (jl_value_t*)jl_bottom_type;
-    }
-
-    // super needs to be instantiated so the matching below finds actual types
-    // and doesn't fail due to the presence of extra typevars.
-    super = (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)super, eqc->data, eqc->n/2);
-
-    size_t n = jl_svec_len(sub->parameters);
-
-    assert(sub->name->wrapper != NULL);
-    jl_value_t *tc0 = sub->name->wrapper;
-    jl_value_t *tc = jl_unwrap_unionall(tc0);
-    jl_svec_t *tc_params = ((jl_datatype_t*)tc)->parameters;
-    // compute what constraints the supertype imposes on the subtype
-    jl_svec_t *subs_sup_params =
-        ((jl_datatype_t*)((jl_datatype_t*)tc)->super)->parameters;
-    // match the intersected supertype against the pattern this subtype
-    // uses to instantiate its supertype. this tells us what subtype parameter
-    // values are implied by the intersected supertype, or that the
-    // intersected supertype cannot come from this subtype (in which case
-    // our final answer is Union{}).
-    size_t i;
-    // hack: we need type_match to find assignments for all typevars
-    int prev_mim = match_intersection_mode;
-    match_intersection_mode = 1;
-    // TODO get rid of these intermediate tuple types
-    p = (jl_value_t*)jl_apply_tuple_type(super->parameters);
-    temp3 = (jl_value_t*)jl_apply_tuple_type(subs_sup_params);
-    env = jl_type_match(p, temp3);
-    int sub_needs_parameters = 0;
-    if (env == jl_false) {
-        env = jl_type_match(temp3, p);
-    }
-    else {
-        // this means it needs to be possible to instantiate the subtype
-        // such that the supertype gets the matching parameters we just
-        // determined.
-        sub_needs_parameters = 1;
-    }
-    match_intersection_mode = prev_mim;
-    if (env == jl_false) {
-        JL_GC_POP();
-        return (jl_value_t*)jl_bottom_type;
-    }
-    if (sub_needs_parameters) {
-        for(int e=0; e < jl_svec_len(env); e+=2) {
-            jl_value_t *tp = jl_svecref(env, e);
-            // make sure each needed parameter is actually set by the subtype
-            size_t j;
-            for(j=0; j < n; j++) {
-                if (tp == jl_svecref(tc_params, j))
-                    break;
-            }
-            if (j >= n) {
-                JL_GC_POP();
-                return (jl_value_t*)jl_bottom_type;
-            }
-        }
-    }
-
-    p = (jl_value_t*)jl_alloc_svec(n);
-    for(i=0; i < n; i++) {
-        jl_value_t *tp = jl_svecref(tc_params, i);
-        jl_value_t *elt = jl_svecref(sub->parameters, i);
-        for(int e=0; e < jl_svec_len(env); e+=2) {
-            if (jl_svecref(env, e) == tp) {
-                elt = jl_type_intersect(elt, jl_svecref(env, e+1),
-                                        penv, eqc, recheck_tuple_intersection, invariant);
-                // note: elt might be Union{} if "Union{}" was the type parameter
-                break;
-            }
-        }
-        jl_svecset(p, i, elt);
-    }
-    jl_value_t *result = (jl_value_t*)jl_apply_type(tc0, jl_svec_data(p), jl_svec_len(p));
-    JL_GC_POP();
-    return result;
-}
-
-JL_DLLEXPORT jl_svec_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t *tvars)
-{
-    jl_svec_t *env = jl_emptysvec;
-    JL_GC_PUSH1(&env);
-    jl_value_t *ti = jl_type_intersection_matching(a, b, &env, tvars);
-    jl_svec_t *pair = jl_svec2(ti, env);
-    JL_GC_POP();
-    return pair;
-}
-
-/*
-  constraint satisfaction algorithm:
-  - keep lists of equality constraints and subtype constraints
-    (invariant and covariant)
-  - all constraints between two typevars are equality, i.e. it means the
-    two corresponding typevars must end up with the same value. however
-    they are kept in the subtype constraint list because they are not part
-    of the final answer yet.
-  - after computing the intersection, we try to solve the typevar constraints
-  - for each equality constraint T=S, add T=S to the results
-  - for each other constraint T=S, do
-      if T=U is in the results
-        if S is a typevar
-          if S=R is in the results
-            update R to meet(lookup(R),lookup(U))
-          else
-            add S=meet(S,lookup(U))
-          end
-          update U to S
-        else
-          update U to meet(lookup(U),S)
-        end
-      else
-        if S has typevars
-          add T=S
-        else
-          add T=_<:S
-        end
-      end
-
-    meet(X,Y) =
-      if X and Y both have no typevars and not equal, fail
-      if X has no typevars and X<:Y, return X, else fail
-      if Y has no typevars and Y<:X, return Y, else fail
-      if one or both is typevar, return meet_typevar(X,Y)
-      else return intersect(X,Y)
-
-    update X to Y =
-      if X is a typevar, trace to its class root and put Y there
-      else put Y where X was
-
-    lookup(X) =
-      if X is a typevar and X=Y is in the results, return lookup(Y)
-      else return X
-*/
-
-static jl_value_t **tvar_lookup(cenv_t *env, jl_value_t **pX)
-{
-    jl_value_t *v = *pX;
-    if (is_btv(v)) {
-        for(int i=0; i < env->n; i+=2) {
-            if (env->data[i] == v) {
-                if (env->data[i+1] == v)  // allow T=T
-                    return pX;
-                return tvar_lookup(env, &env->data[i+1]);
-            }
-        }
-    }
-    return pX;
-}
-
-static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
-{
-    jl_value_t *lb=NULL, *ub=NULL;
-    if (type_eqv_((jl_value_t*)a->lb, (jl_value_t*)b->lb) &&
-        type_eqv_((jl_value_t*)a->ub, (jl_value_t*)b->ub))
-        return (jl_value_t*)b;
-    ub = jl_type_intersection((jl_value_t*)a->ub, (jl_value_t*)b->ub);
-    if (ub == (jl_value_t*)jl_bottom_type)
-        return ub;
-    JL_GC_PUSH2(&lb, &ub);
-    lb = (jl_value_t*)jl_svec2(a->lb, b->lb);
-    lb = jl_type_union((jl_svec_t*)lb);
-    if (!jl_subtype(lb, ub)) {
-        JL_GC_POP();
-        return (jl_value_t*)jl_bottom_type;
-    }
-    // TODO: might not want to collapse tvar to non-tvar in all cases
-    if (jl_is_leaf_type(ub)) {
-        JL_GC_POP();
-        return ub;
-    }
-    jl_value_t *res = (jl_value_t*)jl_new_typevar(underscore_sym, lb, ub);
-    ((jl_tvar_t*)res)->bound = a->bound & b->bound;
-    JL_GC_POP();
-    return res;
-}
-
-static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
-{
-    if (jl_is_typevar(ty))
-        return (jl_value_t*)meet_tvars(tv, (jl_tvar_t*)ty);
-    //if (jl_types_equal((jl_value_t*)tv->ub, ty))
-    //    return ty;
-    if (jl_subtype((jl_value_t*)tv->ub, ty))
-        return (jl_value_t*)tv;
-    // TODO: should we check type_intersection(tv->ub, ty) instead?
-    if (!jl_subtype(ty, (jl_value_t*)tv->ub))
-        return (jl_value_t*)jl_bottom_type;
-    //if (jl_types_equal((jl_value_t*)tv->lb, ty))
-    //    return ty;
-    if (jl_subtype((jl_value_t*)tv->lb, ty)) {
-        if (jl_is_leaf_type(ty) || !jl_is_type(ty))
-            return ty;
-        jl_tvar_t *ntv = jl_new_typevar(underscore_sym, tv->lb, ty);
-        // TODO: this would be nice but causes some spurious ambiguity warnings
-        // due to typevars in covariant position, which we should simplify out somewhere.
-        //ntv->bound = tv->bound;
-        return (jl_value_t*)ntv;
-    }
-    return (jl_value_t*)jl_bottom_type;
-}
-
-static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
-{
-    if (jl_is_typevar(X)) {
-        jl_value_t *tv;
-        if (jl_is_typevar(Y)) {
-            tv = meet_tvars((jl_tvar_t*)X, (jl_tvar_t*)Y);
-        }
-        else {
-            tv = meet_tvar((jl_tvar_t*)X, Y);
-        }
-        if (tv == (jl_value_t*)jl_bottom_type)
-            return NULL;
-        return tv;
-    }
-    if (jl_is_typevar(Y)) {
-        jl_value_t *tv = meet_tvar((jl_tvar_t*)Y, X);
-        if (tv == (jl_value_t*)jl_bottom_type)
-            return NULL;
-        return tv;
-    }
-    if (jl_subtype(X,Y)) return X;
-    if (jl_subtype(Y,X)) return Y;
-    jl_value_t *v = jl_type_intersection(X, Y);
-    return (v == (jl_value_t*)jl_bottom_type ?  NULL : v);
-}
-
-// convert a type to the value it would have if assigned to a static parameter
-// in covariant context.
-// example: {Type{Int},} => {DataType,}
-// calling f{T}(x::T) as f({Int,}) should give T == {DataType,}, but we
-// might temporarily represent this type as {Type{Int},} for more precision.
-static jl_value_t *type_to_static_parameter_value(jl_value_t *t, jl_value_t *tv, jl_value_t **tvs, int ntv)
-{
-    int i;
-    for(i=0; i < ntv; i++) {
-        if (tv == tvs[i])
-            break;
-    }
-    if (i >= ntv)
-        return t;  // don't widen vars not in env
-    if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
-        return jl_typeof(jl_tparam0(t));
-    if (jl_is_tuple_type(t)) {
-        jl_svec_t *p = ((jl_datatype_t*)t)->parameters;
-        size_t l = jl_svec_len(p);
-        int changed = 0;
-        jl_svec_t *np = jl_alloc_svec(l);
-        JL_GC_PUSH1(&np);
-        for(size_t i=0; i < l; i++) {
-            jl_value_t *el = type_to_static_parameter_value(jl_svecref(p,i), NULL, NULL, 0);
-            jl_svecset(np, i, el);
-            if (el != jl_svecref(p,i))
-                changed = 1;
-        }
-        jl_value_t *result = changed ? (jl_value_t*)jl_apply_tuple_type(np) : t;
-        JL_GC_POP();
-        return result;
-    }
-    return t;
-}
-
-/*
-void print_env(cenv_t *soln)
-{
-    for(int i=0; i < soln->n; i+=2) {
-        jl_value_t *T, *S;
-        T = soln->data[i]; S = soln->data[i+1];
-        jl_printf(JL_STDOUT, "%s@%x=", jl_symbol_name(((jl_tvar_t*)T)->name), T);
-        jl_static_show(JL_STDOUT, S);
-        jl_printf(JL_STDOUT, " ");
-    }
-    jl_printf(JL_STDOUT, "\n");
-}
-*/
-
-static int solve_tvar_constraints(cenv_t *env, cenv_t *soln, jl_value_t **tvs, int ntv)
-{
-    jl_value_t *rt1=NULL, *rt2=NULL, *S=NULL;
-    JL_GC_PUSH3(&rt1, &rt2, &S);
-
-    while (1) {
-        int old_n = soln->n;
-
-        // 1. replace each T=S with T=find(S)
-        for(int i=0; i < soln->n; i+=2) {
-            jl_value_t **pS = &soln->data[i+1];
-            if (jl_is_typevar(*pS))
-                *pS = *tvar_lookup(soln, pS);
-            if (!jl_is_typevar(*pS)) {
-                // detect cycles
-                if (jl_has_typevars_from_v(*pS, &soln->data[i], 1))
-                    goto ret_no;
-            }
-        }
-
-        // 2. instantiate all RHSes using soln
-        if (soln->n > 0) {
-            for(int i=0; i < env->n; i+=2) {
-                jl_value_t **pS = &env->data[i+1];
-                JL_TRY {
-                    *pS = jl_instantiate_type_with(*pS, &soln->data[0], soln->n/2);
-                }
-                JL_CATCH {
-                }
-            }
-        }
-
-        // 3. given T, let S´ = intersect(all S s.t. (T=S) or (S=T) ∈ env). add (T=S´) to soln.
-        for(int i=0; i < env->n; i+=2) {
-            jl_value_t *T = env->data[i];
-            jl_value_t **pS = &env->data[i+1];
-            S = *pS;
-            if (!jl_is_typevar(S)) {
-                for(int j=i+2; j < env->n; j+=2) {
-                    jl_value_t *TT = env->data[j];
-                    jl_value_t *SS = env->data[j+1];
-                    if (TT == T) {
-                        // found T=SS in env
-                        if (!jl_is_typevar(SS)) {
-                            rt1 = type_to_static_parameter_value(S, T, tvs, ntv);
-                            rt2 = type_to_static_parameter_value(SS, TT, tvs, ntv);
-                            jl_value_t *m = meet(rt1, rt2, covariant);
-                            if (m == NULL) goto ret_no;
-                            S = m;
-                        }
-                    }
-                    else if (SS == T) {
-                        // found TT=T in env; meet with TT
-                        jl_value_t **pTT = tvar_lookup(soln, &TT);
-                        if (pTT != &TT) {
-                            jl_value_t *m = meet(S, *pTT, covariant);
-                            if (m == NULL) goto ret_no;
-                            S = m;
-                        }
-                    }
-                }
-
-                if (!(jl_is_leaf_type(S) || S == (jl_value_t*)jl_bottom_type)) {
-                    goto next_in_env;
-                }
-
-                jl_value_t **pT = tvar_lookup(soln, &T);
-                if (pT != &T) {
-                    size_t lenS, lenT;
-                    if (jl_get_size(S, &lenS) && jl_get_size(*pT, &lenT)) {
-                        int bot = 0;
-                        long mv = meet_tuple_lengths(~lenS, lenT, &bot);
-                        if (bot)
-                            goto ret_no;
-                        // NOTE: this is unused. can we do anything with it?
-                        (void)mv;
-                        //S = jl_box_long(mv);
-                    }
-                    else {
-                        if (meet(*pT,S,covariant) == NULL)
-                            goto ret_no;
-                    }
-                }
-                else {
-                    extend(T, type_to_static_parameter_value(S, T, tvs, ntv), soln);
-                }
-            }
-            else {
-                jl_value_t **pT = tvar_lookup(soln, &T);
-                if (pT != &T) {
-                    if (tvar_lookup(soln, &S) == &S) {
-                        jl_value_t *v = meet(S, *pT, covariant);
-                        if (v == NULL) goto ret_no;
-                        extend(S, v, soln);
-                        *pT = S;
-                    }
-                }
-            }
-        next_in_env:
-            ;
-        }
-        if (soln->n == old_n)
-            break;
-    }
-
-    for(int i=0; i < env->n; i+=2) {
-        jl_value_t *T = env->data[i];
-        jl_value_t **pS = &env->data[i+1];
-        S = *pS;
-        if (tvar_lookup(soln, &T) == &T) {
-            for(int j=i+2; j < env->n; j+=2) {
-                jl_value_t *TT = env->data[j];
-                jl_value_t *SS = env->data[j+1];
-                if (TT == T) {
-                    rt1 = type_to_static_parameter_value(S, T, tvs, ntv);
-                    rt2 = type_to_static_parameter_value(SS, TT, tvs, ntv);
-                    jl_value_t *m = meet(rt1, rt2, covariant);
-                    if (m == NULL) goto ret_no;
-                    S = m;
-                }
-                else if (SS == T) {
-                    jl_value_t *m = meet(S, *tvar_lookup(soln, &TT), covariant);
-                    if (m == NULL) goto ret_no;
-                    S = m;
-                }
-            }
-            if (jl_is_type(S) || jl_is_typevar(S)) {
-                if (!jl_is_typevar(S) && !jl_is_leaf_type(S) && S != jl_bottom_type) {
-                    S = (jl_value_t*)jl_new_typevar(underscore_sym,
-                                                    (jl_value_t*)jl_bottom_type, S);
-                }
-                extend(T, type_to_static_parameter_value(S, T, tvs, ntv), soln);
-            }
-        }
-    }
-
-    JL_GC_POP();
-    return 1;
- ret_no:
-    JL_GC_POP();
-    return 0;
-}
-
-jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
-                                          jl_svec_t **penv, jl_svec_t *tvars)
-{
-    jl_value_t **rts;
-    JL_GC_PUSHARGS(rts, 2 + 2*MAX_CENV_SIZE);
-    cenv_t eqc; eqc.n = 0; eqc.data = &rts[2];
-    cenv_t env; env.n = 0; env.data = &rts[2+MAX_CENV_SIZE];
-    eqc.tvars = tvars; env.tvars = tvars;
-    jl_value_t **pti = &rts[0];
-    jl_value_t **extraroot = &rts[1];
-
-    int recheck_tuple_intersection = 0;
-    JL_TRY {
-        // This is kind of awful, but an inner call to instantiate_type
-        // might fail due to a mismatched type parameter. The problem is
-        // that we allow Range{T} to exist, even though the declaration of
-        // Range specifies Range{T<:Real}. Therefore intersection cannot see
-        // that some parameter values actually don't match.
-        *pti = jl_type_intersect(a, b, &env, &eqc, &recheck_tuple_intersection, covariant);
-    }
-    JL_CATCH {
-        *pti = (jl_value_t*)jl_bottom_type;
-    }
-    if (*pti == (jl_value_t*)jl_bottom_type ||
-        !(env.n > 0 || eqc.n > 0 || tvars != jl_emptysvec)) {
-        JL_GC_POP();
-        return *pti;
-    }
-
-    int e;
-
-    if (recheck_tuple_intersection) {
-        for (e = 0; e < eqc.n; e += 2) {
-            jl_value_t *val = eqc.data[e + 1];
-            if (jl_is_long(val))
-                break;
-        }
-        if (e < eqc.n) {
-            /*
-              if there are integer-valued parameters, repeat intersection
-              with the full environment visible. this is needed because
-              NTuple has only one element type, so we can't keep track of
-              the fact that an arbitrary tuple's length must match some
-              typevar, e.g. "(Int8,Int32...) of length N". the solution is
-              to find all other constraints on N first, then do intersection
-              again with that knowledge.
-            */
-            *pti = jl_type_intersect(a, b, &env, &eqc, &recheck_tuple_intersection, covariant);
-            if (*pti == (jl_value_t*)jl_bottom_type) {
-                JL_GC_POP();
-                return *pti;
-            }
-        }
-    }
-
-    jl_value_t **tvs;
-    int tvarslen;
-    if (jl_is_typevar(tvars)) {
-        tvs = (jl_value_t**)&tvars;
-        tvarslen = 1;
-    }
-    else {
-        assert(jl_is_svec(tvars));
-        tvs = jl_svec_data(tvars);
-        tvarslen = jl_svec_len(tvars);
-    }
-
-    if (!solve_tvar_constraints(&env, &eqc, tvs, tvarslen)) {
-        JL_GC_POP();
-        return (jl_value_t*)jl_bottom_type;
-    }
-    //jl_printf(JL_STDOUT, "env: "); print_env(&env);
-    //jl_printf(JL_STDOUT, "sol: "); print_env(&eqc);
-
-    int env0 = eqc.n;
-    for(int tk=0; tk < tvarslen; tk++) {
-        jl_tvar_t *tv = (jl_tvar_t*)tvs[tk];
-        for(e=0; e < env0; e+=2) {
-            if (eqc.data[e] == (jl_value_t*)tv) {
-                break;
-            }
-        }
-        // bind type vars to new similar tvars if they were not matched explicitly
-        // during type intersection.
-        if (e >= env0) {
-            /*
-              Note: we used to bind T=T, but this can cause a loop if a recursion
-              is set up such that in a future call T=Foo{T}. If the RHS is
-              instantiated, we unintentionally construct Foo{Foo{T}} since the
-              typevar happens to match. This caused issue #6404.
-            */
-            jl_tvar_t *ntv = jl_new_typevar(tv->name, tv->lb, tv->ub);
-            ntv->bound = tv->bound;
-            extend_((jl_value_t*)tv, (jl_value_t*)ntv, &eqc, 1);
-        }
-    }
-
-    for(int i=0; i < eqc.n; i+=2) {
-        eqc.data[i+1] = *tvar_lookup(&eqc, &eqc.data[i+1]);
-    }
-    if (env0 > 0) {
-        /*
-          in a situation like this:
-          Type{_<:Array{T,1}} ∩ Type{Array{S,N}}
-          We end up with environment
-          _ = Array{S,N}
-          N = 1
-          So we need to instantiate all the RHS's first.
-        */
-        for(int i=0; i < eqc.n; i+=2) {
-            jl_value_t *rhs = eqc.data[i+1];
-            int tvar = jl_is_typevar(rhs);
-            jl_value_t *rhs2 = rhs;
-            if (tvar && jl_has_typevars(((jl_tvar_t*)rhs)->ub)) {
-                rhs2 = ((jl_tvar_t*)rhs)->ub;
-            }
-            else tvar = 0;
-            JL_TRY {
-                jl_value_t *inst = jl_instantiate_type_with(rhs2, eqc.data, eqc.n/2);
-                eqc.data[i+1] = inst;
-                if (tvar) {
-                    *extraroot = rhs;
-                    eqc.data[i+1] = (jl_value_t*)jl_new_typevar(underscore_sym, ((jl_tvar_t*)rhs)->lb, inst);
-                }
-            }
-            JL_CATCH {
-            }
-        }
-
-        // detect cycles; e.g. (T,Ptr{T}) ∩ (Ptr{S},S) == ⊥
-        for(int i=0; i < eqc.n; i+=2) {
-            jl_value_t *var = eqc.data[i];
-            jl_value_t *val = eqc.data[i+1];
-            if (val != var && jl_has_typevars_from_v(val, &var, 1)) {
-                // var's RHS contains the var itself => unsatisfiable (e.g. T = Foo{T})
-                JL_GC_POP();
-                return (jl_value_t*)jl_bottom_type;
-            }
-        }
-
-        JL_TRY {
-            *pti = (jl_value_t*)jl_instantiate_type_with(*pti, eqc.data, eqc.n/2);
-        }
-        JL_CATCH {
-            *pti = (jl_value_t*)jl_bottom_type;
-        }
-    }
-
-    // return environment in same order as tvars
-    *penv = jl_alloc_svec_uninit(tvarslen);
-    for(int tk=0; tk < tvarslen; tk++) {
-        jl_tvar_t *tv = (jl_tvar_t*)tvs[tk];
-        for(e=0; e < eqc.n; e+=2) {
-            if (eqc.data[e] == (jl_value_t*)tv) {
-                jl_svecset(*penv, tk, eqc.data[e+1]);
-            }
-        }
-    }
-
-    JL_GC_POP();
-    if (jl_is_typevar(*pti) && !(jl_is_typevar(a) && jl_is_typevar(b)))
-        return ((jl_tvar_t*)*pti)->ub;
-    return *pti;
-}
-
-JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
-{
-    jl_svec_t *env = jl_emptysvec;
-    JL_GC_PUSH1(&env);
-    jl_value_t *ti = jl_type_intersection_matching(a, b, &env, jl_emptysvec);
-    JL_GC_POP();
-    return ti;
-}
-#endif
-
 // --- type instantiation and cache ---
-#if 0
-static int extensionally_same_type(jl_value_t *a, jl_value_t *b)
-{
-    return jl_subtype(a, b) && jl_subtype(b, a);
-}
-
-static int type_eqv__(jl_value_t *a, jl_value_t *b, int distinguish_tctor)
-{
-    if (a == b) return 1;
-    if (distinguish_tctor && jl_is_typector(a) != jl_is_typector(b)) return 0;
-    if (jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
-    if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
-    if (jl_is_typevar(a)) {
-        if (jl_is_typevar(b)) {
-            return !distinguish_tctor && type_eqv_(((jl_tvar_t*)a)->ub, ((jl_tvar_t*)b)->ub) &&
-                type_eqv_(((jl_tvar_t*)a)->lb, ((jl_tvar_t*)b)->lb);
-        }
-        else {
-            return 0;
-        }
-    }
-    if (jl_is_uniontype(a)) {
-        if (jl_is_uniontype(b)) {
-            return extensionally_same_type(a, b);
-        }
-        return 0;
-    }
-    if (!jl_is_datatype(a) || !jl_is_datatype(b)) {
-        return jl_egal(a, b);
-    }
-    jl_datatype_t *tta = (jl_datatype_t*)a;
-    jl_datatype_t *ttb = (jl_datatype_t*)b;
-    if (tta->name != ttb->name) return 0;
-    jl_svec_t *ap = tta->parameters;
-    jl_svec_t *bp = ttb->parameters;
-    if (jl_svec_len(ap) != jl_svec_len(bp)) {
-        assert(tta->name == jl_tuple_typename);
-        return 0;
-    }
-    size_t i;
-    for(i=0; i < jl_svec_len(ap); i++) {
-        jl_value_t *api = jl_svecref(ap,i);
-        jl_value_t *bpi = jl_svecref(bp,i);
-        if (api == bpi) continue;
-        if (!type_eqv__(api, bpi, distinguish_tctor))
-            return 0;
-    }
-    return 1;
-}
-
-static int type_eqv_(jl_value_t *a, jl_value_t *b)
-{
-    return type_eqv__(a, b, 0);
-}
-#endif
-
-// type cache
 
 static int contains_unions(jl_value_t *type)
 {
@@ -2113,7 +728,6 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_typestack_t top;
     jl_typename_t *tn = dt->name;
-    //jl_value_t *tc = tn->primary;
     int istuple = (tn == jl_tuple_typename);
     // check type cache
     if (cacheable) {
@@ -2511,6 +1125,16 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
     return (jl_datatype_t*)jl_instantiate_unionall(jl_type_type, t);
 }
 
+jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
+{
+    if (n == NULL) {
+        if (t == NULL)
+            return (jl_value_t*)jl_vararg_type;
+        return jl_instantiate_unionall(jl_vararg_type, t);
+    }
+    return jl_instantiate_unionall((jl_unionall_t*)jl_instantiate_unionall(jl_vararg_type, t), n);
+}
+
 void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -2584,7 +1208,7 @@ static int type_eqv_with_ANY(jl_value_t *a, jl_value_t *b)
             jl_types_equal(a, b));
 }
 
-static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant);
+static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant);
 
 static jl_datatype_t *jl_fix_vararg_bound(jl_datatype_t *tt, int nfix)
 {
@@ -2599,6 +1223,55 @@ static jl_datatype_t *jl_fix_vararg_bound(jl_datatype_t *tt, int nfix)
     return ret;
 }
 
+/*
+Simplification of varargs tuple types:
+ JL_TUPLE_FIXED: tuples of known length (e.g., JL_VARARG_NONE or JL_VARARG_INT)
+ JL_TUPLE_VAR:   tuples of unknown length (e.g., JL_VARARG_BOUND or JL_VARARG_UNBOUND)
+
+In some cases, JL_VARARG_BOUND tuples get described as JL_TUPLE_FIXED,
+if the constraints on length are already known.
+
+lenr = "representation length" (the number of parameters)
+lenf = "full length" (including the Vararg length, if known)
+
+In general, lenf >= lenr-1. The lower bound is achieved only for a Vararg of length 0.
+*/
+typedef enum {
+    JL_TUPLE_FIXED = 0,
+    JL_TUPLE_VAR   = 1
+} jl_tuple_lenkind_t;
+
+// Set the parameters for a single tuple
+// returns lenf, sets kind and lenkind
+static size_t data_vararg_params(jl_value_t **data, size_t lenr, jl_vararg_kind_t *kind, jl_tuple_lenkind_t *lenkind)
+{
+    size_t lenf = lenr;
+    int i;
+    if (lenr == 0) {
+        *kind = JL_VARARG_NONE;
+        *lenkind = JL_TUPLE_FIXED;
+        return lenf;
+    }
+    *lenkind = JL_TUPLE_VAR;
+    jl_value_t *last = jl_unwrap_unionall(data[lenr-1]);
+    *kind = jl_vararg_kind(last);
+    if (*kind == JL_VARARG_NONE || *kind == JL_VARARG_INT)
+        *lenkind = JL_TUPLE_FIXED;
+    if (*kind == JL_VARARG_INT || *kind == JL_VARARG_BOUND) {
+        jl_value_t *N = jl_tparam1(last);
+        if (jl_is_long(N)) {
+            lenf += jl_unbox_long(N)-1;
+            *lenkind = JL_TUPLE_FIXED;
+        }
+    }
+    return lenf;
+}
+
+static size_t tuple_vararg_params(jl_svec_t *a, jl_vararg_kind_t *kind, jl_tuple_lenkind_t *lenkind)
+{
+    return data_vararg_params(jl_svec_data(a), jl_svec_len(a), kind, lenkind);
+}
+
 static int jl_tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invariant)
 {
     size_t clenr = jl_nparams(cdt);
@@ -2608,8 +1281,8 @@ static int jl_tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int inv
     size_t plenf, clenf;
     jl_vararg_kind_t ckind, pkind;
     jl_tuple_lenkind_t clenkind, plenkind;
-    clenf = tuple_vararg_params(cdt->parameters, NULL, &ckind, &clenkind);
-    plenf = tuple_vararg_params(pdt->parameters, NULL, &pkind, &plenkind);
+    clenf = tuple_vararg_params(cdt->parameters, &ckind, &clenkind);
+    plenf = tuple_vararg_params(pdt->parameters, &pkind, &plenkind);
     size_t ci=0, pi=0;
     int cseq=0, pseq=0;
     int some_morespecific = 0;
@@ -2632,7 +1305,7 @@ static int jl_tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int inv
             if (jl_is_vararg_type(pe)) pe = jl_unwrap_vararg(pe);
         }
 
-        if (!jl_type_morespecific_(ce, pe, invariant)) {
+        if (!type_morespecific_(ce, pe, invariant)) {
             if (type_eqv_with_ANY(ce,pe)) {
                 if (ci==clenf-1 && pi==plenf-1) {
                     if (!cseq && pseq)
@@ -2681,17 +1354,17 @@ static int partially_morespecific(jl_value_t *a, jl_value_t *b, int invariant)
 {
     if (jl_is_uniontype(b)) {
         jl_uniontype_t *u = (jl_uniontype_t*)b;
-        if ((jl_type_morespecific_(a, u->a, invariant) &&
-             !jl_type_morespecific_(u->a, a, invariant)) ||
-            (jl_type_morespecific_(a, u->b, invariant) &&
-             !jl_type_morespecific_(u->b, a, invariant)))
+        if ((type_morespecific_(a, u->a, invariant) &&
+             !type_morespecific_(u->a, a, invariant)) ||
+            (type_morespecific_(a, u->b, invariant) &&
+             !type_morespecific_(u->b, a, invariant)))
             return 1;
         return 0;
     }
-    return jl_type_morespecific_(a, b, invariant);
+    return type_morespecific_(a, b, invariant);
 }
 
-static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
+static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
 {
     while (jl_is_unionall(a)) a = (jl_value_t*)((jl_unionall_t*)a)->body;
     while (jl_is_unionall(b)) b = (jl_value_t*)((jl_unionall_t*)b)->body;
@@ -2719,12 +1392,12 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
         // more specific than b, and b is not more specific than any
         // element of a.
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        if (partially_morespecific(u->a, b, invariant) && !jl_type_morespecific_(b, u->a, invariant)) {
+        if (partially_morespecific(u->a, b, invariant) && !type_morespecific_(b, u->a, invariant)) {
             if (partially_morespecific(b, a, invariant))
                 return 0;
             return 1;
         }
-        if (partially_morespecific(u->b, b, invariant) && !jl_type_morespecific_(b, u->b, invariant)) {
+        if (partially_morespecific(u->b, b, invariant) && !type_morespecific_(b, u->b, invariant)) {
             if (partially_morespecific(b, a, invariant))
                 return 0;
             return 1;
@@ -2751,8 +1424,7 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
         if (invariant)
             return 0;
         jl_uniontype_t *u = (jl_uniontype_t*)b;
-        if (jl_type_morespecific_(a, u->a, invariant) ||
-            jl_type_morespecific_(a, u->b, invariant))
+        if (type_morespecific_(a, u->a, invariant) || type_morespecific_(a, u->b, invariant))
             return 1;
         return 0;
     }
@@ -2771,14 +1443,14 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
                         return 1;
                 }
                 if (super && ttb->name == jl_type_typename && jl_is_typevar(jl_tparam0(b))) {
-                    if (jl_type_morespecific_(a, jl_tparam0(b), 1))
+                    if (type_morespecific_(a, jl_tparam0(b), 1))
                         return 1;
                 }
                 assert(jl_nparams(tta) == jl_nparams(ttb));
                 for(i=0; i < jl_nparams(tta); i++) {
                     jl_value_t *apara = jl_tparam(tta,i);
                     jl_value_t *bpara = jl_tparam(ttb,i);
-                    if (!jl_type_morespecific_(apara, bpara, 1))
+                    if (!type_morespecific_(apara, bpara, 1))
                         return 0;
                 }
                 return 1;
@@ -2793,11 +1465,10 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
 
     if (jl_is_typevar(a)) {
         if (jl_is_typevar(b)) {
-            return
-                jl_type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->ub,
+            return type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->ub,
                                       (jl_value_t*)((jl_tvar_t*)b)->ub, 0) &&
-                jl_type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->lb,
-                                      (jl_value_t*)((jl_tvar_t*)a)->lb, 0);
+                type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->lb,
+                                   (jl_value_t*)((jl_tvar_t*)a)->lb, 0);
         }
         if (invariant)
             return 0;
@@ -2812,52 +1483,10 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
     return 0;
 }
 
-JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
-{
-    return jl_type_morespecific_(a, b, 0);
-}
-
-static int jl_args_morespecific_(jl_value_t *a, jl_value_t *b)
-{
-    int msp = jl_type_morespecific(a,b);
-    /*
-    int btv = jl_has_typevars(b);
-    if (btv) {
-        if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
-            if (jl_has_typevars(a))
-                return 0;
-            return msp;
-        }
-        if (jl_has_typevars(a)) {
-            type_match_invariance_mask = 0;
-            //int result = jl_type_match_morespecific(b,a) == (jl_value_t*)jl_false);
-            // this rule seems to work better:
-            int result = jl_type_match(b,a) == (jl_value_t*)jl_false;
-            type_match_invariance_mask = 1;
-            if (result)
-                return 1;
-        }
-        int nmsp = jl_type_morespecific(b,a);
-        if (nmsp == msp)
-            return 0;
-    }
-    if (jl_has_typevars((jl_value_t*)a)) {
-        int nmsp = jl_type_morespecific(b,a);
-        if (nmsp && msp)
-            return 1;
-        if (!btv && jl_types_equal(a,b))
-            return 1;
-        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false)
-            return 0;
-    }
-    */
-    return msp;
-}
-
 // Called when a is a bound-vararg and b is not a vararg. Sets the
 // vararg length in a to match b, as long as this makes some earlier
 // argument more specific.
-static int jl_args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap)
+static int args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap)
 {
     jl_datatype_t *tta = (jl_datatype_t*)a;
     jl_datatype_t *ttb = (jl_datatype_t*)b;
@@ -2876,18 +1505,18 @@ static int jl_args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap)
         if (jl_types_equal(b, (jl_value_t*)newtta))
             ret = swap;
         else if (swap)
-            ret = jl_args_morespecific_(b, (jl_value_t*)newtta);
+            ret = type_morespecific_(b, (jl_value_t*)newtta, 0);
         else
-            ret = jl_args_morespecific_((jl_value_t*)newtta, b);
+            ret = type_morespecific_((jl_value_t*)newtta, b, 0);
         JL_GC_POP();
         return ret;
     }
     if (swap)
-        return jl_args_morespecific_(b, a);
-    return jl_args_morespecific_(a, b);
+        return type_morespecific_(b, a, 0);
+    return type_morespecific_(a, b, 0);
 }
 
-JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 {
     if (jl_subtype(a, b))
         return 1;
@@ -2899,328 +1528,20 @@ JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
         size_t alenf, blenf;
         jl_vararg_kind_t akind, bkind;
         jl_tuple_lenkind_t alenkind, blenkind;
-        alenf = tuple_vararg_params(tta->parameters, NULL, &akind, &alenkind);
-        blenf = tuple_vararg_params(ttb->parameters, NULL, &bkind, &blenkind);
+        alenf = tuple_vararg_params(tta->parameters, &akind, &alenkind);
+        blenf = tuple_vararg_params(ttb->parameters, &bkind, &blenkind);
         // When one is JL_VARARG_BOUND and the other has fixed length,
         // allow the argument length to fix the tvar
         if (akind == JL_VARARG_BOUND && blenkind == JL_TUPLE_FIXED && blenf >= alenf) {
-            return jl_args_morespecific_fix1(a, b, 0);
+            return args_morespecific_fix1(a, b, 0);
         }
         if (bkind == JL_VARARG_BOUND && alenkind == JL_TUPLE_FIXED && alenf >= blenf) {
-            return jl_args_morespecific_fix1(b, a, 1);
+            return args_morespecific_fix1(b, a, 1);
         }
     }
-    return jl_args_morespecific_(a, b);
+    return type_morespecific_(a, b, 0);
 }
 
-// ----------------------------------------------------------------------------
-#if 0
-int type_match_invariance_mask = 1;
-
-static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
-                               cenv_t *env, int morespecific, int invariant);
-
-static jl_value_t *tuple_match(jl_datatype_t *child, jl_datatype_t *parent,
-                               cenv_t *env, int morespecific, int invariant)
-{
-    size_t ci=0, pi=0;
-    size_t clenr = jl_nparams(child);
-    size_t plenr = jl_nparams(parent);
-    size_t plenf, clenf;
-    jl_vararg_kind_t ckind, pkind;
-    jl_tuple_lenkind_t clenkind, plenkind;
-    clenf = tuple_vararg_params(child->parameters, NULL, &ckind, &clenkind);
-    plenf = tuple_vararg_params(parent->parameters, NULL, &pkind, &plenkind);
-    int cseq=0, pseq=0;
-    jl_value_t *ce=NULL, *pe=NULL, *cn=NULL, *pn=NULL;
-    int mode = 0;
-    invariant = invariant & type_match_invariance_mask;
-    while(1) {
-        if (!cseq)
-            cseq = (ci<clenr) && clenkind != JL_TUPLE_FIXED && jl_is_vararg_type(jl_tparam(child,ci));
-        if (!pseq)
-            pseq = (pi<plenr) && plenkind != JL_TUPLE_FIXED && jl_is_vararg_type(jl_tparam(parent,pi));
-        if (!morespecific && cseq && !pseq)
-            return jl_false;
-        if (ci >= clenf && !cseq)
-            return (mode || pi>=plenf || (pseq && !invariant)) ? jl_true : jl_false;
-        if (pi >= plenf && !pseq)
-            return mode ? jl_true : jl_false;
-        if (ci < clenr) {
-            ce = jl_tparam(child,ci);
-            if (jl_is_vararg_type(ce)) {
-                cn = jl_tparam1(ce);
-                ce = jl_tparam0(ce);
-            }
-        }
-        if (pi < plenr) {
-            pe = jl_tparam(parent,pi);
-            if (jl_is_vararg_type(pe)) {
-                pn = jl_tparam1(pe);
-                pe = jl_tparam0(pe);
-            }
-        }
-
-        int n = env->n;
-        if (type_match_(ce, pe, env, morespecific, invariant) == jl_false) {
-            env->n = n;
-            if (jl_types_equal(ce,pe)) {
-                if (ci==clenf-1 && pi==plenf-1 && !cseq && pseq) {
-                    return jl_true;
-                }
-                if (!mode) return jl_false;
-            }
-            else {
-                return jl_false;
-            }
-        }
-        // Match the number parameter in Vararg, too
-        if (cseq && pseq) {
-            n = env->n;
-            if (type_match_(cn, pn, env, morespecific, invariant) == jl_false) {
-                env->n = n;
-                return jl_false;
-            }
-        }
-
-        if (mode && cseq && !pseq)
-            return jl_true;
-
-        if (morespecific) {
-            if (!(jl_types_equal(ce,pe) ||
-                  (jl_is_typevar(pe) &&
-                   jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
-                mode = 1;
-            }
-        }
-
-        if (cseq && pseq) return jl_true;
-        ci++;
-        pi++;
-    }
-    return jl_false;
-}
-
-static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
-                               cenv_t *env, int morespecific, int invariant)
-{
-    jl_value_t *tmp, *tmp2;
-    invariant = invariant & type_match_invariance_mask;
-    if (jl_is_typector(child))
-        child = (jl_value_t*)((jl_typector_t*)child)->body;
-    if (jl_is_typector(parent))
-        parent = (jl_value_t*)((jl_typector_t*)parent)->body;
-    size_t i, j;
-    if (match_intersection_mode && jl_is_typevar(child) && !jl_is_typevar(parent)) {
-        tmp = child;
-        child = parent;
-        parent = tmp;
-    }
-    if (jl_is_typevar(parent)) {
-        // make sure type is within this typevar's bounds
-        if (morespecific) {
-            if (!jl_type_morespecific_(child, parent, 0))
-                return jl_false;
-        }
-        else {
-            if (!jl_subtype_le(child, parent, 0, 0))
-                return jl_false;
-        }
-        if (!match_intersection_mode) {
-            if (!((jl_tvar_t*)parent)->bound) return jl_true;
-        }
-        for(int i=0; i < env->n; i+=2) {
-            if (env->data[i] == (jl_value_t*)parent) {
-                jl_value_t *pv = env->data[i+1];
-                if (jl_is_typevar(pv) && jl_is_typevar(child)) {
-                    if (pv == (jl_value_t*)child)
-                        return jl_true;
-                    return jl_false;
-                }
-                if (morespecific) {
-                    if (jl_type_morespecific_(child, pv, 0)) {
-                        return jl_true;
-                    }
-                    else if (!jl_is_typevar(child) && !jl_type_morespecific_(pv, child, 0)) {
-                        return jl_true;
-                    }
-                    else if (jl_subtype(pv, child)) {
-                        env->data[i+1] = (jl_value_t*)child;
-                        return jl_true;
-                    }
-                }
-                else {
-                    if (type_eqv_(child, pv))
-                        return jl_true;
-                }
-                return jl_false;
-            }
-        }
-        extend(parent, child, env);
-        return jl_true;
-    }
-
-    if (child == parent) return jl_true;
-
-    if (jl_is_typevar(child)) {
-        if (!invariant || morespecific) {
-            if (morespecific) {
-                if (jl_type_morespecific_(child, parent, 0))
-                    return jl_true;
-            }
-            else {
-                if (jl_subtype_le(child, parent, 0, 0))
-                    return jl_true;
-            }
-        }
-        return jl_false;
-    }
-    if (!invariant && parent == (jl_value_t*)jl_any_type)
-        return jl_true;
-    if (child  == (jl_value_t*)jl_any_type) return jl_false;
-
-    if (jl_is_uniontype(child)) {
-        jl_svec_t *t = ((jl_uniontype_t*)child)->types;
-        if (morespecific) {
-            jl_value_t **rts;
-            JL_GC_PUSHARGS(rts, MAX_CENV_SIZE);
-            cenv_t tenv; tenv.data = rts;
-            for(i=0; i < jl_svec_len(t); i++) {
-                int n = env->n;
-                tmp = type_match_(jl_svecref(t,i), parent, env, 1, invariant);
-                if (tmp != jl_false) {
-                    tenv.n = 0;
-                    tmp2 = type_match_(parent, jl_svecref(t,i), &tenv, 1, invariant);
-                    if (tmp2 == jl_false) {
-                        n = env->n;
-                        for(j=0; j < jl_svec_len(t); j++) {
-                            tenv.n = 0;
-                            env->n = n;
-                            if (type_match_(parent, jl_svecref(t,j),
-                                            &tenv, 1, invariant) != jl_false &&
-                                type_match_(jl_svecref(t,j), parent,
-                                            env, 1, invariant) == jl_false) {
-                                env->n = n;
-                                JL_GC_POP();
-                                return jl_false;
-                            }
-                        }
-                        JL_GC_POP();
-                        return jl_true;
-                    }
-                }
-                else {
-                    env->n = n;
-                }
-            }
-            JL_GC_POP();
-            return jl_false;
-        }
-        else {
-            for(i=0; i < jl_svec_len(t); i++) {
-                int n = env->n;
-                if (type_match_(jl_svecref(t,i), parent, env, morespecific,
-                                invariant) == jl_false)
-                    { env->n = n; return jl_false; }
-            }
-            if (invariant && child == (jl_value_t*)jl_bottom_type &&
-                !jl_is_typevar(parent))
-                return jl_false;
-        }
-        return jl_true;
-    }
-    if (jl_is_uniontype(parent)) {
-        jl_svec_t *t = ((jl_uniontype_t*)parent)->types;
-        int n = env->n;
-        for(i=0; i < jl_svec_len(t); i++) {
-            env->n = n;
-            if (type_match_(child, jl_svecref(t,i), env,
-                            morespecific, invariant) != jl_false)
-                return jl_true;
-        }
-        return jl_false;
-    }
-
-    if (jl_is_tuple_type(child)) {
-        if (jl_is_tuple_type(parent)) {
-            return tuple_match((jl_datatype_t*)child, (jl_datatype_t*)parent, env,
-                               morespecific, invariant);
-        }
-        return jl_false;
-    }
-    if (jl_is_tuple_type(parent)) {
-        return jl_false;
-    }
-
-    if (!jl_is_datatype(child) || !jl_is_datatype(parent)) {
-        return jl_egal(child,parent) ? jl_true : jl_false;
-    }
-    jl_datatype_t *tta = (jl_datatype_t*)child;
-    jl_datatype_t *ttb = (jl_datatype_t*)parent;
-    int super = 0;
-    while (tta != (jl_datatype_t*)jl_any_type) {
-        if (tta->name == ttb->name) {
-            // note: DataType <: Type, but Type{T} <: DataType
-            // for any specific T.
-            if (super && morespecific && tta->name != jl_type_typename)
-                return jl_true;
-            assert(jl_nparams(tta) == jl_nparams(ttb));
-            for(i=0; i < jl_nparams(tta); i++) {
-                int n = env->n;
-                if (type_match_(jl_tparam(tta,i), jl_tparam(ttb,i),
-                                env, morespecific, 1) == jl_false)
-                    { env->n = n; return jl_false; }
-            }
-            return jl_true;
-        }
-        else if (invariant) {
-            return jl_false;
-        }
-        tta = tta->super; super = 1;
-    }
-    assert(!invariant);
-    if (((jl_datatype_t*)child)->name == jl_type_typename &&
-        ttb->name != jl_type_typename) {
-        // Type{T} also matches >:typeof(T)
-        return type_match_(jl_typeof(jl_tparam0(child)),
-                           parent, env, morespecific, 0);
-    }
-    return jl_false;
-}
-
-/*
-  typically a is a concrete type and b is a type containing typevars.
-  this function tries to find a typevar assignment such that "a" is a subtype
-  of "b".
-  returns a tuple of (typevar,type,...) pairs.
-  used to infer static parameter values in generic method definitions.
-*/
-jl_value_t *jl_type_match_(jl_value_t *a, jl_value_t *b, int morespecific)
-{
-    jl_value_t **rts;
-    JL_GC_PUSHARGS(rts, MAX_CENV_SIZE);
-    cenv_t env; env.n = 0; env.data = rts;
-    jl_value_t *m = type_match_(a, b, &env, morespecific, 0);
-    if (m != jl_false) {
-        m = (jl_value_t*)jl_alloc_svec_uninit(env.n);
-        for(int i=0; i < env.n; i++) {
-            jl_svecset(m, i, env.data[i]);
-        }
-    }
-    JL_GC_POP();
-    return m;
-}
-
-jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b)
-{
-    return jl_type_match_(a, b, 0);
-}
-
-jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b)
-{
-    return jl_type_match_(a, b, 1);
-}
-#endif
 // initialization -------------------------------------------------------------
 
 static jl_tvar_t *tvar(const char *name)
