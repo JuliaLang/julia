@@ -1091,16 +1091,16 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
         // we're ok if the new definition is actually the one we just
         // inferred to be required (see issue #3609). ideally this would
         // never happen, since if New ⊓ Old == New then we should have
-        // considered New more specific, but jl_args_morespecific is not
+        // considered New more specific, but jl_type_morespecific is not
         // perfect, so this is a useful fallback.
         return 1;
     }
 
     // we know type ∩ sig != Union{} and
-    // we know !jl_args_morespecific(type, sig) [before]
-    //      or !jl_args_morespecific(sig, type) [after]
+    // we know !jl_type_morespecific(type, sig) [before]
+    //      or !jl_type_morespecific(sig, type) [after]
     // now we are checking that the reverse is true
-    if (!jl_args_morespecific((jl_value_t*)(closure->after ? type : sig),
+    if (!jl_type_morespecific((jl_value_t*)(closure->after ? type : sig),
                               (jl_value_t*)(closure->after ? sig : type))) {
         jl_typemap_entry_t *l = jl_typemap_assoc_by_type(map, (jl_tupletype_t*)isect, NULL, 0, 0, 0,
                 closure->newentry->min_world);

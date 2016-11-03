@@ -987,7 +987,6 @@ JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n);
 JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
-JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT const char *jl_typename_str(jl_value_t *v);
 JL_DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
