@@ -1045,7 +1045,7 @@ end
 reduced_dims(::Tuple{}, region) = ()
 function reduced_dims(dims::Dims, region)
     Base.depwarn("`reduced_dims` is deprecated for Dims-tuples; pass `indices` to `reduced_indices` instead", :reduced_dims)
-    map(last, reduced_dims(map(n->OneTo(n), dims), region))
+    map(last, reduced_indices(map(OneTo, dims), region))
 end
 
 function reduced_dims0(::Tuple{}, d::Int)
@@ -1055,7 +1055,7 @@ end
 reduced_dims0(::Tuple{}, region) = ()
 function reduced_dims0(dims::Dims, region)
     Base.depwarn("`reduced_dims0` is deprecated for Dims-tuples; pass `indices` to `reduced_indices0` instead", :reduced_dims0)
-    map(last, reduced_dims0(map(n->OneTo(n), dims), region))
+    map(last, reduced_indices0(map(OneTo, dims), region))
 end
 
 function reduced_dims(a::AbstractArray, region)
