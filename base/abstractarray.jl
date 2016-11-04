@@ -202,6 +202,14 @@ function trailingsize(A, n)
     end
     return s
 end
+function trailingsize(inds::Indices, n)
+    s = 1
+    for i=n:length(inds)
+        s *= unsafe_length(inds[i])
+    end
+    return s
+end
+# This version is type-stable even if inds is heterogeneous
 function trailingsize(inds::Indices)
     @_inline_meta
     prod(map(unsafe_length, inds))

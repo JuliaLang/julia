@@ -2,71 +2,86 @@
 
 ## Functions to compute the reduced shape
 
+function reduced_dims(a::AbstractArray, region)
+    to_shape(reduced_indices(a, region))  # to_shape keeps the return-type consistent, when it's possible to do so
+end
+
+function reduced_dims0(a::AbstractArray, region)
+    to_shape(reduced_indices0(a, region))
+end
+
 # for reductions that expand 0 dims to 1
-reduced_dims(a::AbstractArray, region) = reduced_dims(size(a), region)
+reduced_indices(a::AbstractArray, region) = reduced_indices(indices(a), region)
 
 # for reductions that keep 0 dims as 0
-reduced_dims0(a::AbstractArray, region) = reduced_dims0(size(a), region)
+reduced_indices0(a::AbstractArray, region) = reduced_indices0(indices(a), region)
 
-function reduced_dims{N}(siz::NTuple{N,Int}, d::Int, rd::Int)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    elseif d == 1
-        return tuple(rd, siz[d+1:N]...)::typeof(siz)
-    elseif 1 < d < N
-        return tuple(siz[1:d-1]..., rd, siz[d+1:N]...)::typeof(siz)
-    elseif d == N
-        return tuple(siz[1:N-1]..., rd)::typeof(siz)
+function reduced_indices{N}(inds::Indices{N}, d::Int, rd::AbstractUnitRange)
+    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    if d == 1
+        return (oftype(inds[1], rd), tail(inds)...)
+    elseif 1 < d <= N
+        return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
     else
-        return siz
+        return inds
     end
 end
-reduced_dims{N}(siz::NTuple{N,Int}, d::Int) = reduced_dims(siz, d, 1)
+reduced_indices{N}(inds::Indices{N}, d::Int) = reduced_indices(inds, d, OneTo(1))
 
-function reduced_dims0{N}(siz::NTuple{N,Int}, d::Int)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    elseif d <= N
-        return reduced_dims(siz, d, (siz[d] == 0 ? 0 : 1))
+function reduced_indices0{N}(inds::Indices{N}, d::Int)
+    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    if d <= N
+        return reduced_indices(inds, d, (inds[d] == OneTo(0) ? OneTo(0) : OneTo(1)))
     else
-        return siz
+        return inds
     end
 end
 
-function reduced_dims{N}(siz::NTuple{N,Int}, region)
-    rsiz = [siz...]
+function reduced_indices{N}(inds::Indices{N}, region)
+    rinds = [inds...]
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = convert(Int, i)::Int
+        d = Int(i)
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
-            rsiz[d] = 1
+            rinds[d] = oftype(rinds[d], OneTo(1))
         end
     end
-    tuple(rsiz...)::typeof(siz)
+    tuple(rinds...)::typeof(inds)
 end
 
-function reduced_dims0{N}(siz::NTuple{N,Int}, region)
-    rsiz = [siz...]
+function reduced_indices0{N}(inds::Indices{N}, region)
+    rinds = [inds...]
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = convert(Int, i)::Int
+        d = Int(i)
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
-            rsiz[d] = (rsiz[d] == 0 ? 0 : 1)
+            rinds[d] = oftype(rinds[d], (rinds[d] == OneTo(0) ? OneTo(0) : OneTo(1)))
         end
     end
-    tuple(rsiz...)::typeof(siz)
+    tuple(rinds...)::typeof(inds)
 end
 
-function regionsize(a, region)
-    s = 1
-    for d in region
-        s *= size(a,d)
-    end
-    s
+# The following are deprecated in julia-0.6
+function reduced_dims(::Tuple{}, d::Int)
+    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    ()
+end
+reduced_dims(::Tuple{}, region) = ()
+function reduced_dims(dims::Dims, region)
+    map(last, reduced_dims(map(n->OneTo(n), dims), region))
+end
+
+function reduced_dims0(::Tuple{}, d::Int)
+    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    ()
+end
+reduced_dims0(::Tuple{}, region) = ()
+function reduced_dims0(dims::Dims, region)
+    map(last, reduced_dims0(map(n->OneTo(n), dims), region))
 end
 
 
@@ -82,10 +97,10 @@ for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
     @eval initarray!(a::AbstractArray, ::$(Op), init::Bool) = (init && fill!(a, $initval); a)
 end
 
-reducedim_initarray{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_dims(A,region)), v0)
+reducedim_initarray{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_indices(A,region)), v0)
 reducedim_initarray{T}(A::AbstractArray, region, v0::T) = reducedim_initarray(A, region, v0, T)
 
-reducedim_initarray0{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_dims0(A,region)), v0)
+reducedim_initarray0{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_indices0(A,region)), v0)
 reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(A, region, v0, T)
 
 # TODO: better way to handle reducedim initialization
@@ -387,11 +402,11 @@ For an array input, returns the value and index of the minimum over the given re
 """
 function findmin{T}(A::AbstractArray{T}, region)
     if isempty(A)
-        return (similar(A, reduced_dims0(A, region)),
-                zeros(Int, reduced_dims0(A, region)))
+        return (similar(A, reduced_indices0(A, region)),
+                similar(dims->zeros(Int, dims), reduced_indices0(A, region)))
     end
     return findminmax!(<, reducedim_initarray0(A, region, typemax(T)),
-            zeros(Int, reduced_dims0(A, region)), A)
+            similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
 
 """
@@ -414,11 +429,11 @@ For an array input, returns the value and index of the maximum over the given re
 """
 function findmax{T}(A::AbstractArray{T}, region)
     if isempty(A)
-        return (similar(A, reduced_dims0(A,region)),
-                zeros(Int, reduced_dims0(A,region)))
+        return (similar(A, reduced_indices0(A,region)),
+                similar(dims->zeros(Int, dims), reduced_indices0(A,region)))
     end
     return findminmax!(>, reducedim_initarray0(A, region, typemin(T)),
-            zeros(Int, reduced_dims0(A, region)), A)
+            similar(dims->zeros(Int, dims), reduced_indices0(A, region)), A)
 end
 
 reducedim1(R, A) = length(indices1(R)) == 1

@@ -207,10 +207,10 @@ index_ndims() = ()
 
 # Recursively compute the lengths of a list of indices, without dropping scalars
 # These need to be inlined for more than 3 indexes
-index_lengths(A::AbstractArray, I::Colon) = (length(A),)
+index_lengths(A::AbstractArray, I::Colon) = (_length(A),)
 @inline index_lengths(A::AbstractArray, I...) = index_lengths_dim(A, 1, I...)
 index_lengths_dim(A, dim) = ()
-index_lengths_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
+index_lengths_dim(A, dim, ::Colon) = (trailingsize(indices(A), dim),)
 @inline index_lengths_dim(A, dim, ::Colon, i, I...) = (_length(indices(A, dim)), index_lengths_dim(A, dim+1, i, I...)...)
 @inline index_lengths_dim(A, dim, ::Real, I...) = (1, index_lengths_dim(A, dim+1, I...)...)
 @inline index_lengths_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (1, index_lengths_dim(A, dim+N, I...)...)
