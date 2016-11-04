@@ -2238,7 +2238,23 @@ function is_pure_builtin(f::ANY)
         if !(f === Intrinsics.pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.ccall ||      # this one is never effect-free
-             f === Intrinsics.llvmcall)     # this one is never effect-free
+             f === Intrinsics.llvmcall ||   # this one is never effect-free
+             f === Intrinsics.checked_trunc_sint ||
+             f === Intrinsics.checked_trunc_uint ||
+             f === Intrinsics.checked_fptosi ||
+             f === Intrinsics.checked_fptoui ||
+             f === Intrinsics.checked_sadd_int ||
+             f === Intrinsics.checked_uadd_int ||
+             f === Intrinsics.checked_ssub_int ||
+             f === Intrinsics.checked_usub_int ||
+             f === Intrinsics.checked_smul_int ||
+             f === Intrinsics.checked_umul_int ||
+             f === Intrinsics.checked_sdiv_int ||
+             f === Intrinsics.checked_udiv_int ||
+             f === Intrinsics.checked_srem_int ||
+             f === Intrinsics.checked_urem_int ||
+             f === Intrinsics.check_top_bit ||
+             f === Intrinsics.sqrt_llvm)
             return true
         end
     end
