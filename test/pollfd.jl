@@ -26,11 +26,11 @@ function pfd_tst_reads(idx, intvl)
     global ready += 1
     wait(ready_c)
     tic()
-    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=true)
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
     t_elapsed = toq()
     @test !evt.timedout
     @test evt.readable
-    @test evt.writable
+    @test !evt.writable
 
     # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
     # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
