@@ -996,6 +996,10 @@ end
 
 
 # concatenations of homogeneous combinations of vectors, horizontal and vertical
+
+vcat() = Array{Any,1}(0)
+hcat() = Array{Any,1}(0)
+
 function hcat{T}(V::Vector{T}...)
     height = length(V[1])
     for j = 2:length(V)
