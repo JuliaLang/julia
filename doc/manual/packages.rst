@@ -360,7 +360,7 @@ We recommend that you create a `free account <https://github.com/join>`_ on GitH
 
 where ``USERNAME`` is your actual GitHub user name.
 Once you do this, the package manager knows your GitHub user name and can configure things accordingly.
-You should also `upload <https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Fssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
+You should also `upload <https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Fssh>`_ your public SSH key to GitHub and set up an `SSH agent <https://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 Since the package development functions has been moved to the `PkgDev <https://github.com/JuliaLang/PkgDev.jl>`_ package, you need to run ``Pkg.add("PkgDev"); import PkgDev`` to access the functions starting with ``PkgDev.`` in the document below.
 
