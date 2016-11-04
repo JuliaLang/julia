@@ -1127,6 +1127,7 @@ eval(Base.Dates, quote
         end
      end
      recur{T<:TimeType}(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000) = recur(fun, start:step:stop; negate=negate)
+end)
 
 # #19212
 eval(Base.Dates,quote
@@ -1143,6 +1144,13 @@ eval(Base.Dates,quote
                dayname(DayOfWeek(dt); locale=locale))
     @deprecate(dayabbr(dt::Integer;locale::AbstractString="english"),
                dayabbr(DayOfWeek(dt); locale=locale))
+    @deprecate(ismonday(dt::TimeType), DayOfWeek(dt) == Mon)
+    @deprecate(istuesday(dt::TimeType), DayOfWeek(dt) == Tue)
+    @deprecate(iswednesday(dt::TimeType), DayOfWeek(dt) == Wed)
+    @deprecate(isthursday(dt::TimeType), DayOfWeek(dt) == Thu)
+    @deprecate(isfriday(dt::TimeType), DayOfWeek(dt) == Fri)
+    @deprecate(issaturday(dt::TimeType), DayOfWeek(dt) == Sat)
+    @deprecate(issunday(dt::TimeType), DayOfWeek(dt) == Sun)
 end)
 
 # End deprecations scheduled for 0.6

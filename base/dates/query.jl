@@ -67,15 +67,6 @@ in the given `locale`.
 """
 dayabbr(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][DayOfWeek(dt)]
 
-# Convenience methods for each day
-ismonday(dt::TimeType) = DayOfWeek(dt) == Mon
-istuesday(dt::TimeType) = DayOfWeek(dt) == Tue
-iswednesday(dt::TimeType) = DayOfWeek(dt) == Wed
-isthursday(dt::TimeType) = DayOfWeek(dt) == Thu
-isfriday(dt::TimeType) = DayOfWeek(dt) == Fri
-issaturday(dt::TimeType) = DayOfWeek(dt) == Sat
-issunday(dt::TimeType) = DayOfWeek(dt) == Sun
-
 # i.e. 1st Monday? 2nd Monday? 3rd Wednesday? 5th Sunday?
 """
     dayofweekofmonth(dt::TimeType) -> Int

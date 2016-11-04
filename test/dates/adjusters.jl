@@ -206,11 +206,11 @@ end
 
 # Adjusters
 # Adjuster Constructors
-@test Dates.Date(Dates.ismonday,2014) == Dates.Date(2014,1,6)
-@test Dates.Date(Dates.ismonday,2014,5) == Dates.Date(2014,5,5)
+@test Dates.Date(x->Dates.DayOfWeek(x)==Dates.Mon,2014) == Dates.Date(2014,1,6)
+@test Dates.Date(x->Dates.DayOfWeek(x)==Dates.Mon,2014,5) == Dates.Date(2014,5,5)
 
-@test Dates.DateTime(Dates.ismonday,2014) == Dates.DateTime(2014,1,6)
-@test Dates.DateTime(Dates.ismonday,2014,5) == Dates.DateTime(2014,5,5)
+@test Dates.DateTime(x->Dates.DayOfWeek(x)==Dates.Mon,2014) == Dates.DateTime(2014,1,6)
+@test Dates.DateTime(x->Dates.DayOfWeek(x)==Dates.Mon,2014,5) == Dates.DateTime(2014,5,5)
 @test Dates.DateTime(x->Dates.hour(x)==12,2014,5,21) == Dates.DateTime(2014,5,21,12)
 @test Dates.DateTime(x->Dates.minute(x)==30,2014,5,21,12) == Dates.DateTime(2014,5,21,12,30)
 @test Dates.DateTime(x->Dates.second(x)==30,2014,5,21,12,30) == Dates.DateTime(2014,5,21,12,30,30)
@@ -230,35 +230,35 @@ dt = Dates.Date(2014,5,21)
 @test Dates.tonext(Dates.Date(0),Dates.Mon) == Dates.Date(0,1,3)
 
 #test func, diff steps, negate, same
-@test Dates.tonext(Dates.iswednesday,dt) == Dates.Date(2014,5,28)
-@test Dates.tonext(Dates.iswednesday,dt;same=true) == dt
-@test Dates.tonext(Dates.isthursday,dt) == Dates.Date(2014,5,22)
-@test Dates.tonext(Dates.isfriday,dt) == Dates.Date(2014,5,23)
-@test Dates.tonext(Dates.issaturday,dt) == Dates.Date(2014,5,24)
-@test Dates.tonext(Dates.issunday,dt) == Dates.Date(2014,5,25)
-@test Dates.tonext(Dates.ismonday,dt) == Dates.Date(2014,5,26)
-@test Dates.tonext(Dates.istuesday,dt) == Dates.Date(2014,5,27)
-@test Dates.tonext(Dates.ismonday,Dates.Date(0)) == Dates.Date(0,1,3)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt) == Dates.Date(2014,5,28)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;same=true) == dt
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Thu,dt) == Dates.Date(2014,5,22)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Fri,dt) == Dates.Date(2014,5,23)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Sat,dt) == Dates.Date(2014,5,24)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Sun,dt) == Dates.Date(2014,5,25)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Mon,dt) == Dates.Date(2014,5,26)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Tue,dt) == Dates.Date(2014,5,27)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Mon,Dates.Date(0)) == Dates.Date(0,1,3)
 
-@test Dates.tonext(x->!Dates.iswednesday(x),dt;negate=true) == Dates.Date(2014,5,28)
+@test Dates.tonext(x->Dates.DayOfWeek(x)!=Dates.Wed,dt;negate=true) == Dates.Date(2014,5,28)
 # Reach adjust limit
-@test_throws ArgumentError Dates.tonext(Dates.iswednesday,dt;limit=6)
+@test_throws ArgumentError Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;limit=6)
 
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Day(2)) == Dates.Date(2014,6,4)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Day(3)) == Dates.Date(2014,6,11)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Day(4)) == Dates.Date(2014,6,18)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Day(5)) == Dates.Date(2014,6,25)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Day(6)) == Dates.Date(2014,7,2)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Day(7)) == Dates.Date(2014,5,28)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Week(1)) == Dates.Date(2014,5,28)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Week(2)) == Dates.Date(2014,6,4)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Week(3)) == Dates.Date(2014,6,11)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Week(4)) == Dates.Date(2014,6,18)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Week(5)) == Dates.Date(2014,6,25)
-@test Dates.tonext(Dates.iswednesday,dt;step=Dates.Week(6)) == Dates.Date(2014,7,2)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Day(2)) == Dates.Date(2014,6,4)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Day(3)) == Dates.Date(2014,6,11)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Day(4)) == Dates.Date(2014,6,18)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Day(5)) == Dates.Date(2014,6,25)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Day(6)) == Dates.Date(2014,7,2)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Day(7)) == Dates.Date(2014,5,28)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Week(1)) == Dates.Date(2014,5,28)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Week(2)) == Dates.Date(2014,6,4)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Week(3)) == Dates.Date(2014,6,11)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Week(4)) == Dates.Date(2014,6,18)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Week(5)) == Dates.Date(2014,6,25)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;step=Dates.Week(6)) == Dates.Date(2014,7,2)
 
-@test Dates.tonext(Dates.iswednesday,dt;same=true) == dt
-@test Dates.tonext(Dates.isthursday,dt) == Dates.Date(2014,5,22)
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Wed,dt;same=true) == dt
+@test Dates.tonext(x->Dates.DayOfWeek(x)==Dates.Thu,dt) == Dates.Date(2014,5,22)
 
 #toprev
 @test Dates.toprev(dt,Dates.Wed) == Dates.Date(2014,5,14)
@@ -317,7 +317,7 @@ stopdate = Dates.Date(2014,2,1)
 @test length(filter(x->true,stopdate:Dates.Day(-1):startdate)) == 32
 
 Januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014,1,20),Dates.Date(2014,1,27)]
-@test filter(Dates.ismonday,startdate:stopdate) == Januarymondays2014
+@test filter(x->Dates.DayOfWeek(x)==Dates.Mon,startdate:stopdate) == Januarymondays2014
 
 @test_throws MethodError filter((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
 @test_throws MethodError Dates.DateFunction((x,y)->x+y, false, Date(0))
