@@ -89,6 +89,21 @@ try
 
               #const some_method = @which Base.include("string") // FIXME: support for serializing a direct reference to an external Method not implemented
               const some_linfo = @code_typed Base.include("string")
+
+              # more tests for method signature involving a complicated type
+              # issue 18343
+              immutable Pool18343{R, V}
+                  valindex::Vector{V}
+              end
+              immutable Value18343{T, R}
+                  pool::Pool18343{R, Value18343{T, R}}
+              end
+              Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2
+              Base.convert(::Type{Nullable{Value18343}}, ::Value18343{Nullable}) = 2
+              Base.convert{T}(::Type{Ref}, ::Value18343{T}) = 3
+
+              infer_rational() = 1//2
+              Test.@inferred infer_rational()
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -151,7 +166,21 @@ try
                 Val{nothing}},
             0:25)
 
+        @eval begin
+            @inferred 1//2 # use @eval to prevent this from being inferred before this point
+            @inferred $Foo.infer_rational()
+        end
+
         @test Foo.some_linfo === @code_typed Base.include("string")
+
+        PV = Foo.Value18343{Nullable}.types[1]
+        VR = PV.types[1].parameters[1]
+        @test PV.types[1] === Array{VR,1}
+        @test pointer_from_objref(PV.types[1]) ===
+              pointer_from_objref(PV.types[1].parameters[1].types[1].types[1]) ===
+              pointer_from_objref(Array{VR,1})
+        @test PV === PV.types[1].parameters[1].types[1]
+        @test pointer_from_objref(PV) !== pointer_from_objref(PV.types[1].parameters[1].types[1])
     end
 
     Baz_file = joinpath(dir, "Baz.jl")
