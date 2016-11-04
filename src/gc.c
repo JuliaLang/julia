@@ -821,7 +821,7 @@ static void sweep_big(jl_ptls_t ptls, int sweep_full)
 
 // tracking Arrays with malloc'd storage
 
-void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a)
+void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a, uint16_t how)
 {
     // This is **NOT** a GC safe point.
     mallocarray_t *ma;
@@ -833,6 +833,7 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a)
         ptls->heap.mafreelist = ma->next;
     }
     ma->a = a;
+    ma->how = how;
     ma->next = ptls->heap.mallocarrays;
     ptls->heap.mallocarrays = ma;
 }
@@ -860,14 +861,15 @@ static size_t array_nbytes(jl_array_t *a)
     return sz;
 }
 
-static void jl_gc_free_array(jl_array_t *a)
+static void jl_gc_free_array(jl_array_t *a, uint16_t how)
 {
     if (a->flags.how == 2) {
         char *d = (char*)a->data - a->offset*a->elsize;
-        if (a->flags.isaligned)
-            jl_free_aligned(d);
-        else
+        assert(how == 0 || how == 1);
+        if (how == 0)
             free(d);
+        else
+            jl_gc_free_aligned(d);
         gc_num.freed += array_nbytes(a);
     }
 }
@@ -888,7 +890,7 @@ static void sweep_malloced_arrays(void)
             else {
                 *pma = nxt;
                 assert(ma->a->flags.how == 2);
-                jl_gc_free_array(ma->a);
+                jl_gc_free_array(ma->a, ma->how);
                 ma->next = ptls2->heap.mafreelist;
                 ptls2->heap.mafreelist = ma;
             }
@@ -2763,14 +2765,14 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return b;
 }
 
-JL_DLLEXPORT void *jl_malloc(size_t sz)
+JL_DLLEXPORT void *jl_gc_malloc(size_t sz)
 {
     int64_t *p = (int64_t *)jl_gc_counted_malloc(sz);
     p[0] = sz;
     return (void *)(p + 2);
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+JL_DLLEXPORT void *jl_gc_calloc(size_t nm, size_t sz)
 {
     int64_t *p;
     size_t nmsz = nm*sz;
@@ -2779,7 +2781,7 @@ JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
     return (void *)(p + 2);
 }
 
-JL_DLLEXPORT void jl_free(void *p)
+JL_DLLEXPORT void jl_gc_free(void *p)
 {
     if (p != NULL) {
         int64_t *pp = (int64_t *)p - 2;
@@ -2788,7 +2790,7 @@ JL_DLLEXPORT void jl_free(void *p)
     }
 }
 
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
+JL_DLLEXPORT void *jl_gc_realloc(void *p, size_t sz)
 {
     int64_t *pp;
     size_t szold;
@@ -2805,19 +2807,46 @@ JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
     return (void *)(pnew + 2);
 }
 
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
+// TODO add special casing for macOS, where there is guarantee of alignment
+// TODO add special casing for 64 bit systems when 16 byte alignment is requested
+// TODO add checks on align?
+void *jl_gc_malloc_aligned(size_t sz, size_t align)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    maybe_collect(ptls);
-    size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
-    if (allocsz < sz)  // overflow in adding offs, size was "negative"
-        jl_throw(jl_memory_exception);
-    gc_num.allocd += allocsz;
-    gc_num.malloc++;
-    void *b = malloc_cache_align(allocsz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
+    void *p0 = jl_gc_malloc(sz + align);
+    if (!p0) return (void *) 0;
+    void *p = (void *) (((uintptr_t) p0 + align) & (~((uintptr_t) (align - 1))));
+    *((void **) p - 1) = p0;
+    *((size_t *) p - 2) = align;
+    return p;
+}
+
+void *jl_gc_calloc_aligned(size_t nm, size_t sz, size_t align)
+{
+    void *p0 = jl_gc_calloc(1, nm * sz + align);
+    if (!p0) return (void *) 0;
+    void *p = (void *) (((uintptr_t) p0 + align) & (~((uintptr_t) (align - 1))));
+    *((void **) p - 1) = p0;
+    *((size_t *) p - 2) = align;
+    return p;
+}
+
+// TODO when resizing an array, you actually only need to memcpy the portion
+// that is being used, which can have some savings
+void *jl_gc_realloc_aligned(void *p, size_t sz)
+{
+    void *p0 = *((void **) p - 1);
+    size_t align = *((size_t *) p - 2);
+    void *p0new = jl_gc_realloc(p0, sz + align);
+    if (!p0new) return (void *) 0;
+    void *pnew = (void *) (((uintptr_t) p0new + align) & (~((uintptr_t) (align - 1))));
+    *((void **) pnew - 1) = p0new;
+    *((size_t *) pnew - 2) = align;
+    return pnew;
+}
+
+void jl_gc_free_aligned(void *p)
+{
+    if (p) jl_gc_free(*((void **) p - 1));
 }
 
 static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t oldsz,
@@ -2849,13 +2878,6 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         jl_throw(jl_memory_exception);
 
     return b;
-}
-
-JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t *owner)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return gc_managed_realloc_(ptls, d, sz, oldsz, isaligned, owner, 1);
 }
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)

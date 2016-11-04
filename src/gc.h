@@ -240,6 +240,12 @@ JL_EXTENSION typedef struct _bigval_t {
 typedef struct _mallocarray_t {
     jl_array_t *a;
     struct _mallocarray_t *next;
+    /*
+      how - how to free the array's data
+      0 = free
+      1 = jl_gc_free_aligned
+    */
+    uint16_t how:1;
 } mallocarray_t;
 
 // pool page metadata
