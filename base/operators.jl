@@ -23,7 +23,15 @@ julia> supertype(Int32)
 Signed
 ```
 """
-supertype(T::DataType) = T.super
+function supertype(T::DataType)
+    @_pure_meta
+    T.super
+end
+
+function supertype(T::UnionAll)
+    @_pure_meta
+    UnionAll(T.var, supertype(T.body))
+end
 
 ## generic comparison ##
 

@@ -89,8 +89,7 @@ julia> extrema(b)
 """
 linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
-eltype{T}(::Type{AbstractArray{T}}) = T
-eltype{T,N}(::Type{AbstractArray{T,N}}) = T
+eltype(::Type{A}) where A<:AbstractArray{E} where E  = E
 elsize{T}(::AbstractArray{T}) = sizeof(T)
 
 """
@@ -204,7 +203,7 @@ julia> strides(A)
 ```
 """
 strides(A::AbstractArray) = _strides((1,), A)
-_strides{T,N}(out::NTuple{N}, A::AbstractArray{T,N}) = out
+_strides{T,N}(out::NTuple{N,Any}, A::AbstractArray{T,N}) = out
 function _strides{M,T,N}(out::NTuple{M}, A::AbstractArray{T,N})
     @_inline_meta
     _strides((out..., out[M]*size(A, M)), A)
@@ -267,6 +266,7 @@ should define `linearindexing` in the type-domain:
     Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
 """
 linearindexing(A::AbstractArray) = linearindexing(typeof(A))
+linearindexing(::Type{Union{}}) = LinearFast()
 linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
 linearindexing{T<:Array}(::Type{T}) = LinearFast()
 linearindexing{T<:Range}(::Type{T}) = LinearFast()
@@ -997,8 +997,6 @@ promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 #TODO: ERROR CHECK
 cat(catdim::Integer) = Array{Any,1}(0)
 
-vcat() = Array{Any,1}(0)
-hcat() = Array{Any,1}(0)
 typed_vcat{T}(::Type{T}) = Array{T,1}(0)
 typed_hcat{T}(::Type{T}) = Array{T,1}(0)
 

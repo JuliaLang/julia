@@ -2,7 +2,7 @@ using Base.Bottom
 using Base.Test
 
 macro UnionAll(var, expr)
-    Expr(:where, expr, var)
+    Expr(:where, esc(expr), esc(var))
 end
 
 const issub = issubtype
@@ -63,6 +63,11 @@ function test_2()
     @test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Int,Int,Vararg{Int,1}})
     @test Tuple{Int,Vararg{Int}} == Tuple{Int,Vararg{Int}}
     @test (@UnionAll N Tuple{Int,Vararg{Int,N}}) == (@UnionAll N Tuple{Int,Vararg{Int,N}})
+
+    @test issub_strict(Tuple{Tuple{Int,Int},Tuple{Int,Int}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
+    @test !issub(Tuple{Tuple{Int,Int},Tuple{Int,}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
+
+    @test issub(Type{Tuple{VecElement{Bool}}}, (Type{Tuple{Vararg{VecElement{T},N}}} where T where N))
 end
 
 function test_diagonal()
@@ -257,7 +262,7 @@ function test_4()
     # nested unions
     @test !issub(Union{Int,Ref{Union{Int,Int8}}}, Union{Int,Ref{Union{Int8,Int16}}})
 
-    A = Int;   B = Int8
+    A = Int64; B = Int8
     C = Int16; D = Int32
     @test  issub(Union{Union{A,Union{A,Union{B,C}}}, Union{D,Bottom}},
                  Union{Union{A,B},Union{C,Union{B,D}}})
@@ -307,13 +312,13 @@ function test_5()
     @test !issub(Array{Tuple{Array{Int},Array{Vector{Int16}},Array{Vector{Int}},Array{Int}}},
                  @UnionAll T<:(@UnionAll S Tuple{Vararg{Union{Array{S}, Array{Array{S,1}}}}}) Array{T})
 
-    @test  issub(Array{Tuple{Array{Int},Array{Vector{Int  }},Array{Vector{Int}},Array{Int}}},
+    @test  issub(Array{Tuple{Array{Int},Array{Vector{Int}},Array{Vector{Int}},Array{Int}}},
                  @UnionAll T<:(@UnionAll S Tuple{Vararg{Union{Array{S}, Array{Array{S,1}}}}}) Array{T})
 
     @test !issub(Tuple{Array{Int},Array{Vector{Int16}},Array{Vector{Int}},Array{Int}},
                  @UnionAll S Tuple{Vararg{Union{Array{S},Array{Array{S,1}}}}})
 
-    @test  issub(Tuple{Array{Int},Array{Vector{Int  }},Array{Vector{Int}},Array{Int}},
+    @test  issub(Tuple{Array{Int},Array{Vector{Int}},Array{Vector{Int}},Array{Int}},
                  @UnionAll S Tuple{Vararg{Union{Array{S},Array{Array{S,1}}}}})
 
     B = @UnionAll S<:u Tuple{S, Tuple{Any,Any,Any}, Ref{S}}
@@ -329,6 +334,13 @@ function test_5()
     @test !issub(Ref{Union{Ref{Int},Ref{Int8}}}, @UnionAll T Ref{Ref{T}})
     @test  issub(Tuple{Union{Ref{Int},Ref{Int8}}}, @UnionAll T Tuple{Ref{T}})
     @test !issub(Ref{Union{Ref{Int},Ref{Int8}}}, Union{Ref{Ref{Int}}, Ref{Ref{Int8}}})
+
+    @test isequal_type(Ref{Tuple{Union{Int,Int8},Int16}}, Ref{Union{Tuple{Int,Int16},Tuple{Int8,Int16}}})
+    @test isequal_type(Ref{T} where T<:Tuple{Union{Int,Int8},Int16},
+                       Ref{T} where T<:Union{Tuple{Int,Int16},Tuple{Int8,Int16}})
+
+    @test_broken isequal_type(Ref{Tuple{Union{Int,Int8},Int16,T}} where T,
+                              Ref{Union{Tuple{Int,Int16,S},Tuple{Int8,Int16,S}}} where S)
 end
 
 # tricky type variable lower bounds
@@ -417,6 +429,9 @@ function test_Type()
     @test isa(Tuple{},Type{Tuple{}})
     @test !(Tuple{Int,} <: (@UnionAll T<:Tuple Type{T}))
     @test isa(Tuple{Int}, (@UnionAll T<:Tuple Type{T}))
+
+    # this matches with T==DataType, since DataType is concrete
+    @test issub(Tuple{Type{Int},Type{Int8}}, Tuple{T,T} where T)
 end
 
 # old subtyping tests from test/core.jl
@@ -446,6 +461,7 @@ function test_old()
     @test !(Type{Ptr{Bottom}} <: Type{Ptr})
     @test !(Type{Rational{Int}} <: Type{Rational})
     @test Tuple{} <: Tuple{Vararg}
+    @test Tuple{Int,Int} <: Tuple{Vararg}
     @test Tuple{} <: @UnionAll N NTuple{N}
     @test !(Type{Tuple{}} <: Type{Tuple{Vararg}})
     @test !(Type{Tuple{}} <: (@UnionAll N Type{NTuple{N}}))
@@ -564,13 +580,17 @@ macro testintersect(a, b, result)
     end)
 end
 
-abstract IT4805{N, T}
+abstract IT4805_2{N, T}
 abstract AbstractThing{T,N}
 type ConcreteThing{T<:AbstractFloat,N} <: AbstractThing{T,N}
 end
 type A11136 end
 type B11136 end
 abstract Foo11367
+
+abstract AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+immutable UpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
+immutable UnitUpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
 
 function test_intersection()
     @testintersect(Vector{Float64}, Vector{Union{Float64,Float32}}, Bottom)
@@ -698,11 +718,15 @@ function test_intersection()
     @testintersect((@UnionAll N Tuple{Array{Int,N},Vararg{Int,N}}),
                    Tuple{Matrix{Int},Int,Vararg{Float64}}, Bottom)
 
+    @testintersect(Tuple{Array{Any,1}, Tuple{Int64, Int64, Vararg{Int64, N} where N}},
+                   Tuple{Array{T,N}, Tuple{Vararg{Int64,N}}} where N where T,
+                   Bottom)
+
     @testintersect((@UnionAll T<:Union{Float64,Array{Float64,1}} T), Real, Float64)
 
     # issue #4805
-    @testintersect((@UnionAll T<:Int Type{IT4805{1,T}}),
-                   (@UnionAll S<:(@UnionAll N IT4805{N,Int}) Type{S}),
+    @testintersect((@UnionAll T<:Int Type{IT4805_2{1,T}}),
+                   (@UnionAll S<:(@UnionAll N IT4805_2{N,Int}) Type{S}),
                    !Bottom)
 
     # issue #8851
@@ -714,11 +738,13 @@ function test_intersection()
     @testintersect((@UnionAll T Tuple{T, T}), (@UnionAll TB<:B11136 Tuple{A11136, TB}), Bottom)
     @testintersect((@UnionAll T Tuple{T, T}), (@UnionAll T2<:Foo11367 Tuple{Type{BigInt}, T2}), Bottom)
 
+    # PR #12058
     @testintersect((@UnionAll N NTuple{N,Int}), (@UnionAll N NTuple{N,Float64}), Tuple{})
 
     @testintersect((@UnionAll T Tuple{Type{T},T}), Tuple{Type{Type{Float64}},Type{Int}}, Bottom)
 
     @testintersect((@UnionAll T T), Type{Int8}, Type{Int8})
+    # issue #14482
     @testintersect((@UnionAll T Tuple{T}), Tuple{Type{Int8}}, Tuple{Type{Int8}})
 
     @testintersect((@UnionAll T Tuple{Union{Int,T}, Union{Vector{T},Vector{String}}}),
@@ -740,6 +766,29 @@ function test_intersection()
                    (@UnionAll X<:(@UnionAll T Tuple{T,T}) Ref{X}))
     @testintersect(Ref{@UnionAll T @UnionAll S Tuple{T,S}},
                    Ref{@UnionAll T Tuple{T,T}}, Bottom)
+
+    @testintersect(Tuple{T,T} where T<:Union{UpperTriangular, UnitUpperTriangular},
+                   Tuple{AbstractArray{T,N}, AbstractArray{T,N}} where N where T,
+                   Union{Tuple{T,T} where T<:UpperTriangular,
+                         Tuple{T,T} where T<:UnitUpperTriangular})
+
+    @testintersect(DataType, Type, DataType)
+    @testintersect(DataType, Type{T} where T<:Integer, Type{T} where T<:Integer)
+    @testintersect(Union{DataType,Int}, Type, DataType)
+    @testintersect(Union{DataType,Int}, Type{T} where T, DataType)
+    # test typeintersect wrapper as well as _type_intersect
+    @test typeintersect(Union{DataType,Int}, Type) === DataType
+    @test typeintersect(Union{DataType,Int}, Type{T} where T) === DataType
+
+    @testintersect((Type{Tuple{Vararg{T}}} where T), Type{Tuple}, Bottom)
+    @testintersect(Tuple{Type{S}, Tuple{Any, Vararg{Any}}} where S<:Tuple{Any, Vararg{Any}},
+                   Tuple{Type{T}, T} where T,
+                   Tuple{Type{S},S} where S<:Tuple{Any,Vararg{Any,N} where N})
+
+    @test_broken isequal_type(_type_intersect(Tuple{T,T} where T,
+                                              Union{Tuple{S,Array{Int64,1}},Tuple{S,Array{S,1}}} where S),
+                              Union{Tuple{Vector{Int64},Vector{Int64}},
+                                    Tuple{Vector{T},Vector{T}} where T>:Vector})
 end
 
 function test_intersection_properties()

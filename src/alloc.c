@@ -478,7 +478,7 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_method_insta
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
     JL_TIMING(STAGED_FUNCTION);
-    jl_tupletype_t *tt = linfo->specTypes;
+    jl_tupletype_t *tt = (jl_tupletype_t*)linfo->specTypes;
     jl_svec_t *env = linfo->sparam_vals;
     size_t i, l;
     jl_expr_t *ex = NULL;
@@ -681,24 +681,19 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
     m->min_world = ++jl_world_counter;
     m->isstaged = isstaged;
     m->name = name;
-    m->sig = sig;
+    m->sig = (jl_value_t*)sig;
     m->isva = isva;
     m->nargs = nargs;
     if (jl_svec_len(tvars) == 1)
         m->tvars = (jl_svec_t*)jl_svecref(tvars, 0);
     else
         m->tvars = tvars;
-    int j;
-    for(j=(int)jl_svec_len(tvars)-1; j >= 0 ; j--) {
-        m->sig = jl_new_unionall_type((jl_tvar_t*)jl_svecref(tvars,j), m->sig);
-        jl_gc_wb(m, m->sig);
-    }
     m->sparam_syms = sparam_syms;
     root = (jl_value_t*)m;
     jl_method_set_source(m, definition);
     if (isstaged) {
         // create and store generator for generated functions
-        m->generator = jl_get_specialized(m, jl_anytuple_type, jl_emptysvec);
+        m->generator = jl_get_specialized(m, (jl_value_t*)jl_anytuple_type, jl_emptysvec);
         jl_gc_wb(m, m->generator);
         m->generator->inferred = (jl_value_t*)m->source;
     }
@@ -1170,7 +1165,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
         int i;
         int np = jl_svec_len(parameters);
         for (i=np-1; i >= 0; i--) {
-            t->name->wrapper = (jl_value_t*)jl_new_unionall_type((jl_tvar_t*)jl_svecref(parameters,i), t->name->wrapper);
+            t->name->wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters,i), t->name->wrapper);
             jl_gc_wb(t->name, t->name->wrapper);
         }
     }
@@ -1205,23 +1200,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
     return bt;
-}
-
-// unionall types -------------------------------------------------------------
-
-JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(ptls, sizeof(jl_tvar_t), jl_tvar_type);
-    tv->name = name;
-    tv->lb = lb;
-    tv->ub = ub;
-    return tv;
-}
-
-JL_DLLEXPORT jl_unionall_t *jl_new_unionall_type(jl_tvar_t *v, jl_value_t *body)
-{
-    return (jl_unionall_t*)jl_new_struct(jl_unionall_type, v, body);
 }
 
 // bits constructors ----------------------------------------------------------

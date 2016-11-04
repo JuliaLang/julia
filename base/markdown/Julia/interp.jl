@@ -43,6 +43,6 @@ toexpr(xs::Vector{Any}) = Expr(:call, GlobalRef(Base,:vector_any), map(toexpr, x
 
 for T in Any[MD, Paragraph, Header, Link, Bold, Italic]
     @eval function toexpr(md::$T)
-        Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), fieldnames(T))...))
+        Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), fieldnames(Base.unwrap_unionall(T)))...))
     end
 end
