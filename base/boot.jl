@@ -262,8 +262,7 @@ TypeVar(n::Symbol, ub::ANY) =
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
 
-UnionAll(v::TypeVar, t::ANY) =
-    ccall(:jl_new_unionall_type, Ref{UnionAll}, (Any, Any), v, t)
+UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 

@@ -374,9 +374,9 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
 
 // ----- Sorted Type Signature Lookup Matching ----- //
 
-jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, jl_svec_t *tvars)
+jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)
 {
-    jl_value_t *ti = jl_type_intersection_matching(a, b, penv, tvars);
+    jl_value_t *ti = jl_type_intersection_matching(a, b, penv);
     if (ti == (jl_value_t*)jl_bottom_type)
         return ti;
     JL_GC_PUSH1(&ti);
@@ -505,7 +505,7 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
             jl_value_t *ti;
             if (closure->env) {
                 closure->env = jl_emptysvec;
-                ti = jl_lookup_match(closure->type, (jl_value_t*)ml->sig, &closure->env, ml->tvars);
+                ti = jl_lookup_match(closure->type, (jl_value_t*)ml->sig, &closure->env);
             }
             else {
                 ti = jl_type_intersection(closure->type, (jl_value_t*)ml->sig);
@@ -528,6 +528,7 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
         jl_typemap_level_t *cache = map.node;
         jl_value_t *ty = NULL;
         jl_value_t *ttypes = jl_unwrap_unionall(closure->type);
+        assert(jl_is_datatype(ttypes));
         size_t l = jl_field_count(ttypes);
         if (closure->va && l <= offs + 1) {
             ty = closure->va;
@@ -631,7 +632,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                 // which works currently because types is typically a leaf tt,
                 // or inexact is set (which then does a sort of subtype test via jl_types_equal)
                 // but this isn't entirely general
-                jl_value_t *ti = jl_lookup_match((jl_value_t*)types, (jl_value_t*)ml->sig, penv, ml->tvars);
+                jl_value_t *ti = jl_lookup_match((jl_value_t*)types, (jl_value_t*)ml->sig, penv);
                 resetenv = 1;
                 ismatch = (ti != (jl_value_t*)jl_bottom_type);
                 if (ismatch) {
@@ -708,6 +709,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
         // called object is the primary key for constructors, otherwise first argument
         jl_value_t *ty = NULL;
         jl_value_t *ttypes = jl_unwrap_unionall(types);
+        assert(jl_is_datatype(ttypes));
         size_t l = jl_field_count(ttypes);
         int isva = 0;
         // compute the type at offset `offs` into `types`, which may be a Vararg

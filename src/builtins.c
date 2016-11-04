@@ -1624,6 +1624,11 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
     }
     // TODO: better way to show method parameters
     type = jl_unwrap_unionall(type);
+    if (!jl_is_datatype(type)) {
+        n += jl_printf(s, " ");
+        n += jl_static_show(s, type);
+        return n;
+    }
     size_t tl = jl_nparams(type);
     n += jl_printf(s, "(");
     size_t i;

@@ -820,12 +820,26 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type))
         jl_error("cannot add methods to a builtin function");
 
+    int j;
+    for(j=(int)jl_svec_len(tvars)-1; j >= 0 ; j--)
+        argtype = jl_new_struct(jl_unionall_type, jl_svecref(tvars,j), argtype);
+
     m = jl_new_method(f, name, argtype, nargs, isva, tvars, isstaged == jl_true);
+
+    if (jl_has_free_typevars(argtype)) {
+        jl_exceptionf(jl_argumenterror_type,
+                      "method definition for %s at %s:%d has free type variables",
+                      jl_symbol_name(name),
+                      jl_symbol_name(m->file),
+                      m->line);
+    }
+
     jl_check_static_parameter_conflicts(m, tvars);
 
-    size_t i, na = jl_nparams(argtype);
+    jl_value_t *argtype_body = jl_unwrap_unionall(argtype);
+    size_t i, na = jl_svec_len(atypes);
     for (i = 0; i < na; i++) {
-        jl_value_t *elt = jl_tparam(argtype, i);
+        jl_value_t *elt = jl_svecref(atypes, i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == unused_sym)
@@ -850,7 +864,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         jl_value_t *tv = jl_svecref(tvars,i);
         if (!jl_is_typevar(tv))
             jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
-        if (!ishidden && !jl_has_typevar((jl_value_t*)argtype, (jl_tvar_t*)tv)) {
+        if (!ishidden && !jl_has_typevar((jl_value_t*)argtype_body, (jl_tvar_t*)tv)) {
             jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
                       jl_symbol_name(((jl_tvar_t*)tv)->name),
                       jl_symbol_name(name));

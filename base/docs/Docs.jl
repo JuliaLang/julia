@@ -88,7 +88,11 @@ function signature(expr::Expr)
             end
             push!(sig.args[end].args, argtype(arg))
         end
-        Expr(:let, Expr(:block, sig), typevars(expr)...)
+        tv = typevars(expr)
+        for i = length(tv):-1:1
+            sig = Expr(:where, sig, tv[i])
+        end
+        sig
     else
         signature(expr.args[1])
     end
@@ -103,13 +107,10 @@ end
 argtype(other) = :Any
 
 function typevars(expr::Expr)
-    isexpr(expr, :curly) && return [tvar(x) for x in expr.args[2:end]]
+    isexpr(expr, :curly) && return expr.args[2:end]
     typevars(expr.args[1])
 end
 typevars(::Symbol) = []
-
-tvar(x::Expr)   = :($(x.args[1]) = TypeVar($(quot(x.args[1])), $(x.args[2]), true))
-tvar(s::Symbol) = :($(s) = TypeVar($(quot(s)), Any, true))
 
 # Docsystem types.
 # ================

@@ -741,8 +741,7 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
         return Any
     end
     meth = entry.func
-    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
-                      argtype, meth.sig, meth.tvars)::SimpleVector
+    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any), argtype, meth.sig)::SimpleVector
     return typeinf_edge(meth::Method, ti, env, sv)
 end
 
