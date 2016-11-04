@@ -688,11 +688,6 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
         m->tvars = (jl_svec_t*)jl_svecref(tvars, 0);
     else
         m->tvars = tvars;
-    int j;
-    for(j=(int)jl_svec_len(tvars)-1; j >= 0 ; j--) {
-        m->sig = jl_new_unionall_type((jl_tvar_t*)jl_svecref(tvars,j), m->sig);
-        jl_gc_wb(m, m->sig);
-    }
     m->sparam_syms = sparam_syms;
     root = (jl_value_t*)m;
     jl_method_set_source(m, definition);
@@ -1170,7 +1165,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
         int i;
         int np = jl_svec_len(parameters);
         for (i=np-1; i >= 0; i--) {
-            t->name->wrapper = (jl_value_t*)jl_new_unionall_type((jl_tvar_t*)jl_svecref(parameters,i), t->name->wrapper);
+            t->name->wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters,i), t->name->wrapper);
             jl_gc_wb(t->name, t->name->wrapper);
         }
     }
@@ -1205,23 +1200,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
     return bt;
-}
-
-// unionall types -------------------------------------------------------------
-
-JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(ptls, sizeof(jl_tvar_t), jl_tvar_type);
-    tv->name = name;
-    tv->lb = lb;
-    tv->ub = ub;
-    return tv;
-}
-
-JL_DLLEXPORT jl_unionall_t *jl_new_unionall_type(jl_tvar_t *v, jl_value_t *body)
-{
-    return (jl_unionall_t*)jl_new_struct(jl_unionall_type, v, body);
 }
 
 // bits constructors ----------------------------------------------------------

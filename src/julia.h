@@ -987,6 +987,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n);
 JL_DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body);
 JL_DLLEXPORT const char *jl_typename_str(jl_value_t *v);
 JL_DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
@@ -1004,7 +1005,6 @@ STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name);
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub);
-JL_DLLEXPORT jl_unionall_t *jl_new_unionall_type(jl_tvar_t *v, jl_value_t *body);
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p);
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n);
 JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1);

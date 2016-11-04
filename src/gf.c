@@ -2267,8 +2267,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
         else {
             tt = arg_type_tuple(args, nargs);
             if (entry->tvars != jl_emptysvec) {
-                jl_value_t *ti =
-                    jl_lookup_match((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv, entry->tvars);
+                jl_value_t *ti = jl_lookup_match((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
                 assert(ti != (jl_value_t*)jl_bottom_type);
                 (void)ti;
             }
@@ -2351,7 +2350,7 @@ JL_DLLEXPORT jl_value_t *jl_get_invoke_lambda(jl_methtable_t *mt,
     JL_GC_PUSH2(&tpenv, &sig);
     if (entry->tvars != jl_emptysvec) {
         jl_value_t *ti =
-            jl_lookup_match((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv, entry->tvars);
+            jl_lookup_match((jl_value_t*)tt, (jl_value_t*)entry->sig, &tpenv);
         assert(ti != (jl_value_t*)jl_bottom_type);
         (void)ti;
     }
@@ -2417,13 +2416,12 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module)
     return jl_new_generic_function_with_supertype(name, module, jl_function_type, 0);
 }
 
-JL_DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
-                                        jl_svec_t *tvars)
+JL_DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig)
 {
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti=NULL;
     JL_GC_PUSH2(&env, &ti);
-    ti = jl_lookup_match(type, (jl_value_t*)sig, &env, tvars);
+    ti = jl_lookup_match(type, (jl_value_t*)sig, &env);
     jl_svec_t *result = jl_svec2(ti, env);
     JL_GC_POP();
     return result;
@@ -2572,8 +2570,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                 jl_method_t *mambig = (jl_method_t*)jl_array_ptr_ref(meth->ambig, j);
                 env = jl_emptysvec;
                 jl_value_t *mti = jl_type_intersection_matching((jl_value_t*)closure->match.type,
-                                                                (jl_value_t*)mambig->sig,
-                                                                &env, mambig->tvars);
+                                                                (jl_value_t*)mambig->sig, &env);
                 if (mti != (jl_value_t*)jl_bottom_type) {
                     if (closure->include_ambiguous) {
                         assert(done);
@@ -2595,8 +2592,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                         // the current method doesn't match if there is an intersection with an
                         // ambiguous method that covers our intersection with this one.
                         jl_value_t *ambi = jl_type_intersection_matching((jl_value_t*)ml->sig,
-                                                                         (jl_value_t*)mambig->sig,
-                                                                         &env, mambig->tvars);
+                                                                         (jl_value_t*)mambig->sig, &env);
                         if (jl_subtype(closure->match.ti, ambi)) {
                             return_this_match = 0;
                             break;
