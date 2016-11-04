@@ -267,6 +267,7 @@ should define `linearindexing` in the type-domain:
     Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
 """
 linearindexing(A::AbstractArray) = linearindexing(typeof(A))
+linearindexing(::Type{Union{}}) = LinearFast()
 linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
 linearindexing{T<:Array}(::Type{T}) = LinearFast()
 linearindexing{T<:Range}(::Type{T}) = LinearFast()
@@ -1023,8 +1024,6 @@ promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 #TODO: ERROR CHECK
 cat(catdim::Integer) = Array{Any,1}(0)
 
-vcat() = Array{Any,1}(0)
-hcat() = Array{Any,1}(0)
 typed_vcat{T}(::Type{T}) = Array{T,1}(0)
 typed_hcat{T}(::Type{T}) = Array{T,1}(0)
 

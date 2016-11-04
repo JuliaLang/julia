@@ -136,7 +136,7 @@ const AnyDict = Dict{Any,Any}
 
 Dict{K,V}(ps::Pair{K,V}...)            = Dict{K,V}(ps)
 Dict{K  }(ps::Pair{K}...,)             = Dict{K,Any}(ps)
-Dict{V  }(ps::Pair{TypeVar(:K),V}...,) = Dict{Any,V}(ps)
+Dict{V  }(ps::(Pair{K,V} where K)...,) = Dict{Any,V}(ps)
 Dict(     ps::Pair...)                 = Dict{Any,Any}(ps)
 
 function Dict(kv)
