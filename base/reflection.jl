@@ -117,6 +117,7 @@ julia> fieldname(SparseMatrixCSC,5)
 ```
 """
 fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
+fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
 fieldname{T<:Tuple}(t::Type{T}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
 
 """
@@ -139,6 +140,7 @@ function fieldnames(v)
     return fieldnames(t)
 end
 fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
+fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
 fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
 
 """
@@ -273,6 +275,16 @@ Determine the declared type of a field (specified by name or index) in a composi
 """
 fieldtype
 
+"""
+    fieldindex(T, name::Symbol, err:Bool=true)
+
+Get the index of a named field, throwing an error if the field does not exist (when err==true)
+or returning 0 (when err==false).
+"""
+function fieldindex(T::DataType, name::Symbol, err::Bool=true)
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
+end
+
 type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
 
 # return all instances, for types that can be enumerated
@@ -369,7 +381,7 @@ function _methods_by_ftype(t::ANY, lim::Int, world::UInt)
     return _methods_by_ftype(t, lim, world, UInt[typemin(UInt)], UInt[typemax(UInt)])
 end
 function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
-    tp = t.parameters::SimpleVector
+    tp = unwrap_unionall(t).parameters::SimpleVector
     nu = 1
     for ti in tp
         if isa(ti, Union)
@@ -377,16 +389,18 @@ function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, ma
         end
     end
     if 1 < nu <= 64
-        return _methods_by_ftype(Any[tp...], length(tp), lim, [], world, min, max)
+        return _methods_by_ftype(Any[tp...], t, length(tp), lim, [], world, min, max)
     end
     # XXX: the following can return incorrect answers that the above branch would have corrected
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
 end
 
-function _methods_by_ftype(t::Array, i, lim::Integer, matching::Array{Any,1}, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
+function _methods_by_ftype(t::Array, origt::ANY, i, lim::Integer, matching::Array{Any,1},
+                           world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
     if i == 0
         world = typemax(UInt)
-        new = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), Tuple{t...}, lim, 0, world, min, max)
+        new = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}),
+                    rewrap_unionall(Tuple{t...}, origt), lim, 0, world, min, max)
         new === false && return false
         append!(matching, new::Array{Any,1})
     else
@@ -394,14 +408,14 @@ function _methods_by_ftype(t::Array, i, lim::Integer, matching::Array{Any,1}, wo
         if isa(ti, Union)
             for ty in uniontypes(ti::Union)
                 t[i] = ty
-                if _methods_by_ftype(t, i - 1, lim, matching, world, min, max) === false
+                if _methods_by_ftype(t, origt, i - 1, lim, matching, world, min, max) === false
                     t[i] = ti
                     return false
                 end
             end
             t[i] = ti
         else
-            return _methods_by_ftype(t, i - 1, lim, matching, world, min, max)
+            return _methods_by_ftype(t, origt, i - 1, lim, matching, world, min, max)
         end
     end
     return matching
@@ -559,8 +573,7 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool,
     t = to_tuple_type(t)
     ft = isa(f, Type) ? Type{f} : typeof(f)
     tt = Tuple{ft, t.parameters...}
-    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
-                      tt, meth.sig, meth.tvars)::SimpleVector
+    (ti, env) = ccall(:jl_match_method, Any, (Any, Any), tt, meth.sig)::SimpleVector
     meth = func_for_method_checked(meth, tt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     # get the code for it

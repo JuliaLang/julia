@@ -48,6 +48,7 @@ end
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
 convert{T}(::Type{LQ{T}},A::LQ) = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert{T}(::Type{Factorization{T}}, A::LQ{T}) = A
 convert{T}(::Type{Factorization{T}}, A::LQ) = convert(LQ{T}, A)
 convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
 convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)

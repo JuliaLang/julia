@@ -296,7 +296,7 @@ for T in types
 end
 
 # Operators
-TestTypes = [[T.parameters[1] for T in Base.NullSafeTypes.types];
+TestTypes = [[T.parameters[1] for T in Base.uniontypes(Base.NullSafeTypes)];
              [BigInt, BigFloat,
               Complex{Int}, Complex{Float64}, Complex{BigFloat},
               Rational{Int}, Rational{BigInt}]]

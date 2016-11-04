@@ -76,6 +76,13 @@ function unwrap_unionall(a::ANY)
     return a
 end
 
+function rewrap_unionall(t::ANY, u::ANY)
+    if !isa(u, UnionAll)
+        return t
+    end
+    return UnionAll(u.var, rewrap_unionall(t, u.body))
+end
+
 const _va_typename = Vararg.body.body.name
 function isvarargtype(t::ANY)
     t = unwrap_unionall(t)
@@ -84,8 +91,8 @@ end
 
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
 function unwrapva(t::ANY)
-    t = unwrap_unionall(t)
-    isvarargtype(t) ? t.parameters[1] : t
+    t2 = unwrap_unionall(t)
+    isvarargtype(t2) ? t2.parameters[1] : t
 end
 
 convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
@@ -105,6 +112,7 @@ ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
 cconvert{P<:Ptr}(::Type{P}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
+unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
 reinterpret{T}(::Type{T}, x) = box(T, x)

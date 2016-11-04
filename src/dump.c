@@ -482,7 +482,7 @@ static int type_in_worklist(jl_datatype_t *dt)
         return 1;
     int i, l = jl_svec_len(dt->parameters);
     for (i = 0; i < l; i++) {
-        jl_value_t *p = jl_tparam(dt, i);
+        jl_value_t *p = jl_unwrap_unionall(jl_tparam(dt, i));
         if (type_in_worklist((jl_datatype_t*)(jl_is_datatype(p) ? p : jl_typeof(p))))
             return 1;
     }
@@ -499,12 +499,13 @@ static int type_recursively_external(jl_datatype_t *dt)
 
     int i, l = jl_svec_len(dt->parameters);
     for (i = 0; i < l; i++) {
-        jl_datatype_t *p = (jl_datatype_t*)jl_tparam(dt, i);
+        jl_value_t *p0 = jl_tparam(dt, i);
+        jl_datatype_t *p = (jl_datatype_t*)jl_unwrap_unionall(p0);
         if (!jl_is_datatype(p))
             return 0;
         if (module_in_worklist(p->name->module))
             return 0;
-        if (jl_unwrap_unionall(p->name->wrapper) != (jl_value_t*)p) {
+        if (p->name->wrapper != p0) {
             if (!type_recursively_external(p))
                 return 0;
         }
@@ -559,7 +560,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
         assert(tag == 0 || tag == 5 || tag == 6 || tag == 10);
         if (tag == 6) {
             jl_methtable_t *mt = dt->name->mt;
-            jl_datatype_t *primarydt = (jl_datatype_t*)jl_get_global(mt->module, mt->name);
+            jl_datatype_t *primarydt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(mt->module, mt->name));
             assert(jl_is_datatype(primarydt));
             assert(jl_typeof(primarydt->name->mt->kwsorter) == (jl_value_t*)dt);
             dt = primarydt;
@@ -600,13 +601,13 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
 
     if (has_layout) {
         uint8_t layout = 0;
-        if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall(jl_array_type))->layout) {
+        if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout) {
             layout = 1;
         }
         else if (dt->layout == jl_void_type->layout) {
             layout = 2;
         }
-        else if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall(jl_pointer_type))->layout) {
+        else if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->layout) {
             layout = 3;
         }
         write_uint8(s->s, layout);
@@ -1066,6 +1067,19 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
                         return;
                     }
                 }
+                if (t == jl_unionall_type) {
+                    jl_datatype_t *d = (jl_datatype_t*)jl_unwrap_unionall(v);
+                    if (jl_is_datatype(d) && d->name->wrapper == v &&
+                        !module_in_worklist(d->name->module)) {
+                        write_uint8(s->s, 1);
+                        jl_serialize_value(s, d->name->module);
+                        jl_serialize_value(s, d->name->name);
+                        return;
+                    }
+                    else {
+                        write_uint8(s->s, 0);
+                    }
+                }
                 if (t == jl_typemap_level_type) {
                     // perform some compression on the typemap levels
                     // (which will need to be rehashed during deserialization anyhow)
@@ -1176,9 +1190,10 @@ static void jl_serialize_lambdas_from_mod(jl_serializer_state *s, jl_module_t *m
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m && b->value && b->constp) {
-                if (jl_is_datatype(b->value)) {
-                    jl_typename_t *tn = ((jl_datatype_t*)b->value)->name;
-                    if (tn->module == m && tn->name == b->name) {
+                jl_value_t *bv = jl_unwrap_unionall(b->value);
+                if (jl_is_datatype(bv)) {
+                    jl_typename_t *tn = ((jl_datatype_t*)bv)->name;
+                    if (tn->module == m && tn->name == b->name && tn->wrapper == b->value) {
                         jl_methtable_t *mt = tn->mt;
                         if (mt != NULL &&
                                 (jl_value_t*)mt != jl_nothing &&
@@ -1393,13 +1408,13 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     if (has_layout) {
         uint8_t layout = read_uint8(s->s);
         if (layout == 1) {
-            dt->layout = ((jl_datatype_t*)jl_unwrap_unionall(jl_array_type))->layout;
+            dt->layout = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout;
         }
         else if (layout == 2) {
             dt->layout = jl_void_type->layout;
         }
         else if (layout == 3) {
-            dt->layout = ((jl_datatype_t*)jl_unwrap_unionall(jl_pointer_type))->layout;
+            dt->layout = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->layout;
         }
         else {
             assert(layout == 0);
@@ -1604,7 +1619,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     uintptr_t pos = backref_list.len;
     if (usetable)
         arraylist_push(&backref_list, m);
-    m->sig = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&m->sig);
+    m->sig = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&m->sig);
     jl_gc_wb(m, m->sig);
     if (s->mode == MODE_MODULE) {
         int internal = read_uint8(s->s);
@@ -1672,7 +1687,7 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     if (usetable)
         arraylist_push(&backref_list, li);
 
-    li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
+    li->specTypes = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
     if (li->specTypes)
         jl_gc_wb(li, li->specTypes);
     li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
@@ -1912,9 +1927,21 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, jl_value_t *
         if (ref_only) {
             jl_module_t *m = (jl_module_t*)jl_deserialize_value(s, NULL);
             jl_sym_t *sym = (jl_sym_t*)jl_deserialize_value(s, NULL);
-            jl_datatype_t *dt = (jl_datatype_t*)jl_get_global(m, sym);
+            jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(m, sym));
             assert(jl_is_datatype(dt));
             jl_value_t *v = (jl_value_t*)dt->name;
+            if (usetable)
+                backref_list.items[pos] = v;
+            return v;
+        }
+    }
+    if (s->mode == MODE_MODULE && dt == jl_unionall_type) {
+        int ref_only = read_uint8(s->s);
+        if (ref_only) {
+            jl_module_t *m = (jl_module_t*)jl_deserialize_value(s, NULL);
+            jl_sym_t *sym = (jl_sym_t*)jl_deserialize_value(s, NULL);
+            jl_value_t *v = jl_get_global(m, sym);
+            assert(jl_is_unionall(v));
             if (usetable)
                 backref_list.items[pos] = v;
             return v;
@@ -2823,7 +2850,7 @@ static void jl_update_backref_list(jl_value_t *old, jl_value_t *_new, size_t sta
 
 jl_method_t *jl_recache_method(jl_method_t *m, size_t start)
 {
-    jl_datatype_t *sig = m->sig;
+    jl_datatype_t *sig = (jl_datatype_t*)m->sig;
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
@@ -2835,21 +2862,20 @@ jl_method_t *jl_recache_method(jl_method_t *m, size_t start)
 
 jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_t start)
 {
-    assert(jl_is_datatype(li->def));
     jl_datatype_t *sig = (jl_datatype_t*)li->def;
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
     jl_method_t *m = (jl_method_t*)jl_methtable_lookup(mt, sig, /*TODO*/jl_world_counter);
     assert(m && jl_is_method(m));
 
-    jl_datatype_t *argtypes = li->specTypes;
+    jl_datatype_t *argtypes = (jl_datatype_t*)li->specTypes;
     jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
     jl_svec_t *env = jl_emptysvec;
-    jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)m->sig, (jl_value_t*)argtypes, &env, m->tvars);
+    jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)argtypes, (jl_value_t*)m->sig, &env);
     //assert(ti != jl_bottom_type); (void)ti;
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
-    jl_method_instance_t *_new = jl_specializations_get_linfo(m, argtypes, env, /*TODO*/jl_world_counter);
+    jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, /*TODO*/jl_world_counter);
     jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
     return _new;
 }
@@ -3050,13 +3076,13 @@ void jl_init_serializer(void)
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_typeof(jl_emptytuple), jl_array_uint8_type, jl_symbol_type->name,
                      jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_bottomtype_type,
-                     ((jl_datatype_t*)jl_unwrap_unionall(jl_ref_type))->name,
+                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
                      jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,
                      jl_uniontype_type->name, jl_array_typename, jl_expr_type->name,
                      jl_typename_type->name, jl_type_typename, jl_methtable_type->name,
                      jl_typemap_level_type->name, jl_typemap_entry_type->name, jl_tvar_type->name,
-                     ((jl_datatype_t*)jl_unwrap_unionall(jl_abstractarray_type))->name,
-                     ((jl_datatype_t*)jl_unwrap_unionall(jl_densearray_type))->name,
+                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name,
+                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name,
                      jl_vararg_typename, jl_void_type->name, jl_method_instance_type->name, jl_method_type->name,
                      jl_module_type->name, jl_function_type->name, jl_typedslot_type->name,
                      jl_abstractslot_type->name, jl_slotnumber_type->name, jl_unionall_type->name,
@@ -3103,8 +3129,8 @@ void jl_init_serializer(void)
     arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_ref_type->body)->name);
     arraylist_push(&builtin_typenames, jl_pointer_typename);
     arraylist_push(&builtin_typenames, jl_type_typename);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall(jl_abstractarray_type))->name);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall(jl_densearray_type))->name);
+    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name);
+    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
     arraylist_push(&builtin_typenames, jl_tuple_typename);
     arraylist_push(&builtin_typenames, jl_vararg_typename);
 }

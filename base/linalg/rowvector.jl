@@ -87,7 +87,8 @@ parent(rowvec::RowVector) = rowvec.vec
 @inline size(rowvec::RowVector, d) = ifelse(d==2, length(rowvec.vec), 1)
 @inline indices(rowvec::RowVector) = (Base.OneTo(1), indices(rowvec.vec)[1])
 @inline indices(rowvec::RowVector, d) = ifelse(d == 2, indices(rowvec.vec)[1], Base.OneTo(1))
-linearindexing{V<:RowVector}(::Union{V,Type{V}}) = LinearFast()
+linearindexing(::RowVector) = LinearFast()
+linearindexing{V<:RowVector}(::Type{V}) = LinearFast()
 
 @propagate_inbounds getindex(rowvec::RowVector, i) = transpose(rowvec.vec[i])
 @propagate_inbounds setindex!(rowvec::RowVector, v, i) = setindex!(rowvec.vec, transpose(v), i)
