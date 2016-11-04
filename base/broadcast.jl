@@ -120,9 +120,9 @@ map_newindexer(shape, ::Tuple{}) = (), ()
     (keep, keeps...), (Idefault, Idefaults...)
 end
 
-@inline _broadcast_getindex(A, I) = _broadcast_getindex(containertype(A), A, I)
-@inline _broadcast_getindex(::Type{Any}, A, I) = A
-@inline _broadcast_getindex(::Any, A, I) = A[I]
+Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(containertype(A), A, I)
+Base.@propagate_inbounds _broadcast_getindex(::Type{Any}, A, I) = A
+Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 
 ## Broadcasting core
 # nargs encodes the number of As arguments (which matches the number
@@ -140,7 +140,8 @@ end
             # extract array values
             @nexprs $nargs i->(@inbounds val_i = _broadcast_getindex(A_i, I_i))
             # call the function and store the result
-            @inbounds B[I] = @ncall $nargs f val
+            result = @ncall $nargs f val
+            @inbounds B[I] = result
         end
     end
 end
