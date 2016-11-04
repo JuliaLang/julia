@@ -161,7 +161,7 @@ end
 @test lcfirst("*")=="*"
 
 # test AbstractString functions at beginning of string.jl
-immutable tstStringType <: AbstractString
+const struct tstStringType <: AbstractString
     data::Array{UInt8,1}
 end
 tstr = tstStringType("12")

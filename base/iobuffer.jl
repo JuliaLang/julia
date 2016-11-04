@@ -3,7 +3,7 @@
 ## work with AbstractVector{UInt8} via I/O primitives ##
 
 # Stateful string
-type AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
+struct AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
     data::T # T should support: getindex, setindex!, length, copy!, resize!, and T()
     readable::Bool
     writable::Bool

@@ -16,7 +16,7 @@ Note: `next(::AsyncCollector, state) -> (nothing, state)`
 Note: `for task in AsyncCollector(f, results, c...) end` is equivalent to
 `map!(f, results, c...)`.
 """
-type AsyncCollector
+struct AsyncCollector
     f
     results
     enumerator::Enumerate
@@ -40,7 +40,7 @@ function AsyncCollector(f, results, c...; ntasks=0)
     AsyncCollector(f, results, enumerate(zip(c...)), max_tasks, Channel{Tuple{Int, Any}}(typemax(Int)))
 end
 
-type AsyncCollectorState
+struct AsyncCollectorState
     enum_state
     active_count::Int
     item_done::Condition
@@ -159,7 +159,7 @@ Results are returned by the iterator as they become available.
 Note: `collect(AsyncGenerator(f, c...; ntasks=1))` is equivalent to
 `map(f, c...)`.
 """
-type AsyncGenerator
+struct AsyncGenerator
     collector::AsyncCollector
 end
 
@@ -168,7 +168,7 @@ function AsyncGenerator(f, c...; ntasks=0)
 end
 
 
-type AsyncGeneratorState
+struct AsyncGeneratorState
     i::Int
     async_state::AsyncCollectorState
 end

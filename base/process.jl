@@ -7,7 +7,7 @@ const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt8(1 << 2)
 const UV_PROCESS_DETACHED = UInt8(1 << 3)
 const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
 
-immutable Cmd <: AbstractCmd
+const struct Cmd <: AbstractCmd
     exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
@@ -76,19 +76,19 @@ hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir
 ==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
                      x.dir == y.dir && isequal(x.flags, y.flags)
 
-immutable OrCmds <: AbstractCmd
+const struct OrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     OrCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
-immutable ErrOrCmds <: AbstractCmd
+const struct ErrOrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     ErrOrCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
-immutable AndCmds <: AbstractCmd
+const struct AndCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
@@ -136,7 +136,7 @@ const STDIN_NO  = 0
 const STDOUT_NO = 1
 const STDERR_NO = 2
 
-immutable FileRedirect
+const struct FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
@@ -160,7 +160,7 @@ uvtype(x::RawFD) = UV_RAW_FD
 typealias Redirectable Union{IO, FileRedirect, RawFD}
 typealias StdIOSet NTuple{3, Union{Redirectable, Ptr{Void}}} # XXX: remove Ptr{Void} once libuv is refactored to use upstream release
 
-immutable CmdRedirect <: AbstractCmd
+const struct CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
     handle::Redirectable
     stream_no::Int
@@ -304,7 +304,7 @@ run(pipeline("out.txt", `grep xyz`))
 """
 pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 
-type Process <: AbstractPipe
+struct Process <: AbstractPipe
     cmd::Cmd
     handle::Ptr{Void}
     in::IO
@@ -338,7 +338,7 @@ end
 pipe_reader(p::Process) = p.out
 pipe_writer(p::Process) = p.in
 
-immutable ProcessChain <: AbstractPipe
+const struct ProcessChain <: AbstractPipe
     processes::Vector{Process}
     in::Redirectable
     out::Redirectable

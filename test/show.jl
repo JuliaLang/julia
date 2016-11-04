@@ -7,7 +7,7 @@ replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain")
 @test replstr(Array{Any}(2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 @test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0f10"
 
-immutable T5589
+const struct T5589
     names::Vector{String}
 end
 @test replstr(T5589(Array{String,1}(100))) == "T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
@@ -220,7 +220,7 @@ for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
 end
 
 # parametric type instantiation printing
-immutable TParametricPrint{a}; end
+const struct TParametricPrint{a}; end
 @test sprint(show, :(TParametricPrint{false}())) == ":(TParametricPrint{false}())"
 
 # issue #9797
@@ -345,7 +345,7 @@ let filename = tempname()
 end
 
 # issue #12960
-type T12960 end
+struct T12960 end
 let
     A = speye(3)
     B = similar(A, T12960)

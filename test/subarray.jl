@@ -493,7 +493,7 @@ end
 # issue #18034
 # ensure that it is possible to create an isbits, LinearFast view of an immutable Array
 let
-    immutable ImmutableTestArray{T, N} <: Base.DenseArray{T, N}
+    const struct ImmutableTestArray{T, N} <: Base.DenseArray{T, N}
     end
     Base.size(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = (0, 0)
     Base.linearindexing(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = Base.LinearFast()

@@ -199,7 +199,7 @@ Base.Collections.PriorityQueue{String,Int64,Base.Order.ForwardOrdering} with 3 e
   "a" => 2
 ```
 """
-type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
+struct PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
     # Binary heap of (element, priority) pairs.
     xs::Array{Pair{K,V}, 1}
     o::O

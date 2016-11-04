@@ -269,7 +269,7 @@ for T in types
     @test hash(x3) != hash(x4)
 end
 
-type TestNType{T}
+struct TestNType{T}
     v::Nullable{T}
 end
 

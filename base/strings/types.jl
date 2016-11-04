@@ -4,7 +4,7 @@
 
 ## substrings reference original strings ##
 
-immutable SubString{T<:AbstractString} <: AbstractString
+const struct SubString{T<:AbstractString} <: AbstractString
     string::T
     offset::Int
     endof::Int
@@ -100,7 +100,7 @@ end
 
 ## reversed strings without data movement ##
 
-immutable RevString{T<:AbstractString} <: AbstractString
+const struct RevString{T<:AbstractString} <: AbstractString
     string::T
 end
 
@@ -135,7 +135,7 @@ reverseind(s::SubString{String}, i::Integer) =
 
 ## efficient representation of repeated strings ##
 
-immutable RepString <: AbstractString
+const struct RepString <: AbstractString
     string::AbstractString
     repeat::Integer
 end

@@ -8,7 +8,7 @@ import Base: scalarmax, scalarmin, sort, find, findnz
 
 ### Types
 
-immutable SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
+const struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
     n::Int              # the number of elements
     nzind::Vector{Ti}   # the indices of nonzeros
     nzval::Vector{Tv}   # the values of nonzeros

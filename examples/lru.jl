@@ -30,12 +30,12 @@ abstract LRU{K,V} <: Associative{K,V}
 # Default cache size
 const __MAXCACHE = 1024
 
-type CacheItem{K,V}
+struct CacheItem{K,V}
     k::K
     v::V
 end
 
-type UnboundedLRU{K,V} <: LRU{K,V}
+struct UnboundedLRU{K,V} <: LRU{K,V}
     ht::Dict
     q::Vector{CacheItem}
 
@@ -43,7 +43,7 @@ type UnboundedLRU{K,V} <: LRU{K,V}
 end
 UnboundedLRU() = UnboundedLRU{Any, Any}()
 
-type BoundedLRU{K,V} <: LRU{K,V}
+struct BoundedLRU{K,V} <: LRU{K,V}
     ht::Dict
     q::Vector{CacheItem}
     maxsize::Int

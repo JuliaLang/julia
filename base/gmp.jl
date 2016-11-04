@@ -37,7 +37,7 @@ else
 end
 
 
-type BigInt <: Integer
+struct BigInt <: Integer
     alloc::Cint
     size::Cint
     d::Ptr{Limb}

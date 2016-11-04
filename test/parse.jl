@@ -828,7 +828,7 @@ end
 
 # issue 18756
 module Mod18756
-type Type
+struct Type
 end
 end
 @test method_exists(Mod18756.Type, ())

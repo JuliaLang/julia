@@ -36,7 +36,7 @@ const rulecache = AnyDict( (Float64,7) => # precomputed in 100-bit arith.
      4.1795918367346938775510204081658e-01]) )
 
 # integration segment (a,b), estimated integral I, and estimated error E
-immutable Segment
+const struct Segment
     a::Number
     b::Number
     I
@@ -190,7 +190,7 @@ More generally, the precision is set by the precision of the integration
 endpoints (promoted to floating-point types).
 
 The integrand `f(x)` can return any numeric scalar, vector, or matrix type, or in fact any
-type supporting `+`, `-`, multiplication by real values, and a `norm` (i.e., any normed
+struct supporting `+`, `-`, multiplication by real values, and a `norm` (i.e., any normed
 vector space). Alternatively, a different norm can be specified by passing a `norm`-like
 function as the `norm` keyword argument (which defaults to `vecnorm`).
 

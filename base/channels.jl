@@ -16,7 +16,7 @@ Other constructors:
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
 """
-type Channel{T} <: AbstractChannel
+struct Channel{T} <: AbstractChannel
     cond_take::Condition    # waiting for data to become available
     cond_put::Condition     # waiting for a writeable slot
     state::Symbol
@@ -74,7 +74,7 @@ function close(c::Channel)
 end
 isopen(c::Channel) = (c.state == :open)
 
-type InvalidStateException <: Exception
+struct InvalidStateException <: Exception
     msg::AbstractString
     state::Symbol
 end
@@ -193,7 +193,7 @@ eltype{T}(::Type{Channel{T}}) = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
-type ChannelState{T}
+struct ChannelState{T}
     hasval::Bool
     val::T
     ChannelState(x) = new(x)

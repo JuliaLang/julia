@@ -5,7 +5,7 @@ export TimeDelta
 
 import Base.show, Base.+, Base.-, Base.convert, Base.promote_rule
 
-immutable TimeDelta{p}
+const struct TimeDelta{p}
     v::Int64
 end
 

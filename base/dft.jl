@@ -93,7 +93,7 @@ plan_bfft
     plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
 Pre-plan an optimized FFT along given dimensions (`dims`) of arrays matching the shape and
-type of `A`.  (The first two arguments have the same meaning as for [`fft`](:func:`fft`).)
+struct of `A`.  (The first two arguments have the same meaning as for [`fft`](:func:`fft`).)
 Returns an object `P` which represents the linear operator computed by the FFT, and which
 contains all of the information needed to compute `fft(A, dims)` quickly.
 
@@ -237,7 +237,7 @@ A_ldiv_B!(y::AbstractArray, p::Plan, x::AbstractArray) = A_mul_B!(y, inv(p), x)
 # implementations only need to provide the unnormalized backwards FFT,
 # similar to FFTW, and we do the scaling generically to get the ifft:
 
-type ScaledPlan{T,P,N} <: Plan{T}
+struct ScaledPlan{T,P,N} <: Plan{T}
     p::P
     scale::N # not T, to avoid unnecessary promotion to Complex
     pinv::Plan

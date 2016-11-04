@@ -4,7 +4,7 @@ import .Serializer: known_object_data, object_number, serialize_cycle, deseriali
                       __deserialized_types__, serialize_typename, deserialize_typename,
                       TYPENAME_TAG, object_numbers
 
-type ClusterSerializer{I<:IO} <: AbstractSerializer
+struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict

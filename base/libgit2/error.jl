@@ -58,12 +58,12 @@ export GitError
              Describe,
              Rebase)
 
-immutable ErrorStruct
+const struct ErrorStruct
     message::Ptr{UInt8}
     class::Cint
 end
 
-immutable GitError <: Exception
+const struct GitError <: Exception
     class::Class
     code::Code
     msg::AbstractString

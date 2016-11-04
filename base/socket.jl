@@ -6,7 +6,7 @@ abstract IPAddr
 Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
 Base.convert{T<:Integer}(dt::Type{T}, ip::IPAddr) = dt(ip.host)
 
-immutable IPv4 <: IPAddr
+const struct IPv4 <: IPAddr
     host::UInt32
     IPv4(host::UInt32) = new(host)
     IPv4(a::UInt8,b::UInt8,c::UInt8,d::UInt8) = new(UInt32(a)<<24|
@@ -45,7 +45,7 @@ print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF00))>>8),".",
                                   dec(ip.host&0xFF))
 
-immutable IPv6 <: IPAddr
+const struct IPv6 <: IPAddr
     host::UInt128
     IPv6(host::UInt128) = new(host)
     IPv6(a::UInt16,b::UInt16,c::UInt16,d::UInt16,
@@ -241,7 +241,7 @@ macro ip_str(str)
     return parse(IPAddr, str)
 end
 
-immutable InetAddr{T<:IPAddr}
+const struct InetAddr{T<:IPAddr}
     host::T
     port::UInt16
 end
@@ -250,7 +250,7 @@ InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
 
 ## SOCKETS ##
 
-type TCPSocket <: LibuvStream
+struct TCPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
@@ -286,7 +286,7 @@ function TCPSocket()
     return tcp
 end
 
-type TCPServer <: LibuvServer
+struct TCPServer <: LibuvServer
     handle::Ptr{Void}
     status::Int
     connectnotify::Condition
@@ -334,7 +334,7 @@ accept(server::PipeServer) = accept(server, init_pipe!(PipeEndpoint();
 
 # UDP
 
-type UDPSocket <: LibuvStream
+struct UDPSocket <: LibuvStream
     handle::Ptr{Void}
     status::Int
     recvnotify::Condition
@@ -567,7 +567,7 @@ end
 
 ##
 
-type DNSError <: Exception
+struct DNSError <: Exception
     host::AbstractString
     code::Int32
 end

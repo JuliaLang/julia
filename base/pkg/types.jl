@@ -5,7 +5,7 @@ module Types
 export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
 import Base: show, isempty, in, intersect, ==, hash, copy, deepcopy_internal
 
-immutable VersionInterval
+const struct VersionInterval
     lower::VersionNumber
     upper::VersionNumber
 end
@@ -19,7 +19,7 @@ intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,
 ==(a::VersionInterval, b::VersionInterval) = a.lower == b.lower && a.upper == b.upper
 hash(i::VersionInterval, h::UInt) = hash((i.lower, i.upper), h + (0x0f870a92db508386 % UInt))
 
-immutable VersionSet
+const struct VersionSet
     intervals::Vector{VersionInterval}
 end
 function VersionSet(versions::Vector{VersionNumber})
@@ -62,7 +62,7 @@ end
 satisfies(pkg::AbstractString, ver::VersionNumber, reqs::Requires) =
     !haskey(reqs, pkg) || in(ver, reqs[pkg])
 
-immutable Available
+const struct Available
     sha1::String
     requires::Requires
 end
@@ -75,7 +75,7 @@ show(io::IO, a::Available) = isempty(a.requires) ?
     print(io, "Available(", repr(a.sha1), ")") :
     print(io, "Available(", repr(a.sha1), ",", a.requires, ")")
 
-immutable Fixed
+const struct Fixed
     version::VersionNumber
     requires::Requires
 end

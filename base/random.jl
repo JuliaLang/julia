@@ -22,15 +22,15 @@ export srand,
 abstract AbstractRNG
 
 abstract FloatInterval
-type CloseOpen <: FloatInterval end
-type Close1Open2 <: FloatInterval end
+struct CloseOpen <: FloatInterval end
+struct Close1Open2 <: FloatInterval end
 
 
 ## RandomDevice
 
 if is_windows()
 
-    immutable RandomDevice <: AbstractRNG
+    const struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
         RandomDevice() = new(Array{UInt128}(1))
@@ -43,7 +43,7 @@ if is_windows()
 
     rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
 else # !windows
-    immutable RandomDevice <: AbstractRNG
+    const struct RandomDevice <: AbstractRNG
         file::IOStream
         unlimited::Bool
 
@@ -73,7 +73,7 @@ rand(rng::RandomDevice, ::Type{CloseOpen}) = rand(rng, Close1Open2) - 1.0
 
 const MTCacheLength = dsfmt_get_min_array_size()
 
-type MersenneTwister <: AbstractRNG
+struct MersenneTwister <: AbstractRNG
     seed::Vector{UInt32}
     state::DSFMT_state
     vals::Vector{Float64}
@@ -530,7 +530,7 @@ maxmultiplemix(k::UInt64) = if k >> 32 != 0; maxmultiple(k); else (div(0x0000000
 
 abstract RangeGenerator
 
-immutable RangeGeneratorInt{T<:Integer, U<:Unsigned} <: RangeGenerator
+const struct RangeGeneratorInt{T<:Integer, U<:Unsigned} <: RangeGenerator
     a::T   # first element of the range
     k::U   # range length or zero for full range
     u::U   # rejection threshold
@@ -561,7 +561,7 @@ for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
 end
 
 if GMP_VERSION.major >= 6
-    immutable RangeGeneratorBigInt <: RangeGenerator
+    const struct RangeGeneratorBigInt <: RangeGenerator
         a::BigInt             # first
         m::BigInt             # range length - 1
         nlimbs::Int           # number of limbs in generated BigInt's
@@ -569,7 +569,7 @@ if GMP_VERSION.major >= 6
     end
 
 else
-    immutable RangeGeneratorBigInt <: RangeGenerator
+    const struct RangeGeneratorBigInt <: RangeGenerator
         a::BigInt             # first
         m::BigInt             # range length - 1
         limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
@@ -1302,7 +1302,7 @@ end
 
 ## random UUID generation
 
-immutable UUID
+const struct UUID
     value::UInt128
 
     UUID(u::UInt128) = new(u)

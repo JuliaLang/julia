@@ -6,7 +6,7 @@ typealias ViewIndex Union{Real, NonSliceIndex}
 typealias ScalarIndex Union{Real, AbstractCartesianIndex}
 
 # L is true if the view itself supports fast linear indexing
-immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
+const struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indexes::I
     offset1::Int       # for linear indexing and pointer, only valid when L==true

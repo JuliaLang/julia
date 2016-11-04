@@ -72,13 +72,13 @@ function g end
 abstract AT
 
 "BT"
-bitstype 8 BT
+primitive 8 BT
 
 "BT2"
-bitstype 8 BT2 <: Integer
+primitive 8 BT2 <: Integer
 
 "T"
-type T <: AT
+struct T <: AT
     "T.x"
     x
     "T.y"
@@ -86,7 +86,7 @@ type T <: AT
 end
 
 "IT"
-immutable IT
+const struct IT
     "IT.x"
     x :: Int
     "IT.y"
@@ -128,7 +128,7 @@ t(::Int, ::Any)
 t{S <: Integer}(::S)
 
 "FieldDocs"
-type FieldDocs
+struct FieldDocs
     "one"
     one
     doc"two"
@@ -148,7 +148,7 @@ import .Inner.@m
 "Inner.@m"
 :@m
 
-type Foo
+struct Foo
     x
 end
 
@@ -315,7 +315,7 @@ const C = 1
 abstract A
 
 "T"
-type T
+struct T
     "x"
     x
     "y"
@@ -411,7 +411,7 @@ end
 
 module DocVars
 
-immutable __FIELDS__ end
+const struct __FIELDS__ end
 
 function Docs.formatdoc(buffer, docstr, ::Type{__FIELDS__})
     fields = get(docstr.data, :fields, Dict())
@@ -428,7 +428,7 @@ end
 
 $__FIELDS__
 """
-type T
+struct T
     "x"
     x
     "y"
@@ -441,7 +441,7 @@ end
 
 $__FIELDS__
 """
-type S
+struct S
     x
     y
     z
@@ -499,7 +499,7 @@ end
 
 module I15424
 
-immutable LazyHelp
+const struct LazyHelp
     text
 end
 
@@ -586,7 +586,7 @@ end
 
 module I12515
 
-immutable EmptyType{T} end
+const struct EmptyType{T} end
 
 "A new method"
 Base.collect{T}(::Type{EmptyType{T}}) = "borked"
@@ -691,9 +691,9 @@ module Undocumented
 abstract A
 abstract B <: A
 
-type C <: A end
+struct C <: A end
 
-immutable D <: B
+const struct D <: B
     one
     two::String
     three::Float64
@@ -747,7 +747,7 @@ No documentation found.
 
 **Summary:**
 ```
-type Undocumented.C <: Undocumented.A
+struct Undocumented.C <: Undocumented.A
 ```
 """)
 
@@ -756,7 +756,7 @@ No documentation found.
 
 **Summary:**
 ```
-immutable Undocumented.D <: Undocumented.B
+const struct Undocumented.D <: Undocumented.B
 ```
 
 **Fields:**

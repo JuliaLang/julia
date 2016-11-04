@@ -10,7 +10,7 @@ IOContext provides a mechanism for passing output configuration settings among `
 In short, it is an immutable dictionary that is a subclass of `IO`. It supports standard
 dictionary operations such as `getindex`, and can also be used as an I/O stream.
 """
-immutable IOContext{IO_t <: IO} <: AbstractPipe
+const struct IOContext{IO_t <: IO} <: AbstractPipe
     io::IO_t
     dict::ImmutableDict{Symbol, Any}
     function IOContext(io::IO_t, dict::ImmutableDict{Symbol, Any})

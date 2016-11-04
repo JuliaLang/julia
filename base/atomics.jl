@@ -56,7 +56,7 @@ val = x[]
 Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
 `atomic_xchg!`, etc.
 """
-type Atomic{T<:AtomicTypes}
+struct Atomic{T<:AtomicTypes}
     value::T
     Atomic() = new(zero(T))
     Atomic(value) = new(value)

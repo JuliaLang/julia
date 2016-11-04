@@ -2,7 +2,7 @@
 
 module TestHelpers
 
-type FakeTerminal <: Base.Terminals.UnixTerminal
+struct FakeTerminal <: Base.Terminals.UnixTerminal
     in_stream::Base.IO
     out_stream::Base.IO
     err_stream::Base.IO
@@ -54,7 +54,7 @@ using Base: Indices, LinearSlow, LinearFast, tail
 
 export OffsetArray
 
-immutable OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
+const struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
     offsets::NTuple{N,Int}
 end

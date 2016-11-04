@@ -1,6 +1,6 @@
 # weak key dictionaries
 
-type WeakKeyDict{K,V} <: Associative{K,V}
+struct WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{Any,V}
     lock::Threads.RecursiveSpinLock
     finalizer::Function

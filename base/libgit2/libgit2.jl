@@ -34,7 +34,7 @@ include("callbacks.jl")
 
 using .Error
 
-immutable State
+const struct State
     head::Oid
     index::Oid
     work::Oid

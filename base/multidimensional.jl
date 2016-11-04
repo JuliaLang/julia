@@ -13,7 +13,7 @@ module IteratorsMD
     export CartesianIndex, CartesianRange
 
     # CartesianIndex
-    immutable CartesianIndex{N} <: AbstractCartesianIndex{N}
+    const struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
         CartesianIndex(index::NTuple{N,Integer}) = new(index)
     end
@@ -73,7 +73,7 @@ module IteratorsMD
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
 
     # Iteration
-    immutable CartesianRange{I<:CartesianIndex}
+    const struct CartesianRange{I<:CartesianIndex}
         start::I
         stop::I
     end
@@ -1034,7 +1034,7 @@ end
 
 # TODO: this doesn't fit into the new hashing scheme in any obvious way
 
-immutable Prehashed
+const struct Prehashed
     hash::UInt
 end
 hash(x::Prehashed) = x.hash

@@ -2,7 +2,7 @@
 
 module BaseDocs
 
-immutable Keyword
+const struct Keyword
     name :: Symbol
 end
 macro kw_str(text) Keyword(Symbol(text)) end
@@ -77,7 +77,7 @@ kw"export"
 
 """
 `abstract` declares a type that cannot be instantiated, and serves only as a node in the
-type graph, thereby describing sets of related concrete types: those concrete types
+struct graph, thereby describing sets of related concrete types: those concrete types
 which are their descendants. Abstract types form the conceptual hierarchy which makes
 Julia’s type system more than just a collection of object implementations. For example:
 
@@ -97,7 +97,7 @@ specify which of your names are intended to be public (via exporting). For examp
     import Base.show
     export MyType, foo
 
-    type MyType
+    struct MyType
         x
     end
 
@@ -122,8 +122,8 @@ kw"baremodule"
 examples of bits types are integers and floating-point values. Some example built-in
 bits type declarations:
 
-    bitstype 32 Char
-    bitstype 8  Bool <: Integer
+    primitive 32 Char
+    primitive 8  Bool <: Integer
 
 The first parameter indicates how many bits of storage the type requires. Currently,
 only sizes that are multiples of 8 bits are supported. The second parameter gives the
@@ -605,21 +605,21 @@ kw"begin"
 """
 At their most basic, Julia types are specified as a name and a set of fields.
 
-    type Point
+    struct Point
         x
         y
     end
 
 Fields can have type restrictions, which may be parametrised:
 
-    type Point{X}
+    struct Point{X}
         x::X
         y::Float64
     end
 
 Type can also declare an abstract super type via `<:` syntax:
 
-    type Point <: AbstractPoint
+    struct Point <: AbstractPoint
         ...
 
 See the manual for more details, such as information on inner constructors.

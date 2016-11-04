@@ -117,10 +117,10 @@ end
 @test gc_enable(true)
 
 # test methodswith
-immutable NoMethodHasThisType end
+const struct NoMethodHasThisType end
 @test isempty(methodswith(NoMethodHasThisType))
 @test !isempty(methodswith(Int))
-immutable Type4Union end
+const struct Type4Union end
 func4union(::Union{Type4Union,Int}) = ()
 @test !isempty(methodswith(Type4Union))
 

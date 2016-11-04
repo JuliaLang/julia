@@ -2,7 +2,7 @@
 
 ## semantic version numbers (http://semver.org)
 
-immutable VersionNumber
+const struct VersionNumber
     major::Int
     minor::Int
     patch::Int

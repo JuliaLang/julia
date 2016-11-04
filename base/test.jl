@@ -36,7 +36,7 @@ abstract Result
 The test condition was true, i.e. the expression evaluated to true or
 the correct exception was thrown.
 """
-immutable Pass <: Result
+const struct Pass <: Result
     test_type::Symbol
     orig_expr
     data
@@ -61,7 +61,7 @@ end
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
 """
-type Fail <: Result
+struct Fail <: Result
     test_type::Symbol
     orig_expr
     data
@@ -93,7 +93,7 @@ it evaluated to something other than a `Bool`.
 In the case of `@test_broken` it is used to indicate that an
 unexpected `Pass` `Result` occurred.
 """
-type Error <: Result
+struct Error <: Result
     test_type::Symbol
     orig_expr
     value
@@ -133,7 +133,7 @@ end
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.
 """
-type Broken <: Result
+struct Broken <: Result
     test_type::Symbol
     orig_expr
 end
@@ -150,12 +150,12 @@ end
 
 abstract ExecutionResult
 
-immutable Returned <: ExecutionResult
+const struct Returned <: ExecutionResult
     value
     data
 end
 
-immutable Threw <: ExecutionResult
+const struct Threw <: ExecutionResult
     exception
     backtrace
 end
@@ -363,7 +363,7 @@ function finish end
 
 Thrown when a test set finishes and not all tests passed.
 """
-type TestSetException <: Exception
+struct TestSetException <: Exception
     pass::Int
     fail::Int
     error::Int
@@ -386,7 +386,7 @@ end
 
 A simple fallback test set that throws immediately on a failure.
 """
-immutable FallbackTestSet <: AbstractTestSet
+const struct FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
 
@@ -409,7 +409,7 @@ If using the DefaultTestSet, the test results will be recorded. If there
 are any `Fail`s or `Error`s, an exception will be thrown only at the end,
 along with a summary of the test results.
 """
-type DefaultTestSet <: AbstractTestSet
+struct DefaultTestSet <: AbstractTestSet
     description::AbstractString
     results::Vector
     anynonpass::Bool
@@ -1078,7 +1078,7 @@ The `GenericString` can be used to test generic string APIs that program to
 the `AbstractString` interface, in order to ensure that functions can work
 with string types besides the standard `String` type.
 """
-immutable GenericString <: AbstractString
+const struct GenericString <: AbstractString
     string::AbstractString
 end
 Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)

@@ -2,7 +2,7 @@
 
 ## general machinery for irrational mathematical constants
 
-immutable Irrational{sym} <: Real end
+const struct Irrational{sym} <: Real end
 
 show{sym}(io::IO, x::Irrational{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
 

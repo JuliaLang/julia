@@ -8,7 +8,7 @@ using Base: ViewIndex, index_lengths
 
 export serialize, deserialize, SerializationState
 
-type SerializationState{I<:IO} <: AbstractSerializer
+struct SerializationState{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict

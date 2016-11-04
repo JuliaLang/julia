@@ -62,7 +62,7 @@ The `UTInstant` represents a machine timeline based on UT time (1 day = one revo
 the earth). The `T` is a `Period` parameter that indicates the resolution or precision of
 the instant.
 """
-immutable UTInstant{P<:Period} <: Instant
+const struct UTInstant{P<:Period} <: Instant
     periods::P
 end
 
@@ -77,10 +77,10 @@ abstract Calendar <: AbstractTime
 # ISOCalendar implements the ISO 8601 standard (en.wikipedia.org/wiki/ISO_8601)
 # Notably based on the proleptic Gregorian calendar
 # ISOCalendar provides interpretation rules for UTInstants to civil date and time parts
-immutable ISOCalendar <: Calendar end
+const struct ISOCalendar <: Calendar end
 
 abstract TimeZone
-immutable UTC <: TimeZone end
+const struct UTC <: TimeZone end
 
 """
     TimeType
@@ -96,7 +96,7 @@ abstract TimeType <: AbstractTime
 `DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
 Gregorian calendar.
 """
-immutable DateTime <: TimeType
+const struct DateTime <: TimeType
     instant::UTInstant{Millisecond}
     DateTime(instant::UTInstant{Millisecond}) = new(instant)
 end
@@ -106,7 +106,7 @@ end
 
 `Date` wraps a `UTInstant{Day}` and interprets it according to the proleptic Gregorian calendar.
 """
-immutable Date <: TimeType
+const struct Date <: TimeType
     instant::UTInstant{Day}
     Date(instant::UTInstant{Day}) = new(instant)
 end

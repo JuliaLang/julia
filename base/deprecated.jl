@@ -710,7 +710,7 @@ function checkbounds(::Type{Bool}, sz::Integer, i)
     depwarn("checkbounds(Bool, size(A, d), i) is deprecated, use checkindex(Bool, indices(A, d), i).", :checkbounds)
     checkbounds(Bool, 1:sz, i)
 end
-immutable FakeArray{T,N} <: AbstractArray{T,N}
+const struct FakeArray{T,N} <: AbstractArray{T,N}
     dims::NTuple{N,Int}
 end
 size(A::FakeArray) = A.dims

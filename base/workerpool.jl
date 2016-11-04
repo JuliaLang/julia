@@ -15,7 +15,7 @@ abstract AbstractWorkerPool
 #    workers::Set{Int}
 #
 
-type WorkerPool <: AbstractWorkerPool
+struct WorkerPool <: AbstractWorkerPool
     channel::RemoteChannel{Channel{Int}}
     workers::Set{Int}
 
@@ -160,7 +160,7 @@ using `remotecall_fetch`.
 remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), args...; kwargs...)
 remote(p::AbstractWorkerPool, f) = (args...; kwargs...)->remotecall_fetch(f, p, args...; kwargs...)
 
-type CachingPool <: AbstractWorkerPool
+struct CachingPool <: AbstractWorkerPool
     channel::RemoteChannel{Channel{Int}}
     workers::Set{Int}
 

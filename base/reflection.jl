@@ -169,7 +169,7 @@ isconst(m::Module, s::Symbol) =
 # return an integer such that object_id(x)==object_id(y) if x===y
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
-immutable DataTypeLayout
+const struct DataTypeLayout
     nfields::UInt32
     alignment::UInt32
     # alignment : 28;
@@ -399,7 +399,7 @@ end
 # high-level, more convenient method lookup functions
 
 # type for reflecting and pretty-printing a subset of methods
-type MethodList
+struct MethodList
     ms::Array{Method,1}
     mt::MethodTable
 end

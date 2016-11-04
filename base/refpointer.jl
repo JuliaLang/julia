@@ -18,11 +18,11 @@ Ref
 # instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
 # a check for embedded NUL chars in the string (to avoid silent truncation).
 if Int === Int64
-    bitstype 64 Cstring
-    bitstype 64 Cwstring
+    primitive 64 Cstring
+    primitive 64 Cwstring
 else
-    bitstype 32 Cstring
-    bitstype 32 Cwstring
+    primitive 32 Cstring
+    primitive 32 Cwstring
 end
 
 ### General Methods for Ref{T} type
@@ -35,7 +35,7 @@ unsafe_convert{T}(::Type{Ref{T}}, x) = unsafe_convert(Ptr{T}, x)
 
 ### Methods for a Ref object that can store a single value of any type
 
-type RefValue{T} <: Ref{T}
+struct RefValue{T} <: Ref{T}
     x::T
     RefValue() = new()
     RefValue(x) = new(x)
@@ -63,7 +63,7 @@ end
 unsafe_convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 ### Methods for a Ref object that is backed by an array at index i
-immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
+const struct RefArray{T, A<:AbstractArray, R} <: Ref{T}
     x::A
     i::Int
     roots::R # should be either ::Void or ::Any

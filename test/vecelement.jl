@@ -26,7 +26,7 @@ for i=1:20
 end
 
 # Another crash report for #15244 motivated this test.
-immutable Bunch{N,T}
+const struct Bunch{N,T}
     elts::NTuple{N,Base.VecElement{T}}
 end
 
@@ -40,7 +40,7 @@ b = Bunch((VecElement(1.0), VecElement(2.0)))
 
 @test rewrap(b)===VecElement(1.0)
 
-immutable Herd{N,T}
+const struct Herd{N,T}
     elts::NTuple{N,Base.VecElement{T}}
     Herd(elts::NTuple{N,T}) = new(ntuple(i->Base.VecElement{T}(elts[i]), N))
 end
@@ -55,7 +55,7 @@ check(Herd{1,Int}((1,)))
 check(Herd{2,Int}((4,5)))
 check(Herd{4,Int}((16,17,18,19)))
 
-immutable Gr{N, T}
+const struct Gr{N, T}
     u::T
     v::Bunch{N,T}
     w::T

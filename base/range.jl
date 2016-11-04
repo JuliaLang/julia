@@ -9,7 +9,7 @@ abstract Range{T} <: AbstractArray{T,1}
 abstract OrdinalRange{T,S} <: Range{T}
 abstract AbstractUnitRange{T} <: OrdinalRange{T,Int}
 
-immutable StepRange{T,S} <: OrdinalRange{T,S}
+const struct StepRange{T,S} <: OrdinalRange{T,S}
     start::T
     step::S
     stop::T
@@ -69,7 +69,7 @@ steprem(start,stop,step) = (stop-start) % step
 
 StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
 
-immutable UnitRange{T<:Real} <: AbstractUnitRange{T}
+const struct UnitRange{T<:Real} <: AbstractUnitRange{T}
     start::T
     stop::T
     UnitRange(start, stop) = new(start, unitrange_last(start,stop))
@@ -90,7 +90,7 @@ Define an `AbstractUnitRange` that behaves like `1:n`, with the added
 distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
-immutable OneTo{T<:Integer} <: AbstractUnitRange{T}
+const struct OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
     OneTo(stop) = new(max(zero(T), stop))
 end
@@ -139,7 +139,7 @@ range{T,S}(a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+s
 
 ## floating point ranges
 
-immutable FloatRange{T<:AbstractFloat} <: Range{T}
+const struct FloatRange{T<:AbstractFloat} <: Range{T}
     start::T
     step::T
     len::T
@@ -209,7 +209,7 @@ range(a::AbstractFloat, st::Real, len::Integer) = FloatRange(a, float(st), len, 
 
 ## linspace and logspace
 
-immutable LinSpace{T<:AbstractFloat} <: Range{T}
+const struct LinSpace{T<:AbstractFloat} <: Range{T}
     start::T
     stop::T
     len::T

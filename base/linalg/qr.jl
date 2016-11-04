@@ -2,21 +2,21 @@
 
 # QR and Hessenberg Factorizations
 
-immutable QR{T,S<:AbstractMatrix} <: Factorization{T}
+const struct QR{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     QR(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
 QR{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = QR{T,typeof(factors)}(factors, τ)
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
-immutable QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
+const struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
     factors::M
     T::Matrix{S}
     QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) = new(factors, T)
 end
 QRCompactWY{S}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) = QRCompactWY{S,typeof(factors)}(factors, T)
 
-immutable QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
+const struct QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     jpvt::Vector{BlasInt}
@@ -313,14 +313,14 @@ end
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
 getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)
 
-immutable QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+const struct QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
     τ::Vector{T}
     QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
 QRPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = QRPackedQ{T,typeof(factors)}(factors, τ)
 
-immutable QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
+const struct QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
     factors::M
     T::Matrix{S}
     QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) = new(factors, T)

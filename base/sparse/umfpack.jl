@@ -11,7 +11,7 @@ importall ..SparseArrays
 import ..SparseArrays: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
-type MatrixIllConditionedException <: Exception
+struct MatrixIllConditionedException <: Exception
     message::AbstractString
 end
 
@@ -91,7 +91,7 @@ function show_umf_info(level::Real = 2.0)
 end
 
 ## Should this type be immutable?
-type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
+struct UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
     symbolic::Ptr{Void}
     numeric::Ptr{Void}
     m::Int

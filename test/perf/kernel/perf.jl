@@ -4,10 +4,10 @@ include("../perfutil.jl")
 
 abstract List{T}
 
-type Nil{T} <: List{T}
+struct Nil{T} <: List{T}
 end
 
-type Cons{T} <: List{T}
+struct Cons{T} <: List{T}
     head::T
     tail::List{T}
 end

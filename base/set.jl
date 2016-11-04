@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type Set{T} <: AbstractSet{T}
+struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
     Set() = new(Dict{T,Void}())

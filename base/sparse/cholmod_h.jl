@@ -70,7 +70,7 @@ end
 typealias VTypes Union{Complex128, Float64}
 typealias VRealTypes Union{Float64}
 
-type CHOLMODException <: Exception
+struct CHOLMODException <: Exception
     msg::AbstractString
 end
 
