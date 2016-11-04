@@ -17,6 +17,7 @@
 
         @test mapfoldl(abs2, /, 2:5) ≈ 1/900
         @test mapfoldl(abs2, /, 10, 2:5) ≈ 1/1440
+        @test mapfoldl(abs, /, Float16[8.0, 2.0, 2.0]) ≈ 2.0
 
         @test mapfoldl((x)-> x ⊻ true, &, true, [true false true false false]) == false
         @test mapfoldl((x)-> x ⊻ true, &, [true false true false false]) == false
@@ -47,6 +48,26 @@ end
     @testset "mapreduce" begin
         @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
         @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
+        @test mapreduce(abs2, max, Int[]) == 0
+        @test mapreduce(abs2, +, 1:16) == 1496
+        @test mapreduce(sqrt, max, [x/x for x in 0:16]) ≈ 1.0
+
+        @testset "short-circuiting" begin
+            @test mapreduce(-, &, 1) == 1
+            @test mapreduce(-, |, 1) == 1
+            @test mapreduce(-, |, 1.0) == 1.0
+            @test mapreduce(!, &, [false, true]) == false
+            @test mapreduce(!, |, [false, true]) == true
+
+            @testset "empty containers" begin
+                @test mapreduce(-, &, []) == true
+                @test mapreduce(-, |, []) == false
+
+                unknown_eltype_empty_iter = (x ? true : 1.0 for x in [])
+                @test mapreduce(!, &, unknown_eltype_empty_iter) == true
+                @test mapreduce(!, |, unknown_eltype_empty_iter) == false
+            end
+        end
     end
 end
 
@@ -158,7 +179,6 @@ end
         @test sum_kbn(Float64[]) == 0.0
     end
 end
-
 
 @testset "product" begin
     @test prod(Int[]) === 1
@@ -283,7 +303,7 @@ immutable SomeFunctor end
         end
 
         @testset "functors" begin
-            @test all(SomeFunctor(), 1:10)
+            @test any(SomeFunctor(), 1:10)
         end
     end
 
@@ -327,6 +347,20 @@ end
     @test in(0, 1:3) == false
     @test in(1, 1:3) == true
     @test in(2, 1:3) == true
+
+    @test (1 ∈ Int[]) == false
+    @test (1 ∈ Int[1]) == true
+    @test (1 ∈ Int[2]) == false
+    @test (0 ∈ 1:3) == false
+    @test (1 ∈ 1:3) == true
+    @test (2 ∈ 1:3) == true
+
+    @test (1 ∉ Int[]) == true
+    @test (1 ∉ Int[1]) == false
+    @test (1 ∉ Int[2]) == true
+    @test (0 ∉ 1:3) == true
+    @test (1 ∉ 1:3) == false
+    @test (2 ∉ 1:3) == false
 end
 
 @testset "contains" begin
@@ -336,7 +370,9 @@ end
     let A = collect(1:10)
         @test A ∋ 5
         @test A ∌ 11
-        @test contains(==,A,6)
+
+        @test contains(==, A, 6)
+        @test contains(==, A, 11) == false
     end
 end
 
