@@ -2156,14 +2156,14 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return b;
 }
 
-JL_DLLEXPORT void *jl_malloc(size_t sz)
+JL_DLLEXPORT void *jl_gc_malloc(size_t sz)
 {
     int64_t *p = (int64_t *)jl_gc_counted_malloc(sz);
     p[0] = sz;
     return (void *)(p + 2);
 }
 
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
+JL_DLLEXPORT void *jl_gc_calloc(size_t nm, size_t sz)
 {
     int64_t *p;
     size_t nmsz = nm*sz;
@@ -2172,7 +2172,7 @@ JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
     return (void *)(p + 2);
 }
 
-JL_DLLEXPORT void jl_free(void *p)
+JL_DLLEXPORT void jl_gc_free(void *p)
 {
     if (p != NULL) {
         int64_t *pp = (int64_t *)p - 2;
@@ -2181,7 +2181,7 @@ JL_DLLEXPORT void jl_free(void *p)
     }
 }
 
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
+JL_DLLEXPORT void *jl_gc_realloc(void *p, size_t sz)
 {
     int64_t *pp;
     size_t szold;
