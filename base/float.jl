@@ -248,9 +248,28 @@ convert(::Type{AbstractFloat}, x::UInt32)  = convert(Float64, x)
 convert(::Type{AbstractFloat}, x::UInt64)  = convert(Float64, x) # LOSSY
 convert(::Type{AbstractFloat}, x::UInt128) = convert(Float64, x) # LOSSY
 
+"""
+    float(x)
+
+Convert a number or array to a floating point data type.
+When passed a string, this function is equivalent to `parse(Float64, x)`.
+"""
 float(x) = convert(AbstractFloat, x)
 
-# for constructing arrays
+"""
+    float(T::Type)
+
+Returns an appropriate type to represent a value of type `T` as a floating point value.
+Equivalent to `typeof(float(zero(T)))`.
+
+```jldoctest
+julia> float(Complex{Int})
+Complex{Float64}
+
+julia> float(Int)
+Float64
+```
+"""
 float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
 
 for Ti in (Int8, Int16, Int32, Int64)

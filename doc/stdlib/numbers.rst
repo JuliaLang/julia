@@ -118,7 +118,7 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Convert a number, array, or string to a ``AbstractFloat`` data type. For numeric data, the smallest suitable ``AbstractFloat`` type is used. Converts strings to ``Float64``\ .
+   Convert a number or array to a floating point data type. When passed a string, this function is equivalent to ``parse(Float64, x)``\ .
 
 .. function:: significand(x)
 
