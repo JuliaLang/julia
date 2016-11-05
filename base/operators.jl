@@ -965,8 +965,11 @@ length(p::Pair) = 2
 
 convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
 function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
-    convert(A, x[1]) => convert(B, x[2])
+    Pair{A, B}(convert(A, x[1]), convert(B, x[2]))
 end
+
+promote_rule{A1, B1, A2, B2}(::Type{Pair{A1, B1}}, ::Type{Pair{A2, B2}}) =
+    Pair{promote_type(A1, A2), promote_type(B1, B2)}
 
 # some operators not defined yet
 global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
