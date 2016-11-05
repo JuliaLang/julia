@@ -56,11 +56,24 @@ Return both the real and imaginary parts of the complex number `z`.
 """
 reim(z) = (real(z), imag(z))
 
+"""
+    real(T::Type)
+
+Returns the type that represents the real part of a value of type `T`.
+e.g: for `T == Complex{R}`, returns `R`.
+Equivalent to `typeof(real(zero(T)))`.
+
+```jldoctest
+julia> real(Complex{Int})
+Int64
+
+julia> real(Float64)
+Float64
+```
+"""
+real(T::Type) = typeof(real(zero(T)))
 real{T<:Real}(::Type{T}) = T
 real{T<:Real}(::Type{Complex{T}}) = T
-
-complex{T<:Real}(::Type{T}) = Complex{T}
-complex{T<:Real}(::Type{Complex{T}}) = Complex{T}
 
 isreal(x::Real) = true
 isreal(z::Complex) = imag(z) == 0
@@ -75,9 +88,31 @@ isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
 isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))
 isinf(z::Complex) = isinf(real(z)) | isinf(imag(z))
 
-complex(x::Real, y::Real) = Complex(x, y)
-complex(x::Real) = Complex(x)
+"""
+    complex(r, [i])
+
+Convert real numbers or arrays to complex. `i` defaults to zero.
+"""
 complex(z::Complex) = z
+complex(x::Real) = Complex(x)
+complex(x::Real, y::Real) = Complex(x, y)
+
+"""
+    complex(T::Type)
+
+Returns an appropriate type which can represent a value of type `T` as a complex number.
+Equivalent to `typeof(complex(zero(T)))`.
+
+```jldoctest
+julia> complex(Complex{Int})
+Complex{Int64}
+
+julia> complex(Int)
+Complex{Int64}
+```
+"""
+complex{T<:Real}(::Type{T}) = Complex{T}
+complex{T<:Real}(::Type{Complex{T}}) = Complex{T}
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
