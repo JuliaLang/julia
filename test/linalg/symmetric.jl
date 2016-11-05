@@ -250,3 +250,28 @@ let a = randn(2,2)
     cc = copy(c)
     @test conj!(c) == conj(Array(c))
 end
+
+# 19225
+let X = sparse([1 -1; -1 1])
+    for T in (Symmetric, Hermitian)
+        Y = T(copy(X))
+        _Y = similar(Y)
+        copy!(_Y, Y)
+        @test _Y == Y
+
+        W = T(copy(X), :L)
+        copy!(W, Y)
+        @test W.data == Y.data
+        @test W.uplo != Y.uplo
+
+        W[1,1] = 4
+        @test W == T(sparse([4 -1; -1 1]))
+
+        @test Y + I == T(sparse([2 -1; -1 2]))
+        @test Y - I == T(sparse([0 -1; -1 0]))
+        @test Y + 1 == T(sparse([2 0; 0 2]))
+    end
+
+    @test_throws ArgumentError Hermitian(X) + 2im*I
+    @test_throws ArgumentError Hermitian(X) - 2im*I
+end

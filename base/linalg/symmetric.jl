@@ -107,6 +107,24 @@ end
     r
 end
 
+function setindex!(A::Symmetric, v, i::Integer, j::Integer)
+    if (A.uplo == 'U' && i >= j) || (A.uplo == 'L' && i <= j)
+        setindex!(A.data, v, i, j)
+    else
+        setindex!(A.data, v, j, i)
+    end
+end
+
+function setindex!(A::Hermitian, v, i::Integer, j::Integer)
+    if i == j && !isreal(v)
+        throw(ArgumentError("Cannot set a nonreal value to the diagonal in a Hermitian matrix"))
+    elseif (A.uplo == 'U' && i >= j) || (A.uplo == 'L' && i <= j)
+        setindex!(A.data, v, i, j)
+    else
+        setindex!(A.data, v, j, i)
+    end
+end
+
 similar{T}(A::Symmetric, ::Type{T}) = Symmetric(similar(A.data, T))
 # Hermitian version can be simplified when check for imaginary part of
 # diagonal in Hermitian has been removed
@@ -133,6 +151,25 @@ convert{T}(::Type{AbstractMatrix{T}}, A::Hermitian) = Hermitian(convert(Abstract
 
 copy{T,S}(A::Symmetric{T,S}) = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy{T,S}(A::Hermitian{T,S}) = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
+
+function copy!(dest::Symmetric, src::Symmetric)
+    if src.uplo == dest.uplo
+        copy!(dest.data, src.data)
+    else
+        transpose!(dest.data, src.data)
+    end
+    return dest
+end
+
+function copy!(dest::Hermitian, src::Hermitian)
+    if src.uplo == dest.uplo
+        copy!(dest.data, src.data)
+    else
+        ctranspose!(dest.data, src.data)
+    end
+    return dest
+end
+
 ishermitian(A::Hermitian) = true
 ishermitian{T<:Real,S}(A::Symmetric{T,S}) = true
 ishermitian{T<:Complex,S}(A::Symmetric{T,S}) = all(imag(A.data) .== 0)
