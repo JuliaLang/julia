@@ -662,7 +662,7 @@ Channels and RemoteChannels
   by the handle. A deserialized :class:`RemoteChannel` object (on any worker), therefore
   also points to the same backing store as the original.
 
-The channels example from above :ref:`man-channels-example` can be modified for
+The channels example from above :ref:`Channels Example <man-channels-example>` can be modified for
 interprocess communication, as shown below.
 
 We start 4 workers to process a single ``jobs`` remote channel. Jobs, identified by an id (``job_id``),
