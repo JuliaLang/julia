@@ -765,9 +765,10 @@ end
 
 # Deprecate no-op transpose fallback. Please see #13171 and #17075.
 function transpose(x)
-    depwarn(string("the no-op `transpose` fallback is deprecated, and no more specific ",
-        "`transpose` method for $(typeof(x)) exists. Consider `permutedims(x, [2, 1])` ",
-        "or writing a specific `transpose(x::$(typeof(x)))` method if appropriate."),
+    depwarn(string("the no-op `transpose` for non-numeric arrays is deprecated, ",
+        "and no specific `transpose` method for $(typeof(x)) exists. Use ",
+        "`permutedims(x, (2, 1))` for matrices and `reshape(x, 1, length(x))` for vectors, ",
+        "or write a specific `transpose(x::$(typeof(x)))` method if appropriate."),
         :transpose)
     return x
 end
