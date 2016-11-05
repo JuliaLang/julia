@@ -60,7 +60,9 @@
 #endif
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
+#if JL_LLVM_VERSION < 30600
 #include <llvm/Support/MemoryObject.h>
+#endif
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/Host.h>
