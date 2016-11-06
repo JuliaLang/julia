@@ -855,7 +855,7 @@ end
 for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
         :sinpi, :cosc, :ceil, :floor, :trunc, :round, :real, :imag,
-        :log1p, :expm1, :abs, :abs2, :conj,
+        :log1p, :expm1, :abs, :abs2,
         :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
         :cos, :cosh, :cosd, :acos, :acosd,
         :cot, :coth, :cotd, :acot, :acotd,

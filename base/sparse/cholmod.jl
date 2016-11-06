@@ -1504,6 +1504,19 @@ Ac_ldiv_B(L::Factor, B::VecOrMat) = convert(Matrix, solve(CHOLMOD_A, L, Dense(B)
 Ac_ldiv_B(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::SparseVecOrMat) = Ac_ldiv_B(L, Sparse(B))
 
+for f in (:\, :Ac_ldiv_B)
+    @eval function ($f)(A::Union{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+                          Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
+                          Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}, B::StridedVecOrMat)
+        try
+            return ($f)(cholfact(A), B)
+        catch e
+            isa(e, LinAlg.PosDefException) || rethrow(e)
+            return ($f)(ldltfact(A) , B)
+        end
+    end
+end
+
 ## Other convenience methods
 function diag{Tv}(F::Factor{Tv})
     f = unsafe_load(get(F.p))
