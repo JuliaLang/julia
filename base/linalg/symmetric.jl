@@ -108,20 +108,17 @@ end
 end
 
 function setindex!(A::Symmetric, v, i::Integer, j::Integer)
-    if (A.uplo == 'U' && i >= j) || (A.uplo == 'L' && i <= j)
-        setindex!(A.data, v, i, j)
-    else
-        setindex!(A.data, v, j, i)
-    end
+    i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
+    setindex!(A.data, v, i, j)
 end
 
 function setindex!(A::Hermitian, v, i::Integer, j::Integer)
-    if i == j && !isreal(v)
-        throw(ArgumentError("Cannot set a nonreal value to the diagonal in a Hermitian matrix"))
-    elseif (A.uplo == 'U' && i >= j) || (A.uplo == 'L' && i <= j)
-        setindex!(A.data, v, i, j)
+    if i != j
+        throw(ArgumentError("Cannot set a non-diagonal index in a Hermitian matrix"))
+    elseif !isreal(v)
+        throw(ArgumentError("Cannot set a diagonal entry in a Hermitian matrix to a nonreal value"))
     else
-        setindex!(A.data, v, j, i)
+        setindex!(A.data, v, i, j)
     end
 end
 
@@ -254,6 +251,13 @@ A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{
 
 *(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)
+
+for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
+    # Deal with an ambiguous case
+    @eval ($op)(A::$T, x::Bool) = ($T)(($op)(A.data, x), Symbol(A.uplo))
+    S = T == :Hermitian ? :Real : :Number
+    @eval ($op)(A::$T, x::$S) = ($T)(($op)(A.data, x), Symbol(A.uplo))
+end
 
 bkfact(A::HermOrSym) = bkfact(A.data, Symbol(A.uplo), issymmetric(A))
 factorize(A::HermOrSym) = bkfact(A)
