@@ -317,6 +317,7 @@ I,J,N = findnz(z)
 @test var(A_3_3) == 7.5
 @test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
 @test std(A_3_3, 2) == OffsetArray([3,3,3]'', (A_3_3.offsets[1],0))
+@test sum(OffsetArray(ones(Int,3000), -1000)) == 3000
 
 @test_approx_eq vecnorm(v) vecnorm(parent(v))
 @test_approx_eq vecnorm(A) vecnorm(parent(A))
