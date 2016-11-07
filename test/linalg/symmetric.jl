@@ -276,6 +276,8 @@ let X = sparse([1 -1; -1 1])
         @test Y - 1 == T(sparse([0 -2; -2 0]))
         @test Y * 2 == T(sparse([2 -2; -2 2]))
         @test Y / 1 == Y
+
+        @test T([true false; false true]) + true == T([2 1; 1 2])
     end
 
     @test_throws ArgumentError Hermitian(X) + 2im*I
