@@ -154,7 +154,7 @@ function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer
         return v
     else
         # pairwise portion
-        imid = (ifirst + ilast) >>> 1
+        imid = (ifirst + ilast) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)
