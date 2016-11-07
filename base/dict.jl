@@ -152,11 +152,20 @@ function Dict(kv)
     end
 end
 
-dict_with_eltype{K,V}(kv, ::Type{Tuple{K,V}}) = Dict{K,V}(kv)
-dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
+typealias TP{K,V} Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+
+dict_with_eltype{K,V}(kv, ::TP{K,V}) = Dict{K,V}(kv)
+dict_with_eltype{K,V}(kv::Generator, ::TP{K,V}) = Dict{K,V}(kv)
 dict_with_eltype{K,V}(::Type{Pair{K,V}}) = Dict{K,V}()
 dict_with_eltype(::Type) = Dict()
 dict_with_eltype(kv, t) = grow_to!(dict_with_eltype(_default_eltype(typeof(kv))), kv)
+function dict_with_eltype(kv::Generator, t)
+    T = _default_eltype(typeof(kv))
+    if T <: Union{Pair,NTuple{2}} && isleaftype(T)
+        return dict_with_eltype(kv, T)
+    end
+    return grow_to!(dict_with_eltype(T), kv)
+end
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
 # and (2) Pair being invariant. a bit annoying.
