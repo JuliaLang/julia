@@ -39,6 +39,8 @@ let
         @test Ac_mul_Bc(Ai, Bi) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
         @test_throws DimensionMismatch [1 2; 0 0; 0 0] * [1 2]
     end
+    CC = ones(3, 3)
+    @test_throws DimensionMismatch A_mul_B!(CC, AA, BB)
 end
 # 3x3
 let
@@ -62,6 +64,8 @@ let
         @test Ac_mul_Bc(Ai, Bi) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
         @test_throws DimensionMismatch [1 2 3; 0 0 0; 0 0 0] * [1 2 3]
     end
+    CC = ones(4, 4)
+    @test_throws DimensionMismatch A_mul_B!(CC, AA, BB)
 end
 # Generic integer matrix multiplication
 # Generic AbstractArrays
