@@ -70,6 +70,7 @@ function depwarn(msg, funcsym)
             throw(ErrorException(msg))
         end
     end
+    nothing
 end
 
 function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
@@ -781,5 +782,7 @@ end
 # To be deprecated in 0.6
 
 const _oldstyle_array_vcat_ = false
+
+Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching(::_FDWatcher) should not be used.", :stop_watching)
 
 # End deprecations scheduled for 0.6
