@@ -1016,7 +1016,7 @@ the variable::
     Ptr{Int32} @0x00007f418d0816b8
 
 The result is a pointer giving the address of the value. The value can be
-manipulated through this pointer using :func:`unsafe_load` and :func:`unsafe_store`.
+manipulated through this pointer using :func:`unsafe_load` and :func:`unsafe_store!`.
 
 
 Accessing Data through a Pointer
