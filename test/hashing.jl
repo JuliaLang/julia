@@ -20,7 +20,7 @@ vals = vcat(
 
 function coerce(T::Type, x)
     if T<:Rational
-        convert(T, coerce(typeof(num(zero(T))), x))
+        convert(T, coerce(typeof(numerator(zero(T))), x))
     elseif !(T<:Integer)
         convert(T, x)
     else

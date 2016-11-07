@@ -1299,9 +1299,9 @@ for yr = Any[
         f2, m2 = fldmod(x,y)
 
         t1 = isa(x,Rational) && isa(y,Rational) ?
-                               promote_type(typeof(num(x)),typeof(num(y))) :
-             isa(x,Rational) ? promote_type(typeof(num(x)),typeof(y)) :
-             isa(y,Rational) ? promote_type(typeof(x),typeof(num(y))) :
+                               promote_type(typeof(numerator(x)),typeof(numerator(y))) :
+             isa(x,Rational) ? promote_type(typeof(numerator(x)),typeof(y)) :
+             isa(y,Rational) ? promote_type(typeof(x),typeof(numerator(y))) :
                                promote_type(typeof(x),typeof(y))
 
         t2 = promote_type(typeof(x),typeof(y))
@@ -2630,8 +2630,8 @@ end
 rand_int = rand(Int8)
 
 for T in [Int8, Int16, Int32, Int128, BigInt]
-    @test num(convert(T, rand_int)) == rand_int
-    @test den(convert(T, rand_int)) == 1
+    @test numerator(convert(T, rand_int)) == rand_int
+    @test denominator(convert(T, rand_int)) == 1
 
     @test typemin(Rational{T}) == -one(T)//zero(T)
     @test typemax(Rational{T}) == one(T)//zero(T)

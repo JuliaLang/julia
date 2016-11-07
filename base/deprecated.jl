@@ -1087,4 +1087,8 @@ eval(Base.LinAlg, quote
     end
 end)
 
+# #19246
+@deprecate den denominator
+@deprecate num numerator
+
 # End deprecations scheduled for 0.6
