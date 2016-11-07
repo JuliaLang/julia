@@ -44,7 +44,7 @@ function translate(dirs::Vector; root = dirname(@__FILE__))
                 end
             end
         else
-            warn("errors found while generating documentation. Aborting file writing.")
+            error("errors found while generating documentation. Aborting file writing.")
         end
         # Report statistics about 'Base' docs.
         summarise(state)
