@@ -125,6 +125,7 @@ function installed(pkg::AbstractString)
 end
 
 function status(io::IO; pkgname::AbstractString = "")
+    if ispath(pkgname) || throw(PkgError("package $pkgname does not exist")) end
     showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
@@ -156,6 +157,7 @@ end
 status(io::IO, pkg::AbstractString) = status(io, pkgname = pkg)
 
 function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
+    if ispath(pkg) || throw(PkgError("package $pkg does not exist")) end
     @printf io " - %-29s " pkg
     fix || return println(io,ver)
     @printf io "%-19s" ver
