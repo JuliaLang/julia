@@ -187,6 +187,8 @@ type CompoundPeriod <: AbstractTime
     end
 end
 
+CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
+
 """
     CompoundPeriod(periods) -> CompoundPeriod
 
@@ -195,20 +197,20 @@ will be added together.
 
 # Examples
 ```julia
-julia> Dates.CompoundPeriod([Dates.Hour(12), Dates.Hour(13)])
+julia> Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13))
 25 hours
 
-julia> Dates.CompoundPeriod([Dates.Hour(-1), Dates.Minute(1)])
+julia> Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1))
 -1 hour, 1 minute
 
-julia> Dates.CompoundPeriod([Dates.Month(1), Dates.Week(-2)])
+julia> Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2))
 1 month, -2 weeks
 
 julia> Dates.CompoundPeriod(Dates.Minute(50000))
 50000 minutes
 ```
 """
-CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
+CompoundPeriod(p::Period...) = CompoundPeriod(Period[p...])
 
 
 """
@@ -223,13 +225,13 @@ Reduces the `CompoundPeriod` into its canonical form by applying the following r
 
 # Examples
 ```julia
-julia> Dates.canonicalize(Dates.CompoundPeriod([Dates.Hour(12), Dates.Hour(13)]))
+julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13)))
 1 day, 1 hour
 
-julia> Dates.canonicalize(Dates.CompoundPeriod([Dates.Hour(-1), Dates.Minute(1)]))
+julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1)))
 -59 minutes
 
-julia> Dates.canonicalize(Dates.CompoundPeriod([Dates.Month(1), Dates.Week(-2)]))
+julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2)))
 1 month, -2 weeks
 
 julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Minute(50000)))
