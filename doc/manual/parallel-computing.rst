@@ -548,7 +548,7 @@ For example, the following would cause the ``for`` loop to wait for more data::
         foreach(i->put!(c, i), 1:3)    # add a few entries
         data = [i for i in c]
 
-while this will return after reading all data::
+while this will return after reading all data:
 
 .. doctest::
 
