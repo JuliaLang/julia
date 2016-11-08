@@ -178,84 +178,11 @@ type CompoundPeriod <: AbstractTime
                 j = k
             end
             n = i - 1 # new length
+            p  = resize!(p, n)
         elseif n == 1 && value(p[1]) == 0
             p = Period[]
-            n = 0
         end
-        # canonicalize Periods by pushing "overflow" into a coarser period.
-        if n > 0
-            pc = sizehint!(Period[], n)
-            P = typeof(p[n])
-            v = value(p[n])
-            i = n - 1
-            while true
-                Pc, f = coarserperiod(P)
-                if i > 0 && typeof(p[i]) == P
-                    v += value(p[i])
-                    i -= 1
-                end
-                v0 = f == 1 ? v : rem(v, f)
-                v0 != 0 && push!(pc, P(v0))
-                if v != v0
-                    P = Pc
-                    v = div(v - v0, f)
-                elseif i > 0
-                    P = typeof(p[i])
-                    v = value(p[i])
-                    i -= 1
-                else
-                    break
-                end
-            end
-            p = reverse!(pc)
-            n = length(p)
-        else
-            return new(resize!(p, n))
-        end
-        # reduce the amount of mixed positive/negative Periods.
-        if n > 0
-            pc = sizehint!(Period[], n)
-            i = n
-            while i > 0
-                j = i
 
-                # Determine sign of the largest period in this group which
-                # can be converted into via coarserperiod.
-                last = Union{}
-                current = typeof(p[i])
-                while i > 0 && current != last
-                    if typeof(p[i]) == current
-                        i -= 1
-                    end
-                    last, current = current, coarserperiod(current)[1]
-                end
-                s = sign(value(p[i + 1]))
-
-                # Adjust all the periods in the group based upon the
-                # largest period sign.
-                P = typeof(p[j])
-                v = 0
-                while j > i
-                    Pc, f = coarserperiod(P)
-                    if j > 0 && typeof(p[j]) == P
-                        v += value(p[j])
-                        j -= 1
-                    end
-                    v0 = f == 1 ? v : mod(v, f * s)
-                    v0 != 0 && push!(pc, P(v0))
-                    if v != v0
-                        P = Pc
-                        v = div(v - v0, f)
-                    elseif j > 0
-                        P = typeof(p[j])
-                        v = 0
-                    else
-                        break
-                    end
-                end
-            end
-            p = reverse!(pc)
-        end
         return new(p)
     end
 end
@@ -292,6 +219,88 @@ julia> Dates.CompoundPeriod(Dates.Minute(50000)))
 """
 CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
 
+
+function canonicalize(x::CompoundPeriod)
+    # canonicalize Periods by pushing "overflow" into a coarser period.
+    p = x.periods
+    n = length(p)
+    if n > 0
+        pc = sizehint!(Period[], n)
+        P = typeof(p[n])
+        v = value(p[n])
+        i = n - 1
+        while true
+            Pc, f = coarserperiod(P)
+            if i > 0 && typeof(p[i]) == P
+                v += value(p[i])
+                i -= 1
+            end
+            v0 = f == 1 ? v : rem(v, f)
+            v0 != 0 && push!(pc, P(v0))
+            if v != v0
+                P = Pc
+                v = div(v - v0, f)
+            elseif i > 0
+                P = typeof(p[i])
+                v = value(p[i])
+                i -= 1
+            else
+                break
+            end
+        end
+        p = reverse!(pc)
+        n = length(p)
+    else
+        return x
+    end
+
+    # reduce the amount of mixed positive/negative Periods.
+    if n > 0
+        pc = sizehint!(Period[], n)
+        i = n
+        while i > 0
+            j = i
+
+            # Determine sign of the largest period in this group which
+            # can be converted into via coarserperiod.
+            last = Union{}
+            current = typeof(p[i])
+            while i > 0 && current != last
+                if typeof(p[i]) == current
+                    i -= 1
+                end
+                last, current = current, coarserperiod(current)[1]
+            end
+            s = sign(value(p[i + 1]))
+
+            # Adjust all the periods in the group based upon the
+            # largest period sign.
+            P = typeof(p[j])
+            v = 0
+            while j > i
+                Pc, f = coarserperiod(P)
+                if j > 0 && typeof(p[j]) == P
+                    v += value(p[j])
+                    j -= 1
+                end
+                v0 = f == 1 ? v : mod(v, f * s)
+                v0 != 0 && push!(pc, P(v0))
+                if v != v0
+                    P = Pc
+                    v = div(v - v0, f)
+                elseif j > 0
+                    P = typeof(p[j])
+                    v = 0
+                else
+                    break
+                end
+            end
+        end
+        p = reverse!(pc)
+    end
+
+    return CompoundPeriod(p)
+end
 
 Base.convert(::Type{CompoundPeriod}, x::Period) = CompoundPeriod(Period[x])
 function Base.string(x::CompoundPeriod)
@@ -341,8 +350,12 @@ for op in (:.+, :.-)
 end
 
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
-(==)(y::Period, x::CompoundPeriod) = x == y
-(==)(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
+(==)(x::Period, y::CompoundPeriod) = y == x
+(==)(x::CompoundPeriod, y::CompoundPeriod) = canonicalize(x).periods == canonicalize(y).periods
+
+Base.isequal(x::CompoundPeriod, y::Period) = isequal(x, CompoundPeriod(y))
+Base.isequal(x::Period, y::CompoundPeriod) = isequal(y, x)
+Base.isequal(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
 
 # Capture TimeType+-Period methods
 (+)(a::TimeType,b::Period,c::Period) = (+)(a,b+c)
