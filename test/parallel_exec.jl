@@ -794,6 +794,11 @@ len_iter = (1,2,3,4,5)
 @test Base.iteratorsize(len_iter) == Base.HasLength()
 @test asyncmap(identity, len_iter) == Any[1,2,3,4,5]
 
+# Test that the default worker pool cycles through all workers
+@test nworkers() == length(unique(pmap(_->myid(), 1:100)))
+
+# Test same behaviour when executed on a worker
+@test nworkers() == length(unique(remotecall_fetch(()->pmap(_->myid(), 1:100), id_other)))
 
 # CachingPool tests
 wp = CachingPool(workers())

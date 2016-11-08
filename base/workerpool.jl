@@ -11,18 +11,21 @@ abstract AbstractWorkerPool
 # `isready` - return false if a `take!` on the pool would block, else true
 #
 # The default implementations of the above (on a AbstractWorkerPool) require fields
-#    channel::RemoteChannel{Channel{Int}}
+#    channel::Channel{Int}
 #    workers::Set{Int}
 #
 
 type WorkerPool <: AbstractWorkerPool
-    channel::RemoteChannel{Channel{Int}}
+    channel::Channel{Int}
     workers::Set{Int}
 
     # Create a shared queue of available workers
-    WorkerPool() = new(RemoteChannel(()->Channel{Int}(typemax(Int))), Set{Int}())
+    WorkerPool() = WorkerPool(Channel{Int}(typemax(Int)))
+    WorkerPool(c) = new(c, Set{Int}())
 end
 
+# TODO: Support serialization of worker pools by sending only a reference to remote workers.
+serialize(s::AbstractSerializer, wp::WorkerPool) = throw(ErrorException("WorkerPool objects are not serializable."))
 
 """
     WorkerPool(workers)
@@ -40,12 +43,18 @@ function WorkerPool(workers::Vector{Int})
     return pool
 end
 
-push!(pool::AbstractWorkerPool, w::Int) = (push!(pool.workers, w); put!(pool.channel, w); pool)
 push!(pool::AbstractWorkerPool, w::Worker) = push!(pool, w.id)
+push!(pool::AbstractWorkerPool, w::Int) = (push!(pool.workers, w); put!(pool.channel, w); pool)
 length(pool::AbstractWorkerPool) = length(pool.workers)
 isready(pool::AbstractWorkerPool) = isready(pool.channel)
 
-put!(pool::AbstractWorkerPool, w::Int) = (put!(pool.channel, w); pool)
+function put!(pool::AbstractWorkerPool, w::Int)
+    # In case of default_worker_pool, the master is implictly considered a worker, i.e.,
+    # it is not present in pool.workers.
+    # Confirm the that tha worker is part of a pool before making it available.
+    w in pool.workers && put!(pool.channel, w)
+    w
+end
 
 function workers(pool::AbstractWorkerPool)
     if length(pool) == 0 && pool === default_worker_pool()
@@ -92,11 +101,7 @@ function remotecall_pool(rc_f, f, pool::AbstractWorkerPool, args...; kwargs...)
     try
         rc_f(f, worker, args...; kwargs...)
     finally
-        # In case of default_worker_pool, the master is implictly considered a worker
-        # till the time new workers are added, and it is not added back to the available pool.
-        # However, it is perfectly valid for other pools to `push!` any worker (including 1)
-        # to the pool. Confirm the same before making a worker available.
-        worker in pool.workers && put!(pool, worker)
+        put!(pool, worker)
     end
 end
 
@@ -133,21 +138,41 @@ performs a `remote_do` on it.
 """
 remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remote_do, f, pool, args...; kwargs...)
 
+# The cluster default worker pool only exists on the master.
+# Workers using this pool forward calls push!, put!, take! etc to the master
+immutable ClusterDefaultWorkerPool <: AbstractWorkerPool
+end
+
+function push!(pool::ClusterDefaultWorkerPool, w::Int)
+    remotecall_fetch(w->(push!(_default_worker_pool[], w); nothing), 1, w)
+    pool
+end
+length(pool::ClusterDefaultWorkerPool) = remotecall_fetch(()->length(_default_worker_pool[]), 1)
+isready(pool::ClusterDefaultWorkerPool) = remotecall_fetch(()->isready(_default_worker_pool[]), 1)
+
+function put!(pool::ClusterDefaultWorkerPool, w::Int)
+    remotecall_fetch(w->(put!(_default_worker_pool[], w); w), 1, w)
+end
+
+workers(pool::ClusterDefaultWorkerPool) = remotecall_fetch(()->workers(_default_worker_pool[]), 1)
+nworkers(pool::ClusterDefaultWorkerPool) = length(pool)
+take!(pool::ClusterDefaultWorkerPool) = remotecall_fetch(()->take!(_default_worker_pool[]), 1)
+
+const _default_worker_pool = Ref{AbstractWorkerPool}()
+
 """
     default_worker_pool()
 
-WorkerPool containing idle `workers()` (used by `remote(f)`).
+WorkerPool containing idle `workers()` - used by `remote(f)` and `pmap` (by default).
 """
-_default_worker_pool = Nullable{WorkerPool}()
-function default_worker_pool()
-    if isnull(_default_worker_pool) && myid() == 1
-        set_default_worker_pool(WorkerPool())
-    end
-    return get(_default_worker_pool)
-end
+default_worker_pool() = _default_worker_pool[]
 
-function set_default_worker_pool(p::WorkerPool)
-    global _default_worker_pool = Nullable(p)
+function set_default_worker_pool()
+    if myid() == 1
+        _default_worker_pool[] = WorkerPool()
+    else
+        _default_worker_pool[] = ClusterDefaultWorkerPool()
+    end
 end
 
 
@@ -161,18 +186,20 @@ remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), arg
 remote(p::AbstractWorkerPool, f) = (args...; kwargs...)->remotecall_fetch(f, p, args...; kwargs...)
 
 type CachingPool <: AbstractWorkerPool
-    channel::RemoteChannel{Channel{Int}}
+    channel::Channel{Int}
     workers::Set{Int}
 
     # Mapping between a tuple (worker_id, f) and a remote_ref
     map_obj2ref::Dict{Tuple{Int, Function}, RemoteChannel}
 
     function CachingPool()
-        wp = new(RemoteChannel(()->Channel{Int}(typemax(Int))), Set{Int}(), Dict{Int, Function}())
+        wp = new(Channel{Int}(typemax(Int)), Set{Int}(), Dict{Int, Function}())
         finalizer(wp, clear!)
         wp
     end
 end
+
+serialize(s::AbstractSerializer, cp::CachingPool) = throw(ErrorException("CachingPool objects are not serializable."))
 
 """
     CachingPool(workers::Vector{Int})
@@ -236,7 +263,6 @@ function remotecall_pool(rc_f, f, pool::CachingPool, args...; kwargs...)
     try
         rc_f(exec_from_cache, worker, f_ref, args...; kwargs...)
     finally
-        # ensure that we do not add pid 1 back if it is not registered.
-        worker in pool.workers && put!(pool, worker)
+        put!(pool, worker)
     end
 end

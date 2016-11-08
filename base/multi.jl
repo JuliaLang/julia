@@ -89,7 +89,6 @@ immutable JoinPGRPMsg <: AbstractMsg
     self_pid::Int
     other_workers::Array
     topology::Symbol
-    worker_pool
     enable_threaded_blas::Bool
 end
 immutable JoinCompleteMsg <: AbstractMsg
@@ -1498,9 +1497,11 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
 
     for wt in wait_tasks; wait(wt); end
 
-    set_default_worker_pool(msg.worker_pool)
     send_connection_hdr(controller, false)
     send_msg_now(controller, MsgHeader(RRID(0,0), header.notify_oid), JoinCompleteMsg(Sys.CPU_CORES, getpid()))
+
+    # point the default worker pool to the master
+    set_default_worker_pool()
 end
 
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)
@@ -1727,10 +1728,9 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
 
     wait(t_launch)      # catches any thrown errors from the launch task
 
-    # Let all workers know the current set of valid workers. Useful
-    # for nprocs(), nworkers(), etc to return valid values on the workers.
     # Since all worker-to-worker setups may not have completed by the time this
-    # function returns to the caller.
+    # function returns to the caller, send the complete list to all workers.
+    # Useful for nprocs(), nworkers(), etc to return valid values on the workers.
     all_w = workers()
     for pid in all_w
         remote_do(set_valid_processes, pid, all_w)
@@ -1865,7 +1865,7 @@ function create_worker(manager, wconfig)
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id) : ((), x.id, true), join_list)
     send_connection_hdr(w, true)
-    join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, default_worker_pool(), get(wconfig.enable_threaded_blas, false))
+    join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, get(wconfig.enable_threaded_blas, false))
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
     @schedule manage(w.manager, w.id, w.config, :register)
