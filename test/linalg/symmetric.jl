@@ -252,7 +252,7 @@ let a = randn(2,2)
 end
 
 # 19225
-let X = sparse([1 -1; -1 1])
+let X = [1 -1; -1 1]
     for T in (Symmetric, Hermitian)
         Y = T(copy(X))
         _Y = similar(Y)
@@ -265,16 +265,16 @@ let X = sparse([1 -1; -1 1])
         @test W.uplo != Y.uplo
 
         W[1,1] = 4
-        @test W == T(sparse([4 -1; -1 1]))
+        @test W == T([4 -1; -1 1])
         @test_throws ArgumentError (W[1,2] = 2)
 
-        @test Y + I == T(sparse([2 -1; -1 2]))
-        @test Y - I == T(sparse([0 -1; -1 0]))
+        @test Y + I == T([2 -1; -1 2])
+        @test Y - I == T([0 -1; -1 0])
         @test Y * I == Y
 
-        @test Y + 1 == T(sparse([2 0; 0 2]))
-        @test Y - 1 == T(sparse([0 -2; -2 0]))
-        @test Y * 2 == T(sparse([2 -2; -2 2]))
+        @test Y + 1 == T([2 0; 0 2])
+        @test Y - 1 == T([0 -2; -2 0])
+        @test Y * 2 == T([2 -2; -2 2])
         @test Y / 1 == Y
 
         @test T([true false; false true]) + true == T([2 1; 1 2])
