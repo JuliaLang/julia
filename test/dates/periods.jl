@@ -315,6 +315,12 @@ emptyperiod = ((y + d) - d) - y
 @test h + 3mi == 63mi
 @test y - m == 11m
 
+# compound periods should avoid automatically converting period types
+@test (d - h).periods == Dates.Period[d, -h]
+@test d - h == 23h
+@test !isequal(d - h, 23h)
+@test isequal(d - h, 2d - 2h - 1d + 1h)
+
 # reduce compound periods into the most basic form
 @test Dates.canonicalize(h - mi).periods == Dates.Period[59mi]
 @test Dates.canonicalize(-h + mi).periods == Dates.Period[-59mi]
