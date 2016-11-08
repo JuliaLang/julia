@@ -138,7 +138,7 @@ end
 @test first(Dict(:f=>2)) == (:f=>2)
 
 # constructing Dicts from iterators
-let d = Dict(i=>i for i=1:3)
+let d = @inferred Dict(i=>i for i=1:3)
     @test isa(d, Dict{Int,Int})
     @test d == Dict(1=>1, 2=>2, 3=>3)
 end
