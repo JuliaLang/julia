@@ -20,6 +20,8 @@ include("io.jl")
 export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
        TimeZone, UTC, TimeType, DateTime, Date,
+       # periods.jl
+       canonicalize,
        # accessors.jl
        yearmonthday, yearmonth, monthday, year, month, week, day,
        hour, minute, second, millisecond, dayofmonth,
