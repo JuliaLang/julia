@@ -2301,13 +2301,14 @@
   (append! (diff (find-decls 'const e) glob)
            (find-assigned-vars e env)))
 
-(define (occurs-outside? sym e excl)
-  (cond ((eq? e sym) #t)
-        ((not (pair? e)) #f)
-        ((eq? e excl) #f)
-        ((memq (car e) '(lambda module toplevel quote top globalref core line inert)) #f)
-        (else (any (lambda (x) (occurs-outside? sym x excl))
-                   (cdr e)))))
+(define (unbound-vars e bound tab)
+  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
+        ((symbol? e) (if (not (memq e bound)) (put! tab e #t)) tab)
+        ((or (not (pair? e)) (quoted? e)) tab)
+        ((memq (car e) '(lambda scope-block module toplevel)) tab)
+        (else (for-each (lambda (x) (unbound-vars x bound tab))
+                            (cdr e))
+              tab)))
 
 ;; local variable identification and renaming, derived from:
 ;; 1. (local x) expressions inside this scope-block and lambda
@@ -2332,7 +2333,7 @@
                                        (filter (lambda (ren) (not (memq (car ren) lv)))
                                                renames)
                                        #t)))
-           `(lambda ,(cadr e) ,(caddr e) ,body)))
+               `(lambda ,(cadr e) ,(caddr e) ,body)))
         ((eq? (car e) 'scope-block)
          (let* ((blok (cadr e)) ;; body of scope-block expression
                 (other-locals (if lam (caddr lam) '())) ;; locals that are explicitly part of containing lambda expression
@@ -2355,15 +2356,11 @@
                   ;; have the same name as a variable used in an outer scope
                   (if (or newlam (not lam))
                       '()
-                      (receive
-                       (conflicted unknown)
-                       (separate (lambda (v) (or (memq v env) (memq v other-locals)))
-                                 vars)
-                       (append
-                        conflicted
-                        (let ((lbod (lam:body lam)))
-                          (filter (lambda (v) (occurs-outside? v lbod e))
-                                  unknown)))))))
+                       (filter (lambda (v) (or (memq v env)
+                                               (memq v other-locals)
+                                               (memq v implicitglobals)
+                                               (memq v (caddr lam))))
+                               vars))))
                 (need-rename (need-rename? vars))
                 (need-rename-def (need-rename? vars-def))
                 ;; new gensym names for conflicting variables
@@ -2377,24 +2374,32 @@
                                                         (memq (car ren) iglo)
                                                         (memq (car ren) glob))))
                                              renames)))
-                (new-env (append all-vars glob env))
-                (new-iglo (append iglo implicitglobals))
+                (new-env (append all-vars glob env)) ;; all variables declared in or outside blok
+                (new-iglo-table ;; initial list of implicit globals from outside blok
+                  (let ((tab (table)))
+                    (for-each (lambda (v) (put! tab v #t)) iglo)
+                    (for-each (lambda (v) (put! tab v #t)) implicitglobals)
+                    tab))
+                (new-iglo (table.keys ;; compute list of all globals used implicitly in blok
+                            (unbound-vars blok
+                                          new-env ;; list of everything else
+                                          new-iglo-table)))
                 (body (resolve-scopes- blok new-env new-iglo lam new-renames #f))
                 (real-new-vars (append (diff vars need-rename) renamed))
                 (real-new-vars-def (append (diff vars-def need-rename-def) renamed-def)))
-           (for-each (lambda (v)
-                       (if (memq v all-vars)
-                           (error (string "variable \"" v "\" declared both local and global"))))
-                     glob)
-           (if lam ;; update in-place the list of local variables in lam
-               (set-car! (cddr lam)
-                         (append real-new-vars real-new-vars-def (caddr lam))))
-           (insert-after-meta ;; return the new, expanded scope-block
-            (if (and (pair? body) (eq? (car body) 'block))
-                body
-                `(block ,body))
-            (append! (map (lambda (v) `(local ,v)) real-new-vars)
-                     (map (lambda (v) `(local-def ,v)) real-new-vars-def)))))
+               (for-each (lambda (v)
+                           (if (memq v all-vars)
+                               (error (string "variable \"" v "\" declared both local and global"))))
+                         glob)
+               (if lam ;; update in-place the list of local variables in lam
+                   (set-car! (cddr lam)
+                             (append! (caddr lam) real-new-vars real-new-vars-def)))
+               (insert-after-meta ;; return the new, expanded scope-block
+                (if (and (pair? body) (eq? (car body) 'block))
+                    body
+                    `(block ,body))
+                (append! (map (lambda (v) `(local ,v)) real-new-vars)
+                         (map (lambda (v) `(local-def ,v)) real-new-vars-def)))))
         ((eq? (car e) 'module)
          (error "module expression not at top level"))
         (else
