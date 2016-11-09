@@ -429,6 +429,31 @@ JL_DLLEXPORT void jl_lisp_prompt(void)
     jl_ast_ctx_leave(ctx);
 }
 
+JL_DLLEXPORT void fl_show_profile(void)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "show-profiles")));
+    jl_ast_ctx_leave(ctx);
+}
+
+JL_DLLEXPORT void fl_clear_profile(void)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "clear-profiles")));
+    jl_ast_ctx_leave(ctx);
+}
+
+JL_DLLEXPORT void fl_profile(const char *fname)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "profile-e")), symbol(fl_ctx, fname));
+    jl_ast_ctx_leave(ctx);
+}
+
+
 static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
 {
     assert(issymbol(s));
