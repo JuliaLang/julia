@@ -55,6 +55,13 @@ end
             @test isequal(im * T(+1.0), Complex(T(+0.0), T(+1.0)))
             @test isequal(im * T(-1.0), Complex(T(-0.0), T(-1.0)))
         end
+
+        @testset "divide" begin
+            @test isequal(T(+0.0) / im, Complex(T(+0.0), T(-0.0)))
+            @test isequal(T(-0.0) / im, Complex(T(-0.0), T(+0.0)))
+            @test isequal(T(+1.0) / im, Complex(T(+0.0), T(-1.0)))
+            @test isequal(T(-1.0) / im, Complex(T(-0.0), T(+1.0)))
+        end
     end
     @test isequal(true + complex(true,false), complex(true,false) + complex(true,false))
     @test isequal(complex(true,false) + true, complex(true,false) + complex(true,false))
@@ -925,7 +932,7 @@ end
     @test Float16(1)+Float16(1)im === Complex32(1, 1)
     @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
     @test Float16(1)*im === Complex32(im)
-    @test Float16(1)/im === 1.0f0/im === Complex(0.0, -1.0)
+    @test Float16(1)/im === Complex32(0,-1) == -Float16(1)*im
     @test Float16(1)^im === Complex32(1) === Float16(1)+Float16(0)im
 end
 
