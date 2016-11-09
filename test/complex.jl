@@ -932,7 +932,7 @@ end
     @test Float16(1)+Float16(1)im === Complex32(1, 1)
     @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
     @test Float16(1)*im === Complex32(im)
-    @test Float16(1)/im === Complex32(0,-1) == -Float16(1)*im
+    @test Float16(1)/im === Complex32(0,-1) === -Float16(1)*im
     @test Float16(1)^im === Complex32(1) === Float16(1)+Float16(0)im
 end
 
