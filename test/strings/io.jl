@@ -183,3 +183,20 @@ join(myio, "", "", 1)
 @test Base.unindent("\n    \tfoo",4) == "\n    foo"
 @test Base.unindent("\n\t\n    \tfoo",4) == "\n    \n    foo"
 @test Base.unindent("\n\tfoo\tbar",4) == "\n    foo     bar"
+
+# Tests of raw_str macro
+@test raw"$" == "\$"
+@test raw"\n" == "\\n"
+@test raw"\t" == "\\t"
+
+s1 = raw"""
+     lorem ipsum\n
+     $x = 1$
+     """
+
+s2 = """
+     lorem ipsum\\n
+     \$x = 1\$
+     """
+
+@test s1 == s2
