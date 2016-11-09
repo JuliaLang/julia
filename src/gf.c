@@ -122,9 +122,12 @@ JL_DLLEXPORT jl_lambda_info_t *jl_specializations_get_linfo(jl_method_t *m, jl_t
 {
     JL_LOCK(&m->writelock);
     jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->specializations, type, NULL, 1, /*subtype*/0, /*offs*/0);
-    if (sf && jl_is_lambda_info(sf->func.value) && (!allow_exec || sf->func.linfo->code != jl_nothing)) {
+    if (sf && jl_is_lambda_info(sf->func.value)) {
+        jl_lambda_info_t *li = sf->func.linfo;
         JL_UNLOCK(&m->writelock);
-        return (jl_lambda_info_t*)sf->func.value;
+        if (allow_exec && sf->func.linfo->code == jl_nothing)
+            li = jl_get_specialized(m, type, sparams, allow_exec);
+        return li;
     }
     jl_lambda_info_t *li = jl_get_specialized(m, type, sparams, allow_exec);
     JL_GC_PUSH1(&li);
