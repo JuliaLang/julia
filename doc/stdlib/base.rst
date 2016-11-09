@@ -68,13 +68,13 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Edit a file or directory optionally providing a line number to edit the file at. Returns to the ``julia`` prompt when you quit the editor.
+   Edit a file or directory optionally providing a line number to edit the file at. Returns to the ``julia`` prompt when you quit the editor. The editor can be changed by setting ``JULIA_EDITOR``\ , ``VISUAL`` or ``EDITOR`` as an environmental variable.
 
 .. function:: edit(function, [types])
 
    .. Docstring generated from Julia source
 
-   Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
+   Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. The editor can be changed by setting ``JULIA_EDITOR``\ , ``VISUAL`` or ``EDITOR`` as an environmental variable.
 
 .. function:: @edit
 
