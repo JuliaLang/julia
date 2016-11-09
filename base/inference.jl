@@ -1416,27 +1416,28 @@ function tmerge(typea::ANY, typeb::ANY)
 end
 
 function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
+    sa === sb && return sa
     sa === NF && return sb
     sb === NF && return sa
-    issubstate(sa,sb) && return sb
-    issubstate(sb,sa) && return sa
-    VarState(tmerge(sa.typ, sb.typ), sa.undef | sb.undef)
+    issubstate(sa, sb) && return sb
+    issubstate(sb, sa) && return sa
+    return VarState(tmerge(sa.typ, sb.typ), sa.undef | sb.undef)
 end
 
-tchanged(n::ANY, o::ANY) = o===NF || (n!==NF && !(n ⊑ o))
-schanged(n::ANY, o::ANY) = o===NF || (n!==NF && !issubstate(n, o))
+@inline tchanged(n::ANY, o::ANY) = o === NF || (n !== NF && !(n ⊑ o))
+@inline schanged(n::ANY, o::ANY) = (n !== o) && (o === NF || (n !== NF && !issubstate(n, o)))
 
 function stupdate!(state::Tuple{}, changes::StateUpdate)
     newst = copy(changes.state)
     if isa(changes.var, Slot)
         newst[changes.var.id] = changes.vtype
     end
-    newst
+    return newst
 end
 
 function stupdate!(state::VarTable, change::StateUpdate)
     for i = 1:length(state)
-        if isa(change.var,Slot) && i == change.var.id
+        if isa(change.var, Slot) && i == (change.var::Slot).id
             newtype = change.vtype
         else
             newtype = change.state[i]
@@ -1794,8 +1795,8 @@ function typeinf_frame(frame)
             changes = abstract_interpret(stmt, s[pc]::Array{Any,1}, frame)
             if changes === ()
                 # this line threw an error and there is no need to continue
+                #changes = s[pc]
                 break
-                changes = s[pc]
             end
             if frame.cur_hand !== ()
                 # propagate type info to exception handler
@@ -1872,16 +1873,6 @@ function typeinf_frame(frame)
                         push!(W, l)
                         s[l] = newstate
                     end
-#                        if frame.handler_at[l] === 0
-#                            frame.n_handlers += 1
-#                            if frame.n_handlers > 25
-#                                # too many exception handlers slows down inference a lot.
-#                                # for an example see test/libgit2.jl on 0.5-pre master
-#                                # around e.g. commit c072d1ce73345e153e4fddf656cda544013b1219
-#                                inference_stack = (inference_stack::CallStack).prev
-#                                return (ast0, Any, false)
-#                            end
-#                        end
                     frame.handler_at[l] = frame.cur_hand
                 elseif hd === :leave
                     for i = 1:((stmt.args[1])::Int)
