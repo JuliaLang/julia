@@ -178,6 +178,8 @@ const workq = Vector{InferenceState}() # set of InferenceState objects that can 
 
 #### helper functions ####
 
+@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id # using a function to ensure we can infer this
+
 # avoid cycle due to over-specializing `any` when used by inference
 function _any(f::ANY, a)
     for x in a
@@ -1137,7 +1139,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     elseif isa(e,SSAValue)
         return abstract_eval_ssavalue(e::SSAValue, sv.linfo)
     elseif isa(e,Slot)
-        return vtypes[e.id].typ
+        return vtypes[slot_id(e)].typ
     elseif isa(e,Symbol)
         return abstract_eval_global(sv.mod, e)
     elseif isa(e,GlobalRef)
@@ -1350,24 +1352,30 @@ end
 function stupdate!(state::Tuple{}, changes::StateUpdate)
     newst = copy(changes.state)
     if isa(changes.var, Slot)
-        newst[changes.var.id] = changes.vtype
+        newst[slot_id(changes.var::Slot)] = changes.vtype
     end
     return newst
 end
 
 function stupdate!(state::VarTable, change::StateUpdate)
+    if !isa(change.var, Slot)
+        return stupdate!(state, change.state)
+    end
+    newstate = false
+    changeid = slot_id(change.var::Slot)
     for i = 1:length(state)
-        if isa(change.var, Slot) && i == (change.var::Slot).id
+        if i == changeid
             newtype = change.vtype
         else
             newtype = change.state[i]
         end
         oldtype = state[i]
         if schanged(newtype, oldtype)
+            newstate = state
             state[i] = smerge(oldtype, newtype)
         end
     end
-    return state
+    return newstate
 end
 
 function stupdate!(state::VarTable, changes::VarTable)
@@ -1386,6 +1394,21 @@ end
 stupdate!(state::Tuple{}, changes::VarTable) = copy(changes)
 
 stupdate!(state::Tuple{}, changes::Tuple{}) = false
+
+function stupdate1!(state::VarTable, change::StateUpdate)
+    if !isa(change.var, Slot)
+        return false
+    end
+    i = slot_id(change.var::Slot)
+    newtype = change.vtype
+    oldtype = state[i]
+    if schanged(newtype, oldtype)
+        state[i] = smerge(oldtype, newtype)
+        return true
+    end
+    return false
+end
+
 
 #### helper functions for typeinf initialization and looping ####
 
@@ -1409,7 +1432,7 @@ function find_ssavalue_uses(body)
 end
 function find_ssavalue_uses(e::ANY, uses, line)
     if isa(e,SSAValue)
-        id = (e::SSAValue).id+1
+        id = (e::SSAValue).id + 1
         while length(uses) < id
             push!(uses, IntSet())
         end
@@ -1422,7 +1445,7 @@ function find_ssavalue_uses(e::ANY, uses, line)
         end
         if head === :(=)
             if isa(b.args[1],SSAValue)
-                id = (b.args[1]::SSAValue).id+1
+                id = (b.args[1]::SSAValue).id + 1
                 while length(uses) < id
                     push!(uses, IntSet())
                 end
@@ -1731,20 +1754,19 @@ function typeinf_frame(frame)
             stmt = frame.linfo.code[pc]
             changes = abstract_interpret(stmt, s[pc]::Array{Any,1}, frame)
             if changes === ()
-                # this line threw an error and there is no need to continue
-                #changes = s[pc]
-                break
+                break # this line threw an error and so there is no need to continue
+                # changes = s[pc]
             end
-            if frame.cur_hand !== ()
-                # propagate type info to exception handler
+            pc´ = pc + 1
+            if frame.cur_hand !== () && isa(changes, StateUpdate)
+                # propagate new type info to exception handler
+                # the handling for Expr(:enter) propagates all changes from before the try/catch
+                # so this only needs to propagate any changes
                 l = frame.cur_hand[1]
-                newstate = stupdate!(s[l], changes)
-                if newstate !== false
+                if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
                     push!(W, l)
-                    s[l] = newstate
                 end
             end
-            pc´ = pc+1
             if isa(changes, StateUpdate) && isa((changes::StateUpdate).var, SSAValue)
                 # directly forward changes to an SSAValue to the applicable line
                 changes = changes::StateUpdate
@@ -1810,6 +1832,7 @@ function typeinf_frame(frame)
                         push!(W, l)
                         s[l] = newstate
                     end
+                    typeassert(s[l], VarTable)
                     frame.handler_at[l] = frame.cur_hand
                 elseif is(hd, :leave)
                     for i = 1:((stmt.args[1])::Int)
@@ -2022,7 +2045,7 @@ end
 
 function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, undefs, pass)
     if isa(e, Slot)
-        id = (e::Slot).id
+        id = slot_id(e)
         s = vtypes[id]
         vt = widenconst(s.typ)
         if pass == 1
@@ -2086,11 +2109,11 @@ function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, nargs)
         if st_i !== ()
             # st_i === ()  =>  unreached statement  (see issue #7836)
             eval_annotate(expr, st_i, sv, undefs, 1)
-            if isa(expr, Expr) && expr.head == :(=) && i < nexpr && isa(expr.args[1],Slot) && states[i+1] !== ()
+            if isa(expr, Expr) && expr.head == :(=) && i < nexpr && isa(expr.args[1], Slot) && states[i + 1] !== ()
                 # record type of assigned slot by looking at the next statement.
                 # this is needed in case the slot is never used (which makes eval_annotate miss it).
-                id = expr.args[1].id
-                record_slot_type!(id, widenconst(states[i+1][id].typ), linfo.slottypes)
+                id = slot_id(expr.args[1])
+                record_slot_type!(id, widenconst(states[i + 1][id].typ), linfo.slottypes)
             end
         elseif optimize
             if ((isa(expr, Expr) && expr_cannot_delete(expr::Expr)) ||
@@ -2147,23 +2170,24 @@ end
 # other slots by offset.
 function substitute!(e::ANY, na, argexprs, spvals, offset)
     if isa(e, Slot)
-        if 1 <= e.id <= na
-            ae = argexprs[e.id]
+        id = slot_id(e)
+        if 1 <= id <= na
+            ae = argexprs[id]
             if isa(e, TypedSlot) && isa(ae, Slot)
                 return TypedSlot(ae.id, e.typ)
             end
             return ae
         end
         if isa(e, SlotNumber)
-            return SlotNumber(e.id+offset)
+            return SlotNumber(id + offset)
         else
-            return TypedSlot(e.id+offset, e.typ)
+            return TypedSlot(id + offset, e.typ)
         end
     end
-    if isa(e,NewvarNode)
+    if isa(e, NewvarNode)
         return NewvarNode(substitute!(e.slot, na, argexprs, spvals, offset))
     end
-    if isa(e,Expr)
+    if isa(e, Expr)
         e = e::Expr
         if e.head === :static_parameter
             return spvals[e.args[1]]
@@ -2200,9 +2224,9 @@ function exprtype(x::ANY, linfo::LambdaInfo)
     if isa(x, Expr)
         return (x::Expr).typ
     elseif isa(x, SlotNumber)
-        return linfo.slottypes[x.id]
+        return linfo.slottypes[(x::SlotNumber).id]
     elseif isa(x, TypedSlot)
-        return (x::Slot).typ
+        return (x::TypedSlot).typ
     elseif isa(x, SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, linfo)
     elseif isa(x, Symbol)
@@ -2636,7 +2660,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         for j = length(body.args):-1:1
             b = body.args[j]
             if occ < 6
-                occ += occurs_more(b, x->(isa(x,Slot)&&x.id==i), 6)
+                occ += occurs_more(b, x->(isa(x, Slot) && slot_id(x) == i), 6)
             end
             if occ > 0 && affect_free && !effect_free(b, linfo, true)
                 #TODO: we might be able to short-circuit this test better by memoizing effect_free(b) in the for loop over i
@@ -3125,9 +3149,9 @@ function _slot_replace!(e, id, rhs, T)
 end
 
 occurs_undef(var::Int, expr, flags) =
-    flags[var]&Slot_UsedUndef != 0 && occurs_more(expr, e->(isa(e,Slot) && e.id==var), 0)>0
+    flags[var] & Slot_UsedUndef != 0 && occurs_more(expr, e -> (isa(e, Slot) && slot_id(e) == var), 0) > 0
 
-is_argument(linfo, v) = isa(v,Slot) && v.id <= linfo.nargs
+is_argument(nargs::Int32, v::Slot) = slot_id(v) <= nargs
 
 # remove all single-assigned vars v in "v = x" where x is an argument.
 # "sa" is the result of find_sa_vars
@@ -3137,18 +3161,18 @@ function remove_redundant_temp_vars(linfo, sa, T)
     ssavalue_types = linfo.ssavaluetypes
     bexpr = Expr(:block); bexpr.args = linfo.code
     for (v,init) in sa
-        if (isa(init, Slot) && is_argument(linfo, init::Slot))
+        if (isa(init, Slot) && is_argument(linfo.nargs, init::Slot))
             # this transformation is not valid for vars used before def.
             # we need to preserve the point of assignment to know where to
             # throw errors (issue #4645).
-            if T===SSAValue || !occurs_undef(v, bexpr, flags)
+            if T === SSAValue || !occurs_undef(v, bexpr, flags)
                 # the transformation is not ideal if the assignment
                 # is present for the auto-unbox functionality
                 # (from inlining improved type inference information)
                 # and this transformation would worsen the type information
                 # everywhere later in the function
-                ityp = isa(init,TypedSlot) ? init.typ : linfo.slottypes[init.id]
-                if ityp ⊑ (T===SSAValue ? ssavalue_types[v+1] : linfo.slottypes[v])
+                ityp = isa(init, TypedSlot) ? init.typ : linfo.slottypes[(init::SlotNumber).id]
+                if ityp ⊑ (T === SSAValue ? ssavalue_types[v + 1] : linfo.slottypes[v])
                     delete_var!(linfo, v, T)
                     slot_replace!(linfo, v, init, T)
                 end
@@ -3172,7 +3196,7 @@ function find_sa_vars(linfo::LambdaInfo)
             if isa(lhs, SSAValue)
                 gss[lhs.id] = e.args[2]
             elseif isa(lhs, Slot)
-                id = lhs.id
+                id = slot_id(lhs)
                 if id > nargs  # exclude args
                     if !haskey(av, id)
                         av[id] = e.args[2]
@@ -3192,8 +3216,8 @@ symequal(x::Slot    , y::Slot)     = is(x.id,y.id)
 symequal(x::ANY     , y::ANY)      = is(x,y)
 
 function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
-                                 sv::InferenceState, field_count, field_names)
-    if e===sym || (isa(e,Slot) && isa(sym,Slot) && (e::Slot).id == (sym::Slot).id)
+                                 sv::InferenceState, field_count::Int, field_names::ANY)
+    if e === sym || (isa(e, Slot) && isa(sym, Slot) && slot_id(e) == slot_id(sym))
         return true
     end
     if isa(e,Expr)
@@ -3213,13 +3237,13 @@ function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
                                            field_count, field_names)
         else
             if (e.head === :block && isa(sym, Slot) &&
-                linfo.slotflags[(sym::Slot).id] & Slot_UsedUndef == 0)
+                linfo.slotflags[slot_id(sym)] & Slot_UsedUndef == 0)
                 ignore_void = true
             else
                 ignore_void = false
             end
             for a in e.args
-                if ignore_void && isa(a, Slot) && (a::Slot).id == (sym::Slot).id
+                if ignore_void && isa(a, Slot) && slot_id(a) == slot_id(sym)
                     continue
                 end
                 if occurs_outside_getfield(linfo, a, sym, sv, field_count, field_names)
@@ -3365,12 +3389,12 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
         end
         e = e::Expr
         if e.head === :(=) && (isa(e.args[1], SSAValue) ||
-                               (isa(e.args[1],Slot) && haskey(vs, e.args[1].id)))
+                               (isa(e.args[1], Slot) && haskey(vs, slot_id(e.args[1]))))
             var = e.args[1]
             rhs = e.args[2]
             # Need to make sure LLVM can recognize this as LLVM ssa value too
             is_ssa = (isa(var, SSAValue) ||
-                      linfo.slotflags[(var::Slot).id] & Slot_UsedUndef == 0)
+                      linfo.slotflags[slot_id(var)] & Slot_UsedUndef == 0)
         else
             var = nothing
             rhs = e
@@ -3419,12 +3443,11 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                         if is_ssa
                             tmpv = newvar!(sv, elty)
                         else
-                            var = var::Slot
-                            tmpv = add_slot!(linfo, elty, false,
-                                             linfo.slotnames[var.id])
-                            slot_id = tmpv.id
-                            new_slots[j] = slot_id
-                            linfo.slotflags[slot_id] |= Slot_UsedUndef
+                            tmpv = add_slot!(linfo, widenconst(elty), false,
+                                             linfo.slotnames[slot_id(var)])
+                            tmpv_id = slot_id(tmpv)
+                            new_slots[j] = tmpv_id
+                            linfo.slotflags[tmpv_id] |= Slot_UsedUndef
                         end
                         tmp = Expr(:(=), tmpv, tupelt)
                         insert!(body, i+n_ins, tmp)
@@ -3434,12 +3457,12 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                 end
                 replace_getfield!(linfo, bexpr, var, vals, field_names, sv)
                 if !is_ssa
-                    i += replace_newvar_node!(body, (var::Slot).id,
+                    i += replace_newvar_node!(body, slot_id(var),
                                               new_slots, i)
                 elseif isa(var, Slot)
                     # occurs_outside_getfield might have allowed
                     # void use of the slot, we need to delete them too
-                    i -= delete_void_use!(body, var::Slot, i)
+                    i -= delete_void_use!(body, var, i)
                 end
             end
             # Do not increment counter and do the optimization recursively
@@ -3459,10 +3482,10 @@ function replace_newvar_node!(body, orig, new_slots, i0)
     narg = length(body)
     i = 1
     nins = 0
-    newvars = [NewvarNode(SlotNumber(id)) for id in new_slots]
+    newvars = [ NewvarNode(SlotNumber(id)) for id in new_slots ]
     while i <= narg
         a = body[i]
-        if isa(a, NewvarNode) && (a::NewvarNode).slot.id == orig
+        if isa(a, NewvarNode) && slot_id((a::NewvarNode).slot) == orig
             splice!(body, i, newvars)
             if i - nins < i0
                 nins += nvars - 1
@@ -3483,7 +3506,7 @@ function delete_void_use!(body, var::Slot, i0)
     ndel = 0
     while i <= narg
         a = body[i]
-        if isa(a, Slot) && (a::Slot).id == var.id
+        if isa(a, Slot) && slot_id(a) == slot_id(var)
             deleteat!(body, i)
             if i + ndel < i0
                 ndel += 1
@@ -3511,20 +3534,21 @@ function replace_getfield!(linfo::LambdaInfo, e::Expr, tupname, vals, field_name
             val = vals[idx]
             # original expression might have better type info than
             # the tuple element expression that's replacing it.
-            if isa(val,Slot)
+            if isa(val, Slot)
                 val = val::Slot
-                valtyp = isa(val,TypedSlot) ? val.typ : linfo.slottypes[val.id]
+                id = slot_id(val)
+                valtyp = isa(val, TypedSlot) ? val.typ : linfo.slottypes[id]
                 if a.typ ⊑ valtyp && !(valtyp ⊑ a.typ)
-                    if isa(val,TypedSlot)
-                        val = TypedSlot(val.id, a.typ)
+                    if isa(val, TypedSlot)
+                        val = TypedSlot(id, a.typ)
                     end
-                    linfo.slottypes[val.id] = widenconst(a.typ)
+                    linfo.slottypes[id] = widenconst(a.typ)
                 end
             elseif isa(val,SSAValue)
                 val = val::SSAValue
                 typ = exprtype(val, linfo)
                 if a.typ ⊑ typ && !(typ ⊑ a.typ)
-                    sv.linfo.ssavaluetypes[val.id+1] = a.typ
+                    sv.linfo.ssavaluetypes[val.id + 1] = a.typ
                 end
             end
             e.args[i] = val
