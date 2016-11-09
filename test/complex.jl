@@ -959,3 +959,6 @@ end
         @inferred expm1(x)
     end
 end
+
+# issue #19240
+@test big(1)/(10+10im) ≈ big"0.05" - big"0.05"*im
