@@ -66,7 +66,7 @@ Deprecated or removed
 
   * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).
 
-  * `num` and `den` has been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
+  * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
 
 Julia v0.5.0 Release Notes
 ==========================
