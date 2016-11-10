@@ -564,9 +564,10 @@ julia> ones(Complex128, 2, 3)
 ones(t,dims)
 
 """
-    ones(A)
+    ones(A::AbstractArray, T=eltype(A)::Type, dims=size(A)::DimOrInd)
 
-Create an array of all ones with the same element type and shape as `A`.
+Create an array of all ones with the same layout as `A`. Element type and size
+can optionally be adjusted.
 
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -578,6 +579,17 @@ julia> ones(A)
 2×2 Array{Int64,2}:
  1  1
  1  1
+
+ julia> ones(A, Float64)
+2×2 Array{Float64,2}:
+ 1.  1.
+ 1.  1.
+
+ julia> ones(A, Bool, (3,))
+ 3-element Array{Bool,1}:
+  true
+  true
+  true
 ```
 """
 ones(A)
@@ -2704,9 +2716,10 @@ julia> zeros(Int8, 2, 3)
 zeros(t,dims)
 
 """
-    zeros(A)
+    zeros(A::AbstractArray, T=eltype(A)::Type, dims=size(A)::DimOrInd)
 
-Create an array of all zeros with the same element type and shape as `A`.
+Create an array of all zeros with the same layout as `A`. Element type and size
+can optionally be adjusted.
 
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -2718,6 +2731,17 @@ julia> zeros(A)
 2×2 Array{Int64,2}:
  0  0
  0  0
+
+ julia> zeros(A, Float64)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+ julia> zeros(A, Bool, (3,))
+ 3-element Array{Bool,1}:
+  false
+  false
+  false
 ```
 """
 zeros(A)
