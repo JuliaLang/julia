@@ -226,7 +226,7 @@ index_shape(A::AbstractArray,  I::Colon)    = (linearindices(A),)
 @inline index_shape_dim(inds,             ::Colon)          = (OneTo(trailingsize(inds)),)
 @inline function index_shape_dim(inds,    ::Colon, i, I...)
     inds1, indstail = IteratorsMD.split(inds, Val{1})
-    (inds1..., index_shape_dim(indstail, i, I...)...)
+    (_gimme_a_range(inds1...), index_shape_dim(indstail, i, I...)...)
 end
 @inline index_shape_dim(inds,  ::Real...)             = ()
 @inline index_shape_dim(inds,  ::Real, I...)          = index_shape_dim(safe_tail(inds), I...)
@@ -240,6 +240,8 @@ end
     indsN, indstail = IteratorsMD.split(inds, Val{N})
     (indices(i)..., index_shape_dim(indstail, I...)...)
 end
+_gimme_a_range() = OneTo(1)
+_gimme_a_range(inds::Range) = inds
 
 # Convert Colon indices into explicit indices
 @inline decolon(A::AbstractArray, ::Colon) = (linearindices(A),)
@@ -527,7 +529,7 @@ julia> cumsum(a,2)
  4  9  15
 ```
 """
-cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
+cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, _cumsum_type(A)), A, axis)
 cumsum!(B, A::AbstractArray) = cumsum!(B, A, 1)
 """
     cumprod(A, dim=1)
