@@ -968,4 +968,4 @@ end
 end
 
 # issue #19240
-@test big(1)/(10+10im) ≈ big"0.05" - big"0.05"*im
+@test big(1)/(10+10im) ≈ (5-5im)/big(100) ≈ big"0.05" - big"0.05"*im
