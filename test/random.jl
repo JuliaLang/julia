@@ -77,7 +77,7 @@ for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt
     @test mod(r,2)==1
 
     if T<:Integer && !(T===BigInt)
-        x = rand(typemin(T):typemax(T))
+        local x = rand(typemin(T):typemax(T))
         @test isa(x,T)
         @test typemin(T) <= x <= typemax(T)
     end
@@ -103,6 +103,7 @@ end
 
 # BigInt specific
 for T in [UInt32, UInt64, UInt128, Int128]
+    local r, s
     s = big(typemax(T)-1000) : big(typemax(T)) + 10000
     @test rand(s) != rand(s)
     @test big(typemax(T)-1000) <= rand(s) <= big(typemax(T)) + 10000
@@ -257,6 +258,7 @@ let mt = MersenneTwister(0)
 
     srand(mt,0)
     for (i,T) in enumerate([Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32])
+        local A, B
         A = Array{T}(16)
         B = Array{T}(31)
         rand!(mt, A)
@@ -292,6 +294,7 @@ let mt = MersenneTwister()
     c = unsafe_wrap(Array, Ptr{Float64}(pc8), 1000) # Int(pointer(c)) % 16 == 8
 
     for A in (a, b, c)
+        local A
         srand(mt, 0)
         rand(mt) # this is to fill mt.vals, cf. #9040
         rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
@@ -333,6 +336,7 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
         for T in (f! === rand! ? types : ftypes)
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Array{T}(5), Array{T}(2, 3))
+                local A
                 f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
@@ -352,6 +356,7 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
 
     # Test that you cannot call randn or randexp with non-Float types.
     for r in [randn, randexp, randn!, randexp!]
+        local r
         @test_throws MethodError r(Int)
         @test_throws MethodError r(Int32)
         @test_throws MethodError r(Bool)
@@ -450,7 +455,7 @@ srand(typemax(UInt))
 srand(typemax(UInt128))
 
 # copy and ==
-let seed = rand(UInt32, 10)
+let seed = rand(UInt32, 10), r, s
     r = MersenneTwister(seed)
     @test r == MersenneTwister(seed) # r.vals should be all zeros
     s = copy(r)
@@ -472,7 +477,7 @@ end
                                          zeros(Float64, Base.Random.MTCacheLength), -1)
 
 # seed is private to MersenneTwister
-let seed = rand(UInt32, 10)
+let seed = rand(UInt32, 10), r
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
     resize!(seed, 4)

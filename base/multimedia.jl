@@ -99,7 +99,7 @@ for mime in ["application/atom+xml", "application/ecmascript",
              "application/x-latex", "application/xhtml+xml", "application/xml",
              "application/xml-dtd", "image/svg+xml", "model/vrml",
              "model/x3d+vrml", "model/x3d+xml"]
-    istextmime(::MIME{Symbol(mime)}) = true
+    global istextmime(::MIME{Symbol(mime)}) = true
 end
 
 ###########################################################################

@@ -433,12 +433,12 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 end
 
 # Issue #14684: `display` should print associative types in full.
-let d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
+let d = Dict(1 => 2, 3 => 45),
+    buf = IOBuffer(),
     td = TextDisplay(buf)
+
     display(td, d)
     result = String(td.io)
-
     @test contains(result, summary(d))
 
     # Is every pair in the string?

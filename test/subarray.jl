@@ -402,9 +402,10 @@ sA = view(A, 1:2:3, 3, 1:2:8)
 @test sA[:] == A[sA.indexes...][:]
 test_bounds(sA)
 
-a = [5:8;]
-@test parent(a) == a
-@test parentindexes(a) == (1:4,)
+let a = [5:8;]
+    @test parent(a) == a
+    @test parentindexes(a) == (1:4,)
+end
 
 # issue #6218 - logical indexing
 A = rand(2, 2, 3)
@@ -447,7 +448,7 @@ let a = [1,2,3],
     @test b == view(a, UInt(1):UInt(2)) == view(view(a, :), UInt(1):UInt(2)) == [1,2]
 end
 
-let A = reshape(1:4, 2, 2)
+let A = reshape(1:4, 2, 2),
     B = view(A, :, :)
     @test parent(B) === A
     @test parent(view(B, 0x1, :)) === parent(view(B, 0x1, :)) === A
@@ -497,7 +498,7 @@ let
     end
     Base.size(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = (0, 0)
     Base.linearindexing(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = Base.LinearFast()
-    a = ImmutableTestArray{Float64, 2}()
+    local a = ImmutableTestArray{Float64, 2}()
     @test Base.linearindexing(view(a, :, :)) == Base.LinearFast()
     @test isbits(view(a, :, :))
 end

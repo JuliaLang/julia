@@ -921,6 +921,7 @@ end
 
 # issue #10994: pathnames cannot contain embedded NUL chars
 for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid, issetuid, issocket, issticky, realpath, watch_file, poll_file)
+    local f
     @test_throws ArgumentError f("adir\0bad")
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)

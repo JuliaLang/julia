@@ -267,6 +267,7 @@ c, r, res = test_complete(s)
 @test s[r] == "prevind"
 
 for (T, arg) in [(String,"\")\""),(Char, "')'")]
+    global s, c, r, res
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
@@ -426,6 +427,7 @@ try
     touch(joinpath(Pack_folder2, "Test_pack2.jl"))
 
     # Test it completes on folders
+    global c, r, res
     c,r,res = test_complete("using Test_p")
     @test !("Test_pack" in c)
     @test "Test_pack2" in c
@@ -511,7 +513,7 @@ if is_unix()
     # Pressing tab after having entered "/tmp " should not
     # attempt to complete "/tmp" but rather work on the current
     # working directory again.
-    let
+    let s, c, r
         file = joinpath(path, "repl completions")
         s = "/tmp "
         c,r = test_scomplete(s)
@@ -519,7 +521,7 @@ if is_unix()
     end
 
     # Test completing paths with an escaped trailing space
-    let
+    let s, c, r
         file = joinpath(tempdir(), "repl completions")
         touch(file)
         s = string(tempdir(), "/repl\\ ")
@@ -530,7 +532,7 @@ if is_unix()
     end
 
     # Tests homedir expansion
-    let
+    let path, s, c, r
         path = homedir()
         dir = joinpath(path, "tmpfoobar")
         mkdir(dir)
@@ -546,7 +548,7 @@ if is_unix()
     end
 
     # Tests detecting of files in the env path (in shell mode)
-    let
+    let path, s, c, r
         oldpath = ENV["PATH"]
         path = tempdir()
         # PATH can also contain folders which we aren't actually allowed to read.
@@ -597,11 +599,12 @@ if is_unix()
     end
 end
 
-let #test that it can auto complete with spaces in file/path
-    path = tempdir()
-    space_folder = randstring() * " α"
-    dir = joinpath(path, space_folder)
+#test that it can auto complete with spaces in file/path
+let path = tempdir(),
+    space_folder = randstring() * " α",
+    dir = joinpath(path, space_folder),
     dir_space = replace(space_folder, " ", "\\ ")
+
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f

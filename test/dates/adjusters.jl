@@ -101,7 +101,7 @@ g = Dates.Date(2014,1,12)
 dt = a
 for i = 0:364
     @test Dates.firstdayofweek(dt) == a + Dates.Week(div(i,7))
-    dt += Dates.Day(1)
+    global dt += Dates.Day(1)
 end
 a = Dates.DateTime(2014,1,6)
 b = Dates.DateTime(2014,1,7)
@@ -120,7 +120,7 @@ g = Dates.DateTime(2014,1,12)
 dt = a
 for i = 0:364
     @test Dates.firstdayofweek(dt) == a + Dates.Week(div(i,7))
-    dt += Dates.Day(1)
+    global dt += Dates.Day(1)
 end
 @test Dates.firstdayofweek(Dates.DateTime(2013,12,24)) == Dates.DateTime(2013,12,23)
 # Test last day of week; Sunday = last day of week
@@ -142,7 +142,7 @@ g = Dates.Date(2014,1,12)
 dt = a
 for i = 0:364
     @test Dates.lastdayofweek(dt) == g + Dates.Week(div(i,7))
-    dt += Dates.Day(1)
+    global dt += Dates.Day(1)
 end
 a = Dates.DateTime(2014,1,6)
 b = Dates.DateTime(2014,1,7)
@@ -161,7 +161,7 @@ g = Dates.DateTime(2014,1,12)
 dt = a
 for i = 0:364
     @test Dates.lastdayofweek(dt) == g + Dates.Week(div(i,7))
-    dt += Dates.Day(1)
+    global dt += Dates.Day(1)
 end
 @test Dates.lastdayofweek(Dates.DateTime(2013,12,24)) == Dates.DateTime(2013,12,29)
 
@@ -188,7 +188,7 @@ end
 firstday = Dates.Date(2014,1,1)
 lastday = Dates.Date(2014,12,31)
 for i = 0:364
-    dt = firstday + Dates.Day(i)
+    global dt = firstday + Dates.Day(i)
 
     @test Dates.firstdayofyear(dt) == firstday
     @test Dates.firstdayofyear(DateTime(dt)) == DateTime(firstday)

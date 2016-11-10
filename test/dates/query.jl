@@ -123,12 +123,12 @@ Dates.VALUETOMONTH["french"] = french_months
 dt = Dates.DateTime(2000,1,1)
 for i = 1:366
     @test Dates.dayofyear(dt) == i
-    dt += Dates.Day(1)
+    global dt += Dates.Day(1)
 end
 dt = Dates.DateTime(2001,1,1)
 for i = 1:365
     @test Dates.dayofyear(dt) == i
-    dt += Dates.Day(1)
+    global dt += Dates.Day(1)
 end
 
 @test Dates.quarterofyear(Dates.Date(2000,1,1))  == 1

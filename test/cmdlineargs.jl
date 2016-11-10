@@ -2,8 +2,13 @@
 
 catcmd = `cat`
 if is_windows()
-    try # use busybox-w32 on windows
+    havebb = try # use busybox-w32 on windows
         success(`busybox`)
+        true
+    catch
+        false
+    end
+    if havebb
         catcmd = `busybox cat`
     end
 end

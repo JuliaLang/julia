@@ -16,8 +16,13 @@ catcmd = `cat`
 shcmd = `sh`
 sleepcmd = `sleep`
 if is_windows()
-    try # use busybox-w32 on windows
+    havebb = try # use busybox-w32 on windows, if available
         success(`busybox`)
+        true
+    catch
+        false
+    end
+    if havebb
         yes = `busybox yes`
         echo = `busybox echo`
         sortcmd = `busybox sort`
@@ -46,7 +51,7 @@ out = readstring(`$echo hello` & `$echo world`)
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 is_unix() && run(pipeline(yes, `head`, DevNull))
 
-begin
+let a, p
     a = Base.Condition()
     @schedule begin
         p = spawn(pipeline(yes,DevNull))
@@ -240,7 +245,7 @@ yield()
 end
 
 # Test that redirecting an IOStream does not crash the process
-let fname = tempname()
+let fname = tempname(), p
     cmd = """
     # Overwrite libuv memory before freeing it, to make sure that a use after free
     # triggers an assertion.
@@ -427,7 +432,7 @@ if is_unix()
     let ps = Pipe[]
         try
             for i = 1:100_000
-                p = Pipe()
+                local p = Pipe()
                 Base.link_pipe(p)
                 push!(ps, p)
             end

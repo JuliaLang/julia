@@ -48,6 +48,7 @@
                            (cdr e))))
               tab)))
 
+;; find variables that should be forced to be global in a toplevel expr
 (define (find-possible-globals e)
   (table.keys (find-possible-globals- e (table))))
 
@@ -57,19 +58,6 @@
 (define (some-gensym? x)
   (or (gensym? x) (memq x *gensyms*)))
 
-;; find variables that should be forced to be global in a toplevel expr
-(define (toplevel-expr-globals e)
-  (diff
-   (delete-duplicates
-    (append
-     ;; vars assigned at the outer level
-     (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
-     ;; vars declared const or global outside any scope block
-     (find-decls 'const e)
-     (find-decls 'global e)
-     ;; vars assigned anywhere, if they have been defined as global
-     (filter defined-julia-global (find-possible-globals e))))
-   (find-decls 'local e)))
 
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
@@ -79,11 +67,22 @@
     (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
         ex0
         (let* ((ex (julia-expand0 ex0))
-               (gv (toplevel-expr-globals ex))
+               (lv (find-decls 'local ex))
+               (gv (diff (delete-duplicates
+                           (append (find-decls 'const ex) ;; convert vars declared const outside any scope block to outer-globals
+                                   (find-decls 'global ex) ;; convert vars declared global outside any scope block to outer-globals
+                                   ;; vars assigned at the outer level
+                                   (filter (lambda (x) (not (some-gensym? x)))
+                                           (find-assigned-vars ex '() '()))))
+                         lv))
+               ;; vars assigned anywhere, if they have been been explicitly defined
+               (gv-implicit (filter (lambda (x) (and (not (or (memq x lv) (memq x gv))) (defined-julia-global x)))
+                                    (find-possible-globals ex)))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block
-                              (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
+                              (block ,@(map (lambda (v) `(implicit-global ,v)) gv-implicit)
+                                     ,@(map (lambda (v) `(outer-global ,v)) gv)
                                      ,ex))))))
           (if (and (null? (cdadr (caddr th)))
                    (= 0 (cadddr (caddr th))))

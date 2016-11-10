@@ -74,11 +74,11 @@ include(joinpath(dir, "wordcount.jl"))
 
 # the 0mq clustermanager depends on package ZMQ. Just making sure the
 # code loads using a stub module definition for ZMQ.
-zmq_found=true
+zmq_found = true
 try
     using ZMQ
 catch
-    zmq_found=false
+    global zmq_found = false
 end
 
 if !zmq_found

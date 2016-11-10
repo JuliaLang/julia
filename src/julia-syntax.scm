@@ -2257,7 +2257,7 @@
           (check-dups (cdr locals) others)))
   locals)
 
-(define (find-assigned-vars e env)
+(define (find-assigned-vars e env deprecated-env)
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
@@ -2265,18 +2265,22 @@
         ((method)
          (let ((v (decl-var (method-expr-name e))))
            (append!
-            (if (length= e 2) '() (find-assigned-vars (caddr e) env))
+            (if (length= e 2) '() (find-assigned-vars (caddr e) env deprecated-env))
             (if (or (not (symbol? v)) (memq v env))
                 '()
-                (list v)))))
+                (if (memq v deprecated-env)
+                    (let ((str-e (deparse e))) (syntax-deprecation #f (string "implicit usage of global function `" v "` in method definition") (string "global " v)) '())
+                    (list v))))))
         ((=)
          (let ((v (decl-var (cadr e)))
-               (rest (find-assigned-vars (caddr e) env)))
+               (rest (find-assigned-vars (caddr e) env deprecated-env)))
            (if (or (ssavalue? v) (memq v env))
                rest
-               (cons v rest))))
+               (if (memq v deprecated-env)
+                   (let ((str-e (deparse e))) (syntax-deprecation #f (string "implicit global assignment to `" v "` in " str-e) (string "global " v)) rest)
+                   (cons v rest)))))
         (else
-         (apply append! (map (lambda (x) (find-assigned-vars x env))
+         (apply append! (map (lambda (x) (find-assigned-vars x env deprecated-env))
                              e))))))
 
 (define (find-decls kind e)
@@ -2294,10 +2298,10 @@
 (define (find-local-def-decls e) (find-decls 'local-def e))
 (define (find-global-decls e) (find-decls 'global e))
 
-(define (implicit-locals e env glob)
+(define (implicit-locals e env deprecated-env glob deprecated-glob)
   ;; const decls on non-globals introduce locals
-  (append! (diff (find-decls 'const e) glob)
-           (find-assigned-vars e env)))
+  (append! (diff (diff (find-decls 'const e) glob) deprecated-glob)
+           (find-assigned-vars e env deprecated-env)))
 
 (define (occurs-outside? sym e excl)
   (cond ((eq? e sym) #t)
@@ -2313,7 +2317,7 @@
 ;; 3. variables assigned inside this scope-block that don't exist in outer
 ;;    scopes
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
-(define (resolve-scopes- e env implicitglobals lam renames newlam)
+(define (resolve-scopes- e env outerglobals implicitglobals lam renames newlam)
   (cond ((symbol? e) (let ((r (assq e renames)))
                        (if r (cdr r) e))) ;; return the renaming for e, or e
         ((or (not (pair? e)) (quoted? e) (eq? (car e) 'toplevel)) e)
@@ -2323,8 +2327,9 @@
          (let* ((lv (lam:vars e))
                 (env (append lv env))
                 (body (resolve-scopes- (lam:body e) env
-                                       ;; don't propagate implicit globals
+                                       ;; don't propagate implicit or outer globals
                                        ;; issue #7234
+                                       '()
                                        '()
                                        e
                                        (filter (lambda (ren) (not (memq (car ren) lv)))
@@ -2335,16 +2340,16 @@
          (let* ((blok (cadr e)) ;; body of scope-block expression
                 (other-locals (if lam (caddr lam) '())) ;; locals that are explicitly part of containing lambda expression
                 (iglo (find-decls 'implicit-global blok)) ;; implicitly defined globals used in blok
-                (glob (diff (find-global-decls blok) iglo)) ;; all globals declared in blok
+                (oglo (find-decls 'outer-global blok)) ;; globals defined outside blok
+                (glob (diff (diff (find-global-decls blok) oglo) iglo)) ;; all globals declared in blok
                 (vars-def (check-dups (find-local-def-decls blok) '()))
                 (locals-declared (check-dups (find-local-decls blok) vars-def))
-                (locals-implicit (diff (implicit-locals
-                                         blok
-                                         ;; being declared global prevents a variable
-                                         ;; assignment from introducing a local
-                                         (append env glob implicitglobals iglo)
-                                         (append glob iglo))
-                                       vars-def))
+                (locals-implicit (implicit-locals
+                                   blok
+                                   ;; being declared global prevents a variable
+                                   ;; assignment from introducing a local
+                                   (append env glob outerglobals oglo locals-declared vars-def) (append implicitglobals iglo)
+                                   (append glob oglo) iglo))
                 (vars (delete-duplicates (append! locals-declared locals-implicit)))
                 (all-vars (append vars vars-def))
                 (need-rename?
@@ -2375,7 +2380,8 @@
                                              renames)))
                 (new-env (append all-vars glob env))
                 (new-iglo (append iglo implicitglobals))
-                (body (resolve-scopes- blok new-env new-iglo lam new-renames #f))
+                (new-oglo (append oglo outerglobals))
+                (body (resolve-scopes- blok new-env new-oglo new-iglo lam new-renames #f))
                 (real-new-vars (append (diff vars need-rename) renamed))
                 (real-new-vars-def (append (diff vars-def need-rename-def) renamed-def)))
            (for-each (lambda (v)
@@ -2396,10 +2402,10 @@
         (else
          (cons (car e)
                (map (lambda (x)
-                      (resolve-scopes- x env implicitglobals lam renames #f))
+                      (resolve-scopes- x env outerglobals implicitglobals lam renames #f))
                     (cdr e))))))
 
-(define (resolve-scopes e) (resolve-scopes- e '() '() #f '() #f))
+(define (resolve-scopes e) (resolve-scopes- e '() '() '() #f '() #f))
 
 ;; pass 3: analyze variables
 
@@ -2759,7 +2765,7 @@ f(x) = yt(x)
                            (or (atom? e)
                                (memq (car e) '(quote top core line inert local local-def unnecessary
                                                meta inbounds boundscheck simdloop
-                                               implicit-global global globalref
+                                               implicit-global outer-global global globalref
                                                const = null method call))))
                          (lam:body lam))))
                (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
@@ -3376,6 +3382,7 @@ f(x) = yt(x)
             ((local-def) #f)
             ((local) #f)
             ((implicit-global) #f)
+            ((outer-global) #f)
             ((const) (emit e))
 
             ;; top level expressions returning values

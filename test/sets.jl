@@ -98,7 +98,7 @@ s = Set([1])
 @test isequal(empty!(s), Set())
 
 # rehash!
-let
+let s
     # Use a pointer type to have defined behavior for uninitialized
     # array element
     s = Set(["a", "b", "c"])
@@ -119,6 +119,7 @@ end
 # start, done, next
 for data_in in ((7,8,4,5),
                 ("hello", 23, 2.7, (), [], (1,8)))
+    local data_in, s
     s = Set(data_in)
 
     s_new = Set()

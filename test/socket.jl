@@ -241,7 +241,7 @@ begin
 end
 
 # Local-machine broadcast
-let
+let a, b, c
     # (Mac OS X's loopback interface doesn't support broadcasts)
     bcastdst = is_apple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
@@ -289,8 +289,7 @@ let P = Pipe()
 end
 
 # test the method matching connect!(::TCPSocket, ::Base.InetAddr{T<:Base.IPAddr})
-let
-    addr = Base.InetAddr(ip"127.0.0.1", 4444)
+let addr = Base.InetAddr(ip"127.0.0.1", 4444)
 
     function test_connect(addr::Base.InetAddr)
         srv = listen(addr)

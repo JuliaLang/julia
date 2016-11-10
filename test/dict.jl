@@ -503,7 +503,7 @@ let badKeys = [
     "ECGRATE_ema5.0","FIO2_emv5.0","RESPRATE_emv5.0","7wu3ty0a4fs","BVO",
     "4UrCWXUsaT"
 ]
-    d = Dict{AbstractString,Int}()
+    local d = Dict{AbstractString,Int}()
     for i = 1:length(badKeys)
         d[badKeys[i]] = i
     end
@@ -514,7 +514,7 @@ let badKeys = [
 
     # Walk through all possible hash values (mod size of hash table)
     for offset = 0:1023
-        d2 = Dict{MyString,Int}()
+        local d2 = Dict{MyString,Int}()
         hashoffset[] = offset
         for i = 1:length(badKeys)
             d2[MyString(badKeys[i])] = i
@@ -544,7 +544,7 @@ let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9
 
     # Walk through all possible hash values (mod size of hash table)
     for offset = 0:1023
-        d2 = Dict{MyInt, Int}()
+        local d2 = Dict{MyInt, Int}()
         hashoffset[] = offset
         for i = 1:length(badKeys)
             d2[MyInt(badKeys[i])] = i

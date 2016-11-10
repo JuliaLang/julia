@@ -6,7 +6,7 @@ for l in bt
     lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), l, true)
     if lkup[1][1] == :backtrace
         @test lkup[1][5] == false # fromC
-        have_backtrace = true
+        global have_backtrace = true
         break
     end
 end
@@ -110,10 +110,10 @@ hasbt = hasbt2 = false
 for sfs in lkup
     for sf in sfs
         if sf.func == :bt
-            hasbt = true
+            global hasbt = true
         end
         if sf.func == :bt2
-            hasbt2 = true
+            global hasbt2 = true
         end
     end
 end
@@ -133,10 +133,10 @@ hasme = hasbtmacro = false
 for sfs in lkup
     for sf in sfs
         if sf.func == Symbol("macro expansion")
-            hasme = true
+            global hasme = true
         end
         if sf.func == :btmacro
-            hasbtmacro = true
+            global hasbtmacro = true
         end
     end
 end

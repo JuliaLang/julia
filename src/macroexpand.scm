@@ -182,7 +182,7 @@
            (pairs vnames) (separate pair? vlist)
            (let ((v (diff (delete-duplicates
                            (append! (find-declared-vars-in-expansion x 'local)
-                                    (find-assigned-vars-in-expansion x)
+                                    (find-assigned-vars-in-expansion x '())
                                     vnames))
                           globals)))
              (append!

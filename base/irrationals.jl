@@ -185,10 +185,10 @@ catalan
 #    .^(::Irrational{:e}, x) = exp(x)
 # but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
 for T in (Irrational, Rational, Integer, Number)
-    ^(::Irrational{:e}, x::T) = exp(x)
+    global ^(::Irrational{:e}, x::T) = exp(x)
 end
 for T in (Range, BitArray, StridedArray, AbstractArray)
-    .^(::Irrational{:e}, x::T) = exp.(x)
+    global .^(::Irrational{:e}, x::T) = exp.(x)
 end
 
 log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
