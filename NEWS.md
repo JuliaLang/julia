@@ -68,6 +68,8 @@ Deprecated or removed
 
   * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
 
+  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
+
 Julia v0.5.0 Release Notes
 ==========================
 
