@@ -775,3 +775,13 @@ end
 #to_shape
 @test Base.to_shape(()) === ()
 @test Base.to_shape(1) === 1
+
+# issue 19267
+@test ndims((1:3)[:]) == 1
+@test ndims((1:3)[:,:]) == 2
+@test ndims((1:3)[:,[1],:]) == 3
+@test ndims((1:3)[:,[1],:,[1]]) == 4
+@test ndims((1:3)[:,[1],1:1,:]) == 4
+@test ndims((1:3)[:,:,1:1,:]) == 4
+@test ndims((1:3)[:,:,1:1]) == 3
+@test ndims((1:3)[:,:,1:1,:,:,[1]]) == 6
