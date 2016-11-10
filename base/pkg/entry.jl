@@ -7,7 +7,7 @@ import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
 import ...LibGit2
 importall ...LibGit2
 import ...Pkg.PkgError
-using ..Types
+using ..Types, Base.Filesystem
 
 macro recover(ex)
     quote
@@ -48,25 +48,23 @@ end
 
 function add(pkg::AbstractString, vers::VersionSet)
     outdated = :maybe
-    @sync begin
-        @async if !edit(Reqs.add,pkg,vers)
-            ispath(pkg) || throw(PkgError("unknown package $pkg"))
-            info("Nothing to be done")
-        end
-        branch = Dir.getmetabranch()
-        outdated = with(GitRepo, "METADATA") do repo
-            if LibGit2.branch(repo) == branch
-                if LibGit2.isdiff(repo, "origin/$branch")
-                    outdated = :yes
-                else
-                    try
-                        LibGit2.fetch(repo)
-                        outdated = LibGit2.isdiff(repo, "origin/$branch") ? (:yes) : (:no)
-                    end
-                end
+    if !edit(Reqs.add,pkg,vers)
+        ispath_casesensitive(pkg) || throw(PkgError("unknown package $pkg"))
+        info("Nothing to be done")
+    end
+    branch = Dir.getmetabranch()
+    outdated = with(GitRepo, "METADATA") do repo
+        if LibGit2.branch(repo) == branch
+            if LibGit2.isdiff(repo, "origin/$branch")
+                outdated = :yes
             else
-                :no # user is doing something funky with METADATA
+                try
+                    LibGit2.fetch(repo)
+                    outdated = LibGit2.isdiff(repo, "origin/$branch") ? (:yes) : (:no)
+                end
             end
+        else
+            :no # user is doing something funky with METADATA
         end
     end
     if outdated != :no
@@ -79,7 +77,7 @@ add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("Nothing to be done")
+    ispath_casesensitive(pkg) || return info("Nothing to be done")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
 end
@@ -113,7 +111,7 @@ function installed(pkg::AbstractString)
     avail = Read.available(pkg)
     if Read.isinstalled(pkg)
         res = typemin(VersionNumber)
-        if ispath(joinpath(pkg,".git"))
+        if Read.isgitrepo(pkg)
             LibGit2.with(GitRepo, pkg) do repo
                 res = Read.installed_version(pkg, repo, avail)
             end
@@ -159,7 +157,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
     @printf io " - %-29s " pkg
     fix || return println(io,ver)
     @printf io "%-19s" ver
-    if ispath(pkg,".git")
+    if Read.isgitrepo(pkg)
         prepo = GitRepo(pkg)
         try
             with(LibGit2.head(prepo)) do phead
@@ -222,7 +220,8 @@ function clone(url_or_pkg::AbstractString)
 end
 
 function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, do_pull::Bool)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    isdir_casesensitive(pkg) || throw(PkgError("$pkg is not installed"))
+    Read.isgitrepo(pkg) || throw(PkgError("$pkg is not a git repo"))
     info("Checking out $pkg $branch...")
     with(GitRepo, pkg) do r
         LibGit2.transact(r) do repo
@@ -240,7 +239,7 @@ function checkout(pkg::AbstractString, branch::AbstractString, do_merge::Bool, d
 end
 
 function free(pkg::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    Read.isgitrepo(pkg) || throw(PkgError("$pkg is not a git repo"))
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
@@ -267,7 +266,7 @@ end
 function free(pkgs)
     try
         for pkg in pkgs
-            ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+            Read.isgitrepo(pkg) || throw(PkgError("$pkg is not a git repo"))
             Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
             avail = Read.available(pkg)
             isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
@@ -291,7 +290,8 @@ function free(pkgs)
 end
 
 function pin(pkg::AbstractString, head::AbstractString)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    isdir_casesensitive(pkg) || throw(PkgError("$pkg is not installed"))
+    Read.isgitrepo(pkg) || throw(PkgError("$pkg is not a git repo"))
     should_resolve = true
     with(GitRepo, pkg) do repo
         id = if isempty(head) # get HEAD commit
@@ -341,7 +341,7 @@ end
 pin(pkg::AbstractString) = pin(pkg, "")
 
 function pin(pkg::AbstractString, ver::VersionNumber)
-    ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+    Read.isgitrepo(pkg) || throw(PkgError("$pkg is not a git repo"))
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be pinned – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be pinned – not a registered package"))
@@ -411,7 +411,7 @@ function update(branch::AbstractString, upkgs::Set{String})
     try
         stopupdate = false
         for (pkg,ver) in fixed
-            ispath(pkg,".git") || continue
+            Read.isgitrepo(pkg) || continue
             pkg in dont_update && continue
             with(GitRepo, pkg) do repo
                 if LibGit2.isattached(repo)
@@ -694,6 +694,10 @@ function test!(pkg::AbstractString,
                errs::Vector{AbstractString},
                nopkgs::Vector{AbstractString},
                notests::Vector{AbstractString}; coverage::Bool=false)
+    if !isdir_casesensitive(pkg)
+        push!(nopkgs, pkg)
+        return false
+    end
     reqs_path = abspath(pkg,"test","REQUIRE")
     if isfile(reqs_path)
         tests_require = Reqs.parse(reqs_path)
@@ -703,9 +707,7 @@ function test!(pkg::AbstractString,
         end
     end
     test_path = abspath(pkg,"test","runtests.jl")
-    if !isdir(pkg)
-        push!(nopkgs, pkg)
-    elseif !isfile(test_path)
+    if !isfile(test_path)
         push!(notests, pkg)
     else
         info("Testing $pkg")
