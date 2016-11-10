@@ -257,7 +257,7 @@ end
 @inline broadcast_elwise_op(f, As...) =
     broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
-ftype(f, A) = typeof(a -> f(a))
+ftype(f, A) = typeof(f)
 ftype(f, A...) = typeof(a -> f(a...))
 ftype(T::DataType, A) = Type{T}
 ftype(T::DataType, A...) = Type{T}
