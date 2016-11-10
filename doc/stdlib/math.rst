@@ -324,13 +324,13 @@ Mathematical Operators
        julia> typeof(num(a))
        BigInt
 
-.. function:: num(x)
+.. function:: numerator(x)
 
    .. Docstring generated from Julia source
 
    Numerator of the rational representation of ``x``\ .
 
-.. function:: den(x)
+.. function:: denominator(x)
 
    .. Docstring generated from Julia source
 

@@ -1000,13 +1000,6 @@ In-place version of [`reverse`](:func:`reverse`).
 reverse!
 
 """
-    num(x)
-
-Numerator of the rational representation of `x`.
-"""
-num
-
-"""
     .<(x, y)
 
 Element-wise less-than comparison operator.
@@ -2616,13 +2609,6 @@ searchsortedlast
 The process was stopped by a terminal interrupt (CTRL+C).
 """
 InterruptException
-
-"""
-    den(x)
-
-Denominator of the rational representation of `x`.
-"""
-den
 
 """
     issubnormal(f) -> Bool

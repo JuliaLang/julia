@@ -94,7 +94,7 @@ Special values:
 =#
 
 decompose(x::Integer) = x, 0, 1
-decompose(x::Rational) = num(x), 0, den(x)
+decompose(x::Rational) = numerator(x), 0, denominator(x)
 
 function decompose(x::Float16)::NTuple{3,Int}
     isnan(x) && return 0, 0, 0
@@ -144,7 +144,7 @@ end
 ## streamlined hashing for smallish rational types ##
 
 function hash{T<:BitInteger64}(x::Rational{T}, h::UInt)
-    num, den = Base.num(x), Base.den(x)
+    num, den = Base.numerator(x), Base.denominator(x)
     den == 1 && return hash(num, h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
     if isodd(den)
