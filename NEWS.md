@@ -70,6 +70,8 @@ Deprecated or removed
 
   * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
 
+  * `Dates.recur` has been deprecated in favor of `filter` ([#19288])
+
 Julia v0.5.0 Release Notes
 ==========================
 
@@ -698,3 +700,4 @@ Language tooling improvements
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
+[#19288]: https://github.com/JuliaLang/julia/issues/19288
