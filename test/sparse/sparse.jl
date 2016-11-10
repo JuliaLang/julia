@@ -1635,3 +1635,31 @@ let
     @test isa(abs.(A), SparseMatrixCSC) # representative for _unary_nz2nz_z2z class
     @test isa(exp.(A), Array) # representative for _unary_nz2nz_z2nz class
 end
+
+# 19225
+let X = sparse([1 -1; -1 1])
+    for T in (Symmetric, Hermitian)
+        Y = T(copy(X))
+        _Y = similar(Y)
+        copy!(_Y, Y)
+        @test _Y == Y
+
+        W = T(copy(X), :L)
+        copy!(W, Y)
+        @test W.data == Y.data
+        @test W.uplo != Y.uplo
+
+        W[1,1] = 4
+        @test W == T(sparse([4 -1; -1 1]))
+        @test_throws ArgumentError (W[1,2] = 2)
+
+        @test Y + I == T(sparse([2 -1; -1 2]))
+        @test Y - I == T(sparse([0 -1; -1 0]))
+        @test Y * I == Y
+
+        @test Y + 1 == T(sparse([2 0; 0 2]))
+        @test Y - 1 == T(sparse([0 -2; -2 0]))
+        @test Y * 2 == T(sparse([2 -2; -2 2]))
+        @test Y / 1 == Y
+    end
+end
