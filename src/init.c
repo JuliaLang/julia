@@ -214,8 +214,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
     // replace standard output streams with something that we can still print to
     // after the finalizers from base/stream.jl close the TTY
-    JL_STDOUT = STDOUT_FILENO;
-    JL_STDERR = STDERR_FILENO;
+    JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
+    JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
     jl_gc_run_all_finalizers(ptls);
 
