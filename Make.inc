@@ -656,7 +656,7 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
 
-LLVM_VER:=3.8.1
+LLVM_VER:=3.9.0
 USE_BLAS64:=0
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV7
