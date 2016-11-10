@@ -493,8 +493,31 @@ function uncompressed_ast(m::Method, s::CodeInfo)
     return s
 end
 
+# this type mirrors jl_cgparams_t (documented in julia.h)
+immutable CodegenParams
+    cached::Cint
+
+    runtime::Cint
+    exceptions::Cint
+    track_allocations::Cint
+    code_coverage::Cint
+    static_alloc::Cint
+    dynamic_alloc::Cint
+
+    CodegenParams(;cached::Bool=true,
+                   runtime::Bool=true, exceptions::Bool=true,
+                   track_allocations::Bool=true, code_coverage::Bool=true,
+                   static_alloc::Bool=true, dynamic_alloc::Bool=true) =
+        new(Cint(cached),
+            Cint(runtime), Cint(exceptions),
+            Cint(track_allocations), Cint(code_coverage),
+            Cint(static_alloc), Cint(dynamic_alloc))
+end
+
 # Printing code representations in IR and assembly
-function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att)
+function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool,
+                        strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
+                        optimize::Bool=true, params::CodegenParams=CodegenParams())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -509,17 +532,19 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_me
     meth = func_for_method_checked(meth, tt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any), meth, tt, env)
     # get the code for it
-    return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module, syntax)
+    return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module, syntax, optimize, params)
 end
 
-function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att)
+function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool,
+                        strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
+                        optimize::Bool=true, params::CodegenParams=CodegenParams())
     if syntax != :att && syntax != :intel
         throw(ArgumentError("'syntax' must be either :intel or :att"))
     end
     if native
-        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool), linfo, wrapper)
+        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool, CodegenParams), linfo, wrapper, params)
     else
-        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Void}, (Any, Bool), linfo, wrapper)
+        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Void}, (Any, Bool, Bool, CodegenParams), linfo, wrapper, optimize, params)
     end
     if llvmf == C_NULL
         error("could not compile the specified method")

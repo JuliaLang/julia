@@ -457,7 +457,7 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_method_insta
     fptr.fptr = generator->fptr;
     fptr.jlcall_api = generator->jlcall_api;
     if (__unlikely(fptr.fptr == NULL || fptr.jlcall_api == 0)) {
-        void *F = jl_compile_linfo(generator, (jl_code_info_t*)generator->inferred).functionObject;
+        void *F = jl_compile_linfo(generator, (jl_code_info_t*)generator->inferred, &jl_default_cgparams).functionObject;
         fptr = jl_generate_fptr(generator, F);
     }
     assert(jl_svec_len(generator->def->sparam_syms) == jl_svec_len(sparam_vals));
