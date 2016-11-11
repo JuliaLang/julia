@@ -1118,7 +1118,7 @@ Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching
 
 # #19288
 eval(Base.Dates, quote
-    function recur{T<:TimeType}(fun::Function, dr::StepRange{T};negate::Bool=false, limit::Int=10000)
+    function recur{T<:TimeType}(fun::Function, dr::StepRange{T}; negate::Bool=false, limit::Int=10000)
         depwarn("Dates.recur is deprecated, use filter instead.",:recur)
         if negate
             filter(x -> !f(x), dr)
