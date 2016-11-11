@@ -2237,6 +2237,8 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Create a sparse identity matrix of size ``m x m``\ . When ``n`` is supplied, create a sparse identity matrix of size ``m x n``\ . The type defaults to ``Float64`` if not specified.
 
+   ``sparse(I, m, n)`` is equivalent to ``speye(Int, m, n)``\ , and ``sparse(α*I, m, n)`` can be used to efficiently create a sparse multiple ``α`` of the identity matrix.
+
 .. function:: speye(S)
 
    .. Docstring generated from Julia source

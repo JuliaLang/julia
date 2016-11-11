@@ -673,14 +673,6 @@ dimlub(I) = isempty(I) ? 0 : Int(maximum(I)) #least upper bound on required spar
 
 sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)))
 
-function sparse(S::UniformScaling, m::Integer, n::Integer)
-    nnz = min(m,n)
-    colptr = Array(Int, 1+n)
-    colptr[1:nnz+1] = 1:nnz+1
-    colptr[nnz+2:end] = nnz+1
-    SparseMatrixCSC(Int(m), Int(n), colptr, Vector{Int}(1:nnz), fill(S.λ, nnz))
-end
-
 sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J))
 
 sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), Int(m), Int(n))
@@ -1382,21 +1374,29 @@ eye(S::SparseMatrixCSC) = speye(S)
 Create a sparse identity matrix of size `m x m`. When `n` is supplied,
 create a sparse identity matrix of size `m x n`. The type defaults to `Float64`
 if not specified.
+
+`sparse(I, m, n)` is equivalent to `speye(Int, m, n)`, and
+`sparse(α*I, m, n)` can be used to efficiently create a sparse
+multiple `α` of the identity matrix.
 """
-function speye(T::Type, m::Integer, n::Integer)
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    x = min(m,n)
-    rowval = [1:x;]
-    colptr = [rowval; fill(Int(x+1), n+1-x)]
-    nzval  = ones(T, x)
-    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
-end
+speye(T::Type, m::Integer, n::Integer) = speye_scaled(one(T), m, n)
 
 function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
     if m != n; throw(DimensionMismatch("multiplicative identity only defined for square matrices")); end
     speye(T, m)
 end
+
+function speye_scaled(diag, m::Integer, n::Integer)
+    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
+    nnz = min(m,n)
+    colptr = Array(Int, 1+n)
+    colptr[1:nnz+1] = 1:nnz+1
+    colptr[nnz+2:end] = nnz+1
+    SparseMatrixCSC(Int(m), Int(n), colptr, Vector{Int}(1:nnz), fill(diag, nnz))
+end
+
+sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 
 ## Unary arithmetic and boolean operators
 
