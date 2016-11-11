@@ -56,6 +56,10 @@ Library improvements
   * BitArrays can now be constructed from arbitrary iterables, in particular from generator expressions,
     e.g. `BitArray(isodd(x) for x = 1:100)` ([#19018]).
 
+  * `hcat`, `vcat`, and `hvcat` now work with `UniformScaling` objects, so
+    you can now do e.g. `[A I]` and it will concatenate an appropriately sized
+    identity matrix ([#19305]).
+
 Compiler/Runtime improvements
 -----------------------------
 
