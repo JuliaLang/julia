@@ -673,6 +673,14 @@ dimlub(I) = isempty(I) ? 0 : Int(maximum(I)) #least upper bound on required spar
 
 sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)))
 
+function sparse(S::UniformScaling, m::Integer, n::Integer)
+    nnz = min(m,n)
+    colptr = Array(Int, 1+n)
+    colptr[1:nnz+1] = 1:nnz+1
+    colptr[nnz+2:end] = nnz+1
+    SparseMatrixCSC(Int(m), Int(n), colptr, Vector{Int}(1:nnz), fill(S.λ, nnz))
+end
+
 sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J))
 
 sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), Int(m), Int(n))

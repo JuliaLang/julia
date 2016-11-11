@@ -16,6 +16,8 @@ srand(123)
     @test one(UniformScaling(rand(Complex128))) == one(UniformScaling{Complex128})
     @test eltype(one(UniformScaling(rand(Complex128)))) == Complex128
     @test -one(UniformScaling(2)) == UniformScaling(-1)
+    @test sparse(3I,4,5) == spdiagm(fill(3,4),0,4,5)
+    @test sparse(3I,5,4) == spdiagm(fill(3,4),0,5,4)
 end
 
 @testset "istriu, istril, issymmetric, ishermitian, isapprox" begin
@@ -142,5 +144,23 @@ B = bitrand(2,2)
                 @test @inferred(λ\I) === UniformScaling(1/λ)
             end
         end
+    end
+end
+
+@testset "hcat and vcat" begin
+    @test_throws ArgumentError hcat(I)
+    @test_throws ArgumentError [I I]
+    @test_throws ArgumentError vcat(I)
+    @test_throws ArgumentError [I; I]
+    @test_throws ArgumentError [I I; I]
+    for T in (Matrix, SparseMatrixCSC)
+        A = T(rand(3,4))
+        B = T(rand(3,3))
+        @test (hcat(A,2I))::T == hcat(A,2eye(3,3))
+        @test (vcat(A,2I))::T == vcat(A,2eye(4,4))
+        @test (hcat(I,3I,A,2I))::T == hcat(eye(3,3),3eye(3,3),A,2eye(3,3))
+        @test (vcat(I,3I,A,2I))::T == vcat(eye(4,4),3eye(4,4),A,2eye(4,4))
+        @test (hvcat((2,1,2),B,2I,I,3I,4I))::T ==
+            hvcat((2,1,2),B,2eye(3,3),eye(6,6),3eye(3,3),4eye(3,3))
     end
 end
