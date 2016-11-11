@@ -662,6 +662,11 @@ STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
     }
 }
 
+void *jl_gc_malloc_aligned(size_t sz, size_t align);
+void *jl_gc_calloc_aligned(size_t nm, size_t sz, size_t align);
+void *jl_gc_realloc_aligned(void *p, size_t sz);
+void jl_gc_free_aligned(void *p);
+
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner);

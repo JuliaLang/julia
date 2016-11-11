@@ -2198,6 +2198,49 @@ JL_DLLEXPORT void *jl_gc_realloc(void *p, size_t sz)
     return (void *)(pnew + 2);
 }
 
+// TODO add special casing for macOS, where there is guarantee of alignment
+// TODO add special casing for 64 bit systems when 16 byte alignment is requested
+// TODO add checks on align?
+void *jl_gc_malloc_aligned(size_t sz, size_t align)
+{
+    void *p0 = jl_gc_malloc(sz + align);
+    if (!p0) return (void *) 0;
+    void *p = (void *) (((uintptr_t) p0 + align) & (~((uintptr_t) (align - 1))));
+    *((void **) p - 1) = p0;
+    *((size_t *) p - 2) = align;
+    return p;
+}
+
+void *jl_gc_calloc_aligned(size_t nm, size_t sz, size_t align)
+{
+    void *p0 = jl_gc_calloc(1, nm * sz + align);
+    if (!p0) return (void *) 0;
+    void *p = (void *) (((uintptr_t) p0 + align) & (~((uintptr_t) (align - 1))));
+    *((void **) p - 1) = p0;
+    *((size_t *) p - 2) = align;
+    return p;
+}
+
+// TODO when resizing an array, you actually only need to memcpy the portion
+// that is being used, which can have some savings
+void *jl_gc_realloc_aligned(void *p, size_t sz)
+{
+    void *p0 = *((void **) p - 1);
+    size_t align = *((size_t *) p - 2);
+    void *p0new = jl_gc_realloc(p0, sz + align);
+    if (!p0new) return (void *) 0;
+    void *pnew = (void *) (((uintptr_t) p0new + align) & (~((uintptr_t) (align - 1))));
+    *((void **) pnew - 1) = p0new;
+    *((size_t *) pnew - 2) = align;
+    return pnew;
+}
+
+void jl_gc_free_aligned(void *p)
+{
+    if (p) jl_gc_free(*((void **) p - 1));
+}
+
+// TODO remove these
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
