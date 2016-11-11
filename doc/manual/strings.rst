@@ -966,7 +966,7 @@ dependencies.
 Raw String Literals
 -------------------
 
-Raw strings without interpolation or unescaping can be expressed with 
+Raw strings without interpolation or unescaping can be expressed with
 non-standard string literals of the form ``raw"..."``. Raw string literals
 create ordinary :obj:`String` objects which contain enclosed contents exactly
 as entered with no interpolation or unescaping. This is useful for strings which
