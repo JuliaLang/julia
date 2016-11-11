@@ -440,6 +440,198 @@ can also constrain type parameters of methods::
 The ``same_type_numeric`` function behaves much like the ``same_type``
 function defined above, but is only defined for pairs of numbers.
 
+
+Design Patterns with Parametric Methods
+---------------------------------------
+
+While complex dispatch logic is not required for performance or usability,
+sometimes it can be the best way to express some algorithm.
+Here are a few common design patterns that come up sometimes when using dispatch in this way.
+
+1. Extracting the type parameter from a super-type
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Here is the correct code template for returning the element-type ``T``
+of any arbitrary subtype of ``AbstractArray``::
+
+    abstract AbstractArray{T, N}
+    eltype(::Type{AbstractArray}) = Any
+    eltype{T}(::Type{AbstractArray{T}}) = T
+    eltype{T, N}(::Type{AbstractArray{T, N}}) = T
+    eltype{A<:AbstractArray}(::Type{A}) = eltype(supertype(A))
+
+One common foible here is to try to extract the type-parameter directly::
+
+    eltype_wrong{A<:AbstractArray, T}(::Type{A{T}}) = T
+
+Or (when that fails to compile), by using introspection::
+
+    @pure eltype_wrong{A<:AbstractArray}(::Type{A}) = A.parameters[1]
+
+However, it is not hard to construct cases where this will fail::
+
+    type BitVector <: AbstractArray{Bool, 1}
+
+Here we have created a type ``BitVector`` which has no parameters,
+but where the element-type is still fully specified, with ``T`` equal to ``Bool``!
+
+
+2. Building a similar type with a different type parameter
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When building generic code, there is often a need for constructing a similar
+object with some change made to the layout of the type.
+For instance, you might have some sort of abstract array with an arbitrary element type
+and want to write the computation on it with a specific element type.
+
+Because of the foible mentioned above, we must implement a method
+for each type that describes how to compute this type transform.
+There is no general transform of one subtype into another subtype with a different parameter.
+(Quick review: do you see why this is?)
+
+The subtypes of ``AbstractArray`` typically implement two methods for expressing this:
+A method to convert the input to a subtype of a specific ``AbstractArray{T, N}`` abstract type;
+and a method to make a new uninitialized matrix with a specific element type.
+Sample implementations of these can be found in the standard library.
+Here is a basic example usage of them::
+
+    input = convert(AbstractArray{Eltype}, input)
+    output = similar(Eltype, input)
+
+As an extension of this, in cases where the algorithm wants to mutate the input array,
+``convert`` is insufficient as the return value may alias the original input.
+Combining ``similar`` (to make the output array) and ``copy!`` (to fill it with the input data)
+is a generic way to express the requirement for a mutable copy of the input argument::
+
+    copy_with_eltype(Eltype, input) = copy!(similar(Eltype, input), input)
+
+
+3. Iterated dispatch
+~~~~~~~~~~~~~~~~~~~~
+
+In order to dispatch a multi-level parametric argument list,
+often it is best to separate each level of dispatch into separate functions.
+This may sound similar in approach to single-dispatch, but as we shall see below, it is still more flexible.
+
+For example, trying to dispatch on the element-type of an array will often run into ambiguous situations.
+Instead, commonly code will dispatch first on the container type,
+then recurse down to a more specific method based on eltype.
+In most cases, the algorithms lend themselves conveniently to this hierarchical approach,
+while in other cases, this rigor must be resolved manually.
+This dispatching branching can be observed, for example, in the logic to sum two matrices::
+
+    # first dispatch selects the map algorithm for element-wise summation
+    +(a::Matrix, b::Matrix) = map(+, a, b)
+    # then dispatch handles each element and selects the appropriate common element type for the computation
+    +(a, b) = +(promote(a, b)...)
+    # once the elements have the same type, they can be added via Intrinsic calls
+    +(a::T, b::T) = Core.add(a, b)
+
+
+4. Trait-based dispatch
+~~~~~~~~~~~~~~~~~~~~~~~
+
+A natural extension to the iterated dispatch above is to add a layer to
+method selection that identifies classes of types.
+The example above glossed over this detail by avoiding a discussion
+of the implementation of ``map`` and ``promote``.
+
+When iterating over a matrix, such as in the implementation of ``map``,
+one important question is what order to use to traverse the data.
+When ``AbstractArray`` subtypes implement the ``linearindexing`` trait,
+other functions such as ``map`` can dispatch on this information to pick the best algorithm.
+This means that each subtypes does not need to implement a custom version of ``map``,
+since the generic definitions will enable the system to select the fastest version.
+
+::
+
+    map(a::AbstractArray, b::AbstractArray) = map(Base.linearindexing(a, b), a, b)
+    map(::LinearSlow, a::AbstractArray, b::AbstractArray) = # generic implementation
+    map(::LinearFast, a::AbstractArray, b::AbstractArray) = # linear-fast implementation
+
+This trait-based mechanism is also present in the ``promote`` mechanism used by ``+``.
+It is using the types to compute the optimal common type for computing the operation.
+This makes it possible to reduce the problem of implementing every function for every pair of possible type arguments,
+to the much smaller problem of implementing a conversion operation from each type to a common type,
+plus a table of preferred pair-wise promotion rules.
+
+
+5. Output-type Computation
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The discussion of trait-based promotion provides a segue into our next design pattern:
+computing the output element type for a matrix operation.
+
+For implementing primitive operations, such as addition,
+we use the ``promote_type`` function to compute the desired output type.
+(As before, we saw this at work in the ``promote`` call in the call to ``+``).
+
+For more complex functions on matrices, it may be necessary to compute the expected return
+type for a more complex sequence of operations.
+This is often performed by the following sequence of operations:
+
+1. Write a small function ``op`` that expresses the set of operations performed by the kernel of the algorithm.
+2. Compute the element type ``R`` of the result matrix as ``promote_op(op, argument_types...)``,
+   where ``argument_types`` is computed from ``eltype`` applied to each input array.
+3. Build the output matrix as ``similar(R, dims)``, where ``dims`` is the desired dimensions of the output array.
+
+For a more specific example, a generic matrix multiply pseudo-code might look like::
+
+    function matmul(a::AbstractMatrix, b::AbstractMatrix)
+        op = (ai, bi) -> ai * bi + ai * bi
+
+        ## this fails because it assumes `one(eltype(a))` is constructable:
+        # R = typeof(op(one(eltype(a)), one(eltype(b))))
+
+        ## this fails because it assumes `a[1]` exists and is representative of all elements of the array
+        # R = typeof(op(a[1], b[1]))
+
+        ## this fails because it assumes that `+` calls `promote_type`
+        ## but this is not true for some types, such as Bool:
+        # R = promote_type(ai, bi)
+
+        ## but, finally, this works:
+        R = promote_op(op, eltype(a), eltype(b))
+        ## although sometimes it may give a larger type than desired
+        ## it will always give a correct type
+
+        output = similar(b, R, (size(a, 1), size(b, 2)))
+        if size(a, 2) > 0
+            for j in 1:size(b, 2)
+                for i in 1:size(i, 1)
+                    ## here we don't use `ab = zero(R)`,
+                    ## since `R` might be `Any` and `zero(Any)` is not defined
+                    ## we also must declare `ab::R` to make the type of ``ab`` constant in the loop,
+                    ## since it is possible that typeof(a * b) != typeof(a * b + a * b) == R
+                    ab::R = a[i, 1] * b[1, j]
+                    for k in 2:size(a, 2)
+                        ab += a[i, k] * b[k, j]
+                    end
+                    output[i, j] = ab
+                end
+            end
+        end
+        return output
+    end
+
+6. Separate convert and kernel logic
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+One way to significantly cut down on compile-times and testing complexity is to isolate
+the logic for converting to the desired type and the computation.
+This lets the compiler specialize and inline the conversion logic independent
+from the rest of the body of the larger kernel.
+
+This is a common pattern seen when converting from a larger class of types
+to the one specific argument type that is actually supported by the algorithm::
+
+    complexfunction(arg::Int) = ...
+    complexfunction(arg::Any) = complexfunction(convert(Int, arg))
+
+    matmul(a::T, b::T) = ...
+    matmul(a, b) = matmul(promote(a, b)...)
+
+
 .. _man-vararg-fixedlen:
 
 Parametrically-constrained Varargs methods
