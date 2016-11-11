@@ -773,7 +773,7 @@ static void sweep_big(jl_ptls_t ptls, int sweep_full)
 
 // tracking Arrays with malloc'd storage
 
-void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a)
+void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a, uint16_t how)
 {
     // This is **NOT** a GC safe point.
     mallocarray_t *ma;
@@ -785,6 +785,7 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a)
         ptls->heap.mafreelist = ma->next;
     }
     ma->a = a;
+    ma->how = how;
     ma->next = ptls->heap.mallocarrays;
     ptls->heap.mallocarrays = ma;
 }
@@ -812,14 +813,15 @@ static size_t array_nbytes(jl_array_t *a)
     return sz;
 }
 
-static void jl_gc_free_array(jl_array_t *a)
+static void jl_gc_free_array(jl_array_t *a, uint16_t how)
 {
     if (a->flags.how == 2) {
         char *d = (char*)a->data - a->offset*a->elsize;
-        if (a->flags.isaligned)
-            jl_free_aligned(d);
-        else
+        assert(how == 0 || how == 1);
+        if (how == 0)
             free(d);
+        else
+            jl_gc_free_aligned(d);
         gc_num.freed += array_nbytes(a);
     }
 }
@@ -840,7 +842,7 @@ static void sweep_malloced_arrays(void)
             else {
                 *pma = nxt;
                 assert(ma->a->flags.how == 2);
-                jl_gc_free_array(ma->a);
+                jl_gc_free_array(ma->a, ma->how);
                 ma->next = ptls2->heap.mafreelist;
                 ptls2->heap.mafreelist = ma;
             }
@@ -2240,22 +2242,6 @@ void jl_gc_free_aligned(void *p)
     if (p) jl_gc_free(*((void **) p - 1));
 }
 
-// TODO remove these
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    maybe_collect(ptls);
-    size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
-    if (allocsz < sz)  // overflow in adding offs, size was "negative"
-        jl_throw(jl_memory_exception);
-    gc_num.allocd += allocsz;
-    gc_num.malloc++;
-    void *b = malloc_cache_align(allocsz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
-}
-
 static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t oldsz,
                                  int isaligned, jl_value_t *owner, int8_t can_collect)
 {
@@ -2285,13 +2271,6 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         jl_throw(jl_memory_exception);
 
     return b;
-}
-
-JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t *owner)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return gc_managed_realloc_(ptls, d, sz, oldsz, isaligned, owner, 1);
 }
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)

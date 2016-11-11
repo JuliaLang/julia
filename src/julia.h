@@ -667,10 +667,6 @@ void *jl_gc_calloc_aligned(size_t nm, size_t sz, size_t align);
 void *jl_gc_realloc_aligned(void *p, size_t sz);
 void jl_gc_free_aligned(void *p);
 
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
-JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t *owner);
-
 // object accessors -----------------------------------------------------------
 
 #define jl_svec_len(t)              (((jl_svec_t*)(t))->length)
