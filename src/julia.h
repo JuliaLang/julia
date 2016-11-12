@@ -1162,7 +1162,7 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
 
 // arrays
-JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims);
+JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims, int iszeros);
 JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
                                           jl_value_t *dims);
 JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
@@ -1170,11 +1170,11 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
 JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
                                          jl_value_t *dims, int own_buffer);
 
-JL_DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr);
+JL_DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr, int iszeros);
 JL_DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr,
-                                           size_t nc);
+                                           size_t nc, int iszeros);
 JL_DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr,
-                                           size_t nc, size_t z);
+                                           size_t nc, size_t z, int iszeros);
 JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str);
