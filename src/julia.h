@@ -143,7 +143,7 @@ typedef struct {
     uint16_t pooled:1;
     uint16_t ptrarray:1;  // representation is pointer array
     uint16_t isshared:1;  // data is shared by multiple Arrays
-    uint16_t isaligned:1; // data allocated with memalign
+    uint16_t _unused:1;
 } jl_array_flags_t;
 
 JL_EXTENSION typedef struct {
