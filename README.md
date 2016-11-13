@@ -248,7 +248,7 @@ Note that Julia is community-supported and we have little control over our upstr
  - libunwind needs a small patch to its tests to compile.
  - OpenBLAS patches in pkg haven't been upstreamed.
  - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to work around this (upstream bug submitted to FreeBSD pkg maintainers).
- - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=/usr/local/lib` and `CPPFLAGS=/usr/local/include` to your environment or `Make.user` file to build successfully.
+ - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=-L/usr/local/lib` and `CPPFLAGS=-I/usr/local/include` to your environment or `Make.user` file to build successfully.
 
 
 ### Windows
