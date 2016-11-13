@@ -381,7 +381,7 @@ All Objects
 
        julia> convert(Int, 3.5)
        ERROR: InexactError()
-        in convert(::Type{Int64}, ::Float64) at ./float.jl:637
+        in convert(::Type{Int64}, ::Float64) at ./float.jl:656
         ...
 
    If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return the closest value to ``x`` representable by ``T``\ .
@@ -896,7 +896,7 @@ Nullables
 
        julia> unsafe_get(x)
        ERROR: UndefRefError: access to undefined reference
-        in unsafe_get(::Nullable{String}) at ./nullable.jl:123
+        in unsafe_get(::Nullable{String}) at ./nullable.jl:124
         ...
 
        julia> x = 1

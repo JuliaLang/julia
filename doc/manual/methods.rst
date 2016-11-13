@@ -206,8 +206,8 @@ methods. To find out what the signatures of those methods are, use the
 
     julia> methods(f)
     # 2 methods for generic function "f":
-    f(x::Float64, y::Float64) at none:1
-    f(x::Number, y::Number) at none:1
+    f(x::Float64, y::Float64) in Main at none:1
+    f(x::Number, y::Number) in Main at none:1
 
 which shows that ``f`` has two methods, one taking two :obj:`Float64`
 arguments and one taking arguments of type :obj:`Number`. It also
@@ -286,8 +286,8 @@ arguments:
 
     julia> g(2.0, 3.0)
     ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-      g(x, y::Float64) at none:1
-      g(x::Float64, y) at none:1
+      g(x, y::Float64) in Main at none:1
+      g(x::Float64, y) in Main at none:1
      ...
 
 Here the call ``g(2.0, 3.0)`` could be handled by either the

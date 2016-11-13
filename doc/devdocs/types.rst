@@ -215,11 +215,11 @@ a lot about how Julia does dispatch:
 
    julia> methods(candid)
    # 1 method for generic function "candid":
-   candid{T}(A::Array{T,N<:Any}, x::T) at none:1
+   candid{T}(A::Array{T,N<:Any}, x::T) in Main at none:1
 
    julia> methods(sneaky)
    # 1 method for generic function "sneaky":
-   sneaky{T}(A::Array{T,N<:Any}, x::T<:Any) at none:1
+   sneaky{T}(A::Array{T,N<:Any}, x::T<:Any) in Main at none:1
 
 These therefore print identically, but they have very different behavior:
 

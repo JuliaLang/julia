@@ -2799,7 +2799,7 @@ julia> convert(Int, 3.0)
 
 julia> convert(Int, 3.5)
 ERROR: InexactError()
- in convert(::Type{Int64}, ::Float64) at ./float.jl:637
+ in convert(::Type{Int64}, ::Float64) at ./float.jl:656
  ...
 ```
 
