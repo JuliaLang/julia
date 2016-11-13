@@ -333,8 +333,8 @@ for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64
     @eval convert(::Type{Unsigned}, x::$Ts) = convert($Tu, x)
 end
 
-convert{T<:Union{Float32, Float64, Bool}}(::Type{Signed}, x::T) = convert(Int,x)
-convert{T<:Union{Float32, Float64, Bool}}(::Type{Unsigned}, x::T) = convert(UInt,x)
+convert{T<:Union{Float16, Float32, Float64, Bool}}(::Type{Signed}, x::T) = convert(Int,x)
+convert{T<:Union{Float16, Float32, Float64, Bool}}(::Type{Unsigned}, x::T) = convert(UInt,x)
 
 convert(::Type{Integer}, x::Integer) = x
 convert(::Type{Integer}, x::Real) = convert(Signed,x)
