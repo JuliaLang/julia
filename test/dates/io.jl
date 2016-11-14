@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module DatesIo
-using Base.Test
 # Test string/show representation of Date
 @test string(Dates.Date(1,1,1)) == "0001-01-01" # January 1st, 1 AD/CE
 @test sprint(show, Dates.Date(1,1,1)) == "0001-01-01"
@@ -366,5 +364,3 @@ end
 @test Dates.Date("Apr 01 2014", "uuu dd yyyy") == Dates.Date(2014,4,1)
 @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd zz yyyy")
 @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd    yyyy")
-
-end

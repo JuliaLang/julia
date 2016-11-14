@@ -9,6 +9,10 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
+
 ambigs = Any[[], [3], [2,5], [], [3]]
 
 mt = methods(ambig)
@@ -52,8 +56,8 @@ let err = try
     io = IOBuffer()
     Base.showerror(io, err)
     lines = split(takebuf_string(io), '\n')
-    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in Main at") ||
-                           startswith(str, "  ambig(x::Integer, y) in Main at")
+    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in $curmod_str at") ||
+                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at")
     @test ambig_checkline(lines[2])
     @test ambig_checkline(lines[3])
 end

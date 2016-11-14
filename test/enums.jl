@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module TestEnums
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
 using Base.Test
 
@@ -156,7 +158,7 @@ end
 @test string(apple) == "apple"
 
 @test reprmime("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
-@test reprmime("text/plain", orange) == "orange::TestEnums.Fruit = 1"
+@test reprmime("text/plain", orange) == "orange::$(curmod_prefix)Fruit = 1"
 
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL
@@ -167,5 +169,3 @@ let b = IOBuffer()
     seekstart(b)
     @test deserialize(b) === apple
 end
-
-end # module
