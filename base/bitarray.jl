@@ -1333,12 +1333,12 @@ function (|)(B::BitArray, x::Bool)
 end
 (|)(x::Bool, B::BitArray) = B | x
 
-function ($)(B::BitArray, x::Bool)
+function xor(B::BitArray, x::Bool)
     x ? ~B : copy(B)
 end
-($)(x::Bool, B::BitArray) = B $ x
+xor(x::Bool, B::BitArray) = xor(B, x)
 
-for f in (:&, :|, :$)
+for f in (:&, :|, :xor)
     @eval begin
         function ($f)(A::BitArray, B::BitArray)
             F = BitArray(promote_shape(size(A),size(B))...)
@@ -2006,10 +2006,10 @@ map!(::typeof(identity), dest::BitArray, A::BitArray) = copy!(dest, A)
 
 for (T, f) in ((:(Union{typeof(&), typeof(*), typeof(min)}), :(&)),
                (:(Union{typeof(|), typeof(max)}),            :(|)),
-               (:(Union{typeof($), typeof(!=)}),             :($)),
+               (:(Union{typeof(xor), typeof(!=)}),           :xor),
                (:(Union{typeof(>=), typeof(^)}),             :((p, q) -> p | ~q)),
                (:(typeof(<=)),                               :((p, q) -> ~p | q)),
-               (:(typeof(==)),                               :((p, q) -> ~(p $ q))),
+               (:(typeof(==)),                               :((p, q) -> ~xor(p, q))),
                (:(typeof(<)),                                :((p, q) -> ~p & q)),
                (:(typeof(>)),                                :((p, q) -> p & ~q)))
     @eval map(::$T, A::BitArray, B::BitArray) = bit_map!($f, similar(A), A, B)
@@ -2058,12 +2058,12 @@ transpose(B::BitVector) = reshape(copy(B), 1, length(B))
 # http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
 function transpose8x8(x::UInt64)
     y = x
-    t = (y $ (y >>> 7)) & 0x00aa00aa00aa00aa
-    y = y $ t $ (t << 7)
-    t = (y $ (y >>> 14)) & 0x0000cccc0000cccc
-    y = y $ t $ (t << 14)
-    t = (y $ (y >>> 28)) & 0x00000000f0f0f0f0
-    return y $ t $ (t << 28)
+    t = xor(y, y >>> 7) & 0x00aa00aa00aa00aa
+    y = xor(y, t, t << 7)
+    t = xor(y, y >>> 14) & 0x0000cccc0000cccc
+    y = xor(y, t, t << 14)
+    t = xor(y, y >>> 28) & 0x00000000f0f0f0f0
+    return xor(y, t, t << 28)
 end
 
 function form_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::UInt64)

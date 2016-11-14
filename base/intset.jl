@@ -140,7 +140,7 @@ function symdiff!(s::IntSet, n::Integer)
     elseif n < 0
         throw(ArgumentError("IntSet elements cannot be negative"))
     end
-    s.bits[n>>5 + 1] $= (UInt32(1)<<(n&31))
+    s.bits[n>>5 + 1] ⊻= UInt32(1)<<(n&31)
     return s
 end
 
@@ -282,14 +282,14 @@ function symdiff!(s::IntSet, s2::IntSet)
     end
     lim = length(s2.bits)
     for n = 1:lim
-        s.bits[n] $= s2.bits[n]
+        s.bits[n] ⊻= s2.bits[n]
     end
     if s2.fill1s
         for n=lim+1:length(s.bits)
             s.bits[n] = ~s.bits[n]
         end
     end
-    s.fill1s $= s2.fill1s
+    s.fill1s ⊻= s2.fill1s
     s
 end
 

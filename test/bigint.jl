@@ -164,7 +164,7 @@ end
 @test ~BigInt(123) == -124
 @test BigInt(123) & BigInt(234) == 106
 @test BigInt(123) | BigInt(234) == 251
-@test BigInt(123) $ BigInt(234) == 145
+@test BigInt(123) ⊻ BigInt(234) == 145
 
 @test gcd(BigInt(48), BigInt(180)) == 12
 @test lcm(BigInt(48), BigInt(180)) == 720
@@ -199,11 +199,11 @@ g = parse(BigInt,"-1")
 @test *(a, b, c, d, f) == parse(BigInt,"-45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
 @test *(a, b, c, d, f, g) == parse(BigInt,"45258849200337190631492857400003938881995610529251881450243326128168934937055005474972396281351684800")
 
-@test ($)(a, b) == parse(BigInt,"327299")
-@test ($)(a, b, c) == parse(BigInt,"3426495623485904783798472")
-@test ($)(a, b, c, d) == parse(BigInt,"-3426495623485906178489610")
-@test ($)(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
-@test ($)(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
+@test xor(a, b) == parse(BigInt,"327299")
+@test xor(a, b, c) == parse(BigInt,"3426495623485904783798472")
+@test xor(a, b, c, d) == parse(BigInt,"-3426495623485906178489610")
+@test xor(a, b, c, d, f) == parse(BigInt,"-2413804710837418037418307081437316711364709261074607933698")
+@test xor(a, b, c, d, f, g) == parse(BigInt,"2413804710837418037418307081437316711364709261074607933697")
 
 @test (&)(a, b) == parse(BigInt,"124")
 @test (&)(a, b, c) == parse(BigInt,"72")

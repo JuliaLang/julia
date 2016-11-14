@@ -198,7 +198,7 @@ muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 
 (&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
 (|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
-($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
+xor(x::Integer, y::Integer) = xor(promote(x,y)...)
 
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
@@ -253,7 +253,7 @@ muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
 
 (&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
-($){T<:Integer}(x::T, y::T) = no_op_err("\$", T)
+xor{T<:Integer}(x::T, y::T) = no_op_err("xor", T)
 
 =={T<:Number}(x::T, y::T) = x === y
  <{T<:Real}(x::T, y::T) = no_op_err("<" , T)

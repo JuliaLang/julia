@@ -784,7 +784,7 @@ let b1 = bitrand(n1, n2)
     b2 = bitrand(n1, n2)
     @check_bit_operation (&)(b1, b2)  BitMatrix
     @check_bit_operation (|)(b1, b2)  BitMatrix
-    @check_bit_operation ($)(b1, b2)  BitMatrix
+    @check_bit_operation xor(b1, b2)  BitMatrix
     @check_bit_operation (+)(b1, b2)  Matrix{Int}
     @check_bit_operation (-)(b1, b2)  Matrix{Int}
     @check_bit_operation (.*)(b1, b2) BitMatrix
@@ -815,7 +815,7 @@ end
 let b0 = falses(0)
     @check_bit_operation (&)(b0, b0)  BitVector
     @check_bit_operation (|)(b0, b0)  BitVector
-    @check_bit_operation ($)(b0, b0)  BitVector
+    @check_bit_operation xor(b0, b0)  BitVector
     @check_bit_operation (.*)(b0, b0) BitVector
     @check_bit_operation (*)(b0, b0') Matrix{Int}
 end
@@ -826,7 +826,7 @@ let b1 = bitrand(n1, n2)
     i2 = rand(1:10, n1, n2)
     @check_bit_operation (&)(b1, i2)  Matrix{Int}
     @check_bit_operation (|)(b1, i2)  Matrix{Int}
-    @check_bit_operation ($)(b1, i2)  Matrix{Int}
+    @check_bit_operation xor(b1, i2)  Matrix{Int}
     @check_bit_operation (+)(b1, i2)  Matrix{Int}
     @check_bit_operation (-)(b1, i2)  Matrix{Int}
     @check_bit_operation (.*)(b1, i2) Matrix{Int}
@@ -859,14 +859,14 @@ let b2 = bitrand(n1, n2)
 
     @check_bit_operation (&)(i1, b2)  Matrix{Int}
     @check_bit_operation (|)(i1, b2)  Matrix{Int}
-    @check_bit_operation ($)(i1, b2)  Matrix{Int}
+    @check_bit_operation xor(i1, b2)  Matrix{Int}
     @check_bit_operation (.+)(i1, b2)  Matrix{Int}
     @check_bit_operation (.-)(i1, b2)  Matrix{Int}
     @check_bit_operation (.*)(i1, b2) Matrix{Int}
 
     @check_bit_operation (&)(u1, b2)  Matrix{UInt8}
     @check_bit_operation (|)(u1, b2)  Matrix{UInt8}
-    @check_bit_operation ($)(u1, b2)  Matrix{UInt8}
+    @check_bit_operation xor(u1, b2)  Matrix{UInt8}
     @check_bit_operation (.+)(u1, b2)  Matrix{UInt8}
     @check_bit_operation (.-)(u1, b2)  Matrix{UInt8}
     @check_bit_operation (.*)(u1, b2) Matrix{UInt8}
@@ -941,10 +941,10 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation (|)(b1, false)  BitMatrix
     @check_bit_operation (|)(true, b1)   BitMatrix
     @check_bit_operation (|)(false, b1)  BitMatrix
-    @check_bit_operation ($)(b1, true)   BitMatrix
-    @check_bit_operation ($)(b1, false)  BitMatrix
-    @check_bit_operation ($)(true, b1)   BitMatrix
-    @check_bit_operation ($)(false, b1)  BitMatrix
+    @check_bit_operation xor(b1, true)   BitMatrix
+    @check_bit_operation xor(b1, false)  BitMatrix
+    @check_bit_operation xor(true, b1)   BitMatrix
+    @check_bit_operation xor(false, b1)  BitMatrix
     @check_bit_operation (.+)(b1, true)   Matrix{Int}
     @check_bit_operation (.+)(b1, false)  Matrix{Int}
     @check_bit_operation (.-)(b1, true)   Matrix{Int}
@@ -960,13 +960,13 @@ let b1 = bitrand(n1, n2)
 
     @check_bit_operation (&)(b1, b2)  BitMatrix
     @check_bit_operation (|)(b1, b2)  BitMatrix
-    @check_bit_operation ($)(b1, b2)  BitMatrix
+    @check_bit_operation xor(b1, b2)  BitMatrix
     @check_bit_operation (&)(b2, b1)  BitMatrix
     @check_bit_operation (|)(b2, b1)  BitMatrix
-    @check_bit_operation ($)(b2, b1)  BitMatrix
+    @check_bit_operation xor(b2, b1)  BitMatrix
     @check_bit_operation (&)(b1, i2)  Matrix{Int}
     @check_bit_operation (|)(b1, i2)  Matrix{Int}
-    @check_bit_operation ($)(b1, i2)  Matrix{Int}
+    @check_bit_operation xor(b1, i2)  Matrix{Int}
     @check_bit_operation (.+)(b1, i2)  Matrix{Int}
     @check_bit_operation (.-)(b1, i2)  Matrix{Int}
     @check_bit_operation (.*)(b1, i2) Matrix{Int}
@@ -976,7 +976,7 @@ let b1 = bitrand(n1, n2)
 
     @check_bit_operation (&)(b1, u2)  Matrix{UInt8}
     @check_bit_operation (|)(b1, u2)  Matrix{UInt8}
-    @check_bit_operation ($)(b1, u2)  Matrix{UInt8}
+    @check_bit_operation xor(b1, u2)  Matrix{UInt8}
     @check_bit_operation (.+)(b1, u2)  Matrix{UInt8}
     @check_bit_operation (.-)(b1, u2)  Matrix{UInt8}
     @check_bit_operation (.*)(b1, u2) Matrix{UInt8}
@@ -1119,7 +1119,7 @@ let b1 = trues(v1)
     for i = 3:(v1-1), j = 2:i
         submask = b1 << (v1-j+1)
         @test findnext((b1 >> i) | submask, j) == i+1
-        @test findnextnot((~(b1 >> i)) $ submask, j) == i+1
+        @test findnextnot((~(b1 >> i)) ⊻ submask, j) == i+1
     end
 end
 
@@ -1276,7 +1276,7 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
 
     @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == b1 & b2
     @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == b1 | b2
-    @test map($, b1, b2) == map((x,y)->x$y, b1, b2) == b1 $ b2
+    @test map(⊻, b1, b2) == map((x,y)->x⊻y, b1, b2) == b1 ⊻ b2 == xor(b1, b2)
 
     @test map(^, b1, b2) == map((x,y)->x^y, b1, b2) == b1 .^ b2
     @test map(*, b1, b2) == map((x,y)->x*y, b1, b2) == b1 .* b2
@@ -1301,7 +1301,7 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
 
     @test map!(&, b, b1, b2) == map!((x,y)->x&y, b, b1, b2) == b1 & b2 == b
     @test map!(|, b, b1, b2) == map!((x,y)->x|y, b, b1, b2) == b1 | b2 == b
-    @test map!($, b, b1, b2) == map!((x,y)->x$y, b, b1, b2) == b1 $ b2 == b
+    @test map!(⊻, b, b1, b2) == map!((x,y)->x⊻y, b, b1, b2) == b1 ⊻ b2 == xor(b1, b2) == b
 
     @test map!(^, b, b1, b2) == map!((x,y)->x^y, b, b1, b2) == b1 .^ b2 == b
     @test map!(*, b, b1, b2) == map!((x,y)->x*y, b, b1, b2) == b1 .* b2 == b

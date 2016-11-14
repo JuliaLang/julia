@@ -4,7 +4,7 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
+import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
@@ -194,7 +194,7 @@ function convert{T<:Signed}(::Type{T}, x::BigInt)
     else
         0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
         y = x % T
-        (x.size > 0) $ (y > 0) && throw(InexactError()) # catch overflow
+        (x.size > 0) ⊻ (y > 0) && throw(InexactError()) # catch overflow
         y
     end
 end
@@ -249,7 +249,7 @@ promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
-                 (:&, :and), (:|, :ior), (:$, :xor))
+                 (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         function ($fJ)(x::BigInt, y::BigInt)
             z = BigInt()
@@ -279,7 +279,7 @@ function invmod(x::BigInt, y::BigInt)
 end
 
 # More efficient commutative operations
-for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
+for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         function ($fJ)(a::BigInt, b::BigInt, c::BigInt)
             z = BigInt()

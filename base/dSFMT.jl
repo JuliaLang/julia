@@ -115,19 +115,19 @@ function dsfmt_jump_add!(dest::Vector{UInt64}, src::Vector{UInt64})
     while i <= N-diff
         j = i*2-1
         p = j + diff*2
-        dest[j]   $= src[p]
-        dest[j+1] $= src[p+1]
+        dest[j]   ⊻= src[p]
+        dest[j+1] ⊻= src[p+1]
         i += 1
     end
     while i <= N
         j = i*2-1
         p = j + (diff - N)*2
-        dest[j]   $= src[p]
-        dest[j+1] $= src[p+1]
+        dest[j]   ⊻= src[p]
+        dest[j+1] ⊻= src[p+1]
         i += 1
     end
-    dest[N*2+1] $= src[N*2+1]
-    dest[N*2+2] $= src[N*2+2]
+    dest[N*2+1] ⊻= src[N*2+1]
+    dest[N*2+2] ⊻= src[N*2+2]
     return dest
 end
 
@@ -148,10 +148,10 @@ function dsfmt_jump_next_state!(mts::Vector{UInt64})
     t1 = mts[a+1]
     L0 = mts[u]
     L1 = mts[u+1]
-    mts[u]   = (t0 << SL1) $ (L1 >> 32) $ (L1 << 32) $ mts[b]
-    mts[u+1] = (t1 << SL1) $ (L0 >> 32) $ (L0 << 32) $ mts[b+1]
-    mts[a]   = (mts[u]   >> SR) $ (mts[u]   & MSK1) $ t0
-    mts[a+1] = (mts[u+1] >> SR) $ (mts[u+1] & MSK2) $ t1
+    mts[u]   = xor(t0 << SL1, L1 >> 32, L1 << 32, mts[b])
+    mts[u+1] = xor(t1 << SL1, L0 >> 32, L0 << 32, mts[b+1])
+    mts[a]   = xor(mts[u]   >> SR, mts[u]   & MSK1, t0)
+    mts[a+1] = xor(mts[u+1] >> SR, mts[u+1] & MSK2, t1)
 
     mts[end] = (mts[end] + 2) % (N*2)
     return mts

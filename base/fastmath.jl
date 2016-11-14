@@ -153,7 +153,7 @@ mul_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
     cmp_fast{T<:FloatTypes}(x::T, y::T) = ifelse(x==y, 0, ifelse(x<y, -1, +1))
     function mod_fast{T<:FloatTypes}(x::T, y::T)
         r = rem(x,y)
-        ifelse((r > 0) $ (y > 0), r+y, r)
+        ifelse((r > 0) ⊻ (y > 0), r+y, r)
     end
 end
 

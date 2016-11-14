@@ -74,7 +74,7 @@ Expression   Name
 ``~x``       bitwise not
 ``x & y``    bitwise and
 ``x | y``    bitwise or
-``x $ y``    bitwise xor (exclusive or)
+``x ⊻ y``    bitwise xor (exclusive or)
 ``x >>> y``  `logical shift <https://en.wikipedia.org/wiki/Logical_shift>`_ right
 ``x >> y``   `arithmetic shift <https://en.wikipedia.org/wiki/Arithmetic_shift>`_ right
 ``x << y``   logical/arithmetic shift left
@@ -93,7 +93,10 @@ Here are some examples with bitwise operators:
     julia> 123 | 234
     251
 
-    julia> 123 $ 234
+    julia> 123 ⊻ 234
+    145
+
+    julia> xor(123, 234)
     145
 
     julia> ~UInt32(123)
@@ -122,7 +125,7 @@ equivalent to writing ``x = x + 3``::
 The updating versions of all the binary arithmetic and bitwise operators
 are::
 
-    +=  -=  *=  /=  \=  ÷=  %=  ^=  &=  |=  $=  >>>=  >>=  <<=
+    +=  -=  *=  /=  \=  ÷=  %=  ^=  &=  |=  ⊻=  >>>=  >>=  <<=
 
 
 .. note::
@@ -344,11 +347,11 @@ Exponentiation    ``^`` and its elementwise equivalent ``.^``
 Fractions         ``//`` and ``.//``
 Multiplication    ``* / % & \`` and  ``.* ./ .% .\``
 Bitshifts         ``<< >> >>>`` and ``.<< .>> .>>>``
-Addition          ``+ - | $`` and ``.+ .-``
+Addition          ``+ - | ⊻`` and ``.+ .-``
 Syntax            ``: ..`` followed by ``|>``
 Comparisons       ``> < >= <= == === != !== <:`` and ``.> .< .>= .<= .== .!=``
 Control flow      ``&&`` followed by ``||`` followed by ``?``
-Assignments       ``= += -= *= /= //= \= ^= ÷= %= |= &= $= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .÷= .%=``
+Assignments       ``= += -= *= /= //= \= ^= ÷= %= |= &= ⊻= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .÷= .%=``
 ================= =============================================================================================
 
 .. _man-elementary-functions:
