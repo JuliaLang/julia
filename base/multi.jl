@@ -1499,9 +1499,6 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
 
     send_connection_hdr(controller, false)
     send_msg_now(controller, MsgHeader(RRID(0,0), header.notify_oid), JoinCompleteMsg(Sys.CPU_CORES, getpid()))
-
-    # point the default worker pool to the master
-    set_default_worker_pool()
 end
 
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)
@@ -1529,7 +1526,7 @@ function handle_msg(msg::JoinCompleteMsg, header, r_stream, w_stream, version)
     ntfy_channel = lookup_ref(header.notify_oid)
     put!(ntfy_channel, w.id)
 
-    push!(default_worker_pool(), w)
+    push!(default_worker_pool(), w.id)
 end
 
 function disable_threaded_libs()

@@ -18,45 +18,54 @@ abstract AbstractWorkerPool
 type WorkerPool <: AbstractWorkerPool
     channel::Channel{Int}
     workers::Set{Int}
+    ref::RemoteChannel
 
-    # Create a shared queue of available workers
-    WorkerPool() = WorkerPool(Channel{Int}(typemax(Int)))
-    WorkerPool(c) = new(c, Set{Int}())
-end
-
-# TODO: Support serialization of worker pools by sending only a reference to remote workers.
-serialize(s::AbstractSerializer, wp::WorkerPool) = throw(ErrorException("WorkerPool objects are not serializable."))
-
-"""
-    WorkerPool(workers)
-
-Create a WorkerPool from a vector of worker ids.
-"""
-function WorkerPool(workers::Vector{Int})
-    pool = WorkerPool()
-
-    # Add workers to the pool
-    for w in workers
-        push!(pool, w)
+    function WorkerPool()
+        wp = WorkerPool(Channel{Int}(typemax(Int)), RemoteChannel())
+        put!(wp.ref, wp)
+        wp
     end
 
-    return pool
+    """
+        WorkerPool(workers)
+
+    Create a WorkerPool from a vector of worker ids.
+    """
+    function WorkerPool(workers::Vector{Int})
+        pool = WorkerPool()
+        foreach(w->push!(pool, w), workers)
+        return pool
+    end
+
+    # On workers where this pool has been serialized to, instantiate with a dummy local channel.
+    WorkerPool(ref::RemoteChannel) = WorkerPool(Channel{Int}(1), ref)
+    WorkerPool(c::Channel, ref::RemoteChannel) = new(c, Set{Int}(), ref)
 end
 
-push!(pool::AbstractWorkerPool, w::Worker) = push!(pool, w.id)
-push!(pool::AbstractWorkerPool, w::Int) = (push!(pool.workers, w); put!(pool.channel, w); pool)
-length(pool::AbstractWorkerPool) = length(pool.workers)
-isready(pool::AbstractWorkerPool) = isready(pool.channel)
+function Base.serialize(S::AbstractSerializer, pool::WorkerPool)
+    # Allow accessing a worker pool from other processors. When serialized,
+    # initialize the `ref` to point to self and only send the ref.
+    # Other workers will forward all put!, take!, calls to the process owning
+    # the ref (and hence the pool).
+    Serializer.serialize_type(S, typeof(pool))
+    serialize(S, pool.ref)
+end
 
-function put!(pool::AbstractWorkerPool, w::Int)
+Base.deserialize{T<:WorkerPool}(S::AbstractSerializer, t::Type{T}) = T(deserialize(S))
+
+wp_local_push!(pool::AbstractWorkerPool, w::Int) = (push!(pool.workers, w); put!(pool.channel, w); pool)
+wp_local_length(pool::AbstractWorkerPool) = length(pool.workers)
+wp_local_isready(pool::AbstractWorkerPool) = isready(pool.channel)
+
+function wp_local_put!(pool::AbstractWorkerPool, w::Int)
     # In case of default_worker_pool, the master is implictly considered a worker, i.e.,
     # it is not present in pool.workers.
-    # Confirm the that tha worker is part of a pool before making it available.
+    # Confirm the that the worker is part of a pool before making it available.
     w in pool.workers && put!(pool.channel, w)
     w
 end
 
-function workers(pool::AbstractWorkerPool)
+function wp_local_workers(pool::AbstractWorkerPool)
     if length(pool) == 0 && pool === default_worker_pool()
         return [1]
     else
@@ -64,7 +73,7 @@ function workers(pool::AbstractWorkerPool)
     end
 end
 
-function nworkers(pool::AbstractWorkerPool)
+function wp_local_nworkers(pool::AbstractWorkerPool)
     if length(pool) == 0 && pool === default_worker_pool()
         return 1
     else
@@ -72,7 +81,7 @@ function nworkers(pool::AbstractWorkerPool)
     end
 end
 
-function take!(pool::AbstractWorkerPool)
+function wp_local_take!(pool::AbstractWorkerPool)
     # Find an active worker
     worker = 0
     while true
@@ -104,6 +113,47 @@ function remotecall_pool(rc_f, f, pool::AbstractWorkerPool, args...; kwargs...)
         put!(pool, worker)
     end
 end
+
+# Check if pool is local or remote and forward calls if required.
+# NOTE: remotecall_fetch does it automatically, but this will be more efficient as
+# it avoids the overhead associated with a local remotecall.
+
+for func = (:length, :isready, :workers, :nworkers, :take!)
+    func_local = Symbol(string("wp_local_", func))
+    eval(
+        quote
+            function ($func)(pool::WorkerPool)
+                if pool.ref.where != myid()
+                    return remotecall_fetch(ref->($func_local)(fetch(ref)), pool.ref.where, pool.ref)
+                else
+                    return ($func_local)(pool)
+                end
+            end
+
+            # default impl
+            ($func)(pool::AbstractWorkerPool) = ($func_local)(pool)
+        end
+    )
+end
+
+for func = (:push!, :put!)
+    func_local = Symbol(string("wp_local_", func))
+    eval(
+        quote
+            function ($func)(pool::WorkerPool, w::Int)
+                if pool.ref.where != myid()
+                    return remotecall_fetch((ref, w)->($func_local)(fetch(ref), w), pool.ref.where, pool.ref, w)
+                else
+                    return ($func_local)(pool, w)
+                end
+            end
+
+            # default impl
+            ($func)(pool::AbstractWorkerPool, w::Int) = ($func_local)(pool, w)
+        end
+    )
+end
+
 
 """
     remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
@@ -138,43 +188,25 @@ performs a `remote_do` on it.
 """
 remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remote_do, f, pool, args...; kwargs...)
 
-# The cluster default worker pool only exists on the master.
-# Workers using this pool forward calls push!, put!, take! etc to the master
-immutable ClusterDefaultWorkerPool <: AbstractWorkerPool
-end
-
-function push!(pool::ClusterDefaultWorkerPool, w::Int)
-    remotecall_fetch(w->(push!(_default_worker_pool[], w); nothing), 1, w)
-    pool
-end
-length(pool::ClusterDefaultWorkerPool) = remotecall_fetch(()->length(_default_worker_pool[]), 1)
-isready(pool::ClusterDefaultWorkerPool) = remotecall_fetch(()->isready(_default_worker_pool[]), 1)
-
-function put!(pool::ClusterDefaultWorkerPool, w::Int)
-    remotecall_fetch(w->(put!(_default_worker_pool[], w); w), 1, w)
-end
-
-workers(pool::ClusterDefaultWorkerPool) = remotecall_fetch(()->workers(_default_worker_pool[]), 1)
-nworkers(pool::ClusterDefaultWorkerPool) = length(pool)
-take!(pool::ClusterDefaultWorkerPool) = remotecall_fetch(()->take!(_default_worker_pool[]), 1)
-
-const _default_worker_pool = Ref{AbstractWorkerPool}()
+const _default_worker_pool = Ref{Nullable}(Nullable{WorkerPool}())
 
 """
     default_worker_pool()
 
 WorkerPool containing idle `workers()` - used by `remote(f)` and `pmap` (by default).
 """
-default_worker_pool() = _default_worker_pool[]
-
-function set_default_worker_pool()
-    if myid() == 1
-        _default_worker_pool[] = WorkerPool()
-    else
-        _default_worker_pool[] = ClusterDefaultWorkerPool()
+function default_worker_pool()
+    # On workers retrieve the default worker pool from the master when accessed
+    # for the first time
+    if isnull(_default_worker_pool[])
+        if myid() == 1
+            _default_worker_pool[] = Nullable(WorkerPool())
+        else
+            _default_worker_pool[] = Nullable(remotecall_fetch(()->default_worker_pool(), 1))
+        end
     end
+    return get(_default_worker_pool[])
 end
-
 
 """
     remote([::AbstractWorkerPool], f) -> Function

@@ -222,8 +222,6 @@ function process_options(opts::JLOptions)
         # opts.startupfile, opts.load, etc should should not be processed for workers.
         if opts.worker != C_NULL
             start_worker(unsafe_string(opts.worker)) # does not return
-        else
-            set_default_worker_pool()
         end
 
         # add processors

@@ -795,10 +795,17 @@ len_iter = (1,2,3,4,5)
 @test asyncmap(identity, len_iter) == Any[1,2,3,4,5]
 
 # Test that the default worker pool cycles through all workers
+pmap(_->myid(), 1:nworkers())  # priming run
 @test nworkers() == length(unique(pmap(_->myid(), 1:100)))
 
 # Test same behaviour when executed on a worker
 @test nworkers() == length(unique(remotecall_fetch(()->pmap(_->myid(), 1:100), id_other)))
+
+# Same tests with custom worker pools.
+wp = WorkerPool(workers())
+@test nworkers() == length(unique(pmap(wp, _->myid(), 1:100)))
+@test nworkers() == length(unique(remotecall_fetch(wp->pmap(wp, _->myid(), 1:100), id_other, wp)))
+
 
 # CachingPool tests
 wp = CachingPool(workers())
