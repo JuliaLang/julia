@@ -1509,3 +1509,6 @@ for T in types
     x = @compat Nullable{Array{T}}()
     @test_throws UndefRefError unsafe_get(x)
 end
+
+@test xor(1,5) == 4
+@test 1 ⊻ 5 == 4
