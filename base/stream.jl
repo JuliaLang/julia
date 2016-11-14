@@ -187,8 +187,12 @@ function TTY(fd::RawFD; readable::Bool = false)
     return tty
 end
 
-show(io::IO,stream::LibuvServer) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
-show(io::IO, stream::LibuvStream) = print(io, typeof(stream), "(", uv_status_string(stream), ", ",
+show(io::IO, stream::LibuvServer) = print(io, typeof(stream), "(",
+    _fd(stream), " ",
+    uv_status_string(stream), ")")
+show(io::IO, stream::LibuvStream) = print(io, typeof(stream), "(",
+    _fd(stream), " ",
+    uv_status_string(stream), ", ",
     nb_available(stream.buffer)," bytes waiting)")
 
 # Shared LibuvStream object interface
@@ -521,7 +525,9 @@ end
 
 show(io::IO, stream::Pipe) = print(io,
     "Pipe(",
+    _fd(stream.in), " ",
     uv_status_string(stream.in), " => ",
+    _fd(stream.out), " ",
     uv_status_string(stream.out), ", ",
     nb_available(stream), " bytes waiting)")
 
@@ -925,12 +931,16 @@ Connect to the named pipe / UNIX domain socket at `path`.
 """
 connect(path::AbstractString) = connect(init_pipe!(PipeEndpoint(); readable=false, writable=false, julia_only=true),path)
 
+const OS_HANDLE = is_windows() ? WindowsRawSocket : RawFD
+const INVALID_OS_HANDLE = is_windows() ? WindowsRawSocket(Ptr{Void}(-1)) : RawFD(-1)
 _fd(x::IOStream) = RawFD(fd(x))
-if is_windows()
-    _fd(x::LibuvStream) = WindowsRawSocket(
-        ccall(:jl_uv_handle, Ptr{Void}, (Ptr{Void},), x.handle))
-else
-    _fd(x::LibuvStream) = RawFD(ccall(:jl_uv_handle, Int32, (Ptr{Void},), x.handle))
+function _fd(x::Union{LibuvStream, LibuvServer})
+    fd = Ref{OS_HANDLE}(INVALID_OS_HANDLE)
+    if x.status != StatusUninit && x.status != StatusClosed
+        err = ccall(:uv_fileno, Int32, (Ptr{Void}, Ptr{OS_HANDLE}), x.handle, fd)
+        # handle errors by returning INVALID_OS_HANDLE
+    end
+    return fd[]
 end
 
 for (x, writable, unix_fd, c_symbol) in
