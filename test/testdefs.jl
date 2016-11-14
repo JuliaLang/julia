@@ -1,12 +1,20 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
-function runtests(name)
-    @printf("     \033[1m*\033[0m \033[31m%-21s\033[0m", name)
-    res_and_time_data = @timed @testset "$name" begin
-        include("$name.jl")
+function runtests(name, isolate=true)
+    if isolate
+        mod_name = Symbol("TestMain_", replace(name, '/', '_'))
+        m = eval(Main, :(module $mod_name end))
+    else
+        m = Main
     end
+    eval(m, :(using Base.Test))
+    @printf("     \033[1m*\033[0m \033[31m%-21s\033[0m", name)
+    ex = quote
+        @timed @testset $"$name" begin
+            include($"$name.jl")
+        end
+    end
+    res_and_time_data = eval(m, ex)
     rss = Sys.maxrss()
     @printf(" maxrss %7.2f MB\n", rss / 2^20)
     #res_and_time_data[1] is the testset

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using LRUExample
+using .LRUExample
 
 TestLRU = LRUExample.UnboundedLRU{String, String}()
 TestBLRU = LRUExample.BoundedLRU{String, String}(1000)

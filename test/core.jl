@@ -2,6 +2,9 @@
 
 # test core language features
 const Bottom = Union{}
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
 macro testintersect(args...)
     _testintersect(args...)
@@ -1187,8 +1190,8 @@ immutable Foo2509; foo::Int; end
 
 # issue #2517
 immutable Foo2517; end
-@test repr(Foo2517()) == "Foo2517()"
-@test repr(Array{Foo2517}(1)) == "Foo2517[Foo2517()]"
+@test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
+@test repr(Array{Foo2517}(1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -2436,7 +2439,7 @@ let x,y,f
     y = f() # invoke llvm constant folding
     @test Int(0x468ace) === Int(y)
     @test x !== y
-    @test string(y) == "Int24(0x468ace)"
+    @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
 end
 
 # issue #10570
@@ -3066,7 +3069,7 @@ x7864 = 1
 end
 
 @test_throws UndefVarError x7864
-using M7864
+using .M7864
 @test x7864 == 1
 
 # issue #11715
