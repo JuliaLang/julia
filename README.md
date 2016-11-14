@@ -124,6 +124,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `writemime` has been merged into `show` [#16563](https://github.com/JuliaLang/julia/pull/16563). Note that to extend this function requires `@compat`; see the [Supported Syntax](#supported-syntax) section for more information.
 
+* `$` is now `xor` or `⊻` [#18977](https://github.com/JuliaLang/julia/pull/18977).
+
 ## New macros
 
 * `@static` has been added [#16219](https://github.com/JuliaLang/julia/pull/16219).

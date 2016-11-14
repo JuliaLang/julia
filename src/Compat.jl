@@ -1679,4 +1679,10 @@ if VERSION < v"0.6.0-dev.848"
     end
 end
 
+# julia#18977
+if !isdefined(Base, :xor)
+    const xor = $
+    const ⊻ = xor
+end
+
 end # module
