@@ -283,7 +283,7 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition(), t
+let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition(), t, infd, outfd
     @test_throws ArgumentError write(out, "not open error")
     t = @async begin # spawn writer task
         open(echo, "w", out) do in1
@@ -295,6 +295,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
                 write(in2, "orld\n")
             end
         end
+        infd = Base._fd(out.in)
+        outfd = Base._fd(out.out)
         show(out, out)
         notify(ready)
         @test isreadable(out)
@@ -327,13 +329,15 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test !isreadable(out)
     @test !iswritable(out)
     @test !isopen(out)
+    @test infd != Base._fd(out.in) == Base.INVALID_OS_HANDLE
+    @test outfd != Base._fd(out.out) == Base.INVALID_OS_HANDLE
     @test nb_available(out) == 0
     @test c == UInt8['w']
     @test lstrip(ln2) == "1\thello\n"
     @test ln1 == "orld\n"
     @test isempty(read(out))
     @test eof(out)
-    @test desc == "Pipe(open => active, 0 bytes waiting)"
+    @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
     wait(t)
 end
 
