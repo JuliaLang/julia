@@ -4,7 +4,7 @@ function Round0(b,c,d)
 end
 
 function Round1And3(b,c,d)
-    return @compat(UInt32(b $ c $ d))
+    return @compat(UInt32(b ⊻ c ⊻ d))
 end
 
 function Round2(b,c,d)
@@ -21,14 +21,14 @@ function transform!(context::SHA1_CTX)
     # First round of expansions
     for i in 17:32
         @inbounds begin
-            context.W[i] = lrot(1, context.W[i-3] $ context.W[i-8] $ context.W[i-14] $ context.W[i-16], 32)
+            context.W[i] = lrot(1, context.W[i-3] ⊻ context.W[i-8] ⊻ context.W[i-14] ⊻ context.W[i-16], 32)
         end
     end
 
     # Second round of expansions (possibly 4-way SIMD-able)
     for i in 33:80
         @inbounds begin
-            context.W[i] = lrot(2, context.W[i-6] $ context.W[i-16] $ context.W[i-28] $ context.W[i-32], 32)
+            context.W[i] = lrot(2, context.W[i-6] ⊻ context.W[i-16] ⊻ context.W[i-28] ⊻ context.W[i-32], 32)
         end
     end
 
