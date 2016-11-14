@@ -73,7 +73,7 @@ function isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
-        (0 < a <= n) && (used[a] $= true) || return false
+        (0 < a <= n) && (used[a] ⊻= true) || return false
     end
     true
 end

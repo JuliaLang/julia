@@ -2055,6 +2055,8 @@
    '&=     lower-update-op
    '.&=     lower-update-op
    '$=     lower-update-op
+   '⊻=     lower-update-op
+   '.⊻=     lower-update-op
    '<<=    lower-update-op
    '.<<=    lower-update-op
    '>>=    lower-update-op

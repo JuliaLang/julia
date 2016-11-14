@@ -904,7 +904,7 @@ function _ispermutationvalid_permute!{Ti<:Integer,Tp<:Integer}(perm::AbstractVec
     n = length(perm)
     checkspace[1:n] = 0
     for k in perm
-        (0 < k <= n) && ((checkspace[k] $= 1) == 1) || return false
+        (0 < k ≤ n) && ((checkspace[k] ⊻= 1) == 1) || return false
     end
     return true
 end
@@ -1751,7 +1751,7 @@ broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2
 
 ## Binary arithmetic and boolean operators
 
-for op in (+, -, min, max, &, |, $)
+for op in (+, -, min, max, &, |, xor)
     body = gen_broadcast_body_sparse(op, true)
     OP = Symbol(string(op))
     @eval begin

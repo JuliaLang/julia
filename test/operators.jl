@@ -43,7 +43,8 @@ p = 1=>:foo
 @test p[endof(p)] == p[end] == p[2] == :foo
 
 @test (|)(2) == 2
-@test ($)(2) == 2
+@test xor(2) == 2
+@test (⊻)(2) == 2
 
 # @test ctranspose('a') == 'a' # (c)transpose of Chars no longer supported
 

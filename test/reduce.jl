@@ -10,11 +10,11 @@
 @test Base.mapfoldl(abs2, /, 2:5) ≈ 1/900
 @test Base.mapfoldl(abs2, /, 10, 2:5) ≈ 1/1440
 
-@test Base.mapfoldl((x)-> x $ true, &, true, [true false true false false]) == false
-@test Base.mapfoldl((x)-> x $ true, &, [true false true false false]) == false
+@test Base.mapfoldl((x)-> x ⊻ true, &, true, [true false true false false]) == false
+@test Base.mapfoldl((x)-> x ⊻ true, &, [true false true false false]) == false
 
-@test Base.mapfoldl((x)-> x $ true, |, [true false true false false]) == true
-@test Base.mapfoldl((x)-> x $ true, |, false, [true false true false false]) == true
+@test Base.mapfoldl((x)-> x ⊻ true, |, [true false true false false]) == true
+@test Base.mapfoldl((x)-> x ⊻ true, |, false, [true false true false false]) == true
 
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7

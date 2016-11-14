@@ -23,7 +23,7 @@ end
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = box(Bool,and_int(unbox(Bool,x),unbox(Bool,y)))
 (|)(x::Bool, y::Bool) = box(Bool,or_int(unbox(Bool,x),unbox(Bool,y)))
-($)(x::Bool, y::Bool) = (x!=y)
+xor(x::Bool, y::Bool) = (x!=y)
 
 >>(x::Bool, c::Unsigned) = Int(x) >> c
 <<(x::Bool, c::Unsigned) = Int(x) << c
