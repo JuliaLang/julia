@@ -16,6 +16,7 @@ static const char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
 jl_options_t jl_options = { 0,    // quiet
                             NULL, // julia_home
                             NULL, // julia_bin
+                            NULL, // julia_lib
                             NULL, // eval
                             NULL, // print
                             NULL, // post-boot

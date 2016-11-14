@@ -87,3 +87,9 @@ end
 
 include(joinpath(dir, "clustermanager/0mq/ZMQCM.jl"))
 
+# test that the embedding example runs without error
+let
+    lines = readlines(pipeline(`$(joinpath(Base.JULIA_HOME, "embedding"))`, stderr=DevNull))
+    @test parse(Float64, lines[1]) ≈ sqrt(2)
+    @test parse(Float64, lines[2]) ≈ sqrt(2)
+end

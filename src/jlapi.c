@@ -256,6 +256,11 @@ JL_DLLEXPORT jl_value_t *jl_get_julia_bin(void)
     return jl_cstr_to_string(jl_options.julia_bin);
 }
 
+JL_DLLEXPORT jl_value_t *jl_get_julia_lib(void)
+{
+    return jl_cstr_to_string(jl_options.julia_lib);
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_image_file(void)
 {
     return jl_cstr_to_string(jl_options.image_file);

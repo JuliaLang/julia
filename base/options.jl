@@ -5,6 +5,7 @@ immutable JLOptions
     quiet::Int8
     julia_home::Ptr{UInt8}
     julia_bin::Ptr{UInt8}
+    julia_lib::Ptr{UInt8}
     eval::Ptr{UInt8}
     print::Ptr{UInt8}
     postboot::Ptr{UInt8}

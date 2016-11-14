@@ -1,8 +1,16 @@
-JULIAHOME = $(abspath ..)
+JULIAHOME := $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
+FLAGS := -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) $(CFLAGS)
+
+ifeq ($(USEGCC),1)
+FLAGS += -std=gnu99
+endif
+
+ifneq ($(JULIA_THREADS), 0)
+FLAGS += -DJULIA_ENABLE_THREADING -DJULIA_NUM_THREADS=$(JULIA_THREADS)
+endif
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
@@ -38,4 +46,3 @@ clean: | $(CLEAN_TARGETS)
 	rm -f $(build_bindir)/embedding-debug $(build_bindir)/embedding
 
 .PHONY: clean release debug
-
