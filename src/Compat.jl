@@ -1683,6 +1683,7 @@ end
 if !isdefined(Base, :xor)
     const xor = $
     const ⊻ = xor
+    export xor, ⊻
 end
 
 end # module
