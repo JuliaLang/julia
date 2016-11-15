@@ -168,7 +168,9 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 ## reduce & mapreduce
 
 function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op))
-    if ifirst + blksize > ilast
+    if ifirst == ilast
+        return r_promote(op, f(A[ifirst]))
+    elseif ifirst + blksize > ilast
         # sequential portion
         fx1 = r_promote(op, f(A[ifirst]))
         fx2 = r_promote(op, f(A[ifirst + 1]))
