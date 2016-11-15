@@ -172,7 +172,7 @@ g16493{T<:Number}(x::T, y::Integer) = 0
 g16493{T}(x::Complex{T}, y) = 1
 let ms = methods(g16493, (Complex, Any))
     @test length(ms) == 1
-    @test first(ms).sig == Tuple{typeof(g16493), Complex{TypeVar(:T, Any, true)}, Any}
+    @test first(ms).sig == Tuple{typeof(g16493), Complex{T}, Any} where T
 end
 
 # issue #17350

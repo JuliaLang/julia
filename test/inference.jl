@@ -60,7 +60,7 @@ function g3182(t::DataType)
     # however the ::Type{T} method should still match at run time.
     return f3182(t)
 end
-@test g3182(Complex) == 0
+@test g3182(Complex.body) == 0
 
 
 # issue #5906
@@ -103,6 +103,10 @@ barTuple2() = fooTuple{tuple(:y)}()
 
 @test Base.return_types(barTuple1,Tuple{})[1] == Base.return_types(barTuple2,Tuple{})[1] == fooTuple{(:y,)}
 
+# issue #6050
+@test Core.Inference.getfield_tfunc(
+          Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
+          Core.Inference.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
 # issue #12476
 function f12476(a)
@@ -139,7 +143,7 @@ end
 
 # issue #12826
 f12826{I<:Integer}(v::Vector{I}) = v[1]
-@test Base.return_types(f12826,Tuple{Array{TypeVar(:I, Integer),1}})[1] == Integer
+@test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
 
 
 # non-terminating inference, issue #14009
@@ -160,7 +164,7 @@ code_llvm(DevNull, f14009, (Int,))
 arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
 result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
-@test length(code_typed(result_type9232, Tuple{Type{TypeVar(:_, Union{Float32,Float64})}, Type{TypeVar(:T2, Number)}})) == 1
+@test length(code_typed(result_type9232, Tuple{(Type{_} where _<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
 
 
 # issue #10878
@@ -318,8 +322,8 @@ f16530a(c) = fieldtype(Foo16530a, c)
 f16530b() = fieldtype(Foo16530b, :c)
 f16530b(c) = fieldtype(Foo16530b, c)
 
-let T = Array{Tuple{Vararg{Float64,TypeVar(:dim)}},1},
-    TTlim = Type{TypeVar(:_,Array{TypeVar(:_,Tuple),1})}
+let T = Array{Tuple{Vararg{Float64,dim}}, 1} where dim,
+    TTlim = Type{_} where _<:T
 
     @test f16530a() == T
     @test f16530a(:c) == T
@@ -342,7 +346,7 @@ let T1 = Tuple{Int, Float64},
     @test f18037(2) === T2
 
     @test Base.return_types(f18037, ()) == Any[Type{T1}]
-    @test Base.return_types(f18037, (Int,)) == Any[Type{TypeVar(:T, Tuple{Int, AbstractFloat})}]
+    @test Base.return_types(f18037, (Int,)) == Any[Type{T} where T<:Tuple{Int, AbstractFloat}]
 end
 
 # issue #18015
@@ -399,7 +403,7 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 @test f18450() == Tuple{Vararg{Int}}
 
 # issue #18569
-@test Core.Inference.isconstType(Type{Tuple},true)
+@test Core.Inference.isconstType(Type{Tuple})
 
 # ensure pure attribute applies correctly to all signatures of fpure
 Base.@pure function fpure(a=rand(); b=rand())
