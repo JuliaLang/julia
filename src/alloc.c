@@ -477,7 +477,7 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_method_insta
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
     JL_TIMING(STAGED_FUNCTION);
-    jl_tupletype_t *tt = linfo->specTypes;
+    jl_tupletype_t *tt = (jl_tupletype_t*)linfo->specTypes;
     jl_svec_t *env = linfo->sparam_vals;
     size_t i, l;
     jl_expr_t *ex = NULL;
@@ -680,7 +680,7 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
     m->min_world = ++jl_world_counter;
     m->isstaged = isstaged;
     m->name = name;
-    m->sig = sig;
+    m->sig = (jl_value_t*)sig;
     m->isva = isva;
     m->nargs = nargs;
     if (jl_svec_len(tvars) == 1)
@@ -692,7 +692,7 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
     jl_method_set_source(m, definition);
     if (isstaged) {
         // create and store generator for generated functions
-        m->generator = jl_get_specialized(m, jl_anytuple_type, jl_emptysvec);
+        m->generator = jl_get_specialized(m, (jl_value_t*)jl_anytuple_type, jl_emptysvec);
         jl_gc_wb(m, m->generator);
         m->generator->inferred = (jl_value_t*)m->source;
     }

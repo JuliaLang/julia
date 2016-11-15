@@ -600,13 +600,13 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
 
     if (has_layout) {
         uint8_t layout = 0;
-        if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall(jl_array_type))->layout) {
+        if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout) {
             layout = 1;
         }
         else if (dt->layout == jl_void_type->layout) {
             layout = 2;
         }
-        else if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall(jl_pointer_type))->layout) {
+        else if (dt->layout == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->layout) {
             layout = 3;
         }
         write_uint8(s->s, layout);
@@ -1370,13 +1370,13 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     if (has_layout) {
         uint8_t layout = read_uint8(s->s);
         if (layout == 1) {
-            dt->layout = ((jl_datatype_t*)jl_unwrap_unionall(jl_array_type))->layout;
+            dt->layout = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout;
         }
         else if (layout == 2) {
             dt->layout = jl_void_type->layout;
         }
         else if (layout == 3) {
-            dt->layout = ((jl_datatype_t*)jl_unwrap_unionall(jl_pointer_type))->layout;
+            dt->layout = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->layout;
         }
         else {
             assert(layout == 0);
@@ -1581,7 +1581,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     uintptr_t pos = backref_list.len;
     if (usetable)
         arraylist_push(&backref_list, m);
-    m->sig = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&m->sig);
+    m->sig = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&m->sig);
     jl_gc_wb(m, m->sig);
     if (s->mode == MODE_MODULE) {
         int internal = read_uint8(s->s);
@@ -1649,7 +1649,7 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     if (usetable)
         arraylist_push(&backref_list, li);
 
-    li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
+    li->specTypes = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
     if (li->specTypes)
         jl_gc_wb(li, li->specTypes);
     li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
@@ -2765,7 +2765,7 @@ static void jl_update_backref_list(jl_value_t *old, jl_value_t *_new, size_t sta
 
 jl_method_t *jl_recache_method(jl_method_t *m, size_t start)
 {
-    jl_datatype_t *sig = m->sig;
+    jl_datatype_t *sig = (jl_datatype_t*)m->sig;
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
@@ -2784,14 +2784,14 @@ jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_
     jl_method_t *m = (jl_method_t*)jl_methtable_lookup(mt, sig, /*TODO*/jl_world_counter);
     assert(m && jl_is_method(m));
 
-    jl_datatype_t *argtypes = li->specTypes;
+    jl_datatype_t *argtypes = (jl_datatype_t*)li->specTypes;
     jl_set_typeof(li, (void*)(intptr_t)0x40); // invalidate the old value to help catch errors
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti = jl_type_intersection_matching((jl_value_t*)m->sig, (jl_value_t*)argtypes, &env);
     //assert(ti != jl_bottom_type); (void)ti;
     if (ti == jl_bottom_type)
         env = jl_emptysvec; // the intersection may fail now if the type system had made an incorrect subtype env in the past
-    jl_method_instance_t *_new = jl_specializations_get_linfo(m, argtypes, env, /*TODO*/jl_world_counter);
+    jl_method_instance_t *_new = jl_specializations_get_linfo(m, (jl_value_t*)argtypes, env, /*TODO*/jl_world_counter);
     jl_update_backref_list((jl_value_t*)li, (jl_value_t*)_new, start);
     return _new;
 }
@@ -2994,13 +2994,13 @@ void jl_init_serializer(void)
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_typeof(jl_emptytuple), jl_array_uint8_type, jl_symbol_type->name,
                      jl_ssavalue_type->name, jl_tuple_typename, jl_code_info_type, jl_bottomtype_type,
-                     ((jl_datatype_t*)jl_unwrap_unionall(jl_ref_type))->name,
+                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_ref_type))->name,
                      jl_pointer_typename, jl_simplevector_type->name, jl_datatype_type->name,
                      jl_uniontype_type->name, jl_array_typename, jl_expr_type->name,
                      jl_typename_type->name, jl_type_typename, jl_methtable_type->name,
                      jl_typemap_level_type->name, jl_typemap_entry_type->name, jl_tvar_type->name,
-                     ((jl_datatype_t*)jl_unwrap_unionall(jl_abstractarray_type))->name,
-                     ((jl_datatype_t*)jl_unwrap_unionall(jl_densearray_type))->name,
+                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name,
+                     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name,
                      jl_vararg_typename, jl_void_type->name, jl_method_instance_type->name, jl_method_type->name,
                      jl_module_type->name, jl_function_type->name, jl_typedslot_type->name,
                      jl_abstractslot_type->name, jl_slotnumber_type->name, jl_unionall_type->name,
@@ -3046,8 +3046,8 @@ void jl_init_serializer(void)
     arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_ref_type->body)->name);
     arraylist_push(&builtin_typenames, jl_pointer_typename);
     arraylist_push(&builtin_typenames, jl_type_typename);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall(jl_abstractarray_type))->name);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall(jl_densearray_type))->name);
+    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name);
+    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
     arraylist_push(&builtin_typenames, jl_tuple_typename);
     arraylist_push(&builtin_typenames, jl_vararg_typename);
 }

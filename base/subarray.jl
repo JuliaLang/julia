@@ -22,11 +22,11 @@ function SubArray(parent::AbstractArray, indexes::Tuple)
     @_inline_meta
     SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, index_dimsum(indexes...))
 end
-function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, ::NTuple{N})
+function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, ::NTuple{N,Any})
     @_inline_meta
     SubArray{eltype(P), N, P, I, false}(parent, indexes, 0, 0)
 end
-function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, ::NTuple{N})
+function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, ::NTuple{N,Any})
     @_inline_meta
     # Compute the stride and offset
     stride1 = compute_stride1(parent, indexes)
@@ -225,7 +225,7 @@ substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("st
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
-compute_stride1{N}(parent::AbstractArray, I::NTuple{N}) =
+compute_stride1{N}(parent::AbstractArray, I::NTuple{N,Any}) =
     (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val{N}), I))
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{Real, Vararg{Any}}) =
@@ -263,7 +263,7 @@ compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Colon}, 
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
 
-function compute_linindex{N}(parent, I::NTuple{N})
+function compute_linindex{N}(parent, I::NTuple{N,Any})
     @_inline_meta
     IP = fill_to_length(indices(parent), OneTo(1), Val{N})
     compute_linindex(1, 1, IP, I)

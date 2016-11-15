@@ -11,32 +11,32 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test f47(Array{Vector{Int}}(0)) == 0
 
 # issue #8652
-args_morespecific(a, b) = ccall(:jl_args_morespecific, Cint, (Any,Any), a, b) != 0
-let T1 = TypeVar(:T, Integer, true), T2 = TypeVar(:T, Integer, true)
-    a = Tuple{Type{T1}, T1}
-    b2 = Tuple{Type{T2}, Integer}
+args_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0
+let
+    a = Tuple{Type{T1}, T1} where T1<:Integer
+    b2 = Tuple{Type{T2}, Integer} where T2<:Integer
     @test args_morespecific(a, b2)
     @test !args_morespecific(b2, a)
-    a = Tuple{Type{T1}, Ptr{T1}}
-    b2 = Tuple{Type{T2}, Ptr{Integer}}
+    a = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
+    b2 = Tuple{Type{T2}, Ptr{Integer}} where T2<:Integer
     @test args_morespecific(a, b2)
     @test !args_morespecific(b2, a)
 end
 
 # issue #11534
-let T = TypeVar(:T, Tuple{Vararg{RangeIndex}}, true)
+let
     t1 = Tuple{AbstractArray, Tuple{Vararg{RangeIndex}}}
-    t2 = Tuple{Array, T}
+    t2 = Tuple{Array, T} where T<:Tuple{Vararg{RangeIndex}}
     @test !args_morespecific(t1, t2)
     @test  args_morespecific(t2, t1)
 end
 
-let T = TypeVar(:T, Any, true), N = TypeVar(:N, Any, true)
-    a = Tuple{Array{T,N}, Vararg{Int,N}}
+let
+    a = Tuple{Array{T,N}, Vararg{Int,N}} where T where N
     b = Tuple{Array,Int}
     @test  args_morespecific(a, b)
     @test !args_morespecific(b, a)
-    a = Tuple{Array, Vararg{Int,N}}
+    a = Tuple{Array, Vararg{Int,N}} where N
     @test !args_morespecific(a, b)
     @test  args_morespecific(b, a)
 end
@@ -52,9 +52,11 @@ _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 typealias TT11840{T} Tuple{T,T}
 f11840(::Type) = "Type"
 f11840(::DataType) = "DataType"
+f11840(::UnionAll) = "UnionAll"
 f11840{T<:Tuple}(::Type{T}) = "Tuple"
-@test f11840(Type) == "DataType"
-@test f11840(AbstractVector) == "Type"
+@test f11840(Type) == "UnionAll"
+@test f11840(Type.body) == "DataType"
+@test f11840(Union{Int,Int8}) == "Type"
 @test f11840(Tuple) == "Tuple"
 @test f11840(TT11840) == "Tuple"
 
@@ -82,7 +84,7 @@ g11840b(::Type) = 2
 
 h11840(::DataType) = '1'
 h11840(::Type) = '2'
-h11840(::TypeConstructor) = '3'
+h11840(::UnionAll) = '3'
 h11840{T<:Tuple}(::Type{T}) = '4'
 @test h11840(Vector) == '3'
 @test h11840(Vector.body) == '1'
@@ -132,10 +134,10 @@ nttest1{n}(x::NTuple{n,Int}) = n
 @test nttest1(()) == 0
 @test nttest1((1,2)) == 2
 @test NTuple <: Tuple
-@test NTuple{TypeVar(:T),Int32} <: Tuple{Vararg{Int32}}
-@test !(NTuple{TypeVar(:T),Int32} <: Tuple{Int32,Vararg{Int32}})
-@test Tuple{Vararg{Int32}} <: NTuple{TypeVar(:T),Int32}
-@test Tuple{Int32,Vararg{Int32}} <: NTuple{TypeVar(:T),Int32}
+@test (NTuple{T,Int32} where T) <: Tuple{Vararg{Int32}}
+@test !((NTuple{T,Int32} where T) <: Tuple{Int32,Vararg{Int32}})
+@test Tuple{Vararg{Int32}} <: (NTuple{T,Int32} where T)
+@test Tuple{Int32,Vararg{Int32}} <: (NTuple{T,Int32} where T)
 
 # #17198
 @test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
@@ -152,14 +154,14 @@ abstract Qux_{T} <: Sup_{Qux_{Int},T}
 @test ===(Qux_{Int}, Qux_{Char}.super.parameters[1])
 @test ===(Qux_{Char}.super.parameters[2], Char)
 
-@test Qux_.super.parameters[1].super <: Sup_
-@test ===(Qux_{Int}, Qux_.super.parameters[1].super.parameters[1])
-@test ===(Int, Qux_.super.parameters[1].super.parameters[2])
+@test Qux_.body.super.parameters[1].super <: Sup_
+@test ===(Qux_{Int}, Qux_.body.super.parameters[1].super.parameters[1])
+@test ===(Int, Qux_.body.super.parameters[1].super.parameters[2])
 
 type Foo_{T} x::Foo_{Int} end
 
-@test ===(Foo_.types[1], Foo_{Int})
-@test ===(Foo_.types[1].types[1], Foo_{Int})
+@test ===(Foo_.body.types[1], Foo_{Int})
+@test ===(Foo_.body.types[1].types[1], Foo_{Int})
 
 type Circ_{T} x::Circ_{T} end
 @test ===(Circ_{Int}, Circ_{Int}.types[1])
@@ -481,12 +483,14 @@ end
 # isassigned, issue #11167
 type Type11167{T,N} end
 Type11167{Int,2}
-@test !isassigned(Type11167.name.cache, 0)
-@test isassigned(Type11167.name.cache, 1)
-@test !isassigned(Type11167.name.cache, 2)
-Type11167{Float32,5}
-@test isassigned(Type11167.name.cache, 2)
-@test !isassigned(Type11167.name.cache, 3)
+let tname = Type11167.body.body.name
+    @test !isassigned(tname.cache, 0)
+    @test isassigned(tname.cache, 1)
+    @test !isassigned(tname.cache, 2)
+    Type11167{Float32,5}
+    @test isassigned(tname.cache, 2)
+    @test !isassigned(tname.cache, 3)
+end
 
 # dispatch
 let
@@ -788,21 +792,21 @@ let
     # issue #1131
     baar(x::DataType) = 0
     baar(x::Union) = 1
-    baar(x::TypeConstructor) = 2
+    baar(x::UnionAll) = 2
     @test baar(StridedArray) == 2
-    @test baar(StridedArray.body) == 1
+    @test baar(Base.unwrap_unionall(StridedArray)) == 1
     @test baar(Vector) == 2
     @test baar(Vector.body) == 0
 
     boor(x) = 0
     boor(x::Union) = 1
     @test boor(StridedArray) == 0
-    @test boor(StridedArray.body) == 1
+    @test boor(Base.unwrap_unionall(StridedArray)) == 1
 
     # issue #1202
     foor(x::Union) = 1
     @test_throws MethodError foor(StridedArray)
-    @test foor(StridedArray.body) == 1
+    @test foor(Base.unwrap_unionall(StridedArray)) == 1
     @test_throws MethodError foor(StridedArray)
 end
 
@@ -1279,8 +1283,8 @@ g4413(::Union{A4413, B4413, C4413}) = "ABC"
 # tuple argument, but it shouldn't do that for an argument that a static
 # parameter depends on.
 f4482{T}(x::T) = T
-@test f4482((Ptr,Ptr)) === Tuple{DataType,DataType}
-@test f4482((Ptr,))    === Tuple{DataType,}
+@test f4482((Ptr,Ptr)) === Tuple{UnionAll,UnionAll}
+@test f4482((Ptr,))    === Tuple{UnionAll,}
 
 # issue #4486
 try
@@ -1400,6 +1404,9 @@ macro make_closure()
 end
 end # module
 @test (Lib4771.@make_closure)(0) == 1
+
+# issue #4805
+abstract IT4805{N, T}
 
 let
     test0{T <: Int64}(::Type{IT4805{1, T}}, x) = x
@@ -1605,11 +1612,6 @@ end
 macro m6031(x); x; end
 @test @m6031([2,4,6])[3] == 6
 @test (@m6031 [2,4,6])[2] == 4
-
-# issue #6050
-@test Core.Inference.getfield_tfunc(
-          Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-          Core.Inference.Const(:vals)) == (Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1},true)
 
 # issue #6068
 x6068 = 1
@@ -2831,7 +2833,7 @@ function f11355(arg::DataType)
 end
 let t = Tuple{Type{Vector{Int}}}
     @test f11355(t) == 100
-    t = Tuple{Type{Dict{TypeVar(:K, true)}}}
+    t = Tuple{Type{Dict{K} where K}}
     @test f11355(t) == 100
 end
 
@@ -3046,17 +3048,6 @@ f12092(x::Int,) = 1
 f12092(x::Int, y::Int...) = 2
 @test f12092(1) == 1
 
-# issue #12096
-let a = Val{Val{TypeVar(:_,Int,true)}}
-    @test_throws UndefRefError a.instance
-    @test !isleaftype(a)
-end
-
-# PR #12058
-let N = TypeVar(:N,true)
-    @test typeintersect(NTuple{N,Int}, NTuple{N,Float64}) === Tuple{}
-end
-
 # issue #12063
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
 f12063{T}(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) = 1
@@ -3161,7 +3152,7 @@ typealias PossiblyInvalidUnion{T} Union{T,Int}
 # issue #13007
 call13007{T,N}(::Type{Array{T,N}}) = 0
 call13007(::Type{Array}) = 1
-@test length(Base._methods(call13007, Tuple{Type{TypeVar(:_,Array)}}, 4, typemax(UInt))) == 2
+@test length(Base._methods(call13007, Tuple{Type{_} where _<:Array}, 4, typemax(UInt))) == 2
 
 # detecting cycles during type intersection, e.g. #1631
 cycle_in_solve_tvar_constraints{S}(::Type{Nullable{S}}, x::S) = 0
@@ -3278,9 +3269,6 @@ abstract A11327
 abstract B11327 <: A11327
 f11327{T}(::Type{T},x::T) = x
 @test_throws MethodError f11327(Type{A11327},B11327)
-let T=TypeVar(:T,true)
-    @test typeintersect(Tuple{Type{T},T}, Tuple{Type{Type{Float64}},Type{Int}}) === Union{}
-end
 
 # issue 13855
 macro m13855()
@@ -3402,12 +3390,6 @@ end
 let z1 = Z14477()
     @test isa(z1, Z14477)
     @test isa(z1.fld, Z14477)
-end
-
-# issue #14482
-let T = TypeVar(:T, true)
-    @test typeintersect(T, Type{Int8}) == Type{Int8}
-    @test typeintersect(Tuple{T}, Tuple{Type{Int8}}) == Tuple{Type{Int8}}
 end
 
 # issue #8846, generic macros
@@ -4173,8 +4155,9 @@ type A12238{T} end
 type B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
-@test B12238.types[1] === A12238{B12238{Int}}
-@test A12238{B12238{Int}}.instance === B12238.types[1].instance
+@test B12238.body.body.types[1] === A12238{B12238{Int}.body}
+@test isa(A12238{B12238{Int}}.instance, A12238{B12238{Int}})
+@test !isdefined(B12238.body.body.types[1], :instance)  # has free type vars
 
 # issue #16315
 let a = Any[]
@@ -4184,8 +4167,8 @@ let a = Any[]
 end
 
 # issue #12096
-let a = Val{Val{TypeVar(:_, Int, true)}},
-    b = Val{Val{TypeVar(:_, Int)}}
+let a = Val{Val{TypeVar(:_, Int)}},
+    b = Val{Val{_} where _<:Int}
 
     @test !isdefined(a, :instance)
     @test  isdefined(b, :instance)
@@ -4270,8 +4253,8 @@ end
 type C16767{T}
     b::A16767{C16767{:a}}
 end
-@test B16767.types[1].types[1].parameters[1].types === Core.svec(A16767{B16767})
-@test C16767.types[1].types[1].parameters[1].types === Core.svec(A16767{C16767{:a}})
+@test B16767.body.types[1].types[1].parameters[1].types[1] === A16767{B16767.body}
+@test C16767.body.types[1].types[1].parameters[1].types[1] === A16767{C16767{:a}}
 
 # issue #16340
 function f16340{T}(x::T)
@@ -4281,7 +4264,7 @@ function f16340{T}(x::T)
     return g
 end
 let g = f16340(1)
-    @test isa(typeof(g).name.mt.defs.tvars, TypeVar)
+    @test isa(typeof(g).name.mt.defs.sig, UnionAll)
 end
 
 # issue #16793

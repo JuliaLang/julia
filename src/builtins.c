@@ -766,25 +766,39 @@ JL_CALLABLE(jl_f_setfield)
     return args[2];
 }
 
+static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
+{
+    if (jl_is_unionall(t)) {
+        jl_value_t *u = t;
+        JL_GC_PUSH1(&u);
+        u = get_fieldtype(((jl_unionall_t*)t)->body, f);
+        u = jl_type_unionall(((jl_unionall_t*)t)->var, u);
+        JL_GC_POP();
+        return u;
+    }
+    jl_datatype_t *st = (jl_datatype_t*)t;
+    if (!jl_is_datatype(st))
+        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, (jl_value_t*)st);
+    int field_index;
+    if (jl_is_long(f)) {
+        field_index = jl_unbox_long(f) - 1;
+        if (field_index < 0 || field_index >= jl_field_count(st))
+            jl_bounds_error(t, f);
+    }
+    else {
+        JL_TYPECHK(fieldtype, symbol, f);
+        field_index = jl_field_index(st, (jl_sym_t*)f, 1);
+    }
+    return jl_field_type(st, field_index);
+}
+
 JL_CALLABLE(jl_f_fieldtype)
 {
     JL_NARGS(fieldtype, 2, 2);
     jl_datatype_t *st = (jl_datatype_t*)args[0];
     if (st == jl_module_type)
         jl_error("cannot assign variables in other modules");
-    if (!jl_is_datatype(st))
-        jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, (jl_value_t*)st);
-    int field_index;
-    if (jl_is_long(args[1])) {
-        field_index = jl_unbox_long(args[1]) - 1;
-        if (field_index < 0 || field_index >= jl_field_count(st))
-            jl_bounds_error(args[0], args[1]);
-    }
-    else {
-        JL_TYPECHK(fieldtype, symbol, args[1]);
-        field_index = jl_field_index(st, (jl_sym_t*)args[1], 1);
-    }
-    return jl_field_type(st, field_index);
+    return get_fieldtype(args[0], args[1]);
 }
 
 JL_CALLABLE(jl_f_nfields)
@@ -1314,7 +1328,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "%s", jl_symbol_name(dv->name->name));
         if (dv->parameters && (jl_value_t*)dv != dv->name->wrapper &&
             (jl_has_free_typevars(v) ||
-             !jl_types_equal((jl_value_t*)dv, (jl_value_t*)jl_tuple_type))) {
+             (jl_value_t*)dv != (jl_value_t*)jl_tuple_type)) {
             size_t j, tlen = jl_nparams(dv);
             if (tlen > 0) {
                 n += jl_printf(out, "{");

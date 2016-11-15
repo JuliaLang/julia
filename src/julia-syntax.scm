@@ -345,8 +345,18 @@
                           ,body ,isstaged)
                  `(method ,name
                           (block
-                           ,@(map (lambda (l r) (make-assignment l (replace-vars r renames)))
-                                  temps (map bounds-to-TypeVar sparams))
+                           ,@(let loop ((n       names)
+                                        (t       temps)
+                                        (sp      (map bounds-to-TypeVar sparams))
+                                        (ren     '())
+                                        (assigns '()))
+                               (if (null? n)
+                                   (reverse! assigns)
+                                   (loop (cdr n) (cdr t) (cdr sp)
+                                         (cons (cons (car n) (car t)) ren)
+                                         ;; each static param can see just the previous ones
+                                         (cons (make-assignment (car t) (replace-vars (car sp) ren))
+                                               assigns))))
                            (call (core svec) (call (core svec)
                                                    ,@(dots->vararg
                                                       (map (lambda (ty)
@@ -420,10 +430,9 @@
                   sparams))
          (keyword-sparams
           (filter (lambda (s)
-                    (not (expr-contains-eq (car s) (cons 'list positional-sparams))))
-                  sparams))
-         (keyword-sparam-names
-          (map car keyword-sparams)))
+                    (not (any (lambda (p) (eq? (car p) (car s)))
+                              positional-sparams)))
+                  sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy))
           (rkw (if (null? restkw) '() (symbol (string (car restkw) "..."))))
           (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
@@ -497,15 +506,15 @@
                                    (rval0 `(call (core arrayref) ,kw
                                                  (call (top +) ,ii 1)))
                                    ;; note: if the "declared" type of a KW arg
-                                   ;; includes something from keyword-sparam-names,
+                                   ;; includes something from keyword-sparams
                                    ;; then don't assert it here, since those static
                                    ;; parameters don't have values yet.
                                    ;; instead, the type will be picked up when the
                                    ;; underlying method is called.
                                    (rval (if (and (decl? k)
                                                   (not (any (lambda (s)
-                                                              (expr-contains-eq s (caddr k)))
-                                                            keyword-sparam-names)))
+                                                              (expr-contains-eq (car s) (caddr k)))
+                                                            keyword-sparams)))
                                              `(call (core typeassert)
                                                     ,rval0
                                                     ,(caddr k))

@@ -25,6 +25,8 @@ Signed
 """
 supertype(T::DataType) = T.super
 
+supertype(T::UnionAll) = UnionAll(T.var, supertype(T.body))
+
 ## generic comparison ##
 
 ==(x, y) = x === y
