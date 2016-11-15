@@ -140,9 +140,9 @@ noteworthy differences:
 - Like many languages, Julia does not always allow operations on vectors of
   different lengths, unlike R where the vectors only need to share a common
   index range.  For example, ``c(1,2,3,4) + c(1,2)`` is valid R but the
-  equivalent ``[1:4] + [1:2]`` will throw an error in Julia.
-- Julia's :func:`apply` takes the function first, then its arguments, unlike
-  ``lapply(<structure>, function, arg2, ...)`` in R.
+  equivalent ``[1,2,3,4] + [1,2]`` will throw an error in Julia.
+- Julia's :func:`map` takes the function first, then its arguments, unlike
+  ``lapply(<structure>, function, ...)`` in R.
 - Julia uses ``end`` to denote the end of conditional blocks, like ``if``,
   loop blocks, like ``while``/``for``, and functions. In lieu of the one-line
   ``if ( cond ) statement``, Julia allows statements of the form
