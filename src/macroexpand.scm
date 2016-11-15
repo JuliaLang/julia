@@ -57,7 +57,7 @@
     (cons 'varlist (append (llist-vars (fix-arglist argl))
                            (apply nconc
                                   (map (lambda (v) (trycatch
-                                                    (list (sparam-name v))
+                                                    (list (car (analyze-typevar v)))
                                                     (lambda (e) '())))
                                        sparams)))))
 

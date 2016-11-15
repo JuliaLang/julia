@@ -76,6 +76,13 @@ function unwrap_unionall(a::ANY)
     return a
 end
 
+function rewrap_unionall(t::ANY, u::ANY)
+    if !isa(u, UnionAll)
+        return t
+    end
+    return UnionAll(u.var, rewrap_unionall(t, u.body))
+end
+
 const _va_typename = Vararg.body.body.name
 function isvarargtype(t::ANY)
     t = unwrap_unionall(t)

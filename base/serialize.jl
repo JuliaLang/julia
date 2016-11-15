@@ -833,8 +833,7 @@ function deserialize_datatype(s::AbstractSerializer)
         mod = deserialize(s)::Module
         ty = getfield(mod,name)
     end
-    assert(isa(ty,DataType))
-    if isempty(ty.parameters)
+    if isa(ty,DataType)
         t = ty
     else
         params = deserialize(s)

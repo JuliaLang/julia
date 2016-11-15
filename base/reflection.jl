@@ -273,6 +273,16 @@ Determine the declared type of a field (specified by name or index) in a composi
 """
 fieldtype
 
+"""
+    fieldindex(T, name::Symbol, err:Bool=true)
+
+Get the index of a named field, throwing an error if the field does not exist (when err==true)
+or returning 0 (when err==false).
+"""
+function fieldindex(T::DataType, name::Symbol, err::Bool=true)
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
+end
+
 type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
 
 # return all instances, for types that can be enumerated
@@ -559,7 +569,7 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool,
     t = to_tuple_type(t)
     ft = isa(f, Type) ? Type{f} : typeof(f)
     tt = Tuple{ft, t.parameters...}
-    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any), tt, meth.sig)::SimpleVector
+    (ti, env) = ccall(:jl_match_method, Any, (Any, Any), tt, meth.sig)::SimpleVector
     meth = func_for_method_checked(meth, tt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     # get the code for it

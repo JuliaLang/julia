@@ -63,6 +63,9 @@ function test_2()
     @test !(Tuple{Int,Vararg{Int,2}} <: Tuple{Int,Int,Int,Vararg{Int,1}})
     @test Tuple{Int,Vararg{Int}} == Tuple{Int,Vararg{Int}}
     @test (@UnionAll N Tuple{Int,Vararg{Int,N}}) == (@UnionAll N Tuple{Int,Vararg{Int,N}})
+
+    @test issub_strict(Tuple{Tuple{Int,Int},Tuple{Int,Int}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
+    @test !issub(Tuple{Tuple{Int,Int},Tuple{Int,}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
 end
 
 function test_diagonal()
@@ -417,6 +420,9 @@ function test_Type()
     @test isa(Tuple{},Type{Tuple{}})
     @test !(Tuple{Int,} <: (@UnionAll T<:Tuple Type{T}))
     @test isa(Tuple{Int}, (@UnionAll T<:Tuple Type{T}))
+
+    # this matches with T==DataType, since DataType is concrete
+    @test issub(Tuple{Type{Int},Type{Int8}}, Tuple{T,T} where T)
 end
 
 # old subtyping tests from test/core.jl
@@ -446,6 +452,7 @@ function test_old()
     @test !(Type{Ptr{Bottom}} <: Type{Ptr})
     @test !(Type{Rational{Int}} <: Type{Rational})
     @test Tuple{} <: Tuple{Vararg}
+    @test Tuple{Int,Int} <: Tuple{Vararg}
     @test Tuple{} <: @UnionAll N NTuple{N}
     @test !(Type{Tuple{}} <: Type{Tuple{Vararg}})
     @test !(Type{Tuple{}} <: (@UnionAll N Type{NTuple{N}}))
@@ -564,7 +571,7 @@ macro testintersect(a, b, result)
     end)
 end
 
-abstract IT4805{N, T}
+abstract IT4805_2{N, T}
 abstract AbstractThing{T,N}
 type ConcreteThing{T<:AbstractFloat,N} <: AbstractThing{T,N}
 end
@@ -702,11 +709,15 @@ function test_intersection()
     @testintersect((@UnionAll N Tuple{Array{Int,N},Vararg{Int,N}}),
                    Tuple{Matrix{Int},Int,Vararg{Float64}}, Bottom)
 
+    @testintersect(Tuple{Array{Any,1}, Tuple{Int64, Int64, Vararg{Int64, N} where N}},
+                   Tuple{Array{T,N}, Tuple{Vararg{Int64,N}}} where N where T,
+                   Bottom)
+
     @testintersect((@UnionAll T<:Union{Float64,Array{Float64,1}} T), Real, Float64)
 
     # issue #4805
-    @testintersect((@UnionAll T<:Int Type{IT4805{1,T}}),
-                   (@UnionAll S<:(@UnionAll N IT4805{N,Int}) Type{S}),
+    @testintersect((@UnionAll T<:Int Type{IT4805_2{1,T}}),
+                   (@UnionAll S<:(@UnionAll N IT4805_2{N,Int}) Type{S}),
                    !Bottom)
 
     # issue #8851
@@ -718,11 +729,13 @@ function test_intersection()
     @testintersect((@UnionAll T Tuple{T, T}), (@UnionAll TB<:B11136 Tuple{A11136, TB}), Bottom)
     @testintersect((@UnionAll T Tuple{T, T}), (@UnionAll T2<:Foo11367 Tuple{Type{BigInt}, T2}), Bottom)
 
+    # PR #12058
     @testintersect((@UnionAll N NTuple{N,Int}), (@UnionAll N NTuple{N,Float64}), Tuple{})
 
     @testintersect((@UnionAll T Tuple{Type{T},T}), Tuple{Type{Type{Float64}},Type{Int}}, Bottom)
 
     @testintersect((@UnionAll T T), Type{Int8}, Type{Int8})
+    # issue #14482
     @testintersect((@UnionAll T Tuple{T}), Tuple{Type{Int8}}, Tuple{Type{Int8}})
 
     @testintersect((@UnionAll T Tuple{Union{Int,T}, Union{Vector{T},Vector{String}}}),

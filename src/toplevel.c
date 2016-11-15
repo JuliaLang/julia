@@ -517,7 +517,7 @@ static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
     li->inferred = (jl_value_t*)src;
-    li->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple);
+    li->specTypes = jl_typeof(jl_emptytuple);
     return li;
 }
 
@@ -796,7 +796,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     jl_methtable_t *mt;
     jl_sym_t *name;
     jl_method_t *m = NULL;
-    jl_tupletype_t *argtype = jl_apply_tuple_type(atypes);
+    jl_value_t *argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
     JL_GC_PUSH3(&f, &m, &argtype);
 
     if (!jl_is_code_info(f)) {
@@ -807,7 +807,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     }
 
     assert(jl_is_code_info(f));
-    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtype);
+    jl_datatype_t *ftype = jl_first_argument_datatype(argtype);
     if (ftype == NULL ||
         !(jl_is_type_type((jl_value_t*)ftype) ||
           (jl_is_datatype(ftype) &&
@@ -821,10 +821,14 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         jl_error("cannot add methods to a builtin function");
 
     int j;
-    for(j=(int)jl_svec_len(tvars)-1; j >= 0 ; j--)
-        argtype = jl_new_struct(jl_unionall_type, jl_svecref(tvars,j), argtype);
+    for(j=(int)jl_svec_len(tvars)-1; j >= 0 ; j--) {
+        jl_value_t *tv = jl_svecref(tvars,j);
+        if (!jl_is_typevar(tv))
+            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
+        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+    }
 
-    m = jl_new_method(f, name, argtype, nargs, isva, tvars, isstaged == jl_true);
+    m = jl_new_method(f, name, (jl_tupletype_t*)argtype, nargs, isva, tvars, isstaged == jl_true);
 
     if (jl_has_free_typevars(argtype)) {
         jl_exceptionf(jl_argumenterror_type,
@@ -836,7 +840,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
 
     jl_check_static_parameter_conflicts(m, tvars);
 
-    jl_value_t *argtype_body = jl_unwrap_unionall(argtype);
     size_t i, na = jl_svec_len(atypes);
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
@@ -860,17 +863,17 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     }
 
     int ishidden = !!strchr(jl_symbol_name(name), '#');
-    for (size_t i=0; i < jl_svec_len(tvars); i++) {
-        jl_value_t *tv = jl_svecref(tvars,i);
-        if (!jl_is_typevar(tv))
-            jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
-        if (!ishidden && !jl_has_typevar((jl_value_t*)argtype_body, (jl_tvar_t*)tv)) {
+    jl_value_t *atemp = argtype;
+    while (jl_is_unionall(atemp)) {
+        jl_unionall_t *ua = (jl_unionall_t*)atemp;
+        jl_tvar_t *tv = ua->var;
+        if (!ishidden && !jl_has_typevar(ua->body, tv)) {
             jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
-                      jl_symbol_name(((jl_tvar_t*)tv)->name),
-                      jl_symbol_name(name));
+                      jl_symbol_name(tv->name), jl_symbol_name(name));
             print_func_loc(JL_STDERR, m);
             jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
         }
+        atemp = ua->body;
     }
 
     jl_method_table_insert(mt, m, NULL);

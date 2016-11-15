@@ -204,7 +204,7 @@ julia> strides(A)
 ```
 """
 strides(A::AbstractArray) = _strides((1,), A)
-_strides{T,N}(out::NTuple{N}, A::AbstractArray{T,N}) = out
+_strides{T,N}(out::NTuple{N,Any}, A::AbstractArray{T,N}) = out
 function _strides{M,T,N}(out::NTuple{M}, A::AbstractArray{T,N})
     @_inline_meta
     _strides((out..., out[M]*size(A, M)), A)
