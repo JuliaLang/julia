@@ -548,6 +548,18 @@ let
 end
 @test glob_x3 == 12
 
+# interaction between local variable renaming and nested globals (#19333)
+x19333 = 1
+function f19333(x19333)
+    return let x19333 = x19333
+        g19333() = (global x19333 += 2)
+        g19333() + (x19333 += 1)
+    end + (x19333 += 1)
+end
+@test f19333(0) == 5
+@test f19333(0) == 7
+@test x19333 == 5
+
 # let - new variables, including undefinedness
 function let_undef()
     first = true

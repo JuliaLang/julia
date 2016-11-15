@@ -2373,7 +2373,9 @@
                 (new-renames (append (map cons need-rename renamed) ;; map from definition name -> gensym name
                                      (map cons need-rename-def renamed-def)
                                      (filter (lambda (ren) ;; old renames list, with anything in vars removed
-                                               (not (memq (car ren) all-vars)))
+                                               (not (or (memq (car ren) all-vars)
+                                                        (memq (car ren) iglo)
+                                                        (memq (car ren) glob))))
                                              renames)))
                 (new-env (append all-vars glob env))
                 (new-iglo (append iglo implicitglobals))
