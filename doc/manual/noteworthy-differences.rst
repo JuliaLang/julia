@@ -133,14 +133,14 @@ noteworthy differences:
 - In Julia, not all data structures support logical indexing. Furthermore,
   logical indexing in Julia is supported only with vectors of length equal to
   the object being indexed. For example:
-  - In R, ``c(1, 2, 3, 4)[c(TRUE, FALSE)]`` is equivalent to ``c(1,3)``.
-  - In R, ``c(1, 2, 3, 4)[c(TRUE, FALSE, TRUE, FALSE)]`` is equivalent to ``c(1,3)``.
+  - In R, ``c(1, 2, 3, 4)[c(TRUE, FALSE)]`` is equivalent to ``c(1, 3)``.
+  - In R, ``c(1, 2, 3, 4)[c(TRUE, FALSE, TRUE, FALSE)]`` is equivalent to ``c(1, 3)``.
   - In Julia, ``[1, 2, 3, 4][[true, false]]`` throws a :exc:`BoundsError`.
   - In Julia, ``[1, 2, 3, 4][[true, false, true, false]]`` produces ``[1, 3]``.
 - Like many languages, Julia does not always allow operations on vectors of
   different lengths, unlike R where the vectors only need to share a common
-  index range.  For example, ``c(1,2,3,4) + c(1,2)`` is valid R but the
-  equivalent ``[1,2,3,4] + [1,2]`` will throw an error in Julia.
+  index range.  For example, ``c(1, 2, 3, 4) + c(1, 2)`` is valid R but the
+  equivalent ``[1, 2, 3, 4] + [1, 2]`` will throw an error in Julia.
 - Julia's :func:`map` takes the function first, then its arguments, unlike
   ``lapply(<structure>, function, ...)`` in R.
 - Julia uses ``end`` to denote the end of conditional blocks, like ``if``,
