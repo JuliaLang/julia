@@ -2,45 +2,7 @@ using Base.Bottom
 using Base.Test
 
 macro UnionAll(var, expr)
-    lb = :Bottom
-    ub = :Any
-    if isa(var,Expr) && var.head === :comparison
-        if length(var.args) == 3
-            v = var.args[1]
-            if var.args[2] == :(<:)
-                ub = esc(var.args[3])
-            elseif var.args[2] == :(>:)
-                lb = esc(var.args[3])
-            else
-                error("invalid bounds in UnionAll")
-            end
-        elseif length(var.args) == 5
-            v = var.args[3]
-            if var.args[2] == var.args[4] == :(<:)
-                lb = esc(var.args[1])
-                ub = esc(var.args[5])
-            else
-                error("invalid bounds in UnionAll")
-            end
-        else
-            error("invalid bounds in UnionAll")
-        end
-    elseif isa(var,Expr) && var.head === :(<:)
-        v = var.args[1]
-        ub = esc(var.args[2])
-    elseif isa(var,Expr) && var.head === :(>:)
-        v = var.args[1]
-        lb = esc(var.args[2])
-    elseif !isa(var,Symbol)
-        error("invalid variable in UnionAll")
-    else
-        v = var
-    end
-    Base.remove_linenums!(quote
-        let $(esc(v)) = TypeVar($(Expr(:quote,v)), $lb, $ub)
-            UnionAll($(esc(v)), $(esc(expr)))
-        end
-    end)
+    Expr(:where, expr, var)
 end
 
 const issub = issubtype
@@ -597,26 +559,8 @@ macro testintersect(a, b, result)
         cmp = :isequal_type
     end
     Base.remove_linenums!(quote
-        if !($(esc(cmp))(_type_intersect($(esc(a)), $(esc(b))), $(esc(result))))
-            show($a)
-            println()
-            show($b)
-            println()
-            show(_type_intersect($a, $b))
-            println()
-            @test false
-        end
-        #@test $(esc(cmp))(_type_intersect($(esc(a)), $(esc(b))), $(esc(result)))
-        if !($(esc(cmp))(_type_intersect($(esc(b)), $(esc(a))), $(esc(result))))
-            show($b)
-            println()
-            show($a)
-            println()
-            show(_type_intersect($b, $a))
-            println()
-            @test false
-        end
-        #@test $(esc(cmp))(_type_intersect($(esc(b)), $(esc(a))), $(esc(result)))
+        @test $(esc(cmp))(_type_intersect($(esc(a)), $(esc(b))), $(esc(result)))
+        @test $(esc(cmp))(_type_intersect($(esc(b)), $(esc(a))), $(esc(result)))
     end)
 end
 
