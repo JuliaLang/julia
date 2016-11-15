@@ -1042,7 +1042,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
             }
             size_t nf = jl_datatype_nfields(t);
             if (nf == 0 && jl_datatype_size(t)>0) {
-                if (t->name == jl_pointer_type->name) {
+                if (t->name == jl_pointer_type->name && jl_unbox_voidpointer(v) != (void*)-1) {
+                    // normalize most pointers to NULL, to help catch memory errors
+                    // but permit MAP_FAILED / INVALID_HANDLE to be stored unchanged
                     write_int32(s->s, 0);
 #ifdef _P64
                     write_int32(s->s, 0);
