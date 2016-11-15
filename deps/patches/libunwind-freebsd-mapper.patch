@@ -1,0 +1,12 @@
+--- tests/mapper.c	2014-10-06 14:46:27.000000000 -0400
++++ tests/mapper.c	2014-10-06 14:47:00.000000000 -0400
+@@ -39,6 +39,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DE
+ #if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
+ # define MAP_ANONYMOUS MAP_ANON
+ #endif
++#if !defined(MAP_NORESERVE)
++# define MAP_NORESERVE 0
++#endif
+ 
+ int
+ main (void)
