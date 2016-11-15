@@ -12,7 +12,7 @@ data = Any["", "test", lorem, file, so_many_as]
 
 # Descriptions of the data, the SHA functions we'll run on the data, etc...
 data_desc = ["the empty string", "the string \"test\"", "lorem ipsum", "0 file", "one million a's"]
-sha_types = @compat Dict(sha1 => SHA.SHA1_CTX,
+sha_types = Dict(sha1 => SHA.SHA1_CTX,
             sha2_224 => SHA.SHA2_224_CTX, sha2_256 => SHA.SHA2_256_CTX, sha2_384 => SHA.SHA2_384_CTX, sha2_512 => SHA.SHA2_512_CTX,
             sha3_224 => SHA.SHA3_224_CTX, sha3_256 => SHA.SHA3_256_CTX, sha3_384 => SHA.SHA3_384_CTX, sha3_512 => SHA.SHA3_512_CTX)
 sha_funcs = [sha1,
@@ -25,7 +25,7 @@ shws = ["SHA1 hash state",
         "SHA2 224-bit hash state", "SHA2 256-bit hash state", "SHA2 384-bit hash state", "SHA2 512-bit hash state",
         "SHA3 224-bit hash state", "SHA3 256-bit hash state", "SHA3 384-bit hash state", "SHA3 512-bit hash state"]
 
-answers = @compat Dict(
+answers = Dict(
 sha1 => [
 "da39a3ee5e6b4b0d3255bfef95601890afd80709",
 "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3",

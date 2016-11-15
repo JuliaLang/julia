@@ -1,4 +1,4 @@
-function transform!{T<:@compat(Union{SHA2_224_CTX,SHA2_256_CTX})}(context::T)
+function transform!{T<:Union{SHA2_224_CTX,SHA2_256_CTX}}(context::T)
     buffer = reinterpret(eltype(context.state), context.buffer)
     # Initialize registers with the previous intermediate values (our state)
     a = context.state[1]
@@ -22,11 +22,11 @@ function transform!{T<:@compat(Union{SHA2_224_CTX,SHA2_256_CTX})}(context::T)
             h = g
             g = f
             f = e
-            e = @compat UInt32(d + T1)
+            e = UInt32(d + T1)
             d = c
             c = b
             b = a
-            a = @compat UInt32(T1 + T2)
+            a = UInt32(T1 + T2)
         end
     end
 
@@ -45,11 +45,11 @@ function transform!{T<:@compat(Union{SHA2_224_CTX,SHA2_256_CTX})}(context::T)
             h = g
             g = f
             f = e
-            e = @compat UInt32(d + T1)
+            e = UInt32(d + T1)
             d = c
             c = b
             b = a
-            a = @compat UInt32(T1 + T2)
+            a = UInt32(T1 + T2)
         end
     end
 
@@ -65,7 +65,7 @@ function transform!{T<:@compat(Union{SHA2_224_CTX,SHA2_256_CTX})}(context::T)
 end
 
 
-function transform!(context::@compat(Union{SHA2_384_CTX,SHA2_512_CTX}))
+function transform!(context::Union{SHA2_384_CTX,SHA2_512_CTX})
     buffer = reinterpret(eltype(context.state), context.buffer)
     # Initialize registers with the prev. intermediate value
     a = context.state[1]
