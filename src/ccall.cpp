@@ -1731,7 +1731,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (isVa && ai >= nargt - 1) {
             largty = fargt.at(nargt - 1);
             toboxed = fargt_isboxed.at(nargt - 1);
-            jargty = jl_tparam0(jl_svecref(tt, nargt - 1));
+            jargty = jl_unwrap_vararg(jl_svecref(tt, nargt - 1));
             byRef = byRefList.at(nargt - 1);
         }
         else {

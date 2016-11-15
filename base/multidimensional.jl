@@ -159,9 +159,9 @@ module IteratorsMD
     @inline split{N}(t, V::Type{Val{N}}) = _split((), t, V)
     @inline _split(tN, trest, V) = _split((tN..., trest[1]), tail(trest), V)
     # exit either when we've exhausted the input tuple or when tN has length N
-    @inline _split{N}(tN::NTuple{N}, ::Tuple{}, ::Type{Val{N}}) = tN, ()  # ambig.
-    @inline _split{N}(tN,            ::Tuple{}, ::Type{Val{N}}) = tN, ()
-    @inline _split{N}(tN::NTuple{N},  trest,    ::Type{Val{N}}) = tN, trest
+    @inline _split{N}(tN::NTuple{N,Any}, ::Tuple{}, ::Type{Val{N}}) = tN, ()  # ambig.
+    @inline _split{N}(tN,                ::Tuple{}, ::Type{Val{N}}) = tN, ()
+    @inline _split{N}(tN::NTuple{N,Any},  trest,    ::Type{Val{N}}) = tN, trest
 end  # IteratorsMD
 
 
@@ -312,8 +312,8 @@ end
 _maybe_reshape(::LinearFast, A::AbstractArray, i) = A
 _maybe_reshape(::LinearSlow, A::AbstractVector, i) = A
 @inline _maybe_reshape(::LinearSlow, A::AbstractArray, i) = _maybe_reshape(LinearSlow(), index_ndims(i...), A)
-@inline _maybe_reshape{T,N}(::LinearIndexing, ::NTuple{N}, A::AbstractArray{T,N}) = A
-@inline _maybe_reshape{N}(::LinearIndexing, ::NTuple{N}, A) = reshape(A, Val{N})
+@inline _maybe_reshape{T,N}(::LinearIndexing, ::NTuple{N,Any}, A::AbstractArray{T,N}) = A
+@inline _maybe_reshape{N}(::LinearIndexing, ::NTuple{N,Any}, A) = reshape(A, Val{N})
 
 @inline function _getindex{N}(l::LinearIndexing, A::AbstractArray, I::Vararg{Union{Real, AbstractArray, Colon},N}) # TODO: DEPRECATE FOR #14770
     @boundscheck checkbounds(A, I...)

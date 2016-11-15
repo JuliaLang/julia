@@ -92,7 +92,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
     jl_array_t *sp = NULL;
     JL_GC_PUSH2(&ip, &sp);
     if (array_ptr_void_type == NULL) {
-        array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, jl_voidpointer_type, jl_box_long(1));
+        array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
     ip = jl_alloc_array_1d(array_ptr_void_type, 0);
     sp = returnsp ? jl_alloc_array_1d(array_ptr_void_type, 0) : NULL;
@@ -124,7 +124,7 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
     jl_array_t *bt = NULL;
     JL_GC_PUSH1(&bt);
     if (array_ptr_void_type == NULL) {
-        array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, jl_voidpointer_type, jl_box_long(1));
+        array_ptr_void_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_voidpointer_type, jl_box_long(1));
     }
     bt = jl_alloc_array_1d(array_ptr_void_type, ptls->bt_size);
     memcpy(bt->data, ptls->bt_data, ptls->bt_size * sizeof(void*));

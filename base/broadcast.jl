@@ -14,7 +14,7 @@ typealias ScalarType Union{Type{Any}, Type{Nullable}}
 ## Broadcasting utilities ##
 # fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
-@inline broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
+@inline broadcast{N}(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) = map(f, t, ts...)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)

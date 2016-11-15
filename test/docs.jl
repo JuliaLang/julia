@@ -602,7 +602,7 @@ Base.collect{T}(::Type{EmptyType{T}}) = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
+    @test fd.order[1] == Tuple{Type{I12515.EmptyType{T}}} where T
 end
 
 # PR #12593
