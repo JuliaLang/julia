@@ -188,13 +188,13 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *li, int force)
     JL_TIMING(INFERENCE);
     if (jl_typeinf_func == NULL)
         return NULL;
+    jl_code_info_t *src = NULL;
 #ifdef ENABLE_INFERENCE
     jl_module_t *mod = NULL;
     if (li->def != NULL)
         mod = li->def->module;
     static int inInference = 0;
     int lastIn = inInference;
-    jl_code_info_t *src = NULL;
     inInference = 1;
     if (force ||
         (mod != jl_gf_mtable(jl_typeinf_func)->module &&
