@@ -120,6 +120,8 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
         return 1;
     if (wc < 0xA1 || wc > 0x10ffff)
         return 0;
+    if (wc == 0x1d40)   // superscript transpose
+        return 0;
     utf8proc_category_t cat = utf8proc_category((utf8proc_int32_t) wc);
     if (is_wc_cat_id_start(wc, cat)) return 1;
     if (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||

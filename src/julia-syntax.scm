@@ -2122,8 +2122,9 @@
                      ,.(apply append rows)))
             `(call (top typed_vcat) ,t ,@a)))))
 
-   '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
-   '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
+   'ᵀ    (lambda (e) `(call       transpose ,(expand-forms (cadr e))))
+   '|'|  (lambda (e) `(call      ctranspose ,(expand-forms (cadr e))))
+   '|.'| (lambda (e) `(call matlabtranspose ,(expand-forms (cadr e))))
 
    'ccall
    (lambda (e)

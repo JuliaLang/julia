@@ -1116,4 +1116,8 @@ Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching
 @deprecate takebuf_array take!
 @deprecate takebuf_string(b) String(take!(b))
 
+# Deprecate .' syntax for transpose
+matlabtranspose(x) = depwarn(string(".' is now depreacted in favor of ᵀ, i.e. superscipt T which ",
+    "you can type \\^T[tab] in the REPL, Jupyter, and most editors"), :matlabtranspose)
+
 # End deprecations scheduled for 0.6

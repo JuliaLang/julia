@@ -662,6 +662,7 @@ export
     lufact!,
     lufact,
     lyap,
+    matlabtranspose,
     norm,
     normalize,
     normalize!,

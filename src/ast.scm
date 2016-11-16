@@ -21,7 +21,7 @@
                  (if (and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
                      (deparse (cadr (caddr e)))
                      (string #\( (deparse (caddr e)) #\)))))
-        ((memq (car e) '(... |'| |.'|))
+        ((memq (car e) '(... |'| |.'| ᵀ))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
          (string (deparse (cadr e)) (car e) (deparse (caddr e))))
@@ -206,7 +206,8 @@
                            (pair? (caddr x))
                            (length> (caddr x) 1)
                            (eq? (cadr (caddr x)) 'Vararg)))))
-(define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
+(define (trans? x) (and (pair? x) (eq? (car x) 'ᵀ)))
+(define (matlabtrans?  x) (and (pair? x) (eq? (car x) '|.'|)))
 (define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
 
 (define (make-assignment l r) `(= ,l ,r))
