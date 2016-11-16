@@ -864,12 +864,7 @@ function (\)(A::SparseMatrixCSC, B::AbstractVecOrMat)
             return UpperTriangular(A) \ B
         end
         if ishermitian(A)
-            try
-                return cholfact(Hermitian(A)) \ B
-            catch e
-                isa(e, PosDefException) || rethrow(e)
-                return ldltfact(Hermitian(A)) \ B
-            end
+            Hermitian(A) \ B
         end
         return lufact(A) \ B
     else
