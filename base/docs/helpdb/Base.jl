@@ -53,14 +53,6 @@ Compute the inverse sine of `x`, where the output is in radians.
 asin
 
 """
-    takebuf_array(b::IOBuffer)
-
-Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
-`IOBuffer` is reset to its initial state.
-"""
-takebuf_array
-
-"""
     pointer(array [, index])
 
 Get the native address of an array or string element. Be careful to ensure that a Julia

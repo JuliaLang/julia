@@ -15,7 +15,7 @@ end
 function test_bin_reflection(freflect, f, types)
     iob = IOBuffer()
     freflect(iob, f, types)
-    str = takebuf_string(iob)
+    str = String(take!(iob))
     @test !isempty(str)
     nothing
 end
@@ -60,7 +60,7 @@ using Base.Test
 function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)
-    str = takebuf_string(iob)
+    str = String(take!(iob))
     return !isempty(search(str, tag))
 end
 
@@ -89,7 +89,7 @@ tag = Base.have_color ? Base.text_colors[:red] : "ARRAY{FLOAT64,N}"
 tag = Base.have_color ? Base.text_colors[:red] : "ANY"
 iob = IOBuffer()
 show(iob, expand(:(x->x^2)))
-str = takebuf_string(iob)
+str = String(take!(iob))
 @test isempty(search(str, tag))
 
 module ImportIntrinsics15819

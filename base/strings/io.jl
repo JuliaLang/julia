@@ -126,7 +126,7 @@ Create a string from any value using the [`showall`](:func:`showall`) function.
 function repr(x)
     s = IOBuffer()
     showall(s, x)
-    takebuf_string(s)
+    String(take!(s))
 end
 
 # IOBuffer views of a (byte)string:
@@ -397,7 +397,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             write(buf, ' ')
         end
     end
-    takebuf_string(buf)
+    String(take!(buf))
 end
 
 function convert(::Type{String}, chars::AbstractVector{Char})

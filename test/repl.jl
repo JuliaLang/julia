@@ -484,7 +484,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         if !ok
             LineEdit.transition(s,:abort)
         end
-        line = strip(takebuf_string(buf))
+        line = strip(String(take!(buf)))
         LineEdit.reset_state(s)
         return notify(c,line)
     end
@@ -546,5 +546,5 @@ let io = IOBuffer()
         catch e
             e
         end, [])
-    @test length(takebuf_string(io)) < 1500
+    @test length(String(take!(io))) < 1500
 end

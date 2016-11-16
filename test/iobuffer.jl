@@ -37,8 +37,8 @@ io.readable = false
 @test_throws ArgumentError read!(io,UInt8[0])
 truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
-@test takebuf_string(io) == "boston\ncambridge\n"
-@test takebuf_string(io) == ""
+@test String(take!(io)) == "boston\ncambridge\n"
+@test String(take!(io)) == ""
 @test write(io, Complex{Float64}(0)) == 16
 @test write(io, Rational{Int64}(1//2)) == 16
 close(io)
@@ -57,8 +57,8 @@ seek(io,0)
 @test_throws ArgumentError truncate(io,0)
 @test_throws ArgumentError write(io,UInt8(0))
 @test_throws ArgumentError write(io,UInt8[0])
-@test takebuf_string(io) == "hamster\nguinea pig\nturtle"
-@test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
+@test String(take!(io)) == "hamster\nguinea pig\nturtle"
+@test String(take!(io)) == "hamster\nguinea pig\nturtle" #should be unchanged
 close(io)
 end
 
@@ -118,8 +118,8 @@ write(io,'e')
 @test length(io.data) == 75
 @test position(io) == 0
 skip(io,72)
-@test takebuf_string(io) == "\0ab"
-@test takebuf_string(io) == ""
+@test String(take!(io)) == "\0ab"
+@test String(take!(io)) == ""
 
 # issues 4021
 print(io, true)
@@ -166,13 +166,13 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     @test readstring(io) == "dω"
     @test String(io) == "αhelloworldω"
     @test_throws ArgumentError write(io,"!")
-    @test takebuf_array(io) == b"αhelloworldω"
+    @test take!(io) == b"αhelloworldω"
     seek(io, 2)
     seekend(io2)
     write(io2, io)
     @test readstring(io) == ""
     @test readstring(io2) == ""
-    @test takebuf_string(io) == "αhelloworldω"
+    @test String(take!(io)) == "αhelloworldω"
     seek(io2, 0)
     truncate(io2, io2.size - 2)
     @test readstring(io2) == "goodnightmoonhelloworld"

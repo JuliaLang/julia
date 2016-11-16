@@ -161,7 +161,7 @@ arr = ["a","b","c"]
 # join with empty input
 myio = IOBuffer()
 join(myio, "", "", 1)
-@test isempty(takebuf_array(myio))
+@test isempty(take!(myio))
 
 # unescape_chars
 @test Base.unescape_chars("\\t","t") == "t"
