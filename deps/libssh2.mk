@@ -28,7 +28,11 @@ $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCD
 	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
+$(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
+	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libssh2-netinet-in.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/source-extracted $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
