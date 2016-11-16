@@ -80,7 +80,7 @@ some noteworthy differences that may trip up Julia users accustomed to MATLAB:
   ``A == B`` do not return an array of booleans. Instead, use ``A .== B``, and
   similarly for the other boolean operators like :obj:`<`, :obj:`>` and
   :obj:`!=`.
-- In Julia, the operators :obj:`&`, :obj:`|`, and :obj:`$` perform the bitwise
+- In Julia, the operators :obj:`&`, :obj:`|`, and :obj:`⊻` (:obj:`xor`) perform the bitwise
   operations equivalent to ``and``, ``or``, and ``xor`` respectively in MATLAB,
   and have precedence similar to Python's bitwise operators (unlike C). They
   can operate on scalars or element-wise across arrays and can be used to
@@ -331,10 +331,10 @@ Noteworthy differences from C/C++
   ``;`` also has a different meaning within ``[ ]``, something to watch out for.
   ``;`` can be used to separate expressions on a single line, but are not strictly necessary in many cases,
   and are more an aid to readability.
-- In Julia, the operator :obj:`$` performs the bitwise XOR operation, i.e. :obj:`^`
+- In Julia, the operator :obj:`⊻` (:obj:`xor`) performs the bitwise XOR operation, i.e. :obj:`^`
   in C/C++.  Also, the bitwise operators do not have the same precedence as C/++,
   so parenthesis may be required.
-- Julia's :obj:`^` is exponentiation (pow), not bitwise XOR as in C/C++ (use :obj:`$` in Julia)
+- Julia's :obj:`^` is exponentiation (pow), not bitwise XOR as in C/C++ (use :obj:`⊻`, or :obj:`xor`, in Julia)
 - Julia has two right-shift operators, ``>>`` and ``>>>``.  ``>>>`` performs an arithmetic shift,
   ``>>`` always performs a logical shift, unlike C/C++,
   where the meaning of ``>>`` depends on the type of the value being shifted.
