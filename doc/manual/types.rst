@@ -410,7 +410,7 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
 
     julia> Foo((), 23.5, 1)
     ERROR: InexactError()
-     in convert(::Type{Int64}, ::Float64) at ./float.jl:637
+     in convert(::Type{Int64}, ::Float64) at ./float.jl:656
      in Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
      ...
 
@@ -1488,7 +1488,7 @@ You can safely access the value of a :obj:`Nullable` object using :func:`get`:
 
     julia> get(Nullable{Float64}())
     ERROR: NullException()
-     in get(::Nullable{Float64}) at ./nullable.jl:90
+     in get(::Nullable{Float64}) at ./nullable.jl:91
      ...
 
     julia> get(Nullable(1.0))
