@@ -1549,7 +1549,7 @@ function Prompt(prompt;
     on_enter = default_enter_cb,
     on_done = ()->nothing,
     hist = EmptyHistoryProvider(),
-    sticky = false)
+    sticky = true)
 
     Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, keymap_func_data,
         complete, on_enter, on_done, hist, sticky)
