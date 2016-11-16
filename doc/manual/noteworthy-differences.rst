@@ -142,7 +142,12 @@ noteworthy differences:
   index range.  For example, ``c(1, 2, 3, 4) + c(1, 2)`` is valid R but the
   equivalent ``[1, 2, 3, 4] + [1, 2]`` will throw an error in Julia.
 - Julia's :func:`map` takes the function first, then its arguments, unlike
-  ``lapply(<structure>, function, ...)`` in R.
+  ``lapply(<structure>, function, ...)`` in R. Similarly Julia's equivalent of
+  ``apply(X, MARGIN, FUN, ...)`` in R is :func:`mapslices` where function is a
+  first argument.
+- Multivariate apply in R, e.g. ``mapply(choose, 11:13, 1:3)``, can be written as
+  ``broadcast(binomial, 11:13, 1:3)`` in Julia. Equivalently Julia offers a shorter
+  dot syntax for vectorizing functions ``binomial.(11:13, 1:3)``.
 - Julia uses ``end`` to denote the end of conditional blocks, like ``if``,
   loop blocks, like ``while``/``for``, and functions. In lieu of the one-line
   ``if ( cond ) statement``, Julia allows statements of the form
