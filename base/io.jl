@@ -400,7 +400,7 @@ function readuntil(s::IO, delim::Char)
             break
         end
     end
-    return takebuf_string(out)
+    return String(take!(out))
 end
 
 function readuntil{T}(s::IO, delim::T)
@@ -445,7 +445,7 @@ function readuntil(s::IO, t::AbstractString)
             break
         end
     end
-    return takebuf_string(out)
+    return String(take!(out))
 end
 
 readline() = readline(STDIN)

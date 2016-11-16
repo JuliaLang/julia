@@ -723,7 +723,7 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # need to compute value before left-padding since trailing zeros are elided
     push!(blk.args, :(tmpout = IOBuffer()))
     push!(blk.args, :(print_fixed(tmpout,fprec,pt,len,$('#' in flags))))
-    push!(blk.args, :(tmpstr = takebuf_string(tmpout)))
+    push!(blk.args, :(tmpstr = String(take!(tmpout))))
     push!(blk.args, :(width -= length(tmpstr)))
     if '+' in flags || ' ' in flags
         push!(blk.args, :(width -= 1))
@@ -1111,7 +1111,7 @@ function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::C
     write(fmt, 'R')
     write(fmt, c)
     write(fmt, UInt8(0))
-    printf_fmt = takebuf_array(fmt)
+    printf_fmt = take!(fmt)
     @assert length(printf_fmt) == fmt_len
     bufsiz = length(DIGITS) - 1
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), DIGITS, bufsiz, printf_fmt, &d)
@@ -1221,7 +1221,7 @@ macro sprintf(args...)
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[1].args, :(takebuf_string(out)))
+    push!(letexpr.args[1].args, :(String(take!(out))))
     letexpr
 end
 

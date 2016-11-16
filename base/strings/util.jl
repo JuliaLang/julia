@@ -358,7 +358,7 @@ function replace(str::String, pattern, repl, limit::Integer)
         n += 1
     end
     write(out, SubString(str,i))
-    takebuf_string(out)
+    String(take!(out))
 end
 
 """

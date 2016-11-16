@@ -253,7 +253,13 @@ function String(io::AbstractIOBuffer)
     return String(copy!(Array{UInt8}(io.size), 1, io.data, 1, io.size))
 end
 
-function takebuf_array(io::AbstractIOBuffer)
+"""
+    take!(b::IOBuffer)
+
+Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
+`IOBuffer` is reset to its initial state.
+"""
+function take!(io::AbstractIOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable
         nbytes = io.size
@@ -268,7 +274,7 @@ function takebuf_array(io::AbstractIOBuffer)
     end
     return data
 end
-function takebuf_array(io::IOBuffer)
+function take!(io::IOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable
         data = io.data
@@ -290,14 +296,6 @@ function takebuf_array(io::IOBuffer)
     end
     return data
 end
-
-"""
-    takebuf_string(b::IOBuffer)
-
-Obtain the contents of an `IOBuffer` as a string, without copying.
-Afterwards, the `IOBuffer` is reset to its initial state.
-"""
-takebuf_string(io::AbstractIOBuffer) = String(takebuf_array(io))
 
 function write(to::AbstractIOBuffer, from::AbstractIOBuffer)
     if to === from

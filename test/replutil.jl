@@ -7,9 +7,9 @@ const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
 function test_have_color(buf, color, no_color)
     if Base.have_color
-        @test takebuf_string(buf) == color
+        @test String(take!(buf)) == color
     else
-        @test takebuf_string(buf) == no_color
+        @test String(take!(buf)) == no_color
     end
 end
 
@@ -43,7 +43,7 @@ test_have_color(buf, "", "")
 
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
-let mc = takebuf_string(buf)
+let mc = String(take!(buf))
     @test contains(mc, "\nClosest candidates are:\n  Tuple{}{T}(")
     @test !contains(mc, cfile)
 end
@@ -114,10 +114,10 @@ method_c6(; x=1) = x
 method_c6(a; y=1) = y
 m_error = try method_c6(y=1) catch e; e; end
 showerror(buf, m_error)
-error_out = takebuf_string(buf)
+error_out = String(take!(buf))
 m_error = try method_c6(1, x=1) catch e; e; end
 showerror(buf, m_error)
-error_out1 = takebuf_string(buf)
+error_out1 = String(take!(buf))
 
 c6mline = @__LINE__
 module TestKWError
@@ -126,10 +126,10 @@ method_c6_in_module(a; y=1) = y
 end
 m_error = try TestKWError.method_c6_in_module(y=1) catch e; e; end
 showerror(buf, m_error)
-error_out2 = takebuf_string(buf)
+error_out2 = String(take!(buf))
 m_error = try TestKWError.method_c6_in_module(1, x=1) catch e; e; end
 showerror(buf, m_error)
-error_out3 = takebuf_string(buf)
+error_out3 = String(take!(buf))
 
 if Base.have_color
     @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1)\e[1m\e[31m got unsupported keyword argument \"y\"\e[0m")
@@ -175,9 +175,9 @@ macro except_str(expr, err_type)
             end
             err === nothing && error("expected failure, but no exception thrown")
             @test typeof(err) === $(esc(err_type))
-            buff = IOBuffer()
-            showerror(buff, err)
-            takebuf_string(buff)
+            buf = IOBuffer()
+            showerror(buf, err)
+            String(take!(buf))
         end
     end
 end
@@ -191,9 +191,9 @@ macro except_strbt(expr, err_type)
             end
             err === nothing && error("expected failure, but no exception thrown")
             @test typeof(err) === $(esc(err_type))
-            buff = IOBuffer()
-            showerror(buff, err, catch_backtrace())
-            takebuf_string(buff)
+            buf = IOBuffer()
+            showerror(buf, err, catch_backtrace())
+            String(take!(buf))
         end
     end
 end
@@ -311,11 +311,11 @@ end
 
 # issue 11845
 let
-    buff = IOBuffer()
-    showerror(buff, MethodError(convert, (3, 1.0)))
-    showerror(buff, MethodError(convert, (Int, 1.0)))
-    showerror(buff, MethodError(convert, Tuple{Type, Float64}))
-    showerror(buff, MethodError(convert, Tuple{DataType, Float64}))
+    buf = IOBuffer()
+    showerror(buf, MethodError(convert, (3, 1.0)))
+    showerror(buf, MethodError(convert, (Int, 1.0)))
+    showerror(buf, MethodError(convert, Tuple{Type, Float64}))
+    showerror(buf, MethodError(convert, Tuple{DataType, Float64}))
 end
 
 # Issue #14884

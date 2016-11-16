@@ -267,7 +267,7 @@ function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
     termbuf = TerminalBuffer(outbuf)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
     # Output the entire refresh at once
-    write(terminal, takebuf_array(outbuf))
+    write(terminal, take!(outbuf))
     flush(terminal)
     return ret
 end
@@ -668,7 +668,7 @@ function normalize_key(key::AbstractString)
             write(buf, c)
         end
     end
-    return takebuf_string(buf)
+    return String(take!(buf))
 end
 
 function normalize_keys(keymap::Dict)
@@ -1501,7 +1501,7 @@ end
 activate(m::ModalInterface, s::MIState, termbuf, term::TextTerminal) =
     activate(s.current_mode, s, termbuf, term)
 
-commit_changes(t::UnixTerminal, termbuf) = write(t, takebuf_array(termbuf.out_stream))
+commit_changes(t::UnixTerminal, termbuf) = write(t, take!(termbuf.out_stream))
 function transition(f::Function, s::MIState, mode)
     if mode === :abort
         s.aborted = true

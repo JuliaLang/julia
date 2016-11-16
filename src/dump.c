@@ -2372,7 +2372,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_method_t *m, jl_array_t *ast)
 
     //jl_printf(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
 
-    jl_array_t *v = jl_takebuf_array(&dest);
+    jl_array_t *v = jl_take_buffer(&dest);
     if (jl_array_len(m->roots) == 0) {
         m->roots = NULL;
     }

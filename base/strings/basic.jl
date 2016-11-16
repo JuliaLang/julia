@@ -442,7 +442,7 @@ function map(f, s::AbstractString)
         end
         write(out, c2::Char)
     end
-    String(takebuf_array(out))
+    String(take!(out))
 end
 
 function filter(f, s::AbstractString)
@@ -453,5 +453,5 @@ function filter(f, s::AbstractString)
             write(out, c)
         end
     end
-    takebuf_string(out)
+    String(take!(out))
 end
