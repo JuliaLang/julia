@@ -381,6 +381,7 @@ for elty in (Float64, Complex{Float64})
     @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(ones(elty, 4)))
     @test F'\ones(elty, 5) ≈ Array(A1pd)'\ones(5)
     @test F'\sparse(ones(elty, 5)) ≈ Array(A1pd)'\ones(5)
+    @test F.'\ones(elty, 5) ≈ conj(A1pd)'\ones(elty, 5)
     @test logdet(F) ≈ logdet(Array(A1pd))
     @test det(F) == exp(logdet(F))
     let # to test supernodal, we must use a larger matrix
@@ -670,3 +671,19 @@ let m = 400, n = 500
     @test s.is_super == 0
     @test F\b ≈ ones(m + n)
 end
+
+# Test that \ and '\ and .'\ work for Symmetric and Hermitian. This is just
+# a dispatch exercise so it doesn't matter that the complex matrix has
+# zero imaginary parts
+let Apre = sprandn(10, 10, 0.2) - I
+    for A in (Symmetric(Apre), Hermitian(Apre),
+              Symmetric(Apre + 10I), Hermitian(Apre + 10I),
+              Hermitian(complex(Apre)), Hermitian(complex(Apre) + 10I))
+
+        x = ones(10)
+        b = A*x
+        @test x ≈ A\b
+        @test A.'\b ≈ A'\b
+    end
+end
+
