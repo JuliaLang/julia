@@ -338,7 +338,7 @@ types of the arguments given to the constructor. Here are some examples:
 
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
-     in convert(::Type{Int64}, ::Float64) at ./float.jl:637
+     in convert(::Type{Int64}, ::Float64) at ./float.jl:656
      in Point{Int64}(::Float64, ::Float64) at ./none:2
      ...
 
