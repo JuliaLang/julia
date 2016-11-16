@@ -710,7 +710,7 @@ U+022B7           ⊷            \\image                                        
 U+022B8           ⊸            \\multimap                                     MULTIMAP
 U+022B9           ⊹            \\hermitconjmatrix                             HERMITIAN CONJUGATE MATRIX
 U+022BA           ⊺            \\intercal                                     INTERCALATE
-U+022BB           ⊻            \\veebar                                       XOR
+U+022BB           ⊻            \\veebar, \\xor                                XOR
 U+022BC           ⊼            \\barwedge                                     NAND
 U+022BD           ⊽            \\barvee                                       NOR
 U+022BE           ⊾            \\rightanglearc                                RIGHT ANGLE WITH ARC
