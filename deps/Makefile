@@ -20,11 +20,11 @@ include $(SRCDIR)/tools/git-external.mk
 # if you are adding a new target, it can help to copy an similar, existing target
 #
 # autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv curl
-# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
+# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind http_parser
 # entirely custom: virtualenv
-# CMake libs: http_parser libgit2 libssh2 mbedtls
+# CMake libs: libgit2 libssh2 mbedtls
 #
-# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun, libgit2, libssh2
+# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun, http_parser, libgit2, libssh2
 #
 # there are rules in this file with the . replaced by a %
 # this is some magic Makefile trick that tells make
