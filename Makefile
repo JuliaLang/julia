@@ -282,6 +282,9 @@ endif
 ifeq ($(USE_SYSTEM_CURL),0)
 JL_PRIVATE_LIBS += curl
 endif
+ifeq ($(USE_SYSTEM_HTTPPARSER),0)
+JL_PRIVATE_LIBS += http_parser
+endif
 ifeq ($(USE_SYSTEM_LIBGIT2),0)
 JL_PRIVATE_LIBS += git2
 endif
