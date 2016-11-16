@@ -460,7 +460,7 @@ of any arbitrary subtype of ``AbstractArray``::
     eltype{T, N}(::Type{AbstractArray{T, N}}) = T
     eltype{A<:AbstractArray}(::Type{A}) = eltype(supertype(A))
 
-One common foible here is to try to extract the type-parameter directly::
+One common mistake here is to try to extract the type-parameter directly::
 
     eltype_wrong{A<:AbstractArray, T}(::Type{A{T}}) = T
 
@@ -484,8 +484,8 @@ object with some change made to the layout of the type.
 For instance, you might have some sort of abstract array with an arbitrary element type
 and want to write the computation on it with a specific element type.
 
-Because of the foible mentioned above, we must implement a method
-for each type that describes how to compute this type transform.
+Another implication of the common mistake discussed above mentioned above,
+is that we must implement a method for each type that describes how to compute this type transform.
 There is no general transform of one subtype into another subtype with a different parameter.
 (Quick review: do you see why this is?)
 
@@ -520,12 +520,14 @@ In most cases, the algorithms lend themselves conveniently to this hierarchical 
 while in other cases, this rigor must be resolved manually.
 This dispatching branching can be observed, for example, in the logic to sum two matrices::
 
-    # first dispatch selects the map algorithm for element-wise summation
+    # First dispatch selects the map algorithm for element-wise summation.
     +(a::Matrix, b::Matrix) = map(+, a, b)
-    # then dispatch handles each element and selects the appropriate common element type for the computation
+    # Then dispatch handles each element and selects the appropriate
+    # common element type for the computation.
     +(a, b) = +(promote(a, b)...)
-    # once the elements have the same type, they can be added via Intrinsic calls
-    +(a::T, b::T) = Core.add(a, b)
+    # Once the elements have the same type, they can be added.
+    # For example, via primitive operations exposed by the processor.
+    +(a::Float, b::Float) = Core.add(a, b)
 
 
 4. Trait-based dispatch
@@ -533,15 +535,23 @@ This dispatching branching can be observed, for example, in the logic to sum two
 
 A natural extension to the iterated dispatch above is to add a layer to
 method selection that identifies classes of types.
-The example above glossed over this detail by avoiding a discussion
-of the implementation of ``map`` and ``promote``.
+We could do this by writing out a ``Union`` of the types with similar characteristics.
+But then this would list then would not be extensible.
+However, by expressing the property as a "trait",
+it is possible to express type behaviors in the abstract
+in a way that is flexible to new additions, but which has no performance impact.
 
+A trait is implemented by defining a pure generic function which returns a
+singleton value from a particular set, as a computation on the types of its arguments.
+
+The example above glossed over the implementation details of ``map`` and ``promote``,
+since those both operate in terms of type traits.
 When iterating over a matrix, such as in the implementation of ``map``,
 one important question is what order to use to traverse the data.
 When ``AbstractArray`` subtypes implement the ``linearindexing`` trait,
 other functions such as ``map`` can dispatch on this information to pick the best algorithm.
 This means that each subtypes does not need to implement a custom version of ``map``,
-since the generic definitions will enable the system to select the fastest version.
+since the generic definitions + trait classes will enable the system to select the fastest version.
 
 ::
 
@@ -550,7 +560,7 @@ since the generic definitions will enable the system to select the fastest versi
     map(::LinearFast, a::AbstractArray, b::AbstractArray) = # linear-fast implementation
 
 This trait-based mechanism is also present in the ``promote`` mechanism used by ``+``.
-It is using the types to compute the optimal common type for computing the operation.
+That mechanism uses the types to compute the optimal common type for computing the operation.
 This makes it possible to reduce the problem of implementing every function for every pair of possible type arguments,
 to the much smaller problem of implementing a conversion operation from each type to a common type,
 plus a table of preferred pair-wise promotion rules.
@@ -559,7 +569,7 @@ plus a table of preferred pair-wise promotion rules.
 5. Output-type Computation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The discussion of trait-based promotion provides a segue into our next design pattern:
+The discussion of trait-based promotion provides a transition into our next design pattern:
 computing the output element type for a matrix operation.
 
 For implementing primitive operations, such as addition,
@@ -568,7 +578,7 @@ we use the ``promote_type`` function to compute the desired output type.
 
 For more complex functions on matrices, it may be necessary to compute the expected return
 type for a more complex sequence of operations.
-This is often performed by the following sequence of operations:
+This is often performed by the following steps:
 
 1. Write a small function ``op`` that expresses the set of operations performed by the kernel of the algorithm.
 2. Compute the element type ``R`` of the result matrix as ``promote_op(op, argument_types...)``,
@@ -580,15 +590,19 @@ For a more specific example, a generic matrix multiply pseudo-code might look li
     function matmul(a::AbstractMatrix, b::AbstractMatrix)
         op = (ai, bi) -> ai * bi + ai * bi
 
-        ## this fails because it assumes `one(eltype(a))` is constructable:
+        ## this is insufficient because it assumes `one(eltype(a))` is constructable:
         # R = typeof(op(one(eltype(a)), one(eltype(b))))
 
         ## this fails because it assumes `a[1]` exists and is representative of all elements of the array
         # R = typeof(op(a[1], b[1]))
 
-        ## this fails because it assumes that `+` calls `promote_type`
+        ## this is incorrect because it assumes that `+` calls `promote_type`
         ## but this is not true for some types, such as Bool:
         # R = promote_type(ai, bi)
+
+        # this is wrong, since depending on the return value
+        # of type-inference is very brittle (as well as not being optimizable):
+        # R = return_types(ap, (eltype(a), eltype(b)))
 
         ## but, finally, this works:
         R = promote_op(op, eltype(a), eltype(b))
