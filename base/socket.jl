@@ -468,17 +468,6 @@ function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing
     end
 end
 
-alloc_buf_hook(sock::UDPSocket,size::UInt) = (Libc.malloc(size),size)
-
-function _recv_start(sock::UDPSocket)
-    if ccall(:uv_is_active, Cint, (Ptr{Void}, ), sock.handle) == 0
-        uv_error("recv_start", ccall(:uv_udp_recv_start, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
-                                    sock.handle, uv_jl_alloc_buf::Ptr{Void}, uv_jl_recvcb::Ptr{Void}))
-    end
-end
-
-_recv_stop(sock::UDPSocket) = uv_error("recv_stop", ccall(:uv_udp_recv_stop, Cint, (Ptr{Void}, ), sock.handle))
-
 """
     recv(socket::UDPSocket)
 
@@ -486,7 +475,7 @@ Read a UDP packet from the specified socket, and return the bytes received. This
 """
 function recv(sock::UDPSocket)
     addr, data = recvfrom(sock)
-    data
+    return data
 end
 
 """
@@ -497,36 +486,46 @@ address will be either IPv4 or IPv6 as appropriate.
 """
 function recvfrom(sock::UDPSocket)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
-    if sock.status != StatusInit && sock.status != StatusOpen
+    if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
-    _recv_start(sock)
-    return stream_wait(sock, sock.recvnotify)::Tuple{Union{IPv4,  IPv6},  Vector{UInt8}}
+    if ccall(:uv_is_active, Cint, (Ptr{Void},), sock.handle) == 0
+        uv_error("recv_start", ccall(:uv_udp_recv_start, Cint, (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                                    sock.handle, uv_jl_alloc_buf::Ptr{Void}, uv_jl_recvcb::Ptr{Void}))
+    end
+    sock.status = StatusActive
+    return stream_wait(sock, sock.recvnotify)::Tuple{Union{IPv4, IPv6}, Vector{UInt8}}
 end
 
+alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), size)
 
 function uv_recvcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void}, addr::Ptr{Void}, flags::Cuint)
-    sock = @handle_as handle UDPSocket
-    buf_addr = ccall(:jl_uv_buf_base, Ptr{Void}, (Ptr{Void},), buf)
-    buf_size = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Void},), buf)
     # C signature documented as (*uv_udp_recv_cb)(...)
-    if flags & UV_UDP_PARTIAL > 0
+    sock = @handle_as handle UDPSocket
+    if nread < 0
         Libc.free(buf_addr)
-        notify_error(sock.recvnotify,"Partial message received")
+        notify_error(sock.recvnotify, UVError("recv", nread))
+    elseif flags & UV_UDP_PARTIAL > 0
+        Libc.free(buf_addr)
+        notify_error(sock.recvnotify, "Partial message received")
+    else
+        buf_addr = ccall(:jl_uv_buf_base, Ptr{Void}, (Ptr{Void},), buf)
+        buf_size = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Void},), buf)
+        # need to check the address type in order to convert to a Julia IPAddr
+        addrout = if addr == C_NULL
+                      IPv4(0)
+                  elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Void},), addr) == 1
+                      IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), addr)))
+                  else
+                      tmp = [UInt128(0)]
+                      ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt8}), addr, pointer(tmp))
+                      IPv6(ntoh(tmp[1]))
+                  end
+        buf = unsafe_wrap(Array, convert(Ptr{UInt8}, buf_addr), Int(nread), true)
+        notify(sock.recvnotify, (addrout, buf))
     end
-
-    # need to check the address type in order to convert to a Julia IPAddr
-    addrout = if (addr == C_NULL)
-                  IPv4(0)
-              elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Void},), addr) == 1
-                  IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), addr)))
-              else
-                  tmp = [UInt128(0)]
-                  ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt8}), addr, pointer(tmp))
-                  IPv6(ntoh(tmp[1]))
-              end
-    buf = unsafe_wrap(Array, convert(Ptr{UInt8},buf_addr),Int(buf_size),true)
-    notify(sock.recvnotify,(addrout,buf[1:nread]))
+    ccall(:uv_udp_recv_stop, Cint, (Ptr{Void},), sock.handle)
+    sock.status = StatusOpen
     nothing
 end
 
@@ -547,7 +546,7 @@ Send `msg` over `socket` to `host:port`.
 """
 function send(sock::UDPSocket,ipaddr,port,msg)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
-    if sock.status != StatusInit && sock.status != StatusOpen
+    if sock.status != StatusInit && sock.status != StatusOpen && sock.status != StatusActive
         error("UDPSocket is not initialized and open")
     end
     uv_error("send", _send(sock, ipaddr, UInt16(port), msg))
@@ -558,7 +557,7 @@ end
 function uv_sendcb(handle::Ptr{Void}, status::Cint)
     sock = @handle_as handle UDPSocket
     if status < 0
-        notify_error(sock.sendnotify,UVError("UDP send failed",status))
+        notify_error(sock.sendnotify, UVError("UDP send failed", status))
     end
     notify(sock.sendnotify)
     Libc.free(handle)
