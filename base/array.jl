@@ -202,14 +202,13 @@ julia> fill(1.0, (5,5))
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
 dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
-fill(v, dims::Dims)       = fill!(Array{typeof(v)}(dims), v)
-fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
+fill(v, dims::Dims)       = fill(Array, v, dims)
+fill(v, dims::Integer...) = fill(Array, v, convert(Dims, dims))
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
         ($fname)(T::Type, dims...)       = fill!(Array{T}(dims...), ($felt)(T))
         ($fname)(dims...)                = fill!(Array{Float64}(dims...), ($felt)(Float64))
-        ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
     end
 end
 
@@ -219,13 +218,7 @@ end
 `m`-by-`n` identity matrix.
 The default element type is `Float64`.
 """
-function eye(T::Type, m::Integer, n::Integer)
-    a = zeros(T,m,n)
-    for i = 1:min(m,n)
-        a[i,i] = one(T)
-    end
-    return a
-end
+eye(T::Type, m::Integer, n::Integer) = eye(Matrix{T}, m, n)
 
 """
     eye(m, n)
@@ -982,6 +975,23 @@ function vcat{T}(arrays::Vector{T}...)
     return arr
 end
 
+hcat(A::Matrix...) = typed_hcat(Array{promote_eltype(A...)}, A...)
+hcat{T}(A::Matrix{T}...) = typed_hcat(Array{T}, A...)
+
+vcat(A::Matrix...) = typed_vcat(Array{promote_eltype(A...)}, A...)
+vcat{T}(A::Matrix{T}...) = typed_vcat(Array{T}, A...)
+
+hcat(A::Union{Matrix, Vector}...) = typed_hcat(Array{promote_eltype(A...)}, A...)
+hcat{T}(A::Union{Matrix{T}, Vector{T}}...) = typed_hcat(Array{T}, A...)
+
+vcat(A::Union{Matrix, Vector}...) = typed_vcat(Array{promote_eltype(A...)}, A...)
+vcat{T}(A::Union{Matrix{T}, Vector{T}}...) = typed_vcat(Array{T}, A...)
+
+hvcat(rows::Tuple{Vararg{Int}}, xs::Vector...) = typed_hvcat(Array{promote_eltype(xs...)}, rows, xs...)
+hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Vector{T}...) = typed_hvcat(Array{T}, rows, xs...)
+
+hvcat(rows::Tuple{Vararg{Int}}, xs::Matrix...) = typed_hvcat(Array{promote_eltype(xs...)}, rows, xs...)
+hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Matrix{T}...) = typed_hvcat(Array{T}, rows, xs...)
 
 ## find ##
 

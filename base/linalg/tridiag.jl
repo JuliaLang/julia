@@ -12,6 +12,12 @@ immutable SymTridiagonal{T} <: AbstractMatrix{T}
         end
         new(dv,ev)
     end
+    function SymTridiagonal(m::Integer, n::Integer)
+        check_array_size(m, n)
+        checksquaredims(m, n, SymTridiagonal{T})
+        new(Vector{T}(n), Vector{T}(n-1))
+    end
+    SymTridiagonal(dims::Dims{2}) = SymTridiagonal{T}(dims...)
 end
 
 """
@@ -47,6 +53,17 @@ julia> SymTridiagonal(dv, ev)
 ```
 """
 SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(dv, ev)
+
+"""
+    SymTridiagonal{T}(dims)
+
+Constructs a symmetric tridiagonal matrix with uninitialized diagonal and
+sub/super--diagonal elements of type `T`. If `T` is omitted, it defaults to `Float64`. The
+dims may be given as two integer arguments or as tuple of two `Int`s, both of which have to
+be equal as `SymTridiagonal` matrices are always square.
+"""
+SymTridiagonal(m::Integer, n::Integer) = SymTridiagonal{Float64}(m, n)
+SymTridiagonal(dims::Dims{2}) = SymTridiagonal(dims...)
 
 function SymTridiagonal{Td,Te}(dv::AbstractVector{Td}, ev::AbstractVector{Te})
     T = promote_type(Td,Te)
@@ -346,7 +363,27 @@ immutable Tridiagonal{T} <: AbstractMatrix{T}
     d::Vector{T}     # diagonal
     du::Vector{T}    # sup-diagonal
     du2::Vector{T}   # supsup-diagonal for pivoting
+
+    Tridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T}, du2::Vector{T}) = new(dl, d, du, du2)
+    function Tridiagonal(m::Integer, n::Integer)
+        check_array_size(m, n)
+        checksquaredims(m, n, Tridiagonal{T})
+        new(Vector{T}(n-1), Vector{T}(n), Vector{T}(n-1), Vector{T}(n-2))
+    end
+    Tridiagonal(dims::Dims{2}) = Tridiagonal{T}(dims...)
 end
+Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T}, du2::Vector{T}) = Tridiagonal{T}(dl, d, du, du2)
+
+"""
+    Tridiagonal{T}(dims)
+
+Constructs a tridiagonal matrix with uninitialized diagonal and sub/super--diagonal
+elements of type `T`. If `T` is omitted, it defaults to `Float64`. The dims may be given as
+two integer arguments or as tuple of two `Int`s, both of which have to be equal as
+`Tridiagonal` matrices are always square.
+"""
+Tridiagonal(m::Integer, n::Integer) = Tridiagonal{Float64}(m, n)
+Tridiagonal(dims::Dims{2}) = Tridiagonal(dims...)
 
 """
     Tridiagonal(dl, d, du)

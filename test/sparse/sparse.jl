@@ -5,6 +5,26 @@
 @test Base.SparseArrays.indtype(sparse(ones(Int8,2),ones(Int8,2),rand(2))) == Int8
 
 # check sparse matrix construction
+let sz = (3, 4)
+    X = SparseMatrixCSC(sz)
+    @test isa(X, SparseMatrixCSC{Float64,Int})
+    @test size(X) == sz
+    X = SparseMatrixCSC(sz...)
+    @test isa(X, SparseMatrixCSC{Float64,Int})
+    @test size(X) == sz
+    X = SparseMatrixCSC{Int16}(sz)
+    @test isa(X, SparseMatrixCSC{Int16,Int})
+    @test size(X) == sz
+    X = SparseMatrixCSC{Int16}(sz...)
+    @test isa(X, SparseMatrixCSC{Int16,Int})
+    @test size(X) == sz
+    X = SparseMatrixCSC{Int16,Int8}(sz)
+    @test isa(X, SparseMatrixCSC{Int16,Int8})
+    @test size(X) == sz
+    X = SparseMatrixCSC{Int16,Int8}(sz...)
+    @test isa(X, SparseMatrixCSC{Int16,Int8})
+    @test size(X) == sz
+end
 @test isequal(Array(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
 @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
 @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)

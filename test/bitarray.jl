@@ -56,6 +56,22 @@ s1, s2, s3, s4 = 5, 8, 3, 7
 allsizes = [((), BitArray{0}), ((v1,), BitVector),
             ((n1,n2), BitMatrix), ((s1,s2,s3,s4), BitArray{4})]
 
+# constructors
+for (sz,T) in allsizes
+    a = BitArray(sz...)
+    @test isa(a, T)
+    @test sz == size(a)
+    b = BitArray(sz)
+    @test isa(b, T)
+    @test sz == size(b)
+    c = BitArray{length(sz)}(sz...)
+    @test isa(c, T)
+    @test sz == size(c)
+    d = BitArray{length(sz)}(sz)
+    @test isa(d, T)
+    @test sz == size(d)
+end
+
 # trues and falses
 for (sz,T) in allsizes
     a = falses(sz...)
@@ -95,6 +111,8 @@ timesofar("conversions")
 ## utility functions ##
 
 let b1 = bitrand(v1)
+    @test isequal(fill(BitArray, true, (v1,)), trues(size(b1)))
+    @test isequal(fill(BitArray, false, (n1, n2)), falses(n1, n2))
     @test isequal(fill!(b1, true), trues(size(b1)))
     @test isequal(fill!(b1, false), falses(size(b1)))
 end

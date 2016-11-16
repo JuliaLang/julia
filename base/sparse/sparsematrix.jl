@@ -13,9 +13,12 @@ immutable SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     nzval::Vector{Tv}       # Nonzero values
 
     function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv})
-        m < 0 && throw(ArgumentError("number of rows (m) must be ≥ 0, got $m"))
-        n < 0 && throw(ArgumentError("number of columns (n) must be ≥ 0, got $n"))
+        check_array_size(m, n)
         new(Int(m), Int(n), colptr, rowval, nzval)
+    end
+    function SparseMatrixCSC(m::Integer, n::Integer)
+        check_array_size(m, n)
+        SparseMatrixCSC{Tv,Ti}(m, n, ones(Ti, n+1), Array{Ti}(0), Array{Tv}(0))
     end
 end
 function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
@@ -23,6 +26,9 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
     Ti = promote_type(eltype(colptr), eltype(rowval))
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
+SparseMatrixCSC(m::Integer, n::Integer) = SparseMatrixCSC{Float64}(m, n)
+(::Type{SparseMatrixCSC{Tv}}){Tv}(m::Integer, n::Integer) = SparseMatrixCSC{Tv,Int}(m, n)
+(::Type{T}){T<:SparseMatrixCSC}(dims::Dims{2}) = T(dims[1], dims[2])
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
 
@@ -394,7 +400,7 @@ function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector
 
     m = m < 0 ? 0 : m
     n = n < 0 ? 0 : n
-    if isempty(V); return spzeros(eltype(V),Ti,m,n); end
+    if isempty(V); return SparseMatrixCSC{eltype(V),Ti}(m,n); end
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
@@ -1329,18 +1335,26 @@ sparse array will not contain any nonzero values. No storage will be allocated
 for nonzero values during construction. The type defaults to `Float64` if not
 specified.
 """
-spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
-spzeros(Tv::Type, m::Integer, n::Integer) = spzeros(Tv, Int, m, n)
-function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    SparseMatrixCSC(m, n, ones(Ti, n+1), Array{Ti}(0), Array{Tv}(0))
-end
+spzeros(m::Integer, n::Integer) = zeros(SparseMatrixCSC, m, n)
+spzeros(Tv::Type, m::Integer, n::Integer) = zeros(SparseMatrixCSC{Tv}, m, n)
+spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer) = zeros(SparseMatrixCSC{Tv,Ti}, m, n)
 # de-splatting variant
 spzeros(Tv::Type, Ti::Type, sz::Tuple{Integer,Integer}) = spzeros(Tv, Ti, sz[1], sz[2])
 
-speye(n::Integer) = speye(Float64, n)
-speye(T::Type, n::Integer) = speye(T, n, n)
-speye(m::Integer, n::Integer) = speye(Float64, m, n)
+function eye{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, m::Integer, n::Integer)
+    check_array_size(m, n)
+    x = min(m,n)
+    rowval = collect(Ti, 1:x)
+    colptr = Ti[rowval; fill(Ti(x+1), n+1-x)]
+    nzval  = ones(Tv, x)
+    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
+end
+eye{Tv}(::Type{SparseMatrixCSC{Tv}}, m::Integer, n::Integer) = eye(SparseMatrixCSC{Tv,Int}, m, n)
+eye(::Type{SparseMatrixCSC}, m::Integer, n::Integer) = eye(SparseMatrixCSC{Float64,Int}, m, n)
+
+speye(n::Integer) = eye(SparseMatrixCSC, n)
+speye(T::Type, n::Integer) = eye(SparseMatrixCSC{T}, n, n)
+speye(m::Integer, n::Integer) = eye(SparseMatrixCSC, m, n)
 
 """
     speye(S)
@@ -1365,8 +1379,8 @@ julia> speye(A)
 
 Note the difference from [`spones`](:func:`spones`).
 """
-speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
-eye(S::SparseMatrixCSC) = speye(S)
+speye{T}(S::SparseMatrixCSC{T}) = eye(SparseMatrixCSC{T}, size(S, 1), size(S, 2))
+eye{T<:SparseMatrixCSC}(S::T) = eye(T, S)
 
 """
     speye([type,]m[,n])
@@ -1375,14 +1389,7 @@ Create a sparse identity matrix of size `m x m`. When `n` is supplied,
 create a sparse identity matrix of size `m x n`. The type defaults to `Float64`
 if not specified.
 """
-function speye(T::Type, m::Integer, n::Integer)
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    x = min(m,n)
-    rowval = [1:x;]
-    colptr = [rowval; fill(Int(x+1), n+1-x)]
-    nzval  = ones(T, x)
-    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
-end
+speye(T::Type, m::Integer, n::Integer) = eye(SparseMatrixCSC{T}, m, n)
 
 function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
@@ -3228,7 +3235,10 @@ dropstored!(A::SparseMatrixCSC, ::Colon) = dropstored!(A, :, :)
 
 # Sparse concatenation
 
-function vcat(X::SparseMatrixCSC...)
+promote_indtype() = Base.Bottom
+promote_indtype{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, Xs::SparseMatrixCSC...) = promote_type(Ti, promote_indtype(Xs...))
+
+function typed_vcat{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, X::SparseMatrixCSC...)
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
     nX = Int[ size(x, 2) for x in X ]
@@ -3239,13 +3249,6 @@ function vcat(X::SparseMatrixCSC...)
         if nX[i] != n
             throw(DimensionMismatch("All inputs to vcat should have the same number of columns"))
         end
-    end
-
-    Tv = eltype(X[1].nzval)
-    Ti = eltype(X[1].rowval)
-    for i = 2:length(X)
-        Tv = promote_type(Tv, eltype(X[i].nzval))
-        Ti = promote_type(Ti, eltype(X[i].rowval))
     end
 
     nnzX = Int[ nnz(x) for x in X ]
@@ -3288,7 +3291,7 @@ end
 end
 
 
-function hcat(X::SparseMatrixCSC...)
+function typed_hcat{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, X::SparseMatrixCSC...)
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
     nX = Int[ size(x, 2) for x in X ]
@@ -3297,9 +3300,6 @@ function hcat(X::SparseMatrixCSC...)
         if mX[i] != m; throw(DimensionMismatch("")); end
     end
     n = sum(nX)
-
-    Tv = promote_type(map(x->eltype(x.nzval), X)...)
-    Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array{Ti}(n + 1)
     nnzX = Int[ nnz(x) for x in X ]
@@ -3324,6 +3324,42 @@ function hcat(X::SparseMatrixCSC...)
     end
 
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
+end
+
+for d in (:h, :v)
+    let cat_name = Symbol(d, :cat), typed_cat_name = Symbol(:typed_, cat_name)
+        @eval begin
+            $(cat_name)(Xin::Union{Vector, Matrix, SparseMatrixCSC}...) = $(typed_cat_name)(SparseMatrixCSC, Xin...)
+
+            $(typed_cat_name){T<:SparseMatrixCSC}(::Type{T}) = T(0, 0)
+            $(typed_cat_name){T<:SparseMatrixCSC}(::Type{T}, A::AbstractVecOrMat...) =
+                $(typed_cat_name)(T, map(hcat, A)...)
+            $(typed_cat_name){T<:SparseMatrixCSC}(::Type{T}, A::AbstractMatrix...) =
+                $(typed_cat_name)(T, map(SparseMatrixCSC, A)...)
+            $(typed_cat_name)(::Type{SparseMatrixCSC}, X::SparseMatrixCSC...) =
+                $(typed_cat_name)(SparseMatrixCSC{promote_eltype(X...)}, X...)
+            $(typed_cat_name){Tv}(::Type{SparseMatrixCSC{Tv}}, X::SparseMatrixCSC...) =
+                $(typed_cat_name)(SparseMatrixCSC{Tv,promote_indtype(X...)}, X...)
+        end
+    end
+end
+
+typed_vcat{T<:SparseMatrixCSC}(::Type{T}, A::AbstractVector...) = typed_vcat(T, map(hcat, A)...)
+
+# hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCSC}...) = typed_hvcat(SparseMatrixCSC, rows, X...)
+typed_hvcat{T<:SparseMatrixCSC}(::Type{T}, rows::Tuple{Vararg{Int}}) = T(length(rows),0)
+typed_hvcat{T<:SparseMatrixCSC}(::Type{T}, rows::Tuple{Vararg{Int}}, X::AbstractMatrix...) =
+    invoke(typed_hvcat, (Type{T}, Tuple{Vararg{Int}}, Vararg{AbstractVecOrMat}), T, rows, X...)
+function typed_hvcat{T<:SparseMatrixCSC}(::Type{T}, rows::Tuple{Vararg{Int}}, X::AbstractVecOrMat...)
+    nbr = length(rows)  # number of block rows
+
+    tmp_rows = Array{T}(nbr)
+    k = 0
+    @inbounds for i = 1 : nbr
+        tmp_rows[i] = typed_hcat(T, X[(1 : rows[i]) + k]...)
+        k += rows[i]
+    end
+    typed_vcat(T, tmp_rows...)
 end
 
 """

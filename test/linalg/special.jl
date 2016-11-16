@@ -80,6 +80,50 @@ let a=[1.0:n;]
    end
 end
 
+# eye
+for newtype in (Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix)
+    I = eye(newtype, n)
+    @test isa(I, newtype{Float64})
+    @test I == eye(n)
+    I = eye(newtype, n, n)
+    @test isa(I, newtype{Float64})
+    @test I == eye(n, n)
+    I = eye(newtype, rand(n, n))
+    @test isa(I, newtype{Float64})
+    @test I == eye(n, n)
+    I = eye(newtype{Int16}, n)
+    @test isa(I, newtype{Int16})
+    @test I == eye(Int16, n)
+    I = eye(newtype{Int16}, n, n)
+    @test isa(I, newtype{Int16})
+    @test I == eye(Int16, n, n)
+    I = eye(newtype{Int16}, rand(n, n))
+    @test isa(I, newtype{Int16})
+    @test I == eye(Int16, n, n)
+    I = eye(newtype, rand(Int16, n, n))
+    @test isa(I, newtype{Int16})
+    @test I == eye(Int16, n, n)
+end
+
+# zeros
+for newtype in (Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix)
+    I = zeros(newtype, n, n)
+    @test isa(I, newtype{Float64})
+    @test I == zeros(n, n)
+    I = zeros(newtype, rand(n, n))
+    @test isa(I, newtype{Float64})
+    @test I == zeros(n, n)
+    I = zeros(newtype{Int16}, n, n)
+    @test isa(I, newtype{Int16})
+    @test I == zeros(Int16, n, n)
+    I = zeros(newtype{Int16}, rand(n, n))
+    @test isa(I, newtype{Int16})
+    @test I == zeros(Int16, n, n)
+    I = zeros(newtype, rand(Int16, n, n))
+    @test isa(I, newtype{Int16})
+    @test I == zeros(Int16, n, n)
+end
+
 # Binary ops among special types
 let a=[1.0:n;]
    A=Diagonal(a)

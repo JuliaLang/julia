@@ -1,5 +1,27 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+### Non-initializing contrsutor
+let sz = (5,)
+    X = SparseVector(sz)
+    @test isa(X, SparseVector{Float64,Int})
+    @test size(X) == sz
+    X = SparseVector(sz...)
+    @test isa(X, SparseVector{Float64,Int})
+    @test size(X) == sz
+    X = SparseVector{Int16}(sz)
+    @test isa(X, SparseVector{Int16,Int})
+    @test size(X) == sz
+    X = SparseVector{Int16}(sz...)
+    @test isa(X, SparseVector{Int16,Int})
+    @test size(X) == sz
+    X = SparseVector{Int16,Int8}(sz)
+    @test isa(X, SparseVector{Int16,Int8})
+    @test size(X) == sz
+    X = SparseVector{Int16,Int8}(sz...)
+    @test isa(X, SparseVector{Int16,Int8})
+    @test size(X) == sz
+end
+
 ### Data
 
 spv_x1 = SparseVector(8, [2, 5, 6], [1.25, -0.75, 3.5])

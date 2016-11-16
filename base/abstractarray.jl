@@ -126,6 +126,34 @@ _length(A) = length(A)
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
+function fixate_eltype{T<:AbstractArray}(::Type{T}, default::Type)
+    @_pure_meta
+    aa_type = T
+    while aa_type.name.primary != AbstractArray
+        aa_type = supertype(aa_type)
+    end
+    if isa(aa_type.parameters[1], TypeVar)
+        varname = aa_type.parameters[1].name
+        new_params = collect(T.parameters)
+        for i in eachindex(new_params)
+            p = new_params[i]
+            if isa(p, TypeVar) && p.name == varname
+                new_params[i] = default
+            end
+        end
+        return T.name.primary{new_params...}
+    else
+        return T
+    end
+end
+
+function check_array_size(dims::DimsInteger)
+    for i in 1:length(dims)
+        dims[i] >= 0 || throw(ArgumentError("dimension size must be ≥ 0, got $(dims[i]) for dimension $i"))
+    end
+end
+check_array_size(dims::Integer...) = check_array_size(dims)
+
 function first(itr)
     state = start(itr)
     done(itr, state) && throw(ArgumentError("collection must be non-empty"))
@@ -661,7 +689,131 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
+"""
+    fill(array_type, x, dims)
+
+Create an array of type `array_type` filled with the value `x`. For example,
+`fill(BitArray, true, (5,5))` returns a 5×5 `BitArray`, with each element initialized to
+`true`.
+
+```jldoctest
+julia> fill(BitArray, true, (5,5))
+5×5 BitArray{2}:
+ true  true  true  true  true
+ true  true  true  true  true
+ true  true  true  true  true
+ true  true  true  true  true
+ true  true  true  true  true
+```
+
+If `x` is an object reference, all elements will refer to the same object. `fill(Array,
+Foo(), dims)` will return an array filled with the result of evaluating `Foo()` once.
+"""
+fill{T<:AbstractArray}(::Type{T}, v, dims::Dims) = fill!(fixate_eltype(T, typeof(v))(dims), v)
+
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
+
+for (fname, felt) in ((:zeros,:zero), (:ones,:one))
+    @eval begin
+        function ($fname){T<:AbstractArray}(::Type{T}, dims::Dims)
+            array_type=fixate_eltype(T,Float64)
+            fill(array_type, ($felt)(eltype(array_type)), dims)
+        end
+        ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
+    end
+end
+
+"""
+    zeros(array_type, dims)
+
+Create an array of specified type of all zeros.
+The element type defaults to `Float64` if not specified.
+
+```jldoctest
+julia> zeros(Diagonal, 3, 3)
+3×3 Diagonal{Float64}:
+ 0.0   ⋅    ⋅
+  ⋅   0.0   ⋅
+  ⋅    ⋅   0.0
+```
+
+```jldoctest
+julia> zeros(Diagonal{Int8}, 3, 3)
+3×3 Diagonal{Int8}:
+ 0  ⋅  ⋅
+ ⋅  0  ⋅
+ ⋅  ⋅  0
+```
+"""
+zeros{T<:AbstractArray}(::Type{T}, dims::Integer...) = zeros(T, convert(Dims, dims))
+
+"""
+    zeros(array_type, A)
+
+Create an array of specified type of all zeros with the shape of A.
+"""
+zeros{T<:AbstractArray}(::Type{T}, A::AbstractArray) = zeros(fixate_eltype(T, eltype(A)), size(A))
+
+"""
+    ones(array_type, dims)
+
+Create an array of specified type of all ones.
+The element type defaults to `Float64` if not specified.
+
+```jldoctest
+julia> ones(SparseMatrixCSC, 2, 3)
+2×3 sparse matrix with 6 Float64 nonzero entries:
+    [1, 1]  =  1.0
+    [2, 1]  =  1.0
+    [1, 2]  =  1.0
+    [2, 2]  =  1.0
+    [1, 3]  =  1.0
+    [2, 3]  =  1.0
+```
+
+```jldoctest
+julia> ones(SparseMatrixCSC{Int8}, 1, 2)
+1×2 sparse matrix with 2 Int8 nonzero entries:
+    [1, 1]  =  1
+    [1, 2]  =  1
+```
+"""
+ones{T<:AbstractArray}(::Type{T}, dims::Integer...) = ones(T, convert(Dims, dims))
+
+"""
+    ones(array_type, A)
+
+Create an array of specified type of all ones with the shape of A.
+"""
+ones{T<:AbstractArray}(::Type{T}, A::AbstractArray) = ones(fixate_eltype(T, eltype(A)), size(A))
+
+"""
+    eye(array_type, m::Integer, n::Integer)
+
+`m`-by-`n` identity matrix of type `array_type`.
+"""
+function eye{T<:AbstractMatrix}(::Type{T}, m::Integer, n::Integer)
+    a = zeros(T,m,n)
+    for i = 1:min(m,n)
+        a[i,i] = one(eltype(a))
+    end
+    return a
+end
+
+"""
+    eye(array_type, n::Integer)
+
+`n`-by-`n` identity matrix of type `array_type`.
+"""
+eye{T<:AbstractMatrix}(::Type{T}, n::Integer) = eye(T, n, n)
+
+"""
+    eye(array_type, A)
+
+Identity matrix of type `array_type` of the same dimensions as `A`.
+"""
+eye{T<:AbstractMatrix}(::Type{T}, x::AbstractMatrix) =
+    eye(fixate_eltype(T, eltype(x)), size(x, 1), size(x, 2))
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both LinearFast and LinearSlow arrays
@@ -1001,7 +1153,9 @@ cat(catdim::Integer) = Array{Any,1}(0)
 vcat() = Array{Any,1}(0)
 hcat() = Array{Any,1}(0)
 typed_vcat{T}(::Type{T}) = Array{T,1}(0)
+typed_vcat{T<:AbstractArray}(::Type{T}) = T(0)
 typed_hcat{T}(::Type{T}) = Array{T,1}(0)
+typed_hcat{T<:AbstractArray}(::Type{T}) = T(0)
 
 ## cat: special cases
 vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
@@ -1012,17 +1166,24 @@ hcat{T<:Number}(X::T...) = T[ X[j] for i=1:1, j=1:length(X) ]
 vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
 hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
 typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,1}(length(X)), X)
+typed_vcat{T<:AbstractArray}(::Type{T}, X::Number...) = hvcat_fill(T(length(X)), X)
 typed_hcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,2}(1,length(X)), X)
+typed_hcat{T<:AbstractArray}(::Type{T}, X::Number...) = hvcat_fill(T(1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat{T}(V::AbstractVector{T}...) = typed_vcat(T, V...)
+
+prepare_cat_result{T}(::Type{T}, dims::Dims, A1::AbstractArray, A...) = similar(A1, T, dims)
+prepare_cat_result{T}(::Type{T}, dims::Dims, A...) = similar([A[1]], T, dims)
+prepare_cat_result{T<:AbstractArray}(::Type{T}, dims::Dims, A1::AbstractArray, A...) = fixate_eltype(T, promote_eltype(A1, A...))(dims)
+prepare_cat_result{T<:AbstractArray}(::Type{T}, dims::Dims, A...) = fixate_eltype(T, promote_eltype(A...))(dims)
 
 function typed_vcat{T}(::Type{T}, V::AbstractVector...)
     n::Int = 0
     for Vk in V
         n += length(Vk)
     end
-    a = similar(V[1], T, n)
+    a = prepare_cat_result(T, (n,), V...)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -1050,7 +1211,7 @@ function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = prepare_cat_result(T, (nrows, ncols), A...)
     pos = 1
     if dense
         for k=1:nargs
@@ -1082,7 +1243,7 @@ function typed_vcat{T}(::Type{T}, A::AbstractMatrix...)
             throw(ArgumentError("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
         end
     end
-    B = similar(A[1], T, nrows, ncols)
+    B = prepare_cat_result(T, (nrows, ncols), A...)
     pos = 1
     for k=1:nargs
         Ak = A[k]
@@ -1129,7 +1290,7 @@ function cat_t(catdims, typeC::Type, X...)
         end
     end
 
-    C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, tuple(dimsC...))
+    C = prepare_cat_result(typeC, tuple(dimsC...), X...)
     if length(catdims)>1
         fill!(C,0)
     end
@@ -1311,7 +1472,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractMatrix.
         a += rows[i]
     end
 
-    out = similar(as[1], T, nr, nc)
+    out = prepare_cat_result(T, (nr, nc), as...)
 
     a = 1
     r = 1
@@ -1363,7 +1524,7 @@ function hvcat{T<:Number}(rows::Tuple{Vararg{Int}}, xs::T...)
     a
 end
 
-function hvcat_fill(a::Array, xs::Tuple)
+function hvcat_fill(a::AbstractArray, xs::Tuple)
     k = 1
     nr, nc = size(a,1), size(a,2)
     for i=1:nr
