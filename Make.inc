@@ -663,6 +663,13 @@ OPENBLAS_TARGET_ARCH:=ARMV7
 USE_SYSTEM_LIBM:=1
 endif
 
+# If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
+ifneq (,$(findstring aarch64,$(ARCH)))
+LLVM_VER:=3.9.0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV8
+endif
+
 # Set MARCH-specific flags
 ifneq ($(MARCH),)
 CC += -march=$(MARCH)
