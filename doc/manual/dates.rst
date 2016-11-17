@@ -260,6 +260,33 @@ What's going on there? In the first line, we're adding 1 day to January 29th, wh
 
 Tricky? Perhaps. What is an innocent :mod:`Dates` user to do? The bottom line is to be aware that explicitly forcing a certain associativity, when dealing with months, may lead to some unexpected results, but otherwise, everything should work as expected. Thankfully, that's pretty much the extent of the odd cases in date-period arithmetic when dealing with time in UT (avoiding the "joys" of dealing with daylight savings, leap seconds, etc.).
 
+As a bonus, all period arithmetic objects work directly with ranges::
+
+  julia> dr = Date(2014,1,29):Date(2014,2,3)
+  2014-01-29:1 day:2014-02-03
+
+  julia> collect(dr)
+  6-element Array{Date,1}:
+   2014-01-29
+   2014-01-30
+   2014-01-31
+   2014-02-01
+   2014-02-02
+   2014-02-03
+
+  julia> dr = Date(2014,1,29):Dates.Month(1):Date(2014,07,29)
+  2014-01-29:1 month:2014-07-29
+
+  julia> collect(dr)
+  7-element Array{Date,1}:
+   2014-01-29
+   2014-02-28
+   2014-03-29
+   2014-04-29
+   2014-05-29
+   2014-06-29
+   2014-07-29
+
 
 Adjuster Functions
 ------------------
@@ -305,14 +332,12 @@ This is useful with the do-block syntax for more complex temporal expressions::
         end
   2014-11-27
 
-The final method in the adjuster API is the :func:`recur` function. :func:`recur` vectorizes the adjustment process by taking a start and stop date (optionally specificed by a :class:`StepRange`), along with a :class:`DateFunction` to specify all valid dates/moments to be returned in the specified range. In this case, the :class:`DateFunction` is often referred to as the "inclusion" function because it specifies (by returning ``true``) which dates/moments should be included in the returned vector of dates.
-
-::
+The :func:`Base.filter` method can be used to obtain all valid dates/moments in a specified range::
 
   # Pittsburgh street cleaning; Every 2nd Tuesday from April to November
   # Date range from January 1st, 2014 to January 1st, 2015
   julia> dr = Dates.Date(2014):Dates.Date(2015);
-  julia> recur(dr) do x
+  julia> filter(dr) do x
              Dates.dayofweek(x) == Dates.Tue &&
              Dates.April <= Dates.month(x) <= Dates.Nov &&
              Dates.dayofweekofmonth(x) == 2
