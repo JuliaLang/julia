@@ -2817,6 +2817,46 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             }
         }
     }
+
+    else if (f == jl_builtin_isdefined && nargs == 2) {
+        jl_datatype_t *stt = (jl_datatype_t*)expr_type(args[1], ctx);
+        if (!jl_is_leaf_type((jl_value_t*)stt) || jl_is_array_type(stt) ||
+            stt == jl_module_type) {
+            JL_GC_POP();
+            return false;
+        }
+
+        ssize_t fieldidx = -1;
+        if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2], 0))) {
+            jl_sym_t * sym = (jl_sym_t*)jl_fieldref(args[2], 0);
+            fieldidx = jl_field_index(stt, sym, 0);
+        }
+        else if (jl_is_long(args[2])) {
+            fieldidx = jl_unbox_long(args[2]) - 1;
+        }
+        else {
+            JL_GC_POP();
+            return false;
+        }
+        jl_cgval_t strct = emit_expr(args[1], ctx);
+        if (fieldidx < 0 || fieldidx >= jl_datatype_nfields(stt)) {
+            *ret = mark_julia_const(jl_false);
+        }
+        else if (!jl_field_isptr(stt, fieldidx) || fieldidx < stt->ninitialized) {
+            *ret = mark_julia_const(jl_true);
+        }
+        else {
+            size_t offs = jl_field_offset(stt, fieldidx);
+            Value *ptr = data_pointer(strct, ctx, T_pint8);
+            Value *llvm_idx = ConstantInt::get(T_size, offs);
+            Value *addr = builder.CreateGEP(ptr, llvm_idx);
+            Value *fldv = tbaa_decorate(strct.tbaa, builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)));
+            Value *isdef = builder.CreateICmpNE(fldv, V_null);
+            *ret = mark_julia_type(isdef, false, jl_bool_type, ctx);
+        }
+        JL_GC_POP();
+        return true;
+    }
     // TODO: other known builtins
     JL_GC_POP();
     return false;
