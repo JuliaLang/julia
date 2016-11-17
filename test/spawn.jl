@@ -413,8 +413,8 @@ end
 # test for correct error when an empty command is spawned (Issue 19094)
 @test_throws ArgumentError run(Base.Cmd(``))
 @test_throws ArgumentError run(Base.AndCmds(``, ``))
-@test_throws ArgumentError run(Base.AndCmds(``, `$echo test`))
-@test_throws ArgumentError run(Base.AndCmds(`$echo test`, ``))
+@test_throws ArgumentError run(Base.AndCmds(``, `$truecmd`))
+@test_throws ArgumentError run(Base.AndCmds(`$truecmd`, ``))
 
 @test_throws ArgumentError spawn(Base.Cmd(``))
 @test_throws ArgumentError spawn(Base.AndCmds(``, ``))
