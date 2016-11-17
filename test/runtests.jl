@@ -155,7 +155,7 @@ cd(dirname(@__FILE__)) do
     print_with_color(:white, rpad("Test:",name_align," "), " | ")
     print_with_color(:white, "Total time (s): | GC time (s): | Percent in gc: | Allocated (MB): | RSS (MB):\n")
     for res in results
-        if !isa(res[2][1], RemoteException)
+        if !isa(res[2][1], Exception)
             print_with_color(:white, rpad("$(res[1])",name_align," "), " | ")
             time_str = @sprintf("%7.2f",res[2][2])
             print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
