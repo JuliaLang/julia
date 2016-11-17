@@ -143,7 +143,7 @@ noteworthy differences:
   equivalent ``[1, 2, 3, 4] + [1, 2]`` will throw an error in Julia.
 - Julia's :func:`map` takes the function first, then its arguments, unlike
   ``lapply(<structure>, function, ...)`` in R. Similarly Julia's equivalent of
-  ``apply(X, MARGIN, FUN, ...)`` in R is :func:`mapslices` where function is a
+  ``apply(X, MARGIN, FUN, ...)`` in R is :func:`mapslices` where the function is the
   first argument.
 - Multivariate apply in R, e.g. ``mapply(choose, 11:13, 1:3)``, can be written as
   ``broadcast(binomial, 11:13, 1:3)`` in Julia. Equivalently Julia offers a shorter
