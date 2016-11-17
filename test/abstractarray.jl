@@ -785,3 +785,6 @@ end
 @test ndims((1:3)[:,:,1:1,:]) == 4
 @test ndims((1:3)[:,:,1:1]) == 3
 @test ndims((1:3)[:,:,1:1,:,:,[1]]) == 6
+
+# dispatch loop introduced in #19305
+@test [(1:2) zeros(2,2); ones(3,3)] == [[1,2] zeros(2,2); ones(3,3)] == [reshape([1,2],2,1) zeros(2,2); ones(3,3)]
