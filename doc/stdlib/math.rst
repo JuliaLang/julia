@@ -321,7 +321,7 @@ Mathematical Operators
        julia> a = rationalize(BigInt, 10.3)
        103//10
 
-       julia> typeof(num(a))
+       julia> typeof(numerator(a))
        BigInt
 
 .. function:: numerator(x)
@@ -606,8 +606,8 @@ Mathematical Operators
        julia> 4 | 1
        5
 
-.. _$:
-.. function:: $(x, y)
+.. function:: xor(x, y)
+              ⊻(x, y)
 
    .. Docstring generated from Julia source
 
