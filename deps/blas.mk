@@ -74,7 +74,11 @@ endif
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/openblas-freebsd.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(dir $<)/Makefile.system
 	echo 1 > $@
 
