@@ -120,38 +120,34 @@ end
 
 for func = (:length, :isready, :workers, :nworkers, :take!)
     func_local = Symbol(string("wp_local_", func))
-    eval(
-        quote
-            function ($func)(pool::WorkerPool)
-                if pool.ref.where != myid()
-                    return remotecall_fetch(ref->($func_local)(fetch(ref)), pool.ref.where, pool.ref)
-                else
-                    return ($func_local)(pool)
-                end
+    @eval begin
+        function ($func)(pool::WorkerPool)
+            if pool.ref.where != myid()
+                return remotecall_fetch(ref->($func_local)(fetch(ref)), pool.ref.where, pool.ref)
+            else
+                return ($func_local)(pool)
             end
-
-            # default impl
-            ($func)(pool::AbstractWorkerPool) = ($func_local)(pool)
         end
-    )
+
+        # default impl
+        ($func)(pool::AbstractWorkerPool) = ($func_local)(pool)
+    end
 end
 
 for func = (:push!, :put!)
     func_local = Symbol(string("wp_local_", func))
-    eval(
-        quote
-            function ($func)(pool::WorkerPool, w::Int)
-                if pool.ref.where != myid()
-                    return remotecall_fetch((ref, w)->($func_local)(fetch(ref), w), pool.ref.where, pool.ref, w)
-                else
-                    return ($func_local)(pool, w)
-                end
+    @eval begin
+        function ($func)(pool::WorkerPool, w::Int)
+            if pool.ref.where != myid()
+                return remotecall_fetch((ref, w)->($func_local)(fetch(ref), w), pool.ref.where, pool.ref, w)
+            else
+                return ($func_local)(pool, w)
             end
-
-            # default impl
-            ($func)(pool::AbstractWorkerPool, w::Int) = ($func_local)(pool, w)
         end
-    )
+
+        # default impl
+        ($func)(pool::AbstractWorkerPool, w::Int) = ($func_local)(pool, w)
+    end
 end
 
 
