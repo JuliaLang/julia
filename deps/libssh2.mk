@@ -28,6 +28,8 @@ $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCD
 	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
 	echo 1 > $@
 
+# Patch submitted upstream: https://github.com/libssh2/libssh2/pull/148
+# Remove the patch here once we're using a version of libssh2 that includes the upstream patch
 $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
 	cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libssh2-netinet-in.patch
 	echo 1 > $@
