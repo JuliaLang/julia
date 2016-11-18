@@ -2665,9 +2665,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         if method.module == _topmod(method.module) || (isdefined(Main, :Base) && method.module == Main.Base)
             # however, some gf have special tfunc, meaning they wouldn't have been inferred yet
             # check the same conditions from abstract_call to detect this case
-            if method.name == :promote_type || method.name == :typejoin
-                force_infer = true
-            elseif method.name == :getindex || method.name == :next || method.name == :indexed_next
+            if method.name == :getindex || method.name == :next || method.name == :indexed_next
                 if length(atypes) > 2 && atypes[3] ⊑ Int
                     at2 = widenconst(atypes[2])
                     if (at2 <: Tuple ||
@@ -2684,7 +2682,24 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 linfo = code_for_method(method, metharg, methsp)
             end
             if isa(linfo, MethodInstance)
-                frame = typeinf_frame(linfo::MethodInstance, nothing, true, true, sv.params)
+                linfo = linfo::MethodInstance
+                if isa(atypes[3], Const)
+                    # Since we inferred this with the information that atypes[3]::Const,
+                    # must inline with that same information.
+                    # We do that by overriding the argument type,
+                    # while ensuring we don't cache that information
+                    # This isn't particularly important for `getindex`,
+                    # as we'll be able to fix that up at the end of inlinable when we verify the return type.
+                    # But `next` and `indexed_next` make tuples which would end up burying some of that information in the AST
+                    # where we can't easily correct it afterwards.
+                    src = get_source(linfo)
+                    frame = InferenceState(linfo, src, #=optimize=#true, #=cache=#false, sv.params)
+                    frame.stmt_types[1][3] = VarState(atypes[3], false)
+                    typeinf_loop(frame)
+                else
+                    # If we don't have any special extra information, just infer and cache normally.
+                    frame = typeinf_frame(linfo, nothing, #=optimize=#true, #=cache=#true, sv.params)
+                end
             end
         end
         if isa(frame, InferenceState) && frame.inferred
@@ -2931,6 +2946,8 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     if isa(expr,Expr)
         old_t = e.typ
         if old_t ⊑ expr.typ
+            # if we had better type information than the content being inlined,
+            # change the return type now to use the better type
             expr.typ = old_t
         end
     end
