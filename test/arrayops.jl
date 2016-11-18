@@ -1869,7 +1869,7 @@ end
     end
 end
 
-isdefined(:TestHelpers) || eval(Main, :(include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))))
+isdefined(Main, :TestHelpers) || eval(Main, :(include("TestHelpers.jl")))
 using TestHelpers.OAs
 
 @testset "accumulate, accumulate!" begin
