@@ -584,7 +584,7 @@ median elements. The `by` keyword lets you provide a function that will be
 applied to each element before comparison. The `lt` keyword allows providing a
 custom "less than" function for sorting prior to taking the median.
 """
-median{T}(v::AbstractArray{T}; lt=isless, by=identity, rev::Bool=false) = median!(copy!(Array{T,1}(_length(v)), v), lt=lt, by=by)
+median{T}(v::AbstractArray{T}; lt=isless, by=identity) = median!(copy!(Array{T,1}(_length(v)), v), lt=lt, by=by)
 
 """
     median(v[, region])
