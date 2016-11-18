@@ -74,6 +74,8 @@ endif
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
+# Patch submitted upstream: https://github.com/xianyi/OpenBLAS/pull/1015
+# Remove the patch here once we're using a version of OpenBLAS that includes the upstream patch
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-freebsd.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/source-extracted
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/openblas-freebsd.patch
 	echo 1 > $@
