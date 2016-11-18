@@ -702,6 +702,8 @@ Language tooling improvements
 [#18442]: https://github.com/JuliaLang/julia/issues/18442
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
+[#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
+[#19305]: https://github.com/JuliaLang/julia/issues/19305
