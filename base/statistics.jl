@@ -561,7 +561,7 @@ julia> middle(a)
 """
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
-function median!{T}(v::AbstractVector{T}; lt=isless, by=identity, rev::Bool=false)
+function median!{T}(v::AbstractVector{T}; lt=isless, by=identity)
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
     if T<:AbstractFloat
         @inbounds for x in v
@@ -571,21 +571,20 @@ function median!{T}(v::AbstractVector{T}; lt=isless, by=identity, rev::Bool=fals
     inds = indices(v, 1)
     n = length(inds)
     mid = div(first(inds)+last(inds),2)
-    middle(select!(v, isodd(n) ? mid : (mid:mid+1), lt=lt, by=by, rev=rev))
+    middle(select!(v, isodd(n) ? mid : (mid:mid+1), lt=lt, by=by))
 end
 median!{T}(v::AbstractArray{T}) = median!(vec(v))
 
 """
-    median(v, lt=isless, by=identity, rev::Bool=false)
+    median(v, lt=isless, by=identity)
 
 Compute the median of an array `v`. For an even number of elements no exact
 median element exists, so the result is equivalent to calculating mean of two
 median elements. The `by` keyword lets you provide a function that will be
 applied to each element before comparison. The `lt` keyword allows providing a
-custom "less than" function for sorting prior to taking the median. The `rev`
-keyword specifies whether to reverse the sort order.
+custom "less than" function for sorting prior to taking the median.
 """
-median{T}(v::AbstractArray{T}; lt=isless, by=identity, rev::Bool=false) = median!(copy!(Array{T,1}(_length(v)), v), lt=lt, by=by, rev=rev)
+median{T}(v::AbstractArray{T}; lt=isless, by=identity, rev::Bool=false) = median!(copy!(Array{T,1}(_length(v)), v), lt=lt, by=by)
 
 """
     median(v[, region])
