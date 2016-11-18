@@ -26,6 +26,12 @@ end
 @test median([1,3,2]) === 2.0
 @test median([1,3,2,4]) === 2.5
 
+ismore(x,y) = !isless(x,y)
+@test median([1,3,2,4], lt=ismore) === 2.5
+@test median([1,-2,3,-4], lt=ismore, by=abs) === 0.5
+@test median([1,-2,3,-4], by=abs) === 0.5
+@test median([1,3,-4], lt=isless, by=abs) === 3.0
+
 @test median([0.0,Inf]) == Inf
 @test median([0.0,-Inf]) == -Inf
 @test median([0.,Inf,-Inf]) == 0.0
