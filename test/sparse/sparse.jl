@@ -1662,3 +1662,28 @@ end
 
 # 19304
 @inferred hcat(sparse(rand(2,1)), eye(2,2))
+
+# Test that broadcast[!](f, [C::SparseMatrixCSC], A::SparseMatrixCSC, B::SparseMatrixCSC)
+# returns the correct (densely populated) result when f(zero(eltype(A)), zero(eltype(B))) != 0
+let
+    N = 5
+    sparsesqrmat = sprand(N, N, 0.5)
+    sparsesqrmat2 = sprand(N, N, 0.5)
+    sparserowmat = sprand(1, N, 0.5)
+    sparsecolmat = sprand(N, 1, 0.5)
+    sparse1x1matz = spzeros(1, 1)
+    sparse1x1mato = spones(sparse1x1matz)
+    zeroscourge = (x, y) -> x + y + 1
+    # test case where the matrices have the same shape and no singleton dimensions
+    @test broadcast(zeroscourge, sparsesqrmat, sparsesqrmat2) ==
+            broadcast(zeroscourge, Matrix(sparsesqrmat), Matrix(sparsesqrmat2))
+    # test combinations where either or both matrices have one or more singleton dimensions
+    sparsemats = (sparsesqrmat, sparserowmat, sparsecolmat, sparse1x1matz, sparse1x1mato)
+    densemats = map(Matrix, sparsemats)
+    for (sparseA, denseA) in zip(sparsemats, densemats)
+        for (sparseB, denseB) in zip(sparsemats, densemats)
+            @test broadcast(zeroscourge, sparseA, sparseB) ==
+                    broadcast(zeroscourge, denseA, denseB)
+        end
+    end
+end
