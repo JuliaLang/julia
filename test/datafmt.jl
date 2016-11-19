@@ -262,3 +262,13 @@ for writefunc in ((io,x) -> show(io, "text/csv", x),
         @test vec(readcsv(io)) == x
     end
 end
+
+# Test that we can read a write protected file
+let fn = tempname()
+    open(fn, "w") do f
+        write(f, "Julia")
+    end
+    chmod(fn, 0o444)
+    readdlm(fn)[] == "Julia"
+    rm(fn)
+end
