@@ -294,6 +294,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
 - **[libgit2]** (>= 0.23)    — Git linkable library, used by Julia's package manager
+- **[http_parser]**          - HTTP parsing library, used by `libgit2`
 - **[curl]** (>= 7.50)       — libcurl provides download and proxy support for Julia's package manager
 - **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes
 - **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
@@ -330,6 +331,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [double-conversion]: http://double-conversion.googlecode.com
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.github.com/
+[http_parser]:  https://github.com/nodejs/http-parser
 [utf8proc]:     http://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind
