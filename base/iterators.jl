@@ -291,8 +291,8 @@ julia> collect(Iterators.take(a,3))
  5
 ```
 """
-take(xs, n::Int) = Take(xs, n)
-take(xs::Take, n::Int) = Take(xs.xs, min(n, xs.n))
+take(xs, n::Integer) = Take(xs, Int(n))
+take(xs::Take, n::Integer) = Take(xs.xs, min(Int(n), xs.n))
 
 eltype{I}(::Type{Take{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Take{I}}) = iteratoreltype(I)
@@ -345,9 +345,9 @@ julia> collect(Iterators.drop(a,4))
  11
 ```
 """
-drop(xs, n::Int) = Drop(xs, n)
-drop(xs::Take, n::Int) = Take(drop(xs.xs, n), max(0, xs.n - n))
-drop(xs::Drop, n::Int) = Drop(xs.xs, n + xs.n)
+drop(xs, n::Integer) = Drop(xs, Int(n))
+drop(xs::Take, n::Integer) = Take(drop(xs.xs, Int(n)), max(0, xs.n - Int(n)))
+drop(xs::Drop, n::Integer) = Drop(xs.xs, Int(n) + xs.n)
 
 eltype{I}(::Type{Drop{I}}) = eltype(I)
 iteratoreltype{I}(::Type{Drop{I}}) = iteratoreltype(I)
@@ -430,7 +430,7 @@ julia> collect(a)
  [1 2]
 ```
 """
-repeated(x, n::Int) = take(repeated(x), n)
+repeated(x, n::Integer) = take(repeated(x), Int(n))
 
 eltype{O}(::Type{Repeated{O}}) = O
 
@@ -646,7 +646,7 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
  [5]
 ```
 """
-partition{T}(c::T, n::Int) = PartitionIterator{T}(c, n)
+partition{T}(c::T, n::Integer) = PartitionIterator{T}(c, Int(n))
 
 
 type PartitionIterator{T}

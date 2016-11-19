@@ -391,3 +391,11 @@ let s = "Monkey 🙈🙊🙊"
     @test tf(2) == "Mo|nk|ey| 🙈|🙊🙊"
     @test tf(1) == "M|o|n|k|e|y| |🙈|🙊|🙊"
 end
+
+# take and friends with arbitrary integers (#19214)
+for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
+    @test length(take(1:6, T(3))) == 3
+    @test length(drop(1:6, T(3))) == 3
+    @test length(repeated(1, T(5))) == 5
+    @test collect(partition(1:5, T(5)))[1] == collect(1:5)
+end
