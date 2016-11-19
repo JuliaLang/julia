@@ -540,6 +540,22 @@ function base(b::Integer, n::BigInt)
     unsafe_wrap(String, p, true)
 end
 
+function base(b::Integer, n::BigInt, pad::Integer)
+    s = base(b, n)
+    buf = IOBuffer()
+    if n < 0
+        s = s[2:end]
+        write(buf, '-')
+    end
+    if length(s) < pad
+        for i in 1:pad-length(s)
+            write(buf, '0')
+        end
+    end
+    write(buf, s)
+    String(buf)
+end
+
 function ndigits0z(x::BigInt, b::Integer=10)
     b < 2 && throw(DomainError())
     if ispow2(b) && 2 <= b <= 62 # GMP assumes b is in this range
