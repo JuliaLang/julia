@@ -83,20 +83,19 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == realpath(tmpdir)
-        write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd -\n")
         readuntil(stdout_read, origpwd[max(1,end-39):end])
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == origpwd
-        write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "cd\n")
         readuntil(stdout_read, realpath(homedir())[max(1,end-39):end])
         readuntil(stdout_read, "\n")
         readuntil(stdout_read, "\n")
         @test pwd() == realpath(homedir())
+        write(stdin_write, "\b")
     end
     cd(origpwd)
 
