@@ -961,7 +961,10 @@ export
     next,
     start,
 
-    enumerate,  # re-exported from Iterators
+    # re-exported from Iterators
+    enumerate,
+    enumerate_countfrom,
+
     zip,
 
 # object identity and equality

@@ -130,7 +130,7 @@ include("associative.jl")
 include("dict.jl")
 include("set.jl")
 include("iterators.jl")
-using .Iterators: zip, enumerate
+using .Iterators: zip, enumerate, enumerate_countfrom
 using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
