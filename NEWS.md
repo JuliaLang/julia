@@ -79,6 +79,7 @@ Deprecated or removed
   * `Dates.recur` has been deprecated in favor of `filter` ([#19288])
 
   * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
+  
 Julia v0.5.0 Release Notes
 ==========================
 
