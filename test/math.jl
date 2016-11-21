@@ -939,7 +939,6 @@ end
 
 @test Base.Math.f64(complex(1f0,1f0)) == complex(1.0, 1.0)
 @test Base.Math.f64(1f0) == 1.0
-@test Base.Math.ofpromotedtype((complex(1f0, 1f0), 1.0), 5.0) == complex(5.0)
 
 # no domain error is thrown for negative values
 @test invoke(cbrt, Tuple{AbstractFloat}, -1.0) == -1.0
@@ -962,8 +961,12 @@ end
 @test_throws MethodError zeta(1.0,big"2.0")
 @test_throws MethodError zeta(big"1.0",2.0)
 
-@test typeof(zeta(complex(1),2.0)) == Complex{Float64}
+
+@test typeof(zeta(complex(1), 2.0)) == Complex{Float64}
 @test typeof(polygamma(3, 0x2)) == Float64
 @test typeof(polygamma(big"3", 2f0)) == Float32
-@test typeof(zeta(big"1",2.0)) == Float64 #Is this really desirable behavour?
-
+@test typeof(zeta(big"1", 2.0)) == Float64
+@test typeof(zeta(big"1", 2f0)) == Float32
+@test typeof(zeta(2f0, 2f0)) == Float32
+@test typeof(zeta(2f0, complex(2f0,0f0))) == Complex{Float32}
+@test typeof(zeta(complex(1,1), 2f0)) == Complex{Float32}

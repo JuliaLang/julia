@@ -344,10 +344,7 @@ this definition is equivalent to the Hurwitz zeta function
 ``\\sum_{k=0}^\\infty (k+z)^{-s}``.   For ``z=1``, it yields
 the Riemann zeta function ``\\zeta(s)``.
 """
-zeta(s,z)
-
-function zeta(s::Union{Int, ComplexOrReal{Float64}},
-              z::ComplexOrReal{Float64})
+function zeta(s::ComplexOrReal{Float64}, z::ComplexOrReal{Float64})
     ζ = zero(promote_type(typeof(s), typeof(z)))
 
     (z == 1 || z == 0) && return oftype(ζ, zeta(s))
@@ -611,10 +608,11 @@ end
 
 # Converting types that we can convert, and not ones we can not
 # Float16, and Float32 and their Complex equivalents can be converted to Float64
-# and results converted back. Similar for BitIntegers (eg Int32), but no converting back.
+# and results converted back.
 # Otherwise, we need to make things use their own `float` converting methods
 # and in those cases, we do not convert back either as we assume
 # they also implement their own versions of the functions, with the correct return types.
+# This is the case for BitIntegers (which become `Float64` when `float`ed).
 # Otherwise, if they do not implement their version of the functions we
 # manually throw a `MethodError`.
 # This case occurs, when calling `float` on a type does not change its type,
@@ -627,13 +625,7 @@ end
 # Float16 version, by using a precomputed table look-up.
 
 
-
-ofpromotedtype(as::Tuple, c) = convert(promote_type(typeof.(as)...), c)
-ComplexOrRealUnion(TS...) = Union{(ComplexOrReal{T} for T in TS)...}
-
-const types_le_Float64 = (Float16, Float32, Float64, Base.BitInteger.types...)
-
-for T in types_le_Float64
+for T in (Float16, Float32, Float64)
     @eval f64(x::Complex{$T}) = Complex128(x)
     @eval f64(x::$T) = Float64(x)
 end
@@ -641,8 +633,9 @@ end
 
 for f in (:digamma, :trigamma, :zeta, :eta, :invdigamma)
     @eval begin
-        $f(z::ComplexOrRealUnion(Base.BitInteger.types...)) = $f(f64(z))
-        $f(z::ComplexOrRealUnion(Float16,Float32)) = oftype(z, $f(f64(z)))
+		function $f(z::Union{ComplexOrReal{Float16}, ComplexOrReal{Float32}})
+			oftype(z, $f(f64(z)))
+		end
 
         function $f(z::Number)
             x = float(z)
@@ -653,41 +646,19 @@ for f in (:digamma, :trigamma, :zeta, :eta, :invdigamma)
     end
 end
 
-function polygamma(m::Integer, z::ComplexOrRealUnion(Float16,Float32))
-    oftype(z, polygamma(m, f64(z)))
-end
 
-for T1 in types_le_Float64, T2 in types_le_Float64
-    if (T1 == T2 == Float64) ||  (T1 == Int && T2 == Float64)
-        continue # Avoid redefining base definition
-        # However this skips `zeta(::Complex{Int}, ::ComplexOrReal{Float64})`
-        # so that will need to be added back after
-    end
+for T1 in (Float16, Float32, Float64), T2 in (Float16, Float32, Float64)
+    (T1 == T2 == Float64) && continue # Avoid redefining base definition
 
-    if T1<:Integer && T2<:Integer
-        @eval function zeta(s::ComplexOrReal{$T1}, z::ComplexOrReal{$T2})
-            zeta(f64(s), f64(z)) #Do not promote down to Integers
-        end
-    else
-        @eval function zeta(s::ComplexOrReal{$T1}, z::ComplexOrReal{$T2})
-            ofpromotedtype((s, z), zeta(f64(s), f64(z)))
-        end
-    end
-end
+	@eval function zeta(s::ComplexOrReal{$T1}, z::ComplexOrReal{$T2})
+		ζ = zeta(f64(s), f64(z))
 
-# this is the one definition that is skipped
-function zeta(s::Complex{Int}, z::ComplexOrReal{Float64})::Complex{Float64}
-    zeta(f64(s), f64(z))
-end
-
-function zeta(s::Integer, z::Number)
-    t = Int(s)  # One could worry here about converting a BigInteger into a Int32/Int64
-    x = float(z)
-    if typeof(t) === typeof(s) && typeof(x) === typeof(z)
-        # There is nothing to fallback to, since this didn't work
-        throw(MethodError(zeta,(s,z)))
-    end
-    zeta(t, x)
+		if typeof(s) <: Complex || typeof(z) <: Complex
+			convert(Complex{$T2}, ζ)
+		else
+			convert(typeof(z), ζ)
+		end
+	end
 end
 
 
@@ -699,6 +670,18 @@ function zeta(s::Number, z::Number)
         throw(MethodError(zeta,(s,z)))
     end
     zeta(t, x)
+end
+
+# It is safe to convert `s` to a float as underflow will occur before precision issues
+zeta(s::Integer, z::Number) = zeta(oftype(z, s), z)
+function zeta(s::Integer, z::Integer)
+	x=float(z)
+	zeta(oftype(x, s), x)
+end
+
+
+function polygamma(m::Integer, z::Union{ComplexOrReal{Float16}, ComplexOrReal{Float32}})
+    oftype(z, polygamma(m, f64(z)))
 end
 
 
