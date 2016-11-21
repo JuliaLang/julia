@@ -60,7 +60,7 @@ Library improvements
     you can now do e.g. `[A I]` and it will concatenate an appropriately sized
     identity matrix ([#19305]).
 
-  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as [scan](https://en.wikipedia.org/wiki/Prefix_sum) ([#18931]).
+  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
 
 Compiler/Runtime improvements
 -----------------------------
