@@ -1627,14 +1627,10 @@ let A = sparse(UInt32[1,2,3], UInt32[1,2,3], [1.0,2.0,3.0])
     @test A[1,1:3] == A[1,:] == [1,0,0]
 end
 
-# Check that `broadcast` methods specialized for unary operations over
-# `SparseMatrixCSC`s are called. (Issue #18705.)
-let
-    A = spdiagm(1.0:5.0)
-    @test isa(sin.(A), SparseMatrixCSC) # representative for _unary_nz2z_z2z class
-    @test isa(abs.(A), SparseMatrixCSC) # representative for _unary_nz2nz_z2z class
-    @test isa(exp.(A), Array) # representative for _unary_nz2nz_z2nz class
-end
+# Check that `broadcast` methods specialized for unary operations over `SparseMatrixCSC`s
+# are called. (Issue #18705.) EDIT: #19239 unified broadcast over a single sparse matrix,
+# eliminating the former operation classes.
+@test isa(sin.(spdiagm(1.0:5.0)), SparseMatrixCSC)
 
 # 19225
 let X = sparse([1 -1; -1 1])
