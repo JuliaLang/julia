@@ -887,7 +887,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t *li, jl_code_info_t *s
     assert(jl_is_code_info(src));
 
     // Step 2: setup global state
-    BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    IRBuilderBase::InsertPoint old = builder.saveAndClearIP();
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     if (!nested_compile && dump_compiles_stream != NULL)
@@ -908,10 +908,8 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t *li, jl_code_info_t *s
         li->functionObjectsDecls.functionObject = NULL;
         li->functionObjectsDecls.specFunctionObject = NULL;
         nested_compile = last_n_c;
-        if (old != NULL) {
-            builder.SetInsertPoint(old);
-            builder.SetCurrentDebugLocation(olddl);
-        }
+        builder.restoreIP(old);
+        builder.SetCurrentDebugLocation(olddl);
         JL_UNLOCK(&codegen_lock); // Might GC
         jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->def ? li->def->name : anonymous_sym));
     }
@@ -953,10 +951,8 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t *li, jl_code_info_t *s
     }
 
     // Step 6: Done compiling: Restore global state
-    if (old != NULL) {
-        builder.SetInsertPoint(old);
-        builder.SetCurrentDebugLocation(olddl);
-    }
+    builder.restoreIP(old);
+    builder.SetCurrentDebugLocation(olddl);
     nested_compile = last_n_c;
     JL_UNLOCK(&codegen_lock); // Might GC
 
@@ -1274,7 +1270,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, bool getwrapper, bool optim
 
     // Backup the info for the nested compile
     JL_LOCK(&codegen_lock);
-    BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+
+    IRBuilderBase::InsertPoint old = builder.saveAndClearIP();
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
@@ -1287,18 +1284,14 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, bool getwrapper, bool optim
     JL_CATCH {
         // something failed!
         nested_compile = last_n_c;
-        if (old != NULL) {
-            builder.SetInsertPoint(old);
-            builder.SetCurrentDebugLocation(olddl);
-        }
+        builder.restoreIP(old);
+        builder.SetCurrentDebugLocation(olddl);
         JL_UNLOCK(&codegen_lock); // Might GC
         jl_rethrow_with_add("error compiling %s", jl_symbol_name(linfo->def ? linfo->def->name : anonymous_sym));
     }
     // Restore the previous compile context
-    if (old != NULL) {
-        builder.SetInsertPoint(old);
-        builder.SetCurrentDebugLocation(olddl);
-    }
+    builder.restoreIP(old);
+    builder.SetCurrentDebugLocation(olddl);
     nested_compile = last_n_c;
 
     if (optimize)
@@ -4025,16 +4018,14 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
 
     // Backup the info for the nested compile
     JL_LOCK(&codegen_lock);
-    BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    IRBuilderBase::InsertPoint old = builder.saveAndClearIP();
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
     Function *f = gen_cfun_wrapper(ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt);
     // Restore the previous compile context
-    if (old != NULL) {
-        builder.SetInsertPoint(old);
-        builder.SetCurrentDebugLocation(olddl);
-    }
+    builder.restoreIP(old);
+    builder.SetCurrentDebugLocation(olddl);
     nested_compile = last_n_c;
     JL_UNLOCK(&codegen_lock); // Might GC
     JL_GC_POP();
