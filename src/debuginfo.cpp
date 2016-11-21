@@ -1894,8 +1894,8 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     // I'm not a great fan of the naming of this constant, but it means the
     // right thing, which is a table of FDEs and ips.
     di->format = UNW_INFO_FORMAT_IP_OFFSET;
-    di->u.ti.name_ptr = 0;
-    di->u.ti.segbase = (unw_word_t)Addr;
+    di->u.rti.name_ptr = 0;
+    di->u.rti.segbase = (unw_word_t)Addr;
     // Now first count the number of FDEs
     size_t nentries = 0;
     processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
@@ -2001,8 +2001,8 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     }
     assert(end_ip != 0);
 
-    di->u.ti.table_len = nentries;
-    di->u.ti.table_data = (unw_word_t*)table;
+    di->u.rti.table_len = nentries * sizeof(*table) / sizeof(unw_word_t);
+    di->u.rti.table_data = (unw_word_t)table;
     di->start_ip = start_ip;
     di->end_ip = end_ip;
 
