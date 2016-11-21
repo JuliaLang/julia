@@ -324,10 +324,10 @@ function ndigits0znb(n::Signed, b::Int)
 end
 
 function ndigits0z(n::Unsigned, b::Int)
-    b < 0 && return ndigits0znb(signed(n), b)
-    b == 2  && return (sizeof(n)<<3-leading_zeros(n))
-    b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
-    b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
+    b < 0   && return ndigits0znb(signed(n), b)
+    b == 2  && return sizeof(n)<<3 - leading_zeros(n)
+    b == 8  && return (sizeof(n)<<3 - leading_zeros(n) + 2) ÷ 3
+    b == 16 && return sizeof(n)<<1 - leading_zeros(n)>>2
     b == 10 && return ndigits0z(n)
 
     d = 0
