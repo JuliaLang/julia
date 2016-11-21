@@ -89,6 +89,9 @@ let n = rand(Int)
 end
 @test ndigits(Int8(5)) == ndigits(5)
 
+# issue #19367
+@test ndigits(Int128(2)^64, 256) == 9
+
 @test bin('3') == "110011"
 @test bin('3',7) == "0110011"
 @test bin(3) == "11"
