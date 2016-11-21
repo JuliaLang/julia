@@ -156,7 +156,7 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
  * we use only a compiler (signal) barrier and use the signal handler to do the
  * synchronization in order to lower the mutator overhead as much as possible.
  *
- * We use the compiler instrinsics to implement a similar API to the c11/c++11
+ * We use the compiler intrinsics to implement a similar API to the c11/c++11
  * one instead of using it directly because,
  *
  *     1. We support GCC 4.7 and GCC add support for c11 atomics in 4.9.
