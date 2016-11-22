@@ -1,7 +1,19 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 module Rounding
-include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "fenv_constants.jl".data))) # include($BUILDROOT/base/fenv_constants.jl)
+
+let fenv_consts = Vector{Int32}(9)
+    ccall(:jl_get_fenv_consts, Void, (Ptr{Int32},), fenv_consts)
+    global const JL_FE_INEXACT = fenv_consts[1]
+    global const JL_FE_UNDERFLOW = fenv_consts[2]
+    global const JL_FE_OVERFLOW = fenv_consts[3]
+    global const JL_FE_DIVBYZERO = fenv_consts[4]
+    global const JL_FE_INVALID = fenv_consts[5]
+    global const JL_FE_TONEAREST = fenv_consts[6]
+    global const JL_FE_UPWARD = fenv_consts[7]
+    global const JL_FE_DOWNWARD = fenv_consts[8]
+    global const JL_FE_TOWARDZERO = fenv_consts[9]
+end
 
 export
     RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,

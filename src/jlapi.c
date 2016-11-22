@@ -367,6 +367,108 @@ JL_DLLEXPORT void (jl_cpu_wake)(void)
     jl_cpu_wake();
 }
 
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+#  ifndef FE_INVALID
+#    define FE_INVALID 0x01
+#  endif
+#  ifndef FE_DIVBYZERO
+#    define FE_DIVBYZERO 0x04
+#  endif
+#  ifndef FE_OVERFLOW
+#    define FE_OVERFLOW 0x08
+#  endif
+#  ifndef FE_UNDERFLOW
+#    define FE_UNDERFLOW 0x10
+#  endif
+#  ifndef FE_INEXACT
+#    define FE_INEXACT 0x20
+#  endif
+
+#  ifndef FE_TONEAREST
+#    define FE_TONEAREST 0
+#  endif
+#  ifndef FE_DOWNWARD
+#    define FE_DOWNWARD 0x400
+#  endif
+#  ifndef FE_UPWARD
+#    define FE_UPWARD 0x800
+#  endif
+#  ifndef FE_TOWARDZERO
+#    define FE_TOWARDZERO 0xc00
+#  endif
+#elif defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
+#  ifndef FE_INVALID
+#    define FE_INVALID 0x01
+#  endif,
+#  ifndef FE_DIVBYZERO
+#    define FE_DIVBYZERO 0x02
+#  endif,
+#  ifndef FE_OVERFLOW
+#    define FE_OVERFLOW 0x04
+#  endif,
+#  ifndef FE_UNDERFLOW
+#    define FE_UNDERFLOW 0x08
+#  endif,
+#  ifndef FE_INEXACT
+#    define FE_INEXACT 0x10
+#  endif,
+
+#  ifndef FE_TONEAREST
+#    define FE_TONEAREST 0x0
+#  endif,
+#  ifndef FE_UPWARD
+#    define FE_UPWARD 0x400000
+#  endif,
+#  ifndef FE_DOWNWARD
+#    define FE_DOWNWARD 0x800000
+#  endif,
+#  ifndef FE_TOWARDZERO
+#    define FE_TOWARDZERO 0xc00000
+#  endif
+#elif defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#  ifndef FE_INEXACT
+#    define FE_INEXACT 0x02000000
+#  endif,
+#  ifndef FE_DIVBYZERO
+#    define FE_DIVBYZERO 0x04000000
+#  endif,
+#  ifndef FE_UNDERFLOW
+#    define FE_UNDERFLOW 0x08000000
+#  endif,
+#  ifndef FE_OVERFLOW
+#    define FE_OVERFLOW 0x10000000
+#  endif,
+#  ifndef FE_INVALID
+#    define FE_INVALID 0x20000000
+#  endif,
+
+#  ifndef FE_TONEAREST
+#    define FE_TONEAREST 0
+#  endif,
+#  ifndef FE_TOWARDZERO
+#    define FE_TOWARDZERO 1
+#  endif,
+#  ifndef FE_UPWARD
+#    define FE_UPWARD 2
+#  endif,
+#  ifndef FE_DOWNWARD
+#    define FE_DOWNWARD 3
+#  endif
+#endif
+
+JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
+{
+    ret[0] = FE_INEXACT;
+    ret[1] = FE_UNDERFLOW;
+    ret[2] = FE_OVERFLOW;
+    ret[3] = FE_DIVBYZERO;
+    ret[4] = FE_INVALID;
+    ret[5] = FE_TONEAREST;
+    ret[6] = FE_UPWARD;
+    ret[7] = FE_DOWNWARD;
+    ret[8] = FE_TOWARDZERO;
+}
+
 #ifdef __cplusplus
 }
 #endif
