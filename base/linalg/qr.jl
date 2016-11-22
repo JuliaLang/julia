@@ -252,8 +252,10 @@ end
 
 # Conversions
 convert{T}(::Type{QR{T}}, A::QR) = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+convert{T}(::Type{Factorization{T}}, A::QR{T}) = A
 convert{T}(::Type{Factorization{T}}, A::QR) = convert(QR{T}, A)
 convert{T}(::Type{QRCompactWY{T}}, A::QRCompactWY) = QRCompactWY(convert(AbstractMatrix{T}, A.factors), convert(AbstractMatrix{T}, A.T))
+convert{T}(::Type{Factorization{T}}, A::QRCompactWY{T}) = A
 convert{T}(::Type{Factorization{T}}, A::QRCompactWY) = convert(QRCompactWY{T}, A)
 convert(::Type{AbstractMatrix}, F::Union{QR,QRCompactWY}) = F[:Q] * F[:R]
 convert(::Type{AbstractArray}, F::Union{QR,QRCompactWY}) = convert(AbstractMatrix, F)
@@ -261,6 +263,7 @@ convert(::Type{Matrix}, F::Union{QR,QRCompactWY}) = convert(Array, convert(Abstr
 convert(::Type{Array}, F::Union{QR,QRCompactWY}) = convert(Matrix, F)
 full(F::Union{QR,QRCompactWY}) = convert(AbstractArray, F)
 convert{T}(::Type{QRPivoted{T}}, A::QRPivoted) = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
+convert{T}(::Type{Factorization{T}}, A::QRPivoted{T}) = A
 convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
 convert(::Type{AbstractMatrix}, F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
 convert(::Type{AbstractArray}, F::QRPivoted) = convert(AbstractMatrix, F)
@@ -328,8 +331,10 @@ end
 QRCompactWYQ{S}(factors::AbstractMatrix{S}, T::Matrix{S}) = QRCompactWYQ{S,typeof(factors)}(factors, T)
 
 convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ{T}) = Q
 convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ) = convert(QRPackedQ{T}, Q)
 convert{S}(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
+convert{S}(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ{S}) = Q
 convert{S}(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) = convert(QRCompactWYQ{S}, Q)
 convert{T}(::Type{Matrix}, A::Union{QRPackedQ{T},QRCompactWYQ{T}}) = A_mul_B!(A, eye(T, size(A.factors, 1), minimum(size(A.factors))))
 convert(::Type{Array}, A::Union{QRPackedQ,QRCompactWYQ}) = convert(Matrix, A)

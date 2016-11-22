@@ -196,6 +196,7 @@ function convert{T}(::Type{LU{T}}, F::LU)
     LU{T,typeof(M)}(M, F.ipiv, F.info)
 end
 convert{T,S}(::Type{LU{T,S}}, F::LU) = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
+convert{T}(::Type{Factorization{T}}, F::LU{T}) = F
 convert{T}(::Type{Factorization{T}}, F::LU) = convert(LU{T}, F)
 
 

@@ -2,7 +2,7 @@ using Base.Bottom
 using Base.Test
 
 macro UnionAll(var, expr)
-    Expr(:where, expr, var)
+    Expr(:where, esc(expr), esc(var))
 end
 
 const issub = issubtype
@@ -66,6 +66,8 @@ function test_2()
 
     @test issub_strict(Tuple{Tuple{Int,Int},Tuple{Int,Int}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
     @test !issub(Tuple{Tuple{Int,Int},Tuple{Int,}}, Tuple{NTuple{N,Int},NTuple{N,Int}} where N)
+
+    @test issub(Type{Tuple{VecElement{Bool}}}, (Type{Tuple{Vararg{VecElement{T},N}}} where T where N))
 end
 
 function test_diagonal()
@@ -260,7 +262,7 @@ function test_4()
     # nested unions
     @test !issub(Union{Int,Ref{Union{Int,Int8}}}, Union{Int,Ref{Union{Int8,Int16}}})
 
-    A = Int;   B = Int8
+    A = Int64; B = Int8
     C = Int16; D = Int32
     @test  issub(Union{Union{A,Union{A,Union{B,C}}}, Union{D,Bottom}},
                  Union{Union{A,B},Union{C,Union{B,D}}})
@@ -332,6 +334,13 @@ function test_5()
     @test !issub(Ref{Union{Ref{Int},Ref{Int8}}}, @UnionAll T Ref{Ref{T}})
     @test  issub(Tuple{Union{Ref{Int},Ref{Int8}}}, @UnionAll T Tuple{Ref{T}})
     @test !issub(Ref{Union{Ref{Int},Ref{Int8}}}, Union{Ref{Ref{Int}}, Ref{Ref{Int8}}})
+
+    @test isequal_type(Ref{Tuple{Union{Int,Int8},Int16}}, Ref{Union{Tuple{Int,Int16},Tuple{Int8,Int16}}})
+    @test isequal_type(Ref{T} where T<:Tuple{Union{Int,Int8},Int16},
+                       Ref{T} where T<:Union{Tuple{Int,Int16},Tuple{Int8,Int16}})
+
+    @test_broken isequal_type(Ref{Tuple{Union{Int,Int8},Int16,T}} where T,
+                              Ref{Union{Tuple{Int,Int16,S},Tuple{Int8,Int16,S}}} where S)
 end
 
 # tricky type variable lower bounds
@@ -765,6 +774,16 @@ function test_intersection()
 
     @testintersect(DataType, Type, DataType)
     @testintersect(DataType, Type{T} where T<:Integer, Type{T} where T<:Integer)
+
+    @testintersect((Type{Tuple{Vararg{T}}} where T), Type{Tuple}, Bottom)
+    @testintersect(Tuple{Type{S}, Tuple{Any, Vararg{Any}}} where S<:Tuple{Any, Vararg{Any}},
+                   Tuple{Type{T}, T} where T,
+                   Tuple{Type{S},S} where S<:Tuple{Any,Vararg{Any,N} where N})
+
+    @test_broken isequal_type(_type_intersect(Tuple{T,T} where T,
+                                              Union{Tuple{S,Array{Int64,1}},Tuple{S,Array{S,1}}} where S),
+                              Union{Tuple{Vector{Int64},Vector{Int64}},
+                                    Tuple{Vector{T},Vector{T}} where T>:Vector})
 end
 
 function test_intersection_properties()

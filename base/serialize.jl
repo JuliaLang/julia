@@ -4,7 +4,7 @@ module Serializer
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast, datatype_pointerfree
 import Core: svec
-using Base: ViewIndex, index_lengths
+using Base: ViewIndex, index_lengths, unwrap_unionall
 
 export serialize, deserialize, SerializationState
 
@@ -24,14 +24,13 @@ SerializationState(io::IO) = SerializationState{typeof(io)}(io)
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32,
     Int64, UInt64, Int128, UInt128, Float32, Float64, Char, Ptr,
-    DataType, Union, TypeName,
-    Tuple, Array, Expr,
+    DataType, Union, TypeName, Tuple, Array, Expr,
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
     LineNumberNode, Slot, LabelNode, GotoNode,
     QuoteNode, CodeInfo, TypeVar, Core.Box, Core.MethodInstance,
     Module, #=UndefRefTag=#Symbol, Task, String, Float16,
-    SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef,
+    SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef, UnionAll,
 
     (), Bool, Any, :Any, Bottom, Core.BottomType, :reserved22, Type,
     :Array, :TypeVar, :Box,
@@ -50,7 +49,7 @@ const TAGS = Any[
     28, 29, 30, 31, 32
 ]
 
-const ser_version = 4 # do not make changes without bumping the version #!
+const ser_version = 5 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
@@ -743,11 +742,6 @@ function deserialize(s::AbstractSerializer, ::Type{GlobalRef})
     end
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Union})
-    types = deserialize(s)
-    Union{types...}
-end
-
 module __deserialized_types__ end
 
 function deserialize(s::AbstractSerializer, ::Type{TypeName})
@@ -838,7 +832,7 @@ function deserialize_datatype(s::AbstractSerializer)
         mod = deserialize(s)::Module
         ty = getfield(mod,name)
     end
-    if isa(ty,DataType)
+    if isa(ty,DataType) && isempty(ty.parameters)
         t = ty
     else
         params = deserialize(s)

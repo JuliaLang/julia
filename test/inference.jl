@@ -488,3 +488,9 @@ test_fast_le(a, b) = @fastmath a <= b
 @inferred test_fast_ne(1.0, 1.0)
 @inferred test_fast_lt(1.0, 1.0)
 @inferred test_fast_le(1.0, 1.0)
+
+abstract AbstractMyType18457{T,F,G}
+immutable MyType18457{T,F,G}<:AbstractMyType18457{T,F,G} end
+tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
+tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
+@test tpara18457(MyType18457{true}) === true
