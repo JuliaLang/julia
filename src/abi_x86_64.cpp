@@ -178,12 +178,12 @@ bool use_sret(jl_datatype_t *dt) override
     return sret;
 }
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     Classification cl = classify(dt);
     if (cl.isMemory) {
-        *byRef = true;
-        return;
+        ab.addAttribute(Attribute::ByVal);
+        return true;
     }
 
     // Figure out how many registers we want for this arg:
@@ -202,8 +202,10 @@ void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
     else if (jl_is_structtype(dt)) {
         // spill to memory even though we would ordinarily pass
         // it in registers
-        *byRef = true;
+        ab.addAttribute(Attribute::ByVal);
+        return true;
     }
+    return false;
 }
 
 // Called on behalf of ccall to determine preferred LLVM representation

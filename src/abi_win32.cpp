@@ -49,10 +49,14 @@ bool use_sret(jl_datatype_t *dt) override
     return true;
 }
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     // Use pass by reference for all structs
-    *byRef = dt->layout->nfields > 0;
+    if (dt->layout->nfields > 0) {
+        ab.addAttribute(Attribute::ByVal);
+        return true;
+    }
+    return false;
 }
 
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
