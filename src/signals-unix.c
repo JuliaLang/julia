@@ -115,9 +115,23 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
     ctx->uc_mcontext.pc = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
+    uintptr_t target = (uintptr_t)fptr;
+    // Apparently some glibc's sigreturn target is running in thumb state.
+    // Mimic a `bx` instruction by settting the T(5) bit of CPSR
+    // depending on the target address.
+    uintptr_t cpsr = ctx->uc_mcontext.arm_cpsr;
+    // Thumb mode function pointer should have the lowest bit set
+    if (target & 1) {
+        target = target & ~((uintptr_t)1);
+        cpsr = cpsr | (1 << 5);
+    }
+    else {
+        cpsr = cpsr & ~(1 << 5);
+    }
+    ctx->uc_mcontext.arm_cpsr = cpsr;
     ctx->uc_mcontext.arm_sp = rsp;
     ctx->uc_mcontext.arm_lr = 0; // Clear link register
-    ctx->uc_mcontext.arm_pc = (uintptr_t)fptr;
+    ctx->uc_mcontext.arm_pc = target;
 #elif defined(_OS_DARWIN_)
     // Only used for SIGFPE.
     // This doesn't seems to be reliable when the SIGFPE is generated
