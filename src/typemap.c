@@ -900,7 +900,8 @@ static jl_typemap_level_t *jl_new_typemap_level(void)
     return cache;
 }
 
-static jl_typemap_level_t *jl_method_convert_list_to_cache(jl_typemap_entry_t *ml, jl_value_t *key, int8_t offs)
+static jl_typemap_level_t *jl_method_convert_list_to_cache(jl_typemap_entry_t *ml, jl_value_t *key, int8_t offs,
+                                                           const struct jl_typemap_info *tparams)
 {
     jl_typemap_level_t *cache = jl_new_typemap_level();
     cache->key = key;
@@ -909,7 +910,7 @@ static jl_typemap_level_t *jl_method_convert_list_to_cache(jl_typemap_entry_t *m
     while (ml != (void*)jl_nothing) {
         next = ml->next;
         ml->next = (jl_typemap_entry_t*)jl_nothing;
-        jl_typemap_level_insert_(cache, ml, offs, 0);
+        jl_typemap_level_insert_(cache, ml, offs, tparams);
         ml = next;
     }
     JL_GC_POP();
@@ -941,7 +942,7 @@ static void jl_typemap_insert_generic(union jl_typemap_t *pml, jl_value_t *paren
 
     unsigned count = jl_typemap_list_count(pml->leaf);
     if (count > MAX_METHLIST_COUNT) {
-        pml->node = jl_method_convert_list_to_cache(pml->leaf, key, offs);
+        pml->node = jl_method_convert_list_to_cache(pml->leaf, key, offs, tparams);
         jl_gc_wb(parent, pml->node);
         jl_typemap_level_insert_(pml->node, newrec, offs, tparams);
         return;

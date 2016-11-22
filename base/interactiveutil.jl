@@ -517,11 +517,15 @@ excluding type `Any`.
 """
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     for d in methods(f)
-        if any(x -> (type_close_enough(x, t) ||
-                     (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
-                      (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                     x != Any && x != ANY),
-               d.sig.parameters)
+        if any(function (x)
+                   let x = rewrap_unionall(x, d.sig)
+                       (type_close_enough(x, t) ||
+                        (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                         (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
+                        x != Any && x != ANY)
+                   end
+               end,
+               unwrap_unionall(d.sig).parameters)
             push!(meths, d)
         end
     end
@@ -722,6 +726,10 @@ summarysize(obj; exclude = Union{Module,DataType,TypeName}) =
     summarysize(obj, ObjectIdDict(), exclude)
 
 summarysize(obj::Symbol, seen, excl) = 0
+
+function summarysize(obj::UnionAll, seen, excl)
+    return 2*sizeof(Int) + summarysize(obj.body, seen, excl) + summarysize(obj.var, seen, excl)
+end
 
 function summarysize(obj::DataType, seen, excl)
     key = pointer_from_objref(obj)

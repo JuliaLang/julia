@@ -123,7 +123,7 @@ type InferenceState
                 push!(sp, sig.var)
                 sig = sig.body
             end
-            sp = svec(sig...)
+            sp = svec(sp...)
         else
             sp = linfo.sparam_vals
         end
@@ -506,7 +506,10 @@ function type_depth(t::ANY)
     elseif isa(t, DataType)
         return (t::DataType).depth
     elseif isa(t, UnionAll)
-        return type_depth(t.body)
+        if t.var.ub === Any
+            return type_depth(t.body)
+        end
+        return max(type_depth(t.var.ub)+1, type_depth(t.body))
     end
     return 0
 end
@@ -518,7 +521,13 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool=true, var::Union{Void,TypeVa
         end
         return Union{map(x->limit_type_depth(x, d+1, cov, var), (t.a,t.b))...}
     elseif isa(t,UnionAll)
-        return UnionAll(t.var, limit_type_depth(t.body, d, cov, var))
+        v = t.var
+        if v.ub === Any
+            return UnionAll(t.var, limit_type_depth(t.body, d, cov, var))
+        end
+        ub = limit_type_depth(v.ub, d+1, true, nothing)
+        v2 = TypeVar(v.name, v.lb, ub)
+        return UnionAll(v2, limit_type_depth(t{v2}, d, cov, var))
     elseif !isa(t,DataType)
         return t
     end
@@ -551,13 +560,11 @@ function getfield_tfunc(s00::ANY, name)
     s = s0 = unwrap_unionall(s00)
     if isType(s)
         p1 = s.parameters[1]
-        if isa(p1,UnionAll)
-            if isa(name,Const)
-                if name.val === :var
-                    return Const(p1.var)
-                elseif name.val === :body
-                    return Type{p1.body}
-                end
+        if isa(p1,UnionAll) && isa(name,Const)
+            if name.val === :var
+                return Const(p1.var)
+            elseif name.val === :body
+                return abstract_eval_constant(p1.body)
             end
         end
         s = typeof(p1)
@@ -568,10 +575,20 @@ function getfield_tfunc(s00::ANY, name)
         return rewrap_unionall(tmerge(getfield_tfunc(s.a, name), getfield_tfunc(s.b, name)),
                                s00)
     elseif isa(s,Const)
-        if isa(s.val, Module) && isa(name, Const) && isa(name.val, Symbol)
-            return abstract_eval_global(s.val, name.val)
+        sv = s.val
+        if isa(name,Const)
+            nv = name.val
+            if isa(sv, Module) && isa(nv, Symbol)
+                return abstract_eval_global(sv, nv)
+            end
+            if isa(sv,DataType) || isimmutable(sv)
+                try
+                    return abstract_eval_constant(getfield(sv, nv))
+                catch
+                end
+            end
         end
-        s = typeof(s.val)
+        s = typeof(sv)
     end
     if !isa(s,DataType) || s.abstract
         return Any
@@ -649,6 +666,8 @@ function fieldtype_tfunc(s::ANY, name::ANY)
     t = getfield_tfunc(s, name)
     if t === Bottom
         return t
+    elseif isa(t,Const)
+        return Type{typeof(t.val)}
     elseif isleaftype(t) || isvarargtype(t)
         return Type{t}
     end
@@ -923,7 +942,8 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
     x::Array{Any,1} = applicable
     fullmatch = false
     for (m::SimpleVector) in x
-        sig = unwrap_unionall(m[1])::DataType
+        sig = m[1]
+        sigtuple = unwrap_unionall(sig)::DataType
         method = m[3]::Method
         sparams = m[2]::SimpleVector
         recomputesvec = false
@@ -934,7 +954,7 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
         # limit argument type tuple growth
         msig = unwrap_unionall(m[3].sig)
         lsig = length(msig.parameters)
-        ls = length(sig.parameters)
+        ls = length(sigtuple.parameters)
         td = type_depth(sig)
         # look at the existing edges to detect growing argument lists
         mightlimitlength = ls > lsig + 1
@@ -965,10 +985,11 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
                         # impose limit if we recur and the argument types grow beyond MAX_TYPE_DEPTH
                         if td > MAX_TYPE_DEPTH
                             sig = limit_type_depth(sig, 0)
+                            sigtuple = unwrap_unionall(sig)
                             recomputesvec = true
                             break
                         else
-                            p1, p2 = sig.parameters, unwrap_unionall(infstate.linfo.specTypes).parameters
+                            p1, p2 = sigtuple.parameters, unwrap_unionall(infstate.linfo.specTypes).parameters
                             if length(p2) == ls
                                 limitdepth = false
                                 newsig = Array{Any}(ls)
@@ -985,7 +1006,8 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
                                     end
                                 end
                                 if limitdepth
-                                    sig = Tuple{newsig...}
+                                    sigtuple = Tuple{newsig...}
+                                    sig = rewrap_unionall(sigtuple, sig)
                                     recomputesvec = true
                                     break
                                 end
@@ -996,36 +1018,29 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
             end
         end
 
-#        # limit argument type size growth
-#        tdepth = type_depth(sig)
-#        if tdepth > MAX_TYPE_DEPTH
-#            sig = limit_type_depth(sig, 0)
-#        end
-
         # limit length based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments
         # instead of the default (MAX_TUPLETYPE_LEN)
         if limitlength
             if !istopfunction(tm, f, :promote_typeof)
-                fst = sig.parameters[lsig + 1]
+                fst = sigtuple.parameters[lsig + 1]
                 allsame = true
                 # allow specializing on longer arglists if all the trailing
                 # arguments are the same, since there is no exponential
                 # blowup in this case.
                 for i = (lsig + 2):ls
-                    if sig.parameters[i] != fst
+                    if sigtuple.parameters[i] != fst
                         allsame = false
                         break
                     end
                 end
                 if !allsame
-                    sig = limit_tuple_type_n(sig, lsig + 1)
+                    sigtuple = limit_tuple_type_n(sigtuple, lsig + 1)
+                    sig = rewrap_unionall(sigtuple, sig)
                     recomputesvec = true
                 end
             end
         end
-
-        sig = rewrap_unionall(sig, m[1])
 
         # if sig changed, may need to recompute the sparams environment
         if recomputesvec && !isempty(sparams)
@@ -1149,7 +1164,7 @@ function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv:
                 elseif isleaftype(rt) || isleaftype(af_argtype) || rt === Bottom
                     return Type{rt}
                 else
-                    return Type{TypeVar(:R, rt)}
+                    return Type{R} where R<:rt
                 end
             end
         end
@@ -1233,9 +1248,16 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
         end
         return Any
     elseif f === UnionAll
-        if length(fargs) == 3 && isa(argtypes[2],Const) && isType(argtypes[3])
+        if length(fargs) == 3 && isa(argtypes[2],Const)
+            if isType(argtypes[3])
+                body = argtypes[3].parameters[1]
+            elseif isa(argtypes[3],Const)
+                body = argtypes[3].val
+            else
+                return Any
+            end
             try
-                return Type{UnionAll(argtypes[2].val, argtypes[3].parameters[1])}
+                return abstract_eval_constant(UnionAll(argtypes[2].val, body))
             catch
             end
         end
@@ -1252,10 +1274,10 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
             if istopfunction(tm, f, :getindex)
                 return getfield_tfunc(argtypes[2], argtypes[3])
             elseif istopfunction(tm, f, :next)
-                t1 = getfield_tfunc(argtypes[2], argtypes[3])
+                t1 = widenconst(getfield_tfunc(argtypes[2], argtypes[3]))
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
             elseif istopfunction(tm, f, :indexed_next)
-                t1 = getfield_tfunc(argtypes[2], argtypes[3])
+                t1 = widenconst(getfield_tfunc(argtypes[2], argtypes[3]))
                 return t1===Bottom ? Bottom : Tuple{t1, Int}
             end
         end
@@ -1358,7 +1380,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
                 # if the tvar does not refer to anything more specific than Any,
                 # the static param might actually be an integer, symbol, etc.
                 if !(Any <: val.ub)
-                    t = Type{val}
+                    t = UnionAll(val, Type{val})
                 end
             else
                 t = abstract_eval_constant(val)
@@ -1393,8 +1415,9 @@ function abstract_eval_constant(x::ANY)
     if isa(x,Type)
         if x === Array
             return Type_Array
+        elseif !has_free_typevars(x)
+            return Type{x}
         end
-        return Type{x}
     end
     return Const(x)
 end
