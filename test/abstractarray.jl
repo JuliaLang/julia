@@ -563,6 +563,10 @@ function test_cat(::Type{TestAbstractArray})
 
     # 18395
     @test isa(Any["a" 5; 2//3 1.0][2,1], Rational{Int})
+
+    # 13665, 19038
+    @test @inferred(hcat([1.0 2.0], 3))::Array{Float64,2} == [1.0 2.0 3.0]
+    @test @inferred(vcat([1.0, 2.0], 3))::Array{Float64,1} == [1.0, 2.0, 3.0]
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
