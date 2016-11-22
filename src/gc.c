@@ -818,7 +818,9 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     // to workaround a llvm bug.
     // Ref https://llvm.org/bugs/show_bug.cgi?id=27190
     jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + pool_offset);
+#ifdef JULIA_ENABLE_THREADING
     assert(ptls->gc_state == 0);
+#endif
 #ifdef MEMDEBUG
     return jl_gc_big_alloc(ptls, osize);
 #endif
