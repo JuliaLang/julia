@@ -201,7 +201,6 @@ bool imaging_mode = false;
 Module *shadow_output;
 #define jl_Module ctx->f->getParent()
 #define jl_builderModule builder.GetInsertBlock()->getParent()->getParent()
-static MDBuilder *mbuilder;
 
 #if JL_LLVM_VERSION >= 30700
 // No DataLayout pass needed anymore.
@@ -5164,17 +5163,27 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
 
 // --- initialization ---
 
-MDNode *tbaa_make_child(const char *name, MDNode *parent, bool isConstant=false)
+std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false)
 {
-    MDNode *n = mbuilder->createTBAANode(name,parent,isConstant);
+    static MDBuilder *mbuilder = new MDBuilder(jl_LLVMContext);
+    static MDNode *tbaa_root = mbuilder->createTBAARoot("jtbaa");
+    if (!parent)
+        parent = tbaa_root;
+#if JL_LLVM_VERSION >= 30700
+    MDNode *scalar = mbuilder->createTBAAScalarTypeNode(name, parent);
+    MDNode *n = mbuilder->createTBAAStructTagNode(scalar, scalar, 0, isConstant);
+#else
+    MDNode *n = mbuilder->createTBAANode(name, parent, isConstant);
+    MDNode *scalar = n;
 #if JL_LLVM_VERSION < 30600
 #if JL_LLVM_VERSION >= 30500
-    n->setValueName( ValueName::Create(name));
+    n->setValueName(ValueName::Create(name));
 #else
-    n->setValueName( ValueName::Create(name, name+strlen(name)));
+    n->setValueName(ValueName::Create(name, name + strlen(name)));
 #endif
 #endif
-    return n;
+#endif
+    return std::make_pair(n, scalar);
 }
 
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr, Module *m)
@@ -5278,23 +5287,25 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int s
 
 static void init_julia_llvm_meta(void)
 {
-    mbuilder = new MDBuilder(jl_LLVMContext);
-    MDNode *tbaa_root = mbuilder->createTBAARoot("jtbaa");
-    tbaa_gcframe = tbaa_make_child("jtbaa_gcframe", tbaa_root);
-    tbaa_stack = tbaa_make_child("jtbaa_stack", tbaa_root);
-    tbaa_data = tbaa_make_child("jtbaa_data", tbaa_root);
-    tbaa_tag = tbaa_make_child("jtbaa_tag", tbaa_data);
-    tbaa_binding = tbaa_make_child("jtbaa_binding", tbaa_data);
-    tbaa_value = tbaa_make_child("jtbaa_value", tbaa_data);
-    tbaa_mutab = tbaa_make_child("jtbaa_mutab", tbaa_value);
-    tbaa_immut = tbaa_make_child("jtbaa_immut", tbaa_value);
-    tbaa_arraybuf = tbaa_make_child("jtbaa_arraybuf", tbaa_data);
-    tbaa_array = tbaa_make_child("jtbaa_array", tbaa_root);
-    tbaa_arrayptr = tbaa_make_child("jtbaa_arrayptr", tbaa_array);
-    tbaa_arraysize = tbaa_make_child("jtbaa_arraysize", tbaa_array);
-    tbaa_arraylen = tbaa_make_child("jtbaa_arraylen", tbaa_array);
-    tbaa_arrayflags = tbaa_make_child("jtbaa_arrayflags", tbaa_array);
-    tbaa_const = tbaa_make_child("jtbaa_const", tbaa_root, true);
+    tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
+    tbaa_stack = tbaa_make_child("jtbaa_stack").first;
+    MDNode *tbaa_data_scalar;
+    std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child("jtbaa_data");
+    tbaa_tag = tbaa_make_child("jtbaa_tag", tbaa_data_scalar).first;
+    tbaa_binding = tbaa_make_child("jtbaa_binding", tbaa_data_scalar).first;
+    MDNode *tbaa_value_scalar;
+    std::tie(tbaa_value, tbaa_value_scalar) =
+        tbaa_make_child("jtbaa_value", tbaa_data_scalar);
+    tbaa_mutab = tbaa_make_child("jtbaa_mutab", tbaa_value_scalar).first;
+    tbaa_immut = tbaa_make_child("jtbaa_immut", tbaa_value_scalar).first;
+    tbaa_arraybuf = tbaa_make_child("jtbaa_arraybuf", tbaa_data_scalar).first;
+    MDNode *tbaa_array_scalar;
+    std::tie(tbaa_array, tbaa_array_scalar) = tbaa_make_child("jtbaa_array");
+    tbaa_arrayptr = tbaa_make_child("jtbaa_arrayptr", tbaa_array_scalar).first;
+    tbaa_arraysize = tbaa_make_child("jtbaa_arraysize", tbaa_array_scalar).first;
+    tbaa_arraylen = tbaa_make_child("jtbaa_arraylen", tbaa_array_scalar).first;
+    tbaa_arrayflags = tbaa_make_child("jtbaa_arrayflags", tbaa_array_scalar).first;
+    tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
 }
 
 static void init_julia_llvm_env(Module *m)
