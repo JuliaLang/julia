@@ -536,10 +536,8 @@ function base(b::Integer, n::BigInt, pad::Integer)
         s = s[2:end]
         write(buf, '-')
     end
-    if length(s) < pad
-        for i in 1:pad-length(s)
-            write(buf, '0')
-        end
+    for i in 1:pad-sizeof(s) # `s` is known to be ASCII, and `length` is slower
+        write(buf, '0')
     end
     write(buf, s)
     String(buf)
