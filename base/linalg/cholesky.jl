@@ -395,9 +395,12 @@ function convert{T,S}(::Type{Cholesky{T,S}}, C::Cholesky)
     Cnew = convert(AbstractMatrix{T}, C.factors)
     Cholesky{T, typeof(Cnew)}(Cnew, C.uplo)
 end
+convert{T}(::Type{Factorization{T}}, C::Cholesky{T}) = C
 convert{T}(::Type{Factorization{T}}, C::Cholesky) = convert(Cholesky{T}, C)
+convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted{T}) = C
 convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) =
     CholeskyPivoted(AbstractMatrix{T}(C.factors),C.uplo,C.piv,C.rank,C.tol,C.info)
+convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted{T}) = C
 convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivoted{T}, C)
 
 convert(::Type{AbstractMatrix}, C::Cholesky) = C.uplo == 'U' ? C[:U]'C[:U] : C[:L]*C[:L]'

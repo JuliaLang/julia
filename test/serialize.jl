@@ -4,8 +4,8 @@ using Base.Test
 
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.sertag(Symbol) == 2
-@test Serializer.sertag(()) == 44
-@test Serializer.sertag(false) == 120
+@test Serializer.sertag(()) == 45
+@test Serializer.sertag(false) == 121
 
 function create_serialization_stream(f::Function)
     s = IOBuffer()
@@ -151,7 +151,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test deserialize(s) == utype
 end
 
 create_serialization_stream() do s # immutable type with 1 field
@@ -160,7 +160,7 @@ create_serialization_stream() do s # immutable type with 1 field
     utype = eval(parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test deserialize(s) == utype
 end
 
 create_serialization_stream() do s # immutable type with 2 field
