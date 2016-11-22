@@ -2893,6 +2893,7 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
                                             jl_value_t **args, size_t nargs, jl_value_t *callexpr, jl_codectx_t *ctx)
 {
     Value *theFptr = (Value*)decls.functionObject;
+    jl_value_t *inferred_retty = expr_type(callexpr, ctx);
     if (decls.specFunctionObject != NULL) {
         // emit specialized call site
         jl_value_t *jlretty = li->rettype;
@@ -2906,6 +2907,7 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
         unsigned idx = 0;
         Value *result;
         if (sret) {
+            assert(!retboxed);
             result = emit_static_alloca(cft->getParamType(0)->getContainedType(0), ctx);
             argvals[idx] = result;
             idx++;
@@ -2950,10 +2952,16 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
         CallInst *call = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
         call->setAttributes(cf->getAttributes());
         mark_gc_uses(gc_uses);
-        return sret ? mark_julia_slot(result, jlretty, tbaa_stack) : mark_julia_type(call, retboxed, jlretty, ctx);
+        if (sret)
+            return mark_julia_slot(result, jlretty, tbaa_stack);
+        // see if codegen has a better type for the call than inference had at the time
+        if (!retboxed && jlretty != inferred_retty) {
+            inferred_retty = jlretty;
+        }
+        return mark_julia_type(call, retboxed, inferred_retty, ctx);
     }
-    return mark_julia_type(emit_jlcall(theFptr, boxed(theF,ctx), &args[1], nargs, ctx), true,
-                           expr_type(callexpr, ctx), ctx);
+    Value *ret = emit_jlcall(theFptr, boxed(theF, ctx), &args[1], nargs, ctx);
+    return mark_julia_type(ret, true, inferred_retty, ctx);
 }
 
 static jl_cgval_t emit_invoke(jl_expr_t *ex, jl_codectx_t *ctx)
