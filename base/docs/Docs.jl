@@ -284,6 +284,7 @@ function doc(binding::Binding, sig::Type = Union{})
 end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
+doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 

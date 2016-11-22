@@ -141,10 +141,10 @@ end
 @test isleaftype(Type{Vector})
 
 # issue #10165
-i10165(::DataType) = 0
+i10165(::Type) = 0
 i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
-@test i10165(AbstractArray{Int}) == 0
-@test which(i10165, Tuple{Type{AbstractArray{Int}},}).sig == Tuple{typeof(i10165),DataType}
+@test i10165(AbstractArray{Int,n} where n) == 0
+@test which(i10165, Tuple{Type{AbstractArray{Int,n} where n},}).sig == Tuple{typeof(i10165),Type}
 
 # fullname
 @test fullname(Base) == (:Base,)
@@ -284,7 +284,7 @@ let ex = :(a + b)
 end
 foo13825{T,N}(::Array{T,N}, ::Array, ::Vector) = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T<:Any,1})")
+                 "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T,1} where T)")
 
 type TLayout
     x::Int8

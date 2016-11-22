@@ -835,7 +835,7 @@ void jl_get_builtin_hooks(void)
 
     jl_string_type = (jl_datatype_t*)core("String");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
-    jl_vecelement_typename = ((jl_datatype_t*)core("VecElement"))->name;
+    jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
 }
 
 JL_DLLEXPORT void jl_get_system_hooks(void)

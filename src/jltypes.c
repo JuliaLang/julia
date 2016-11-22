@@ -609,7 +609,7 @@ static int valid_type_param(jl_value_t *v)
 static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
 {
     jl_value_t *lb = t, *ub = t;
-    if (jl_is_typevar(t)) {
+    if (jl_is_typevar(t) || jl_has_free_typevars(t)) {
         // TODO: automatically restrict typevars in method definitions based on
         // types they are used in.
         return 1;
@@ -636,7 +636,7 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
         jl_value_t *pi = params[i];
 
         if (!valid_type_param(pi)) {
-            jl_type_error_rt("type", "parameter",
+            jl_type_error_rt("Type", "parameter",
                              jl_isa(pi, (jl_value_t*)jl_number_type) ?
                              (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
                              pi);
@@ -644,8 +644,23 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
 
         jl_unionall_t *ua = (jl_unionall_t*)tc;
         if (!jl_has_free_typevars(ua->var->lb) && !jl_has_free_typevars(ua->var->ub) &&
-            !within_typevar(pi, ua->var->lb, ua->var->ub))
-            jl_type_error_rt("type", "parameter", (jl_value_t*)ua->var, pi);
+            !within_typevar(pi, ua->var->lb, ua->var->ub)) {
+            jl_datatype_t *inner = (jl_datatype_t*)jl_unwrap_unionall(tc);
+            int iswrapper = 0;
+            if (jl_is_datatype(inner)) {
+                jl_value_t *temp = inner->name->wrapper;
+                while (jl_is_unionall(temp)) {
+                    if (temp == tc) {
+                        iswrapper = 1;
+                        break;
+                    }
+                    temp = ((jl_unionall_t*)temp)->body;
+                }
+            }
+            // if this is a wrapper, let check_datatype_parameters give the error
+            if (!iswrapper)
+                jl_type_error_rt("Type", jl_symbol_name(ua->var->name), (jl_value_t*)ua->var, pi);
+        }
 
         tc = jl_instantiate_unionall(ua, pi);
     }
@@ -1598,10 +1613,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
         jl_value_t *tp0a = jl_tparam0(a);
         if (jl_is_typevar(tp0a)) {
             jl_value_t *ub = ((jl_tvar_t*)tp0a)->ub;
-            if (jl_isa(ub, b) &&
-                !jl_subtype((jl_value_t*)jl_any_type, ub)) {
+            if (is_kind(b) && !jl_subtype((jl_value_t*)jl_any_type, ub))
                 return 1;
-            }
         }
         else {
             if (jl_isa(tp0a, b))
@@ -1636,13 +1649,22 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
                         return 1;
                 }
                 assert(jl_nparams(tta) == jl_nparams(ttb));
+                int ascore=0, bscore=0, ascore1=0, bscore1=0;
                 for(i=0; i < jl_nparams(tta); i++) {
                     jl_value_t *apara = jl_tparam(tta,i);
                     jl_value_t *bpara = jl_tparam(ttb,i);
-                    if (!type_morespecific_(apara, bpara, 1, env))
-                        return 0;
+                    ascore += type_morespecific_(apara, bpara, 1, env);
+                    bscore += type_morespecific_(bpara, apara, 1, env);
+                    if (jl_is_typevar(bpara) && !jl_is_typevar(apara) && !jl_is_type(apara))
+                        ascore1 += 1;
+                    if (jl_is_typevar(apara) && !jl_is_typevar(bpara) && !jl_is_type(bpara))
+                        bscore1 += 1;
                 }
-                return 1;
+                if (bscore1 == 0 && ascore1 > 0)
+                    return 1;
+                if (ascore1 == 0 && bscore1 > 0)
+                    return 0;
+                return ascore == jl_nparams(tta);
             }
             else if (invariant) {
                 return 0;
@@ -2213,6 +2235,7 @@ void jl_init_types(void)
     jl_svecset(jl_simplevector_type->types, 0, jl_long_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
+    jl_svecset(jl_typename_type->types, 3, jl_type_type);
     jl_svecset(jl_methtable_type->types, 3, jl_long_type);
     jl_svecset(jl_methtable_type->types, 5, jl_module_type);
     jl_svecset(jl_methtable_type->types, 6, jl_array_any_type);

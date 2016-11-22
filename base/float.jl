@@ -63,6 +63,7 @@ for t1 in (Float32,Float64)
         end
     end
 end
+convert(::Type{Integer}, x::Float16) = convert(Integer, Float32(x))
 convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
 
 
