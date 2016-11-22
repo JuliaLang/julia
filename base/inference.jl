@@ -622,16 +622,14 @@ function apply_type_tfunc(args...)
     if headtype === Union
         largs == 1 && return Type{Bottom}
         largs == 2 && return args[2]
-        args = args[2:end]
-        if all(isType, args)
-            try
-                return Type{Union{map(t->t.parameters[1],args)...}}
-            catch
-                return Any
-            end
-        else
-            return Any
+        for i = 2:largs
+            isType(args[i]) || return Any
         end
+        ty = Union{}
+        for i = 2:largs
+            ty = Union{ty, args[i].parameters[1]}
+        end
+        return Type{ty}
     elseif isa(headtype, Union)
         return Any
     end
@@ -2653,18 +2651,11 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         isa(si, TypeVar) && return NF
     end
 
-    # see if the method has been previously inferred (and cached)
-    linfo = code_for_method(method, metharg, methsp, true)
-    if isa(linfo, MethodInstance) && isdefined(linfo, :inferred)
-        src = (linfo::MethodInstance).inferred
-    elseif !method.isstaged
-        # if we decided in the past not to try to infer this particular signature
-        # (due to signature coarsening in abstract_call_gf_by_type)
-        # don't infer it now, as attempting to force it now would be a bad idea (non terminating)
-        force_infer = false
+    # some gf have special tfunc, meaning they wouldn't have been inferred yet
+    # check the same conditions from abstract_call to detect this case
+    force_infer = false
+    if !method.isstaged
         if method.module == _topmod(method.module) || (isdefined(Main, :Base) && method.module == Main.Base)
-            # however, some gf have special tfunc, meaning they wouldn't have been inferred yet
-            # check the same conditions from abstract_call to detect this case
             if method.name == :getindex || method.name == :next || method.name == :indexed_next
                 if length(atypes) > 2 && atypes[3] ⊑ Int
                     at2 = widenconst(atypes[2])
@@ -2676,54 +2667,68 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 end
             end
         end
-        frame = nothing
-        if force_infer
-            if !isa(linfo, MethodInstance)
-                linfo = code_for_method(method, metharg, methsp)
-            end
-            if isa(linfo, MethodInstance)
-                linfo = linfo::MethodInstance
-                if isa(atypes[3], Const)
-                    # Since we inferred this with the information that atypes[3]::Const,
-                    # must inline with that same information.
-                    # We do that by overriding the argument type,
-                    # while ensuring we don't cache that information
-                    # This isn't particularly important for `getindex`,
-                    # as we'll be able to fix that up at the end of inlinable when we verify the return type.
-                    # But `next` and `indexed_next` make tuples which would end up burying some of that information in the AST
-                    # where we can't easily correct it afterwards.
-                    src = get_source(linfo)
-                    frame = InferenceState(linfo, src, #=optimize=#true, #=cache=#false, sv.params)
-                    frame.stmt_types[1][3] = VarState(atypes[3], false)
-                    typeinf_loop(frame)
-                else
-                    # If we don't have any special extra information, just infer and cache normally.
-                    frame = typeinf_frame(linfo, nothing, #=optimize=#true, #=cache=#true, sv.params)
-                end
-            end
-        end
-        if isa(frame, InferenceState) && frame.inferred
-            linfo = frame.linfo
-            src = frame.src
-        else
-            linfo = nothing
-            src = nothing
-        end
-    else
-        linfo = nothing
-        src = nothing
     end
 
-    if isa(linfo, MethodInstance) && linfo.jlcall_api == 2
+    # see if the method has been previously inferred (and cached)
+    linfo = code_for_method(method, metharg, methsp, !force_infer) # Union{Void, MethodInstance}
+    isa(linfo, MethodInstance) || return invoke_NF()
+    linfo = linfo::MethodInstance
+    if linfo.jlcall_api == 2
         # in this case function can be inlined to a constant
         return inline_as_constant(linfo.inferred, argexprs, sv)
     end
 
-    if !isa(src, CodeInfo) || !src.inferred || !src.inlineable
+    # see if the method has a current InferenceState frame
+    # or existing inferred code info
+    frame = nothing # Union{Void, InferenceState}
+    src = nothing # Union{Void, CodeInfo}
+    if force_infer && isa(atypes[3], Const)
+        # Since we inferred this with the information that atypes[3]::Const,
+        # must inline with that same information.
+        # We do that by overriding the argument type,
+        # while ensuring we don't cache that information
+        # This isn't particularly important for `getindex`,
+        # as we'll be able to fix that up at the end of inlinable when we verify the return type.
+        # But `next` and `indexed_next` make tuples which would end up burying some of that information in the AST
+        # where we can't easily correct it afterwards.
+        frame = InferenceState(linfo, get_source(linfo), #=optimize=#true, #=cache=#false, sv.params)
+        frame.stmt_types[1][3] = VarState(atypes[3], false)
+        typeinf_loop(frame)
+    else
+        if isdefined(linfo, :inferred)
+            # use cache
+            src = linfo.inferred
+        elseif force_infer
+            # create inferred code on-demand
+            # but if we decided in the past not to try to infer this particular signature
+            # (due to signature coarsening in abstract_call_gf_by_type)
+            # don't infer it now, as attempting to force it now would be a bad idea (non terminating)
+            frame = typeinf_frame(linfo, nothing, #=optimize=#true, #=cache=#true, sv.params)
+        end
+    end
+
+    # compute the return value
+    if isa(frame, InferenceState)
+        frame = frame::InferenceState
+        frame.inferred || return invoke_NF()
+        linfo = frame.linfo
+        src = frame.src
+        if linfo.jlcall_api == 2
+            # in this case function can be inlined to a constant
+            return inline_as_constant(linfo.inferred, argexprs, sv)
+        end
+        rettype = widenconst(frame.bestguess)
+    else
+        rettype = linfo.rettype
+    end
+
+    # check that the code is inlineable
+    isa(src, CodeInfo) || return invoke_NF()
+    src = src::CodeInfo
+    ast = src.code
+    if !src.inferred || !src.inlineable
         return invoke_NF()
     end
-    ast = src.code
-    rettype = linfo.rettype
 
     spvals = Any[]
     for i = 1:length(methsp)
