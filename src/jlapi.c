@@ -14,7 +14,10 @@
 #include "julia.h"
 
 #ifdef __cplusplus
+#include <cfenv>
 extern "C" {
+#else
+#include <fenv.h>
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
@@ -365,6 +368,19 @@ JL_DLLEXPORT void (jl_cpu_pause)(void)
 JL_DLLEXPORT void (jl_cpu_wake)(void)
 {
     jl_cpu_wake();
+}
+
+JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
+{
+    ret[0] = FE_INEXACT;
+    ret[1] = FE_UNDERFLOW;
+    ret[2] = FE_OVERFLOW;
+    ret[3] = FE_DIVBYZERO;
+    ret[4] = FE_INVALID;
+    ret[5] = FE_TONEAREST;
+    ret[6] = FE_UPWARD;
+    ret[7] = FE_DOWNWARD;
+    ret[8] = FE_TOWARDZERO;
 }
 
 #ifdef __cplusplus
