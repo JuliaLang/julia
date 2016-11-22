@@ -3634,14 +3634,13 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     std::vector<bool> fargt_isboxed(0);
     std::vector<Type*> fargt_sig(0);
     Type *fargt_vasig;
-    std::vector<bool> inRegList(0);
     std::vector<bool> byRefList(0);
     AttributeSet attrs;
     Type *prt = NULL;
     int sret = 0;
     size_t nargs = jl_nparams(argt);
     std::string err_msg = generate_func_sig(&crt, &prt, sret, fargt, fargt_isboxed,
-                                            fargt_sig, fargt_vasig, inRegList, byRefList,
+                                            fargt_sig, fargt_vasig, byRefList,
                                             attrs, jlrettype, argt->parameters, nargs);
     if (!err_msg.empty())
         jl_error(err_msg.c_str());
@@ -3922,7 +3921,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             prt = fargt_sig[0]->getContainedType(0); // sret is a PointerType
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type, 0);
         Value *v = julia_to_native(crt, toboxed, declrt, retval,
-                false, false, false, false, 0, &ctx, NULL);
+                false, false, false, 0, &ctx, NULL);
         r = llvm_type_rewrite(v, crt, prt, false, false, issigned, &ctx);
         if (sret)
             builder.CreateStore(r, sretPtr);

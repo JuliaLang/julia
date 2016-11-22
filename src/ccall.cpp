@@ -338,7 +338,7 @@ class AbiLayout {
 public:
     virtual ~AbiLayout() {}
     virtual bool use_sret(jl_datatype_t *ty) = 0;
-    virtual void needPassByRef(jl_datatype_t *ty, bool *byRef, bool *inReg) = 0;
+    virtual bool needPassByRef(jl_datatype_t *ty, AttrBuilder&) = 0;
     virtual Type *preferred_llvm_type(jl_datatype_t *ty, bool isret) const = 0;
 };
 
@@ -482,7 +482,7 @@ static Value *llvm_type_rewrite(
 // jlto = Julia type of formal argument
 // jvinfo = value of actual argument
 static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl_cgval_t &jvinfo,
-                              bool addressOf, bool byRef, bool inReg,
+                              bool addressOf, bool byRef,
                               bool tojulia, int argn, jl_codectx_t *ctx,
                               bool *needStackRestore)
 {
@@ -981,7 +981,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         jl_cgval_t &arg = argv[i];
         arg = emit_expr(argi, ctx);
 
-        Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, false, i, ctx, NULL);
+        Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, i, ctx, NULL);
         // make sure args are rooted
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0);
         argvals[i] = llvm_type_rewrite(v, t, t, false, false, issigned, ctx);
@@ -1153,7 +1153,6 @@ static std::string generate_func_sig(
         std::vector<bool> &fargt_isboxed, // vector of whether the llvm output types is boxed for each argument (vararg is the last item, if applicable)
         std::vector<Type *> &fargt_sig, // vector of ABI coercion types for call signature
         Type *&fargt_vasig, // ABI coercion type for vararg list
-        std::vector<bool> &inRegList, // vector of "inreg" parameters (vararg is the last item, if applicable)
         std::vector<bool> &byRefList, // vector of "byref" parameters (vararg is the last item, if applicable)
         AttributeSet &attributes, // vector of function call site attributes (vararg is the last item, if applicable)
         jl_value_t *rt, // julia return type
@@ -1163,24 +1162,26 @@ static std::string generate_func_sig(
     size_t nargt = jl_svec_len(tt);
     assert(rt && !jl_is_abstract_ref_type(rt));
 
-    std::vector<AttrBuilder> paramattrs;
+    std::vector<AttributeSet> paramattrs;
     std::unique_ptr<AbiLayout> abi(new DefaultAbiState());
     sret = 0;
 
     if (type_is_ghost(*lrt)) {
         *prt = *lrt = T_void;
+        abi->use_sret(jl_void_type);
     }
     else {
         if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_cpointer_type(rt) || jl_is_array_type(rt)) {
             *prt = *lrt; // passed as pointer
+            abi->use_sret(jl_voidpointer_type);
         }
         else if (abi->use_sret((jl_datatype_t*)rt)) {
-            paramattrs.push_back(AttrBuilder());
-            paramattrs[0].clear();
+            AttrBuilder retattrs = AttrBuilder();
 #if !defined(_OS_WINDOWS_) || JL_LLVM_VERSION >= 30500 // llvm used to use the old mingw ABI, skipping this marking works around that difference
-            paramattrs[0].addAttribute(Attribute::StructRet);
+            retattrs.addAttribute(Attribute::StructRet);
 #endif
-            paramattrs[0].addAttribute(Attribute::NoAlias);
+            retattrs.addAttribute(Attribute::NoAlias);
+            paramattrs.push_back(AttributeSet::get(jl_LLVMContext, 1, retattrs));
             fargt_sig.push_back(PointerType::get(*lrt, 0));
             sret = 1;
             *prt = *lrt;
@@ -1194,7 +1195,8 @@ static std::string generate_func_sig(
 
     size_t i;
     bool current_isVa = false;
-    for(i = 0; i < nargt;) {
+    for (i = 0; i < nargt;) {
+        AttrBuilder ab;
         jl_value_t *tti = jl_svecref(tt,i);
         if (jl_is_vararg_type(tti)) {
             current_isVa = true;
@@ -1202,7 +1204,6 @@ static std::string generate_func_sig(
         }
         Type *t = NULL;
         bool isboxed;
-        Attribute::AttrKind av = Attribute::None;
         if (jl_is_abstract_ref_type(tti)) {
             if (jl_is_typevar(jl_tparam0(tti)))
                 jl_error("ccall: argument type Ref should have an element type, not Ref{T}");
@@ -1219,9 +1220,9 @@ static std::string generate_func_sig(
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
                 if (jl_datatype_size(bt) < 4) {
                     if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0))
-                        av = Attribute::SExt;
+                        ab.addAttribute(Attribute::SExt);
                     else
-                        av = Attribute::ZExt;
+                        ab.addAttribute(Attribute::ZExt);
                 }
             }
 
@@ -1235,17 +1236,13 @@ static std::string generate_func_sig(
             }
         }
 
-        // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = false;
-
-        // Whether or not to pass this in registers
-        bool inReg = false;
-
         Type *pat;
         if (!jl_is_datatype(tti) || ((jl_datatype_t*)tti)->layout == NULL || jl_is_array_type(tti))
             tti = (jl_value_t*)jl_voidpointer_type; // passed as pointer
 
-        abi->needPassByRef((jl_datatype_t*)tti, &byRef, &inReg);
+        // Whether or not LLVM wants us to emit a pointer to the data
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab);
+
         if (jl_is_cpointer_type(tti)) {
             pat = t;
         }
@@ -1259,7 +1256,6 @@ static std::string generate_func_sig(
         }
 
         byRefList.push_back(byRef);
-        inRegList.push_back(inReg);
         fargt.push_back(t);
         fargt_isboxed.push_back(isboxed);
         if (!current_isVa)
@@ -1269,35 +1265,23 @@ static std::string generate_func_sig(
 
         do { // for each arg for which this type applies, add the appropriate LLVM parameter attributes
             if (i < nargs) { // if vararg, the last declared arg type may not have a corresponding arg value
-                paramattrs.push_back(AttrBuilder());
-                // Note that even though the LLVM argument is called ByVal
-                // this really means that the thing we're passing is pointing to
-                // the thing we want to pass by value
-#ifndef _CPU_AARCH64_
-                // the aarch64 backend seems to interpret ByVal as
-                // implicitly passed on stack.
-                if (byRef)
-                    paramattrs[i + sret].addAttribute(Attribute::ByVal);
-#endif
-                if (inReg)
-                    paramattrs[i + sret].addAttribute(Attribute::InReg);
-                if (av != Attribute::None)
-                    paramattrs[i + sret].addAttribute(av);
+                AttributeSet params = AttributeSet::get(jl_LLVMContext, i + sret + 1, ab);
+                paramattrs.push_back(params);
             }
             i++;
         } while (current_isVa && i < nargs); // if is this is the vararg, loop to the end
     }
 
     for (i = 0; i < nargs + sret; ++i) {
-        if (paramattrs[i].hasAttributes()) {
-            attributes = attributes.addAttributes(jl_LLVMContext, i + 1,
-                                                  AttributeSet::get(jl_LLVMContext, i + 1, paramattrs[i]));
-        }
+        const AttributeSet &as = paramattrs.at(i);
+        if (!as.isEmpty())
+            attributes = attributes.addAttributes(jl_LLVMContext, i + 1, as);
     }
-    if (rt == jl_bottom_type)
+    if (rt == jl_bottom_type) {
         attributes = attributes.addAttribute(jl_LLVMContext,
                                              AttributeSet::FunctionIndex,
                                              Attribute::NoReturn);
+    }
     return "";
 }
 
@@ -1685,13 +1669,12 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     std::vector<Type*> fargt_sig(0);
     std::vector<bool> fargt_isboxed(0);
     Type *fargt_vasig = NULL;
-    std::vector<bool> inRegList(0);
     std::vector<bool> byRefList(0);
     AttributeSet attrs;
     Type *prt = NULL;
     int sret = 0;
     std::string err_msg = generate_func_sig(&lrt, &prt, sret, fargt, fargt_isboxed, fargt_sig, fargt_vasig,
-                                            inRegList, byRefList, attrs, rt, tt, (nargs - 3)/2);
+                                            byRefList, attrs, rt, tt, (nargs - 3)/2);
     if (!err_msg.empty()) {
         JL_GC_POP();
         emit_error(err_msg,ctx);
@@ -1741,20 +1724,18 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Type *largty; // LLVM type of the current parameter
         bool toboxed;
         jl_value_t *jargty; // Julia type of the current parameter
-        bool byRef, inReg; // Argument attributes
+        bool byRef; // Argument attributes
         if (isVa && ai >= nargt - 1) {
             largty = fargt.at(nargt - 1);
             toboxed = fargt_isboxed.at(nargt - 1);
             jargty = jl_tparam0(jl_svecref(tt, nargt - 1));
             byRef = byRefList.at(nargt - 1);
-            inReg = inRegList.at(nargt - 1);
         }
         else {
             largty = fargt.at(ai);
             toboxed = fargt_isboxed.at(ai);
             jargty = jl_svecref(tt, ai);
             byRef = byRefList.at(ai);
-            inReg = inRegList.at(ai);
         }
 
         jl_cgval_t &arg = argv[ai];
@@ -1773,7 +1754,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jargty = (jl_value_t*)jl_voidpointer_type;
         }
 
-        Value *v = julia_to_native(largty, toboxed, jargty, arg, addressOf, byRef, inReg,
+        Value *v = julia_to_native(largty, toboxed, jargty, arg, addressOf, byRef,
                                    false, ai + 1, ctx, &needStackRestore);
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
         argvals[ai + sret] = llvm_type_rewrite(v, largty,

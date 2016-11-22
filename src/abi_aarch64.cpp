@@ -188,14 +188,14 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele) const
     return NULL;
 }
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
     //   unmodified.
     size_t size;
     if (isHFAorHVA(dt, size))
-        return;
+        return false;
     // B.3
     //   If the argument type is a Composite Type that is larger than 16 bytes,
     //   then the argument is copied to memory allocated by the caller and the
@@ -203,7 +203,7 @@ void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
     // We only check for the total size and not whether it is a composite type
     // since there's no corresponding C type and we just treat such large
     // bitstype as a composite type of the right size.
-    *byRef = jl_datatype_size(dt) > 16;
+    return jl_datatype_size(dt) > 16;
     // B.4
     //   If the argument type is a Composite Type then the size of the argument
     //   is rounded up to the nearest multiple of 8 bytes.
