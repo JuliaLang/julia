@@ -1499,6 +1499,32 @@ Indexing, Assignment, and Concatenation
 Array functions
 ---------------
 
+.. function:: accumulate(op, A, dim=1)
+
+   .. Docstring generated from Julia source
+
+   Cumulative operation ``op`` along a dimension ``dim`` (defaults to 1). See also :func:`accumulate!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow). For common operations there are specialized variants of accumulate, see: :func:`cumsum`\ , :func:`cumprod`
+
+   .. doctest::
+
+       julia> accumulate(+, [1,2,3])
+       3-element Array{Int64,1}:
+        1
+        3
+        6
+
+       julia> accumulate(*, [1,2,3])
+       3-element Array{Int64,1}:
+        1
+        2
+        6
+
+.. function:: accumulate!(op, B, A, dim=1)
+
+   .. Docstring generated from Julia source
+
+   Cumulative operation ``op`` on ``A`` along a dimension, storing the result in ``B``\ . The dimension defaults to 1. See also :func:`accumulate`\ .
+
 .. function:: cumprod(A, dim=1)
 
    .. Docstring generated from Julia source

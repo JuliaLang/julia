@@ -60,6 +60,8 @@ Library improvements
     you can now do e.g. `[A I]` and it will concatenate an appropriately sized
     identity matrix ([#19305]).
 
+  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -75,6 +77,8 @@ Deprecated or removed
   * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
 
   * `Dates.recur` has been deprecated in favor of `filter` ([#19288])
+
+  * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
 
 Julia v0.5.0 Release Notes
 ==========================
