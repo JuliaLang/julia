@@ -872,16 +872,16 @@ typealias _TypedDenseConcatGroup{T} Union{Vector{T}, Matrix{T}, _Annotated_Typed
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 function cat(catdims, Xin::_SparseConcatGroup...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
     T = promote_eltype(Xin...)
     Base.cat_t(catdims, T, X...)
 end
 function hcat(Xin::_SparseConcatGroup...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
     hcat(X...)
 end
 function vcat(Xin::_SparseConcatGroup...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
     vcat(X...)
 end
 function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
