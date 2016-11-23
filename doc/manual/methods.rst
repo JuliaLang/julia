@@ -536,7 +536,7 @@ This dispatching branching can be observed, for example, in the logic to sum two
 A natural extension to the iterated dispatch above is to add a layer to
 method selection that identifies classes of types.
 We could do this by writing out a ``Union`` of the types with similar characteristics.
-But then this would list then would not be extensible.
+But then this list would not be extensible.
 However, by expressing the property as a "trait",
 it is possible to express type behaviors in the abstract
 in a way that is flexible to new additions, but which has no performance impact.
