@@ -982,6 +982,8 @@ function vcat{T}(arrays::Vector{T}...)
     return arr
 end
 
+cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
+
 
 ## find ##
 

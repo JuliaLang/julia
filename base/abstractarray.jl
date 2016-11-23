@@ -1164,7 +1164,6 @@ function _cat(A, shape, catdims, X...)
         end
         A[inds...] = x
     end
-
     return A
 end
 
