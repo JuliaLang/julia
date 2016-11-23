@@ -7,27 +7,27 @@
 
 Positive infinity of type `Float16`.
 """
-const Inf16 = box(Float16,unbox(UInt16,0x7c00))
+const Inf16 = box(Float16, 0x7c00)
 """
     NaN16
 
 A not-a-number value of type `Float16`.
 """
-const NaN16 = box(Float16,unbox(UInt16,0x7e00))
+const NaN16 = box(Float16, 0x7e00)
 """
     Inf32
 
 Positive infinity of type `Float32`.
 """
-const Inf32 = box(Float32,unbox(UInt32,0x7f800000))
+const Inf32 = box(Float32, 0x7f800000)
 """
     NaN32
 
 A not-a-number value of type `Float32`.
 """
-const NaN32 = box(Float32,unbox(UInt32,0x7fc00000))
-const Inf64 = box(Float64,unbox(UInt64,0x7ff0000000000000))
-const NaN64 = box(Float64,unbox(UInt64,0x7ff8000000000000))
+const NaN32 = box(Float32, 0x7fc00000)
+const Inf64 = box(Float64, 0x7ff0000000000000)
+const NaN64 = box(Float64, 0x7ff8000000000000)
 
 """
     Inf
@@ -43,23 +43,23 @@ A not-a-number value of type `Float64`.
 const NaN = NaN64
 
 ## conversions to floating-point ##
-convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
-for t in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
+convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32, x))
+for t in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float16
 end
 promote_rule(::Type{Float16}, ::Type{Bool}) = Float16
 
-for t1 in (Float32,Float64)
-    for st in (Int8,Int16,Int32,Int64)
+for t1 in (Float32, Float64)
+    for st in (Int8, Int16, Int32, Int64)
         @eval begin
-            convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
-            promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
+            convert(::Type{$t1}, x::($st)) = box($t1, sitofp($t1, x))
+            promote_rule(::Type{$t1}, ::Type{$st}) = $t1
         end
     end
-    for ut in (Bool,UInt8,UInt16,UInt32,UInt64)
+    for ut in (Bool, UInt8, UInt16, UInt32, UInt64)
         @eval begin
-            convert(::Type{$t1},x::($ut)) = box($t1,uitofp($t1,unbox($ut,x)))
-            promote_rule(::Type{$t1}, ::Type{$ut}  ) = $t1
+            convert(::Type{$t1}, x::($ut)) = box($t1, uitofp($t1, x))
+            promote_rule(::Type{$t1}, ::Type{$ut}) = $t1
         end
     end
 end
@@ -229,13 +229,13 @@ for i = 0:255
         shifttable[i|0x100+1] = 13
     end
 end
-#convert(::Type{Float16}, x::Float32) = box(Float16,fptrunc(Float16,x))
-convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc(Float32,unbox(Float64,x)))
-convert(::Type{Float16}, x::Float64) = convert(Float16, convert(Float32,x))
+#convert(::Type{Float16}, x::Float32) = box(Float16, fptrunc(Float16, x))
+convert(::Type{Float32}, x::Float64) = box(Float32, fptrunc(Float32, x))
+convert(::Type{Float16}, x::Float64) = convert(Float16, convert(Float32, x))
 
-#convert(::Type{Float32}, x::Float16) = box(Float32,fpext(Float32,x))
-convert(::Type{Float64}, x::Float32) = box(Float64,fpext(Float64,unbox(Float32,x)))
-convert(::Type{Float64}, x::Float16) = convert(Float64, convert(Float32,x))
+#convert(::Type{Float32}, x::Float16) = box(Float32, fpext(Float32, x))
+convert(::Type{Float64}, x::Float32) = box(Float64, fpext(Float64, x))
+convert(::Type{Float64}, x::Float16) = convert(Float64, convert(Float32, x))
 
 convert(::Type{AbstractFloat}, x::Bool)    = convert(Float64, x)
 convert(::Type{AbstractFloat}, x::Int8)    = convert(Float64, x)
@@ -275,14 +275,14 @@ float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
-        unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti,fptosi($Ti,unbox(Float32,x)))
-        unsafe_trunc(::Type{$Ti}, x::Float64) = box($Ti,fptosi($Ti,unbox(Float64,x)))
+        unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti, fptosi($Ti, x))
+        unsafe_trunc(::Type{$Ti}, x::Float64) = box($Ti, fptosi($Ti, x))
     end
 end
 for Ti in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
-        unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti,fptoui($Ti,unbox(Float32,x)))
-        unsafe_trunc(::Type{$Ti}, x::Float64) = box($Ti,fptoui($Ti,unbox(Float64,x)))
+        unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti, fptoui($Ti, x))
+        unsafe_trunc(::Type{$Ti}, x::Float64) = box($Ti, fptoui($Ti, x))
     end
 end
 
@@ -333,20 +333,20 @@ ceil{ T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
 round{T<:Integer}(::Type{T}, x::AbstractFloat) = trunc(T,round(x))
 round{T<:Integer}(::Type{T}, x::Float16) = round(T, Float32(x))
 
-trunc(x::Float64) = box(Float64,trunc_llvm(unbox(Float64,x)))
-trunc(x::Float32) = box(Float32,trunc_llvm(unbox(Float32,x)))
+trunc(x::Float64) = box(Float64, trunc_llvm(x))
+trunc(x::Float32) = box(Float32, trunc_llvm(x))
 trunc(x::Float16) = Float16(trunc(Float32(x)))
 
-floor(x::Float64) = box(Float64,floor_llvm(unbox(Float64,x)))
-floor(x::Float32) = box(Float32,floor_llvm(unbox(Float32,x)))
+floor(x::Float64) = box(Float64, floor_llvm(x))
+floor(x::Float32) = box(Float32, floor_llvm(x))
 floor(x::Float16) = Float16(floor(Float32(x)))
 
-ceil(x::Float64) = box(Float64,ceil_llvm(unbox(Float64,x)))
-ceil(x::Float32) = box(Float32,ceil_llvm(unbox(Float32,x)))
+ceil(x::Float64) = box(Float64, ceil_llvm(x))
+ceil(x::Float32) = box(Float32, ceil_llvm(x))
 ceil(x::Float16) = Float16( ceil(Float32(x)))
 
-round(x::Float64) = box(Float64,rint_llvm(unbox(Float64,x)))
-round(x::Float32) = box(Float32,rint_llvm(unbox(Float32,x)))
+round(x::Float64) = box(Float64, rint_llvm(x))
+round(x::Float32) = box(Float32, rint_llvm(x))
 round(x::Float16) = Float16(round(Float32(x)))
 
 ## floating point promotions ##
@@ -360,24 +360,24 @@ widen(::Type{Float32}) = Float64
 _default_type(T::Union{Type{Real},Type{AbstractFloat}}) = Float64
 
 ## floating point arithmetic ##
--(x::Float64) = box(Float64,neg_float(unbox(Float64,x)))
--(x::Float32) = box(Float32,neg_float(unbox(Float32,x)))
--(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) ⊻ 0x8000)
+-(x::Float64) = box(Float64, neg_float(x))
+-(x::Float32) = box(Float32, neg_float(x))
+-(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) ⊻ 0x8000)
 
-for op in (:+,:-,:*,:/,:\,:^)
+for op in (:+, :-, :*, :/, :\, :^)
     @eval ($op)(a::Float16, b::Float16) = Float16(($op)(Float32(a), Float32(b)))
 end
-+(x::Float32, y::Float32) = box(Float32,add_float(unbox(Float32,x),unbox(Float32,y)))
-+(x::Float64, y::Float64) = box(Float64,add_float(unbox(Float64,x),unbox(Float64,y)))
--(x::Float32, y::Float32) = box(Float32,sub_float(unbox(Float32,x),unbox(Float32,y)))
--(x::Float64, y::Float64) = box(Float64,sub_float(unbox(Float64,x),unbox(Float64,y)))
-*(x::Float32, y::Float32) = box(Float32,mul_float(unbox(Float32,x),unbox(Float32,y)))
-*(x::Float64, y::Float64) = box(Float64,mul_float(unbox(Float64,x),unbox(Float64,y)))
-/(x::Float32, y::Float32) = box(Float32,div_float(unbox(Float32,x),unbox(Float32,y)))
-/(x::Float64, y::Float64) = box(Float64,div_float(unbox(Float64,x),unbox(Float64,y)))
++(x::Float32, y::Float32) = box(Float32, add_float(x, y))
++(x::Float64, y::Float64) = box(Float64, add_float(x, y))
+-(x::Float32, y::Float32) = box(Float32, sub_float(x, y))
+-(x::Float64, y::Float64) = box(Float64, sub_float(x, y))
+*(x::Float32, y::Float32) = box(Float32, mul_float(x, y))
+*(x::Float64, y::Float64) = box(Float64, mul_float(x, y))
+/(x::Float32, y::Float32) = box(Float32, div_float(x, y))
+/(x::Float64, y::Float64) = box(Float64, div_float(x, y))
 
-muladd(x::Float32, y::Float32, z::Float32) = box(Float32,muladd_float(unbox(Float32,x),unbox(Float32,y),unbox(Float32,z)))
-muladd(x::Float64, y::Float64, z::Float64) = box(Float64,muladd_float(unbox(Float64,x),unbox(Float64,y),unbox(Float64,z)))
+muladd(x::Float32, y::Float32, z::Float32) = box(Float32, muladd_float(x, y, z))
+muladd(x::Float64, y::Float64, z::Float64) = box(Float64, muladd_float(x, y, z))
 function muladd(a::Float16, b::Float16, c::Float16)
     Float16(muladd(Float32(a), Float32(b), Float32(c)))
 end
@@ -392,8 +392,8 @@ for func in (:div,:fld,:cld,:rem,:mod)
     end
 end
 
-rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
-rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
+rem(x::Float32, y::Float32) = box(Float32, rem_float(x, y))
+rem(x::Float64, y::Float64) = box(Float64, rem_float(x, y))
 
 cld{T<:AbstractFloat}(x::T, y::T) = -fld(-x,y)
 
@@ -420,20 +420,20 @@ function ==(x::Float16, y::Float16)
     end
     return ix == iy
 end
-==(x::Float32, y::Float32) = eq_float(unbox(Float32,x),unbox(Float32,y))
-==(x::Float64, y::Float64) = eq_float(unbox(Float64,x),unbox(Float64,y))
-!=(x::Float32, y::Float32) = ne_float(unbox(Float32,x),unbox(Float32,y))
-!=(x::Float64, y::Float64) = ne_float(unbox(Float64,x),unbox(Float64,y))
-<( x::Float32, y::Float32) = lt_float(unbox(Float32,x),unbox(Float32,y))
-<( x::Float64, y::Float64) = lt_float(unbox(Float64,x),unbox(Float64,y))
-<=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
-<=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
+==(x::Float32, y::Float32) = eq_float(x, y)
+==(x::Float64, y::Float64) = eq_float(x, y)
+!=(x::Float32, y::Float32) = ne_float(x, y)
+!=(x::Float64, y::Float64) = ne_float(x, y)
+<( x::Float32, y::Float32) = lt_float(x, y)
+<( x::Float64, y::Float64) = lt_float(x, y)
+<=(x::Float32, y::Float32) = le_float(x, y)
+<=(x::Float64, y::Float64) = le_float(x, y)
 
-isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
-isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
-isless( x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
-isless( x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
-for op in (:<,:<=,:isless)
+isequal(x::Float32, y::Float32) = fpiseq(x, y)
+isequal(x::Float64, y::Float64) = fpiseq(x, y)
+isless( x::Float32, y::Float32) = fpislt(x, y)
+isless( x::Float64, y::Float64) = fpislt(x, y)
+for op in (:<, :<=, :isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(Float32(a), Float32(b))
 end
 
@@ -505,9 +505,9 @@ end
 <=(x::Union{Int32,UInt32}, y::Float32) = Float64(x)<=Float64(y)
 
 
-abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) & 0x7fff)
-abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
-abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
+abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16, x) & 0x7fff)
+abs(x::Float32) = box(Float32, abs_float(x))
+abs(x::Float64) = box(Float64, abs_float(x))
 
 """
     isnan(f) -> Bool
@@ -549,8 +549,8 @@ hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((3a + reinterpret(UInt64,b)) - 
 const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
 
 hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
-hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64,abs(x)), Float64(x), h)
-hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN ⊻ h) : hx(box(UInt64,fptoui(unbox(Float64,abs(x)))), x, h)
+hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64, abs(x)), Float64(x), h)
+hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN ⊻ h) : hx(box(UInt64, fptoui(UInt64, abs(x))), x, h)
 
 hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
@@ -681,10 +681,10 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
 end
 
 @eval begin
-    issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(UInt32,0x00800000)))) & (x!=0)
-    issubnormal(x::Float64) = (abs(x) < $(box(Float64,unbox(UInt64,0x0010000000000000)))) & (x!=0)
+    issubnormal(x::Float32) = (abs(x) < $(box(Float32, 0x00800000))) & (x!=0)
+    issubnormal(x::Float64) = (abs(x) < $(box(Float64, 0x0010000000000000))) & (x!=0)
 
-    typemin(::Type{Float16}) = $(box(Float16,unbox(UInt16,0xfc00)))
+    typemin(::Type{Float16}) = $(box(Float16, 0xfc00))
     typemax(::Type{Float16}) = $(Inf16)
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
@@ -693,33 +693,33 @@ end
     typemin{T<:Real}(x::T) = typemin(T)
     typemax{T<:Real}(x::T) = typemax(T)
 
-    realmin(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x0400)))
-    realmin(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x00800000)))
-    realmin(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x0010000000000000)))
-    realmax(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x7bff)))
-    realmax(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x7f7fffff)))
-    realmax(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x7fefffffffffffff)))
+    realmin(::Type{Float16}) = $(box(Float16, 0x0400))
+    realmin(::Type{Float32}) = $(box(Float32, 0x00800000))
+    realmin(::Type{Float64}) = $(box(Float64, 0x0010000000000000))
+    realmax(::Type{Float16}) = $(box(Float16, 0x7bff))
+    realmax(::Type{Float32}) = $(box(Float32, 0x7f7fffff))
+    realmax(::Type{Float64}) = $(box(Float64, 0x7fefffffffffffff))
     realmin{T<:AbstractFloat}(x::T) = realmin(T)
     realmax{T<:AbstractFloat}(x::T) = realmax(T)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : oftype(x,NaN)
-    eps(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x1400)))
-    eps(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x34000000)))
-    eps(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x3cb0000000000000)))
+    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
+    eps(::Type{Float16}) = $(box(Float16, 0x1400))
+    eps(::Type{Float32}) = $(box(Float32, 0x34000000))
+    eps(::Type{Float64}) = $(box(Float64, 0x3cb0000000000000))
     eps() = eps(Float64)
 end
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
-bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))
-bswap(x::Float64) = box(Float64,bswap_int(unbox(Float64,x)))
+bswap(x::Float32) = box(Float32, bswap_int(x))
+bswap(x::Float64) = box(Float64, bswap_int(x))
 
 # bit patterns
-reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64,x)
-reinterpret(::Type{Unsigned}, x::Float32) = reinterpret(UInt32,x)
-reinterpret(::Type{Signed}, x::Float64) = reinterpret(Int64,x)
-reinterpret(::Type{Signed}, x::Float32) = reinterpret(Int32,x)
+reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64, x)
+reinterpret(::Type{Unsigned}, x::Float32) = reinterpret(UInt32, x)
+reinterpret(::Type{Signed}, x::Float64) = reinterpret(Int64, x)
+reinterpret(::Type{Signed}, x::Float32) = reinterpret(Int32, x)
 
 sign_mask(::Type{Float64}) =        0x8000_0000_0000_0000
 exponent_mask(::Type{Float64}) =    0x7ff0_0000_0000_0000

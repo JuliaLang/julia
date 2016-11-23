@@ -3056,13 +3056,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             return (argexprs[2],())
         end
     end
-    if length(atypes)==3 && f === unbox
-        at3 = widenconst(atypes[3])
-        if isa(at3,DataType) && !at3.mutable && at3.layout != C_NULL && datatype_pointerfree(at3)
-            # remove redundant unbox
-            return (argexprs[3],())
-        end
-    end
     topmod = _topmod(sv)
     # special-case inliners for known pure functions that compute types
     if sv.params.inlining

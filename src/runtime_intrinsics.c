@@ -14,7 +14,7 @@
 
 const unsigned int host_char_bit = 8;
 
-// run time version of box/unbox intrinsic
+// run time version of bitcast intrinsic
 JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(reinterpret, datatype, ty);

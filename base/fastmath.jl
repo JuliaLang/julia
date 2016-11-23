@@ -23,7 +23,9 @@ module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: box, unbox, powi_llvm, sqrt_llvm_fast
+import Core.Intrinsics: box, powi_llvm, sqrt_llvm_fast,
+    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
+    eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
 const fast_op =
     Dict(# basic arithmetic
@@ -131,18 +133,13 @@ end
 
 FloatTypes = Union{Float32, Float64}
 
-sub_fast{T<:FloatTypes}(x::T) = box(T,Base.neg_float_fast(unbox(T,x)))
+sub_fast{T<:FloatTypes}(x::T) = box(T, Base.neg_float_fast(x))
 
-add_fast{T<:FloatTypes}(x::T, y::T) =
-    box(T,Base.add_float_fast(unbox(T,x), unbox(T,y)))
-sub_fast{T<:FloatTypes}(x::T, y::T) =
-    box(T,Base.sub_float_fast(unbox(T,x), unbox(T,y)))
-mul_fast{T<:FloatTypes}(x::T, y::T) =
-    box(T,Base.mul_float_fast(unbox(T,x), unbox(T,y)))
-div_fast{T<:FloatTypes}(x::T, y::T) =
-    box(T,Base.div_float_fast(unbox(T,x), unbox(T,y)))
-rem_fast{T<:FloatTypes}(x::T, y::T) =
-    box(T,Base.rem_float_fast(unbox(T,x), unbox(T,y)))
+add_fast{T<:FloatTypes}(x::T, y::T) = box(T, add_float_fast(x, y))
+sub_fast{T<:FloatTypes}(x::T, y::T) = box(T, sub_float_fast(x, y))
+mul_fast{T<:FloatTypes}(x::T, y::T) = box(T, mul_float_fast(x, y))
+div_fast{T<:FloatTypes}(x::T, y::T) = box(T, div_float_fast(x, y))
+rem_fast{T<:FloatTypes}(x::T, y::T) = box(T, rem_float_fast(x, y))
 
 add_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
     add_fast(add_fast(x, y), zs...)
@@ -157,14 +154,10 @@ mul_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
     end
 end
 
-eq_fast{T<:FloatTypes}(x::T, y::T) =
-    Base.eq_float_fast(unbox(T,x),unbox(T,y))
-ne_fast{T<:FloatTypes}(x::T, y::T) =
-    Base.ne_float_fast(unbox(T,x),unbox(T,y))
-lt_fast{T<:FloatTypes}(x::T, y::T) =
-    Base.lt_float_fast(unbox(T,x),unbox(T,y))
-le_fast{T<:FloatTypes}(x::T, y::T) =
-    Base.le_float_fast(unbox(T,x),unbox(T,y))
+eq_fast{T<:FloatTypes}(x::T, y::T) = eq_float_fast(x, y)
+ne_fast{T<:FloatTypes}(x::T, y::T) = ne_float_fast(x, y)
+lt_fast{T<:FloatTypes}(x::T, y::T) = lt_float_fast(x, y)
+le_fast{T<:FloatTypes}(x::T, y::T) = le_float_fast(x, y)
 
 isinf_fast(x) = false
 isfinite_fast(x) = true
@@ -251,12 +244,11 @@ end
 # builtins
 
 pow_fast{T<:FloatTypes}(x::T, y::Integer) = pow_fast(x, Int32(y))
-pow_fast{T<:FloatTypes}(x::T, y::Int32) =
-    box(T, Base.powi_llvm(unbox(T,x), unbox(Int32,y)))
+pow_fast{T<:FloatTypes}(x::T, y::Int32) = box(T, Base.powi_llvm(x, y))
 
 # TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
 # checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic
-sqrt_fast{T<:FloatTypes}(x::T) = box(T, Base.sqrt_llvm_fast(unbox(T,x)))
+sqrt_fast{T<:FloatTypes}(x::T) = box(T, Base.sqrt_llvm_fast(x))
 
 # libm
 

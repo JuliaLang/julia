@@ -8,7 +8,7 @@ export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
        checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
        add_with_overflow, sub_with_overflow, mul_with_overflow
 
-import Core.Intrinsics: box, unbox,
+import Core.Intrinsics: box,
        checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,

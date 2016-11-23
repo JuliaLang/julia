@@ -96,11 +96,11 @@ module ImportIntrinsics15819
 # Make sure changing the lookup path of an intrinsic doesn't break
 # the heuristic for type instability warning.
 # This can be any intrinsic that needs boxing
-import Core.Intrinsics: sqrt_llvm, box, unbox
+import Core.Intrinsics: sqrt_llvm, box
 # Use import
-sqrt15819(x::Float64) = box(Float64, sqrt_llvm(unbox(Float64, x)))
+sqrt15819(x::Float64) = box(Float64, sqrt_llvm(x))
 # Use fully qualified name
-sqrt15819(x::Float32) = box(Float32, Core.Intrinsics.sqrt_llvm(unbox(Float32, x)))
+sqrt15819(x::Float32) = box(Float32, Core.Intrinsics.sqrt_llvm(x))
 end
 foo11122(x) = @fastmath x - 1.0
 

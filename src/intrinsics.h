@@ -3,7 +3,6 @@
 #define INTRINSICS \
     /*  wrap and unwrap */ \
     ALIAS(box, reinterpret) \
-    ALIAS(unbox, reinterpret) \
     /*  arithmetic */ \
     ADD_I(neg_int, 1) \
     ADD_I(add_int, 2) \
