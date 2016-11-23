@@ -1868,3 +1868,61 @@ end
         @test size(a) == size(b)
     end
 end
+
+isdefined(Main, :TestHelpers) || eval(Main, :(include("TestHelpers.jl")))
+using TestHelpers.OAs
+
+@testset "accumulate, accumulate!" begin
+
+    @test accumulate(+, [1,2,3]) == [1, 3, 6]
+    @test accumulate(min, [1 2; 3 4], 1) == [1 2; 1 2]
+    @test accumulate(max, [1 2; 3 0], 2) == [1 2; 3 3]
+    @test accumulate(+, Bool[]) == Int[]
+    @test accumulate(*, Bool[]) == Bool[]
+    @test accumulate(+, Float64[]) == Float64[]
+
+    @test accumulate(min, [1, 2, 5, -1, 3, -2]) == [1, 1, 1, -1, -1, -2]
+    @test accumulate(max, [1, 2, 5, -1, 3, -2]) == [1, 2, 5, 5, 5, 5]
+
+    @test accumulate(max, [1 0; 0 1], 1) == [1 0; 1 1]
+    @test accumulate(max, [1 0; 0 1], 2) == [1 1; 0 1]
+    @test accumulate(min, [1 0; 0 1], 1) == [1 0; 0 0]
+    @test accumulate(min, [1 0; 0 1], 2) == [1 0; 0 0]
+
+    @test isa(accumulate(+,     Int[]) , Vector{Int})
+    @test isa(accumulate(+, 1., Int[]) , Vector{Float64})
+    @test accumulate(+, 1, [1,2]) == [2, 4]
+    arr = randn(4)
+    @test accumulate(*, 1, arr) ≈ accumulate(*, arr)
+
+    N = 5
+    for arr in [rand(Float64, N), rand(Bool, N), rand(-2:2, N)]
+        for (op, cumop) in [(+, cumsum), (*, cumprod)]
+            @inferred accumulate(op, arr)
+            accumulate_arr = accumulate(op, arr)
+            @test accumulate_arr ≈ cumop(arr)
+            @test accumulate_arr[end] ≈ reduce(op, arr)
+            @test accumulate_arr[1] ≈ arr[1]
+            @test accumulate(op, arr, 10) ≈ arr
+
+            if eltype(arr) in [Int, Float64] # eltype of out easy
+                out = similar(arr)
+                @test accumulate!(op, out, arr) ≈ accumulate_arr
+                @test out ≈ accumulate_arr
+            end
+        end
+    end
+
+    # exotic indexing
+    arr = randn(4)
+    oarr = OffsetArray(arr, (-3,))
+    @test accumulate(+, oarr).parent == accumulate(+, arr)
+
+    @inferred accumulate(+, randn(3))
+    @inferred accumulate(+, 1, randn(3))
+
+    # asymmetric operation
+    op(x,y) = 2x+y
+    @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
+    @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
+end

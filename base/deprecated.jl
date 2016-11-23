@@ -145,6 +145,10 @@ end
 @deprecate chol(A::Number, ::Type{Val{:L}})         ctranspose(chol(A))
 @deprecate chol(A::AbstractMatrix, ::Type{Val{:L}}) ctranspose(chol(A))
 
+@deprecate cummin(A, dim=1) accumulate(min, A, dim=1)
+@deprecate cummax(A, dim=1) accumulate(max, A, dim=1)
+
+
 # Number updates
 
 # rem1 is inconsistent for x==0: The result should both have the same
