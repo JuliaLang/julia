@@ -94,9 +94,8 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
   every operation that can return an unboxed value does so.
   this maximizes opportunities for composing functions without
     unnecessary boxing.
-  the box and unbox functions do nothing except change the type tag
-   of a value. The unbox name is deprecated as it is simply an alias for box.
-   and both are perhaps better known as reinterpret.
+  the bitcast function does nothing except change the type tag
+   of a value. At the user-level, it is perhaps better known as reinterpret.
   boxing is delayed until absolutely necessary, and handled at the point
     where the box is needed.
   all intrinsics have a non-compiled implementation, this file contains
@@ -811,7 +810,6 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     case pointerset:
         return emit_pointerset(argv, ctx);
     case box:
-    case unbox:
         return generic_reinterpret(argv, ctx);
     case trunc_int:
         return generic_cast(f, generic_trunc, argv, ctx, true, true);
