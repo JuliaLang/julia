@@ -749,6 +749,12 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
         xc = copy(x)
         @test scale!(2.5, xc) === xc
         @test exact_equal(xc, sx)
+        xc = copy(x)
+        @test scale!(xc, complex(2.5, 0.0)) === xc
+        @test exact_equal(xc, sx)
+        xc = copy(x)
+        @test scale!(complex(2.5, 0.0), xc) === xc
+        @test exact_equal(xc, sx)
     end
 
     # dot
@@ -840,6 +846,7 @@ let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     @test SparseArrays.densemv(A, x; trans='N') ≈ Af * xf
     @test SparseArrays.densemv(A, x2; trans='T') ≈ Af.' * x2f
     @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
+    @test_throws ArgumentError SparseArrays.densemv(A, x; trans='D')
 end
 
 ## sparse A * sparse x -> sparse y
