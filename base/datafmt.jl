@@ -16,6 +16,14 @@ invalid_dlm(::Type{UInt32}) = 0xfffffffe
 const offs_chunk_size = 5000
 
 countlines(f::AbstractString, eol::Char='\n') = open(io->countlines(io,eol), f)::Int
+
+"""
+    countlines(io::IO, eol::Char='\\n')
+
+Read `io` until the end of the stream/file and count the number of lines. To specify a file
+pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
+passing them as the second argument.
+"""
 function countlines(io::IO, eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)

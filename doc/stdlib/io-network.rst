@@ -398,11 +398,11 @@ General I/O
 
    Advance the stream until before the first character for which ``predicate`` returns ``false``\ . For example ``skipchars(stream, isspace)`` will skip all whitespace. If keyword argument ``linecomment`` is specified, characters from that character through the end of a line will also be skipped.
 
-.. function:: countlines(io,[eol::Char])
+.. function:: countlines(io::IO, eol::Char='\\n')
 
    .. Docstring generated from Julia source
 
-   Read ``io`` until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than '\\n' are supported by passing them as the second argument.
+   Read ``io`` until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than ``'\n'`` are supported by passing them as the second argument.
 
 .. function:: PipeBuffer(data::Vector{UInt8}=UInt8[],[maxsize::Int=typemax(Int)])
 
@@ -835,7 +835,7 @@ stack with:
 
    Pop the topmost backend off of the display-backend stack, or the topmost copy of ``d`` in the second variant.
 
-.. function:: TextDisplay(stream)
+.. function:: TextDisplay(io::IO)
 
    .. Docstring generated from Julia source
 
