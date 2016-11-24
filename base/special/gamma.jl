@@ -468,7 +468,9 @@ function polygamma(m::Integer, z::ComplexOrReal{Float64})
     # constants. We throw a DomainError() since the definition is unclear.
     real(m) < 0 && throw(DomainError())
 
-    s = m+1
+    s = Float64(m+1)
+    # It is safe to convert any integer (including `BigInt`) to a float here
+    # as underflow occurs before precision issues.
     if real(z) <= 0 # reflection formula
         (zeta(s, 1-z) + signflip(m, cotderiv(m,z))) * (-gamma(s))
     else
@@ -633,14 +635,14 @@ end
 
 for f in (:digamma, :trigamma, :zeta, :eta, :invdigamma)
     @eval begin
-		function $f(z::Union{ComplexOrReal{Float16}, ComplexOrReal{Float32}})
-			oftype(z, $f(f64(z)))
-		end
+        function $f(z::Union{ComplexOrReal{Float16}, ComplexOrReal{Float32}})
+            oftype(z, $f(f64(z)))
+        end
 
         function $f(z::Number)
             x = float(z)
             typeof(x) === typeof(z) && throw(MethodError($f, (z,)))
-            # There is nothing to fallback to, since this didn't change the argument types
+            # There is nothing to fallback to, as this didn't change the argument types
             $f(x)
         end
     end
@@ -650,15 +652,10 @@ end
 for T1 in (Float16, Float32, Float64), T2 in (Float16, Float32, Float64)
     (T1 == T2 == Float64) && continue # Avoid redefining base definition
 
-	@eval function zeta(s::ComplexOrReal{$T1}, z::ComplexOrReal{$T2})
-		ζ = zeta(f64(s), f64(z))
-
-		if typeof(s) <: Complex || typeof(z) <: Complex
-			convert(Complex{$T2}, ζ)
-		else
-			convert(typeof(z), ζ)
-		end
-	end
+    @eval function zeta(s::ComplexOrReal{$T1}, z::ComplexOrReal{$T2})
+        ζ = zeta(f64(s), f64(z))
+        convert(promote_type(typeof(s), typeof(z)),  ζ)
+    end
 end
 
 
@@ -670,13 +667,6 @@ function zeta(s::Number, z::Number)
         throw(MethodError(zeta,(s,z)))
     end
     zeta(t, x)
-end
-
-# It is safe to convert `s` to a float as underflow will occur before precision issues
-zeta(s::Integer, z::Number) = zeta(oftype(z, s), z)
-function zeta(s::Integer, z::Integer)
-	x=float(z)
-	zeta(oftype(x, s), x)
 end
 
 
