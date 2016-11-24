@@ -2,7 +2,7 @@
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal, box
+import Core.Intrinsics: cglobal, bitcast
 
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
@@ -61,13 +61,13 @@ if !is_windows()
 end
 
 # construction from typed pointers
-convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
-convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, p)
+convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = bitcast(Cstring, p)
+convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
+convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
 
 # construction from untyped pointers
-convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = box(T, p)
+convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = bitcast(T, p)
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)

@@ -115,7 +115,7 @@ unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults 
 unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
 unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
-reinterpret{T}(::Type{T}, x) = box(T, x)
+reinterpret{T}(::Type{T}, x) = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 

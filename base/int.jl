@@ -73,15 +73,15 @@ signbit(x::Unsigned) = false
 flipsign{T<:BitSigned}(x::T, y::T) = flipsign_int(x, y)
 
 flipsign(x::Signed, y::Signed)  = convert(typeof(x), flipsign(promote_noncircular(x, y)...))
-flipsign(x::Signed, y::Float16) = flipsign(x, box(Int16, y))
-flipsign(x::Signed, y::Float32) = flipsign(x, box(Int32, y))
-flipsign(x::Signed, y::Float64) = flipsign(x, box(Int64, y))
+flipsign(x::Signed, y::Float16) = flipsign(x, bitcast(Int16, y))
+flipsign(x::Signed, y::Float32) = flipsign(x, bitcast(Int32, y))
+flipsign(x::Signed, y::Float64) = flipsign(x, bitcast(Int64, y))
 flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x, signbit(y)))
 
 copysign(x::Signed, y::Signed)  = flipsign(x, x ⊻ y)
-copysign(x::Signed, y::Float16) = copysign(x, box(Int16, y))
-copysign(x::Signed, y::Float32) = copysign(x, box(Int32, y))
-copysign(x::Signed, y::Float64) = copysign(x, box(Int64, y))
+copysign(x::Signed, y::Float16) = copysign(x, bitcast(Int16, y))
+copysign(x::Signed, y::Float32) = copysign(x, bitcast(Int32, y))
+copysign(x::Signed, y::Float64) = copysign(x, bitcast(Int64, y))
 copysign(x::Signed, y::Real)    = copysign(x, -oftype(x, signbit(y)))
 
 """
@@ -312,11 +312,11 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
         else
             if !(issubtype(from, Signed) === issubtype(to, Signed))
                 # raise InexactError if x's top bit is set
-                @eval convert(::Type{$to}, x::($from)) = box($to, check_top_bit(x))
+                @eval convert(::Type{$to}, x::($from)) = bitcast($to, check_top_bit(x))
             else
-                @eval convert(::Type{$to}, x::($from)) = box($to, x)
+                @eval convert(::Type{$to}, x::($from)) = bitcast($to, x)
             end
-            @eval rem(x::($from), ::Type{$to}) = box($to, x)
+            @eval rem(x::($from), ::Type{$to}) = bitcast($to, x)
         end
     end
 end
@@ -409,9 +409,9 @@ typemax(::Type{Int64 }) = 9223372036854775807
 typemin(::Type{UInt64}) = UInt64(0)
 typemax(::Type{UInt64}) = 0xffffffffffffffff
 @eval typemin(::Type{UInt128}) = $(convert(UInt128, 0))
-@eval typemax(::Type{UInt128}) = $(box(UInt128, convert(Int128, -1)))
+@eval typemax(::Type{UInt128}) = $(bitcast(UInt128, convert(Int128, -1)))
 @eval typemin(::Type{Int128} ) = $(convert(Int128, 1) << 127)
-@eval typemax(::Type{Int128} ) = $(box(Int128, typemax(UInt128) >> 1))
+@eval typemax(::Type{Int128} ) = $(bitcast(Int128, typemax(UInt128) >> 1))
 
 widen{T<:Union{Int8, Int16}}(::Type{T}) = Int32
 widen(::Type{Int32}) = Int64

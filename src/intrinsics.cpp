@@ -34,7 +34,6 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     } while (0);
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) runtime_func[alias] = runtime_func[base];
-    ADD_HIDDEN(reinterpret, 2);
     INTRINSICS
 #undef ADD_I
 #undef ADD_HIDDEN
@@ -418,7 +417,7 @@ static jl_cgval_t emit_runtime_call(JL_I::intrinsic f, const jl_cgval_t *argv, s
 }
 
 // put a bits type tag on some value (despite the name, this doesn't necessarily actually change anything about the value however)
-static jl_cgval_t generic_reinterpret(const jl_cgval_t *argv, jl_codectx_t *ctx)
+static jl_cgval_t generic_bitcast(const jl_cgval_t *argv, jl_codectx_t *ctx)
 {
     // Give the arguments names //
     const jl_cgval_t &bt_value = argv[0];
@@ -427,7 +426,7 @@ static jl_cgval_t generic_reinterpret(const jl_cgval_t *argv, jl_codectx_t *ctx)
 
     // it's easier to throw a good error from C than llvm
     if (!bt)
-        return emit_runtime_call(reinterpret, argv, 2, ctx);
+        return emit_runtime_call(bitcast, argv, 2, ctx);
 
     Type *llvmt = bitstype_to_llvm(bt);
     int nb = jl_datatype_size(bt);
@@ -441,10 +440,10 @@ static jl_cgval_t generic_reinterpret(const jl_cgval_t *argv, jl_codectx_t *ctx)
         if (!jl_is_bitstype(v.typ)) {
             if (isboxed) {
                 Value *isbits = emit_datatype_isbitstype(typ);
-                error_unless(isbits, "reinterpret: expected bitstype value for second argument", ctx);
+                error_unless(isbits, "bitcast: expected bitstype value for second argument", ctx);
             }
             else {
-                emit_error("reinterpret: expected bitstype value for second argument", ctx);
+                emit_error("bitcast: expected bitstype value for second argument", ctx);
                 return jl_cgval_t();
             }
         }
@@ -452,10 +451,10 @@ static jl_cgval_t generic_reinterpret(const jl_cgval_t *argv, jl_codectx_t *ctx)
             if (isboxed) {
                 Value *size = emit_datatype_size(typ);
                 error_unless(builder.CreateICmpEQ(size, ConstantInt::get(T_int32, nb)),
-                            "reinterpret: argument size does not match size of target type", ctx);
+                            "bitcast: argument size does not match size of target type", ctx);
             }
             else {
-                emit_error("reinterpret: argument size does not match size of target type", ctx);
+                emit_error("bitcast: argument size does not match size of target type", ctx);
                 return jl_cgval_t();
             }
         }
@@ -809,8 +808,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return emit_pointerref(argv, ctx);
     case pointerset:
         return emit_pointerset(argv, ctx);
-    case box:
-        return generic_reinterpret(argv, ctx);
+    case bitcast:
+        return generic_bitcast(argv, ctx);
     case trunc_int:
         return generic_cast(f, generic_trunc, argv, ctx, true, true);
     case checked_trunc_uint:

@@ -6,7 +6,7 @@ const curmod_name = fullname(curmod)
 const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
 # bits types
-@test isa((()->Core.Intrinsics.box(Ptr{Int8}, 0))(), Ptr{Int8})
+@test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
 @test isa(convert(Char, 65), Char)
 
 # runtime intrinsics
@@ -18,7 +18,7 @@ end
 # issue #4581
 bitstype 64 Date4581{T}
 let
-    x = Core.Intrinsics.box(Date4581{Int}, Int64(1234))
+    x = Core.Intrinsics.bitcast(Date4581{Int}, Int64(1234))
     xs = Date4581[x]
     ys = copy(xs)
     @test ys !== xs
@@ -27,10 +27,10 @@ end
 
 # issue #6591
 function f6591(d)
-    Core.Intrinsics.box(Int64, d)
-    (f->f(d))(identity)
+    Core.Intrinsics.bitcast(Int64, d)
+    return (f -> f(d))(identity)
 end
-let d = Core.Intrinsics.box(Date4581{Int}, Int64(1))
+let d = Core.Intrinsics.bitcast(Date4581{Int}, Int64(1))
     @test isa(f6591(d), Date4581)
 end
 

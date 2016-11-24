@@ -15,15 +15,15 @@
 const unsigned int host_char_bit = 8;
 
 // run time version of bitcast intrinsic
-JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v)
+JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
-    JL_TYPECHK(reinterpret, datatype, ty);
+    JL_TYPECHK(bitcast, datatype, ty);
     if (!jl_is_leaf_type(ty) || !jl_is_bitstype(ty))
-        jl_error("reinterpret: target type not a leaf bitstype");
+        jl_error("bitcast: target type not a leaf bitstype");
     if (!jl_is_bitstype(jl_typeof(v)))
-        jl_error("reinterpret: value not a bitstype");
+        jl_error("bitcast: value not a bitstype");
     if (jl_datatype_size(jl_typeof(v)) != jl_datatype_size(ty))
-        jl_error("reinterpret: argument size does not match size of target type");
+        jl_error("bitcast: argument size does not match size of target type");
     if (ty == jl_typeof(v))
         return v;
     if (ty == (jl_value_t*)jl_bool_type)
@@ -90,7 +90,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         v = jl_fieldref(v, 0);
 
     if (jl_is_pointer(v))
-        return jl_reinterpret(rt, v);
+        return jl_bitcast(rt, v);
 
     char *f_lib = NULL;
     if (jl_is_tuple(v) && jl_nfields(v) > 1) {
