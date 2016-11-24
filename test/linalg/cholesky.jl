@@ -218,7 +218,9 @@ let A = complex(randn(10,5), randn(10, 5)), v = complex(randn(5), randn(5))
         F = cholfact(AcA, uplo)
         G = cholfact(BcB, uplo)
         @test LinAlg.lowrankupdate(F, v)[uplo] ≈ G[uplo]
+        @test_throws DimensionMismatch LinAlg.lowrankupdate(F, ones(eltype(v), length(v)+1))
         @test LinAlg.lowrankdowndate(G, v)[uplo] ≈ F[uplo]
+        @test_throws DimensionMismatch LinAlg.lowrankdowndate(G, ones(eltype(v), length(v)+1))
     end
 end
 
