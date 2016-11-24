@@ -282,6 +282,17 @@ const MS_ASYNC = 1
 const MS_INVALIDATE = 2
 const MS_SYNC = 4
 
+"""
+    Mmap.sync!(m::Array, flags::Integer=MS_SYNC)
+
+Forces synchronization between the in-memory version of a memory-mapped `Array` or
+`BitArray` and the on-disk version. The optional `flags` argument
+is used on UNIX to control the behavior of `msync`. There are three options:
+
+* `MS_ASYNC` causes the update to the file to be scheduled, but the call will return immediately.
+* `MS_INVALIDATE` asks the update to invalidate any other copies of the file.
+* `MS_SYNC` (default) requests the update to the file be made and waits for it to complete.
+"""
 function sync!{T}(m::Array{T}, flags::Integer=MS_SYNC)
     offset = rem(UInt(pointer(m)), PAGESIZE)
     ptr = pointer(m) - offset

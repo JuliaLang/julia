@@ -912,11 +912,15 @@ Memory-mapped I/O
 
    This would create a 25-by-30000 ``BitArray``\ , linked to the file associated with stream ``s``\ .
 
-.. function:: Mmap.sync!(array)
+.. function:: Mmap.sync!(m::Array, flags::Integer=MS_SYNC)
 
    .. Docstring generated from Julia source
 
-   Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version.
+   Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version. The optional ``flags`` argument is used on UNIX to control the behavior of ``msync``\ . There are three options:
+
+   * ``MS_ASYNC`` causes the update to the file to be scheduled, but the call will return immediately.
+   * ``MS_INVALIDATE`` asks the update to invalidate any other copies of the file.
+   * ``MS_SYNC`` (default) requests the update to the file be made and waits for it to complete.
 
 Network I/O
 -----------

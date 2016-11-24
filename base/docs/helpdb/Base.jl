@@ -1666,14 +1666,6 @@ end
 get
 
 """
-    Mmap.sync!(array)
-
-Forces synchronization between the in-memory version of a memory-mapped `Array` or
-`BitArray` and the on-disk version.
-"""
-Mmap.sync!
-
-"""
     csc(x)
 
 Compute the cosecant of `x`, where `x` is in radians.
