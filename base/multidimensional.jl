@@ -2,7 +2,7 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import Base: eltype, length, size, start, done, next, last, in, getindex,
+    import Base: eltype, length, size, start, done, next, first, last, in, getindex,
                  setindex!, linearindexing, min, max, zero, one, isless, eachindex,
                  ndims, iteratorsize, to_index
 
@@ -10,7 +10,7 @@ module IteratorsMD
     import Base: simd_outer_range, simd_inner_length, simd_index
     using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
 
-    export CartesianIndex, CartesianRange
+    export CartesianIndex, CartesianRange, CartesianRange2
 
     # CartesianIndex
     immutable CartesianIndex{N} <: AbstractCartesianIndex{N}
@@ -153,6 +153,88 @@ module IteratorsMD
     simd_index{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex, I1::Int) = iter.start
     @inline function simd_index{N}(iter::CartesianRange, Ilast::CartesianIndex{N}, I1::Int)
         CartesianIndex((I1+iter.start[1], Ilast.I...))
+    end
+
+    # Iteration2
+    immutable CartesianRange2{N,R<:OrdinalRange{Int,Int}}
+        ranges::NTuple{N,R}
+    end
+
+    CartesianRange2(::Tuple{}) = CartesianRange2{0,OneTo{Int}}(())
+    CartesianRange2(::CartesianIndex{0}) = CartesianRange2{0,OneTo{Int}}(())
+    CartesianRange2(index::CartesianIndex) = CartesianRange2(map(OneTo,index.I))
+    CartesianRange2{N}(sz::NTuple{N,Int}) = CartesianRange2(map(OneTo,sz))
+    CartesianRange2(ranges::Tuple{Vararg{Union{Int,OrdinalRange{Int,Int}}}}) = CartesianRange2(promote(map(to_range,ranges)))
+    to_range(s::Int) = s:s
+    to_range(r::Range) = r
+
+    ndims{N}(R::CartesianRange2{N}) = N
+    ndims{N,R}(::Type{CartesianRange2{N,R}}) = N
+
+    # eachindex(::LinearSlow, A::AbstractArray) = CartesianRange(indices(A))
+
+    # @inline eachindex(::LinearSlow, A::AbstractArray, B::AbstractArray...) = CartesianRange(maxsize((), A, B...))
+    # maxsize(sz) = sz
+    # @inline maxsize(sz, A, B...) = maxsize(maxt(sz, size(A)), B...)
+    # @inline maxt(a::Tuple{}, b::Tuple{}) = ()
+    # @inline maxt(a::Tuple{}, b::Tuple)   = b
+    # @inline maxt(a::Tuple,   b::Tuple{}) = a
+    # @inline maxt(a::Tuple,   b::Tuple)   = (max(a[1], b[1]), maxt(tail(a), tail(b))...)
+
+    eltype{N,R}(::Type{CartesianRange2{N,R}}) = CartesianIndex{N}
+    iteratorsize{N,R}(::Type{CartesianRange2{N,R}}) = Base.HasShape()
+
+    @inline function start(iter::CartesianRange2)
+        r = iter.ranges
+        s = map(start, r)
+        if any(map(done, r, s))
+            return map(+, map(last,r), map(step,r))
+        else
+            return s
+        end
+    end
+    @inline function next(iter::CartesianRange2, state)
+        return CartesianIndex(state), carry(inc2(state, iter.ranges), iter.ranges)
+    end
+    # increment & carry
+    @inline inc2{N}(state::NTuple{N}, ranges::NTuple{N}) = (next(ranges[1],state[1])[2], tail(state)...)
+
+    @inline carry(state::NTuple{1}, ranges::NTuple{1}) = state
+    @inline function carry{N}(state::NTuple{N}, ranges::NTuple{N})
+        !done(ranges[1],state[1]) && return state
+        rtail = tail(ranges)
+        stail = tail(state)
+        return tuple(start(ranges[1]), carry(inc2(stail, rtail), rtail)...)
+    end
+    @inline done(iter::CartesianRange2, state) = done(iter.ranges[end], state[end])
+
+    # 0-d cartesian ranges are special-cased to iterate once and only once
+    start(iter::CartesianRange2{0}) = false
+    next(iter::CartesianRange2{0}, state) = CartesianIndex{0}(()), true
+    done(iter::CartesianRange2{0}, state) = state
+
+    size(iter::CartesianRange2) = map(length, iter.ranges)
+
+    length(iter::CartesianRange2) = prod(size(iter))
+
+    first(iter::CartesianRange2) = CartesianIndex(map(first, iter.ranges))
+    last(iter::CartesianRange2) = CartesianIndex(map(last, iter.ranges))
+
+    @inline function in{N}(i::CartesianIndex{N}, r::CartesianRange2{N})
+        _in2(true, i.I, r.ranges)
+    end
+    _in2(b, ::Tuple{}, ::Tuple{}) = b
+    @inline _in2(b, i, r) = _in(b & in(i[1], r[1]), tail(i), tail(r))
+
+    simd_outer_range(iter::CartesianRange2{0}) = iter
+    simd_outer_range(iter::CartesianRange2) = CartesianRange2(tail(iter.ranges))
+
+    simd_inner_length(iter::CartesianRange2{0}, ::Any) = 1
+    simd_inner_length(iter::CartesianRange2, ::Any) = length(iter.ranges[1])
+
+    simd_index(iter::CartesianRange2{0}, ::CartesianIndex, I1::Int) = CartesianIndex{0}(())
+    @inline function simd_index(iter::CartesianRange2, Ilast::CartesianIndex, I1::Int)
+        CartesianIndex((I1+first(iter.ranges[1]), Ilast.I...))
     end
 
     # Split out the first N elements of a tuple
