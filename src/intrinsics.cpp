@@ -835,6 +835,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return generic_cast(f, generic_fpext, argv, ctx, false, false);
 
     case fptoui_auto: {
+        // deprecated
         const jl_cgval_t &x = argv[0];
         if (!jl_is_bitstype(x.typ))
             return emit_runtime_call(f, argv, nargs, ctx);
@@ -849,6 +850,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 
     case fptosi_auto: {
+        // deprecated
         const jl_cgval_t &x = argv[0];
         if (!jl_is_bitstype(x.typ))
             return emit_runtime_call(f, argv, nargs, ctx);

@@ -1417,7 +1417,7 @@ f5150(T) = Array{Rational{T}}(1)
 
 # issue #5165
 bitstype 64 T5165{S}
-make_t(x::Int64) = Base.box(T5165{Void}, Base.unbox(Int64, x))
+make_t(x::Int64) = Base.box(T5165{Void}, x)
 xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
 for x in xs5165

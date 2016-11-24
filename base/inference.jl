@@ -307,10 +307,8 @@ tupletype_tail(t::ANY, n) = Tuple{t.parameters[n:end]...}
 
 #### type-functions for builtins / intrinsics ####
 
-cmp_tfunc = (x::ANY, y::ANY) -> Bool
-
 const _Type_name = Type.body.name
-isType(t::ANY) = isa(t,DataType) && (t::DataType).name === _Type_name
+isType(t::ANY) = isa(t, DataType) && (t::DataType).name === _Type_name
 
 # true if Type is inlineable as constant (is a singleton)
 isconstType(t::ANY) = isType(t) && (isleaftype(t.parameters[1]) || t.parameters[1] === Union{})
@@ -327,7 +325,9 @@ function add_tfunc(f::Function, minarg::Int, maxarg::Int, tfunc::ANY)
     push!(t_ffunc_key, f)
     push!(t_ffunc_val, (minarg, maxarg, tfunc))
 end
-add_tfunc(throw, 1, 1, x->Bottom)
+
+add_tfunc(throw, 1, 1, (x::ANY) -> Bottom)
+
 # the inverse of typeof_tfunc
 function instanceof_tfunc(t::ANY)
     # TODO improve
@@ -342,7 +342,95 @@ function instanceof_tfunc(t::ANY)
     end
     return Any
 end
-add_tfunc(box, 2, 2, (t,v)->instanceof_tfunc(t))
+box_tfunc(t::ANY, x::ANY) = instanceof_tfunc(t)
+math_tfunc(x::ANY) = widenconst(x)
+math_tfunc(x::ANY, y::ANY) = widenconst(x)
+math_tfunc(x::ANY, y::ANY, z::ANY) = widenconst(x)
+fptoui_tfunc(t::ANY, x::ANY) = box_tfunc(t, x)
+fptosi_tfunc(t::ANY, x::ANY) = box_tfunc(t, x)
+function fptoui_tfunc(x::ANY)
+    T = widenconst(x)
+    T === Float64 && return UInt64
+    T === Float32 && return UInt32
+    T === Float16 && return UInt16
+    return Any
+end
+function fptosi_tfunc(x::ANY)
+    T = widenconst(x)
+    T === Float64 && return Int64
+    T === Float32 && return Int32
+    T === Float16 && return Int16
+    return Any
+end
+
+    ## conversion ##
+add_tfunc(box, 2, 2, box_tfunc)
+add_tfunc(sext_int, 2, 2, box_tfunc)
+add_tfunc(zext_int, 2, 2, box_tfunc)
+add_tfunc(trunc_int, 2, 2, box_tfunc)
+add_tfunc(fptoui, 1, 2, fptoui_tfunc)
+add_tfunc(fptosi, 1, 2, fptosi_tfunc)
+add_tfunc(uitofp, 2, 2, box_tfunc)
+add_tfunc(sitofp, 2, 2, box_tfunc)
+add_tfunc(fptrunc, 2, 2, box_tfunc)
+add_tfunc(fpext, 2, 2, box_tfunc)
+    ## checked conversion ##
+add_tfunc(checked_trunc_sint, 2, 2, box_tfunc)
+add_tfunc(checked_trunc_uint, 2, 2, box_tfunc)
+add_tfunc(check_top_bit, 1, 1, math_tfunc)
+    ## arithmetic ##
+add_tfunc(neg_int, 1, 1, math_tfunc)
+add_tfunc(add_int, 2, 2, math_tfunc)
+add_tfunc(sub_int, 2, 2, math_tfunc)
+add_tfunc(mul_int, 2, 2, math_tfunc)
+add_tfunc(sdiv_int, 2, 2, math_tfunc)
+add_tfunc(udiv_int, 2, 2, math_tfunc)
+add_tfunc(srem_int, 2, 2, math_tfunc)
+add_tfunc(urem_int, 2, 2, math_tfunc)
+add_tfunc(neg_float, 1, 1, math_tfunc)
+add_tfunc(add_float, 2, 2, math_tfunc)
+add_tfunc(sub_float, 2, 2, math_tfunc)
+add_tfunc(mul_float, 2, 2, math_tfunc)
+add_tfunc(div_float, 2, 2, math_tfunc)
+add_tfunc(rem_float, 2, 2, math_tfunc)
+add_tfunc(fma_float, 3, 3, math_tfunc)
+add_tfunc(muladd_float, 3, 3, math_tfunc)
+    ## fast arithmetic ##
+add_tfunc(neg_float_fast, 1, 1, math_tfunc)
+add_tfunc(add_float_fast, 2, 2, math_tfunc)
+add_tfunc(sub_float_fast, 2, 2, math_tfunc)
+add_tfunc(mul_float_fast, 2, 2, math_tfunc)
+add_tfunc(div_float_fast, 2, 2, math_tfunc)
+add_tfunc(rem_float_fast, 2, 2, math_tfunc)
+    ## bitwise operators ##
+add_tfunc(and_int, 2, 2, math_tfunc)
+add_tfunc(or_int, 2, 2, math_tfunc)
+add_tfunc(xor_int, 2, 2, math_tfunc)
+add_tfunc(not_int, 1, 1, math_tfunc)
+add_tfunc(shl_int, 2, 2, math_tfunc)
+add_tfunc(lshr_int, 2, 2, math_tfunc)
+add_tfunc(ashr_int, 2, 2, math_tfunc)
+add_tfunc(bswap_int, 1, 1, math_tfunc)
+add_tfunc(ctpop_int, 1, 1, math_tfunc)
+add_tfunc(ctlz_int, 1, 1, math_tfunc)
+add_tfunc(cttz_int, 1, 1, math_tfunc)
+add_tfunc(checked_sdiv_int, 2, 2, math_tfunc)
+add_tfunc(checked_udiv_int, 2, 2, math_tfunc)
+add_tfunc(checked_srem_int, 2, 2, math_tfunc)
+add_tfunc(checked_urem_int, 2, 2, math_tfunc)
+    ## functions ##
+add_tfunc(abs_float, 1, 1, math_tfunc)
+add_tfunc(copysign_float, 2, 2, math_tfunc)
+add_tfunc(flipsign_int, 2, 2, math_tfunc)
+add_tfunc(ceil_llvm, 1, 1, math_tfunc)
+add_tfunc(floor_llvm, 1, 1, math_tfunc)
+add_tfunc(trunc_llvm, 1, 1, math_tfunc)
+add_tfunc(rint_llvm, 1, 1, math_tfunc)
+add_tfunc(sqrt_llvm, 1, 1, math_tfunc)
+add_tfunc(powi_llvm, 2, 2, math_tfunc)
+add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc)
+    ## same-type comparisons ##
+cmp_tfunc(x::ANY, y::ANY) = Bool
 add_tfunc(eq_int, 2, 2, cmp_tfunc)
 add_tfunc(ne_int, 2, 2, cmp_tfunc)
 add_tfunc(slt_int, 2, 2, cmp_tfunc)
@@ -360,14 +448,15 @@ add_tfunc(ne_float_fast, 2, 2, cmp_tfunc)
 add_tfunc(lt_float_fast, 2, 2, cmp_tfunc)
 add_tfunc(le_float_fast, 2, 2, cmp_tfunc)
 
-chk_tfunc = (x::ANY, y::ANY) -> Tuple{widenconst(x), Bool}
+    ## checked arithmetic ##
+chk_tfunc(x::ANY, y::ANY) = Tuple{widenconst(x), Bool}
 add_tfunc(checked_sadd_int, 2, 2, chk_tfunc)
 add_tfunc(checked_uadd_int, 2, 2, chk_tfunc)
 add_tfunc(checked_ssub_int, 2, 2, chk_tfunc)
 add_tfunc(checked_usub_int, 2, 2, chk_tfunc)
 add_tfunc(checked_smul_int, 2, 2, chk_tfunc)
 add_tfunc(checked_umul_int, 2, 2, chk_tfunc)
-
+    ## other, misc intrinsics ##
 add_tfunc(Core.Intrinsics.llvmcall, 3, IInf,
     (fptr::ANY, rt::ANY, at::ANY, a...) -> instanceof_tfunc(rt))
 cglobal_tfunc(fptr::ANY) = Ptr{Void}
