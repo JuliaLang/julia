@@ -1758,4 +1758,9 @@ end)
 @deprecate(SharedArray{T}(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...),
            SharedArray{T,length(dims)}(filename, dims, offset; kwargs...))
 
+@noinline function is_intrinsic_expr(x::ANY)
+    Base.depwarn("is_intrinsic_expr is deprecated. There are no intrinsic functions anymore.", :is_intrinsic_expr)
+    return false
+end
+
 # End deprecations scheduled for 0.6
