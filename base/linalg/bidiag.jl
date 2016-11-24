@@ -263,8 +263,8 @@ end
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 
-istriu(M::Bidiagonal) = M.isupper || all(M.ev .== 0)
-istril(M::Bidiagonal) = !M.isupper || all(M.ev .== 0)
+istriu(M::Bidiagonal) = M.isupper || all(M.ev .== zero(eltype(M)))
+istril(M::Bidiagonal) = !M.isupper || all(M.ev .== zero(eltype(M)))
 
 function tril!(M::Bidiagonal, k::Integer=0)
     n = length(M.dv)
