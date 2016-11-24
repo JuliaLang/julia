@@ -271,94 +271,19 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-// try to statically evaluate, NULL if not possible
-// remove this once jl_has_intrinsics is deleted
-extern jl_value_t *jl_builtin_getfield;
-static jl_value_t *jl_static_eval(jl_value_t *ex, jl_module_t *mod,
-                                  jl_method_instance_t *linfo, int sparams)
-{
-    if (jl_is_symbol(ex)) {
-        jl_sym_t *sym = (jl_sym_t*)ex;
-        if (jl_is_const(mod, sym))
-            return jl_get_global(mod, sym);
-        return NULL;
-    }
-    if (jl_is_slot(ex))
-        return NULL;
-    if (jl_is_ssavalue(ex))
-        return NULL;
-    if (jl_is_quotenode(ex))
-        return jl_fieldref(ex, 0);
-    if (jl_is_method_instance(ex))
-        return NULL;
-    jl_module_t *m = NULL;
-    jl_sym_t *s = NULL;
-    if (jl_is_globalref(ex)) {
-        jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), jl_globalref_name(ex));
-        if (b && b->constp) {
-            return b->value;
-        }
-        return NULL;
-    }
-    if (jl_is_expr(ex)) {
-        jl_expr_t *e = (jl_expr_t*)ex;
-        if (e->head == call_sym) {
-            jl_value_t *f = jl_static_eval(jl_exprarg(e, 0), mod, linfo, sparams);
-            if (f) {
-                if (jl_array_dim0(e->args) == 3 && f==jl_builtin_getfield) {
-                    m = (jl_module_t*)jl_static_eval(jl_exprarg(e, 1), mod, linfo, sparams);
-                    s = (jl_sym_t*)jl_static_eval(jl_exprarg(e, 2), mod, linfo, sparams);
-                    if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
-                        jl_binding_t *b = jl_get_binding(m, s);
-                        if (b && b->constp) {
-                            return b->value;
-                        }
-                    }
-                }
-            }
-        }
-        else if (e->head == static_parameter_sym) {
-            size_t idx = jl_unbox_long(jl_exprarg(e, 0));
-            if (linfo && idx <= jl_svec_len(linfo->sparam_vals)) {
-                jl_value_t *e = jl_svecref(linfo->sparam_vals, idx - 1);
-                if (jl_is_typevar(e))
-                    return NULL;
-                return e;
-            }
-        }
-        return NULL;
-    }
-    return ex;
-}
-
-
-int jl_has_intrinsics(jl_method_instance_t *li, jl_value_t *v, jl_module_t *m)
+int jl_has_intrinsics(jl_value_t *v)
 {
     if (!jl_is_expr(v))
         return 0;
     jl_expr_t *e = (jl_expr_t*)v;
-    if (jl_array_len(e->args) == 0)
-        return 0;
     if (e->head == toplevel_sym || e->head == copyast_sym)
         return 0;
-    jl_value_t *e0 = jl_exprarg(e, 0);
     if (e->head == foreigncall_sym)
         return 1;
-    if (e->head == call_sym) {
-        jl_value_t *sv = jl_static_eval(e0, m, li, li != NULL);
-        if (sv && jl_typeis(sv, jl_intrinsic_type))
-            return 1;
-    }
-    if (0 && e->head == assign_sym && jl_is_ssavalue(e0)) { // code branch needed for *very-linear-mode*, but not desirable otherwise
-        jl_value_t *e1 = jl_exprarg(e, 1);
-        jl_value_t *sv = jl_static_eval(e1, m, li, li != NULL);
-        if (sv && jl_typeis(sv, jl_intrinsic_type))
-            return 1;
-    }
     int i;
     for (i = 0; i < jl_array_len(e->args); i++) {
-        jl_value_t *a = jl_exprarg(e,i);
-        if (jl_is_expr(a) && jl_has_intrinsics(li, a, m))
+        jl_value_t *a = jl_exprarg(e, i);
+        if (jl_is_expr(a) && jl_has_intrinsics(a))
             return 1;
     }
     return 0;
@@ -399,7 +324,8 @@ static int jl_eval_with_compiler_p(jl_code_info_t *src, jl_array_t *body, int co
                 }
             }
         }
-        if (jl_has_intrinsics(NULL, stmt, m)) return 1;
+        if (jl_has_intrinsics(stmt))
+            return 1;
     }
     return 0;
 }
@@ -408,7 +334,7 @@ static int jl_eval_expr_with_compiler_p(jl_value_t *e, int compileloops, jl_modu
 {
     if (jl_is_expr(e) && ((jl_expr_t*)e)->head == body_sym)
         return jl_eval_with_compiler_p(NULL, ((jl_expr_t*)e)->args, compileloops, m);
-    if (jl_has_intrinsics(NULL, e, m))
+    if (jl_has_intrinsics(e))
         return 1;
     return 0;
 }

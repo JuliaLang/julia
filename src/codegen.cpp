@@ -1108,7 +1108,7 @@ static jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method)
                     code = jl_uncompress_ast(def, code);
                 size_t i, l = jl_array_len(code);
                 for (i = 0; i < l; i++) {
-                    if (jl_has_intrinsics(method, jl_array_ptr_ref(code, i), def->module)) {
+                    if (jl_has_intrinsics(jl_array_ptr_ref(code, i))) {
                         needs_sparam_vals_ducttape = 1;
                         break;
                     }
