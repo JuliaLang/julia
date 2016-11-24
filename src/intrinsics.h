@@ -2,7 +2,7 @@
 
 #define INTRINSICS \
     /*  wrap and unwrap */ \
-    ALIAS(box, reinterpret) \
+    ADD_I(bitcast, 2) \
     /*  arithmetic */ \
     ADD_I(neg_int, 1) \
     ADD_I(add_int, 2) \
@@ -114,8 +114,7 @@ enum intrinsic {
 #undef ADD_I
 #undef ADD_HIDDEN
 #undef ALIAS
-    num_intrinsics,
-    reinterpret = box
+    num_intrinsics
 };
 
 #ifdef __cplusplus
@@ -205,7 +204,6 @@ void jl_init_intrinsic_properties(void)
 #define ADD_I(name, nargs) add_intrinsic_properties(name, nargs, (void(*)(void))&jl_##name);
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) add_intrinsic_properties(alias, intrinsic_nargs[base], runtime_fp[base]);
-    ADD_HIDDEN(reinterpret, 2);
     INTRINSICS
 #undef ADD_I
 #undef ADD_HIDDEN

@@ -763,7 +763,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         func_args = args[2:end]
 
-        if (in(ex.args[1], (GlobalRef(Base, :box), :throw)) ||
+        if (in(ex.args[1], (GlobalRef(Base, :bitcast), :throw)) ||
             ismodulecall(ex))
             show_type = false
         end

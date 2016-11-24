@@ -7,14 +7,14 @@ copysign(x::Float32, y::Float32) = copysign_float(x, y)
 copysign(x::Float32, y::Real) = copysign(x, Float32(y))
 copysign(x::Float64, y::Real) = copysign(x, Float64(y))
 
-flipsign(x::Float64, y::Float64) = box(Float64, xor_int(box(UInt64, x), and_int(box(UInt64, y), 0x8000000000000000)))
-flipsign(x::Float32, y::Float32) = box(Float32, xor_int(box(UInt32, x), and_int(box(UInt32, y), 0x80000000)))
+flipsign(x::Float64, y::Float64) = bitcast(Float64, xor_int(bitcast(UInt64, x), and_int(bitcast(UInt64, y), 0x8000000000000000)))
+flipsign(x::Float32, y::Float32) = bitcast(Float32, xor_int(bitcast(UInt32, x), and_int(bitcast(UInt32, y), 0x80000000)))
 flipsign(x::Float32, y::Real) = flipsign(x, Float32(y))
 flipsign(x::Float64, y::Real) = flipsign(x, Float64(y))
 
-signbit(x::Float64) = signbit(box(Int64, x))
-signbit(x::Float32) = signbit(box(Int32, x))
-signbit(x::Float16) = signbit(box(Int16, x))
+signbit(x::Float64) = signbit(bitcast(Int64, x))
+signbit(x::Float32) = signbit(bitcast(Int32, x))
+signbit(x::Float16) = signbit(bitcast(Int16, x))
 
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
@@ -24,18 +24,18 @@ maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
-num2hex(x::Float16) = hex(box(UInt16, x), 4)
-num2hex(x::Float32) = hex(box(UInt32, x), 8)
-num2hex(x::Float64) = hex(box(UInt64, x), 16)
+num2hex(x::Float16) = hex(bitcast(UInt16, x), 4)
+num2hex(x::Float32) = hex(bitcast(UInt32, x), 8)
+num2hex(x::Float64) = hex(bitcast(UInt64, x), 16)
 
 function hex2num(s::AbstractString)
     if length(s) <= 4
-        return box(Float16, parse(UInt16, s, 16))
+        return bitcast(Float16, parse(UInt16, s, 16))
     end
     if length(s) <= 8
-        return box(Float32, parse(UInt32, s, 16))
+        return bitcast(Float32, parse(UInt32, s, 16))
     end
-    return box(Float64, parse(UInt64, s, 16))
+    return bitcast(Float64, parse(UInt64, s, 16))
 end
 
 """

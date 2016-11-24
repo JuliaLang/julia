@@ -39,7 +39,7 @@ const TAGS = Any[
     :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
     :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
     :add_int, :sub_int, :mul_int, :add_float, :sub_float,
-    :mul_float, :unbox, :box,
+    :mul_float, :bitcast, :box,
     :eq_int, :slt_int, :sle_int, :ne_int,
     :arrayset, :arrayref,
     :Core, :Base, svec(), Tuple{},

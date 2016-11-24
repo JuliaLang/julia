@@ -342,12 +342,12 @@ function instanceof_tfunc(t::ANY)
     end
     return Any
 end
-box_tfunc(t::ANY, x::ANY) = instanceof_tfunc(t)
+bitcast_tfunc(t::ANY, x::ANY) = instanceof_tfunc(t)
 math_tfunc(x::ANY) = widenconst(x)
 math_tfunc(x::ANY, y::ANY) = widenconst(x)
 math_tfunc(x::ANY, y::ANY, z::ANY) = widenconst(x)
-fptoui_tfunc(t::ANY, x::ANY) = box_tfunc(t, x)
-fptosi_tfunc(t::ANY, x::ANY) = box_tfunc(t, x)
+fptoui_tfunc(t::ANY, x::ANY) = bitcast_tfunc(t, x)
+fptosi_tfunc(t::ANY, x::ANY) = bitcast_tfunc(t, x)
 function fptoui_tfunc(x::ANY)
     T = widenconst(x)
     T === Float64 && return UInt64
@@ -364,19 +364,19 @@ function fptosi_tfunc(x::ANY)
 end
 
     ## conversion ##
-add_tfunc(box, 2, 2, box_tfunc)
-add_tfunc(sext_int, 2, 2, box_tfunc)
-add_tfunc(zext_int, 2, 2, box_tfunc)
-add_tfunc(trunc_int, 2, 2, box_tfunc)
+add_tfunc(bitcast, 2, 2, bitcast_tfunc)
+add_tfunc(sext_int, 2, 2, bitcast_tfunc)
+add_tfunc(zext_int, 2, 2, bitcast_tfunc)
+add_tfunc(trunc_int, 2, 2, bitcast_tfunc)
 add_tfunc(fptoui, 1, 2, fptoui_tfunc)
 add_tfunc(fptosi, 1, 2, fptosi_tfunc)
-add_tfunc(uitofp, 2, 2, box_tfunc)
-add_tfunc(sitofp, 2, 2, box_tfunc)
-add_tfunc(fptrunc, 2, 2, box_tfunc)
-add_tfunc(fpext, 2, 2, box_tfunc)
+add_tfunc(uitofp, 2, 2, bitcast_tfunc)
+add_tfunc(sitofp, 2, 2, bitcast_tfunc)
+add_tfunc(fptrunc, 2, 2, bitcast_tfunc)
+add_tfunc(fpext, 2, 2, bitcast_tfunc)
     ## checked conversion ##
-add_tfunc(checked_trunc_sint, 2, 2, box_tfunc)
-add_tfunc(checked_trunc_uint, 2, 2, box_tfunc)
+add_tfunc(checked_trunc_sint, 2, 2, bitcast_tfunc)
+add_tfunc(checked_trunc_uint, 2, 2, bitcast_tfunc)
 add_tfunc(check_top_bit, 1, 1, math_tfunc)
     ## arithmetic ##
 add_tfunc(neg_int, 1, 1, math_tfunc)

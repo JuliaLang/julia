@@ -7,27 +7,27 @@
 
 Positive infinity of type `Float16`.
 """
-const Inf16 = box(Float16, 0x7c00)
+const Inf16 = bitcast(Float16, 0x7c00)
 """
     NaN16
 
 A not-a-number value of type `Float16`.
 """
-const NaN16 = box(Float16, 0x7e00)
+const NaN16 = bitcast(Float16, 0x7e00)
 """
     Inf32
 
 Positive infinity of type `Float32`.
 """
-const Inf32 = box(Float32, 0x7f800000)
+const Inf32 = bitcast(Float32, 0x7f800000)
 """
     NaN32
 
 A not-a-number value of type `Float32`.
 """
-const NaN32 = box(Float32, 0x7fc00000)
-const Inf64 = box(Float64, 0x7ff0000000000000)
-const NaN64 = box(Float64, 0x7ff8000000000000)
+const NaN32 = bitcast(Float32, 0x7fc00000)
+const Inf64 = bitcast(Float64, 0x7ff0000000000000)
+const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 
 """
     Inf
@@ -681,10 +681,10 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
 end
 
 @eval begin
-    issubnormal(x::Float32) = (abs(x) < $(box(Float32, 0x00800000))) & (x!=0)
-    issubnormal(x::Float64) = (abs(x) < $(box(Float64, 0x0010000000000000))) & (x!=0)
+    issubnormal(x::Float32) = (abs(x) < $(bitcast(Float32, 0x00800000))) & (x!=0)
+    issubnormal(x::Float64) = (abs(x) < $(bitcast(Float64, 0x0010000000000000))) & (x!=0)
 
-    typemin(::Type{Float16}) = $(box(Float16, 0xfc00))
+    typemin(::Type{Float16}) = $(bitcast(Float16, 0xfc00))
     typemax(::Type{Float16}) = $(Inf16)
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
@@ -693,21 +693,21 @@ end
     typemin{T<:Real}(x::T) = typemin(T)
     typemax{T<:Real}(x::T) = typemax(T)
 
-    realmin(::Type{Float16}) = $(box(Float16, 0x0400))
-    realmin(::Type{Float32}) = $(box(Float32, 0x00800000))
-    realmin(::Type{Float64}) = $(box(Float64, 0x0010000000000000))
-    realmax(::Type{Float16}) = $(box(Float16, 0x7bff))
-    realmax(::Type{Float32}) = $(box(Float32, 0x7f7fffff))
-    realmax(::Type{Float64}) = $(box(Float64, 0x7fefffffffffffff))
+    realmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
+    realmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
+    realmin(::Type{Float64}) = $(bitcast(Float64, 0x0010000000000000))
+    realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
+    realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
+    realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
     realmin{T<:AbstractFloat}(x::T) = realmin(T)
     realmax{T<:AbstractFloat}(x::T) = realmax(T)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
     eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
-    eps(::Type{Float16}) = $(box(Float16, 0x1400))
-    eps(::Type{Float32}) = $(box(Float32, 0x34000000))
-    eps(::Type{Float64}) = $(box(Float64, 0x3cb0000000000000))
+    eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
+    eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
+    eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
     eps() = eps(Float64)
 end
 

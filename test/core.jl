@@ -1417,7 +1417,7 @@ f5150(T) = Array{Rational{T}}(1)
 
 # issue #5165
 bitstype 64 T5165{S}
-make_t(x::Int64) = Base.box(T5165{Void}, x)
+make_t(x::Int64) = Core.Intrinsics.bitcast(T5165{Void}, x)
 xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
 for x in xs5165
@@ -1736,7 +1736,7 @@ obj6387 = ObjMember(DateRange6387{Int64}())
 
 function v6387{T}(r::Range{T})
     a = Array{T}(1)
-    a[1] = Core.Intrinsics.box(Date6387{Int64}, Int64(1))
+    a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
     return a
 end
 
