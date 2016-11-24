@@ -40,7 +40,7 @@
 
 using namespace llvm;
 
-extern MDNode *tbaa_make_child(const char *name, MDNode *parent, bool isConstant=false);
+extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
 
 namespace {
 
@@ -1180,9 +1180,7 @@ static void ensure_enter_function(Module &M)
 
 bool LowerGCFrame::runOnModule(Module &M)
 {
-    MDBuilder mbuilder(M.getContext());
-    MDNode *tbaa_root = mbuilder.createTBAARoot("jtbaa");
-    MDNode *tbaa_gcframe = tbaa_make_child("jtbaa_gcframe", tbaa_root);
+    MDNode *tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
 
     Function *ptls_getter = M.getFunction("jl_get_ptls_states");
     ensure_enter_function(M);

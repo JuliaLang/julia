@@ -31,7 +31,7 @@
 
 using namespace llvm;
 
-extern MDNode *tbaa_make_child(const char *name, MDNode *parent, bool isConstant=false);
+extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr, bool isConstant=false);
 
 namespace {
 
@@ -172,9 +172,7 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
 
 bool LowerPTLS::runOnModule(Module &M)
 {
-    MDBuilder mbuilder(M.getContext());
-    MDNode *tbaa_root = mbuilder.createTBAARoot("jtbaa");
-    MDNode *tbaa_const = tbaa_make_child("jtbaa_const", tbaa_root, true);
+    MDNode *tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
 
     Function *ptls_getter = M.getFunction("jl_get_ptls_states");
     if (!ptls_getter)
