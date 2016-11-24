@@ -55,6 +55,20 @@ end
 
 Wrap an expression in a [`Task`](:class:`Task`) without executing it, and return the [`Task`](:class:`Task`). This only
 creates a task, and does not run it.
+
+```jldoctest
+julia> a1() = det(rand(1000, 1000));
+
+julia> b = @task a1();
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> istaskdone(b)
+true
+```
 """
 macro task(ex)
     :(Task(()->$(esc(ex))))
@@ -68,16 +82,39 @@ Get the currently running [`Task`](:class:`Task`).
 current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 
 """
-    istaskdone(task) -> Bool
+    istaskdone(t::Task) -> Bool
 
 Determine whether a task has exited.
+
+```jldoctest
+julia> a2() = det(rand(1000, 1000));
+
+julia> b = Task(a2);
+
+julia> istaskdone(b)
+false
+
+julia> schedule(b);
+
+julia> istaskdone(b)
+true
+```
 """
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
 
 """
-    istaskstarted(task) -> Bool
+    istaskstarted(t::Task) -> Bool
 
 Determine whether a task has started executing.
+
+```jldoctest
+julia> a3() = det(rand(1000, 1000));
+
+julia> b = Task(a3);
+
+julia> istaskstarted(b)
+false
+```
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
