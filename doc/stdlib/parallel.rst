@@ -77,7 +77,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Create an edge-triggered event source that tasks can wait for. Tasks that call :func:`wait` on a ``Condition`` are suspended and queued. Tasks are woken up when :func:`notify` is later called on the ``Condition``\ . Edge triggering means that only tasks waiting at the time ``notify`` is called can be woken up. For level-triggered notifications, you must keep extra state to keep track of whether a notification has happened. The :class:`Channel` type does this, and so can be used for level-triggered events.
+   Create an edge-triggered event source that tasks can wait for. Tasks that call :func:`wait` on a ``Condition`` are suspended and queued. Tasks are woken up when :func:`notify` is later called on the ``Condition``\ . Edge triggering means that only tasks waiting at the time :func:`notify` is called can be woken up. For level-triggered notifications, you must keep extra state to keep track of whether a notification has happened. The :class:`Channel` type does this, and so can be used for level-triggered events.
 
 .. function:: notify(condition, val=nothing; all=true, error=false)
 
@@ -452,7 +452,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   An implementation of an ``AbstractWorkerPool``\ . :func:`remote`\ , :func:`remotecall_fetch`\ , :func:`pmap` (and other remote calls which execute functions remotely) benefit from caching the serialized/deserialized functions on the worker nodes, especially closures (which capture large amounts of data).
+   An implementation of an ``AbstractWorkerPool``\ . :func:`remote`\ , :func:`remotecall_fetch`\ , :func:`pmap` (and other remote calls which execute functions remotely) benefit from caching the serialized/deserialized functions on the worker nodes, especially closures (which may capture large amounts of data).
 
    The remote cache is maintained for the lifetime of the returned ``CachingPool`` object. To clear the cache earlier, use ``clear!(pool)``\ .
 

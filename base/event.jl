@@ -7,7 +7,7 @@
 
 Create an edge-triggered event source that tasks can wait for. Tasks that call [`wait`](:func:`wait`) on a
 `Condition` are suspended and queued. Tasks are woken up when [`notify`](:func:`notify`) is later called on
-the `Condition`. Edge triggering means that only tasks waiting at the time `notify` is
+the `Condition`. Edge triggering means that only tasks waiting at the time [`notify`](:func:`notify`) is
 called can be woken up. For level-triggered notifications, you must keep extra state to keep
 track of whether a notification has happened. The [`Channel`](:class:`Channel`) type does
 this, and so can be used for level-triggered events.

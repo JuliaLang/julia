@@ -237,7 +237,7 @@ An implementation of an `AbstractWorkerPool`.
 [`remote`](:func:`remote`), [`remotecall_fetch`](:func:`remotecall_fetch`),
 [`pmap`](:func:`pmap`) (and other remote calls which execute functions remotely)
 benefit from caching the serialized/deserialized functions on the worker nodes,
-especially closures (which capture large amounts of data).
+especially closures (which may capture large amounts of data).
 
 The remote cache is maintained for the lifetime of the returned `CachingPool` object.
 To clear the cache earlier, use `clear!(pool)`.
