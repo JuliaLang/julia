@@ -10,7 +10,7 @@ end
 
 Apply `f` to each element of `c` in parallel using available workers and tasks.
 
-For multiple collection arguments, apply f elementwise.
+For multiple collection arguments, apply `f` elementwise.
 
 Results are returned in order as they become available.
 
@@ -36,7 +36,7 @@ pgenerate(f, c1, c...) = pgenerate(a->f(a...), zip(c1, c...))
 Transform collection `c` by applying `f` to each element using available
 workers and tasks.
 
-For multiple collection arguments, apply f elementwise.
+For multiple collection arguments, apply `f` elementwise.
 
 Note that `f` must be made available to all worker processes; see
 [Code Availability and Loading Packages](:ref:`Code Availability
@@ -47,7 +47,8 @@ If a worker pool is not specified, all available workers, i.e., the default work
 is used.
 
 By default, `pmap` distributes the computation over all specified workers. To use only the
-local process and distribute over tasks, specify `distributed=false`. This is equivalent to `asyncmap`.
+local process and distribute over tasks, specify `distributed=false`.
+This is equivalent to [`asyncmap`](:func:`asyncmap`).
 
 `pmap` can also use a mix of processes and tasks via the `batch_size` argument. For batch sizes
 greater than 1, the collection is split into multiple batches, which are distributed across

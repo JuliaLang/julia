@@ -155,7 +155,7 @@ end
 """
     remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
-WorkerPool variant of `remotecall(f, pid, ....)`. Waits for and takes a free worker from `pool` and performs a `remotecall` on it.
+`WorkerPool` variant of `remotecall(f, pid, ....)`. Waits for and takes a free worker from `pool` and performs a `remotecall` on it.
 """
 remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall, f, pool, args...; kwargs...)
 
@@ -163,7 +163,7 @@ remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(re
 """
     remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
-WorkerPool variant of `remotecall_wait(f, pid, ....)`. Waits for and takes a free worker from `pool` and
+`WorkerPool` variant of `remotecall_wait(f, pid, ....)`. Waits for and takes a free worker from `pool` and
 performs a `remotecall_wait` on it.
 """
 remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall_wait, f, pool, args...; kwargs...)
@@ -172,7 +172,7 @@ remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_po
 """
     remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) -> result
 
-WorkerPool variant of `remotecall_fetch(f, pid, ....)`. Waits for and takes a free worker from `pool` and
+`WorkerPool` variant of `remotecall_fetch(f, pid, ....)`. Waits for and takes a free worker from `pool` and
 performs a `remotecall_fetch` on it.
 """
 remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remotecall_fetch, f, pool, args...; kwargs...)
@@ -180,7 +180,7 @@ remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_p
 """
     remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) -> nothing
 
-WorkerPool variant of `remote_do(f, pid, ....)`. Waits for and takes a free worker from `pool` and
+`WorkerPool` variant of `remote_do(f, pid, ....)`. Waits for and takes a free worker from `pool` and
 performs a `remote_do` on it.
 """
 remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remote_do, f, pool, args...; kwargs...)
@@ -190,7 +190,7 @@ const _default_worker_pool = Ref{Nullable}(Nullable{WorkerPool}())
 """
     default_worker_pool()
 
-WorkerPool containing idle `workers()` - used by `remote(f)` and `pmap` (by default).
+`WorkerPool` containing idle `workers()` - used by `remote(f)` and [`pmap`](:func:`pmap`) (by default).
 """
 function default_worker_pool()
     # On workers retrieve the default worker pool from the master when accessed
@@ -209,7 +209,7 @@ end
     remote([::AbstractWorkerPool], f) -> Function
 
 Returns a lambda that executes function `f` on an available worker
-using `remotecall_fetch`.
+using [`remotecall_fetch`](:func:`remotecall_fetch`).
 """
 remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), args...; kwargs...)
 remote(p::AbstractWorkerPool, f) = (args...; kwargs...)->remotecall_fetch(f, p, args...; kwargs...)
@@ -233,12 +233,14 @@ serialize(s::AbstractSerializer, cp::CachingPool) = throw(ErrorException("Cachin
 """
     CachingPool(workers::Vector{Int})
 
-An implementation of an `AbstractWorkerPool`. `remote`, `remotecall_fetch`, `pmap` and other
-remote calls which execute functions remotely, benefit from caching the serialized/deserialized
-functions on the worker nodes, especially for closures which capture large amounts of data.
+An implementation of an `AbstractWorkerPool`.
+[`remote`](:func:`remote`), [`remotecall_fetch`](:func:`remotecall_fetch`),
+[`pmap`](:func:`pmap`) (and other remote calls which execute functions remotely)
+benefit from caching the serialized/deserialized functions on the worker nodes,
+especially closures (which capture large amounts of data).
 
-The remote cache is maintained for the lifetime of the returned `CachingPool` object. To clear the
-cache earlier, use `clear!(pool)`.
+The remote cache is maintained for the lifetime of the returned `CachingPool` object.
+To clear the cache earlier, use `clear!(pool)`.
 
 For global variables, only the bindings are captured in a closure, not the data.
 `let` blocks can be used to capture global data.

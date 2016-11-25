@@ -955,7 +955,7 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Get the IP address and the port that the given ``TCPSocket`` is connected to (or bound to, in the case of ``TCPServer``\ ).
+   Get the IP address and the port that the given :obj:`TCPSocket` is connected to (or bound to, in the case of :obj:`TCPServer`\ ).
 
 .. function:: IPv4(host::Integer) -> IPv4
 
@@ -1042,7 +1042,7 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Read a UDP packet from the specified socket, returning a tuple of (address, data), where address will be either IPv4 or IPv6 as appropriate.
+   Read a UDP packet from the specified socket, returning a tuple of ``(address, data)``\ , where ``address`` will be either IPv4 or IPv6 as appropriate.
 
 .. function:: setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
 

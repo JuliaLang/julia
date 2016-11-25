@@ -6,7 +6,8 @@ abstract AbstractChannel
     Channel{T}(sz::Int)
 
 Constructs a `Channel` with an internal buffer that can hold a maximum of `sz` objects
-of type `T`. `put!` calls on a full channel block until an object is removed with `take!`.
+of type `T`.
+[`put!`](:func:`put!`) calls on a full channel block until an object is removed with [`take!`](:func:`take!`).
 
 `Channel(0)` constructs an unbuffered channel. `put!` blocks until a matching `take!` is called.
 And vice-versa.
@@ -64,8 +65,8 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 Closes a channel. An exception is thrown by:
 
-* `put!` on a closed channel.
-* `take!` and `fetch` on an empty, closed channel.
+* [`put!`](:func:`put!`) on a closed channel.
+* [`take!`](:func:`take!`) and [`fetch`](:func:`fetch`) on an empty, closed channel.
 """
 function close(c::Channel)
     c.state = :closed
@@ -84,7 +85,7 @@ end
 
 Appends an item `v` to the channel `c`. Blocks if the channel is full.
 
-For unbuffered channels, blocks until a `take!` is performed by a different
+For unbuffered channels, blocks until a [`take!`](:func:`take!`) is performed by a different
 task.
 """
 function put!(c::Channel, v)
@@ -130,9 +131,9 @@ fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on
 """
     take!(c::Channel)
 
-Removes and returns a value from a `Channel`. Blocks until data is available.
+Removes and returns a value from a [`Channel`](:obj:`Channel`). Blocks until data is available.
 
-For unbuffered channels, blocks until a `put!` is performed by a different
+For unbuffered channels, blocks until a [`put!`](:func:`put!`) is performed by a different
 task.
 """
 take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
@@ -166,11 +167,11 @@ end
 """
     isready(c::Channel)
 
-Determine whether a `Channel` has a value stored to it. Returns
+Determine whether a [`Channel`](:obj:`Channel`) has a value stored to it. Returns
 immediately, does not block.
 
 For unbuffered channels returns `true` if there are tasks waiting
-on a `put!`.
+on a [`put!`](:func:`put!`).
 """
 isready(c::Channel) = n_avail(c) > 0
 n_avail(c::Channel) = isbuffered(c) ? length(c.data) : n_waiters(c.cond_put)
