@@ -530,7 +530,7 @@ typedef struct {
 
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
-typedef struct {
+struct jl_codectx_t {
     Function *f;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -561,7 +561,7 @@ typedef struct {
     bool is_inbounds{false};
 
     jl_cgparams_t *params;
-} jl_codectx_t;
+};
 
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx);
 
