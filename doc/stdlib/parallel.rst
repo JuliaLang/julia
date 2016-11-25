@@ -160,7 +160,7 @@ Tasks
 =======
    Add a task to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as :func:`wait`\ .
 
-   If a second argument ``val`` is provided, it will be passed to the task (via the return value of :func:`yieldto` when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
+   If a second argument ``val`` is provided, it will be passed to the task (via the return value of :func:`yieldto`\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
 
    .. doctest::
 
