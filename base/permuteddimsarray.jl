@@ -118,7 +118,7 @@ function _copy!{T,N,perm}(P::PermutedDimsArray{T,N,perm}, src)
     return P
 end
 
-@noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianRange{CartesianIndex{0}}, R2, R3, ds, dp)
+@noinline function _permutedims!(P::PermutedDimsArray, src, R1::CartesianRange{0}, R2, R3, ds, dp)
     ip, is = indices(src, dp), indices(src, ds)
     for jo in first(ip):8:last(ip), io in first(is):8:last(is)
         for I3 in R3, I2 in R2
