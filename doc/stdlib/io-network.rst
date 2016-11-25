@@ -780,7 +780,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
 
-   Returns a boolean value indicating whether or not the object ``x`` can be written as the given ``mime`` type. (By default, this is determined automatically by the existence of the corresponding :func:`show` function for ``typeof(x)``\ .)
+   Returns a boolean value indicating whether or not the object ``x`` can be written as the given ``mime`` type. (By default, this is determined automatically by the existence of the corresponding :func:`show` method for ``typeof(x)``\ .)
 
 .. function:: reprmime(mime, x)
 

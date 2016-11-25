@@ -31,7 +31,7 @@ end
 
 Returns a boolean value indicating whether or not the object `x` can be written as the given
 `mime` type. (By default, this is determined automatically by the existence of the
-corresponding [`show`](:func:`show`) function for `typeof(x)`.)
+corresponding [`show`](:func:`show`) method for `typeof(x)`.)
 """
 mimewritable{mime}(::MIME{mime}, x) =
   method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
