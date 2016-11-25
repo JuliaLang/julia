@@ -588,11 +588,11 @@ end
 let
     f18888() = return nothing
     m = first(methods(f18888, Tuple{}))
-    @test m.specializations == nothing
+    @test m.specializations === nothing
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test m.specializations != nothing  # uncached, but creates the specializations entry
+    @test m.specializations !== nothing  # uncached, but creates the specializations entry
     code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
     @test !isdefined(code, :inferred)
 

@@ -95,29 +95,29 @@ end
 
     # SSH URL using scp-like syntax
     m = match(LibGit2.URL_REGEX, "user@server:project.git")
-    @test m[:scheme] == nothing
+    @test m[:scheme] === nothing
     @test m[:user] == "user"
-    @test m[:password] == nothing
+    @test m[:password] === nothing
     @test m[:host] == "server"
-    @test m[:port] == nothing
+    @test m[:port] === nothing
     @test m[:path] == "project.git"
 
     # Realistic example from GitHub using HTTPS
     m = match(LibGit2.URL_REGEX, "https://github.com/JuliaLang/Example.jl.git")
     @test m[:scheme] == "https"
-    @test m[:user] == nothing
-    @test m[:password] == nothing
+    @test m[:user] === nothing
+    @test m[:password] === nothing
     @test m[:host] == "github.com"
-    @test m[:port] == nothing
+    @test m[:port] === nothing
     @test m[:path] == "/JuliaLang/Example.jl.git"
 
     # Realistic example from GitHub using SSH
     m = match(LibGit2.URL_REGEX, "git@github.com:JuliaLang/Example.jl.git")
-    @test m[:scheme] == nothing
+    @test m[:scheme] === nothing
     @test m[:user] == "git"
-    @test m[:password] == nothing
+    @test m[:password] === nothing
     @test m[:host] == "github.com"
-    @test m[:port] == nothing
+    @test m[:port] === nothing
     @test m[:path] == "JuliaLang/Example.jl.git"
 
     # Make sure usernames can contain special characters
