@@ -100,6 +100,14 @@ before_install:
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - git clone -q git://git.kitenet.net/moreutils
 script:
+    - otool -L $(brew --prefix openblas-julia)/lib/libopenblas.dylib
+    - cnt=0;
+      IFS=$'\n' read -rd '' -a blasdeps <<<"$(otool -L $(brew --prefix openblas-julia)/lib/libopenblas.dylib)";
+      for blasdep in $blasdeps; do
+        if [ "$cnt" = 0 ]; then continue; fi;
+        d=${blasdep%% *};
+        if [ ! -e "$d" ]; then echo "libopenblas dependency $d not found"; fi;
+      done;
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
     # capture the log, but only print it if `make deps` fails
