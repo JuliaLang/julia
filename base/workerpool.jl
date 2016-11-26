@@ -20,27 +20,28 @@ type WorkerPool <: AbstractWorkerPool
     workers::Set{Int}
     ref::RemoteChannel
 
-    function WorkerPool()
-        wp = WorkerPool(Channel{Int}(typemax(Int)), RemoteChannel())
-        put!(wp.ref, wp)
-        wp
-    end
-
-    """
-        WorkerPool(workers)
-
-    Create a WorkerPool from a vector of worker ids.
-    """
-    function WorkerPool(workers::Vector{Int})
-        pool = WorkerPool()
-        foreach(w->push!(pool, w), workers)
-        return pool
-    end
-
-    # On workers where this pool has been serialized to, instantiate with a dummy local channel.
-    WorkerPool(ref::RemoteChannel) = WorkerPool(Channel{Int}(1), ref)
     WorkerPool(c::Channel, ref::RemoteChannel) = new(c, Set{Int}(), ref)
 end
+
+function WorkerPool()
+    wp = WorkerPool(Channel{Int}(typemax(Int)), RemoteChannel())
+    put!(wp.ref, wp)
+    wp
+end
+
+"""
+    WorkerPool(workers::Vector{Int})
+
+Create a WorkerPool from a vector of worker ids.
+"""
+function WorkerPool(workers::Vector{Int})
+    pool = WorkerPool()
+    foreach(w->push!(pool, w), workers)
+    return pool
+end
+
+# On workers where this pool has been serialized to, instantiate with a dummy local channel.
+WorkerPool(ref::RemoteChannel) = WorkerPool(Channel{Int}(1), ref)
 
 function Base.serialize(S::AbstractSerializer, pool::WorkerPool)
     # Allow accessing a worker pool from other processors. When serialized,
