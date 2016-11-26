@@ -163,7 +163,7 @@ log{T<:Number}(b::T, x::T) = log(x)/log(b)
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
+Compute the base `b` logarithm of `x`. Throws [`DomainError`](:obj:`DomainError`) for negative `Real` arguments.
 
 ```jldoctest
 julia> log(4,8)
@@ -174,7 +174,7 @@ julia> log(4,2)
 ```
 
 !!! note
-    If `b` is a power of 2 or 10, `log2` or `log10` should be used, as these will
+    If `b` is a power of 2 or 10, [`log2`](:func:`log2`) or [`log10`](:func:`log10`) should be used, as these will
     typically be faster and more accurate. For example,
 
     ```jldoctest
@@ -272,7 +272,7 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws `DomainError` for negative `Real` arguments. Use complex
+Return ``\\sqrt{x}``. Throws [`DomainError`](:obj:`DomainError`) for negative `Real` arguments. Use complex
 negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt(x::Real) = sqrt(float(x))
