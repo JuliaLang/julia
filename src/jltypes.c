@@ -68,7 +68,7 @@ JL_DLLEXPORT jl_value_t *jl_emptytuple=NULL;
 jl_svec_t *jl_emptysvec;
 jl_value_t *jl_nothing;
 
-jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 1, 1, 1};
+const jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 1, 1, 1};
 
 // --- type properties and predicates ---
 
