@@ -163,10 +163,10 @@ function tril!(M::AbstractMatrix, k::Integer)
 end
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
-function gradient(F::Vector, h::Vector)
+function gradient(F::AbstractVector, h::Vector)
     n = length(F)
     T = typeof(one(eltype(F))/one(eltype(h)))
-    g = Array{T}(n)
+    g = similar(F, T)
     if n == 1
         g[1] = zero(T)
     elseif n > 1
@@ -309,9 +309,9 @@ kron(a::AbstractVector, b::AbstractVector)=vec(kron(reshape(a,length(a),1),resha
 kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
 kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
 
-^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
+^(A::AbstractMatrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
-function ^(A::Matrix, p::Number)
+function ^(A::AbstractMatrix, p::Number)
     if isinteger(p)
         return A^Integer(real(p))
     end
