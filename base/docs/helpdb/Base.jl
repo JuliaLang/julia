@@ -1167,7 +1167,7 @@ prod(A, dims)
 """
     log1p(x)
 
-Accurate natural logarithm of `1+x`. Throws `DomainError` for `Real` arguments less than -1.
+Accurate natural logarithm of `1+x`. Throws [`DomainError`](:obj:`DomainError`) for `Real` arguments less than -1.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
@@ -1274,7 +1274,7 @@ typeof
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
+Compute the natural logarithm of `x`. Throws [`DomainError`](:obj:`DomainError`) for negative `Real` arguments.
 Use complex negative arguments to obtain complex results.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
@@ -1402,7 +1402,7 @@ next
 """
     log2(x)
 
-Compute the logarithm of `x` to base 2. Throws `DomainError` for negative `Real` arguments.
+Compute the logarithm of `x` to base 2. Throws [`DomainError`](:obj:`DomainError`) for negative `Real` arguments.
 
 ```jldoctest
 julia> log2(4)
@@ -3336,5 +3336,13 @@ dawson
     ⊻(x, y)
 
 Bitwise exclusive or.
+
+```jldoctest
+julia> [true; true; false] ⊻ [true; false; false]
+3-element Array{Bool,1}:
+ false
+  true
+ false
+```
 """
 Base.xor(x, y)
