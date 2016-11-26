@@ -765,13 +765,6 @@ Sum elements of `A` over the singleton dimensions of `r`, and write results to `
 sum!
 
 """
-    parentindexes(A)
-
-From an array view `A`, returns the corresponding indexes in the parent.
-"""
-parentindexes
-
-"""
     display(x)
     display(d::Display, x)
     display(mime, x)
@@ -852,16 +845,6 @@ julia> num2hex(2.2)
 num2hex
 
 """
-    displayable(mime) -> Bool
-    displayable(d::Display, mime) -> Bool
-
-Returns a boolean value indicating whether the given `mime` type (string) is displayable by
-any of the displays in the current display stack, or specifically by the display `d` in the
-second variant.
-"""
-displayable
-
-"""
     truncate(file,n)
 
 Resize the file or buffer given by the first argument to exactly `n` bytes, filling
@@ -923,24 +906,6 @@ uninitialized client stream may be provided, in which case it will be used inste
 creating a new stream.
 """
 accept
-
-"""
-    readstring(stream::IO)
-    readstring(filename::AbstractString)
-
-Read the entire contents of an I/O stream or a file as a string.
-The text is assumed to be encoded in UTF-8.
-"""
-readstring
-
-"""
-    eachline(stream::IO)
-    eachline(filename::AbstractString)
-
-Create an iterable object that will yield each line from an I/O stream or a file.
-The text is assumed to be encoded in UTF-8.
-"""
-eachline
 
 """
     Mmap.Anonymous(name, readonly, create)
@@ -1705,16 +1670,6 @@ julia> minimum(A, 2)
 minimum(A,dims)
 
 """
-    view(A, inds...)
-
-Like [`getindex`](:func:`getindex`), but returns a view into the parent array `A` with the
-given indices instead of making a copy.  Calling [`getindex`](:func:`getindex`) or
-[`setindex!`](:func:`setindex!`) on the returned [`SubArray`](:obj:`SubArray`) computes the
-indices to the parent array on the fly without checking bounds.
-"""
-view
-
-"""
     cot(x)
 
 Compute the cotangent of `x`, where `x` is in radians.
@@ -2359,15 +2314,6 @@ Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` c
 setfield!
 
 """
-    countlines(io,[eol::Char])
-
-Read `io` until the end of the stream/file and count the number of lines. To specify a file
-pass the filename as the first argument. EOL markers other than '\\n' are supported by
-passing them as the second argument.
-"""
-countlines
-
-"""
     .\\(x, y)
 
 Element-wise left division operator.
@@ -2428,15 +2374,6 @@ Base.:(*)(x, y...)
 Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 """
 time()
-
-"""
-    TextDisplay(stream)
-
-Returns a `TextDisplay <: Display`, which can display any object as the text/plain MIME type
-(only), writing the text representation to the given I/O stream. (The text representation is
-the same as the way an object is printed in the Julia REPL.)
-"""
-TextDisplay
 
 """
     ismatch(r::Regex, s::AbstractString) -> Bool
@@ -2675,15 +2612,6 @@ sumabs2(A,dims)
 Similar to [`show`](:func:`show`), except shows all elements of arrays.
 """
 showall
-
-"""
-    mimewritable(mime, x)
-
-Returns a boolean value indicating whether or not the object `x` can be written as the given
-`mime` type. (By default, this is determined automatically by the existence of the
-corresponding [`show`](:func:`show`) function for `typeof(x)`.)
-"""
-mimewritable
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
