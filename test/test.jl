@@ -390,3 +390,8 @@ end
 @test @inferred(inferrable_kwtest(1; y=1)) == 2
 @test @inferred(uninferrable_kwtest(1)) == 3
 @test_throws ErrorException @inferred(uninferrable_kwtest(1; y=2)) == 2
+
+@test_throws ErrorException @testset "$(error())" for i in 1:10
+end
+@test_throws ErrorException @testset "$(error())" begin
+end
