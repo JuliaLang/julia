@@ -1220,7 +1220,24 @@ Errors
 
    .. Docstring generated from Julia source
 
-   Get the backtrace of the current exception, for use within ``catch`` blocks.
+   Get the backtrace of the current exception, for use within ``catch`` blocks. The backtrace is represented as an ``Array{Ptr{Void}}`` of addresses, so :func:`showerror` may be helpful for displaying the backtrace in a human-readable format.
+
+   **Example**
+
+   .. doctest::
+
+       julia> f(x) = try
+                  sqrt(x)
+              catch y
+                  bt = catch_backtrace()
+                  showerror(STDOUT, y, bt)
+              end;
+
+       julia> f(-1)
+       DomainError:
+        in f(::Int64) at ./REPL[24]:2
+        in eval(::Module, ::Any) at ./boot.jl:236
+        ...
 
 .. function:: assert(cond)
 

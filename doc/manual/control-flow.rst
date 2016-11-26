@@ -807,7 +807,7 @@ execution:
 
     julia> error("Hi"); 1+1
     ERROR: Hi
-     in error(::String) at ./error.jl:21
+     in error(::String) at ./error.jl:26
      ...
 
 
