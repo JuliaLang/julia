@@ -1503,7 +1503,7 @@ Array functions
 
    .. Docstring generated from Julia source
 
-   Cumulative operation ``op`` along a dimension ``dim`` (defaults to 1). See also :func:`accumulate!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow). For common operations there are specialized variants of accumulate, see: :func:`cumsum`\ , :func:`cumprod`
+   Cumulative operation ``op`` along a dimension ``dim`` (defaults to 1). See also :func:`accumulate!` to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow). For common operations there are specialized variants of ``accumulate``\ , see: :func:`cumsum`\ , :func:`cumprod`
 
    .. doctest::
 

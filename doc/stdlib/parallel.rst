@@ -438,7 +438,7 @@ General Parallel Computing Support
        @async put!(c, remotecall_fetch(long_computation, p))
        isready(c)  # will not block
 
-.. function:: WorkerPool(workers)
+.. function:: WorkerPool(workers::Vector{Int})
 
    .. Docstring generated from Julia source
 
@@ -470,7 +470,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   WorkerPool containing idle ``workers()`` (used by ``remote(f)``\ ).
+   WorkerPool containing idle ``workers()`` - used by ``remote(f)`` and ``pmap`` (by default).
 
 .. function:: remote([::AbstractWorkerPool], f) -> Function
 
