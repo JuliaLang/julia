@@ -21,19 +21,7 @@ Tasks
 
    In this example, ``b`` is a runnable ``Task`` that hasn't started yet.
 
-<<<<<<< HEAD
 .. function:: yieldto(t::Task, arg = nothing)
-=======
-   .. doctest::
-
-       julia> a() = det(rand(1000, 1000));
-
-       julia> b = Task(a);
-
-   In this example, ``b`` is a runnable ``Task`` that hasn't started yet.
-
-.. function:: yieldto(task, arg = nothing)
->>>>>>> Update docstrings and add doctests for task-related functions
 
    .. Docstring generated from Julia source
 
@@ -61,6 +49,8 @@ Tasks
        false
 
        julia> schedule(b);
+
+       julia> yield();
 
        julia> istaskdone(b)
        true
@@ -147,38 +137,13 @@ Tasks
 
        julia> schedule(b);
 
-       julia> istaskstarted(b)
-       true
-
-       julia> istaskdone(b)
-       true
-
-<<<<<<< HEAD
-   Add a :obj:`Task` to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as :func:`wait`\ .
-
-   If a second argument ``val`` is provided, it will be passed to the task (via the return value of :func:`yieldto`\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
-=======
-   Add a task to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as :func:`wait`\ .
-
-   If a second argument ``val`` is provided, it will be passed to the task (via the return value of :func:`yieldto`\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
-
-   .. doctest::
-
-       julia> a5() = det(rand(1000, 1000));
-
-       julia> b = Task(a5);
-
-       julia> istaskstarted(b)
-       false
-
-       julia> schedule(b);
+       julia> yield();
 
        julia> istaskstarted(b)
        true
 
        julia> istaskdone(b)
        true
->>>>>>> Update docstrings and add doctests for task-related functions
 
 .. function:: @schedule
 
@@ -202,6 +167,8 @@ Tasks
        false
 
        julia> schedule(b);
+
+       julia> yield();
 
        julia> istaskdone(b)
        true

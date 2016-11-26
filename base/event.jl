@@ -101,6 +101,8 @@ false
 
 julia> schedule(b);
 
+julia> yield();
+
 julia> istaskstarted(b)
 true
 

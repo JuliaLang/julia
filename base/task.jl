@@ -66,6 +66,8 @@ false
 
 julia> schedule(b);
 
+julia> yield();
+
 julia> istaskdone(b)
 true
 ```
@@ -95,6 +97,8 @@ julia> istaskdone(b)
 false
 
 julia> schedule(b);
+
+julia> yield();
 
 julia> istaskdone(b)
 true
