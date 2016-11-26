@@ -420,9 +420,9 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   IOContext provides a mechanism for passing output configuration settings among ``show`` methods.
+   ``IOContext`` provides a mechanism for passing output configuration settings among :func:`show` methods.
 
-   In short, it is an immutable dictionary that is a subclass of ``IO``\ . It supports standard dictionary operations such as ``getindex``\ , and can also be used as an I/O stream.
+   In short, it is an immutable dictionary that is a subclass of :obj:`IO`\ . It supports standard dictionary operations such as :func:`getindex`\ , and can also be used as an I/O stream.
 
 .. function:: IOContext(io::IO, KV::Pair)
 
@@ -443,7 +443,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Create an ``IOContext`` that wraps an alternate ``IO`` but inherits the properties of ``context``\ .
+   Create an ``IOContext`` that wraps an alternate :func:`IO` but inherits the properties of ``context``\ .
 
 .. function:: IOContext(io::IO; properties...)
 
@@ -483,6 +483,14 @@ Text I/O
    Return a string giving a brief description of a value. By default returns ``string(typeof(x))``\ , e.g. ``Int64``\ .
 
    For arrays, returns a string of size and type info, e.g. ``10-element Array{Int64,1}``\ .
+
+   .. doctest::
+
+       julia> summary(1)
+       "Int64"
+
+       julia> summary(zeros(2))
+       "2-element Array{Float64,1}"
 
 .. function:: print(io::IO, x)
 
@@ -673,7 +681,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``readdlm`` with ``delim`` set to comma, and type optionally defined by ``T``\ .
+   Equivalent to :func:`readdlm` with ``delim`` set to comma, and type optionally defined by ``T``\ .
 
 .. function:: writecsv(filename, A; opts)
 
@@ -685,7 +693,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Returns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ``ostream``\ . Calling ``close`` on the ``Base64EncodePipe`` stream is necessary to complete the encoding (but does not close ``ostream``\ ).
+   Returns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ``ostream``\ . Calling :func:`close` on the ``Base64EncodePipe`` stream is necessary to complete the encoding (but does not close ``ostream``\ ).
 
 .. function:: Base64DecodePipe(istream)
 
@@ -698,7 +706,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Given a ``write``\ -like function ``writefunc``\ , which takes an I/O stream as its first argument, ``base64encode(writefunc, args...)`` calls ``writefunc`` to write ``args...`` to a base64-encoded string, and returns the string. ``base64encode(args...)`` is equivalent to ``base64encode(write, args...)``\ : it converts its arguments into bytes using the standard ``write`` functions and returns the base64-encoded string.
+   Given a :func:`write`\ -like function ``writefunc``\ , which takes an I/O stream as its first argument, ``base64encode(writefunc, args...)`` calls ``writefunc`` to write ``args...`` to a base64-encoded string, and returns the string. ``base64encode(args...)`` is equivalent to ``base64encode(write, args...)``\ : it converts its arguments into bytes using the standard :func:`write` functions and returns the base64-encoded string.
 
 .. function:: base64decode(string)
 
