@@ -850,14 +850,14 @@ stack with:
 Memory-mapped I/O
 -----------------
 
-.. function:: Mmap.Anonymous(name, readonly, create)
+.. function:: Mmap.Anonymous(name::AbstractString="", readonly::Bool=false, create::Bool=true)
 
    .. Docstring generated from Julia source
 
-   Create an ``IO``\ -like object for creating zeroed-out mmapped-memory that is not tied to a file for use in ``Mmap.mmap``\ . Used by ``SharedArray`` for creating shared memory arrays.
+   Create an ``IO``\ -like object for creating zeroed-out mmapped-memory that is not tied to a file for use in :func:`mmap`\ . Used by :obj:`SharedArray` for creating shared memory arrays.
 
-.. function:: Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-                     Mmap.mmap(type::Type{Array{T,N}}, dims)
+.. function:: Mmap.mmap(io::IO, type::Type{Array{T,N}}=Vector{UInt8}, dims::NTuple{N,Integer}, offset::Integer=position(io); grow::Bool=true, shared::Bool=true)
+              Mmap.mmap(type::Type{Array{T,N}}, dims)
 
    .. Docstring generated from Julia source
 
@@ -902,7 +902,7 @@ Memory-mapped I/O
 
    A more portable file would need to encode the word size – 32 bit or 64 bit – and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 
-.. function:: Mmap.mmap(io, BitArray, [dims, offset])
+.. function:: Mmap.mmap(io::IOStream, BitArray, dims::NTuple{N,Integer}, offset::Int64=position(io); grow::Bool=true, shared::Bool=true)
 
    .. Docstring generated from Julia source
 
@@ -912,11 +912,15 @@ Memory-mapped I/O
 
    This would create a 25-by-30000 ``BitArray``\ , linked to the file associated with stream ``s``\ .
 
-.. function:: Mmap.sync!(array)
+.. function:: Mmap.sync!(m::Array, flags::Integer=MS_SYNC)
 
    .. Docstring generated from Julia source
 
-   Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version.
+   Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version. The optional ``flags`` argument is used on UNIX to control the behavior of ``msync``\ . There are three options:
+
+   * ``MS_ASYNC`` causes the update to the file to be scheduled, but the call will return immediately.
+   * ``MS_INVALIDATE`` asks the update to invalidate any other copies of the file.
+   * ``MS_SYNC`` (default) requests the update to the file be made and waits for it to complete.
 
 Network I/O
 -----------
