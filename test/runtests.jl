@@ -849,7 +849,7 @@ mktempdir() do dir
         verbose && println("$name write(::IOBuffer, ...)")
         @compat to = IOBuffer(UInt8[convert(UInt8, _) for _ in text], false, true)
         write(to, io())
-        @test takebuf_string(to) == text
+        @test String(take!(to)) == text
 
         cleanup()
     end
@@ -1106,7 +1106,7 @@ end
 
 for (Fun, func) in [(:AndFun,              :&),
                     (:OrFun,               :|),
-                    (:XorFun,              :$),
+                    (:XorFun,              :⊻),
                     (:AddFun,              :+),
                     (:DotAddFun,           :.+),
                     (:SubFun,              :-),
@@ -1250,7 +1250,7 @@ end
 
 let io = IOBuffer(), s = "hello"
     unsafe_write(io, pointer(s), length(s))
-    @test takebuf_string(io) == s
+    @test String(take!(io)) == s
 end
 
 @static if VERSION ≥ v"0.4"
@@ -1512,3 +1512,15 @@ end
 
 @test xor(1,5) == 4
 @test 1 ⊻ 5 == 4
+
+# julia#19246
+@test numerator(1//2) === 1
+@test denominator(1//2) === 2
+
+# julia#19088
+let io = IOBuffer()
+    write(io, "aaa")
+    @test take!(io) == UInt8['a', 'a', 'a']
+    write(io, "bbb")
+    @test String(take!(io)) == "bbb"
+end

@@ -1686,4 +1686,16 @@ if !isdefined(Base, :xor)
     export xor, ⊻
 end
 
+# julia#19246
+if !isdefined(Base, :numerator)
+    const numerator = num
+    const denominator = den
+    export numerator, denominator
+end
+
+# julia#19088
+if VERSION < v"0.6.0-dev.1256"
+    Base.take!(io::Base.AbstractIOBuffer) = takebuf_array(io)
+end
+
 end # module

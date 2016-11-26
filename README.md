@@ -126,6 +126,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `$` is now `xor` or `⊻` [#18977](https://github.com/JuliaLang/julia/pull/18977).
 
+* `num` and `den` are now `numerator` and `denominator` [#19246](https://github.com/JuliaLang/julia/pull/19246).
+
+* `takebuf_array` is now a method of `take!`. `takebuf_string(io)` becomes `String(take!(io))` [#19088](https://github.com/JuliaLang/julia/pull/19088).
+
 ## New macros
 
 * `@static` has been added [#16219](https://github.com/JuliaLang/julia/pull/16219).
