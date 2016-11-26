@@ -156,7 +156,6 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
-readstring(filename::AbstractString) = open(readstring, filename)
 
 """
     readuntil(stream::IO, delim)
@@ -499,7 +498,15 @@ function read(s::IO, nb=typemax(Int))
     return resize!(b, nr)
 end
 
+"""
+    readstring(stream::IO)
+    readstring(filename::AbstractString)
+
+Read the entire contents of an I/O stream or a file as a string.
+The text is assumed to be encoded in UTF-8.
+"""
 readstring(s::IO) = String(read(s))
+readstring(filename::AbstractString) = open(readstring, filename)
 
 ## high-level iterator interfaces ##
 
@@ -509,6 +516,14 @@ type EachLine
     EachLine(stream) = EachLine(stream, ()->nothing)
     EachLine(stream, ondone) = new(stream, ondone)
 end
+
+"""
+    eachline(stream::IO)
+    eachline(filename::AbstractString)
+
+Create an iterable object that will yield each line from an I/O stream or a file.
+The text is assumed to be encoded in UTF-8.
+"""
 eachline(stream::IO) = EachLine(stream)
 function eachline(filename::AbstractString)
     s = open(filename)
