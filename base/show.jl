@@ -5,10 +5,10 @@ print(io::IO, s::Symbol) = (write(io,s); nothing)
 """
     IOContext
 
-IOContext provides a mechanism for passing output configuration settings among `show` methods.
+`IOContext` provides a mechanism for passing output configuration settings among [`show`](:func:`show`) methods.
 
-In short, it is an immutable dictionary that is a subclass of `IO`. It supports standard
-dictionary operations such as `getindex`, and can also be used as an I/O stream.
+In short, it is an immutable dictionary that is a subclass of [`IO`](:obj:`IO`). It supports standard
+dictionary operations such as [`getindex`](:func:`getindex`), and can also be used as an I/O stream.
 """
 immutable IOContext{IO_t <: IO} <: AbstractPipe
     io::IO_t
@@ -43,7 +43,7 @@ IOContext(io::IO, context::IO) = IOContext(io)
 """
     IOContext(io::IO, context::IOContext)
 
-Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
+Create an `IOContext` that wraps an alternate [`IO`](:func:`IO`) but inherits the properties of `context`.
 """
 IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
 
@@ -1504,6 +1504,14 @@ Return a string giving a brief description of a value. By default returns
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.
+
+```jldoctest
+julia> summary(1)
+"Int64"
+
+julia> summary(zeros(2))
+"2-element Array{Float64,1}"
+```
 """
 summary(x) = string(typeof(x)) # e.g. Int64
 
