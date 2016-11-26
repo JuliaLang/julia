@@ -13,13 +13,14 @@ symbol      meaning
 ``#``       begin single line comment
 ``#=``      begin multi-line comment (these are nestable)
 ``=#``      end multi-line comment
-``$``       bitwise xor operator, string and expression interpolation
+``$``       string and expression interpolation
 ``%``       remainder operator
 ``^``       exponent operator
 ``&``       bitwise and
 ``&&``      short-circuiting boolean and
 ``|``       bitwise or
 ``||``      short-circuiting boolean or
+``⊻``       bitwise xor operator
 ``*``       multiply, or matrix multiply
 ``()``      the empty tuple
 ``~``       bitwise not operator
