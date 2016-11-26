@@ -1687,3 +1687,7 @@ let
         end
     end
 end
+
+# Check that `broadcast` methods specialized for unary operations over
+# `SparseMatrixCSC`s determine a reasonable return type. (Issue #18974.)
+@test eltype(sin.(spdiagm(Int64(1):Int64(4)))) == Float64
