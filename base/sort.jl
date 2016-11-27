@@ -168,18 +168,24 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
-    if step(a) == 0
-        lt(o, first(a), x) ? length(a) + 1 : 1
+    if lt(o, first(a), x)
+        if step(a) == 0
+            length(a) + 1
+        else
+            min(cld(x - first(a), step(a)), length(a)) + 1
+        end
     else
-        clamp(-fld(first(a) - signed(x), step(a)) + 1, 1, length(a) + 1)
+        1
     end
 end
 
 function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
-    if step(a) == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+    if lt(o, x, first(a))
+        0
+    elseif step(a) == 0
+        length(a)
     else
-        clamp( fld(signed(x) - first(a), step(a)) + 1, 0, length(a))
+        min(fld(x - first(a), step(a)) + 1, length(a))
     end
 end
 
