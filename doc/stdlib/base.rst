@@ -1406,19 +1406,19 @@ Events
 
    .. Docstring generated from Julia source
 
-   Create a timer to call the given ``callback`` function. The ``callback`` is passed one argument, the timer object itself. The callback will be invoked after the specified initial ``delay``\ , and then repeating with the given ``repeat`` interval. If ``repeat`` is ``0``\ , the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling ``close`` on it.
+   Create a timer to call the given ``callback`` function. The ``callback`` is passed one argument, the timer object itself. The callback will be invoked after the specified initial ``delay``\ , and then repeating with the given ``repeat`` interval. If ``repeat`` is ``0``\ , the timer is only triggered once. Times are in seconds. A timer is stopped and has its resources freed by calling :func:`close` on it.
 
 .. function:: Timer(delay, repeat=0)
 
    .. Docstring generated from Julia source
 
-   Create a timer that wakes up tasks waiting for it (by calling ``wait`` on the timer object) at a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the timer is closed (by ``close``\ ). Use ``isopen`` to check whether a timer is still active.
+   Create a timer that wakes up tasks waiting for it (by calling :func:`wait` on the timer object) at a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the timer is closed (by :func:`close`\ . Use :func:`isopen` to check whether a timer is still active.
 
 .. function:: AsyncCondition()
 
    .. Docstring generated from Julia source
 
-   Create a async condition that wakes up tasks waiting for it (by calling ``wait`` on the object) when notified from C by a call to uv_async_send. Waiting tasks are woken with an error when the object is closed (by ``close``\ ). Use ``isopen`` to check whether it is still active.
+   Create a async condition that wakes up tasks waiting for it (by calling :func:`wait` on the object) when notified from C by a call to ``uv_async_send``\ . Waiting tasks are woken with an error when the object is closed (by :func:`close`\ . Use :func:`isopen` to check whether it is still active.
 
 .. function:: AsyncCondition(callback::Function)
 
