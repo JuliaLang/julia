@@ -481,8 +481,8 @@ end
 """
     recvfrom(socket::UDPSocket) -> (address, data)
 
-Read a UDP packet from the specified socket, returning a tuple of (address, data), where
-address will be either IPv4 or IPv6 as appropriate.
+Read a UDP packet from the specified socket, returning a tuple of `(address, data)`, where
+`address` will be either IPv4 or IPv6 as appropriate.
 """
 function recvfrom(sock::UDPSocket)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
@@ -832,8 +832,8 @@ listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
 
-Get the IP address and the port that the given `TCPSocket` is connected to
-(or bound to, in the case of `TCPServer`).
+Get the IP address and the port that the given [`TCPSocket`](:obj:`TCPSocket`) is connected to
+(or bound to, in the case of [`TCPServer`](:obj:`TCPServer`)).
 """
 function getsockname(sock::Union{TCPServer,TCPSocket})
     rport = Ref{Cushort}(0)

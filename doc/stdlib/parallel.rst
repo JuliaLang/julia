@@ -13,7 +13,7 @@ Tasks
 
    Create a ``Task`` (i.e. coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.
 
-.. function:: yieldto(task, arg = nothing)
+.. function:: yieldto(t::Task, arg = nothing)
 
    .. Docstring generated from Julia source
 
@@ -77,7 +77,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Create an edge-triggered event source that tasks can wait for. Tasks that call ``wait`` on a ``Condition`` are suspended and queued. Tasks are woken up when ``notify`` is later called on the ``Condition``\ . Edge triggering means that only tasks waiting at the time ``notify`` is called can be woken up. For level-triggered notifications, you must keep extra state to keep track of whether a notification has happened. The :class:`Channel` type does this, and so can be used for level-triggered events.
+   Create an edge-triggered event source that tasks can wait for. Tasks that call :func:`wait` on a ``Condition`` are suspended and queued. Tasks are woken up when :func:`notify` is later called on the ``Condition``\ . Edge triggering means that only tasks waiting at the time :func:`notify` is called can be woken up. For level-triggered notifications, you must keep extra state to keep track of whether a notification has happened. The :class:`Channel` type does this, and so can be used for level-triggered events.
 
 .. function:: notify(condition, val=nothing; all=true, error=false)
 
@@ -89,15 +89,15 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Add a task to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as ``wait``\ .
+   Add a :obj:`Task` to the scheduler's queue. This causes the task to run constantly when the system is otherwise idle, unless the task performs a blocking operation such as :func:`wait`\ .
 
-   If a second argument ``val`` is provided, it will be passed to the task (via the return value of ``yieldto``\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
+   If a second argument ``val`` is provided, it will be passed to the task (via the return value of :func:`yieldto`\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
 
 .. function:: @schedule
 
    .. Docstring generated from Julia source
 
-   Wrap an expression in a ``Task`` and add it to the local machine's scheduler queue.
+   Wrap an expression in a :obj:`Task` and add it to the local machine's scheduler queue.
 
 .. function:: @task
 
@@ -115,7 +115,7 @@ Tasks
 
    .. Docstring generated from Julia source
 
-   Constructs a ``Channel`` with an internal buffer that can hold a maximum of ``sz`` objects of type ``T``\ . ``put!`` calls on a full channel block until an object is removed with ``take!``\ .
+   Constructs a ``Channel`` with an internal buffer that can hold a maximum of ``sz`` objects of type ``T``\ . :func:`put!` calls on a full channel block until an object is removed with :func:`take!`\ .
 
    ``Channel(0)`` constructs an unbuffered channel. ``put!`` blocks until a matching ``take!`` is called. And vice-versa.
 
@@ -130,23 +130,23 @@ Tasks
 
    Appends an item ``v`` to the channel ``c``\ . Blocks if the channel is full.
 
-   For unbuffered channels, blocks until a ``take!`` is performed by a different task.
+   For unbuffered channels, blocks until a :func:`take!` is performed by a different task.
 
 .. function:: take!(c::Channel)
 
    .. Docstring generated from Julia source
 
-   Removes and returns a value from a ``Channel``\ . Blocks until data is available.
+   Removes and returns a value from a :obj:`Channel`\ . Blocks until data is available.
 
-   For unbuffered channels, blocks until a ``put!`` is performed by a different task.
+   For unbuffered channels, blocks until a :func:`put!` is performed by a different task.
 
 .. function:: isready(c::Channel)
 
    .. Docstring generated from Julia source
 
-   Determine whether a ``Channel`` has a value stored to it. Returns immediately, does not block.
+   Determine whether a :obj:`Channel` has a value stored to it. Returns immediately, does not block.
 
-   For unbuffered channels returns ``true`` if there are tasks waiting on a ``put!``\ .
+   For unbuffered channels returns ``true`` if there are tasks waiting on a :func:`put!`\ .
 
 .. function:: fetch(c::Channel)
 
@@ -160,8 +160,8 @@ Tasks
 
    Closes a channel. An exception is thrown by:
 
-   * ``put!`` on a closed channel.
-   * ``take!`` and ``fetch`` on an empty, closed channel.
+   * :func:`put!` on a closed channel.
+   * :func:`take!` and :func:`fetch` on an empty, closed channel.
 
 General Parallel Computing Support
 ----------------------------------
@@ -219,7 +219,7 @@ General Parallel Computing Support
 
    Launches worker processes via the specified cluster manager.
 
-   For example Beowulf clusters are  supported via a custom cluster manager implemented in the package ``ClusterManagers.jl``\ .
+   For example, Beowulf clusters are supported via a custom cluster manager implemented in the package ``ClusterManagers.jl``\ .
 
    The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 
@@ -283,7 +283,7 @@ General Parallel Computing Support
 
    Transform collection ``c`` by applying ``@async f`` to each element.
 
-   For multiple collection arguments, apply f elementwise.
+   For multiple collection arguments, apply ``f`` elementwise.
 
 .. function:: pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_n=0, retry_max_delay=DEFAULT_RETRY_MAX_DELAY, retry_on=DEFAULT_RETRY_ON) -> collection
 
@@ -291,13 +291,13 @@ General Parallel Computing Support
 
    Transform collection ``c`` by applying ``f`` to each element using available workers and tasks.
 
-   For multiple collection arguments, apply f elementwise.
+   For multiple collection arguments, apply ``f`` elementwise.
 
    Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.
 
    If a worker pool is not specified, all available workers, i.e., the default worker pool is used.
 
-   By default, ``pmap`` distributes the computation over all specified workers. To use only the local process and distribute over tasks, specify ``distributed=false``\ . This is equivalent to ``asyncmap``\ .
+   By default, ``pmap`` distributes the computation over all specified workers. To use only the local process and distribute over tasks, specify ``distributed=false``\ . This is equivalent to :func:`asyncmap`\ .
 
    ``pmap`` can also use a mix of processes and tasks via the ``batch_size`` argument. For batch sizes greater than 1, the collection is split into multiple batches, which are distributed across workers. Each such batch is processed in parallel via tasks in each worker. The specified ``batch_size`` is an upper limit, the actual size of batches may be smaller and is calculated depending on the number of workers available and length of the collection.
 
@@ -315,7 +315,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Exceptions  on remote computations are captured and rethrown locally.  A ``RemoteException`` wraps the pid of the worker and a captured exception. A ``CapturedException`` captures the remote exception and a serializable form of the call stack when the exception was raised.
+   Exceptions on remote computations are captured and rethrown locally.  A ``RemoteException`` wraps the ``pid`` of the worker and a captured exception. A ``CapturedException`` captures the remote exception and a serializable form of the call stack when the exception was raised.
 
 .. function:: Future(pid::Integer=myid())
 
@@ -363,8 +363,8 @@ General Parallel Computing Support
 
    Waits and fetches a value from ``x`` depending on the type of ``x``\ :
 
-   * ``Future``\ : Wait for and get the value of a Future. The fetched value is cached locally. Further calls to ``fetch`` on the same reference return the cached value. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
-   * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are same as for a ``Future`` .
+   * :obj:`Future`\ : Wait for and get the value of a ``Future``\ . The fetched value is cached locally. Further calls to ``fetch`` on the same reference return the cached value. If the remote value is an exception, throws a :obj:`RemoteException` which captures the remote exception and backtrace.
+   * :obj:`RemoteChannel`\ : Wait for and get the value of a remote reference. Exceptions raised are same as for a ``Future`` .
 
    Does not remove the item fetched.
 
@@ -372,7 +372,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Call a function ``f`` asynchronously on the given arguments on the specified process. Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``f``\ .
+   Call a function ``f`` asynchronously on the given arguments on the specified process. Returns a :obj:`Future`\ . Keyword arguments, if any, are passed through to ``f``\ .
 
 .. function:: remotecall_wait(f, id::Integer, args...; kwargs...)
 
@@ -380,23 +380,27 @@ General Parallel Computing Support
 
    Perform a faster ``wait(remotecall(...))`` in one message on the ``Worker`` specified by worker id ``id``\ . Keyword arguments, if any, are passed through to ``f``\ .
 
+   See also :func:`wait` and :func:`remotecall`\ .
+
 .. function:: remotecall_fetch(f, id::Integer, args...; kwargs...)
 
    .. Docstring generated from Julia source
 
-   Perform ``fetch(remotecall(...))`` in one message. Keyword arguments, if any, are passed through to ``f``\ . Any remote exceptions are captured in a ``RemoteException`` and thrown.
+   Perform ``fetch(remotecall(...))`` in one message. Keyword arguments, if any, are passed through to ``f``\ . Any remote exceptions are captured in a :obj:`RemoteException` and thrown.
+
+   See also :func:`fetch` and :func:`remotecall`\ .
 
 .. function:: remote_do(f, id::Integer, args...; kwargs...) -> nothing
 
    .. Docstring generated from Julia source
 
-   Executes ``f`` on worker ``id`` asynchronously. Unlike ``remotecall``\ , it does not store the result of computation, nor is there a way to wait for its completion.
+   Executes ``f`` on worker ``id`` asynchronously. Unlike :func:`remotecall`\ , it does not store the result of computation, nor is there a way to wait for its completion.
 
    A successful invocation indicates that the request has been accepted for execution on the remote node.
 
-   While consecutive remotecalls to the same worker are serialized in the order they are invoked, the order of executions on the remote worker is undetermined. For example, ``remote_do(f1, 2); remotecall(f2, 2); remote_do(f3, 2)`` will serialize the call to ``f1``\ , followed by ``f2`` and ``f3`` in that order. However, it is not guaranteed that ``f1`` is executed before ``f3`` on worker 2.
+   While consecutive ``remotecall``\ s to the same worker are serialized in the order they are invoked, the order of executions on the remote worker is undetermined. For example, ``remote_do(f1, 2); remotecall(f2, 2); remote_do(f3, 2)`` will serialize the call to ``f1``\ , followed by ``f2`` and ``f3`` in that order. However, it is not guaranteed that ``f1`` is executed before ``f3`` on worker 2.
 
-   Any exceptions thrown by ``f`` are printed to ``STDERR`` on the remote worker.
+   Any exceptions thrown by ``f`` are printed to :obj:`STDERR` on the remote worker.
 
    Keyword arguments, if any, are passed through to ``f``\ .
 
@@ -404,33 +408,33 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Store a set of values to the ``RemoteChannel``\ . If the channel is full, blocks until space is available. Returns its first argument.
+   Store a set of values to the :obj:`RemoteChannel`\ . If the channel is full, blocks until space is available. Returns its first argument.
 
 .. function:: put!(rr::Future, v)
 
    .. Docstring generated from Julia source
 
-   Store a value to a ``Future`` ``rr``\ . ``Future``\ s are write-once remote references. A ``put!`` on an already set ``Future`` throws an ``Exception``\ . All asynchronous remote calls return ``Future``\ s and set the value to the return value of the call upon completion.
+   Store a value to a :obj:`Future` ``rr``\ . ``Future``\ s are write-once remote references. A ``put!`` on an already set ``Future`` throws an ``Exception``\ . All asynchronous remote calls return ``Future``\ s and set the value to the return value of the call upon completion.
 
 .. function:: take!(rr::RemoteChannel, args...)
 
    .. Docstring generated from Julia source
 
-   Fetch value(s) from a remote channel, removing the value(s) in the processs.
+   Fetch value(s) from a :obj:`RemoteChannel` ``rr``\ , removing the value(s) in the processs.
 
 .. function:: isready(rr::RemoteChannel, args...)
 
    .. Docstring generated from Julia source
 
-   Determine whether a ``RemoteChannel`` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. However, it can be safely used on a ``Future`` since they are assigned only once.
+   Determine whether a :obj:`RemoteChannel` has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. However, it can be safely used on a :obj:`Future` since they are assigned only once.
 
 .. function:: isready(rr::Future)
 
    .. Docstring generated from Julia source
 
-   Determine whether a ``Future`` has a value stored to it.
+   Determine whether a :obj:`Future` has a value stored to it.
 
-   If the argument ``Future`` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for ``rr`` in a separate task instead or to use a local ``Channel`` as a proxy:
+   If the argument ``Future`` is owned by a different node, this call will block to wait for the answer. It is recommended to wait for ``rr`` in a separate task instead or to use a local :obj:`Channel` as a proxy:
 
    .. code-block:: julia
 
@@ -448,7 +452,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   An implementation of an ``AbstractWorkerPool``\ . ``remote``\ , ``remotecall_fetch``\ , ``pmap`` and other remote calls which execute functions remotely, benefit from caching the serialized/deserialized functions on the worker nodes, especially for closures which capture large amounts of data.
+   An implementation of an ``AbstractWorkerPool``\ . :func:`remote`\ , :func:`remotecall_fetch`\ , :func:`pmap` (and other remote calls which execute functions remotely) benefit from caching the serialized/deserialized functions on the worker nodes, especially closures (which may capture large amounts of data).
 
    The remote cache is maintained for the lifetime of the returned ``CachingPool`` object. To clear the cache earlier, use ``clear!(pool)``\ .
 
@@ -470,37 +474,37 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   WorkerPool containing idle ``workers()`` - used by ``remote(f)`` and ``pmap`` (by default).
+   ``WorkerPool`` containing idle ``workers()`` - used by ``remote(f)`` and :func:`pmap` (by default).
 
 .. function:: remote([::AbstractWorkerPool], f) -> Function
 
    .. Docstring generated from Julia source
 
-   Returns a lambda that executes function ``f`` on an available worker using ``remotecall_fetch``\ .
+   Returns a lambda that executes function ``f`` on an available worker using :func:`remotecall_fetch`\ .
 
 .. function:: remotecall(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
    .. Docstring generated from Julia source
 
-   WorkerPool variant of ``remotecall(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall`` on it.
+   ``WorkerPool`` variant of ``remotecall(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall`` on it.
 
 .. function:: remotecall_wait(f, pool::AbstractWorkerPool, args...; kwargs...) -> Future
 
    .. Docstring generated from Julia source
 
-   WorkerPool variant of ``remotecall_wait(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall_wait`` on it.
+   ``WorkerPool`` variant of ``remotecall_wait(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall_wait`` on it.
 
 .. function:: remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...) -> result
 
    .. Docstring generated from Julia source
 
-   WorkerPool variant of ``remotecall_fetch(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall_fetch`` on it.
+   ``WorkerPool`` variant of ``remotecall_fetch(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remotecall_fetch`` on it.
 
 .. function:: remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) -> nothing
 
    .. Docstring generated from Julia source
 
-   WorkerPool variant of ``remote_do(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remote_do`` on it.
+   ``WorkerPool`` variant of ``remote_do(f, pid, ....)``\ . Waits for and takes a free worker from ``pool`` and performs a ``remote_do`` on it.
 
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
@@ -524,13 +528,13 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``fetch(@spawn expr)``\ .
+   Equivalent to ``fetch(@spawn expr)``\ . See :func:`fetch` and :func:`@spawn`\ .
 
 .. function:: @fetchfrom
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``fetch(@spawnat p expr)``\ .
+   Equivalent to ``fetch(@spawnat p expr)``\ . See :func:`fetch` and :func:`@spawnat`\ .
 
 .. function:: @async
 
@@ -558,7 +562,7 @@ General Parallel Computing Support
 
    The specified range is partitioned and locally executed across all workers. In case an optional reducer function is specified, ``@parallel`` performs local reductions on each worker with a final reduction on the calling process.
 
-   Note that without a reducer function, ``@parallel`` executes asynchronously, i.e. it spawns independent tasks on all available workers and returns immediately without waiting for completion. To wait for completion, prefix the call with ``@sync``\ , like :
+   Note that without a reducer function, ``@parallel`` executes asynchronously, i.e. it spawns independent tasks on all available workers and returns immediately without waiting for completion. To wait for completion, prefix the call with :func:`@sync`\ , like :
 
    .. code-block:: julia
 
@@ -570,7 +574,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Execute an expression under Main everywhere. Equivalent to calling ``eval(Main, expr)`` on all processes. Errors on any of the processes are collected into a ``CompositeException`` and thrown. For example :
+   Execute an expression under ``Main`` everywhere. Equivalent to calling ``eval(Main, expr)`` on all processes. Errors on any of the processes are collected into a ``CompositeException`` and thrown. For example :
 
    .. code-block:: julia
 
@@ -578,7 +582,7 @@ General Parallel Computing Support
 
    will define ``Main.bar`` on all processes.
 
-   Unlike ``@spawn`` and ``@spawnat``\ , ``@everywhere`` does not capture any local variables. Prefixing ``@everywhere`` with ``@eval`` allows us to broadcast local variables using interpolation :
+   Unlike :func:`@spawn` and :func:`@spawnat`\ , ``@everywhere`` does not capture any local variables. Prefixing ``@everywhere`` with :func:`@eval` allows us to broadcast local variables using interpolation :
 
    .. code-block:: julia
 
@@ -608,15 +612,13 @@ General Parallel Computing Support
 
    ``Future``\ s and ``RemoteChannel``\ s are identified by fields:
 
-   ``where`` - refers to the node where the underlying object/storage referred to by the reference actually exists.
-
-   ``whence`` - refers to the node the remote reference was created from.  Note that this is different from the node where the underlying object  referred to actually exists. For example calling ``RemoteChannel(2)``  from the master process would result in a ``where`` value of 2 and  a ``whence`` value of 1.
-
-   ``id`` is unique across all references created from the worker specified by ``whence``\ .
+   * ``where`` - refers to the node where the underlying object/storage referred to by the reference actually exists.
+   * ``whence`` - refers to the node the remote reference was created from. Note that this is different from the node where the underlying object referred to actually exists. For example calling ``RemoteChannel(2)`` from the master process would result in a ``where`` value of 2 and a ``whence`` value of 1.
+   * ``id`` is unique across all references created from the worker specified by ``whence``\ .
 
    Taken together,  ``whence`` and ``id`` uniquely identify a reference across all workers.
 
-   ``Base.remoteref_id`` is a low-level API which returns a ``Base.RRID``  object that wraps ``whence`` and ``id`` values of a remote reference.
+   ``Base.remoteref_id`` is a low-level API which returns a ``Base.RRID`` object that wraps ``whence`` and ``id`` values of a remote reference.
 
 .. function:: Base.channel_from_id(id) -> c
 
@@ -628,7 +630,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   A low-level API which given a ``IO`` connection or a ``Worker``\ , returns the ``pid`` of the worker it is connected to. This is useful when writing custom ``serialize`` methods for a type, which optimizes the data written out depending on the receiving process id.
+   A low-level API which given a ``IO`` connection or a ``Worker``\ , returns the ``pid`` of the worker it is connected to. This is useful when writing custom :func:`serialize` methods for a type, which optimizes the data written out depending on the receiving process id.
 
 .. function:: Base.cluster_cookie() -> cookie
 
@@ -686,15 +688,15 @@ Shared Arrays
 
    .. Docstring generated from Julia source
 
-   Returns the current worker's index in the list of workers mapping the SharedArray (i.e. in the same list returned by ``procs(S)``\ ), or 0 if the SharedArray is not mapped locally.
+   Returns the current worker's index in the list of workers mapping the ``SharedArray`` (i.e. in the same list returned by ``procs(S)``\ ), or 0 if the ``SharedArray`` is not mapped locally.
 
 .. function:: localindexes(S::SharedArray)
 
    .. Docstring generated from Julia source
 
-   Returns a range describing the "default" indexes to be handled by the current process.  This range should be interpreted in the sense of linear indexing, i.e., as a sub-range of ``1:length(S)``\ .  In multi-process contexts, returns an empty range in the parent process (or any process for which ``indexpids`` returns 0).
+   Returns a range describing the "default" indexes to be handled by the current process.  This range should be interpreted in the sense of linear indexing, i.e., as a sub-range of ``1:length(S)``\ .  In multi-process contexts, returns an empty range in the parent process (or any process for which :func:`indexpids` returns 0).
 
-   It's worth emphasizing that ``localindexes`` exists purely as a convenience, and you can partition work on the array among workers any way you wish.  For a SharedArray, all indexes should be equally fast for each worker process.
+   It's worth emphasizing that ``localindexes`` exists purely as a convenience, and you can partition work on the array among workers any way you wish. For a ``SharedArray``\ , all indexes should be equally fast for each worker process.
 
 Multi-Threading
 ---------------
@@ -862,7 +864,7 @@ ccall using a threadpool (Experimental)
 
    .. Docstring generated from Julia source
 
-   The ``@threadcall`` macro is called in the same way as ``ccall`` but does the work in a different thread. This is useful when you want to call a blocking C function without causing the main ``julia`` thread to become blocked. Concurrency is limited by size of the libuv thread pool, which defaults to 4 threads but can be increased by setting the ``UV_THREADPOOL_SIZE`` environment variable and restarting the ``julia`` process.
+   The ``@threadcall`` macro is called in the same way as :func:`ccall` but does the work in a different thread. This is useful when you want to call a blocking C function without causing the main ``julia`` thread to become blocked. Concurrency is limited by size of the libuv thread pool, which defaults to 4 threads but can be increased by setting the ``UV_THREADPOOL_SIZE`` environment variable and restarting the ``julia`` process.
 
    Note that the called function should never call back into Julia.
 
@@ -977,7 +979,7 @@ between processes. It is possible for Cluster Managers to provide a different tr
 
    .. Docstring generated from Julia source
 
-   Implemented by cluster managers. For every Julia worker launched by this function, it should append a ``WorkerConfig`` entry to ``launched`` and notify ``launch_ntfy``\ . The function MUST exit once all workers, requested by ``manager`` have been launched. ``params`` is a dictionary of all keyword arguments ``addprocs`` was called with.
+   Implemented by cluster managers. For every Julia worker launched by this function, it should append a ``WorkerConfig`` entry to ``launched`` and notify ``launch_ntfy``\ . The function MUST exit once all workers, requested by ``manager`` have been launched. ``params`` is a dictionary of all keyword arguments :func:`addprocs` was called with.
 
 .. function:: manage(manager::ClusterManager, id::Integer, config::WorkerConfig. op::Symbol)
 
@@ -993,7 +995,7 @@ between processes. It is possible for Cluster Managers to provide a different tr
 
    .. Docstring generated from Julia source
 
-   Implemented by cluster managers. It is called on the master process, by ``rmprocs``\ . It should cause the remote worker specified by ``pid`` to exit. ``Base.kill(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
+   Implemented by cluster managers. It is called on the master process, by :func:`rmprocs`\ . It should cause the remote worker specified by ``pid`` to exit. ``Base.kill(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``\ .
 
 .. function:: init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
 
@@ -1012,4 +1014,6 @@ between processes. It is possible for Cluster Managers to provide a different tr
    .. Docstring generated from Julia source
 
    Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two ``IO`` objects, one for incoming messages and the other for messages addressed to the remote worker. If ``incoming`` is ``true``\ , the remote peer initiated the connection. Whichever of the pair initiates the connection sends the cluster cookie and its Julia version number to perform the authentication handshake.
+
+   See also :func:`cluster_cookie`\ .
 

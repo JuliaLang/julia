@@ -582,7 +582,7 @@ end
 
 A low-level API which given a `IO` connection or a `Worker`,
 returns the `pid` of the worker it is connected to.
-This is useful when writing custom `serialize` methods for a type,
+This is useful when writing custom [`serialize`](:func:`serialize`) methods for a type,
 which optimizes the data written out depending on the receiving process id.
 """
 function worker_id_from_socket(s)
@@ -666,10 +666,10 @@ end
 """
     client_refs
 
-Tracks whether a particular AbstractRemoteRef
+Tracks whether a particular `AbstractRemoteRef`
 (identified by its RRID) exists on this worker.
 
-The client_refs lock is also used to synchronize access to `.refs` and associated clientset state
+The `client_refs` lock is also used to synchronize access to `.refs` and associated `clientset` state.
 """
 const client_refs = WeakKeyDict{Any, Void}() # used as a WeakKeySet
 
@@ -771,21 +771,21 @@ hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 
 `Future`s and `RemoteChannel`s are identified by fields:
 
-`where` - refers to the node where the underlying object/storage
-referred to by the reference actually exists.
+* `where` - refers to the node where the underlying object/storage
+  referred to by the reference actually exists.
 
-`whence` - refers to the node the remote reference was created from.
- Note that this is different from the node where the underlying object
- referred to actually exists. For example calling `RemoteChannel(2)`
- from the master process would result in a `where` value of 2 and
- a `whence` value of 1.
+* `whence` - refers to the node the remote reference was created from.
+  Note that this is different from the node where the underlying object
+  referred to actually exists. For example calling `RemoteChannel(2)`
+  from the master process would result in a `where` value of 2 and
+  a `whence` value of 1.
 
- `id` is unique across all references created from the worker specified by `whence`.
+* `id` is unique across all references created from the worker specified by `whence`.
 
- Taken together,  `whence` and `id` uniquely identify a reference across all workers.
+Taken together,  `whence` and `id` uniquely identify a reference across all workers.
 
- `Base.remoteref_id` is a low-level API which returns a `Base.RRID`
- object that wraps `whence` and `id` values of a remote reference.
+`Base.remoteref_id` is a low-level API which returns a `Base.RRID`
+object that wraps `whence` and `id` values of a remote reference.
 """
 remoteref_id(r::AbstractRemoteRef) = RRID(r.whence, r.id)
 
@@ -823,11 +823,11 @@ end
 """
     isready(rr::Future)
 
-Determine whether a `Future` has a value stored to it.
+Determine whether a [`Future`](:obj:`Future`) has a value stored to it.
 
 If the argument `Future` is owned by a different node, this call will block to wait for the answer.
 It is recommended to wait for `rr` in a separate task instead
-or to use a local `Channel` as a proxy:
+or to use a local [`Channel`](:obj:`Channel`) as a proxy:
 
     c = Channel(1)
     @async put!(c, remotecall_fetch(long_computation, p))
@@ -847,10 +847,10 @@ end
 """
     isready(rr::RemoteChannel, args...)
 
-Determine whether a `RemoteChannel` has a value stored to it.
+Determine whether a [`RemoteChannel`](:obj:`RemoteChannel`) has a value stored to it.
 Note that this function can cause race conditions, since by the
 time you receive its result it may no longer be true. However,
-it can be safely used on a `Future` since they are assigned only once.
+it can be safely used on a [`Future`](:obj:`Future`) since they are assigned only once.
 """
 function isready(rr::RemoteChannel, args...)
     rid = remoteref_id(rr)
@@ -988,8 +988,8 @@ end
 """
     RemoteException(captured)
 
-Exceptions  on remote computations are captured and rethrown locally.  A `RemoteException`
-wraps the pid of the worker and a captured exception. A `CapturedException` captures the
+Exceptions on remote computations are captured and rethrown locally.  A `RemoteException`
+wraps the `pid` of the worker and a captured exception. A `CapturedException` captures the
 remote exception and a serializable form of the call stack when the exception was raised.
 """
 RemoteException(captured) = RemoteException(myid(), captured)
@@ -1049,7 +1049,7 @@ end
     remotecall(f, id::Integer, args...; kwargs...) -> Future
 
 Call a function `f` asynchronously on the given arguments on the specified process.
-Returns a `Future`.
+Returns a [`Future`](:obj:`Future`).
 Keyword arguments, if any, are passed through to `f`.
 """
 remotecall(f, id::Integer, args...; kwargs...) = remotecall(f, worker_from_id(id), args...; kwargs...)
@@ -1078,7 +1078,10 @@ end
 
 Perform `fetch(remotecall(...))` in one message.
 Keyword arguments, if any, are passed through to `f`.
-Any remote exceptions are captured in a `RemoteException` and thrown.
+Any remote exceptions are captured in a
+[`RemoteException`](:obj:`RemoteException`) and thrown.
+
+See also [`fetch`](:func:`fetch`) and [`remotecall`](:func:`remotecall`).
 """
 remotecall_fetch(f, id::Integer, args...; kwargs...) =
     remotecall_fetch(f, worker_from_id(id), args...; kwargs...)
@@ -1104,6 +1107,8 @@ end
 
 Perform a faster `wait(remotecall(...))` in one message on the `Worker` specified by worker id `id`.
 Keyword arguments, if any, are passed through to `f`.
+
+See also [`wait`](:func:`wait`) and [`remotecall`](:func:`remotecall`).
 """
 remotecall_wait(f, id::Integer, args...; kwargs...) =
     remotecall_wait(f, worker_from_id(id), args...; kwargs...)
@@ -1126,19 +1131,20 @@ end
 """
     remote_do(f, id::Integer, args...; kwargs...) -> nothing
 
-Executes `f` on worker `id` asynchronously. Unlike `remotecall`, it does not store the
+Executes `f` on worker `id` asynchronously.
+Unlike [`remotecall`](:func:`remotecall`), it does not store the
 result of computation, nor is there a way to wait for its completion.
 
 A successful invocation indicates that the request has been accepted for execution on
 the remote node.
 
-While consecutive remotecalls to the same worker are serialized in the order they are
+While consecutive `remotecall`s to the same worker are serialized in the order they are
 invoked, the order of executions on the remote worker is undetermined. For example,
 `remote_do(f1, 2); remotecall(f2, 2); remote_do(f3, 2)` will serialize the call
 to `f1`, followed by `f2` and `f3` in that order. However, it is not guaranteed that `f1`
 is executed before `f3` on worker 2.
 
-Any exceptions thrown by `f` are printed to `STDERR` on the remote worker.
+Any exceptions thrown by `f` are printed to [`STDERR`](:obj:`STDERR`) on the remote worker.
 
 Keyword arguments, if any, are passed through to `f`.
 """
@@ -1189,10 +1195,10 @@ fetch(r::RemoteChannel, args...) = call_on_owner(fetch_ref, r, args...)
 
 Waits and fetches a value from `x` depending on the type of `x`:
 
-* `Future`: Wait for and get the value of a Future. The fetched value is cached locally.
+* [`Future`](:obj:`Future`): Wait for and get the value of a `Future`. The fetched value is cached locally.
   Further calls to `fetch` on the same reference return the cached value. If the remote value
-  is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
-* `RemoteChannel`: Wait for and get the value of a remote reference. Exceptions raised are
+  is an exception, throws a [`RemoteException`](:obj:`RemoteException`) which captures the remote exception and backtrace.
+* [`RemoteChannel`](:obj:`RemoteChannel`): Wait for and get the value of a remote reference. Exceptions raised are
   same as for a `Future` .
 
 Does not remove the item fetched.
@@ -1204,7 +1210,8 @@ isready(rv::RemoteValue, args...) = isready(rv.c, args...)
 """
     put!(rr::Future, v)
 
-Store a value to a `Future` `rr`. `Future`s are write-once remote references.
+Store a value to a [`Future`](:obj:`Future`) `rr`.
+`Future`s are write-once remote references.
 A `put!` on an already set `Future` throws an `Exception`.
 All asynchronous remote calls return `Future`s and set the
 value to the return value of the call upon completion.
@@ -1231,7 +1238,7 @@ put_ref(rid, args...) = (put!(lookup_ref(rid), args...); nothing)
 """
     put!(rr::RemoteChannel, args...)
 
-Store a set of values to the `RemoteChannel`.
+Store a set of values to the [`RemoteChannel`](:obj:`RemoteChannel`).
 If the channel is full, blocks until space is available.
 Returns its first argument.
 """
@@ -1249,7 +1256,8 @@ end
 """
     take!(rr::RemoteChannel, args...)
 
-Fetch value(s) from a remote channel, removing the value(s) in the processs.
+Fetch value(s) from a [`RemoteChannel`](:obj:`RemoteChannel`) `rr`,
+removing the value(s) in the processs.
 """
 take!(rr::RemoteChannel, args...) = call_on_owner(take_ref, rr, myid(), args...)
 
@@ -1311,6 +1319,8 @@ remote worker.
 If `incoming` is `true`, the remote peer initiated the connection.
 Whichever of the pair initiates the connection sends the cluster cookie and its
 Julia version number to perform the authentication handshake.
+
+See also [`cluster_cookie`](:func:`cluster_cookie`).
 """
 function process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
     @schedule message_handler_loop(r_stream, w_stream, incoming)
@@ -1671,7 +1681,7 @@ const worker_lock = ReentrantLock()
 
 Launches worker processes via the specified cluster manager.
 
-For example Beowulf clusters are  supported via a custom cluster manager implemented in
+For example, Beowulf clusters are supported via a custom cluster manager implemented in
 the package `ClusterManagers.jl`.
 
 The number of seconds a newly launched worker waits for connection establishment from the
@@ -1936,6 +1946,7 @@ end
     @fetch
 
 Equivalent to `fetch(@spawn expr)`.
+See [`fetch`](:func:`fetch`) and [`@spawn`](:func:`@spawn`).
 """
 macro fetch(expr)
     expr = localize_vars(esc(:(()->($expr))), false)
@@ -1949,6 +1960,7 @@ end
     @fetchfrom
 
 Equivalent to `fetch(@spawnat p expr)`.
+See [`fetch`](:func:`fetch`) and [`@spawnat`](:func:`@spawnat`).
 """
 macro fetchfrom(p, expr)
     expr = localize_vars(esc(:(()->($expr))), false)
@@ -1958,7 +1970,7 @@ end
 """
     @everywhere expr
 
-Execute an expression under Main everywhere. Equivalent to calling
+Execute an expression under `Main` everywhere. Equivalent to calling
 `eval(Main, expr)` on all processes. Errors on any of the processes are collected into a
 `CompositeException` and thrown. For example :
 
@@ -1966,8 +1978,10 @@ Execute an expression under Main everywhere. Equivalent to calling
 
 will define `Main.bar` on all processes.
 
-Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variables. Prefixing
-`@everywhere` with `@eval` allows us to broadcast local variables using interpolation :
+Unlike [`@spawn`](:func:`@spawn`) and [`@spawnat`](:func:`@spawnat`),
+`@everywhere` does not capture any local variables. Prefixing
+`@everywhere` with [`@eval`](:func:`@eval`) allows us to broadcast
+local variables using interpolation :
 
     foo = 1
     @eval @everywhere bar=\$foo
@@ -2079,7 +2093,7 @@ with a final reduction on the calling process.
 
 Note that without a reducer function, `@parallel` executes asynchronously, i.e. it spawns
 independent tasks on all available workers and returns immediately without waiting for
-completion. To wait for completion, prefix the call with `@sync`, like :
+completion. To wait for completion, prefix the call with [`@sync`](:func:`@sync`), like :
 
     @sync @parallel for var = range
         body

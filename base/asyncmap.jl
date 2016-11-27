@@ -11,10 +11,12 @@ If `ntasks` is unspecified, uses `max(100, nworkers())` tasks.
 For multiple collection arguments, apply `f` elementwise.
 Output is collected into `results`.
 
-Note: `next(::AsyncCollector, state) -> (nothing, state)`
+!!! note
+    `next(::AsyncCollector, state) -> (nothing, state)`
 
-Note: `for task in AsyncCollector(f, results, c...) end` is equivalent to
-`map!(f, results, c...)`.
+!!! note
+    `for task in AsyncCollector(f, results, c...) end` is equivalent to
+    `map!(f, results, c...)`.
 """
 type AsyncCollector
     f
@@ -154,10 +156,12 @@ end
 
 Apply `f` to each element of `c` using at most `ntasks` asynchronous tasks.
 If `ntasks` is unspecified, uses `max(100, nworkers())` tasks.
-For multiple collection arguments, apply f elementwise.
+For multiple collection arguments, apply `f` elementwise.
 Results are returned by the iterator as they become available.
-Note: `collect(AsyncGenerator(f, c...; ntasks=1))` is equivalent to
-`map(f, c...)`.
+
+!!! note
+    `collect(AsyncGenerator(f, c...; ntasks=1))` is equivalent to
+    `map(f, c...)`.
 """
 type AsyncGenerator
     collector::AsyncCollector
@@ -220,7 +224,7 @@ length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 
 Transform collection `c` by applying `@async f` to each element.
 
-For multiple collection arguments, apply f elementwise.
+For multiple collection arguments, apply `f` elementwise.
 """
 asyncmap(f, c...) = collect(AsyncGenerator(f, c...))
 
@@ -228,7 +232,7 @@ asyncmap(f, c...) = collect(AsyncGenerator(f, c...))
 """
     asyncmap!(f, c)
 
-In-place version of `asyncmap()`.
+In-place version of [`asyncmap()`](:func:`asyncmap`).
 """
 asyncmap!(f, c) = (for x in AsyncCollector(f, c, c) end; c)
 
@@ -236,6 +240,6 @@ asyncmap!(f, c) = (for x in AsyncCollector(f, c, c) end; c)
 """
     asyncmap!(f, results, c...)
 
-Like `asyncmap()`, but stores output in `results` rather returning a collection.
+Like [`asyncmap()`](:func:`asyncmap`), but stores output in `results` rather returning a collection.
 """
 asyncmap!(f, r, c1, c...) = (for x in AsyncCollector(f, r, c1, c...) end; r)
