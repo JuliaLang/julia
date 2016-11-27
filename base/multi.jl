@@ -1964,7 +1964,7 @@ Execute an expression under Main everywhere. Equivalent to calling
 
     @everywhere bar=1
 
-will define `Main.bar` on all processes.
+will define `Main.bar` on all current processes.
 
 Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variables. Prefixing
 `@everywhere` with `@eval` allows us to broadcast local variables using interpolation :
@@ -1981,6 +1981,9 @@ For example :
     FooBar.foo()
 
 will result in `Main.bar` being defined on all processes and not `FooBar.bar`.
+
+The expression is evaluated on all current processes. Any processes added later
+(say with [`addprocs`](:func:`addprocs`)) will not have the expression defined.
 """
 macro everywhere(ex)
     quote
