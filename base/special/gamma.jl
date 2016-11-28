@@ -448,7 +448,7 @@ end
     polygamma(m, x)
 
 Compute the polygamma function of order `m` of argument `x`
-(the `(m+1)th` derivative of the logarithm of `gamma(x)`)
+(the `(m+1)`th derivative of the logarithm of `gamma(x)`)
 """
 function polygamma(m::Integer, z::ComplexOrReal{Float64})
     m == 0 && return digamma(z)
