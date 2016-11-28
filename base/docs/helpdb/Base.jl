@@ -2093,7 +2093,7 @@ sqrtm
 """
     readcsv(source, [T::Type]; options...)
 
-Equivalent to `readdlm` with `delim` set to comma, and type optionally defined by `T`.
+Equivalent to [`readdlm`](:func:`readdlm`) with `delim` set to comma, and type optionally defined by `T`.
 """
 readcsv
 
