@@ -147,7 +147,8 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *t)
     if (t->state == done_sym || t->state == failed_sym)
         return;
     char *frame_addr = (char*)jl_get_frame_addr();
-    size_t nb = (char*)ptls->stackbase - frame_addr;
+    char *stackbase = (char*)ptls->stackbase;
+    size_t nb = stackbase > frame_addr ? stackbase - frame_addr : 0;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
         buf = (char*)jl_gc_alloc_buf(ptls, nb);
