@@ -76,9 +76,21 @@ PUBLIC_HEADERS += $(LIBUV_INC)/uv*
 endif
 PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)))
 
-# In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
-# In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
+# `llvm-config` support `--link-*` only on 3.8+
+USE_LLVM_CONFIG_LIB := 0
+else
+ifeq ($(OS),WINNT)
+# Somehow `llvm-config --libs` does not work with shlib build on windows
+USE_LLVM_CONFIG_LIB := 0
+else
+USE_LLVM_CONFIG_LIB := 1
+endif
+endif
+
+ifeq ($(USE_LLVM_CONFIG_LIB),0)
 ifneq ($(USE_LLVM_SHLIB),1)
+# In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
 ifeq ($(LLVM_USE_CMAKE),1)
@@ -92,6 +104,16 @@ endif # OS == WINNT
 endif # LLVM_USE_CMAKE == 1
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
+else
+ifeq ($(USE_LLVM_SHLIB),1)
+LLVM_CONFIG_FLAG := --link-shared
+FLAGS += -DLLVM_SHLIB
+else
+LLVM_CONFIG_FLAG := --link-static
+endif # USE_LLVM_SHLIB == 1
+# In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) $(LLVM_CONFIG_FLAG) --ldflags) $(shell $(LLVM_CONFIG_HOST) $(LLVM_CONFIG_FLAG) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) $(LLVM_CONFIG_FLAG) --ldflags) $(shell $(LLVM_CONFIG_HOST) $(LLVM_CONFIG_FLAG) --system-libs 2> /dev/null)
+endif # LLVM 3.3
 
 COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
 DEBUG_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)

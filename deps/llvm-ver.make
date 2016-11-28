@@ -1,3 +1,7 @@
+ifeq ($(USE_SYSTEM_LLVM), 1)
+LLVM_VER := $(shell $(LLVM_CONFIG_HOST) --version)
+endif
+
 LLVM_VER_MAJ:=$(word 1, $(subst ., ,$(LLVM_VER)))
 LLVM_VER_MIN:=$(word 2, $(subst ., ,$(LLVM_VER)))
 # define a "short" LLVM version for easy comparisons
