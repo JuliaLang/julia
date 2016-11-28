@@ -2531,6 +2531,7 @@ end
 #getindex(x::Number) = x
 for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test getindex(x) == x
+    @test getindex(x, 1, 1) == x
 end
 
 #getindex(x::Number,-1) throws BoundsError
@@ -2546,6 +2547,7 @@ for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test_throws BoundsError getindex([x x],-1)
     @test_throws BoundsError getindex([x x],0)
     @test_throws BoundsError getindex([x x],length([x,x])+1)
+    @test_throws BoundsError getindex(x, 1, 0)
 end
 
 # copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
