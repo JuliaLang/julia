@@ -240,7 +240,7 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
 
 * Julia
   - **Homepage:** <http://julialang.org>
-  - **Discussion:** <http://julialang.org/community/>
+  - **Community:** <http://julialang.org/community/>
   - **IRC:** <http://webchat.freenode.net/?channels=Julia>
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
