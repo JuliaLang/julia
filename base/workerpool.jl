@@ -265,8 +265,6 @@ function CachingPool(workers::Vector{Int})
     return pool
 end
 
-CachingPool(wp::WorkerPool) = CachingPool(workers(wp))
-
 """
     clear!(pool::CachingPool) -> pool
 
