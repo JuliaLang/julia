@@ -139,7 +139,7 @@ function cmp(a::AbstractString, b::AbstractString)
     end
     i = start(a)
     j = start(b)
-    while !done(a,i) && !done(b,i)
+    while !done(a,i) && !done(b,j)
         c, i = next(a,i)
         d, j = next(b,j)
         if c != d
