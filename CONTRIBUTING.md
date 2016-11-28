@@ -12,7 +12,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 - Contributing code? Be sure to review the [contributor checklist](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#contributor-checklist) for helpful tips on the tools we use to build Julia.
 
-- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](http://docs.julialang.org/en/release-0.4/manual/packages/#package-development). Please email the [julia-users](https://groups.google.com/forum/#!forum/julia-users) mailing list to discuss library ideas. Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
+- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](http://docs.julialang.org/en/release-0.4/manual/packages/#package-development). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org/). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
 
 ## Contributor Checklist
 
@@ -26,7 +26,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 * Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.GitHub.io/levels/1/challenges/1).
 
-* Review discussions on the [dev mailing list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev).
+* Review discussions on the [Julia Discourse forum](https://discourse.julialang.org/).
 
 * For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
 
@@ -37,7 +37,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 A useful bug report filed as a GitHub issue provides information about how to reproduce the error.
 
 1. Before opening a new [GitHub issue](https://github.com/JuliaLang/julia/issues):
-  - Try searching the existing issues or the [`julia-users` mailing list](https://groups.google.com/forum/#!forum/julia-users) to see if someone else has already noticed the same problem.
+  - Try searching the existing issues or the [Julia Discourse forum](https://discourse.julialang.org/) to see if someone else has already noticed the same problem.
   - Try some simple debugging techniques to help isolate the problem.
     - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
     - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
@@ -171,7 +171,7 @@ For new functionality and other substantial changes, add a brief summary to `NEW
 
 The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR). You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
 
-Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the mailing list or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
+Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org/) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
 Add new code to Julia's base libraries as follows:
 
@@ -240,7 +240,7 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
 
 * Julia
   - **Homepage:** <http://julialang.org>
-  - **Mailing lists:** <http://julialang.org/community/>
+  - **Community:** <http://julialang.org/community/>
   - **IRC:** <http://webchat.freenode.net/?channels=Julia>
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
