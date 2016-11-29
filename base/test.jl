@@ -765,9 +765,9 @@ function testset_forloop(args, testloop)
             pop_testset()
             push!(arr, finish(ts))
         end
-        first_iteration = false
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
+        first_iteration = false
         try
             $(esc(tests))
         catch err
