@@ -283,6 +283,10 @@ array:
     julia> searchsorted(a, 3)
     3:2
 
+In Julia version 0.4.5 and earlier, there is a substantial performance penalty 
+associated with arrays with more than six subscripts.  This limit of six is slated 
+to be increased in future language versions.
+
 Assignment
 ----------
 
