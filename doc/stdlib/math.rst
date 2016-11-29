@@ -613,6 +613,14 @@ Mathematical Operators
 
    Bitwise exclusive or.
 
+   .. doctest::
+
+       julia> [true; true; false] ⊻ [true; false; false]
+       3-element Array{Bool,1}:
+        false
+         true
+        false
+
 .. _!:
 .. function:: !(x)
 
@@ -945,7 +953,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the natural logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments to obtain complex results.
+   Compute the natural logarithm of ``x``\ . Throws :obj:`DomainError` for negative ``Real`` arguments. Use complex negative arguments to obtain complex results.
 
    There is an experimental variant in the ``Base.Math.JuliaLibm`` module, which is typically faster and more accurate.
 
@@ -953,7 +961,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the base ``b`` logarithm of ``x``\ . Throws ``DomainError`` for negative ``Real`` arguments.
+   Compute the base ``b`` logarithm of ``x``\ . Throws :obj:`DomainError` for negative ``Real`` arguments.
 
    .. doctest::
 
@@ -964,7 +972,7 @@ Mathematical Functions
        0.5
 
    .. note::
-      If ``b`` is a power of 2 or 10, ``log2`` or ``log10`` should be used, as these will typically be faster and more accurate. For example,
+      If ``b`` is a power of 2 or 10, :func:`log2` or :func:`log10` should be used, as these will typically be faster and more accurate. For example,
 
       .. doctest::
 
@@ -979,7 +987,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
+   Compute the logarithm of ``x`` to base 2. Throws :obj:`DomainError` for negative ``Real`` arguments.
 
    .. doctest::
 
@@ -1007,7 +1015,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Accurate natural logarithm of ``1+x``\ . Throws ``DomainError`` for ``Real`` arguments less than -1.
+   Accurate natural logarithm of ``1+x``\ . Throws :obj:`DomainError` for ``Real`` arguments less than -1.
 
    There is an experimental variant in the ``Base.Math.JuliaLibm`` module, which is typically faster and more accurate.
 
@@ -1430,7 +1438,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Return :math:`\sqrt{x}`\ . Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.  The prefix operator ``√`` is equivalent to ``sqrt``\ .
+   Return :math:`\sqrt{x}`\ . Throws :obj:`DomainError` for negative ``Real`` arguments. Use complex negative arguments instead.  The prefix operator ``√`` is equivalent to ``sqrt``\ .
 
 .. function:: isqrt(n::Integer)
 
@@ -1696,7 +1704,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the digamma function of ``x`` (the logarithmic derivative of ``gamma(x)``\ )
+   Compute the digamma function of ``x`` (the logarithmic derivative of :func:`gamma`\ ).
 
 .. function:: invdigamma(x)
 
@@ -1708,13 +1716,13 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the trigamma function of ``x`` (the logarithmic second derivative of ``gamma(x)``\ ).
+   Compute the trigamma function of ``x`` (the logarithmic second derivative of :func:`gamma`\ ).
 
 .. function:: polygamma(m, x)
 
    .. Docstring generated from Julia source
 
-   Compute the polygamma function of order ``m`` of argument ``x`` (the ``(m+1)th`` derivative of the logarithm of ``gamma(x)``\ )
+   Compute the polygamma function of order ``m`` of argument ``x`` (the ``(m+1)th`` derivative of the logarithm of :func:`gamma`\ )
 
 .. function:: airy(k,x)
 
