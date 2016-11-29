@@ -73,7 +73,7 @@ macro assert(ex, msgs...)
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
         msg = :(Main.Base.string($(esc(msg))))
-    elseif isdefined(Main, :Base) && isdefined(Main.Base, :string)
+    elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap

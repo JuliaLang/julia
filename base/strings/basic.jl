@@ -17,48 +17,9 @@ Convert a string to a contiguous byte array representation encoded as UTF-8 byte
 This representation is often appropriate for passing strings to C.
 """
 String(s::AbstractString) = print_to_string(s)
-String(s::String) = s
 
-# String constructor docstring from boot.jl, workaround for #16730
-# and the unavailability of @doc in boot.jl context.
-"""
-    String(v::Vector{UInt8})
-
-Create a new `String` from a vector `v` of bytes containing
-UTF-8 encoded characters.   This function takes "ownership" of
-the array, which means that you should not subsequently modify
-`v` (since strings are supposed to be immutable in Julia) for
-as long as the string exists.
-
-If you need to subsequently modify `v`, use `String(copy(v))` instead.
-"""
-String(v::Array{UInt8,1})
-
-
-"""
-    unsafe_string(p::Ptr{UInt8}, [length::Integer])
-
-Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8.
-(The pointer can be safely freed afterwards.) If `length` is specified
-(the length of the data in bytes), the string does not have to be NUL-terminated.
-
-This function is labelled "unsafe" because it will crash if `p` is not
-a valid memory address to data of the requested length.
-
-See also [`unsafe_wrap(String, p, [length])`](@ref), which takes a pointer
-and wraps a string object around it without making a copy.
-"""
-function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
-    p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
-    ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8},Int), p, len)
-end
-function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
-    p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
-    ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
-end
-
-convert(::Type{Vector{UInt8}}, s::AbstractString) = String(s).data
-convert(::Type{Array{UInt8}}, s::AbstractString) = String(s).data
+convert(::Type{Vector{UInt8}}, s::AbstractString) = convert(Vector{UInt8}, String(s))
+convert(::Type{Array{UInt8}}, s::AbstractString) = convert(Vector{UInt8}, s)
 convert(::Type{String}, s::AbstractString) = String(s)
 convert(::Type{Vector{Char}}, s::AbstractString) = collect(s)
 convert(::Type{Symbol}, s::AbstractString) = Symbol(s)
@@ -155,12 +116,10 @@ end
 ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
 isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 
-# faster comparisons for byte strings and symbols
+# faster comparisons for symbols
 
-cmp(a::String, b::String) = lexcmp(a.data, b.data)
 cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
 
-==(a::String, b::String) = a.data == b.data
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 
 ## Generic validation functions ##
@@ -189,32 +148,6 @@ prevind(s::DirectIndexString, i::Integer) = Int(i)-1
 prevind(s::AbstractArray    , i::Integer) = Int(i)-1
 nextind(s::DirectIndexString, i::Integer) = Int(i)+1
 nextind(s::AbstractArray    , i::Integer) = Int(i)+1
-
-function prevind(s::String, i::Integer)
-    j = Int(i)
-    e = endof(s.data)
-    if j > e
-        return endof(s)
-    end
-    j -= 1
-    while j > 0 && is_valid_continuation(s.data[j])
-        j -= 1
-    end
-    j
-end
-
-function nextind(s::String, i::Integer)
-    j = Int(i)
-    if j < 1
-        return 1
-    end
-    e = endof(s.data)
-    j += 1
-    while j <= e && is_valid_continuation(s.data[j])
-        j += 1
-    end
-    j
-end
 
 """
     prevind(str::AbstractString, i::Integer)
@@ -319,10 +252,6 @@ next(e::EachStringIndex, state) = (state, nextind(e.s, state))
 done(e::EachStringIndex, state) = done(e.s, state)
 eltype(::Type{EachStringIndex}) = Int
 
-typealias Chars Union{Char,Tuple{Vararg{Char}},AbstractVector{Char},Set{Char}}
-
-typealias ByteArray Union{Vector{UInt8},Vector{Int8}}
-
 ## character column width function ##
 
 """
@@ -365,18 +294,6 @@ false
 """
 isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 isxdigit(s::AbstractString) = all(isxdigit, s)
-
-## checking UTF-8 & ACSII validity ##
-
-byte_string_classify(data::Vector{UInt8}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), data, length(data))
-byte_string_classify(s::String) = byte_string_classify(s.data)
-    # 0: neither valid ASCII nor UTF-8
-    # 1: valid ASCII
-    # 2: valid UTF-8
-
-isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) != 0
-isvalid(s::String) = isvalid(String, s)
 
 ## uppercase, lowercase, and titlecase transformations ##
 

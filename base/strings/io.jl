@@ -106,7 +106,7 @@ write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); en
 show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 write(to::AbstractIOBuffer, s::SubString{String}) =
-    s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset + 1, nextind(s, s.endof) - 1)
+    s.endof==0 ? 0 : unsafe_write(to, pointer(s.string, s.offset + 1), UInt(nextind(s, s.endof) - 1))
 
 ## printing literal quoted string data ##
 
@@ -136,8 +136,8 @@ end
 
 Create a read-only `IOBuffer` on the data underlying the given string.
 """
-IOBuffer(str::String) = IOBuffer(str.data)
-IOBuffer(s::SubString{String}) = IOBuffer(view(s.string.data, s.offset + 1 : s.offset + sizeof(s)))
+IOBuffer(str::String) = IOBuffer(Vector{UInt8}(str))
+IOBuffer(s::SubString{String}) = IOBuffer(view(Vector{UInt8}(s.string), s.offset + 1 : s.offset + sizeof(s)))
 
 # join is implemented using IO
 
@@ -308,7 +308,7 @@ end
 
 unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
-macro b_str(s); :($(unescape_string(s)).data); end
+macro b_str(s); :(Vector{UInt8}($(unescape_string(s)))); end
 
 ## multiline strings ##
 

@@ -4009,6 +4009,11 @@ void jl_init_types(void)
 
     jl_ANY_flag = (jl_value_t*)tvar("ANY");
 
+    jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), jl_any_type, jl_emptysvec);
+    jl_string_type = jl_new_datatype(jl_symbol("String"), jl_abstractstring_type, jl_emptysvec,
+                                     jl_svec1(jl_symbol("len")), jl_svec1(jl_long_type),
+                                     0, 1, 1);
+
     // complete builtin type metadata
     jl_value_t *pointer_void = jl_apply_type((jl_value_t*)jl_pointer_type,
                                              jl_svec1(jl_void_type));

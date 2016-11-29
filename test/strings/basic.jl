@@ -1,10 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # constructors
-let d = [0x61,0x62,0x63,0x21]
-    @test String(d) == "abc!"
-    @test String(d).data === d # String(d) should not make a copy
-end
+@test String([0x61,0x62,0x63,0x21]) == "abc!"
 @test String("abc!") == "abc!"
 
 @test isempty(string())

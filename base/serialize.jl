@@ -245,6 +245,12 @@ trimmedindex(P, d, i::Real) = oftype(i, 1)
 trimmedindex(P, d, i::Colon) = i
 trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), indices(i)))
 
+function serialize(s::AbstractSerializer, ss::String)
+    serialize_type(s, String)
+    write(s.io, sizeof(ss))
+    write(s.io, ss)
+end
+
 function serialize{T<:AbstractString}(s::AbstractSerializer, ss::SubString{T})
     # avoid saving a copy of the parent string, keeping the type of ss
     serialize_any(s, convert(SubString{T}, convert(T,ss)))
@@ -857,6 +863,13 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     t.result = deserialize(s)
     t.exception = deserialize(s)
     t
+end
+
+function deserialize(s::AbstractSerializer, ::Type{String})
+    n = read(s.io, Int)
+    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
+    unsafe_read(s.io, pointer(out), n)
+    return out
 end
 
 # default DataType deserializer

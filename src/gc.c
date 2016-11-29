@@ -1382,6 +1382,10 @@ static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits)
         bits = gc_setmark(ptls, v, sizeof(jl_weakref_t));
         goto ret;
     }
+    else if (vt == (jl_value_t*)jl_string_type) {
+        bits = gc_setmark(ptls, v, jl_string_len(v) + sizeof(size_t) + 1);
+        goto ret;
+    }
     if ((jl_is_datatype(vt) && ((jl_datatype_t*)vt)->layout->pointerfree)) {
         int sz = jl_datatype_size(vt);
         bits = gc_setmark(ptls, v, sz);
