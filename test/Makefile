@@ -10,7 +10,7 @@ default: all
 
 # set hard and soft limits for spawn fd-exhaustion test
 ifeq ($(OS),WINNT)
-ULIMIT_TEST=
+ULIMIT_TEST=true
 else
 ULIMIT_TEST=ulimit -n 128
 endif
