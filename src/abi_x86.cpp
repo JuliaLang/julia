@@ -63,12 +63,13 @@ bool use_sret(jl_datatype_t *dt) override
     return true;
 }
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     size_t size = jl_datatype_size(dt);
     if (is_complex64(dt) || is_complex128(dt) || (jl_is_bitstype(dt) && size <= 8))
-        return;
-    *byRef = true;
+        return false;
+    ab.addAttribute(Attribute::ByVal);
+    return true;
 }
 
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
