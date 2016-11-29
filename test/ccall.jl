@@ -134,6 +134,30 @@ end
 test_struct1(Struct1)
 test_struct1(Struct1I)
 
+let a, b, x
+    a = Struct1(352.39422f23, 19.287577)
+    b = Float32(123.456)
+    a2 = copy(a)
+
+    x = ccall((:test_1long_a, libccalltest), Struct1, (Int, Int, Int, Struct1, Float32), 2, 3, 4, a2, b)
+    @test a2.x == a.x && a2.y == a.y
+    @test !(a2 === x)
+    @test x.x ≈ a.x + b + 9
+    @test x.y ≈ a.y - 2*b
+
+    x = ccall((:test_1long_b, libccalltest), Struct1, (Int, Float64, Int, Struct1, Float32), 2, 3, 4, a2, b)
+    @test a2.x == a.x && a2.y == a.y
+    @test !(a2 === x)
+    @test x.x ≈ a.x + b + 9
+    @test x.y ≈ a.y - 2*b
+
+    x = ccall((:test_1long_c, libccalltest), Struct1, (Int, Float64, Int, Int, Struct1, Float32), 2, 3, 4, 5, a2, b)
+    @test a2.x == a.x && a2.y == a.y
+    @test !(a2 === x)
+    @test x.x ≈ a.x + b + 14
+    @test x.y ≈ a.y - 2*b
+end
+
 let a, b, x, y
     a = Complex{Int32}(Int32(10),Int32(31))
     b = Int32(42)
@@ -542,6 +566,16 @@ function test_struct_big{Struct}(::Type{Struct})
 end
 test_struct_big(Struct_Big)
 test_struct_big(Struct_BigI)
+
+let a, a2, x
+    a = Struct_Big(424,-5,Int8('Z'))
+    a2 = copy(a)
+    x = ccall((:test_big_long, libccalltest), Struct_Big, (Int, Int, Int, Struct_Big,), 2, 3, 4, a2)
+    @test a2.x == a.x && a2.y == a.y && a2.z == a.z
+    @test x.x == a.x + 10
+    @test x.y == a.y - 2
+    @test x.z == a.z - Int('A')
+end
 
 const Struct_huge1a = NTuple{8, Int64}
 const Struct_huge1b = NTuple{9, Int64}

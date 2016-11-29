@@ -101,12 +101,15 @@ bool use_sret(jl_datatype_t *dt) override
     return false;
 }
 
-void needPassByRef(jl_datatype_t *dt, bool *byRef, bool *inReg) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
-    if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8)
-        *byRef = true;
+    if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8) {
+        ab.addAttribute(Attribute::ByVal);
+        return true;
+    }
+    return false;
 }
 
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override

@@ -338,6 +338,30 @@ JL_DLLEXPORT struct1 test_1(struct1 a, float b) {
     return a;
 }
 
+JL_DLLEXPORT struct1 test_1long_a(jint x1, jint x2, jint x3, struct1 a, float b) {
+    //Unpack a "small" struct { float, double }
+    if (verbose) fprintf(stderr,"(%" PRIjint ", %" PRIjint ", %" PRIjint ") & %g + %g i & %g\n", x1, x2, x3, a.x, a.y, b);
+    a.x += b + x1 + x2 + x3;
+    a.y -= b * 2;
+    return a;
+}
+
+JL_DLLEXPORT struct1 test_1long_b(jint x1, double x2, jint x3, struct1 a, float b) {
+    //Unpack a "small" struct { float, double }
+    if (verbose) fprintf(stderr,"(%" PRIjint ", %g, %" PRIjint ") & %g + %g i & %g\n", x1, x2, x3, a.x, a.y, b);
+    a.x += b + x1 + x2 + x3;
+    a.y -= b * 2;
+    return a;
+}
+
+JL_DLLEXPORT struct1 test_1long_c(jint x1, double x2, jint x3, jint x4, struct1 a, float b) {
+    //Unpack a "small" struct { float, double }
+    if (verbose) fprintf(stderr,"(%" PRIjint ", %g, %" PRIjint ", %" PRIjint ") & %g + %g i & %g\n", x1, x2, x3, x4, a.x, a.y, b);
+    a.x += b + x1 + x2 + x3 + x4;
+    a.y -= b * 2;
+    return a;
+}
+
 JL_DLLEXPORT struct2a test_2a(struct2a a, int32_t b) {
     //Unpack a ComplexPair{Int32} struct
     if (verbose) fprintf(stderr,"%" PRId32 " + %" PRId32 " i & %" PRId32 "\n", a.x.x, a.y.y, b);
@@ -514,6 +538,15 @@ JL_DLLEXPORT struct_big test_big(struct_big a) {
     //Unpack a "big" struct { int, int, char }
     if (verbose) fprintf(stderr,"%" PRIjint " %" PRIjint " %c\n", a.x, a.y, a.z);
     a.x += 1;
+    a.y -= 2;
+    a.z -= 'A';
+    return a;
+}
+
+JL_DLLEXPORT struct_big test_big_long(jint x1, jint x2, jint x3, struct_big a) {
+    //Unpack a "big" struct { int, int, char }
+    if (verbose) fprintf(stderr,"(%" PRIjint ", %" PRIjint ", %" PRIjint ") %" PRIjint " %" PRIjint " %c\n", x1, x2, x3, a.x, a.y, a.z);
+    a.x += 1 + x1 + x2 + x3;
     a.y -= 2;
     a.z -= 'A';
     return a;
