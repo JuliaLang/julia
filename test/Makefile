@@ -12,12 +12,12 @@ default: all
 ifeq ($(OS),WINNT)
 ULIMIT_TEST=
 else
-ULIMIT_TEST=ulimit -n 128
+ULIMIT_TEST=ulimit -n 128 &&
 endif
 
 $(TESTS):
 	@cd $(SRCDIR) && \
-	$(ULIMIT_TEST) && \
+	$(ULIMIT_TEST) \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
 
 perf:
