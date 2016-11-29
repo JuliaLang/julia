@@ -414,6 +414,16 @@ function dict_identifier_key(str,tag)
     return (obj, partial_key, begin_of_key)
 end
 
+# This needs to be a separate non-inlined function, see #19441
+@noinline function find_dict_matches(identifier, partial_key)
+    matches = []
+    for key in keys(identifier)
+        rkey = repr(key)
+        startswith(rkey,partial_key) && push!(matches,rkey)
+    end
+    return matches
+end
+
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
@@ -425,11 +435,7 @@ function completions(string, pos)
     identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
     if identifier !== nothing
         if partial_key !== nothing
-            matches = []
-            for key in keys(identifier)
-                rkey = repr(key)
-                startswith(rkey,partial_key) && push!(matches,rkey)
-            end
+            matches = find_dict_matches(identifier, partial_key)
             length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
             length(matches)>0 && return sort(matches), loc:pos, true
         else
