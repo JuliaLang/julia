@@ -27,11 +27,11 @@ for (i,dt) in enumerate([Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec])
     @test Dates.monthname(i) == monthnames[i]
     @test Dates.monthabbr(dt) == monthnames[i][1:3]
     @test Dates.monthabbr(i) == monthnames[i][1:3]
-    @test Dates.dayofweek(dt) == daysofweek[i]
+    @test Dates.DayOfWeek(dt) == daysofweek[i]
     @test Dates.dayname(dt) == dows[i]
-    @test Dates.dayname(Dates.dayofweek(dt)) == dows[i]
+    @test Dates.dayname(Dates.DayOfWeek(dt)) == dows[i]
     @test Dates.dayabbr(dt) == dows[i][1:3]
-    @test Dates.dayabbr(Dates.dayofweek(dt)) == dows[i][1:3]
+    @test Dates.dayabbr(Dates.DayOfWeek(dt)) == dows[i][1:3]
     @test Dates.daysinmonth(dt) == daysinmonth[i]
 end
 
@@ -84,14 +84,14 @@ Dates.VALUETOMONTH["french"] = french_months
 @test Dates.daysinyear(Dates.DateTime(2001)) == 365
 
 # Days of week from Monday = 1 to Sunday = 7
-@test Dates.dayofweek(Dates.DateTime(2013,12,22)) == 7
-@test Dates.dayofweek(Dates.DateTime(2013,12,23)) == 1
-@test Dates.dayofweek(Dates.DateTime(2013,12,24)) == 2
-@test Dates.dayofweek(Dates.DateTime(2013,12,25)) == 3
-@test Dates.dayofweek(Dates.DateTime(2013,12,26)) == 4
-@test Dates.dayofweek(Dates.DateTime(2013,12,27)) == 5
-@test Dates.dayofweek(Dates.DateTime(2013,12,28)) == 6
-@test Dates.dayofweek(Dates.DateTime(2013,12,29)) == 7
+@test Dates.DayOfWeek(Dates.DateTime(2013,12,22)) == Dates.Sun
+@test Dates.DayOfWeek(Dates.DateTime(2013,12,23)) == Dates.Mon
+@test Dates.DayOfWeek(Dates.DateTime(2013,12,24)) == Dates.Tue
+@test Dates.DayOfWeek(Dates.DateTime(2013,12,25)) == Dates.Wed
+@test Dates.DayOfWeek(Dates.DateTime(2013,12,26)) == Dates.Thu
+@test Dates.DayOfWeek(Dates.DateTime(2013,12,27)) == Dates.Fri
+@test Dates.DayOfWeek(Dates.DateTime(2013,12,28)) == Dates.Sat
+@test Dates.DayOfWeek(Dates.DateTime(2013,12,29)) == Dates.Sun
 
 # There are 5 Sundays in December, 2013
 @test Dates.daysofweekinmonth(Dates.DateTime(2013,12,1)) == 5

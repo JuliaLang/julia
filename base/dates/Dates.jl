@@ -24,7 +24,7 @@ export Period, DatePeriod, TimePeriod,
        yearmonthday, yearmonth, monthday, year, month, week, day,
        hour, minute, second, millisecond, dayofmonth,
        # query.jl
-       dayofweek, isleapyear, daysinmonth, daysinyear, dayofyear, dayname, dayabbr,
+       DayOfWeek, isleapyear, daysinmonth, daysinyear, dayofyear, dayname, dayabbr,
        dayofweekofmonth, daysofweekinmonth, monthname, monthabbr,
        quarterofyear, dayofquarter,
        Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday,

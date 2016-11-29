@@ -1133,4 +1133,28 @@ eval(Base.Dates, quote
      recur{T<:TimeType}(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000) = recur(fun, start:step:stop; negate=negate)
 end)
 
+# #19212
+eval(Base.Dates,quote
+    @deprecate(dayofweek(dt), Int64(DayOfWeek(dt)))
+    @deprecate(tonext(dt::TimeType, dow::Int; same::Bool=false),
+               tonext(dt, DayOfWeek(dow); same=same))
+    @deprecate(toprev(dt::TimeType, dow::Int; same::Bool=false),
+               toprev(dt, DayOfWeek(dow); same=same))
+    @deprecate(tofirst(dt::TimeType, dow::Int; of::Union{Type{Year}, Type{Month}}=Month),
+               tofirst(dt, DayOfWeek(dow); same=same))
+    @deprecate(tolast(dt::TimeType, dow::Int; of::Union{Type{Year}, Type{Month}}=Month),
+               tolast(dt, DayOfWeek(dow); same=same))
+    @deprecate(dayname(dt::Integer;locale::AbstractString="english"),
+               dayname(DayOfWeek(dt); locale=locale))
+    @deprecate(dayabbr(dt::Integer;locale::AbstractString="english"),
+               dayabbr(DayOfWeek(dt); locale=locale))
+    @deprecate(ismonday(dt::TimeType), DayOfWeek(dt) == Mon)
+    @deprecate(istuesday(dt::TimeType), DayOfWeek(dt) == Tue)
+    @deprecate(iswednesday(dt::TimeType), DayOfWeek(dt) == Wed)
+    @deprecate(isthursday(dt::TimeType), DayOfWeek(dt) == Thu)
+    @deprecate(isfriday(dt::TimeType), DayOfWeek(dt) == Fri)
+    @deprecate(issaturday(dt::TimeType), DayOfWeek(dt) == Sat)
+    @deprecate(issunday(dt::TimeType), DayOfWeek(dt) == Sun)
+end)
+
 # End deprecations scheduled for 0.6

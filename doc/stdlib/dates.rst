@@ -61,7 +61,7 @@ Dates Functions
 ---------------
 
 All Dates functions are defined in the ``Dates`` module; note that only the ``Date``, ``DateTime``, and ``now`` functions are exported;
-to use all other ``Dates`` functions, you'll need to prefix each function call with an explicit ``Dates.``, e.g. ``Dates.dayofweek(dt)``.
+to use all other ``Dates`` functions, you'll need to prefix each function call with an explicit ``Dates.``, e.g. ``Dates.DayOfWeek(dt)``.
 Alternatively, you can write ``using Base.Dates`` to bring all exported functions into ``Main`` to be used without the ``Dates.`` prefix.
 
 
@@ -263,6 +263,12 @@ Accessor Functions
 
    The day of month of a ``Date`` or ``DateTime`` as an ``Int64``\ .
 
+.. function:: days(dt::TimeType) -> Int64
+
+   .. Docstring generated from Julia source
+
+   The Rata Die day number: the number of days since ``Date("0000-12-31")``\ .
+
 .. function:: hour(dt::DateTime) -> Int64
 
    .. Docstring generated from Julia source
@@ -368,11 +374,22 @@ Query Functions
 
    Return the abbreviated name corresponding to the day of the week of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
-.. function:: dayofweek(dt::TimeType) -> Int64
+.. function:: DayOfWeek(n::Integer)
 
    .. Docstring generated from Julia source
 
-   Returns the day of the week as an ``Int64`` with ``1 = Monday, 2 = Tuesday, etc.``\ .
+   An ``Enum`` with ``DayOfWeek(1) == Monday``\ , ``DayOfWeek(2) == Tuesday``\ , etc. Accepts an arbitrary-sized integer, from which days will be computed modulo 7.
+
+   .. doctest::
+
+       julia> DayOfWeek(8) == Monday
+       true
+
+.. function:: DayOfWeek(dt::TimeType)
+
+   .. Docstring generated from Julia source
+
+   Returns the day of the week of ``dt`` as an element of the enum ``DayOfWeek``\ .
 
 .. function:: dayofmonth(dt::TimeType) -> Int64
 
@@ -385,6 +402,8 @@ Query Functions
    .. Docstring generated from Julia source
 
    For the day of week of ``dt``\ , returns which number it is in ``dt``\ 's month. So if the day of the week of ``dt`` is Monday, then ``1 = First Monday of the month, 2 = Second Monday of the month, etc.`` In the range 1:5.
+
+   See also ``daysofweekinmonth``\ .
 
 .. function:: daysofweekinmonth(dt::TimeType) -> Int
 
@@ -449,17 +468,17 @@ Adjuster Functions
 
    Truncates the value of ``dt`` according to the provided ``Period`` type. E.g. if ``dt`` is ``1996-01-01T12:30:00``\ , then ``trunc(dt,Day) == 1996-01-01T00:00:00``\ .
 
-.. function:: firstdayofweek(dt::TimeType) -> TimeType
+.. function:: firstdayofweek(dt::TimeType[, firstday::DayOfWeek=Monday]) -> TimeType
 
    .. Docstring generated from Julia source
 
-   Adjusts ``dt`` to the Monday of its week.
+   Adjusts ``dt`` to the first day of its week. The optional second argument specifies the ``DayOfWeek`` which starts the week: by default, this is ``Monday``\ , as per ISO 8601.
 
-.. function:: lastdayofweek(dt::TimeType) -> TimeType
+.. function:: lastdayofweek(dt::TimeType[, lastday::DayOfWeek=Sunday]) -> TimeType
 
    .. Docstring generated from Julia source
 
-   Adjusts ``dt`` to the Sunday of its week.
+   Adjusts ``dt`` to the last day of its week. The optional second argument specifies the ``DayOfWeek`` which ends the week: by default, this is ``Sunday``\ , as per ISO 8601.
 
 .. function:: firstdayofmonth(dt::TimeType) -> TimeType
 
@@ -497,25 +516,25 @@ Adjuster Functions
 
    Adjusts ``dt`` to the last day of its quarter.
 
-.. function:: tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+.. function:: tonext(dt::TimeType, dow::DayOfWeek; same::Bool=false) -> TimeType
 
    .. Docstring generated from Julia source
 
-   Adjusts ``dt`` to the next day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the next ``dow``\ , allowing for no adjustment to occur.
+   Adjusts ``dt`` to the next day of week corresponding to ``dow``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the next ``dow``\ , allowing for no adjustment to occur.
 
-.. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+.. function:: toprev(dt::TimeType, dow::DayOfWeek; same::Bool=false) -> TimeType
 
    .. Docstring generated from Julia source
 
-   Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the previous ``dow``\ , allowing for no adjustment to occur.
+   Adjusts ``dt`` to the previous day of week corresponding to ``dow``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the previous ``dow``\ , allowing for no adjustment to occur.
 
-.. function:: tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
+.. function:: tofirst(dt::TimeType, dow::DayOfWeek; of=Month) -> TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the first ``dow`` of its month. Alternatively, ``of=Year`` will adjust to the first ``dow`` of the year.
 
-.. function:: tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
+.. function:: tolast(dt::TimeType, dow::DayOfWeek; of=Month) -> TimeType
 
    .. Docstring generated from Julia source
 
