@@ -289,9 +289,10 @@ for T in types
 end
 
 # Operators
-TestTypes = Union{Base.NullSafeTypes, BigInt, BigFloat,
-                  Complex{Int}, Complex{Float64}, Complex{BigFloat},
-                  Rational{Int}, Rational{BigInt}}.types
+TestTypes = [[T.parameters[1] for T in Base.NullSafeTypes.types];
+             [BigInt, BigFloat,
+              Complex{Int}, Complex{Float64}, Complex{BigFloat},
+              Rational{Int}, Rational{BigInt}]]
 for S in TestTypes, T in TestTypes
     u0 = zero(S)
     u1 = one(S)
@@ -423,9 +424,9 @@ sqr(x) = x^2
 @test map(x -> x ? 0 : 0.0, Nullable{Bool}()) |> isnull_oftype(Union{})
 
 # broadcast and elementwise
-#=
-@test sin.(Nullable(0.0))             === Nullable(0.0)
-@test sin.(Nullable{Float64}())       |> isnull_oftype(Float64)
+# @inferred cannot be used on these because sin.() is not a call expression
+@test sin.(Nullable(0.0))            === Nullable(0.0)
+@test sin.(Nullable{Float64}())      |> isnull_oftype(Float64)
 
 @test Nullable(8) .+ Nullable(10)     === Nullable(18)
 @test Nullable(8) .- Nullable(10)     === Nullable(-2)
@@ -446,9 +447,10 @@ sqr(x) = x^2
 @test Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
     Nullable(1) .+ Nullable(1) |> isnull_oftype(Int)
 
+# these are not inferrable because there are too many arguments
 us = map(Nullable, 1:20)
-@test broadcast(max, us...)                  === Nullable(20)
-@test broadcast(max, us..., Nullable{Int}()) |> isnull_oftype(Int)
+@test broadcast(max, us...) === Nullable(20)
+@test isnull(broadcast(max, us..., Nullable{Int}()))
 
 # test all elementwise operations
 for (eop, op) in ((.+, +), (.-, -), (.*, *), (./, /), (.\, \), (.//, //),
@@ -460,8 +462,20 @@ for (eop, op) in ((.+, +), (.-, -), (.*, *), (./, /), (.\, \), (.//, //),
     @test eop(Nullable{Int}(), Nullable(1))     |> isnull_oftype(typeof(res))
     @test eop(Nullable(1), Nullable{Int}())     |> isnull_oftype(typeof(res))
     @test eop(Nullable{Int}(), Nullable{Int}()) |> isnull_oftype(typeof(res))
+    @test eop(Nullable(1), 1)                   === Nullable(res)
+    @test eop(1, Nullable(1))                   === Nullable(res)
 end
-=#
+
+# test reasonable results for Union{}
+# the exact types of these is finnicky and depends on implementation details
+# but is guaranteed to be at worst concrete and possibly Union{} on a good day
+@test isnull(@inferred(Nullable() .+ Nullable()))
+@test isnull(@inferred(Nullable() .+ 1))
+@test isnull(@inferred(Nullable() .+ Nullable(1)))
+
+# test that things don't pessimize because of non-homogenous types
+@test Nullable(10.5) ===
+    @inferred(broadcast(+, 1, 2, Nullable(3), Nullable(4.0), Nullable(1//2)))
 
 # issue #11675
 @test repr(Nullable()) == "Nullable{Union{}}()"

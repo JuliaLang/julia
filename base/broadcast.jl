@@ -4,7 +4,8 @@ module Broadcast
 
 using Base.Cartesian
 using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
-            _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
+            _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
+            nullable_returntype, null_safe_eltype_op, hasvalue
 import Base: broadcast, broadcast!
 export bitbroadcast, dotview
 export broadcast_getindex, broadcast_setindex!
@@ -31,6 +32,7 @@ containertype{T<:Ptr}(::Type{T}) = Any
 containertype{T<:Tuple}(::Type{T}) = Tuple
 containertype{T<:Ref}(::Type{T}) = Array
 containertype{T<:AbstractArray}(::Type{T}) = Array
+containertype{T<:Nullable}(::Type{T}) = Nullable
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
 
@@ -39,6 +41,8 @@ promote_containertype(::Type{Array}, ct) = Array
 promote_containertype(ct, ::Type{Array}) = Array
 promote_containertype(::Type{Tuple}, ::Type{Any}) = Tuple
 promote_containertype(::Type{Any}, ::Type{Tuple}) = Tuple
+promote_containertype(::Type{Any}, ::Type{Nullable}) = Nullable
+promote_containertype(::Type{Nullable}, ::Type{Any}) = Nullable
 promote_containertype{T}(::Type{T}, ::Type{T}) = T
 
 ## Calculate the broadcast indices of the arguments, or error if incompatible
@@ -49,6 +53,7 @@ broadcast_indices(::Type{Any}, A) = ()
 broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::Type{Array}, A) = indices(A)
 broadcast_indices(::Type{Array}, A::Ref) = ()
+broadcast_indices(::Type{Nullable}, x) = (Nullable(1, !isnull(x)),)
 @inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
@@ -299,6 +304,17 @@ function broadcast_c(f, ::Type{Tuple}, As...)
     shape = broadcast_indices(As...)
     n = length(shape[1])
     return ntuple(k->f((_broadcast_getindex(A, k) for A in As)...), n)
+end
+@inline function broadcast_c(f, ::Type{Nullable}, a...)
+    nullity = all(hasvalue, a)
+    S = Base._default_eltype(Base.Generator{ziptype(a...), ftype(f, a...)})
+    if isleaftype(S) && null_safe_eltype_op(f, a...)
+        Nullable{S}(f(map(unsafe_get, a)...), nullity)
+    elseif !nullity
+        Nullable{nullable_returntype(S)}()
+    else
+        Nullable(f(map(unsafe_get, a)...))
+    end
 end
 @inline broadcast_c(f, ::Type{Any}, a...) = f(a...)
 

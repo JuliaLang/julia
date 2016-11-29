@@ -175,18 +175,39 @@ vectorization.
 """
 null_safe_op(f::Any, ::Type, ::Type...) = false
 
-typealias NullSafeSignedInts Union{Int128, Int16, Int32, Int64, Int8}
-typealias NullSafeUnsignedInts Union{Bool, UInt128, UInt16, UInt32, UInt64, UInt8}
+typealias NullSafeSignedInts Union{Type{Int128}, Type{Int16}, Type{Int32},
+                                   Type{Int64}, Type{Int8}}
+typealias NullSafeUnsignedInts Union{Type{Bool}, Type{UInt128}, Type{UInt16},
+                                     Type{UInt32}, Type{UInt64}, Type{UInt8}}
 typealias NullSafeInts Union{NullSafeSignedInts, NullSafeUnsignedInts}
-typealias NullSafeFloats Union{Float16, Float32, Float64}
+typealias NullSafeFloats Union{Type{Float16}, Type{Float32}, Type{Float64}}
 typealias NullSafeTypes Union{NullSafeInts, NullSafeFloats}
+typealias EqualOrLess Union{typeof(isequal), typeof(isless)}
 
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isequal), ::Type{S}, ::Type{T}) = true
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isequal), ::Type{Complex{S}}, ::Type{Complex{T}}) = true
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isequal), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
+null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
+
+@pure null_safe_eltype_op(op, a) = null_safe_op(op, eltype(a))
+@pure null_safe_eltype_op(op, a, b) = null_safe_op(op, eltype(a), eltype(b))
+@pure null_safe_eltype_op(op, a, b, c) =
+    null_safe_op(op, eltype(a), eltype(b), eltype(c))
+@generated function null_safe_eltype_op(op, xs...)
+    ops = []
+    for i in 1:length(xs)
+        push!(ops, :(eltype(xs[$i])))
+    end
+    Expr(:call, :null_safe_op, :op, ops...)
+end
+
+@pure _null_safe_eltype_op(op, ::Tuple, Ts...) = true
+@pure null_safe_eltype_op(op, xs...) =
+    _null_safe_eltype_op(op, xs)
+
+null_safe_op(f::EqualOrLess, ::NullSafeTypes, ::NullSafeTypes) = true
+null_safe_op{S,T}(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) =
+    null_safe_op(f, T, S)
+# complex numbers can be compared for equality but not in general ordered
+null_safe_op{S,T}(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) =
+    null_safe_op(isequal, T, S)
 
 """
     isequal(x::Nullable, y::Nullable)
@@ -206,13 +227,6 @@ end
 isequal(x::Nullable{Union{}}, y::Nullable{Union{}}) = true
 isequal(x::Nullable{Union{}}, y::Nullable) = isnull(y)
 isequal(x::Nullable, y::Nullable{Union{}}) = isnull(x)
-
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isless), ::Type{S}, ::Type{T}) = true
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isless), ::Type{Complex{S}}, ::Type{Complex{T}}) = true
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isless), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
 
 """
     isless(x::Nullable, y::Nullable)
@@ -267,7 +281,7 @@ end
 """
 Return the given type if it is concrete, and `Union{}` otherwise.
 """
-concretify{T}(::Type{T}) = isleaftype(T) ? T : Union{}
+nullable_returntype{T}(::Type{T}) = isleaftype(T) ? T : Union{}
 
 """
     map(f, x::Nullable)
@@ -282,17 +296,53 @@ type `Nullable{typeof(f(x))}`.
 function map{T}(f, x::Nullable{T})
     S = promote_op(f, T)
     if isleaftype(S) && null_safe_op(f, T)
-        Nullable{S}(f(unsafe_get(x)), isnull(x))
+        Nullable{S}(f(unsafe_get(x)), !isnull(x))
     else
         if isnull(x)
-            Nullable{concretify(S)}()
+            Nullable{nullable_returntype(S)}()
         else
             Nullable(f(unsafe_get(x)))
         end
     end
 end
 
+# We need the following function and specializations because LLVM cannot
+# optimize !any(isnull, t) without further guidance.
+hasvalue(x::Nullable) = x.hasvalue
+hasvalue(x) = true
+all{N}(f::typeof(hasvalue), t::NTuple{N}) = f(t[1]) & all(f, tail(t))
+all(f::typeof(hasvalue), t::Tuple{}) = true
+
 # optimizations for common cases TODO
 
-# extra null_safe_op overloads
-null_safe_op(+, Int) = true
+# Overloads of null_safe_op
+# Unary operators
+
+# Note this list does not include sqrt since it can raise a DomainError
+for op in (+, -, abs, abs2)
+    null_safe_op(::typeof(op), ::NullSafeTypes) = true
+    null_safe_op{S}(::typeof(op), ::Type{Complex{S}}) = null_safe_op(op, S)
+    null_safe_op{S}(::typeof(op), ::Type{Rational{S}}) = null_safe_op(op, S)
+end
+
+null_safe_op(::typeof(~), ::NullSafeInts) = true
+null_safe_op(::typeof(!), ::Type{Bool}) = true
+
+# Binary operators
+
+# Note this list does not include ^, ÷ and %
+# Operations between signed and unsigned types are not safe: promotion to unsigned
+# gives an InexactError for negative numbers
+for op in (+, -, *, /, &, |, <<, >>, >>>,
+           scalarmin, scalarmax)
+    # to fix ambiguities
+    null_safe_op(::typeof(op), ::NullSafeFloats, ::NullSafeFloats) = true
+    null_safe_op(::typeof(op), ::NullSafeSignedInts, ::NullSafeSignedInts) = true
+    null_safe_op(::typeof(op), ::NullSafeUnsignedInts, ::NullSafeUnsignedInts) = true
+end
+for op in (+, -, *, /)
+    null_safe_op{S,T}(::typeof(op), ::Type{Complex{S}}, ::Type{T}) =
+        null_safe_op(op, T, S)
+    null_safe_op{S,T}(::typeof(op), ::Type{Rational{S}}, ::Type{T}) =
+        null_safe_op(op, T, S)
+end
