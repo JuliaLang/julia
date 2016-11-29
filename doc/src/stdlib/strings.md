@@ -11,6 +11,7 @@ Core.String(::AbstractString)
 Base.transcode
 Base.unsafe_string
 Base.unsafe_wrap(::Type{String}, ::Union{Ptr{Int8}, Ptr{UInt8}}, ::Integer, ::Bool)
+Base.codeunit(::AbstractString, ::Integer)
 Base.ascii
 Base.@r_str
 Base.Docs.@html_str

@@ -182,8 +182,6 @@ else
     typealias UInt UInt32
 end
 
-abstract AbstractString
-
 function Typeof end
 (f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
 
@@ -192,12 +190,19 @@ type ErrorException <: Exception
     msg::AbstractString
     ErrorException(msg::AbstractString) = new(msg)
 end
+
+Expr(args::ANY...) = _expr(args...)
+
+macro _noinline_meta()
+    Expr(:meta, :noinline)
+end
+
 immutable BoundsError        <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(a::ANY) = new(a)
-    BoundsError(a::ANY, i::ANY) = new(a,i)
+    BoundsError(a::ANY) = (@_noinline_meta; new(a))
+    BoundsError(a::ANY, i) = (@_noinline_meta; new(a,i))
 end
 immutable DivideError        <: Exception end
 immutable DomainError        <: Exception end
@@ -221,11 +226,7 @@ end
 
 abstract DirectIndexString <: AbstractString
 
-immutable String <: AbstractString
-    data::Array{UInt8,1}
-    # required to make String("foo") work (#15120):
-    String(d::Array{UInt8,1}) = new(d)
-end
+String(s::String) = s  # no constructor yet
 
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
@@ -277,8 +278,6 @@ immutable VecElement{T}
     VecElement(value::T) = new(value) # disable converting constructor in Core
 end
 VecElement{T}(arg::T) = VecElement{T}(arg)
-
-Expr(args::ANY...) = _expr(args...)
 
 # used by lowering of splicing unquote
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
@@ -338,15 +337,17 @@ Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
 
-
 # primitive Symbol constructors
-Symbol(s::String) = Symbol(s.data)
+function Symbol(s::String)
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
+                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
+                 sizeof(s))
+end
 function Symbol(a::Array{UInt8,1})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-          ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
-          Intrinsics.arraylen(a))
+                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
+                 Intrinsics.arraylen(a))
 end
-
 
 # docsystem basics
 macro doc(x...)
@@ -378,8 +379,8 @@ unsafe_write(io::IO, x::Ptr{UInt8}, nb::Int) =
 write(io::IO, x::UInt8) =
     (ccall(:jl_uv_putb, Void, (Ptr{Void}, UInt8), io_pointer(io), x); 1)
 function write(io::IO, x::String)
-    nb = sizeof(x.data)
-    unsafe_write(io, ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), x.data), nb)
+    nb = sizeof(x)
+    unsafe_write(io, ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), x), nb)
     return nb
 end
 

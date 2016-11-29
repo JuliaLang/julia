@@ -369,20 +369,23 @@ JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (!jl_typeis(a, jl_array_uint8_type))
-        jl_type_error("jl_array_to_string", (jl_value_t*)jl_array_uint8_type, (jl_value_t*)a);
-    jl_value_t *s = jl_gc_alloc(ptls, sizeof(void*), jl_string_type);
-    jl_set_nth_field(s, 0, (jl_value_t*)a);
-    return s;
+    return jl_pchar_to_string(jl_array_data(a), jl_array_len(a));
 }
 
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
-    jl_array_t *a = jl_pchar_to_array(str, len);
-    JL_GC_PUSH1(&a);
-    jl_value_t *s = jl_array_to_string(a);
-    JL_GC_POP();
+    jl_value_t *s = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t)+len+1, jl_string_type);
+    *(size_t*)s = len;
+    memcpy((char*)s + sizeof(size_t), str, len);
+    ((char*)s + sizeof(size_t))[len] = 0;
+    return s;
+}
+
+JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
+{
+    jl_value_t *s = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t)+len+1, jl_string_type);
+    *(size_t*)s = len;
+    ((char*)s + sizeof(size_t))[len] = 0;
     return s;
 }
 

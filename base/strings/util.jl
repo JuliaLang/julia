@@ -52,7 +52,8 @@ function endswith(a::AbstractString, b::AbstractString)
 end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
-startswith(a::String, b::String) = startswith(a.data, b.data)
+startswith(a::String, b::String) =
+    (a.len >= b.len && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, b.len) == 0)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
     (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
@@ -87,9 +88,9 @@ function chomp(s::AbstractString)
 end
 function chomp(s::String)
     i = endof(s)
-    if i < 1 || s.data[i] != 0x0a
+    if i < 1 || codeunit(s,i) != 0x0a
         SubString(s, 1, i)
-    elseif i < 2 || s.data[i-1] != 0x0d
+    elseif i < 2 || codeunit(s,i-1) != 0x0d
         SubString(s, 1, i-1)
     else
         SubString(s, 1, i-2)
@@ -97,13 +98,14 @@ function chomp(s::String)
 end
 
 # NOTE: use with caution -- breaks the immutable string convention!
-function chomp!(s::String)
-    if !isempty(s) && s.data[end] == 0x0a
-        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
-        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
-    end
-    return s
-end
+# TODO: this is hard to provide with the new representation
+#function chomp!(s::String)
+#    if !isempty(s) && codeunit(s,s.len) == 0x0a
+#        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
+#        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
+#    end
+#    return s
+#end
 chomp!(s::AbstractString) = chomp(s) # copying fallback for other string types
 
 const _default_delims = [' ','\t','\n','\v','\f','\r']
@@ -340,7 +342,7 @@ function replace(str::String, pattern, repl, limit::Integer)
     ensureroom(out, floor(Int, 1.2sizeof(str)))
     while j != 0
         if i == a || i <= k
-            write_sub(out, str.data, i, j-i)
+            unsafe_write(out, pointer(str, i), UInt(j-i))
             _replace(out, repl, str, r, pattern)
         end
         if k<j
@@ -446,7 +448,7 @@ end
 # check for pure ASCII-ness
 
 function ascii(s::String)
-    for (i, b) in enumerate(s.data)
+    for (i, b) in enumerate(Vector{UInt8}(s))
         b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
     end
     return s

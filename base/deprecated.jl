@@ -430,7 +430,7 @@ end
                 endn += 1
             end
             (endn > idx) && (endn -= 1)
-            splice!(a, idx:endn, invalids_as.data)
+            splice!(a, idx:endn, Vector{UInt8}(invalids_as))
             l = length(a)
         end
         String(a)

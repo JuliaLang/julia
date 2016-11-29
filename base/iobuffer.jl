@@ -250,7 +250,7 @@ isopen(io::AbstractIOBuffer) = io.readable || io.writable || io.seekable || nb_a
 function String(io::AbstractIOBuffer)
     io.readable || throw(ArgumentError("IOBuffer is not readable"))
     io.seekable || throw(ArgumentError("IOBuffer is not seekable"))
-    return String(copy!(Array{UInt8}(io.size), 1, io.data, 1, io.size))
+    return unsafe_string(pointer(io.data), io.size)
 end
 
 """
@@ -326,22 +326,11 @@ function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     return written
 end
 
-function write_sub{T}(to::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
+function write_sub(to::AbstractIOBuffer, a::AbstractArray{UInt8}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    local written::Int
-    if isbits(T) && isa(a,Array)
-        nb = UInt(nel * sizeof(T))
-        written = unsafe_write(to, pointer(a, offs), nb)
-    else
-        written = 0
-        ensureroom(to, UInt(sizeof(a)))
-        for i = offs:offs+nel-1
-            written += write(to, a[i])
-        end
-    end
-    return written
+    unsafe_write(to, pointer(a, offs), UInt(nel))
 end
 
 @inline function write(to::AbstractIOBuffer, a::UInt8)
