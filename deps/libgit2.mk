@@ -47,6 +47,10 @@ OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)
 ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/cert.pem
 endif
+# This certfile location observed on Ubuntu 16.04
+ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca-certificates.crt ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/certs/ca-certificates.crt
+endif
 # This certfile location observed on Debian 7
 ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
