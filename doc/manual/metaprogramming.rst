@@ -45,11 +45,21 @@ each string into an object called an expression, represented by the Julia type
 
     julia> typeof(ex1)
     Expr
+    
 
 :obj:`Expr` objects contain three parts:
 
-- a ``Symbol`` identifying the kind of expression. A symbol is an
-  `interned string <https://en.wikipedia.org/wiki/String_interning>`_
+.. doctest::
+
+    julia> fieldnames(Expr)
+    3-element Array{Symbol,1}:
+     :head
+     :args
+     :typ 
+
+- `head` -- a ``Symbol`` identifying the 
+  `kind of expression <http://docs.julialang.org/en/release-0.5/devdocs/ast/#expr-types>`_. 
+  A symbol is an `interned string <https://en.wikipedia.org/wiki/String_interning>`_
   identifier (more discussion below).
 
 .. doctest::
@@ -57,7 +67,7 @@ each string into an object called an expression, represented by the Julia type
     julia> ex1.head
     :call
 
-- the expression arguments, which may be symbols, other expressions, or literal values:
+- `args` -- the expression arguments, which may be symbols, other expressions, or literal values:
 
 .. doctest::
 
@@ -67,7 +77,7 @@ each string into an object called an expression, represented by the Julia type
      1
      1
 
-- finally, the expression result type, which may be annotated by the user or inferred
+- `typ` -- the expression result type, which may be annotated by the user or inferred
   by the compiler (and may be ignored completely for the purposes of this chapter):
 
 .. doctest::
@@ -158,7 +168,8 @@ the value bound to that symbol in the appropriate :ref:`scope
 <man-variables-and-scoping>`.
 
 Sometimes extra parentheses around the argument to ``:`` are needed to avoid
-ambiguity in parsing.:
+ambiguity in parsing, e.g. Distinguishing between the token `:` as in `1:5` 
+and the token `::` as in `x::Int`:
 
 .. doctest::
 
