@@ -39,7 +39,7 @@ matrix:
     #             - gfortran-5
     - os: osx
       env: ARCH="x86_64"
-      osx_image: xcode8
+      osx_image: xcode6.4
 # cache:
 #   directories:
 #     - $TRAVIS_BUILD_DIR/deps/srccache
