@@ -286,6 +286,7 @@ typedef struct _jl_method_instance_t {
     // with the same name as the generated functions for this linfo, suitable
     // for referencing in LLVM IR
     jl_llvm_functions_t functionObjectsDecls;
+    uint8_t pure;
 } jl_method_instance_t;
 
 // all values are callable as Functions

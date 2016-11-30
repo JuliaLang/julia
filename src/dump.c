@@ -965,6 +965,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         else {
             write_int8(s->s, li->jlcall_api);
         }
+        write_int8(s->s, li->pure);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -1626,6 +1627,7 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
         li->jlcall_api = jlcall_api;
     }
     li->compile_traced = 0;
+    li->pure = read_int8(s->s);
     return (jl_value_t*)li;
 }
 

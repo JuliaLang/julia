@@ -3930,7 +3930,7 @@ void jl_init_types(void)
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(13,
+                        jl_svec(14,
                                 jl_symbol("specTypes"),
                                 jl_symbol("rettype"),
                                 jl_symbol("sparam_vals"),
@@ -3942,8 +3942,9 @@ void jl_init_types(void)
                                 jl_symbol(""),
                                 jl_symbol("fptr"),
                                 jl_symbol("unspecialized_ducttape"),
-                                jl_symbol(""), jl_symbol("")),
-                        jl_svec(13,
+                                jl_symbol(""), jl_symbol(""),
+                                jl_symbol("pure")),
+                        jl_svec(14,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_simplevector_type,
@@ -3955,7 +3956,8 @@ void jl_init_types(void)
                                 jl_bool_type,
                                 jl_any_type, // void*
                                 jl_any_type, // void*
-                                jl_any_type, jl_any_type), // void*, void*
+                                jl_any_type, jl_any_type, // void*, void*
+                                jl_uint8_type),
                         0, 1, 3);
 
     jl_typector_type =

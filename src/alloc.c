@@ -418,6 +418,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->specTypes = NULL;
     li->inInference = 0;
     li->def = NULL;
+    li->pure = 0;
     return li;
 }
 

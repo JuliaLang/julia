@@ -39,6 +39,10 @@ const Slot_Assigned     = 2
 const Slot_AssignedOnce = 16
 const Slot_UsedUndef    = 32
 
+const Pure_Unknown = 0x0
+const Pure_False = 0x1
+const Pure_True = 0x2
+
 #### inference state types ####
 
 immutable NotFound end
@@ -72,6 +76,7 @@ type InferenceState
     stmt_types::Vector{Any}
     # return type
     bestguess #::Type
+    pure::UInt8
     # current active instruction pointers
     ip::IntSet
     nstmts::Int
@@ -184,10 +189,11 @@ type InferenceState
         push!(W, 1) #initial pc to visit
 
         inmodule = toplevel ? current_module() : linfo.def.module # toplevel thunks are inferred in the current module
+        init_pure = src.pure ? Pure_True : Pure_Unknown
         frame = new(
             sp, nl, inmodule, 0,
             params,
-            linfo, src, nargs, s, Union{}, W, n,
+            linfo, src, nargs, s, Union{}, init_pure, W, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, ssavalue_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
@@ -197,6 +203,16 @@ type InferenceState
         nactive[] += 1
         return frame
     end
+end
+
+function set_unpure(frame::InferenceState)
+    if frame.pure != Pure_True
+        frame.pure = Pure_False
+    end
+    return
+end
+
+function set_unpure(frame::Void)
 end
 
 # create copies of the CodeInfo definition, and any fields that type-inference might modify
@@ -702,7 +718,7 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
     meth = entry.func
     (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
                       argtype, meth.sig, meth.tvars)::SimpleVector
-    return typeinf_edge(meth::Method, ti, env, sv)
+    return typeinf_edge(meth::Method, ti, env, sv)[1]
 end
 
 function tuple_tfunc(argtype::ANY)
@@ -729,6 +745,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
     elseif f === svec
         return SimpleVector
     elseif f === arrayset
+        set_unpure(sv)
         if length(argtypes) < 3 && !isva
             return Bottom
         end
@@ -738,6 +755,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
         end
         return a1
     elseif f === arrayref
+        set_unpure(sv)
         if length(argtypes) < 2 && !isva
             return Bottom
         end
@@ -750,6 +768,7 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
         end
         return Expr
     elseif f === invoke
+        set_unpure(sv) # For #265
         if length(argtypes)>1 && isa(argtypes[1], Const)
             af = argtypes[1].val
             sig = argtypes[2]
@@ -760,7 +779,11 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
         return Any
     end
     if isva
+        set_unpure(sv)
         return Any
+    end
+    if !is_pure_builtin(f)
+        set_unpure(sv)
     end
     if isa(f, IntrinsicFunction)
         iidx = Int(reinterpret(Int32, f::IntrinsicFunction))+1
@@ -835,6 +858,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv::InferenceState)
     applicable = _methods_by_ftype(argtype, 4)
     rettype = Bottom
     if applicable === false
+        set_unpure(sv)
         # this means too many methods matched
         return Any
     end
@@ -844,7 +868,12 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv::InferenceState)
         # TODO: it would be nice to return Bottom here, but during bootstrap we
         # often compile code that calls methods not defined yet, so it is much
         # safer just to fall back on dynamic dispatch.
+        set_unpure(sv)
         return Any
+    end
+    # Be conservative for #265 here....
+    if length(x) != 1 || !isleaftype(argtype)
+        set_unpure(sv)
     end
     for (m::SimpleVector) in x
         sig = m[1]::DataType
@@ -955,7 +984,8 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv::InferenceState)
             sig = recomputed[1]::DataType
             sparams = recomputed[2]::SimpleVector
         end
-        rt = typeinf_edge(method, sig, sparams, sv)
+        rt, ispure = typeinf_edge(method, sig, sparams, sv)
+        ispure || set_unpure(sv)
         rettype = tmerge(rettype, rt)
         if rettype === Any
             break
@@ -1070,9 +1100,10 @@ function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, vtypes::VarTable, sv:
         return false
     end
     meth = meth[1]::SimpleVector
+    methsp = meth[2]
     method = meth[3]::Method
-    # TODO: check pure on the inferred thunk
-    if method.isstaged || !method.source.pure
+    if ((method.isstaged || !method.source.pure) &&
+        !typeinf_edge(method, atype, methsp, sv)[2])
         return false
     end
 
@@ -1099,6 +1130,7 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
                 af = aft.instance
             else
                 # TODO jb/functions: take advantage of case where non-constant `af`'s type is known
+                set_unpure(sv)
                 return Any
             end
         end
@@ -1106,6 +1138,7 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
     end
     for i=2:(length(argtypes)-1)
         if isvarargtype(argtypes[i])
+            set_unpure(sv)
             return Any
         end
     end
@@ -1119,6 +1152,7 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
                 return Const(ft.name.mt.kwsorter)
             end
         end
+        set_unpure(sv)
         return Any
     end
 
@@ -1147,6 +1181,7 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
     t !== false && return t
 
     if istopfunction(tm, f, :promote_type) || istopfunction(tm, f, :typejoin)
+        set_unpure(sv)
         return Type
     end
 
@@ -1187,6 +1222,7 @@ function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
         else
             for i = 2:(length(argtypes)-1)
                 if isvarargtype(argtypes[i])
+                    set_unpure(sv)
                     return Any
                 end
             end
@@ -1208,9 +1244,9 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     elseif isa(e,Slot)
         return vtypes[slot_id(e)].typ
     elseif isa(e,Symbol)
-        return abstract_eval_global(sv.mod, e)
+        return abstract_eval_global(sv.mod, e, sv)
     elseif isa(e,GlobalRef)
-        return abstract_eval_global(e.mod, e.name)
+        return abstract_eval_global(e.mod, e.name, sv)
     end
 
     if !isa(e,Expr)
@@ -1251,6 +1287,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
             end
         end
     elseif e.head === :method
+        set_unpure(sv)
         t = (length(e.args) == 1) ? Any : Void
     elseif e.head === :copyast
         t = abstract_eval(e.args[1], vtypes, sv)
@@ -1259,6 +1296,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     elseif e.head === :invoke
         error("type inference data-flow error: tried to double infer a function")
     else
+        is_meta_expr(e) || set_unpure(sv)
         t = Any
     end
     if isa(t,TypeVar)
@@ -1285,10 +1323,11 @@ function abstract_eval_constant(x::ANY)
     return Const(x)
 end
 
-function abstract_eval_global(M::Module, s::Symbol)
+function abstract_eval_global(M::Module, s::Symbol, sv=nothing)
     if isdefined(M,s) && isconst(M,s)
         return abstract_eval_constant(getfield(M,s))
     end
+    set_unpure(sv)
     return Any
 end
 
@@ -1319,6 +1358,8 @@ function abstract_interpret(e::ANY, vtypes::VarTable, sv::InferenceState)
         if isa(lhs,Slot) || isa(lhs,SSAValue)
             # don't bother for GlobalRef
             return StateUpdate(lhs, VarState(t,false), vtypes)
+        else
+            set_unpure(sv)
         end
     elseif e.head === :call
         t = abstract_eval(e, vtypes, sv)
@@ -1327,6 +1368,7 @@ function abstract_interpret(e::ANY, vtypes::VarTable, sv::InferenceState)
         t = abstract_eval(e.args[1], vtypes, sv)
         t === Bottom && return ()
     elseif e.head === :method
+        set_unpure(sv)
         fname = e.args[1]
         if isa(fname,Slot)
             return StateUpdate(fname, VarState(Any,false), vtypes)
@@ -1621,25 +1663,26 @@ end
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller::InferenceState)
     code = code_for_method(method, atypes, sparams)
-    code === nothing && return Any
+    code === nothing && return (Any, false)
     code = code::MethodInstance
     if isdefined(code, :inferred)
         # return rettype if the code is already inferred
         # staged functions make this hard since they have two "inferred" conditions,
         # so need to check whether the code itself is also inferred
         inf = code.inferred
+        ispure = code.pure != 0
         if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
             if isdefined(code, :inferred_const)
-                return abstract_eval_constant(code.inferred_const)
+                return abstract_eval_constant(code.inferred_const), ispure
             else
-                return code.rettype
+                return code.rettype, ispure
             end
         end
     end
     frame = typeinf_frame(code, caller, true, true, caller.params)
-    frame === nothing && return Any
+    frame === nothing && return (Any, false)
     frame = frame::InferenceState
-    return frame.bestguess
+    return frame.bestguess, frame.pure == Pure_True
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
@@ -1844,6 +1887,9 @@ function typeinf_frame(frame)
                 end
             elseif isa(stmt, GotoNode)
                 pc´ = (stmt::GotoNode).label
+                if pc´ <= pc
+                    set_unpure(frame)
+                end
             elseif isa(stmt, Expr)
                 stmt = stmt::Expr
                 hd = stmt.head
@@ -1851,6 +1897,9 @@ function typeinf_frame(frame)
                     condt = abstract_eval(stmt.args[1], s[pc], frame)
                     condval = isa(condt, Const) ? condt.val : nothing
                     l = stmt.args[2]::Int
+                    if l <= pc
+                        set_unpure(frame)
+                    end
                     # constant conditions
                     if condval === true
                     elseif condval === false
@@ -1882,6 +1931,7 @@ function typeinf_frame(frame)
                         unmark_fixedpoint(frame)
                     end
                 elseif hd === :enter
+                    set_unpure(frame) # This can create a loop
                     l = stmt.args[1]::Int
                     frame.cur_hand = (l, frame.cur_hand)
                     # propagate type info to exception handler
@@ -1991,6 +2041,9 @@ function finish(me::InferenceState)
     # set `inworkq` to prevent it from trying to look
     # at the object in any detail
     @assert me.inworkq
+    if me.pure != Pure_False
+        me.pure = Pure_True
+    end
 
     # annotate fulltree with type information
     gt = me.src.ssavaluetypes
@@ -2037,7 +2090,7 @@ function finish(me::InferenceState)
     end
 
     const_api = false
-    ispure = me.src.pure
+    ispure = me.pure == Pure_True
     inferred = me.src
     if const_ret && inferred_const !== nothing
         if !ispure && length(me.src.code) < 10
@@ -2094,6 +2147,7 @@ function finish(me::InferenceState)
     end
 
     me.src.inferred = true
+    me.linfo.pure = ispure
     me.linfo.inInference = false
     # finalize and record the linfo result
     me.inferred = true
