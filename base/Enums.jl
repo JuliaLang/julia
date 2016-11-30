@@ -103,7 +103,7 @@ macro enum(T,syms...)
     end
     blk = quote
         # enum definition
-        Base.@__doc__(bitstype $(basetype.size * 8) $(esc(typename)) <: Enum{$(basetype)})
+        Base.@__doc__(bitstype $(sizeof(basetype) * 8) $(esc(typename)) <: Enum{$(basetype)})
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
             box($(esc(typename)), convert($(basetype), x))
