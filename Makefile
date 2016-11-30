@@ -474,6 +474,10 @@ else
 endif
 	rm -fr $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
+app:
+	$(MAKE) -C contrib/mac/app
+	-mv contrib/mac/app/$(JULIA_BINARYDIST_FILENAME).dmg $(BUILDROOT)
+
 light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html
 ifneq ($(BUILDROOT),$(JULIAHOME))
 	$(error make light-source-dist does not work in out-of-tree builds)
