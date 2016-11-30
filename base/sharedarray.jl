@@ -357,7 +357,8 @@ function init_loc_flds{T,N}(S::SharedArray{T,N})
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
-        S.loc_subarr_1d = view(Array{T}(ntuple(d->0,N)), 1:0)
+        S.s = Array{T}(ntuple(d->0,N))
+        S.loc_subarr_1d = view(S.s, 1:0)
     end
 end
 
@@ -389,6 +390,36 @@ function deserialize{T,N}(s::AbstractSerializer, t::Type{SharedArray{T,N}})
     S = invoke(deserialize, Tuple{AbstractSerializer, DataType}, s, t)
     init_loc_flds(S)
     S
+end
+
+function display_str(S::SharedArray)
+    if length(size(S)) == 1
+        size_str = string(size(S)[1], "-element")
+    else
+        size_str = join([string(x) for x in size(S)], "x")
+    end
+
+    string(size_str, " ", typeof(S))
+end
+
+unmapped_display_str(S::SharedArray) = string(display_str(S), ": <unmapped on node ", myid(), ">")
+
+function show(io::IO, S::SharedArray)
+    if length(S.s) > 0
+        invoke(show, (IO, DenseArray,), io, S.s)
+    else
+        println(io, unmapped_display_str(S))
+    end
+end
+
+function show(io::IO, mime::MIME"text/plain", S::SharedArray)
+    if length(S.s) > 0
+        invoke(show, (IO, MIME"text/plain", DenseArray,), io, mime, S.s)
+        println(io)
+        println(io, "mapped as a ", display_str(S))
+    else
+        println(io, unmapped_display_str(S))
+    end
 end
 
 convert(::Type{Array}, S::SharedArray) = S.s
