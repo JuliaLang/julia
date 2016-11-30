@@ -172,7 +172,7 @@ void jl_charmap_init(fl_context_t *fl_ctx)
     size_t charmap_len = sizeof(charmap) / (2*sizeof(uint32_t));
     size_t i;
     htable_t *h = htable_new(&fl_ctx->jl_charmap, charmap_len);
-    assert(sizeof(uint32_t) >= sizeof(void*));
+    assert(sizeof(uint32_t) <= sizeof(void*));
     for (i = 0; i < charmap_len; ++i) {
         /* Store charmap in a hash table.  Typecasting codepoints
            directly to pointer keys works because pointers are a
