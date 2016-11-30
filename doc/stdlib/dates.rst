@@ -533,12 +533,6 @@ Adjuster Functions
 
    Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns ``true``\ . ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns ``false`` instead of ``true``\ .
 
-.. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
-
-   .. Docstring generated from Julia source
-
-   ``func`` takes a single TimeType argument and returns a ``Bool`` indicating whether the input should be "included" in the final set. ``recur`` applies ``func`` over each element in the range of ``dr``\ , including those elements for which ``func`` returns ``true`` in the resulting Array, unless ``negate=true``\ , then only elements where ``func`` returns ``false`` are included.
-
 Periods
 ~~~~~~~
 
