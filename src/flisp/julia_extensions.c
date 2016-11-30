@@ -152,16 +152,7 @@ value_t fl_julia_identifier_start_char(fl_context_t *fl_ctx, value_t *args, uint
     return jl_id_start_char(wc) ? fl_ctx->T : fl_ctx->F;
 }
 
-/* Array of {original codepoint, replacement codepoint} normalizations
-   to perform on Julia identifiers, to canonicalize characters that
-   are both easily confused and easily inputted by accident.   We convert
-   this to a hash table, below, in the expectation that it may grow to
-   be large in the future (e.g. we may implement a subset of NFKC). */
-static const uint32_t charmap[][2] = {
-    { 0x025B, 0x03B5 }, // latin small letter open e -> greek small letter epsilon
-    { 0x00B5, 0x03BC }, // micro sign -> greek small letter mu
-};
-
+#include "julia_charmap.h"
 #define _equal_wchar_(x, y, ctx) ((x) == (y))
 #define _hash_wchar_(x, ctx) inthash((uint32_t) ((uintptr_t) (x)))
 #include "htable.inc"
