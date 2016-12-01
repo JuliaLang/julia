@@ -14,7 +14,7 @@ function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Con
     @check ccall((:git_reference_create, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{UInt8}, Ptr{Oid}, Cint, Cstring),
                    ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
-                   isempty(msg) ? Cstring_NULL : msg)
+                   isempty(msg) ? C_NULL : msg)
     return GitReference(ref_ptr_ptr[])
 end
 
@@ -53,7 +53,7 @@ end
 
 function branch(ref::GitReference)
     isempty(ref) && return ""
-    str_ptr_ptr = Ref(LibGit2.Cstring_NULL)
+    str_ptr_ptr = Ref{Cstring}()
     @check ccall((:git_branch_name, :libgit2), Cint,
                   (Ptr{Cstring}, Ptr{Void},), str_ptr_ptr, ref.ptr)
     return unsafe_string(str_ptr_ptr[])
@@ -179,7 +179,7 @@ function target!(ref::GitReference, new_oid::Oid; msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_set_target, :libgit2), Cint,
              (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}, Cstring),
-             ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? Cstring_NULL : msg)
+             ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? C_NULL : msg)
     return GitReference(ref_ptr_ptr[])
 end
 

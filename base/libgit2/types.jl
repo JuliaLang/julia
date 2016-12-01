@@ -3,10 +3,11 @@
 """
     @kwdef typedef
 
-This is a helper macro that automatically defines a keyword-based constructor for the type declared in the expression `typedef`, which must be a `type` or `immutable` expression. The default argument is supplied by declaring fields of the form `field::Type = default`. If no default is provided then the default is:
- - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
- - zero for integer types
- - no-argument constructor calls (e.g. `T()`) for all other types
+This is a helper macro that automatically defines a keyword-based constructor for the type
+declared in the expression `typedef`, which must be a `type` or `immutable`
+expression. The default argument is supplied by declaring fields of the form `field::T
+= default`. If no default is provided then the default is provided by the `_kwdef(T)`
+function.
 """
 macro kwdef(expr)
     typename = expr.args[2]
@@ -24,8 +25,7 @@ macro kwdef(expr)
         elseif ei.head == :(::)
             # no default value provided
             dec = ei
-            T = ei.args[2]
-            def = :($T <: Union{Ptr, Cstring, Cwstring} ? $T(C_NULL) : $T <: Integer ? zero($T) : $T())
+            def = :(_kwdef($(ei.args[2])))
             push!(defparams.args, Expr(:kw, dec, def))
             push!(defcall.args, dec.args[1])
         end
@@ -35,6 +35,27 @@ macro kwdef(expr)
         $(esc(Expr(:call, typename, defparams))) = $(esc(defcall))
     end
 end
+
+"""
+    _kwdef(T)
+
+The default value for use with the `@kwdef` macro. Returns:
+
+ - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
+ - zero for integer types
+ - no-argument constructor calls (e.g. `T()`) for all other types
+
+"""
+function _kwdef end
+
+_kwdef{T}(::Type{Ptr{T}}) = Ptr{T}(C_NULL)
+_kwdef(::Type{Cstring}) = Cstring(C_NULL)
+_kwdef(::Type{Cwstring}) = Cwstring(C_NULL)
+
+_kwdef{T<:Integer}(::Type{T}) = zero(T)
+
+_kwdef{T}(::Type{T}) = T()
+
 
 import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
 
