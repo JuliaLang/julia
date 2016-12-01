@@ -182,6 +182,17 @@ utf8proc_int32_t jl_charmap_map(utf8proc_int32_t c, void *fl_ctx_)
     return v == HT_NOTFOUND ? c : (utf8proc_int32_t) ((uintptr_t) v);
 }
 
+value_t fl_julia_normalize_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "normalize-char", nargs, 1);
+    if (fl_ctx->FL_EOF == args[0])
+        return args[0];
+    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
+        type_error(fl_ctx, "normalize-char", "wchar", args[0]);
+    int32_t wc = jl_charmap_map(*(int32_t*)cp_data((cprim_t*)ptr(args[0])), fl_ctx);
+    return mk_wchar(fl_ctx, wc);
+}
+
 // return NFC-normalized UTF8-encoded version of s, with
 // additional custom normalizations defined by jl_charmap above.
 static char *normalize(fl_context_t *fl_ctx, char *s)
@@ -245,6 +256,7 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "accum-julia-symbol", fl_accum_julia_symbol },
     { "identifier-char?", fl_julia_identifier_char },
     { "identifier-start-char?", fl_julia_identifier_start_char },
+    { "normalize-char", fl_julia_normalize_char },
     { NULL, NULL }
 };
 
