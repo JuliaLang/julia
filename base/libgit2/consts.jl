@@ -27,36 +27,38 @@ module Consts
     const REF_LISTALL  = REF_OID | REF_SYMBOLIC
 
     # checkout
-    const CHECKOUT_NONE                    = Cuint(0)
-    const CHECKOUT_SAFE                    = Cuint(1 << 0)
-    const CHECKOUT_FORCE                   = Cuint(1 << 1)
-    const CHECKOUT_RECREATE_MISSING        = Cuint(1 << 2)
-    const CHECKOUT_ALLOW_CONFLICTS         = Cuint(1 << 4)
-    const CHECKOUT_REMOVE_UNTRACKED        = Cuint(1 << 5)
-    const CHECKOUT_REMOVE_IGNORED          = Cuint(1 << 6)
-    const CHECKOUT_UPDATE_ONLY             = Cuint(1 << 7)
-    const CHECKOUT_DONT_UPDATE_INDEX       = Cuint(1 << 8)
-    const CHECKOUT_NO_REFRESH              = Cuint(1 << 9)
-    const CHECKOUT_SKIP_UNMERGED           = Cuint(1 << 10)
-    const CHECKOUT_USE_OURS                = Cuint(1 << 11)
-    const CHECKOUT_USE_THEIRS              = Cuint(1 << 12)
-    const CHECKOUT_DISABLE_PATHSPEC_MATCH  = Cuint(1 << 13)
-    const CHECKOUT_SKIP_LOCKED_DIRECTORIES = Cuint(1 << 18)
-    const CHECKOUT_DONT_OVERWRITE_IGNORED  = Cuint(1 << 19)
-    const CHECKOUT_CONFLICT_STYLE_MERGE    = Cuint(1 << 20)
-    const CHECKOUT_CONFLICT_STYLE_DIFF3    = Cuint(1 << 21)
-    const CHECKOUT_DONT_REMOVE_EXISTING    = Cuint(1 << 22)
+    @enumset(CHECKOUT,
+             CHECKOUT_SAFE                    = 1 << 0,
+             CHECKOUT_FORCE                   = 1 << 1,
+             CHECKOUT_RECREATE_MISSING        = 1 << 2,
+             CHECKOUT_ALLOW_CONFLICTS         = 1 << 4,
+             CHECKOUT_REMOVE_UNTRACKED        = 1 << 5,
+             CHECKOUT_REMOVE_IGNORED          = 1 << 6,
+             CHECKOUT_UPDATE_ONLY             = 1 << 7,
+             CHECKOUT_DONT_UPDATE_INDEX       = 1 << 8,
+             CHECKOUT_NO_REFRESH              = 1 << 9,
+             CHECKOUT_SKIP_UNMERGED           = 1 << 10,
+             CHECKOUT_USE_OURS                = 1 << 11,
+             CHECKOUT_USE_THEIRS              = 1 << 12,
+             CHECKOUT_DISABLE_PATHSPEC_MATCH  = 1 << 13,
+             CHECKOUT_SKIP_LOCKED_DIRECTORIES = 1 << 18,
+             CHECKOUT_DONT_OVERWRITE_IGNORED  = 1 << 19,
+             CHECKOUT_CONFLICT_STYLE_MERGE    = 1 << 20,
+             CHECKOUT_CONFLICT_STYLE_DIFF3    = 1 << 21,
+             CHECKOUT_DONT_REMOVE_EXISTING    = 1 << 22)
+    const CHECKOUT_NONE = CHECKOUT()
 
     const CHECKOUT_UPDATE_SUBMODULES       = Cuint(1 << 16)
     const CHECKOUT_UPDATE_SUBMODULES_IF_CHANGED = Cuint(1 << 17)
 
-    const CHECKOUT_NOTIFY_NONE      = Cuint(0)
-    const CHECKOUT_NOTIFY_CONFLICT  = Cuint(1 << 0)
-    const CHECKOUT_NOTIFY_DIRTY     = Cuint(1 << 1)
-    const CHECKOUT_NOTIFY_UPDATED   = Cuint(1 << 2)
-    const CHECKOUT_NOTIFY_UNTRACKED = Cuint(1 << 3)
-    const CHECKOUT_NOTIFY_IGNORED   = Cuint(1 << 4)
-    const CHECKOUT_NOTIFY_ALL       = 0x0FFFF
+    @enumset(CHECKOUT_NOTIFY,
+             CHECKOUT_NOTIFY_CONFLICT  = 1 << 0,
+             CHECKOUT_NOTIFY_DIRTY     = 1 << 1,
+             CHECKOUT_NOTIFY_UPDATED   = 1 << 2,
+             CHECKOUT_NOTIFY_UNTRACKED = 1 << 3,
+             CHECKOUT_NOTIFY_IGNORED   = 1 << 4)
+    const CHECKOUT_NOTIFY_NONE      = CHECKOUT_NOTIFY()
+    const CHECKOUT_NOTIFY_ALL       = typemax(CHECKOUT_NOTIFY)
 
     # diff
     const DIFF_OPTIONS_VERSION = Cuint(1)
@@ -222,22 +224,23 @@ module Consts
     const STATUS_SHOW_WORKDIR_ONLY      = Cint(2)
 
     # status options
-    const STATUS_OPT_INCLUDE_UNTRACKED                = Cuint(1 << 0)
-    const STATUS_OPT_INCLUDE_IGNORED                  = Cuint(1 << 1)
-    const STATUS_OPT_INCLUDE_UNMODIFIED               = Cuint(1 << 2)
-    const STATUS_OPT_EXCLUDE_SUBMODULES               = Cuint(1 << 3)
-    const STATUS_OPT_RECURSE_UNTRACKED_DIRS           = Cuint(1 << 4)
-    const STATUS_OPT_DISABLE_PATHSPEC_MATCH           = Cuint(1 << 5)
-    const STATUS_OPT_RECURSE_IGNORED_DIRS             = Cuint(1 << 6)
-    const STATUS_OPT_RENAMES_HEAD_TO_INDEX            = Cuint(1 << 7)
-    const STATUS_OPT_RENAMES_INDEX_TO_WORKDIR         = Cuint(1 << 8)
-    const STATUS_OPT_SORT_CASE_SENSITIVELY            = Cuint(1 << 9)
-    const STATUS_OPT_SORT_CASE_INSENSITIVELY          = Cuint(1 << 10)
-    const STATUS_OPT_RENAMES_FROM_REWRITES            = Cuint(1 << 11)
-    const STATUS_OPT_NO_REFRESH                       = Cuint(1 << 12)
-    const STATUS_OPT_UPDATE_INDEX                     = Cuint(1 << 13)
-    const STATUS_OPT_INCLUDE_UNREADABLE               = Cuint(1 << 14)
-    const STATUS_OPT_INCLUDE_UNREADABLE_AS_UNTRACKED  = Cuint(1 << 15)
+    @enumset(STATUS_OPT,
+             STATUS_OPT_INCLUDE_UNTRACKED                = 1 << 0,
+             STATUS_OPT_INCLUDE_IGNORED                  = 1 << 1,
+             STATUS_OPT_INCLUDE_UNMODIFIED               = 1 << 2,
+             STATUS_OPT_EXCLUDE_SUBMODULES               = 1 << 3,
+             STATUS_OPT_RECURSE_UNTRACKED_DIRS           = 1 << 4,
+             STATUS_OPT_DISABLE_PATHSPEC_MATCH           = 1 << 5,
+             STATUS_OPT_RECURSE_IGNORED_DIRS             = 1 << 6,
+             STATUS_OPT_RENAMES_HEAD_TO_INDEX            = 1 << 7,
+             STATUS_OPT_RENAMES_INDEX_TO_WORKDIR         = 1 << 8,
+             STATUS_OPT_SORT_CASE_SENSITIVELY            = 1 << 9,
+             STATUS_OPT_SORT_CASE_INSENSITIVELY          = 1 << 10,
+             STATUS_OPT_RENAMES_FROM_REWRITES            = 1 << 11,
+             STATUS_OPT_NO_REFRESH                       = 1 << 12,
+             STATUS_OPT_UPDATE_INDEX                     = 1 << 13,
+             STATUS_OPT_INCLUDE_UNREADABLE               = 1 << 14,
+             STATUS_OPT_INCLUDE_UNREADABLE_AS_UNTRACKED  = 1 << 15)
 
     @enum(GIT_SUBMODULE_IGNORE, SUBMODULE_IGNORE_UNSPECIFIED  = -1, # use the submodule's configuration
                                 SUBMODULE_IGNORE_NONE         = 1,  # any change or untracked == dirty

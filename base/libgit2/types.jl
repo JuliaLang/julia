@@ -62,14 +62,14 @@ reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 immutable CheckoutOptions
     version::Cuint
 
-    checkout_strategy::Cuint
+    checkout_strategy::Consts.CHECKOUT
 
     disable_filters::Cint
     dir_mode::Cuint
     file_mode::Cuint
     file_open_flags::Cint
 
-    notify_flags::Cuint
+    notify_flags::Consts.CHECKOUT_NOTIFY
     notify_cb::Ptr{Void}
     notify_payload::Ptr{Void}
 
@@ -89,12 +89,12 @@ immutable CheckoutOptions
     perfdata_cb::Ptr{Void}
     perfdata_payload::Ptr{Void}
 end
-CheckoutOptions(; checkout_strategy::Cuint = Consts.CHECKOUT_SAFE,
+CheckoutOptions(; checkout_strategy::Consts.CHECKOUT = Consts.CHECKOUT_SAFE,
                   disable_filters::Cint = zero(Cint),
                   dir_mode::Cuint = Cuint(0), # Cuint(0o755),
                   file_mode::Cuint = Cuint(0), #Cuint(0o644),
                   file_open_flags::Cint = zero(Cint),
-                  notify_flags::Cuint = Consts.CHECKOUT_NOTIFY_NONE,
+                  notify_flags::Consts.CHECKOUT_NOTIFY = Consts.CHECKOUT_NOTIFY_NONE,
                   notify_cb::Ptr{Void} = Ptr{Void}(0),
                   notify_payload::Ptr{Void} = Ptr{Void}(0),
                   progress_cb::Ptr{Void} = Ptr{Void}(0),
@@ -541,11 +541,11 @@ Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rb
 immutable StatusOptions
     version::Cuint
     show::Cint
-    flags::Cuint
+    flags::Consts.STATUS_OPT
     pathspec::StrArrayStruct
 end
 StatusOptions(; show::Cint = Consts.STATUS_SHOW_INDEX_AND_WORKDIR,
-                flags::Cuint = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
+                flags::Consts.STATUS_OPT = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
                                Consts.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
                                Consts.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
                                Consts.STATUS_OPT_SORT_CASE_SENSITIVELY,
