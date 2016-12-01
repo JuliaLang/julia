@@ -38,8 +38,6 @@ end
 
 import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
 
-const Cstring_NULL = convert(Cstring, Ptr{UInt8}(C_NULL))
-
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
 const OID_MINPREFIXLEN = 4
