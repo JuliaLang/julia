@@ -32,6 +32,23 @@ ismore(x,y) = !isless(x,y)
 @test median([1,-2,3,-4], by=abs) === 0.5
 @test median([1,3,-4], lt=isless, by=abs) === 3.0
 
+immutable Student
+    name::String
+    height::Int64
+end
+classroom = [
+    Student("Alice",  153), Student("Bob",    172),
+    Student("Claire", 160), Student("Daniel", 155) ]
+
+Base.isless(a::Student, b::Student) = isless(a.height, b.height)
+# Base.middle(a::Student, b::Student) = isless(a, b) ? a : b
+ans = median(classroom, lt=isless, by=x->x.height,
+             # `middle` is always passed a 2-element array
+             middle=(v) -> ((a,b) = v; isless(a, b) ? a : b))
+@test ans.name == "Daniel"
+# ans = median(classroom, by=x->x.height)
+# @test ans.name == "Daniel"
+
 @test median([0.0,Inf]) == Inf
 @test median([0.0,-Inf]) == -Inf
 @test median([0.,Inf,-Inf]) == 0.0
