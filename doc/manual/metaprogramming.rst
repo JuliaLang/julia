@@ -57,8 +57,8 @@ each string into an object called an expression, represented by the Julia type
      :args
      :typ 
 
-- `head` -- a ``Symbol`` identifying the :ref:`kind of expression <expr-types>`. 
-  A symbol is used to represent a variable in metaprogramming (`discussion 
+- ``head`` -- a ``Symbol`` identifying the :ref:`kind of expression <expr-types>`. 
+  A symbol is used to represent a variable in metaprogramming (discussion `here  
   <http://stackoverflow.com/questions/23480722/what-is-a-symbol-in-julia/23482257#23482257>`_). 
 
 .. doctest::
@@ -66,7 +66,7 @@ each string into an object called an expression, represented by the Julia type
     julia> ex1.head
     :call
 
-- `args` -- the expression arguments, which may be symbols, other expressions, or literal values:
+- ``args`` -- the expression arguments, which may be symbols, other expressions, or literal values:
 
 .. doctest::
 
@@ -76,7 +76,7 @@ each string into an object called an expression, represented by the Julia type
      1
      1
 
-- `typ` -- the expression result type, which may be annotated by the user or inferred
+- ``typ`` -- the expression result type, which may be annotated by the user or inferred
   by the compiler (and may be ignored completely for the purposes of this chapter):
 
 .. doctest::
