@@ -234,11 +234,11 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     do {
         allascii &= (wc <= 0x7f);
         ios_getutf8(s, &wc);
-        if (wc == '!') {
+        if (jl_charmap_map((int32_t)wc,fl_ctx) == '!') {
             uint32_t nwc;
             ios_peekutf8(s, &nwc);
             // make sure != is always an operator
-            if (nwc == '=') {
+            if (jl_charmap_map((int32_t)nwc,fl_ctx) == '=') {
                 ios_ungetc('!', s);
                 break;
             }
