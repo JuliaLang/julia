@@ -10,34 +10,47 @@ expression. The default argument is supplied by declaring fields of the form `fi
 function.
 """
 macro kwdef(expr)
-    typename = expr.args[2]
-    defparams = Expr(:parameters)
-    defcall = Expr(:call, typename)
-    typeblk = expr.args[3]
-    for i in eachindex(typeblk.args)
-        ei = typeblk.args[i]
-        if ei.head == :(=)
-            dec = ei.args[1]
-            def = ei.args[2]
-            push!(defparams.args, Expr(:kw, dec, def))
-            push!(defcall.args, dec.args[1])
-            typeblk.args[i] = dec
-        elseif ei.head == :(::)
-            # no default value provided
-            dec = ei
-            def = :(_kwdef($(ei.args[2])))
-            push!(defparams.args, Expr(:kw, dec, def))
-            push!(defcall.args, dec.args[1])
-        end
-    end
+    expr = macroexpand(expr) # to expand @static
+    T = expr.args[2]
+    params_ex = Expr(:parameters)
+    call_ex = Expr(:call, T)
+    _kwdef!(expr.args[3], params_ex, call_ex)
     quote
         $expr
-        $(esc(Expr(:call, typename, defparams))) = $(esc(defcall))
+        $(esc(Expr(:call, T, params_ex))) = $(esc(call_ex))
     end
 end
 
+# @kwdef helper function
+# mutates arguments inplace
+function _kwdef!(blk, params_ex, call_ex)
+    for i in eachindex(blk.args)
+        ei = blk.args[i]
+        isa(ei, Expr) || continue
+        if ei.head == :(=)
+            # val::Typ = defexpr
+            dec = ei.args[1] # val::Typ
+            def = ei.args[2] # defexpr
+            push!(params_ex.args, Expr(:kw, dec, def))
+            push!(call_ex.args, dec.args[1])
+            blk.args[i] = dec
+        elseif ei.head == :(::)
+            dec = ei # val::Typ
+            def = :(kwdef_val($(ei.args[2])))
+            push!(params_ex.args, Expr(:kw, dec, def))
+            push!(call_ex.args, dec.args[1])
+        elseif ei.head == :block
+            # can arise with use of @static inside type decl
+            _kwdef!(ei, params_ex, call_ex)
+        end
+    end
+    blk
+end
+
+
+
 """
-    _kwdef(T)
+    kwdef_val(T)
 
 The default value for use with the `@kwdef` macro. Returns:
 
@@ -46,15 +59,15 @@ The default value for use with the `@kwdef` macro. Returns:
  - no-argument constructor calls (e.g. `T()`) for all other types
 
 """
-function _kwdef end
+function kwdef_val end
 
-_kwdef{T}(::Type{Ptr{T}}) = Ptr{T}(C_NULL)
-_kwdef(::Type{Cstring}) = Cstring(C_NULL)
-_kwdef(::Type{Cwstring}) = Cwstring(C_NULL)
+kwdef_val{T}(::Type{Ptr{T}}) = Ptr{T}(C_NULL)
+kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
+kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
 
-_kwdef{T<:Integer}(::Type{T}) = zero(T)
+kwdef_val{T<:Integer}(::Type{T}) = zero(T)
 
-_kwdef{T}(::Type{T}) = T()
+kwdef_val{T}(::Type{T}) = T()
 
 
 import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
@@ -113,14 +126,14 @@ reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 @kwdef immutable CheckoutOptions
     version::Cuint = one(Cuint)
 
-    checkout_strategy::Cuint = Consts.CHECKOUT_SAFE
+    checkout_strategy::Cuint    = Consts.CHECKOUT_SAFE
 
     disable_filters::Cint
     dir_mode::Cuint
     file_mode::Cuint
     file_open_flags::Cint
 
-    notify_flags::Cuint = Consts.CHECKOUT_NOTIFY_NONE
+    notify_flags::Cuint         = Consts.CHECKOUT_NOTIFY_NONE
     notify_cb::Ptr{Void}
     notify_payload::Ptr{Void}
 
@@ -142,7 +155,7 @@ reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 end
 
 @kwdef immutable RemoteCallbacks
-    version::Cuint                   = one(Cuint)
+    version::Cuint                    = one(Cuint)
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
     credentials::Ptr{Void}
@@ -161,31 +174,23 @@ function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractC
     RemoteCallbacks(credentials=credentials_cb(), payload=pointer_from_objref(payload))
 end
 
-if LibGit2.version() >= v"0.24.0"
-    @kwdef immutable FetchOptions
-        version::Cuint             = one(Cuint)
-        callbacks::RemoteCallbacks
-        prune::Cint                = Consts.FETCH_PRUNE_UNSPECIFIED
-        update_fetchhead::Cint     = one(Cint)
-        download_tags::Cint        = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+@kwdef immutable FetchOptions
+    version::Cuint                  = one(Cuint)
+    callbacks::RemoteCallbacks
+    prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
+    update_fetchhead::Cint          = one(Cint)
+    download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct
-    end
-else
-    @kwdef immutable FetchOptions
-        version::Cuint             = one(Cuint)
-        callbacks::RemoteCallbacks
-        prune::Cint                = Consts.FETCH_PRUNE_UNSPECIFIED
-        update_fetchhead::Cint     = one(Cint)
-        download_tags::Cint        = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
     end
 end
 
 @kwdef immutable CloneOptions
-    version::Cuint                   = one(Cuint)
+    version::Cuint                      = one(Cuint)
     checkout_opts::CheckoutOptions
     fetch_opts::FetchOptions
     bare::Cint
-    localclone::Cint                 = Consts.CLONE_LOCAL_AUTO
+    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
     checkout_branch::Cstring
     repository_cb::Ptr{Void}
     repository_cb_payload::Ptr{Void}
@@ -194,45 +199,26 @@ end
 end
 
 # git diff option struct
-if LibGit2.version() >= v"0.24.0"
-    @kwdef immutable DiffOptionsStruct
-        version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
-        flags::UInt32                            = Consts.DIFF_NORMAL
+@kwdef immutable DiffOptionsStruct
+    version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
+    flags::UInt32                            = Consts.DIFF_NORMAL
 
-        # options controlling which files are in the diff
-        ignore_submodules::GIT_SUBMODULE_IGNORE  = Consts.SUBMODULE_IGNORE_UNSPECIFIED
-        pathspec::StrArrayStruct
-        notify_cb::Ptr{Void}
+    # options controlling which files are in the diff
+    ignore_submodules::GIT_SUBMODULE_IGNORE  = Consts.SUBMODULE_IGNORE_UNSPECIFIED
+    pathspec::StrArrayStruct
+    notify_cb::Ptr{Void}
+    @static if LibGit2.VERSION >= v"0.24.0"
         progress_cb::Ptr{Void}
-        payload::Ptr{Void}
-
-        # options controlling how the diff text is generated
-        context_lines::UInt32                    = UInt32(3)
-        interhunk_lines::UInt32
-        id_abbrev::UInt16                        = UInt16(7)
-        max_size::Int64                          = Int64(512*1024*1024) #512Mb
-        old_prefix::Cstring
-        new_prefix::Cstring
     end
-else
-    @kwdef immutable DiffOptionsStruct
-        version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
-        flags::UInt32                            = Consts.DIFF_NORMAL
+    payload::Ptr{Void}
 
-        # options controlling which files are in the diff
-        ignore_submodules::GIT_SUBMODULE_IGNORE  = Consts.SUBMODULE_IGNORE_UNSPECIFIED
-        pathspec::StrArrayStruct
-        notify_cb::Ptr{Void}
-        payload::Ptr{Void}
-
-        # options controlling how the diff text is generated
-        context_lines::UInt32                    = UInt32(3)
-        interhunk_lines::UInt32
-        id_abbrev::UInt16                        = UInt16(7)
-        max_size::Int64                          = Int64(512*1024*1024)
-        old_prefix::Cstring
-        new_prefix::Cstring
-    end
+    # options controlling how the diff text is generated
+    context_lines::UInt32                    = UInt32(3)
+    interhunk_lines::UInt32
+    id_abbrev::UInt16                        = UInt16(7)
+    max_size::Int64                          = Int64(512*1024*1024) #512Mb
+    old_prefix::Cstring
+    new_prefix::Cstring
 end
 
 @kwdef immutable DiffFile
@@ -253,53 +239,28 @@ end
 end
 
 # TODO: double check this when libgit2 v0.25.0 is released
-if LibGit2.version() >= v"0.25.0"
-    @kwdef immutable MergeOptions
-        version::Cuint                    = one(Cuint)
-        flags::Cint
-        rename_threshold::Cuint           = Cuint(50)
-        target_limit::Cuint               = Cuint(200)
-        metric::Ptr{Void}
+@kwdef immutable MergeOptions
+    version::Cuint                    = one(Cuint)
+    flags::Cint
+    rename_threshold::Cuint           = Cuint(50)
+    target_limit::Cuint               = Cuint(200)
+    metric::Ptr{Void}
+    @static if LibGit2.VERSION >= v"0.24.0"
         recursion_limit::Cuint
+    end
+    @static if LibGit2.VERSION >= v"0.25.0"
         default_driver::Cstring
-        file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
-        file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
     end
-elseif LibGit2.version() >= v"0.24.0"
-    @kwdef immutable MergeOptions
-        version::Cuint                    = one(Cuint)
-        flags::Cint
-        rename_threshold::Cuint           = Cuint(50)
-        target_limit::Cuint               = Cuint(200)
-        metric::Ptr{Void}
-        recursion_limit::Cuint
-        file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
-        file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
-    end
-else
-    @kwdef immutable MergeOptions
-        version::Cuint                    = one(Cuint)
-        flags::Cint
-        rename_threshold::Cuint           = Cuint(50)
-        target_limit::Cuint               = Cuint(200)
-        metric::Ptr{Void}
-        file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
-        file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
-    end
+    file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
+    file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
 end
 
-if LibGit2.version() >= v"0.24.0"
-    @kwdef immutable PushOptions
-        version::Cuint                     = one(Cuint)
-        parallelism::Cint                  = one(Cint)
-        callbacks::RemoteCallbacks
+@kwdef immutable PushOptions
+    version::Cuint                     = one(Cuint)
+    parallelism::Cint                  = one(Cint)
+    callbacks::RemoteCallbacks
+    @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct
-    end
-else
-    @kwdef immutable PushOptions
-        version::Cuint                     = one(Cuint)
-        parallelism::Cint                  = one(Cint)
-        callbacks::RemoteCallbacks
     end
 end
 
@@ -329,22 +290,17 @@ end
 Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
 
-if LibGit2.version() >= v"0.24.0"
-    @kwdef immutable RebaseOptions
-        version::Cuint                 = one(Cuint)
-        quiet::Cint                    = Cint(1)
+@kwdef immutable RebaseOptions
+    version::Cuint                 = one(Cuint)
+    quiet::Cint                    = Cint(1)
+    @static if LibGit2.VERSION >= v"0.24.0"
         inmemory::Cint
-        rewrite_notes_ref::Cstring
+    end
+    rewrite_notes_ref::Cstring
+    @static if LibGit2.VERSION >= v"0.24.0"
         merge_opts::MergeOptions
-        checkout_opts::CheckoutOptions
     end
-else
-    @kwdef immutable RebaseOptions
-        version::Cuint                 = one(Cuint)
-        quiet::Cint                    = Cint(1)
-        rewrite_notes_ref::Cstring
-        checkout_opts::CheckoutOptions
-    end
+    checkout_opts::CheckoutOptions
 end
 
 @kwdef immutable RebaseOperation
