@@ -87,6 +87,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `unsafe_get` returns the `:value` field of a `Nullable` object without any null-check and has a generic fallback for non-`Nullable` argument. [#18484](https://github.com/JuliaLang/julia/pull/18484) (Also, `isnull` has a generic fallback for non-`Nullable` argument.)
 
+* `transcode` converts between UTF-xx string encodings in Julia 0.5 (as a lightweight
+   alternative to the LegacyStrings package), [#17323](https://github.com/JuliaLang/julia/pull/17323).
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively.

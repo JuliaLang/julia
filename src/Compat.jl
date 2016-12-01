@@ -1698,4 +1698,30 @@ if VERSION < v"0.6.0-dev.1256"
     Base.take!(io::Base.AbstractIOBuffer) = takebuf_array(io)
 end
 
+# julia #17323
+if VERSION < v"0.5.0-dev+5380"
+    export transcode
+    transcode{T<:Compat.String}(::Type{T}, src::Union{Compat.String,Vector{UInt8}}) = utf8(src)
+    transcode{T<:Compat.String}(::Type{T}, src::Vector{UInt16}) = utf8(utf16(src))
+    transcode{T<:Compat.String}(::Type{T}, src::Vector{UInt32}) = utf8(utf32(src))
+    transcode(::Type{UInt8}, src::Vector{UInt8}) = src
+    transcode(::Type{UInt8}, src) = transcode(Compat.String, src).data
+    function transcode(::Type{UInt16}, src::Union{Compat.String,Vector{UInt8}})
+        d = utf16(utf8(src)).data
+        return resize!(d, length(d)-1) # strip off trailing NUL codeunit
+    end
+    function transcode(::Type{UInt32}, src::Union{Compat.String,Vector{UInt8}})
+        d = utf32(utf8(src)).data
+        return resize!(d, length(d)-1) # strip off trailing NUL codeunit
+    end
+    transcode(::Type{UInt16}, src::Vector{UInt16}) = src
+    transcode(::Type{UInt32}, src::Vector{UInt32}) = src
+    if Cwchar_t == Int32
+        transcode(::Type{Cwchar_t}, src::Vector{Cwchar_t}) = src
+        transcode(::Type{Cwchar_t}, src) = reinterpret(Cwchar_t, transcode(UInt32, src))
+        transcode(::Type{UInt8}, src::Vector{Cwchar_t}) = transcode(UInt8, reinterpret(UInt32, src))
+        transcode(T, src::Vector{Cwchar_t}) = transcode(T, reinterpret(UInt32, src))
+    end
+end
+
 end # module
