@@ -1,0 +1,1232 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Frequently Asked Questions &mdash; Julia Language 0.5.1-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../index.html"/>
+        <link rel="next" title="Noteworthy Differences from other Languages" href="noteworthy-differences.html"/>
+        <link rel="prev" title="Style Guide" href="style-guide.html"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../index.html" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="variables.html">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="variables.html#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="variables.html#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="integers-and-floating-point-numbers.html">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mathematical-operations.html">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mathematical-operations.html#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mathematical-operations.html#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mathematical-operations.html#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mathematical-operations.html#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mathematical-operations.html#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="complex-and-rational-numbers.html">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="complex-and-rational-numbers.html#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="complex-and-rational-numbers.html#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="strings.html">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#id2">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="functions.html">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#dot-syntax-for-vectorizing-functions">Dot Syntax for Vectorizing Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="control-flow.html">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="variables-and-scoping.html">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="variables-and-scoping.html#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="variables-and-scoping.html#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="variables-and-scoping.html#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="types.html">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="types.html#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="methods.html">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#parametrically-constrained-varargs-methods">Parametrically-constrained Varargs methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#function-like-objects">Function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="constructors.html">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#constructors-and-conversion">Constructors and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="conversion-and-promotion.html">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="conversion-and-promotion.html#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conversion-and-promotion.html#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="interfaces.html">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="interfaces.html#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interfaces.html#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interfaces.html#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="modules.html#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#markdown-syntax">Markdown syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#markdown-syntax-extensions">Markdown Syntax Extensions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="metaprogramming.html">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="arrays.html">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="arrays.html#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="arrays.html#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="linear-algebra.html">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="linear-algebra.html#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="linear-algebra.html#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="networking-and-streams.html">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#io-output-contextual-properties">IO Output Contextual Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="parallel-computing.html">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#remote-references-and-abstractchannels">Remote references and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#remote-references-and-distributed-garbage-collection">Remote References and Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#id2">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#shared-arrays-and-distributed-garbage-collection">Shared Arrays and Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#network-requirements-for-localmanager-and-sshmanager">Network requirements for LocalManager and SSHManager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#cluster-cookie">Cluster cookie</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#multi-threading-experimental">Multi-threading (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#threadcall-experimental">&#64;threadcall (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="dates.html">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#period-types">Period Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#rounding">Rounding</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="running-external-programs.html">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="running-external-programs.html#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="running-external-programs.html#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="running-external-programs.html#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="calling-c-and-fortran-code.html">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#some-examples-of-c-wrappers">Some Examples of C Wrappers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#c">C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="handling-operating-system-variation.html">Handling Operating System Variation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="interacting-with-julia.html">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="interacting-with-julia.html#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interacting-with-julia.html#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interacting-with-julia.html#tab-completion">Tab completion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interacting-with-julia.html#customizing-colors">Customizing Colors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="embedding.html">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="packages.html">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="packages.html#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="profile.html">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="profile.html#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="profile.html#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="profile.html#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="profile.html#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="profile.html#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="stacktraces.html">Stack Traces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="stacktraces.html#viewing-a-stack-trace">Viewing a stack trace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="stacktraces.html#extracting-useful-information">Extracting useful information</a></li>
+<li class="toctree-l2"><a class="reference internal" href="stacktraces.html#error-handling">Error handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="stacktraces.html#comparison-with-backtrace">Comparison with <code class="docutils literal"><span class="pre">backtrace()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="performance-tips.html">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#separate-kernel-functions-aka-function-barriers">Separate kernel functions (aka, function barriers)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#types-with-values-as-parameters">Types with values-as-parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#the-dangers-of-abusing-multiple-dispatch-aka-more-on-types-with-values-as-parameters">The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="workflow-tips.html">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="workflow-tips.html#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflow-tips.html#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="style-guide.html">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="noteworthy-differences.html">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="noteworthy-differences.html#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="noteworthy-differences.html#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="noteworthy-differences.html#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="noteworthy-differences.html#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="unicode-input.html">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/base.html">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/collections.html">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/math.html">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/numbers.html">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/strings.html">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/arrays.html">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#sparse-vectors-and-matrices">Sparse Vectors and Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/parallel.html">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#multi-threading">Multi-Threading</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#ccall-using-a-threadpool-experimental">ccall using a threadpool (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#synchronization-primitives">Synchronization Primitives</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/linalg.html">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/linalg.html#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/linalg.html#low-level-matrix-operations">Low-level matrix operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/linalg.html#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/linalg.html#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/constants.html">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/file.html">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/io-network.html">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/punctuation.html">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/sort.html">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/sort.html#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/sort.html#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/sort.html#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/pkg.html">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/dates.html">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/dates.html#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/dates.html#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/test.html">Unit Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#basic-unit-tests">Basic Unit Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#working-with-test-sets">Working with Test Sets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#other-test-macros">Other Test Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#broken-tests">Broken Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#creating-custom-abstracttestset-types">Creating Custom <code class="docutils literal"><span class="pre">AbstractTestSet</span></code> Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/c.html">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/c.html#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/libc.html">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/libdl.html">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/profile.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/stacktraces.html">StackTraces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/simd-types.html">SIMD Support</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../devdocs/reflection.html">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../devdocs/julia.html">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/init.html">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/eval.html">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/ast.html">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/types.html">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/object.html">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/functions.html">Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/callconv.html">Calling Conventions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/cartesian.html">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/meta.html">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/subarrays.html">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/sysimg.html">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/llvm.html">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/stdio.html">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/boundscheck.html">Bounds checking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/locks.html">Proper maintenance and care of multi-threading locks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/offset-arrays.html">Arrays with custom indices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../devdocs/C.html">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/backtraces.html">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/debuggingtips.html">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/valgrind.html">Using Valgrind with Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/sanitizers.html">Sanitizer support</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+    <li>Frequently Asked Questions</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../_sources/manual/faq.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="frequently-asked-questions">
+<span id="man-faq"></span><h1>Frequently Asked Questions<a class="headerlink" href="#frequently-asked-questions" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="sessions-and-the-repl">
+<h2>Sessions and the REPL<a class="headerlink" href="#sessions-and-the-repl" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="how-do-i-delete-an-object-in-memory">
+<h3>How do I delete an object in memory?<a class="headerlink" href="#how-do-i-delete-an-object-in-memory" title="Permalink to this headline">¶</a></h3>
+<p>Julia does not have an analog of MATLAB&#8217;s <code class="docutils literal"><span class="pre">clear</span></code> function; once a
+name is defined in a Julia session (technically, in module <code class="docutils literal"><span class="pre">Main</span></code>),
+it is always present.</p>
+<p>If memory usage is your concern, you can always replace objects with
+ones that consume less memory.  For example, if <code class="docutils literal"><span class="pre">A</span></code> is a
+gigabyte-sized array that you no longer need, you can free the memory
+with <code class="docutils literal"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">0</span></code>.  The memory will be released the next time the garbage
+collector runs; you can force this to happen with <a class="reference internal" href="../stdlib/base.html#Base.gc" title="Base.gc"><code class="xref jl jl-func docutils literal"><span class="pre">gc()</span></code></a>.</p>
+</div>
+<div class="section" id="how-can-i-modify-the-declaration-of-a-type-immutable-in-my-session">
+<h3>How can I modify the declaration of a type/immutable in my session?<a class="headerlink" href="#how-can-i-modify-the-declaration-of-a-type-immutable-in-my-session" title="Permalink to this headline">¶</a></h3>
+<p>Perhaps you&#8217;ve defined a type and then realize you need to add a
+new field.  If you try this at the REPL, you get the error:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">ERROR</span><span class="p">:</span> <span class="n">invalid</span> <span class="n">redefinition</span> <span class="n">of</span> <span class="n">constant</span> <span class="n">MyType</span>
+</pre></div>
+</div>
+<p>Types in module <code class="docutils literal"><span class="pre">Main</span></code> cannot be redefined.</p>
+<p>While this can be inconvenient when you are developing new code,
+there&#8217;s an excellent workaround.  Modules can be replaced by
+redefining them, and so if you wrap all your new code inside a module
+you can redefine types and constants.  You can&#8217;t import the type names
+into <code class="docutils literal"><span class="pre">Main</span></code> and then expect to be able to redefine them there, but
+you can use the module name to resolve the scope.  In other words,
+while developing you might use a workflow something like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">include</span><span class="p">(</span><span class="s">&quot;mynewcode.jl&quot;</span><span class="p">)</span>              <span class="c"># this defines a module MyModule</span>
+<span class="n">obj1</span> <span class="o">=</span> <span class="n">MyModule</span><span class="o">.</span><span class="n">ObjConstructor</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<span class="n">obj2</span> <span class="o">=</span> <span class="n">MyModule</span><span class="o">.</span><span class="n">somefunction</span><span class="p">(</span><span class="n">obj1</span><span class="p">)</span>
+<span class="c"># Got an error. Change something in &quot;mynewcode.jl&quot;</span>
+<span class="n">include</span><span class="p">(</span><span class="s">&quot;mynewcode.jl&quot;</span><span class="p">)</span>              <span class="c"># reload the module</span>
+<span class="n">obj1</span> <span class="o">=</span> <span class="n">MyModule</span><span class="o">.</span><span class="n">ObjConstructor</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span> <span class="c"># old objects are no longer valid, must reconstruct</span>
+<span class="n">obj2</span> <span class="o">=</span> <span class="n">MyModule</span><span class="o">.</span><span class="n">somefunction</span><span class="p">(</span><span class="n">obj1</span><span class="p">)</span>   <span class="c"># this time it worked!</span>
+<span class="n">obj3</span> <span class="o">=</span> <span class="n">MyModule</span><span class="o">.</span><span class="n">someotherfunction</span><span class="p">(</span><span class="n">obj2</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+<span class="o">...</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="i-passed-an-argument-x-to-a-function-modified-it-inside-that-function-but-on-the-outside-the-variable-x-is-still-unchanged-why">
+<h3>I passed an argument <code class="docutils literal"><span class="pre">x</span></code> to a function, modified it inside that function, but on the outside, the variable <code class="docutils literal"><span class="pre">x</span></code> is still unchanged. Why?<a class="headerlink" href="#i-passed-an-argument-x-to-a-function-modified-it-inside-that-function-but-on-the-outside-the-variable-x-is-still-unchanged-why" title="Permalink to this headline">¶</a></h3>
+<p>Suppose you call a function like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="mi">10</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> change_value</span><span class="o">!</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+           <span class="n">y</span> <span class="o">=</span> <span class="mi">17</span>
+       <span class="k">end</span>
+<span class="n">change_value!</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">change_value!</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="mi">17</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="c"># x is unchanged!</span>
+<span class="mi">10</span>
+</pre></div>
+</div>
+<p>In Julia, the binding of a variable <code class="docutils literal"><span class="pre">x</span></code> cannot be changed by passing
+<code class="docutils literal"><span class="pre">x</span></code> as an argument to a function. When calling <code class="docutils literal"><span class="pre">change_value!(x)</span></code>
+in the above example, <code class="docutils literal"><span class="pre">y</span></code> is a newly created variable, bound
+initially to the value of <code class="docutils literal"><span class="pre">x</span></code>, i.e. <code class="docutils literal"><span class="pre">10</span></code>; then <code class="docutils literal"><span class="pre">y</span></code> is rebound to
+the constant <code class="docutils literal"><span class="pre">17</span></code>, while the variable <code class="docutils literal"><span class="pre">x</span></code> of the outer scope is
+left untouched.</p>
+<p>But here is a thing you should pay attention to: suppose <code class="docutils literal"><span class="pre">x</span></code> is
+bound to an object of type <code class="docutils literal"><span class="pre">Array</span></code> (or any other <em>mutable</em> type).
+From within the function, you cannot &#8220;unbind&#8221; <code class="docutils literal"><span class="pre">x</span></code> from this Array,
+but you can change its content. For example:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">]</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="mi">3</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> change_array</span><span class="o">!</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+           <span class="n">A</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span>
+       <span class="k">end</span>
+<span class="n">change_array!</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">change_array!</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="mi">5</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span>
+<span class="mi">2</span>
+<span class="mi">3</span>
+</pre></div>
+</div>
+<p>Here we created a function <code class="docutils literal"><span class="pre">change_array!()</span></code>, that assigns <code class="docutils literal"><span class="pre">5</span></code> to
+the first element of the passed array (bound to <code class="docutils literal"><span class="pre">x</span></code> at the call
+site, and bound to <code class="docutils literal"><span class="pre">A</span></code> within the function). Notice that, after the
+function call, <code class="docutils literal"><span class="pre">x</span></code> is still bound to the same array, but the content
+of that array changed: the variables <code class="docutils literal"><span class="pre">A</span></code> and <code class="docutils literal"><span class="pre">x</span></code> were distinct
+bindings refering to the same mutable <code class="docutils literal"><span class="pre">Array</span></code> object.</p>
+</div>
+<div class="section" id="can-i-use-using-or-import-inside-a-function">
+<h3>Can I use <code class="docutils literal"><span class="pre">using</span></code> or <code class="docutils literal"><span class="pre">import</span></code> inside a function?<a class="headerlink" href="#can-i-use-using-or-import-inside-a-function" title="Permalink to this headline">¶</a></h3>
+<p>No, you are not allowed to have a <code class="docutils literal"><span class="pre">using</span></code> or <code class="docutils literal"><span class="pre">import</span></code> statement inside
+a function.  If you want to import a module but only use its symbols
+inside a specific function or set of functions, you have two options:</p>
+<ol class="arabic">
+<li><p class="first">Use <code class="docutils literal"><span class="pre">import</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">import</span> <span class="n">Foo</span>
+<span class="k">function</span><span class="nf"> bar</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">...</span> <span class="n">refer</span> <span class="n">to</span> <span class="n">Foo</span> <span class="n">symbols</span> <span class="n">via</span> <span class="n">Foo</span><span class="o">.</span><span class="n">baz</span> <span class="o">...</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>This loads the module <code class="docutils literal"><span class="pre">Foo</span></code> and defines a variable <code class="docutils literal"><span class="pre">Foo</span></code> that refers
+to the module, but does not import any of the other symbols from the
+module into the current namespace.  You refer to the <code class="docutils literal"><span class="pre">Foo</span></code> symbols by
+their qualified names <code class="docutils literal"><span class="pre">Foo.bar</span></code> etc.</p>
+</li>
+<li><p class="first">Wrap your function in a module:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">module</span> <span class="n">Bar</span>
+<span class="k">export</span> <span class="n">bar</span>
+<span class="k">using</span> <span class="n">Foo</span>
+<span class="k">function</span><span class="nf"> bar</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+    <span class="o">...</span> <span class="n">refer</span> <span class="n">to</span> <span class="n">Foo</span><span class="o">.</span><span class="n">baz</span> <span class="n">as</span> <span class="n">simply</span> <span class="n">baz</span> <span class="o">....</span>
+<span class="k">end</span>
+<span class="k">end</span>
+<span class="k">using</span> <span class="n">Bar</span>
+</pre></div>
+</div>
+<p>This imports all the symbols from <code class="docutils literal"><span class="pre">Foo</span></code>, but only inside the module <code class="docutils literal"><span class="pre">Bar</span></code>.</p>
+</li>
+</ol>
+</div>
+<div class="section" id="what-does-the-operator-do">
+<span id="man-slurping-splatting"></span><h3>What does the <code class="docutils literal"><span class="pre">...</span></code> operator do?<a class="headerlink" href="#what-does-the-operator-do" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="the-two-uses-of-the-operator-slurping-and-splatting">
+<h3>The two uses of the <code class="docutils literal"><span class="pre">...</span></code> operator: slurping and splatting<a class="headerlink" href="#the-two-uses-of-the-operator-slurping-and-splatting" title="Permalink to this headline">¶</a></h3>
+<p>Many newcomers to Julia find the use of <code class="docutils literal"><span class="pre">...</span></code> operator confusing. Part of
+what makes the <code class="docutils literal"><span class="pre">...</span></code> operator confusing is that it means two different things
+depending on context.</p>
+</div>
+<div class="section" id="combines-many-arguments-into-one-argument-in-function-definitions">
+<h3><code class="docutils literal"><span class="pre">...</span></code> combines many arguments into one argument in function definitions<a class="headerlink" href="#combines-many-arguments-into-one-argument-in-function-definitions" title="Permalink to this headline">¶</a></h3>
+<p>In the context of function definitions, the <code class="docutils literal"><span class="pre">...</span></code> operator is used to combine
+many different arguments into a single argument. This use of <code class="docutils literal"><span class="pre">...</span></code> for
+combining many different arguments into a single argument is called slurping:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> printargs</span><span class="p">(</span><span class="n">args</span><span class="o">...</span><span class="p">)</span>
+           <span class="p">@</span><span class="n">printf</span><span class="p">(</span><span class="s">&quot;</span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">args</span><span class="p">))</span>
+           <span class="k">for</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span> <span class="k">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+               <span class="p">@</span><span class="n">printf</span><span class="p">(</span><span class="s">&quot;Arg </span><span class="si">%d</span><span class="s"> = </span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span>
+           <span class="k">end</span>
+       <span class="k">end</span>
+<span class="n">printargs</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">printargs</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<span class="p">(</span><span class="kt">Int64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+<span class="n">Arg</span> <span class="mi">1</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">Arg</span> <span class="mi">2</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">Arg</span> <span class="mi">3</span> <span class="o">=</span> <span class="mi">3</span>
+</pre></div>
+</div>
+<p>If Julia were a language that made more liberal use of ASCII characters, the
+slurping operator might have been written as <code class="docutils literal"><span class="pre">&lt;-...</span></code> instead of <code class="docutils literal"><span class="pre">...</span></code>.</p>
+</div>
+<div class="section" id="splits-one-argument-into-many-different-arguments-in-function-calls">
+<h3><code class="docutils literal"><span class="pre">...</span></code> splits one argument into many different arguments in function calls<a class="headerlink" href="#splits-one-argument-into-many-different-arguments-in-function-calls" title="Permalink to this headline">¶</a></h3>
+<p>In contrast to the use of the <code class="docutils literal"><span class="pre">...</span></code> operator to denote slurping many
+different arguments into one argument when defining a function, the <code class="docutils literal"><span class="pre">...</span></code>
+operator is also used to cause a single function argument to be split apart
+into many different arguments when used in the context of a function call. This
+use of <code class="docutils literal"><span class="pre">...</span></code> is called splatting:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> threeargs</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+           <span class="p">@</span><span class="n">printf</span><span class="p">(</span><span class="s">&quot;a = </span><span class="si">%s</span><span class="s">::</span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>
+           <span class="p">@</span><span class="n">printf</span><span class="p">(</span><span class="s">&quot;b = </span><span class="si">%s</span><span class="s">::</span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">b</span><span class="p">))</span>
+           <span class="p">@</span><span class="n">printf</span><span class="p">(</span><span class="s">&quot;c = </span><span class="si">%s</span><span class="s">::</span><span class="si">%s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">c</span><span class="p">))</span>
+       <span class="k">end</span>
+<span class="n">threeargs</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">vec</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+ <span class="mi">1</span>
+ <span class="mi">2</span>
+ <span class="mi">3</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">threeargs</span><span class="p">(</span><span class="n">vec</span><span class="o">...</span><span class="p">)</span>
+<span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">::</span><span class="kt">Int64</span>
+<span class="n">b</span> <span class="o">=</span> <span class="mi">2</span><span class="p">::</span><span class="kt">Int64</span>
+<span class="n">c</span> <span class="o">=</span> <span class="mi">3</span><span class="p">::</span><span class="kt">Int64</span>
+</pre></div>
+</div>
+<p>If Julia were a language that made more liberal use of ASCII characters,
+the splatting operator might have been written as <code class="docutils literal"><span class="pre">...-&gt;</span></code> instead of <code class="docutils literal"><span class="pre">...</span></code>.</p>
+</div>
+</div>
+<div class="section" id="types-type-declarations-and-constructors">
+<h2>Types, type declarations, and constructors<a class="headerlink" href="#types-type-declarations-and-constructors" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="what-does-type-stable-mean">
+<span id="man-type-stable"></span><h3>What does &#8220;type-stable&#8221; mean?<a class="headerlink" href="#what-does-type-stable-mean" title="Permalink to this headline">¶</a></h3>
+<p>It means that the type of the output is predictable from the types
+of the inputs.  In particular, it means that the type of the output
+cannot vary depending on the <em>values</em> of the inputs. The following
+code is <em>not</em> type-stable:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> unstable</span><span class="p">(</span><span class="n">flag</span><span class="p">::</span><span class="kt">Bool</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">flag</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="k">else</span>
+        <span class="k">return</span> <span class="mf">1.0</span>
+    <span class="k">end</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>It returns either an <code class="docutils literal"><span class="pre">Int</span></code> or a <code class="docutils literal"><span class="pre">Float64</span></code> depending on the value of its
+argument. Since Julia can&#8217;t predict the return type of this function at
+compile-time, any computation that uses it will have to guard against both
+types possibly occurring, making generation of fast machine code difficult.</p>
+</div>
+<div class="section" id="why-does-julia-give-a-domainerror-for-certain-seemingly-sensible-operations">
+<span id="man-domain-error"></span><h3>Why does Julia give a <code class="docutils literal"><span class="pre">DomainError</span></code> for certain seemingly-sensible operations?<a class="headerlink" href="#why-does-julia-give-a-domainerror-for-certain-seemingly-sensible-operations" title="Permalink to this headline">¶</a></h3>
+<p>Certain operations make mathematical sense but result in errors:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">-</span><span class="mf">2.0</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span>
+ <span class="k">in</span> <span class="n">sqrt</span> <span class="n">at</span> <span class="n">math</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">128</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">^-</span><span class="mi">5</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span>
+ <span class="k">in</span> <span class="n">power_by_squaring</span> <span class="n">at</span> <span class="n">intfuncs</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">70</span>
+ <span class="k">in</span> <span class="o">^</span> <span class="n">at</span> <span class="n">intfuncs</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">84</span>
+</pre></div>
+</div>
+<p>This behavior is an inconvenient consequence of the requirement for
+type-stability.  In the case of <a class="reference internal" href="../stdlib/math.html#Base.sqrt" title="Base.sqrt"><code class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></code></a>, most users want
+<code class="docutils literal"><span class="pre">sqrt(2.0)</span></code> to give a real number, and would be unhappy if it
+produced the complex number <code class="docutils literal"><span class="pre">1.4142135623730951</span> <span class="pre">+</span> <span class="pre">0.0im</span></code>.  One could
+write the <a class="reference internal" href="../stdlib/math.html#Base.sqrt" title="Base.sqrt"><code class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></code></a> function to switch to a complex-valued output only
+when passed a negative number (which is what <a class="reference internal" href="../stdlib/math.html#Base.sqrt" title="Base.sqrt"><code class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></code></a> does in some
+other languages), but then the result would not be <a class="reference external" href="#man-type-stable">type-stable</a> and the <a class="reference internal" href="../stdlib/math.html#Base.sqrt" title="Base.sqrt"><code class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></code></a> function would have poor
+performance.</p>
+<p>In these and other cases, you can get the result you want by choosing
+an <em>input type</em> that conveys your willingness to accept an <em>output type</em> in
+which the result can be represented:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">-</span><span class="mf">2.0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span><span class="p">)</span>
+<span class="mf">0.0</span> <span class="o">+</span> <span class="mf">1.4142135623730951</span><span class="nb">im</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mf">2.0</span><span class="o">^-</span><span class="mi">5</span>
+<span class="mf">0.03125</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="why-does-julia-use-native-machine-integer-arithmetic">
+<h3>Why does Julia use native machine integer arithmetic?<a class="headerlink" href="#why-does-julia-use-native-machine-integer-arithmetic" title="Permalink to this headline">¶</a></h3>
+<p>Julia uses machine arithmetic for integer computations. This means that the range of <code class="docutils literal"><span class="pre">Int</span></code> values is bounded and wraps around at either end so that adding, subtracting and multiplying integers can overflow or underflow, leading to some results that can be unsettling at first:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typemax</span><span class="p">(</span><span class="kt">Int</span><span class="p">)</span>
+<span class="mi">9223372036854775807</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ans</span><span class="o">+</span><span class="mi">1</span>
+<span class="o">-</span><span class="mi">9223372036854775808</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="n">ans</span>
+<span class="o">-</span><span class="mi">9223372036854775808</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">*</span><span class="n">ans</span>
+<span class="mi">0</span>
+</pre></div>
+</div>
+<p>Clearly, this is far from the way mathematical integers behave, and you might
+think it less than ideal for a high-level programming language to expose this
+to the user. For numerical work where efficiency and transparency are at a
+premium, however, the alternatives are worse.</p>
+<p>One alternative to consider would be to check each integer operation for
+overflow and promote results to bigger integer types such as <code class="docutils literal"><span class="pre">Int128</span></code> or
+<a class="reference internal" href="../stdlib/numbers.html#Base.BigInt" title="Base.BigInt"><code class="xref jl jl-class docutils literal"><span class="pre">BigInt</span></code></a> in the case of overflow. Unfortunately, this introduces major
+overhead on every integer operation (think incrementing a loop counter) – it
+requires emitting code to perform run-time overflow checks after arithmetic
+instructions and branches to handle potential overflows. Worse still, this
+would cause every computation involving integers to be type-unstable. As we
+mentioned above, <a class="reference external" href="#man-type-stable">type-stability is crucial</a> for effective
+generation of efficient code. If you can&#8217;t count on the results of integer
+operations being integers, it&#8217;s impossible to generate fast, simple code the
+way C and Fortran compilers do.</p>
+<p>A variation on this approach, which avoids the appearance of type instability is to merge the <code class="docutils literal"><span class="pre">Int</span></code> and <a class="reference internal" href="../stdlib/numbers.html#Base.BigInt" title="Base.BigInt"><code class="xref jl jl-class docutils literal"><span class="pre">BigInt</span></code></a> types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach <em>can</em> be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.</p>
+<p>An alternative to using hybrid integers or promoting to BigInts is to use
+saturating integer arithmetic, where adding to the largest integer value
+leaves it unchanged and likewise for subtracting from the smallest integer
+value. This is precisely what Matlab™ does:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">&gt;&gt;</span> <span class="n">int64</span><span class="p">(</span><span class="mi">9223372036854775807</span><span class="p">)</span>
+
+<span class="n">ans</span> <span class="o">=</span>
+
+  <span class="mi">9223372036854775807</span>
+
+<span class="o">&gt;&gt;</span> <span class="n">int64</span><span class="p">(</span><span class="mi">9223372036854775807</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+
+<span class="n">ans</span> <span class="o">=</span>
+
+  <span class="mi">9223372036854775807</span>
+
+<span class="o">&gt;&gt;</span> <span class="n">int64</span><span class="p">(</span><span class="o">-</span><span class="mi">9223372036854775808</span><span class="p">)</span>
+
+<span class="n">ans</span> <span class="o">=</span>
+
+ <span class="o">-</span><span class="mi">9223372036854775808</span>
+
+<span class="o">&gt;&gt;</span> <span class="n">int64</span><span class="p">(</span><span class="o">-</span><span class="mi">9223372036854775808</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+
+<span class="n">ans</span> <span class="o">=</span>
+
+ <span class="o">-</span><span class="mi">9223372036854775808</span>
+</pre></div>
+</div>
+<p>At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with <a class="reference internal" href="../stdlib/base.html#Base.typemin" title="Base.typemin"><code class="xref jl jl-func docutils literal"><span class="pre">typemin(Int)</span></code></a> or <a class="reference internal" href="../stdlib/base.html#Base.typemax" title="Base.typemax"><code class="xref jl jl-func docutils literal"><span class="pre">typemax(Int)</span></code></a> as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn&#8217;t associative. Consider this Matlab computation:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">&gt;&gt;</span> <span class="n">n</span> <span class="o">=</span> <span class="n">int64</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">^</span><span class="mi">62</span>
+<span class="mi">4611686018427387904</span>
+
+<span class="o">&gt;&gt;</span> <span class="n">n</span> <span class="o">+</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+<span class="mi">9223372036854775807</span>
+
+<span class="o">&gt;&gt;</span> <span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="n">n</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+<span class="mi">9223372036854775806</span>
+</pre></div>
+</div>
+<p>This makes it hard to write many basic integer algorithms since a lot of
+common techniques depend on the fact that machine addition with overflow <em>is</em>
+associative. Consider finding the midpoint between integer values <code class="docutils literal"><span class="pre">lo</span></code> and
+<code class="docutils literal"><span class="pre">hi</span></code> in Julia using the expression <code class="docutils literal"><span class="pre">(lo</span> <span class="pre">+</span> <span class="pre">hi)</span> <span class="pre">&gt;&gt;&gt;</span> <span class="pre">1</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">n</span> <span class="o">=</span> <span class="mi">2</span><span class="o">^</span><span class="mi">62</span>
+<span class="mi">4611686018427387904</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">2</span><span class="n">n</span><span class="p">)</span> <span class="o">&gt;&gt;&gt;</span> <span class="mi">1</span>
+<span class="mi">6917529027641081856</span>
+</pre></div>
+</div>
+<p>See? No problem. That&#8217;s the correct midpoint between 2^62 and 2^63, despite
+the fact that <code class="docutils literal"><span class="pre">n</span> <span class="pre">+</span> <span class="pre">2n</span></code> is -4611686018427387904. Now try it in Matlab:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">&gt;&gt;</span> <span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">2</span><span class="o">*</span><span class="n">n</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span>
+
+<span class="n">ans</span> <span class="o">=</span>
+
+  <span class="mi">4611686018427387904</span>
+</pre></div>
+</div>
+<p>Oops. Adding a <code class="docutils literal"><span class="pre">&gt;&gt;&gt;</span></code> operator to Matlab wouldn&#8217;t help, because saturation
+that occurs when adding <code class="docutils literal"><span class="pre">n</span></code> and <code class="docutils literal"><span class="pre">2n</span></code> has already destroyed the information
+necessary to compute the correct midpoint.</p>
+<p>Not only is lack of associativity unfortunate for programmers who cannot rely
+it for techniques like this, but it also defeats almost anything compilers
+might want to do to optimize integer arithmetic. For example, since Julia
+integers use normal machine integer arithmetic, LLVM is free to aggressively
+optimize simple little functions like <code class="docutils literal"><span class="pre">f(k)</span> <span class="pre">=</span> <span class="pre">5k-1</span></code>. The machine code for
+this function is just this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">code_native</span><span class="p">(</span><span class="n">f</span><span class="p">,(</span><span class="kt">Int</span><span class="p">,))</span>
+    <span class="o">.</span><span class="n">section</span>    <span class="n">__TEXT</span><span class="p">,</span><span class="n">__text</span><span class="p">,</span><span class="n">regular</span><span class="p">,</span><span class="n">pure_instructions</span>
+<span class="n">Filename</span><span class="p">:</span> <span class="n">none</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">1</span>
+    <span class="n">push</span>    <span class="n">RBP</span>
+    <span class="n">mov</span> <span class="n">RBP</span><span class="p">,</span> <span class="n">RSP</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">1</span>
+    <span class="n">lea</span> <span class="n">RAX</span><span class="p">,</span> <span class="n">QWORD</span> <span class="n">PTR</span> <span class="p">[</span><span class="n">RDI</span> <span class="o">+</span> <span class="mi">4</span><span class="o">*</span><span class="n">RDI</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">pop</span> <span class="n">RBP</span>
+    <span class="n">ret</span>
+</pre></div>
+</div>
+<p>The actual body of the function is a single <code class="docutils literal"><span class="pre">lea</span></code> instruction, which
+computes the integer multiply and add at once. This is even more beneficial
+when <code class="docutils literal"><span class="pre">f</span></code> gets inlined into another function:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> g</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="n">n</span><span class="p">)</span>
+         <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+           <span class="n">k</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+         <span class="k">end</span>
+         <span class="k">return</span> <span class="n">k</span>
+       <span class="k">end</span>
+<span class="n">g</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">2</span> <span class="n">methods</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">code_native</span><span class="p">(</span><span class="n">g</span><span class="p">,(</span><span class="kt">Int</span><span class="p">,</span><span class="kt">Int</span><span class="p">))</span>
+    <span class="o">.</span><span class="n">section</span>    <span class="n">__TEXT</span><span class="p">,</span><span class="n">__text</span><span class="p">,</span><span class="n">regular</span><span class="p">,</span><span class="n">pure_instructions</span>
+<span class="n">Filename</span><span class="p">:</span> <span class="n">none</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">3</span>
+    <span class="n">push</span>    <span class="n">RBP</span>
+    <span class="n">mov</span> <span class="n">RBP</span><span class="p">,</span> <span class="n">RSP</span>
+    <span class="n">test</span>    <span class="n">RSI</span><span class="p">,</span> <span class="n">RSI</span>
+    <span class="n">jle</span> <span class="mi">22</span>
+    <span class="n">mov</span> <span class="n">EAX</span><span class="p">,</span> <span class="mi">1</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">3</span>
+    <span class="n">lea</span> <span class="n">RDI</span><span class="p">,</span> <span class="n">QWORD</span> <span class="n">PTR</span> <span class="p">[</span><span class="n">RDI</span> <span class="o">+</span> <span class="mi">4</span><span class="o">*</span><span class="n">RDI</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+    <span class="n">inc</span> <span class="n">RAX</span>
+    <span class="n">cmp</span> <span class="n">RAX</span><span class="p">,</span> <span class="n">RSI</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">2</span>
+    <span class="n">jle</span> <span class="o">-</span><span class="mi">17</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">5</span>
+    <span class="n">mov</span> <span class="n">RAX</span><span class="p">,</span> <span class="n">RDI</span>
+    <span class="n">pop</span> <span class="n">RBP</span>
+    <span class="n">ret</span>
+</pre></div>
+</div>
+<p>Since the call to <code class="docutils literal"><span class="pre">f</span></code> gets inlined, the loop body ends up being just a
+single <code class="docutils literal"><span class="pre">lea</span></code> instruction. Next, consider what happens if we make the number
+of loop iterations fixed:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> g</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+         <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+           <span class="n">k</span> <span class="o">=</span> <span class="n">f</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+         <span class="k">end</span>
+         <span class="k">return</span> <span class="n">k</span>
+       <span class="k">end</span>
+<span class="n">g</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">2</span> <span class="n">methods</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">code_native</span><span class="p">(</span><span class="n">g</span><span class="p">,(</span><span class="kt">Int</span><span class="p">,))</span>
+    <span class="o">.</span><span class="n">section</span>    <span class="n">__TEXT</span><span class="p">,</span><span class="n">__text</span><span class="p">,</span><span class="n">regular</span><span class="p">,</span><span class="n">pure_instructions</span>
+<span class="n">Filename</span><span class="p">:</span> <span class="n">none</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">3</span>
+    <span class="n">push</span>    <span class="n">RBP</span>
+    <span class="n">mov</span> <span class="n">RBP</span><span class="p">,</span> <span class="n">RSP</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">3</span>
+    <span class="n">imul</span>    <span class="n">RAX</span><span class="p">,</span> <span class="n">RDI</span><span class="p">,</span> <span class="mi">9765625</span>
+    <span class="n">add</span> <span class="n">RAX</span><span class="p">,</span> <span class="o">-</span><span class="mi">2441406</span>
+<span class="n">Source</span> <span class="n">line</span><span class="p">:</span> <span class="mi">5</span>
+    <span class="n">pop</span> <span class="n">RBP</span>
+    <span class="n">ret</span>
+</pre></div>
+</div>
+<p>Because the compiler knows that integer addition and multiplication are
+associative and that multiplication distributes over addition – neither of
+which is true of saturating arithmetic – it can optimize the entire loop down
+to just a multiply and an add. Saturated arithmetic completely defeats this
+kind of optimization since associativity and distributivity can fail at each
+loop iteration, causing different outcomes depending on which iteration the
+failure occurs in. The compiler can unroll the loop, but it cannot
+algebraically reduce multiple operations into fewer equivalent operations.</p>
+<p>The most reasonable alternative to having integer arithmetic silently overflow
+is to do checked arithmetic everywhere, raising errors when adds, subtracts,
+and multiplies overflow, producing values that are not value-correct. In this
+<a class="reference external" href="http://danluu.com/integer-overflow">blog post</a>, Dan Luu analyzes this and
+finds that rather than the trivial cost that this approach should in theory
+have, it ends up having a substantial cost due to compilers (LLVM and GCC)
+not gracefully optimizing around the added overflow checks. If this improves
+in the future, we could consider defaulting to checked integer arithmetic in
+Julia, but for now, we have to live with the possibility of overflow.</p>
+</div>
+</div>
+<div class="section" id="packages-and-modules">
+<span id="faq-packages"></span><h2>Packages and Modules<a class="headerlink" href="#packages-and-modules" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="what-is-the-difference-between-using-and-importall">
+<h3>What is the difference between &#8220;using&#8221; and &#8220;importall&#8221;?<a class="headerlink" href="#what-is-the-difference-between-using-and-importall" title="Permalink to this headline">¶</a></h3>
+<p>There is only one difference, and on the surface (syntax-wise) it may seem very minor.
+The difference between <code class="docutils literal"><span class="pre">using</span></code> and <code class="docutils literal"><span class="pre">importall</span></code> is that with <code class="docutils literal"><span class="pre">using</span></code> you need to say
+<code class="docutils literal"><span class="pre">function</span> <span class="pre">Foo.bar(..</span></code> to extend module Foo&#8217;s function bar with a new method, but with
+<code class="docutils literal"><span class="pre">importall</span></code> or <code class="docutils literal"><span class="pre">import</span> <span class="pre">Foo.bar</span></code>, you only need to say <code class="docutils literal"><span class="pre">function</span> <span class="pre">bar(...</span></code> and it
+automatically extends module Foo&#8217;s function bar.</p>
+<p>If you use <code class="docutils literal"><span class="pre">importall</span></code>, then <code class="docutils literal"><span class="pre">function</span> <span class="pre">Foo.bar(...</span></code> and <code class="docutils literal"><span class="pre">function</span> <span class="pre">bar(...</span></code> become
+equivalent. If you use <code class="docutils literal"><span class="pre">using</span></code>, then they are different.</p>
+<p>The reason this is important enough to have been given separate syntax is that you don&#8217;t
+want to accidentally extend a function that you didn&#8217;t know existed, because that could
+easily cause a bug. This is most likely to happen with a method that takes a common type
+like a string or integer, because both you and the other module could define a method to
+handle such a common type. If you use <code class="docutils literal"><span class="pre">importall</span></code>, then you&#8217;ll replace the other module&#8217;s
+implementation of <code class="docutils literal"><span class="pre">bar(s::AbstractString)</span></code> with your new implementation, which could easily do
+something completely different (and break all/many future usages of the other functions
+in module Foo that depend on calling bar).</p>
+</div>
+</div>
+<div class="section" id="nothingness-and-missing-values">
+<span id="man-nothing"></span><h2>Nothingness and missing values<a class="headerlink" href="#nothingness-and-missing-values" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="how-does-null-or-nothingness-work-in-julia">
+<h3>How does &#8220;null&#8221; or &#8220;nothingness&#8221; work in Julia?<a class="headerlink" href="#how-does-null-or-nothingness-work-in-julia" title="Permalink to this headline">¶</a></h3>
+<p>Unlike many languages (for example, C and Java), Julia does not have a
+&#8220;null&#8221; value. When a reference (variable, object field, or array element)
+is uninitialized, accessing it will immediately throw an error. This
+situation can be detected using the <code class="docutils literal"><span class="pre">isdefined</span></code> function.</p>
+<p>Some functions are used only for their side effects, and do not need to
+return a value. In these cases, the convention is to return the value
+<code class="docutils literal"><span class="pre">nothing</span></code>, which is just a singleton object of type <code class="docutils literal"><span class="pre">Void</span></code>. This
+is an ordinary type with no fields; there is nothing special about it
+except for this convention, and that the REPL does not print anything
+for it. Some language constructs that would not otherwise have a value
+also yield <code class="docutils literal"><span class="pre">nothing</span></code>, for example <code class="docutils literal"><span class="pre">if</span> <span class="pre">false;</span> <span class="pre">end</span></code>.</p>
+<p>For situations where a value exists only sometimes (for example, missing
+statistical data), it is best to use the <code class="docutils literal"><span class="pre">Nullable{T}</span></code> type, which allows
+specifying the type of a missing value.</p>
+<p>The empty tuple (<code class="docutils literal"><span class="pre">()</span></code>) is another form of nothingness. But, it should not
+really be thought of as nothing but rather a tuple of zero values.</p>
+<p>In code written for Julia prior to version 0.4 you may occasionally see <code class="docutils literal"><span class="pre">None</span></code>,
+which is quite different. It is the empty (or &#8220;bottom&#8221;) type, a type with no values
+and no subtypes (except itself). This is now written as <code class="docutils literal"><span class="pre">Union{}</span></code> (an empty union
+type). You will generally not need to use this type.</p>
+</div>
+</div>
+<div class="section" id="memory">
+<h2>Memory<a class="headerlink" href="#memory" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="why-does-x-y-allocate-memory-when-x-and-y-are-arrays">
+<h3>Why does <code class="docutils literal"><span class="pre">x</span> <span class="pre">+=</span> <span class="pre">y</span></code> allocate memory when <code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code> are arrays?<a class="headerlink" href="#why-does-x-y-allocate-memory-when-x-and-y-are-arrays" title="Permalink to this headline">¶</a></h3>
+<p>In Julia, <code class="docutils literal"><span class="pre">x</span> <span class="pre">+=</span> <span class="pre">y</span></code> gets replaced during parsing by <code class="docutils literal"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">x</span> <span class="pre">+</span> <span class="pre">y</span></code>.
+For arrays, this has the consequence that, rather than storing the
+result in the same location in memory as <code class="docutils literal"><span class="pre">x</span></code>, it allocates a new
+array to store the result.</p>
+<p>While this behavior might surprise some, the choice is deliberate. The
+main reason is the presence of <code class="docutils literal"><span class="pre">immutable</span></code> objects within Julia,
+which cannot change their value once created.  Indeed, a number is an
+immutable object; the statements <code class="docutils literal"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">5;</span> <span class="pre">x</span> <span class="pre">+=</span> <span class="pre">1</span></code> do not modify the
+meaning of <code class="docutils literal"><span class="pre">5</span></code>, they modify the value bound to <code class="docutils literal"><span class="pre">x</span></code>. For an
+immutable, the only way to change the value is to reassign it.</p>
+<p>To amplify a bit further, consider the following function:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> power_by_squaring</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">n</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>
+    <span class="n">ispow2</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">||</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;This implementation only works for powers of 2&quot;</span><span class="p">)</span>
+    <span class="k">while</span> <span class="n">n</span> <span class="o">&gt;=</span> <span class="mi">2</span>
+        <span class="n">x</span> <span class="o">*=</span> <span class="n">x</span>
+        <span class="n">n</span> <span class="o">&gt;&gt;=</span> <span class="mi">1</span>
+    <span class="k">end</span>
+    <span class="n">x</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>After a call like <code class="docutils literal"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">5;</span> <span class="pre">y</span> <span class="pre">=</span> <span class="pre">power_by_squaring(x,</span> <span class="pre">4)</span></code>, you would
+get the expected result: <code class="docutils literal"><span class="pre">x</span> <span class="pre">==</span> <span class="pre">5</span> <span class="pre">&amp;&amp;</span> <span class="pre">y</span> <span class="pre">==</span> <span class="pre">625</span></code>.  However, now suppose
+that <code class="docutils literal"><span class="pre">*=</span></code>, when used with matrices, instead mutated the left hand
+side.  There would be two problems:</p>
+<ul class="simple">
+<li>For general square matrices, <code class="docutils literal"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">A*B</span></code> cannot be implemented
+without temporary storage: <code class="docutils literal"><span class="pre">A[1,1]</span></code> gets computed and stored on
+the left hand side before you&#8217;re done using it on the right hand
+side.</li>
+<li>Suppose you were willing to allocate a temporary for the computation
+(which would eliminate most of the point of making <code class="docutils literal"><span class="pre">*=</span></code> work
+in-place); if you took advantage of the mutability of <code class="docutils literal"><span class="pre">x</span></code>, then
+this function would behave differently for mutable vs. immutable
+inputs. In particular, for immutable <code class="docutils literal"><span class="pre">x</span></code>, after the call you&#8217;d
+have (in general) <code class="docutils literal"><span class="pre">y</span> <span class="pre">!=</span> <span class="pre">x</span></code>, but for mutable <code class="docutils literal"><span class="pre">x</span></code> you&#8217;d have <code class="docutils literal"><span class="pre">y</span>
+<span class="pre">==</span> <span class="pre">x</span></code>.</li>
+</ul>
+<p>Because supporting generic programming is deemed more important than
+potential performance optimizations that can be achieved by other
+means (e.g., using explicit loops), operators like <code class="docutils literal"><span class="pre">+=</span></code> and <code class="docutils literal"><span class="pre">*=</span></code>
+work by rebinding new values.</p>
+</div>
+</div>
+<div class="section" id="asynchronous-io-and-concurrent-synchronous-writes">
+<h2>Asynchronous IO and concurrent synchronous writes<a class="headerlink" href="#asynchronous-io-and-concurrent-synchronous-writes" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="why-do-concurrent-writes-to-the-same-stream-result-in-inter-mixed-output">
+<h3>Why do concurrent writes to the same stream result in inter-mixed output?<a class="headerlink" href="#why-do-concurrent-writes-to-the-same-stream-result-in-inter-mixed-output" title="Permalink to this headline">¶</a></h3>
+<p>While the streaming I/O API is synchronous, the underlying implementation
+is fully asynchronous.</p>
+<p>The following:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">sync</span> <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">1</span><span class="p">:</span><span class="mi">3</span>
+    <span class="p">@</span><span class="n">async</span> <span class="n">write</span><span class="p">(</span><span class="n">STDOUT</span><span class="p">,</span> <span class="n">string</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="s">&quot; Foo &quot;</span><span class="p">,</span> <span class="s">&quot; Bar &quot;</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>results in:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="mi">123</span> <span class="n">Foo</span>  <span class="n">Foo</span>  <span class="n">Foo</span>  <span class="n">Bar</span>  <span class="n">Bar</span>  <span class="n">Bar</span>
+</pre></div>
+</div>
+<p>This is happening because, while the <code class="docutils literal"><span class="pre">write</span></code> call is synchronous, the writing of
+each argument yields to other tasks while waiting for that part of the I/O to complete.</p>
+<p><code class="docutils literal"><span class="pre">print</span></code> and <code class="docutils literal"><span class="pre">println</span></code> &#8220;lock&#8221; the stream during a call. Consequently changing <code class="docutils literal"><span class="pre">write</span></code> to
+<code class="docutils literal"><span class="pre">println</span></code> in the above example results in:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="mi">1</span> <span class="n">Foo</span>  <span class="n">Bar</span>
+<span class="mi">2</span> <span class="n">Foo</span>  <span class="n">Bar</span>
+<span class="mi">3</span> <span class="n">Foo</span>  <span class="n">Bar</span>
+</pre></div>
+</div>
+<p>You can lock your writes with a <code class="docutils literal"><span class="pre">ReentrantLock</span></code> like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">l</span> <span class="o">=</span> <span class="n">ReentrantLock</span><span class="p">()</span>
+<span class="p">@</span><span class="n">sync</span> <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">1</span><span class="p">:</span><span class="mi">3</span>
+    <span class="p">@</span><span class="n">async</span> <span class="k">begin</span>
+        <span class="n">lock</span><span class="p">(</span><span class="n">l</span><span class="p">)</span>
+        <span class="k">try</span>
+            <span class="n">write</span><span class="p">(</span><span class="n">STDOUT</span><span class="p">,</span> <span class="n">string</span><span class="p">(</span><span class="n">i</span><span class="p">),</span> <span class="s">&quot; Foo &quot;</span><span class="p">,</span> <span class="s">&quot; Bar &quot;</span><span class="p">)</span>
+        <span class="n">finally</span>
+            <span class="n">unlock</span><span class="p">(</span><span class="n">l</span><span class="p">)</span>
+        <span class="k">end</span>
+    <span class="k">end</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="julia-releases">
+<h2>Julia Releases<a class="headerlink" href="#julia-releases" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="do-i-want-to-use-a-release-beta-or-nightly-version-of-julia">
+<h3>Do I want to use a release, beta, or nightly version of Julia?<a class="headerlink" href="#do-i-want-to-use-a-release-beta-or-nightly-version-of-julia" title="Permalink to this headline">¶</a></h3>
+<p>You may prefer the release version of Julia if you are looking for a stable code base. Releases generally occur every 6 months, giving you a stable platform for writing code.</p>
+<p>You may prefer the beta version of Julia if you don&#8217;t mind being slightly behind the latest bugfixes and changes, but find the slightly faster rate of changes more appealing. Additionally, these binaries are tested before they are published to ensure they are fully functional.</p>
+<p>You may prefer the nightly version of Julia if you want to take advantage of the latest updates to the language, and don&#8217;t mind if the version available today occasionally doesn&#8217;t actually work.</p>
+<p>Finally, you may also consider building Julia from source for yourself. This option is mainly for those individuals who are comfortable at the command line, or interested in learning. If this describes you, you may also be interested in reading our <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md">guidelines for contributing</a>.</p>
+<p>Links to each of these download types can be found on the download page at <a class="reference external" href="http://julialang.org/downloads/">http://julialang.org/downloads/</a>. Note that not all versions of Julia are available for all platforms.</p>
+</div>
+<div class="section" id="when-are-deprecated-functions-removed">
+<h3>When are deprecated functions removed?<a class="headerlink" href="#when-are-deprecated-functions-removed" title="Permalink to this headline">¶</a></h3>
+<p>Deprecated functions are removed after the subsequent release. For example, functions marked as deprecated in the 0.1 release will not be available starting with the 0.2 release.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="noteworthy-differences.html" class="btn btn-neutral float-right" title="Noteworthy Differences from other Languages">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="style-guide.html" class="btn btn-neutral" title="Style Guide"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.5.1-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

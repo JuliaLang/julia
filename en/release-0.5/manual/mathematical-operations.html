@@ -1,0 +1,1508 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Mathematical Operations and Elementary Functions &mdash; Julia Language 0.5.1-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../index.html"/>
+        <link rel="next" title="Complex and Rational Numbers" href="complex-and-rational-numbers.html"/>
+        <link rel="prev" title="Integers and Floating-Point Numbers" href="integers-and-floating-point-numbers.html"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../index.html" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="getting-started.html#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="variables.html">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="variables.html#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="variables.html#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="integers-and-floating-point-numbers.html">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="integers-and-floating-point-numbers.html#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="complex-and-rational-numbers.html">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="complex-and-rational-numbers.html#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="complex-and-rational-numbers.html#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="strings.html">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#id2">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="functions.html">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#dot-syntax-for-vectorizing-functions">Dot Syntax for Vectorizing Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="functions.html#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="control-flow.html">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="control-flow.html#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="variables-and-scoping.html">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="variables-and-scoping.html#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="variables-and-scoping.html#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="variables-and-scoping.html#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="types.html">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="types.html#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="types.html#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="methods.html">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#parametrically-constrained-varargs-methods">Parametrically-constrained Varargs methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#function-like-objects">Function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="methods.html#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="constructors.html">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#constructors-and-conversion">Constructors and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="constructors.html#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="conversion-and-promotion.html">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="conversion-and-promotion.html#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="conversion-and-promotion.html#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="interfaces.html">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="interfaces.html#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interfaces.html#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interfaces.html#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="modules.html#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="documentation.html">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#markdown-syntax">Markdown syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="documentation.html#markdown-syntax-extensions">Markdown Syntax Extensions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="metaprogramming.html">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="metaprogramming.html#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="arrays.html">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="arrays.html#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="arrays.html#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="linear-algebra.html">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="linear-algebra.html#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="linear-algebra.html#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="networking-and-streams.html">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#io-output-contextual-properties">IO Output Contextual Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="networking-and-streams.html#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="parallel-computing.html">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#remote-references-and-abstractchannels">Remote references and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#remote-references-and-distributed-garbage-collection">Remote References and Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#id2">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#shared-arrays-and-distributed-garbage-collection">Shared Arrays and Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#network-requirements-for-localmanager-and-sshmanager">Network requirements for LocalManager and SSHManager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#cluster-cookie">Cluster cookie</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#multi-threading-experimental">Multi-threading (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parallel-computing.html#threadcall-experimental">&#64;threadcall (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="dates.html">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#period-types">Period Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dates.html#rounding">Rounding</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="running-external-programs.html">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="running-external-programs.html#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="running-external-programs.html#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="running-external-programs.html#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="calling-c-and-fortran-code.html">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#some-examples-of-c-wrappers">Some Examples of C Wrappers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="calling-c-and-fortran-code.html#c">C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="handling-operating-system-variation.html">Handling Operating System Variation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="interacting-with-julia.html">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="interacting-with-julia.html#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interacting-with-julia.html#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interacting-with-julia.html#tab-completion">Tab completion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="interacting-with-julia.html#customizing-colors">Customizing Colors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="embedding.html">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="embedding.html#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="packages.html">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="packages.html#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="packages.html#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="profile.html">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="profile.html#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="profile.html#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="profile.html#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="profile.html#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="profile.html#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="stacktraces.html">Stack Traces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="stacktraces.html#viewing-a-stack-trace">Viewing a stack trace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="stacktraces.html#extracting-useful-information">Extracting useful information</a></li>
+<li class="toctree-l2"><a class="reference internal" href="stacktraces.html#error-handling">Error handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="stacktraces.html#comparison-with-backtrace">Comparison with <code class="docutils literal"><span class="pre">backtrace()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="performance-tips.html">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#separate-kernel-functions-aka-function-barriers">Separate kernel functions (aka, function barriers)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#types-with-values-as-parameters">Types with values-as-parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#the-dangers-of-abusing-multiple-dispatch-aka-more-on-types-with-values-as-parameters">The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="performance-tips.html#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="workflow-tips.html">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="workflow-tips.html#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflow-tips.html#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="style-guide.html">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="style-guide.html#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="faq.html">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="faq.html#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="faq.html#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="faq.html#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="faq.html#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="faq.html#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="faq.html#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="faq.html#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="faq.html#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="noteworthy-differences.html">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="noteworthy-differences.html#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="noteworthy-differences.html#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="noteworthy-differences.html#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="noteworthy-differences.html#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="unicode-input.html">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/base.html">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/base.html#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/collections.html">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/collections.html#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/math.html">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/math.html#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/numbers.html">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/numbers.html#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/strings.html">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/arrays.html">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/arrays.html#sparse-vectors-and-matrices">Sparse Vectors and Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/parallel.html">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#multi-threading">Multi-Threading</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#ccall-using-a-threadpool-experimental">ccall using a threadpool (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#synchronization-primitives">Synchronization Primitives</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/parallel.html#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/linalg.html">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/linalg.html#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/linalg.html#low-level-matrix-operations">Low-level matrix operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/linalg.html#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/linalg.html#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/constants.html">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/file.html">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/io-network.html">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/io-network.html#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/punctuation.html">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/sort.html">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/sort.html#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/sort.html#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/sort.html#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/pkg.html">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/dates.html">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/dates.html#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/dates.html#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/test.html">Unit Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#basic-unit-tests">Basic Unit Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#working-with-test-sets">Working with Test Sets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#other-test-macros">Other Test Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#broken-tests">Broken Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stdlib/test.html#creating-custom-abstracttestset-types">Creating Custom <code class="docutils literal"><span class="pre">AbstractTestSet</span></code> Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/c.html">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/c.html#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/libc.html">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/libdl.html">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/profile.html">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/stacktraces.html">StackTraces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stdlib/simd-types.html">SIMD Support</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../devdocs/reflection.html">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../devdocs/julia.html">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/init.html">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/eval.html">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/ast.html">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/types.html">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/object.html">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/functions.html">Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/callconv.html">Calling Conventions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/cartesian.html">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/meta.html">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/subarrays.html">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/sysimg.html">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/llvm.html">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/stdio.html">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/boundscheck.html">Bounds checking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/locks.html">Proper maintenance and care of multi-threading locks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/offset-arrays.html">Arrays with custom indices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../devdocs/C.html">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/backtraces.html">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/debuggingtips.html">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/valgrind.html">Using Valgrind with Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../devdocs/sanitizers.html">Sanitizer support</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../index.html">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../index.html">Docs</a> &raquo;</li>
+      
+    <li>Mathematical Operations and Elementary Functions</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../_sources/manual/mathematical-operations.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="mathematical-operations-and-elementary-functions">
+<span id="man-mathematical-operations"></span><h1>Mathematical Operations and Elementary Functions<a class="headerlink" href="#mathematical-operations-and-elementary-functions" title="Permalink to this headline">¶</a></h1>
+<p>Julia provides a complete collection of basic arithmetic and bitwise
+operators across all of its numeric primitive types, as well as
+providing portable, efficient implementations of a comprehensive
+collection of standard mathematical functions.</p>
+<div class="section" id="arithmetic-operators">
+<h2>Arithmetic Operators<a class="headerlink" href="#arithmetic-operators" title="Permalink to this headline">¶</a></h2>
+<p>The following <a class="reference external" href="https://en.wikipedia.org/wiki/Arithmetic#Arithmetic_operations">arithmetic operators</a>
+are supported on all primitive numeric types:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="16%" />
+<col width="23%" />
+<col width="61%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Expression</th>
+<th class="head">Name</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">+x</span></code></td>
+<td>unary plus</td>
+<td>the identity operation</td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">-x</span></code></td>
+<td>unary minus</td>
+<td>maps values to their additive inverses</td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">+</span> <span class="pre">y</span></code></td>
+<td>binary plus</td>
+<td>performs addition</td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">-</span> <span class="pre">y</span></code></td>
+<td>binary minus</td>
+<td>performs subtraction</td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">y</span></code></td>
+<td>times</td>
+<td>performs multiplication</td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">/</span> <span class="pre">y</span></code></td>
+<td>divide</td>
+<td>performs division</td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">\</span> <span class="pre">y</span></code></td>
+<td>inverse divide</td>
+<td>equivalent to <code class="docutils literal"><span class="pre">y</span> <span class="pre">/</span> <span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">^</span> <span class="pre">y</span></code></td>
+<td>power</td>
+<td>raises <code class="docutils literal"><span class="pre">x</span></code> to the <code class="docutils literal"><span class="pre">y</span></code>th power</td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">%</span> <span class="pre">y</span></code></td>
+<td>remainder</td>
+<td>equivalent to <code class="docutils literal"><span class="pre">rem(x,y)</span></code></td>
+</tr>
+</tbody>
+</table>
+<p>as well as the negation on <code class="docutils literal"><span class="pre">Bool</span></code> types:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="15%" />
+<col width="21%" />
+<col width="65%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Expression</th>
+<th class="head">Name</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">!x</span></code></td>
+<td>negation</td>
+<td>changes <code class="docutils literal"><span class="pre">true</span></code> to <code class="docutils literal"><span class="pre">false</span></code> and vice versa</td>
+</tr>
+</tbody>
+</table>
+<p>Julia&#8217;s promotion system makes arithmetic operations on mixtures of argument
+types &#8220;just work&#8221; naturally and automatically. See <a class="reference internal" href="conversion-and-promotion.html#man-conversion-and-promotion"><span>Conversion and Promotion</span></a>
+for details of the promotion system.</p>
+<p>Here are some simple examples using arithmetic operators:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">3</span>
+<span class="mi">6</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">-</span> <span class="mi">2</span>
+<span class="o">-</span><span class="mi">1</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">3</span><span class="o">*</span><span class="mi">2</span><span class="o">/</span><span class="mi">12</span>
+<span class="mf">0.5</span>
+</pre></div>
+</div>
+<p>(By convention, we tend to space operators more tightly if they get applied before
+other nearby operators. For instance, we would generally write <code class="docutils literal"><span class="pre">-x</span> <span class="pre">+</span> <span class="pre">2</span></code> to reflect
+that first <code class="docutils literal"><span class="pre">x</span></code> gets negated, and then <code class="docutils literal"><span class="pre">2</span></code> is added to that result.)</p>
+</div>
+<div class="section" id="bitwise-operators">
+<h2>Bitwise Operators<a class="headerlink" href="#bitwise-operators" title="Permalink to this headline">¶</a></h2>
+<p>The following <a class="reference external" href="https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators">bitwise
+operators</a>
+are supported on all primitive integer types:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="13%" />
+<col width="87%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Expression</th>
+<th class="head">Name</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">~x</span></code></td>
+<td>bitwise not</td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">&amp;</span> <span class="pre">y</span></code></td>
+<td>bitwise and</td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">|</span> <span class="pre">y</span></code></td>
+<td>bitwise or</td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">$</span> <span class="pre">y</span></code></td>
+<td>bitwise xor (exclusive or)</td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">&gt;&gt;&gt;</span> <span class="pre">y</span></code></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Logical_shift">logical shift</a> right</td>
+</tr>
+<tr class="row-odd"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">&gt;&gt;</span> <span class="pre">y</span></code></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Arithmetic_shift">arithmetic shift</a> right</td>
+</tr>
+<tr class="row-even"><td><code class="docutils literal"><span class="pre">x</span> <span class="pre">&lt;&lt;</span> <span class="pre">y</span></code></td>
+<td>logical/arithmetic shift left</td>
+</tr>
+</tbody>
+</table>
+<p>Here are some examples with bitwise operators:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">~</span><span class="mi">123</span>
+<span class="o">-</span><span class="mi">124</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">123</span> <span class="o">&amp;</span> <span class="mi">234</span>
+<span class="mi">106</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">123</span> <span class="o">|</span> <span class="mi">234</span>
+<span class="mi">251</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">123</span> <span class="o">$</span> <span class="mi">234</span>
+<span class="mi">145</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">~</span><span class="n">UInt32</span><span class="p">(</span><span class="mi">123</span><span class="p">)</span>
+<span class="mh">0xffffff84</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">~</span><span class="n">UInt8</span><span class="p">(</span><span class="mi">123</span><span class="p">)</span>
+<span class="mh">0x84</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="updating-operators">
+<h2>Updating operators<a class="headerlink" href="#updating-operators" title="Permalink to this headline">¶</a></h2>
+<p>Every binary arithmetic and bitwise operator also has an updating
+version that assigns the result of the operation back into its left
+operand. The updating version of the binary operator is formed by placing a
+<code class="docutils literal"><span class="pre">=</span></code> immediately after the operator. For example, writing <code class="docutils literal"><span class="pre">x</span> <span class="pre">+=</span> <span class="pre">3</span></code> is
+equivalent to writing <code class="docutils literal"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">x</span> <span class="pre">+</span> <span class="pre">3</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="mi">1</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">+=</span> <span class="mi">3</span>
+<span class="mi">4</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span>
+<span class="mi">4</span>
+</pre></div>
+</div>
+<p>The updating versions of all the binary arithmetic and bitwise operators
+are:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">+=</span>  <span class="o">-=</span>  <span class="o">*=</span>  <span class="o">/=</span>  \<span class="o">=</span>  <span class="n">÷</span><span class="o">=</span>  <span class="o">%=</span>  <span class="o">^=</span>  <span class="o">&amp;=</span>  <span class="o">|=</span>  <span class="o">$=</span>  <span class="o">&gt;&gt;&gt;=</span>  <span class="o">&gt;&gt;=</span>  <span class="o">&lt;&lt;=</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p>An updating operator rebinds the variable on the left-hand side.
+As a result, the type of the variable may change.</p>
+<div class="last highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mh">0x01</span><span class="p">;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">UInt8</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">*=</span> <span class="mi">2</span> <span class="c">#Same as x = x * 2</span>
+<span class="mi">2</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="numeric-comparisons">
+<span id="man-numeric-comparisons"></span><h2>Numeric Comparisons<a class="headerlink" href="#numeric-comparisons" title="Permalink to this headline">¶</a></h2>
+<p>Standard comparison operations are defined for all the primitive numeric
+types:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="44%" />
+<col width="56%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Operator</th>
+<th class="head">Name</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.==" title="Base.=="><code class="xref jl jl-obj docutils literal"><span class="pre">==</span></code></a></td>
+<td>equality</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.!=" title="Base.!="><code class="xref jl jl-obj docutils literal"><span class="pre">!=</span></code></a> <a class="reference internal" href="../stdlib/math.html#Base.≠" title="Base.≠"><code class="xref jl jl-obj docutils literal"><span class="pre">≠</span></code></a></td>
+<td>inequality</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.&lt;" title="Base.&lt;"><code class="xref jl jl-obj docutils literal"><span class="pre">&lt;</span></code></a></td>
+<td>less than</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.&lt;=" title="Base.&lt;="><code class="xref jl jl-obj docutils literal"><span class="pre">&lt;=</span></code></a> <a class="reference internal" href="../stdlib/math.html#Base.≤" title="Base.≤"><code class="xref jl jl-obj docutils literal"><span class="pre">≤</span></code></a></td>
+<td>less than or equal to</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.&gt;" title="Base.&gt;"><code class="xref jl jl-obj docutils literal"><span class="pre">&gt;</span></code></a></td>
+<td>greater than</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.&gt;=" title="Base.&gt;="><code class="xref jl jl-obj docutils literal"><span class="pre">&gt;=</span></code></a> <a class="reference internal" href="../stdlib/math.html#Base.≥" title="Base.≥"><code class="xref jl jl-obj docutils literal"><span class="pre">≥</span></code></a></td>
+<td>greater than or equal to</td>
+</tr>
+</tbody>
+</table>
+<p>Here are some simple examples:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">2</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">!=</span> <span class="mi">2</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">==</span> <span class="mf">1.0</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">2</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mf">1.0</span> <span class="o">&gt;</span> <span class="mi">3</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&gt;=</span> <span class="mf">1.0</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&lt;=</span> <span class="mi">1</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="mi">1</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="mi">2</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">3</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mf">0.5</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Integers are compared in the standard manner — by comparison of bits.
+Floating-point numbers are compared according to the <a class="reference external" href="https://en.wikipedia.org/wiki/IEEE_754-2008">IEEE 754
+standard</a>:</p>
+<ul class="simple">
+<li>Finite numbers are ordered in the usual manner.</li>
+<li>Positive zero is equal but not greater than negative zero.</li>
+<li><code class="docutils literal"><span class="pre">Inf</span></code> is equal to itself and greater than everything else except <code class="docutils literal"><span class="pre">NaN</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">-Inf</span></code> is equal to itself and less then everything else except <code class="docutils literal"><span class="pre">NaN</span></code>.</li>
+<li><code class="docutils literal"><span class="pre">NaN</span></code> is not equal to, not less than, and not greater than anything,
+including itself.</li>
+</ul>
+<p>The last point is potentially surprising and thus worth noting:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">NaN</span> <span class="o">==</span> <span class="n">NaN</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">NaN</span> <span class="o">!=</span> <span class="n">NaN</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">NaN</span> <span class="o">&lt;</span> <span class="n">NaN</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">NaN</span> <span class="o">&gt;</span> <span class="n">NaN</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>and can cause especial headaches with <a class="reference internal" href="arrays.html#man-arrays"><span>Arrays</span></a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span> <span class="n">NaN</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mi">1</span> <span class="n">NaN</span><span class="p">]</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Julia provides additional functions to test numbers for special values,
+which can be useful in situations like hash key comparisons:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="48%" />
+<col width="52%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Function</th>
+<th class="head">Tests if</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/base.html#Base.isequal" title="Base.isequal"><code class="xref jl jl-func docutils literal"><span class="pre">isequal(x,</span> <span class="pre">y)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code> are identical</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/numbers.html#Base.isfinite" title="Base.isfinite"><code class="xref jl jl-func docutils literal"><span class="pre">isfinite(x)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">x</span></code> is a finite number</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/numbers.html#Base.isinf" title="Base.isinf"><code class="xref jl jl-func docutils literal"><span class="pre">isinf(x)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">x</span></code> is infinite</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/numbers.html#Base.isnan" title="Base.isnan"><code class="xref jl jl-func docutils literal"><span class="pre">isnan(x)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">x</span></code> is not a number</td>
+</tr>
+</tbody>
+</table>
+<p><a class="reference internal" href="../stdlib/base.html#Base.isequal" title="Base.isequal"><code class="xref jl jl-func docutils literal"><span class="pre">isequal()</span></code></a> considers <code class="docutils literal"><span class="pre">NaN</span></code>s equal to each other:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">(</span><span class="n">NaN</span><span class="p">,</span><span class="n">NaN</span><span class="p">)</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">([</span><span class="mi">1</span> <span class="n">NaN</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span> <span class="n">NaN</span><span class="p">])</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">(</span><span class="n">NaN</span><span class="p">,</span><span class="n">NaN32</span><span class="p">)</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="../stdlib/base.html#Base.isequal" title="Base.isequal"><code class="xref jl jl-func docutils literal"><span class="pre">isequal()</span></code></a> can also be used to distinguish signed zeros:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mf">0.0</span> <span class="o">==</span> <span class="mf">0.0</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">(</span><span class="o">-</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Mixed-type comparisons between signed integers, unsigned integers, and
+floats can be tricky. A great deal of care has been taken to ensure
+that Julia does them correctly.</p>
+<p>For other types, <a class="reference internal" href="../stdlib/base.html#Base.isequal" title="Base.isequal"><code class="xref jl jl-func docutils literal"><span class="pre">isequal()</span></code></a> defaults to calling <a class="reference internal" href="../stdlib/math.html#Base.==" title="Base.=="><code class="xref jl jl-func docutils literal"><span class="pre">==()</span></code></a>, so if you want to
+define equality for your own types then you only need to add a <a class="reference internal" href="../stdlib/math.html#Base.==" title="Base.=="><code class="xref jl jl-func docutils literal"><span class="pre">==()</span></code></a>
+method.  If you define your own equality function, you should probably
+define a corresponding <a class="reference internal" href="../stdlib/base.html#Base.hash" title="Base.hash"><code class="xref jl jl-func docutils literal"><span class="pre">hash()</span></code></a> method to ensure that <code class="docutils literal"><span class="pre">isequal(x,y)</span></code>
+implies <code class="docutils literal"><span class="pre">hash(x)</span> <span class="pre">==</span> <span class="pre">hash(y)</span></code>.</p>
+<div class="section" id="chaining-comparisons">
+<h3>Chaining comparisons<a class="headerlink" href="#chaining-comparisons" title="Permalink to this headline">¶</a></h3>
+<p>Unlike most languages, with the <a class="reference external" href="https://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators">notable exception of
+Python</a>,
+comparisons can be arbitrarily chained:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="o">&lt;=</span> <span class="mi">2</span> <span class="o">&lt;</span> <span class="mi">3</span> <span class="o">==</span> <span class="mi">3</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">3</span> <span class="o">!=</span> <span class="mi">5</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>Chaining comparisons is often quite convenient in numerical code.
+Chained comparisons use the <code class="xref jl jl-obj docutils literal"><span class="pre">&amp;&amp;</span></code> operator for scalar comparisons,
+and the <a class="reference internal" href="../stdlib/math.html#Base.&amp;" title="Base.&amp;"><code class="xref jl jl-obj docutils literal"><span class="pre">&amp;</span></code></a> operator for elementwise comparisons, which allows them to
+work on arrays. For example, <code class="docutils literal"><span class="pre">0</span> <span class="pre">.&lt;</span> <span class="pre">A</span> <span class="pre">.&lt;</span> <span class="pre">1</span></code> gives a boolean array whose
+entries are true where the corresponding elements of <code class="docutils literal"><span class="pre">A</span></code> are between 0
+and 1.</p>
+<p>The operator <a class="reference internal" href="../stdlib/math.html#Base..&lt;" title="Base..&lt;"><code class="xref jl jl-obj docutils literal"><span class="pre">.&lt;</span></code></a> is intended for array objects; the operation
+<code class="docutils literal"><span class="pre">A</span> <span class="pre">.&lt;</span> <span class="pre">B</span></code> is valid only if <code class="docutils literal"><span class="pre">A</span></code> and <code class="docutils literal"><span class="pre">B</span></code> have the same dimensions.  The
+operator returns an array with boolean entries and with the same dimensions
+as <code class="docutils literal"><span class="pre">A</span></code> and <code class="docutils literal"><span class="pre">B</span></code>.  Such operators are called <em>elementwise</em>; Julia offers a
+suite of elementwise operators: <a class="reference internal" href="../stdlib/math.html#Base..*" title="Base..*"><code class="xref jl jl-obj docutils literal"><span class="pre">.*</span></code></a>, <a class="reference internal" href="../stdlib/math.html#Base..+" title="Base..+"><code class="xref jl jl-obj docutils literal"><span class="pre">.+</span></code></a>, etc.  Some of the elementwise
+operators can take a scalar operand such as the example <code class="docutils literal"><span class="pre">0</span> <span class="pre">.&lt;</span> <span class="pre">A</span> <span class="pre">.&lt;</span> <span class="pre">1</span></code> in
+the preceding paragraph.
+This notation means that the scalar operand should be replicated for each entry of
+the array.</p>
+<p>Note the evaluation behavior of chained comparisons:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">v</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">v</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">v</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="mi">2</span>
+<span class="mi">1</span>
+<span class="mi">3</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">v</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">v</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="mi">2</span>
+<span class="mi">1</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>The middle expression is only evaluated once, rather than twice as it
+would be if the expression were written as
+<code class="docutils literal"><span class="pre">v(1)</span> <span class="pre">&lt;</span> <span class="pre">v(2)</span> <span class="pre">&amp;&amp;</span> <span class="pre">v(2)</span> <span class="pre">&lt;=</span> <span class="pre">v(3)</span></code>. However, the order of evaluations in a
+chained comparison is undefined. It is strongly recommended not to use
+expressions with side effects (such as printing) in chained comparisons.
+If side effects are required, the short-circuit <code class="xref jl jl-obj docutils literal"><span class="pre">&amp;&amp;</span></code> operator should
+be used explicitly (see <a class="reference internal" href="control-flow.html#man-short-circuit-evaluation"><span>Short-Circuit Evaluation</span></a>).</p>
+</div>
+<div class="section" id="operator-precedence">
+<h3>Operator Precedence<a class="headerlink" href="#operator-precedence" title="Permalink to this headline">¶</a></h3>
+<p>Julia applies the following order of operations, from highest precedence
+to lowest:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="15%" />
+<col width="85%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Category</th>
+<th class="head">Operators</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>Syntax</td>
+<td><code class="docutils literal"><span class="pre">.</span></code> followed by <code class="docutils literal"><span class="pre">::</span></code></td>
+</tr>
+<tr class="row-odd"><td>Exponentiation</td>
+<td><code class="docutils literal"><span class="pre">^</span></code> and its elementwise equivalent <code class="docutils literal"><span class="pre">.^</span></code></td>
+</tr>
+<tr class="row-even"><td>Fractions</td>
+<td><code class="docutils literal"><span class="pre">//</span></code> and <code class="docutils literal"><span class="pre">.//</span></code></td>
+</tr>
+<tr class="row-odd"><td>Multiplication</td>
+<td><code class="docutils literal"><span class="pre">*</span> <span class="pre">/</span> <span class="pre">%</span> <span class="pre">&amp;</span> <span class="pre">\</span></code> and  <code class="docutils literal"><span class="pre">.*</span> <span class="pre">./</span> <span class="pre">.%</span> <span class="pre">.\</span></code></td>
+</tr>
+<tr class="row-even"><td>Bitshifts</td>
+<td><code class="docutils literal"><span class="pre">&lt;&lt;</span> <span class="pre">&gt;&gt;</span> <span class="pre">&gt;&gt;&gt;</span></code> and <code class="docutils literal"><span class="pre">.&lt;&lt;</span> <span class="pre">.&gt;&gt;</span> <span class="pre">.&gt;&gt;&gt;</span></code></td>
+</tr>
+<tr class="row-odd"><td>Addition</td>
+<td><code class="docutils literal"><span class="pre">+</span> <span class="pre">-</span> <span class="pre">|</span> <span class="pre">$</span></code> and <code class="docutils literal"><span class="pre">.+</span> <span class="pre">.-</span></code></td>
+</tr>
+<tr class="row-even"><td>Syntax</td>
+<td><code class="docutils literal"><span class="pre">:</span> <span class="pre">..</span></code> followed by <code class="docutils literal"><span class="pre">|&gt;</span></code></td>
+</tr>
+<tr class="row-odd"><td>Comparisons</td>
+<td><code class="docutils literal"><span class="pre">&gt;</span> <span class="pre">&lt;</span> <span class="pre">&gt;=</span> <span class="pre">&lt;=</span> <span class="pre">==</span> <span class="pre">===</span> <span class="pre">!=</span> <span class="pre">!==</span> <span class="pre">&lt;:</span></code> and <code class="docutils literal"><span class="pre">.&gt;</span> <span class="pre">.&lt;</span> <span class="pre">.&gt;=</span> <span class="pre">.&lt;=</span> <span class="pre">.==</span> <span class="pre">.!=</span></code></td>
+</tr>
+<tr class="row-even"><td>Control flow</td>
+<td><code class="docutils literal"><span class="pre">&amp;&amp;</span></code> followed by <code class="docutils literal"><span class="pre">||</span></code> followed by <code class="docutils literal"><span class="pre">?</span></code></td>
+</tr>
+<tr class="row-odd"><td>Assignments</td>
+<td><code class="docutils literal"><span class="pre">=</span> <span class="pre">+=</span> <span class="pre">-=</span> <span class="pre">*=</span> <span class="pre">/=</span> <span class="pre">//=</span> <span class="pre">\=</span> <span class="pre">^=</span> <span class="pre">÷=</span> <span class="pre">%=</span> <span class="pre">|=</span> <span class="pre">&amp;=</span> <span class="pre">$=</span> <span class="pre">&lt;&lt;=</span> <span class="pre">&gt;&gt;=</span> <span class="pre">&gt;&gt;&gt;=</span></code> and <code class="docutils literal"><span class="pre">.+=</span> <span class="pre">.-=</span> <span class="pre">.*=</span> <span class="pre">./=</span> <span class="pre">.//=</span> <span class="pre">.\=</span> <span class="pre">.^=</span> <span class="pre">.÷=</span> <span class="pre">.%=</span></code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="elementary-functions">
+<span id="man-elementary-functions"></span><h3>Elementary Functions<a class="headerlink" href="#elementary-functions" title="Permalink to this headline">¶</a></h3>
+<p>Julia provides a comprehensive collection of mathematical functions and
+operators. These mathematical operations are defined over as broad a
+class of numerical values as permit sensible definitions, including
+integers, floating-point numbers, rationals, and complexes, wherever
+such definitions make sense.</p>
+<p>Moreover, these functions (like any Julia function) can be applied
+in &#8220;vectorized&#8221; fashion to arrays and other collections with the
+syntax <code class="docutils literal"><span class="pre">f.(A)</span></code>, e.g. <code class="docutils literal"><span class="pre">sin.(A)</span></code> will compute the elementwise
+sine of each element of an array <code class="docutils literal"><span class="pre">A</span></code>.  See <a class="reference internal" href="functions.html#man-dot-vectorizing"><span>Dot Syntax for Vectorizing Functions</span></a>:.</p>
+</div>
+</div>
+<div class="section" id="numerical-conversions">
+<span id="man-numerical-conversions"></span><h2>Numerical Conversions<a class="headerlink" href="#numerical-conversions" title="Permalink to this headline">¶</a></h2>
+<p>Julia supports three forms of numerical conversion, which differ in their
+handling of inexact conversions.</p>
+<ul class="simple">
+<li>The notation <code class="docutils literal"><span class="pre">T(x)</span></code> or <code class="docutils literal"><span class="pre">convert(T,x)</span></code> converts <code class="docutils literal"><span class="pre">x</span></code> to a value of type <code class="docutils literal"><span class="pre">T</span></code>.<ul>
+<li>If <code class="docutils literal"><span class="pre">T</span></code> is a floating-point type, the result is the nearest representable
+value, which could be positive or negative infinity.</li>
+<li>If <code class="docutils literal"><span class="pre">T</span></code> is an integer type, an <code class="docutils literal"><span class="pre">InexactError</span></code> is raised if <code class="docutils literal"><span class="pre">x</span></code>
+is not representable by <code class="docutils literal"><span class="pre">T</span></code>.</li>
+</ul>
+</li>
+<li><code class="docutils literal"><span class="pre">x</span> <span class="pre">%</span> <span class="pre">T</span></code> converts an integer <code class="docutils literal"><span class="pre">x</span></code> to a value of integer type <code class="docutils literal"><span class="pre">T</span></code>
+congruent to <code class="docutils literal"><span class="pre">x</span></code> modulo <code class="docutils literal"><span class="pre">2^n</span></code>, where <code class="docutils literal"><span class="pre">n</span></code> is the number of bits in <code class="docutils literal"><span class="pre">T</span></code>.
+In other words, the binary representation is truncated to fit.</li>
+<li>The <a class="reference internal" href="#man-rounding-functions"><span>Rounding functions</span></a> take a type <code class="docutils literal"><span class="pre">T</span></code> as an optional argument.
+For example, <code class="docutils literal"><span class="pre">round(Int,x)</span></code> is a shorthand for <code class="docutils literal"><span class="pre">Int(round(x))</span></code>.</li>
+</ul>
+<p>The following examples show the different forms.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mi">127</span><span class="p">)</span>
+<span class="mi">127</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
+ <span class="k">in</span> <span class="kt">Int8</span><span class="p">(::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">sysimg</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">53</span>
+ <span class="o">...</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mf">127.0</span><span class="p">)</span>
+<span class="mi">127</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mf">3.14</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
+ <span class="k">in</span> <span class="kt">Int8</span><span class="p">(::</span><span class="kt">Float64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">sysimg</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">53</span>
+ <span class="o">...</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mf">128.0</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
+ <span class="k">in</span> <span class="kt">Int8</span><span class="p">(::</span><span class="kt">Float64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">sysimg</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">53</span>
+ <span class="o">...</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">127</span> <span class="o">%</span> <span class="kt">Int8</span>
+<span class="mi">127</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">128</span> <span class="o">%</span> <span class="kt">Int8</span>
+<span class="o">-</span><span class="mi">128</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="kt">Int8</span><span class="p">,</span><span class="mf">127.4</span><span class="p">)</span>
+<span class="mi">127</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="kt">Int8</span><span class="p">,</span><span class="mf">127.6</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
+ <span class="k">in</span> <span class="n">trunc</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="kt">Int8</span><span class="p">},</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">float</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">458</span>
+ <span class="k">in</span> <span class="n">round</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="kt">Int8</span><span class="p">},</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">float</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">211</span>
+ <span class="o">...</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="conversion-and-promotion.html#man-conversion-and-promotion"><span>Conversion and Promotion</span></a> for how to define your own
+conversions and promotions.</p>
+<div class="section" id="rounding-functions">
+<span id="man-rounding-functions"></span><h3>Rounding functions<a class="headerlink" href="#rounding-functions" title="Permalink to this headline">¶</a></h3>
+<table border="1" class="docutils">
+<colgroup>
+<col width="36%" />
+<col width="46%" />
+<col width="18%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Function</th>
+<th class="head">Description</th>
+<th class="head">Return type</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.round" title="Base.round"><code class="xref jl jl-func docutils literal"><span class="pre">round(x)</span></code></a></td>
+<td>round <code class="docutils literal"><span class="pre">x</span></code> to the nearest integer</td>
+<td><code class="docutils literal"><span class="pre">typeof(x)</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.round" title="Base.round"><code class="xref jl jl-func docutils literal"><span class="pre">round(T,</span> <span class="pre">x)</span></code></a></td>
+<td>round <code class="docutils literal"><span class="pre">x</span></code> to the nearest integer</td>
+<td><code class="docutils literal"><span class="pre">T</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.floor" title="Base.floor"><code class="xref jl jl-func docutils literal"><span class="pre">floor(x)</span></code></a></td>
+<td>round <code class="docutils literal"><span class="pre">x</span></code> towards <code class="docutils literal"><span class="pre">-Inf</span></code></td>
+<td><code class="docutils literal"><span class="pre">typeof(x)</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.floor" title="Base.floor"><code class="xref jl jl-func docutils literal"><span class="pre">floor(T,</span> <span class="pre">x)</span></code></a></td>
+<td>round <code class="docutils literal"><span class="pre">x</span></code> towards <code class="docutils literal"><span class="pre">-Inf</span></code></td>
+<td><code class="docutils literal"><span class="pre">T</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.ceil" title="Base.ceil"><code class="xref jl jl-func docutils literal"><span class="pre">ceil(x)</span></code></a></td>
+<td>round <code class="docutils literal"><span class="pre">x</span></code> towards <code class="docutils literal"><span class="pre">+Inf</span></code></td>
+<td><code class="docutils literal"><span class="pre">typeof(x)</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.ceil" title="Base.ceil"><code class="xref jl jl-func docutils literal"><span class="pre">ceil(T,</span> <span class="pre">x)</span></code></a></td>
+<td>round <code class="docutils literal"><span class="pre">x</span></code> towards <code class="docutils literal"><span class="pre">+Inf</span></code></td>
+<td><code class="docutils literal"><span class="pre">T</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.trunc" title="Base.trunc"><code class="xref jl jl-func docutils literal"><span class="pre">trunc(x)</span></code></a></td>
+<td>round <code class="docutils literal"><span class="pre">x</span></code> towards zero</td>
+<td><code class="docutils literal"><span class="pre">typeof(x)</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.trunc" title="Base.trunc"><code class="xref jl jl-func docutils literal"><span class="pre">trunc(T,</span> <span class="pre">x)</span></code></a></td>
+<td>round <code class="docutils literal"><span class="pre">x</span></code> towards zero</td>
+<td><code class="docutils literal"><span class="pre">T</span></code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="division-functions">
+<h3>Division functions<a class="headerlink" href="#division-functions" title="Permalink to this headline">¶</a></h3>
+<table border="1" class="docutils">
+<colgroup>
+<col width="19%" />
+<col width="81%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Function</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.div" title="Base.div"><code class="xref jl jl-func docutils literal"><span class="pre">div(x,y)</span></code></a></td>
+<td>truncated division; quotient rounded towards zero</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.fld" title="Base.fld"><code class="xref jl jl-func docutils literal"><span class="pre">fld(x,y)</span></code></a></td>
+<td>floored division; quotient rounded towards <code class="docutils literal"><span class="pre">-Inf</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.cld" title="Base.cld"><code class="xref jl jl-func docutils literal"><span class="pre">cld(x,y)</span></code></a></td>
+<td>ceiling division; quotient rounded towards <code class="docutils literal"><span class="pre">+Inf</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.rem" title="Base.rem"><code class="xref jl jl-func docutils literal"><span class="pre">rem(x,y)</span></code></a></td>
+<td>remainder; satisfies <code class="docutils literal"><span class="pre">x</span> <span class="pre">==</span> <span class="pre">div(x,y)*y</span> <span class="pre">+</span> <span class="pre">rem(x,y)</span></code>; sign matches <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.mod" title="Base.mod"><code class="xref jl jl-func docutils literal"><span class="pre">mod(x,y)</span></code></a></td>
+<td>modulus; satisfies <code class="docutils literal"><span class="pre">x</span> <span class="pre">==</span> <span class="pre">fld(x,y)*y</span> <span class="pre">+</span> <span class="pre">mod(x,y)</span></code>; sign matches <code class="docutils literal"><span class="pre">y</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.mod1" title="Base.mod1"><code class="xref jl jl-func docutils literal"><span class="pre">mod1(x,y)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">mod()</span></code> with offset 1; returns <code class="docutils literal"><span class="pre">r∈(0,y]</span></code> for <code class="docutils literal"><span class="pre">y&gt;0</span></code> or <code class="docutils literal"><span class="pre">r∈[y,0)</span></code> for <code class="docutils literal"><span class="pre">y&lt;0</span></code>, where <code class="docutils literal"><span class="pre">mod(r,</span> <span class="pre">y)</span> <span class="pre">==</span> <span class="pre">mod(x,</span> <span class="pre">y)</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.mod2pi" title="Base.mod2pi"><code class="xref jl jl-func docutils literal"><span class="pre">mod2pi(x)</span></code></a></td>
+<td>modulus with respect to 2pi;  <code class="docutils literal"><span class="pre">0</span> <span class="pre">&lt;=</span> <span class="pre">mod2pi(x)</span>&nbsp; <span class="pre">&lt;</span> <span class="pre">2pi</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.divrem" title="Base.divrem"><code class="xref jl jl-func docutils literal"><span class="pre">divrem(x,y)</span></code></a></td>
+<td>returns <code class="docutils literal"><span class="pre">(div(x,y),rem(x,y))</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.fldmod" title="Base.fldmod"><code class="xref jl jl-func docutils literal"><span class="pre">fldmod(x,y)</span></code></a></td>
+<td>returns <code class="docutils literal"><span class="pre">(fld(x,y),mod(x,y))</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.gcd" title="Base.gcd"><code class="xref jl jl-func docutils literal"><span class="pre">gcd(x,y...)</span></code></a></td>
+<td>greatest positive common divisor of <code class="docutils literal"><span class="pre">x</span></code>, <code class="docutils literal"><span class="pre">y</span></code>,...</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.lcm" title="Base.lcm"><code class="xref jl jl-func docutils literal"><span class="pre">lcm(x,y...)</span></code></a></td>
+<td>least positive common multiple of <code class="docutils literal"><span class="pre">x</span></code>, <code class="docutils literal"><span class="pre">y</span></code>,...</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="sign-and-absolute-value-functions">
+<h3>Sign and absolute value functions<a class="headerlink" href="#sign-and-absolute-value-functions" title="Permalink to this headline">¶</a></h3>
+<table border="1" class="docutils">
+<colgroup>
+<col width="35%" />
+<col width="65%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Function</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.abs" title="Base.abs"><code class="xref jl jl-func docutils literal"><span class="pre">abs(x)</span></code></a></td>
+<td>a positive value with the magnitude of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.abs2" title="Base.abs2"><code class="xref jl jl-func docutils literal"><span class="pre">abs2(x)</span></code></a></td>
+<td>the squared magnitude of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.sign" title="Base.sign"><code class="xref jl jl-func docutils literal"><span class="pre">sign(x)</span></code></a></td>
+<td>indicates the sign of <code class="docutils literal"><span class="pre">x</span></code>, returning -1, 0, or +1</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.signbit" title="Base.signbit"><code class="xref jl jl-func docutils literal"><span class="pre">signbit(x)</span></code></a></td>
+<td>indicates whether the sign bit is on (true) or off (false)</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.copysign" title="Base.copysign"><code class="xref jl jl-func docutils literal"><span class="pre">copysign(x,y)</span></code></a></td>
+<td>a value with the magnitude of <code class="docutils literal"><span class="pre">x</span></code> and the sign of <code class="docutils literal"><span class="pre">y</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.flipsign" title="Base.flipsign"><code class="xref jl jl-func docutils literal"><span class="pre">flipsign(x,y)</span></code></a></td>
+<td>a value with the magnitude of <code class="docutils literal"><span class="pre">x</span></code> and the sign of <code class="docutils literal"><span class="pre">x*y</span></code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="powers-logs-and-roots">
+<h3>Powers, logs and roots<a class="headerlink" href="#powers-logs-and-roots" title="Permalink to this headline">¶</a></h3>
+<table border="1" class="docutils">
+<colgroup>
+<col width="32%" />
+<col width="68%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Function</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.sqrt" title="Base.sqrt"><code class="xref jl jl-func docutils literal"><span class="pre">sqrt(x)</span></code></a> <code class="docutils literal"><span class="pre">√x</span></code></td>
+<td>square root of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.cbrt" title="Base.cbrt"><code class="xref jl jl-func docutils literal"><span class="pre">cbrt(x)</span></code></a> <code class="docutils literal"><span class="pre">∛x</span></code></td>
+<td>cube root of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.hypot" title="Base.hypot"><code class="xref jl jl-func docutils literal"><span class="pre">hypot(x,y)</span></code></a></td>
+<td>hypotenuse of right-angled triangle with other sides of length <code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.exp" title="Base.exp"><code class="xref jl jl-func docutils literal"><span class="pre">exp(x)</span></code></a></td>
+<td>natural exponential function at <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.expm1" title="Base.expm1"><code class="xref jl jl-func docutils literal"><span class="pre">expm1(x)</span></code></a></td>
+<td>accurate <code class="docutils literal"><span class="pre">exp(x)-1</span></code> for <code class="docutils literal"><span class="pre">x</span></code> near zero</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.ldexp" title="Base.ldexp"><code class="xref jl jl-func docutils literal"><span class="pre">ldexp(x,n)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">x*2^n</span></code> computed efficiently for integer values of <code class="docutils literal"><span class="pre">n</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.log" title="Base.log"><code class="xref jl jl-func docutils literal"><span class="pre">log(x)</span></code></a></td>
+<td>natural logarithm of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.log" title="Base.log"><code class="xref jl jl-func docutils literal"><span class="pre">log(b,x)</span></code></a></td>
+<td>base <code class="docutils literal"><span class="pre">b</span></code> logarithm of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.log2" title="Base.log2"><code class="xref jl jl-func docutils literal"><span class="pre">log2(x)</span></code></a></td>
+<td>base 2 logarithm of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.log10" title="Base.log10"><code class="xref jl jl-func docutils literal"><span class="pre">log10(x)</span></code></a></td>
+<td>base 10 logarithm of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.log1p" title="Base.log1p"><code class="xref jl jl-func docutils literal"><span class="pre">log1p(x)</span></code></a></td>
+<td>accurate <code class="docutils literal"><span class="pre">log(1+x)</span></code> for <code class="docutils literal"><span class="pre">x</span></code> near zero</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/numbers.html#Base.exponent" title="Base.exponent"><code class="xref jl jl-func docutils literal"><span class="pre">exponent(x)</span></code></a></td>
+<td>binary exponent of <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/numbers.html#Base.significand" title="Base.significand"><code class="xref jl jl-func docutils literal"><span class="pre">significand(x)</span></code></a></td>
+<td>binary significand (a.k.a. mantissa) of a floating-point number <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+</tbody>
+</table>
+<p>For an overview of why functions like <a class="reference internal" href="../stdlib/math.html#Base.hypot" title="Base.hypot"><code class="xref jl jl-func docutils literal"><span class="pre">hypot()</span></code></a>, <a class="reference internal" href="../stdlib/math.html#Base.expm1" title="Base.expm1"><code class="xref jl jl-func docutils literal"><span class="pre">expm1()</span></code></a>, and <a class="reference internal" href="../stdlib/math.html#Base.log1p" title="Base.log1p"><code class="xref jl jl-func docutils literal"><span class="pre">log1p()</span></code></a>
+are necessary and useful, see John D. Cook&#8217;s excellent pair
+of blog posts on the subject: <a class="reference external" href="http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/">expm1, log1p,
+erfc</a>,
+and
+<a class="reference external" href="http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/">hypot</a>.</p>
+</div>
+<div class="section" id="trigonometric-and-hyperbolic-functions">
+<h3>Trigonometric and hyperbolic functions<a class="headerlink" href="#trigonometric-and-hyperbolic-functions" title="Permalink to this headline">¶</a></h3>
+<p>All the standard trigonometric and hyperbolic functions are also defined:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">sin</span>    <span class="n">cos</span>    <span class="n">tan</span>    <span class="n">cot</span>    <span class="n">sec</span>    <span class="n">csc</span>
+<span class="n">sinh</span>   <span class="n">cosh</span>   <span class="n">tanh</span>   <span class="n">coth</span>   <span class="n">sech</span>   <span class="n">csch</span>
+<span class="n">asin</span>   <span class="n">acos</span>   <span class="n">atan</span>   <span class="n">acot</span>   <span class="n">asec</span>   <span class="n">acsc</span>
+<span class="n">asinh</span>  <span class="n">acosh</span>  <span class="n">atanh</span>  <span class="n">acoth</span>  <span class="n">asech</span>  <span class="n">acsch</span>
+<span class="n">sinc</span>   <span class="n">cosc</span>   <span class="n">atan2</span>
+</pre></div>
+</div>
+<p>These are all single-argument functions, with the exception of
+<a class="reference external" href="https://en.wikipedia.org/wiki/Atan2">atan2</a>, which gives the angle
+in <a class="reference external" href="https://en.wikipedia.org/wiki/Radian">radians</a> between the <em>x</em>-axis
+and the point specified by its arguments, interpreted as <em>x</em> and <em>y</em>
+coordinates.</p>
+<p>Additionally, <a class="reference internal" href="../stdlib/math.html#Base.sinpi" title="Base.sinpi"><code class="xref jl jl-func docutils literal"><span class="pre">sinpi(x)</span></code></a> and <a class="reference internal" href="../stdlib/math.html#Base.cospi" title="Base.cospi"><code class="xref jl jl-func docutils literal"><span class="pre">cospi(x)</span></code></a> are provided for more accurate computations
+of <a class="reference internal" href="../stdlib/math.html#Base.sin" title="Base.sin"><code class="xref jl jl-func docutils literal"><span class="pre">sin(pi*x)</span></code></a> and <a class="reference internal" href="../stdlib/math.html#Base.cos" title="Base.cos"><code class="xref jl jl-func docutils literal"><span class="pre">cos(pi*x)</span></code></a> respectively.</p>
+<p>In order to compute trigonometric functions with degrees
+instead of radians, suffix the function with <code class="docutils literal"><span class="pre">d</span></code>. For example, <a class="reference internal" href="../stdlib/math.html#Base.sind" title="Base.sind"><code class="xref jl jl-func docutils literal"><span class="pre">sind(x)</span></code></a>
+computes the sine of <code class="docutils literal"><span class="pre">x</span></code> where <code class="docutils literal"><span class="pre">x</span></code> is specified in degrees.
+The complete list of trigonometric functions with degree variants is:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">sind</span>   <span class="n">cosd</span>   <span class="n">tand</span>   <span class="n">cotd</span>   <span class="n">secd</span>   <span class="n">cscd</span>
+<span class="n">asind</span>  <span class="n">acosd</span>  <span class="n">atand</span>  <span class="n">acotd</span>  <span class="n">asecd</span>  <span class="n">acscd</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="special-functions">
+<h3>Special functions<a class="headerlink" href="#special-functions" title="Permalink to this headline">¶</a></h3>
+<table border="1" class="docutils">
+<colgroup>
+<col width="23%" />
+<col width="77%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Function</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.erf" title="Base.erf"><code class="xref jl jl-func docutils literal"><span class="pre">erf(x)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Error_function">error function</a> at <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.erfc" title="Base.erfc"><code class="xref jl jl-func docutils literal"><span class="pre">erfc(x)</span></code></a></td>
+<td>complementary error function, i.e. the accurate version of <code class="docutils literal"><span class="pre">1-erf(x)</span></code> for large <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.erfinv" title="Base.erfinv"><code class="xref jl jl-func docutils literal"><span class="pre">erfinv(x)</span></code></a></td>
+<td>inverse function to <a class="reference internal" href="../stdlib/math.html#Base.erf" title="Base.erf"><code class="xref jl jl-func docutils literal"><span class="pre">erf()</span></code></a></td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">erfcinv(x)</span></code></td>
+<td>inverse function to <a class="reference internal" href="../stdlib/math.html#Base.erfc" title="Base.erfc"><code class="xref jl jl-func docutils literal"><span class="pre">erfc()</span></code></a></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.erfi" title="Base.erfi"><code class="xref jl jl-func docutils literal"><span class="pre">erfi(x)</span></code></a></td>
+<td>imaginary error function defined as <code class="docutils literal"><span class="pre">-im</span> <span class="pre">*</span> <span class="pre">erf(x</span> <span class="pre">*</span> <span class="pre">im)</span></code>, where <a class="reference internal" href="../stdlib/numbers.html#Base.im" title="Base.im"><code class="xref jl jl-const docutils literal"><span class="pre">im</span></code></a> is the imaginary unit</td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.erfcx" title="Base.erfcx"><code class="xref jl jl-func docutils literal"><span class="pre">erfcx(x)</span></code></a></td>
+<td>scaled complementary error function, i.e. accurate <code class="docutils literal"><span class="pre">exp(x^2)</span> <span class="pre">*</span> <span class="pre">erfc(x)</span></code> for large <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.dawson" title="Base.dawson"><code class="xref jl jl-func docutils literal"><span class="pre">dawson(x)</span></code></a></td>
+<td>scaled imaginary error function, a.k.a. Dawson function, i.e. accurate <code class="docutils literal"><span class="pre">exp(-x^2)</span> <span class="pre">*</span> <span class="pre">erfi(x)</span> <span class="pre">*</span> <span class="pre">sqrt(pi)</span> <span class="pre">/</span> <span class="pre">2</span></code> for large <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.gamma" title="Base.gamma"><code class="xref jl jl-func docutils literal"><span class="pre">gamma(x)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Gamma_function">gamma function</a> at <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.lgamma" title="Base.lgamma"><code class="xref jl jl-func docutils literal"><span class="pre">lgamma(x)</span></code></a></td>
+<td>accurate <code class="docutils literal"><span class="pre">log(gamma(x))</span></code> for large <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.lfact" title="Base.lfact"><code class="xref jl jl-func docutils literal"><span class="pre">lfact(x)</span></code></a></td>
+<td>accurate <code class="docutils literal"><span class="pre">log(factorial(x))</span></code> for large <code class="docutils literal"><span class="pre">x</span></code>; same as <code class="docutils literal"><span class="pre">lgamma(x+1)</span></code> for <code class="docutils literal"><span class="pre">x</span> <span class="pre">&gt;</span> <span class="pre">1</span></code>, zero otherwise</td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.digamma" title="Base.digamma"><code class="xref jl jl-func docutils literal"><span class="pre">digamma(x)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Digamma_function">digamma function</a> (i.e. the derivative of <a class="reference internal" href="../stdlib/math.html#Base.lgamma" title="Base.lgamma"><code class="xref jl jl-func docutils literal"><span class="pre">lgamma()</span></code></a>) at <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.beta" title="Base.beta"><code class="xref jl jl-func docutils literal"><span class="pre">beta(x,y)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Beta_function">beta function</a> at <code class="docutils literal"><span class="pre">x,y</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.lbeta" title="Base.lbeta"><code class="xref jl jl-func docutils literal"><span class="pre">lbeta(x,y)</span></code></a></td>
+<td>accurate <code class="docutils literal"><span class="pre">log(beta(x,y))</span></code> for large <code class="docutils literal"><span class="pre">x</span></code> or <code class="docutils literal"><span class="pre">y</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.eta" title="Base.eta"><code class="xref jl jl-func docutils literal"><span class="pre">eta(x)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Dirichlet_eta_function">Dirichlet eta function</a> at <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.zeta" title="Base.zeta"><code class="xref jl jl-func docutils literal"><span class="pre">zeta(x)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Riemann_zeta_function">Riemann zeta function</a> at <code class="docutils literal"><span class="pre">x</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.airy" title="Base.airy"><code class="xref jl jl-func docutils literal"><span class="pre">airy(z)</span></code></a>, <a class="reference internal" href="../stdlib/math.html#Base.airyai" title="Base.airyai"><code class="xref jl jl-func docutils literal"><span class="pre">airyai(z)</span></code></a>, <code class="docutils literal"><span class="pre">airy(0,z)</span></code></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Airy_function">Airy Ai function</a> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.airyprime" title="Base.airyprime"><code class="xref jl jl-func docutils literal"><span class="pre">airyprime(z)</span></code></a>, <a class="reference internal" href="../stdlib/math.html#Base.airyaiprime" title="Base.airyaiprime"><code class="xref jl jl-func docutils literal"><span class="pre">airyaiprime(z)</span></code></a>, <code class="docutils literal"><span class="pre">airy(1,z)</span></code></td>
+<td>derivative of the Airy Ai function at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.airybi" title="Base.airybi"><code class="xref jl jl-func docutils literal"><span class="pre">airybi(z)</span></code></a>, <code class="docutils literal"><span class="pre">airy(2,z)</span></code></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Airy_function">Airy Bi function</a> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.airybiprime" title="Base.airybiprime"><code class="xref jl jl-func docutils literal"><span class="pre">airybiprime(z)</span></code></a>, <code class="docutils literal"><span class="pre">airy(3,z)</span></code></td>
+<td>derivative of the Airy Bi function at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.airyx" title="Base.airyx"><code class="xref jl jl-func docutils literal"><span class="pre">airyx(z)</span></code></a>, <code class="docutils literal"><span class="pre">airyx(k,z)</span></code></td>
+<td>scaled Airy AI function and <code class="docutils literal"><span class="pre">k</span></code> th derivatives at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.besselj" title="Base.besselj"><code class="xref jl jl-func docutils literal"><span class="pre">besselj(nu,z)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Bessel_function">Bessel function</a> of the first kind of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.besselj0" title="Base.besselj0"><code class="xref jl jl-func docutils literal"><span class="pre">besselj0(z)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">besselj(0,z)</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.besselj1" title="Base.besselj1"><code class="xref jl jl-func docutils literal"><span class="pre">besselj1(z)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">besselj(1,z)</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.besseljx" title="Base.besseljx"><code class="xref jl jl-func docutils literal"><span class="pre">besseljx(nu,z)</span></code></a></td>
+<td>scaled Bessel function of the first kind of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.bessely" title="Base.bessely"><code class="xref jl jl-func docutils literal"><span class="pre">bessely(nu,z)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Bessel_function">Bessel function</a> of the second kind of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.bessely0" title="Base.bessely0"><code class="xref jl jl-func docutils literal"><span class="pre">bessely0(z)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">bessely(0,z)</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.bessely0" title="Base.bessely0"><code class="xref jl jl-func docutils literal"><span class="pre">bessely1(z)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">bessely(1,z)</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.besselyx" title="Base.besselyx"><code class="xref jl jl-func docutils literal"><span class="pre">besselyx(nu,z)</span></code></a></td>
+<td>scaled Bessel function of the second kind of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.besselh" title="Base.besselh"><code class="xref jl jl-func docutils literal"><span class="pre">besselh(nu,k,z)</span></code></a></td>
+<td><a class="reference external" href="https://en.wikipedia.org/wiki/Bessel_function">Bessel function</a> of the third kind (a.k.a. Hankel function) of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code>; <code class="docutils literal"><span class="pre">k</span></code> must be either <code class="docutils literal"><span class="pre">1</span></code> or <code class="docutils literal"><span class="pre">2</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.hankelh1" title="Base.hankelh1"><code class="xref jl jl-func docutils literal"><span class="pre">hankelh1(nu,z)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">besselh(nu,</span> <span class="pre">1,</span> <span class="pre">z)</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.hankelh1x" title="Base.hankelh1x"><code class="xref jl jl-func docutils literal"><span class="pre">hankelh1x(nu,z)</span></code></a></td>
+<td>scaled <code class="docutils literal"><span class="pre">besselh(nu,</span> <span class="pre">1,</span> <span class="pre">z)</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.hankelh2" title="Base.hankelh2"><code class="xref jl jl-func docutils literal"><span class="pre">hankelh2(nu,z)</span></code></a></td>
+<td><code class="docutils literal"><span class="pre">besselh(nu,</span> <span class="pre">2,</span> <span class="pre">z)</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.hankelh2x" title="Base.hankelh2x"><code class="xref jl jl-func docutils literal"><span class="pre">hankelh2x(nu,z)</span></code></a></td>
+<td>scaled <code class="docutils literal"><span class="pre">besselh(nu,</span> <span class="pre">2,</span> <span class="pre">z)</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.besseli" title="Base.besseli"><code class="xref jl jl-func docutils literal"><span class="pre">besseli(nu,z)</span></code></a></td>
+<td>modified <a class="reference external" href="https://en.wikipedia.org/wiki/Bessel_function">Bessel function</a> of the first kind of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.besselix" title="Base.besselix"><code class="xref jl jl-func docutils literal"><span class="pre">besselix(nu,z)</span></code></a></td>
+<td>scaled modified Bessel function of the first kind of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../stdlib/math.html#Base.besselk" title="Base.besselk"><code class="xref jl jl-func docutils literal"><span class="pre">besselk(nu,z)</span></code></a></td>
+<td>modified <a class="reference external" href="https://en.wikipedia.org/wiki/Bessel_function">Bessel function</a> of the second kind of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../stdlib/math.html#Base.besselkx" title="Base.besselkx"><code class="xref jl jl-func docutils literal"><span class="pre">besselkx(nu,z)</span></code></a></td>
+<td>scaled modified Bessel function of the second kind of order <code class="docutils literal"><span class="pre">nu</span></code> at <code class="docutils literal"><span class="pre">z</span></code></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="complex-and-rational-numbers.html" class="btn btn-neutral float-right" title="Complex and Rational Numbers">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="integers-and-floating-point-numbers.html" class="btn btn-neutral" title="Integers and Floating-Point Numbers"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../',
+            VERSION:'0.5.1-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../_static/jquery.js"></script>
+      <script type="text/javascript" src="../_static/underscore.js"></script>
+      <script type="text/javascript" src="../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

@@ -1,0 +1,60 @@
+@import url("css/theme.css");
+
+.wy-nav-content,
+.wy-nav-content-wrap {
+    color: #222;
+    background: #fff;
+}
+
+body,
+.wy-body-for-nav,
+.wy-nav-side,
+.wy-side-nav-search,
+.wy-side-nav-search img {
+    background: #fcfcfc;
+}
+
+.wy-menu-vertical li.current a,
+.wy-side-nav-search,
+.wy-nav-side {
+    border-right: none;
+    box-shadow: inset -14px 0px 5px -12px rgb(210,210,210);
+}
+
+.wy-menu-vertical li.current > a,
+.wy-menu-vertical li.current > a:hover {
+    background: #fff;
+    box-shadow: none;
+}
+
+.wy-side-nav-search img {
+    width: 158px;
+    height: 106px;
+    border-radius: 0;
+    margin: 1em;
+    padding: 0;
+}
+
+.wy-side-nav-search input[type="text"] {
+    border-color: rgb(201, 201, 201);
+}
+
+div.section {
+    font-family: georgia, serif;
+}
+
+h1,h2,h3,h4,h5,h6 {
+    font-family: helvetica, arial, 'freesans clean', sans-serif;
+}
+
+.rst-content dl:not(.docutils) {
+    border-top: solid 1px #f8f8f8;
+}
+
+.rst-content dl:not(.docutils) dt {
+    background: #fdfdfd;
+    border-top: none;
+    color: rgb(64, 64, 64);
+    display: block;
+    margin: 1px 0;
+}
