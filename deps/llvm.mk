@@ -485,6 +485,7 @@ $(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
 $(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
 $(eval $(call LLVM_PATCH,llvm-3.9.0_cygwin)) # R283427, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf))
+$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
