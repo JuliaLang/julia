@@ -96,8 +96,8 @@ end
     et=toq()
     # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
     try
-        @test (et >= 1.0) && (et <= 1.5)
-        @test !isready(rr3)
+        @assert (et >= 1.0) && (et <= 1.5)
+        @assert !isready(rr3)
     catch
         warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
     end
