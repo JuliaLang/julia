@@ -166,7 +166,7 @@ void jl_charmap_init(fl_context_t *fl_ctx)
     assert(sizeof(uint32_t) <= sizeof(void*));
     for (i = 0; i < charmap_len; ++i) {
         /* Store charmap in a hash table.  Typecasting codepoints
-           directly to pointer keys works because pointers are a
+           directly to pointer keys works because pointers are at
            least 32 bits on all Julia-supported systems, and because
            we never map anything to U+0001 (since HT_NOTFOUND is (void*)1). */
         assert((void*)charmap[i][1] != HT_NOTFOUND);
