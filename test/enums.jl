@@ -169,3 +169,38 @@ let b = IOBuffer()
     seekstart(b)
     @test deserialize(b) === apple
 end
+
+
+@enumset VegetableSet carrot potato broccoli
+@test typeof(VegetableSet) == DataType
+@test isbits(VegetableSet)
+@test typeof(carrot) <: VegetableSet <: EnumSet
+@test Int(carrot) == 1
+@test Int(potato) == 2
+@test Int(broccoli) == 4
+@test VegetableSet(0) == VegetableSet()
+@test VegetableSet(1) == carrot
+@test VegetableSet(2) == potato
+@test VegetableSet(3) == carrot|potato
+@test VegetableSet(4) == broccoli
+@test VegetableSet(5) == carrot|broccoli
+@test VegetableSet(6) == potato|broccoli
+@test VegetableSet(7) == carrot|potato|broccoli
+@test_throws ArgumentError VegetableSet(8)
+@test_throws ArgumentError VegetableSet(-1)
+@test VegetableSet(0x01) == carrot
+@test VegetableSet(big(1)) == carrot
+@test_throws MethodError VegetableSet(0.0)
+@test typemin(VegetableSet) == VegetableSet()
+@test typemax(VegetableSet) == carrot|potato|broccoli
+@test convert(UInt8,carrot) === 0x01
+@test convert(UInt16,potato) === 0x0002
+@test convert(UInt128,broccoli) === 0x00000000000000000000000000000004
+@test typeof(convert(BigInt,carrot)) <: BigInt
+@test convert(BigInt,carrot) == 1
+@test carrot ⊆ carrot
+@test carrot ⊆ carrot ∪ potato
+@test carrot ⊈ potato
+@test VegetableSet() ⊆ carrot
+@test carrot ⊈ VegetableSet()
+@test setdiff(carrot ∪ potato, carrot) == potato

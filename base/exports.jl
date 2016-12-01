@@ -27,6 +27,7 @@ export
 
 # Types
     AbstractChannel,
+    AbstractEnum,
     AbstractMatrix,
     AbstractSet,
     AbstractUnitRange,
@@ -59,6 +60,7 @@ export
     Dims,
     EachLine,
     Enum,
+    EnumSet,
     Enumerate,
     Factorization,
     FileMonitor,
@@ -1409,6 +1411,7 @@ export
 
     @assert,
     @enum,
+    @enumset,
     @label,
     @goto,
     @view,
