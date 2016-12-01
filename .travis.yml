@@ -39,7 +39,7 @@ matrix:
             - gfortran-5
     - os: osx
       env: ARCH="x86_64"
-      osx_image: xcode7
+      osx_image: xcode8
 cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps/srccache
@@ -77,8 +77,8 @@ before_install:
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
         brew update;
-        brew install -v jq bar;
-        BAR="bar";
+        brew install -v jq pv;
+        BAR="pv -i 30";
         contrib/travis_fastfail.sh || exit 1;
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
@@ -93,16 +93,19 @@ before_install:
         export CXXFLAGS=-DUSE_ORCJIT;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
+        export JULIA_MACOS_SPAWN="DYLD_FALLBACK_LIBRARY_PATH=\"$DYLD_FALLBACK_LIBRARY_PATH\" \$1";
+        export BUILDOPTS="$BUILDOPTS spawn=\$(JULIA_MACOS_SPAWN)";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - git clone -q git://git.kitenet.net/moreutils
 script:
+    - echo $BUILDOPTS
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
     # capture the log, but only print it if `make deps` fails
     # try to show the end of the log first, because this log might be very long (> 4MB)
     # and thus be truncated by travis
-    - moreutils/mispipe "make $BUILDOPTS VERBOSE=0 -C deps 2> deps-err.log" "$BAR" > deps.log ||
+    - moreutils/mispipe "make \$BUILDOPTS VERBOSE=0 -C deps 2> deps-err.log" "$BAR" > deps.log ||
         { echo "-- deps build log stderr tail 100 --------------------------------------";
           tail -n 100 deps-err.log;
           echo "-- deps build log stdout tail 100 --------------------------------------";
