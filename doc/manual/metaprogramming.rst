@@ -57,10 +57,9 @@ each string into an object called an expression, represented by the Julia type
      :args
      :typ 
 
-- `head` -- a ``Symbol`` identifying the 
-  `kind of expression <http://docs.julialang.org/en/release-0.5/devdocs/ast/#expr-types>`_. 
-  A symbol is an `interned string <https://en.wikipedia.org/wiki/String_interning>`_
-  identifier (more discussion below).
+- `head` -- a ``Symbol`` identifying the :ref:`kind of expression <expr-types>`. 
+  A symbol is used to represent a variable in metaprogramming (`discussion 
+  <http://stackoverflow.com/questions/23480722/what-is-a-symbol-in-julia/23482257#23482257>`_). 
 
 .. doctest::
 
