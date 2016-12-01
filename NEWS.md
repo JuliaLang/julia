@@ -62,6 +62,8 @@ Library improvements
 
   * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
 
+  * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -706,8 +708,10 @@ Language tooling improvements
 [#18442]: https://github.com/JuliaLang/julia/issues/18442
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
+[#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
 [#19305]: https://github.com/JuliaLang/julia/issues/19305
+[#19469]: https://github.com/JuliaLang/julia/issues/19469
