@@ -1095,55 +1095,76 @@ end
 
 ## cat: general case
 
-function cat(catdims, X...)
-    T = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
-    cat_t(catdims, T, X...)
+# helper functions
+cat_size(A) = (1,)
+cat_size(A::AbstractArray) = size(A)
+cat_size(A, d) = 1
+cat_size(A::AbstractArray, d) = size(A, d)
+
+cat_indices(A, d) = OneTo(1)
+cat_indices(A::AbstractArray, d) = indices(A, d)
+
+cat_similar(A, T, shape) = Array{T}(shape)
+cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
+
+cat_shape(dims, shape::Tuple) = shape
+@inline cat_shape(dims, shape::Tuple, nshape::Tuple, shapes::Tuple...) =
+    cat_shape(dims, _cshp(dims, (), shape, nshape), shapes...)
+
+_cshp(::Tuple{}, out, ::Tuple{}, ::Tuple{}) = out
+_cshp(::Tuple{}, out, ::Tuple{}, nshape) = (out..., nshape...)
+_cshp(dims, out, ::Tuple{}, ::Tuple{}) = (out..., map(b -> 1, dims)...)
+@inline _cshp(dims, out, shape, ::Tuple{}) =
+    _cshp(tail(dims), (out..., shape[1] + dims[1]), tail(shape), ())
+@inline _cshp(dims, out, ::Tuple{}, nshape) =
+    _cshp(tail(dims), (out..., nshape[1]), (), tail(nshape))
+@inline function _cshp(::Tuple{}, out, shape, ::Tuple{})
+    _cs(length(out) + 1, false, shape[1], 1)
+    _cshp((), (out..., 1), tail(shape), ())
+end
+@inline function _cshp(::Tuple{}, out, shape, nshape)
+    next = _cs(length(out) + 1, false, shape[1], nshape[1])
+    _cshp((), (out..., next), tail(shape), tail(nshape))
+end
+@inline function _cshp(dims, out, shape, nshape)
+    next = _cs(length(out) + 1, dims[1], shape[1], nshape[1])
+    _cshp(tail(dims), (out..., next), tail(shape), tail(nshape))
 end
 
-function cat_t(catdims, typeC::Type, X...)
-    catdims = collect(catdims)
-    nargs = length(X)
-    ndimsX = Int[isa(a,AbstractArray) ? ndims(a) : 0 for a in X]
-    ndimsC = max(maximum(ndimsX), maximum(catdims))
-    catsizes = zeros(Int,(nargs,length(catdims)))
-    dims2cat = zeros(Int,ndimsC)
-    for k = 1:length(catdims)
-        dims2cat[catdims[k]]=k
-    end
+_cs(d, concat, a, b) = concat ? (a + b) : (a == b ? a : throw(DimensionMismatch(string("mismatch in dimension ", d, " (expected ", a, " got ", b, ")"))))
 
-    dimsC = Int[d <= ndimsX[1] ? size(X[1],d) : 1 for d=1:ndimsC]
-    for k = 1:length(catdims)
-        catsizes[1,k] = dimsC[catdims[k]]
+dims2cat{n}(::Type{Val{n}}) = ntuple(i -> (i == n), Val{n})
+dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
+
+cat(dims, X...) = cat_t(dims, promote_eltype(X...), X...)
+
+function cat_t(dims, T::Type, X...)
+    catdims = dims2cat(dims)
+    shape = cat_shape(catdims, (), map(cat_size, X)...)
+    A = cat_similar(X[1], T, shape)
+    if T <: Number && countnz(catdims) > 1
+        fill!(A, zero(T))
     end
-    for i = 2:nargs
-        for d = 1:ndimsC
-            currentdim = (d <= ndimsX[i] ? size(X[i],d) : 1)
-            if dims2cat[d] != 0
-                dimsC[d] += currentdim
-                catsizes[i,dims2cat[d]] = currentdim
-            elseif dimsC[d] != currentdim
-                throw(DimensionMismatch(string("mismatch in dimension ",d,
-                                               " (expected ",dimsC[d],
-                                               " got ",currentdim,")")))
+    return _cat(A, shape, catdims, X...)
+end
+
+function _cat(A, shape, catdims, X...)
+    N = length(shape)
+    offsets = zeros(Int, N)
+    inds = Vector{UnitRange{Int}}(N)
+    concat = copy!(zeros(Bool, N), catdims)
+    for x in X
+        for i = 1:N
+            if concat[i]
+                inds[i] = offsets[i] + cat_indices(x, i)
+                offsets[i] += cat_size(x, i)
+            else
+                inds[i] = 1:shape[i]
             end
         end
+        A[inds...] = x
     end
-
-    C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, tuple(dimsC...))
-    if length(catdims)>1
-        fill!(C,0)
-    end
-
-    offsets = zeros(Int,length(catdims))
-    for i=1:nargs
-        cat_one = [ dims2cat[d] == 0 ? (1:dimsC[d]) : (offsets[dims2cat[d]]+(1:catsizes[i,dims2cat[d]]))
-                   for d=1:ndimsC ]
-        C[cat_one...] = X[i]
-        for k = 1:length(catdims)
-            offsets[k] += catsizes[i,k]
-        end
-    end
-    return C
+    return A
 end
 
 """
@@ -1179,7 +1200,7 @@ julia> vcat(c...)
  4  5  6
 ```
 """
-vcat(X...) = cat(1, X...)
+vcat(X...) = cat(Val{1}, X...)
 """
     hcat(A...)
 
@@ -1220,30 +1241,28 @@ julia> hcat(c...)
  3  6
 ```
 """
-hcat(X...) = cat(2, X...)
+hcat(X...) = cat(Val{2}, X...)
 
-typed_vcat(T::Type, X...) = cat_t(1, T, X...)
-typed_hcat(T::Type, X...) = cat_t(2, T, X...)
+typed_vcat(T::Type, X...) = cat_t(Val{1}, T, X...)
+typed_hcat(T::Type, X...) = cat_t(Val{2}, T, X...)
 
 cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
 
-cat(catdims, A::AbstractArray...) = cat_t(catdims, promote_eltype(A...), A...)
-
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
-vcat(A::AbstractArray) = cat(1, A)
-vcat(A::AbstractArray, B::AbstractArray) = cat(1, A, B)
-vcat(A::AbstractArray...) = cat(1, A...)
-hcat(A::AbstractArray) = cat(2, A)
-hcat(A::AbstractArray, B::AbstractArray) = cat(2, A, B)
-hcat(A::AbstractArray...) = cat(2, A...)
+vcat(A::AbstractArray) = cat(Val{1}, A)
+vcat(A::AbstractArray, B::AbstractArray) = cat(Val{1}, A, B)
+vcat(A::AbstractArray...) = cat(Val{1}, A...)
+hcat(A::AbstractArray) = cat(Val{2}, A)
+hcat(A::AbstractArray, B::AbstractArray) = cat(Val{2}, A, B)
+hcat(A::AbstractArray...) = cat(Val{2}, A...)
 
-typed_vcat(T::Type, A::AbstractArray) = cat_t(1, T, A)
-typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(1, T, A, B)
-typed_vcat(T::Type, A::AbstractArray...) = cat_t(1, T, A...)
-typed_hcat(T::Type, A::AbstractArray) = cat_t(2, T, A)
-typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(2, T, A, B)
-typed_hcat(T::Type, A::AbstractArray...) = cat_t(2, T, A...)
+typed_vcat(T::Type, A::AbstractArray) = cat_t(Val{1}, T, A)
+typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val{1}, T, A, B)
+typed_vcat(T::Type, A::AbstractArray...) = cat_t(Val{1}, T, A...)
+typed_hcat(T::Type, A::AbstractArray) = cat_t(Val{2}, T, A)
+typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val{2}, T, A, B)
+typed_hcat(T::Type, A::AbstractArray...) = cat_t(Val{2}, T, A...)
 
 # 2d horizontal and vertical concatenation
 

@@ -2215,72 +2215,12 @@ function vcat(A::BitMatrix...)
     return B
 end
 
-function cat(catdim::Integer, X::Integer...)
-    reshape([X...], (ones(Int,catdim-1)..., length(X)))
-end
-
 # general case, specialized for BitArrays and Integers
-function cat(catdim::Integer, X::Union{BitArray, Integer}...)
-    nargs = length(X)
-    # using integers results in conversion to Array{Int}
-    # (except in the all-Bool case)
-    has_integer = false
-    for a in X
-        if isa(a, Integer)
-            has_integer = true; break
-        end
-    end
-    dimsX = map((a->isa(a,BitArray) ? size(a) : (1,)), X)
-    ndimsX = map((a->isa(a,BitArray) ? ndims(a) : 1), X)
-    d_max = maximum(ndimsX)
-
-    if catdim > d_max + 1
-        for i = 1:nargs
-            dimsX[1] == dimsX[i] ||
-                throw(DimensionMismatch("all inputs must have same dimensions when concatenating along a higher dimension"))
-        end
-    elseif nargs >= 2
-        for d = 1:d_max
-            d == catdim && continue
-            len = d <= ndimsX[1] ? dimsX[1][d] : 1
-            for i = 2:nargs
-                len == (d <= ndimsX[i] ? dimsX[i][d] : 1) || throw(DimensionMismatch("mismatch in dimension $d"))
-            end
-        end
-    end
-
-    cat_ranges = ntuple(i->(catdim <= ndimsX[i] ? dimsX[i][catdim] : 1), nargs)
-
-    function compute_dims(d)
-        if d == catdim
-            catdim <= d_max && return sum(cat_ranges)
-            return nargs
-        else
-            d <= ndimsX[1] && return dimsX[1][d]
-            return 1
-        end
-    end
-
-    ndimsC = max(catdim, d_max)
-    dimsC = ntuple(compute_dims, ndimsC)::Tuple{Vararg{Int}}
-    typeC = promote_type(map(x->isa(x,BitArray) ? eltype(x) : typeof(x), X)...)
-    if !has_integer || typeC == Bool
-        C = BitArray(dimsC)
-    else
-        C = Array{typeC}(dimsC)
-    end
-
-    range = 1
-    for k = 1:nargs
-        nextrange = range + cat_ranges[k]
-        cat_one = ntuple(i->(i != catdim ? (1:dimsC[i]) : (range:nextrange-1)),
-                         ndimsC)
-        # note: when C and X are BitArrays, this calls
-        #       the special assign with ranges
-        C[cat_one...] = X[k]
-        range = nextrange
-    end
-    return C
+function cat(dims::Integer, X::Union{BitArray, Bool}...)
+    catdims = dims2cat(dims)
+    shape = cat_shape(catdims, (), map(cat_size, X)...)
+    A = falses(shape)
+    return _cat(A, shape, catdims, X...)
 end
 
 # hvcat -> use fallbacks in abstractarray.jl

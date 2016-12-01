@@ -3219,12 +3219,8 @@ function vcat(X::SparseMatrixCSC...)
         end
     end
 
-    Tv = eltype(X[1].nzval)
-    Ti = eltype(X[1].rowval)
-    for i = 2:length(X)
-        Tv = promote_type(Tv, eltype(X[i].nzval))
-        Ti = promote_type(Ti, eltype(X[i].rowval))
-    end
+    Tv = promote_eltype(X...)
+    Ti = promote_eltype(map(x->x.rowval, X)...)
 
     nnzX = Int[ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
@@ -3276,8 +3272,8 @@ function hcat(X::SparseMatrixCSC...)
     end
     n = sum(nX)
 
-    Tv = promote_type(map(x->eltype(x.nzval), X)...)
-    Ti = promote_type(map(x->eltype(x.rowval), X)...)
+    Tv = promote_eltype(X...)
+    Ti = promote_eltype(map(x->x.rowval, X)...)
 
     colptr = Array{Ti}(n + 1)
     nnzX = Int[ nnz(x) for x in X ]

@@ -1659,3 +1659,6 @@ let X = sparse([1 -1; -1 1])
         @test Y / 1 == Y
     end
 end
+
+# 19304
+@inferred hcat(sparse(rand(2,1)), eye(2,2))
