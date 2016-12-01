@@ -167,8 +167,8 @@ the value bound to that symbol in the appropriate :ref:`scope
 <man-variables-and-scoping>`.
 
 Sometimes extra parentheses around the argument to ``:`` are needed to avoid
-ambiguity in parsing, e.g. Distinguishing between the token `:` as in `1:5` 
-and the token `::` as in `x::Int`:
+ambiguity in parsing, e.g. distinguishing between the token ``:`` as in ``1:5`` 
+and the token ``::`` as in ``x::Int``:
 
 .. doctest::
 
