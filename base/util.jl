@@ -571,3 +571,80 @@ a starting `crc` integer to be mixed in with the checksum.
 function crc32c end
 crc32c(a::Array{UInt8}, crc::UInt32=0x00000000) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
 crc32c(s::String, crc::UInt32=0x00000000) = crc32c(s.data, crc)
+
+"""
+    @kwdef typedef
+
+This is a helper macro that automatically defines a keyword-based constructor for the type
+declared in the expression `typedef`, which must be a `type` or `immutable`
+expression. The default argument is supplied by declaring fields of the form `field::T =
+default`. If no default is provided then the default is provided by the `kwdef_val(T)`
+function.
+
+```
+@kwdef immutable Foo
+    a::Cint            # implied default Cint(0)
+    b::Cint = Cint(1)  # specified default
+    z::Cstring         # implied default Cstring(C_NULL)
+    y::Bar             # implied default Bar()
+end
+```
+"""
+macro kwdef(expr)
+    expr = macroexpand(expr) # to expand @static
+    T = expr.args[2]
+    params_ex = Expr(:parameters)
+    call_ex = Expr(:call, T)
+    _kwdef!(expr.args[3], params_ex, call_ex)
+    quote
+        $(esc(expr))
+        $(esc(Expr(:call,T,params_ex))) = $(esc(call_ex))
+    end
+end
+
+# @kwdef helper function
+# mutates arguments inplace
+function _kwdef!(blk, params_ex, call_ex)
+    for i in eachindex(blk.args)
+        ei = blk.args[i]
+        isa(ei, Expr) || continue
+        if ei.head == :(=)
+            # val::Typ = defexpr
+            dec = ei.args[1] # val::Typ
+            def = ei.args[2] # defexpr
+            push!(params_ex.args, Expr(:kw, dec, def))
+            push!(call_ex.args, dec.args[1])
+            blk.args[i] = dec
+        elseif ei.head == :(::)
+            dec = ei # val::Typ
+            def = :(Base.kwdef_val($(ei.args[2])))
+            push!(params_ex.args, Expr(:kw, dec, def))
+            push!(call_ex.args, dec.args[1])
+        elseif ei.head == :block
+            # can arise with use of @static inside type decl
+            _kwdef!(ei, params_ex, call_ex)
+        end
+    end
+    blk
+end
+
+
+
+"""
+    kwdef_val(T)
+
+The default value for a type for use with the `@kwdef` macro. Returns:
+
+ - null pointer for pointer types (`Ptr{T}`, `Cstring`, `Cwstring`)
+ - zero for integer types
+ - no-argument constructor calls (e.g. `T()`) for all other types
+"""
+function kwdef_val end
+
+kwdef_val{T}(::Type{Ptr{T}}) = Ptr{T}(C_NULL)
+kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
+kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
+
+kwdef_val{T<:Integer}(::Type{T}) = zero(T)
+
+kwdef_val{T}(::Type{T}) = T()
