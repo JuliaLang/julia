@@ -20,13 +20,13 @@ function current(rb::GitRebase)
     return ccall((:git_rebase_operation_current, :libgit2), Csize_t, (Ptr{Void},), rb.ptr)
 end
 
-function Base.getindex(rb::GitRebase, i::Csize_t)
-    rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2), Ptr{Void},
-                       (Ptr{Void}, Csize_t), rb.ptr, i-1)
+function Base.getindex(rb::GitRebase, i::Integer)
+    rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2),
+                      Ptr{RebaseOperation},
+                      (Ptr{Void}, Csize_t), rb.ptr, i-1)
     rb_op_ptr == C_NULL && return nothing
-    return unsafe_load(convert(Ptr{RebaseOperation}, rb_op_ptr), 1)
+    return unsafe_load(rb_op_ptr)
 end
-Base.getindex(rb::GitRebase, i::Int) = getindex(rb, Csize_t(i))
 
 function Base.next(rb::GitRebase)
     rb_op_ptr_ptr = Ref{Ptr{RebaseOperation}}(C_NULL)
@@ -38,7 +38,7 @@ function Base.next(rb::GitRebase)
         err.code == Error.ITEROVER && return nothing
         rethrow(err)
     end
-    return unsafe_load(convert(Ptr{RebaseOperation}, rb_op_ptr_ptr[]), 1)
+    return unsafe_load(rb_op_ptr_ptr[])
 end
 
 function commit(rb::GitRebase, sig::GitSignature)
