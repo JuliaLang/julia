@@ -419,7 +419,7 @@ function frexp{T<:AbstractFloat}(x::T)
         xs == 0 && return x, 0 # +-0
         m = unsigned(leading_zeros(xs) - exponent_bits(T))
         xs <<= m
-        xu = xs ⊻ (xu & sign_mask(T))
+        xu = xs | (xu & sign_mask(T))
         k = 1 - signed(m)
     end
     k -= (exponent_bias(T) - 1)
