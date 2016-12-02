@@ -546,9 +546,9 @@ immutable StatusOptions
 end
 StatusOptions(; show::Cint = Consts.STATUS_SHOW_INDEX_AND_WORKDIR,
                 flags::Consts.STATUS_OPT = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
-                               Consts.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
-                               Consts.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
-                               Consts.STATUS_OPT_SORT_CASE_SENSITIVELY,
+                                           Consts.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
+                                           Consts.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
+                                           Consts.STATUS_OPT_SORT_CASE_SENSITIVELY,
                 pathspec::StrArrayStruct = StrArrayStruct()) =
     StatusOptions(one(Cuint),
                   show,
