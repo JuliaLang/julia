@@ -18,7 +18,7 @@ Oid() = Oid(ntuple(i->zero(UInt8), OID_RAWSZ))
 Time in a signature.
 Matches the [`git_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_time) struct.
 """
-@kwdef immutable TimeStruct
+immutable TimeStruct
     time::Int64     # time in seconds from epoch
     offset::Cint    # timezone offset in minutes
 end
@@ -29,7 +29,7 @@ end
 An action signature (e.g. for committers, taggers, etc).
 Matches the [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) struct.
 """
-@kwdef immutable SignatureStruct
+immutable SignatureStruct
     name::Ptr{UInt8}  # full name of the author
     email::Ptr{UInt8} # email of the author
     when::TimeStruct  # time when the action happened
@@ -206,7 +206,7 @@ end
 Description of one side of a delta.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
 """
-@kwdef immutable DiffFile
+immutable DiffFile
     id::Oid
     path::Cstring
     size::Int64
@@ -220,7 +220,7 @@ end
 Description of changes to one entry.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
 """
-@kwdef immutable DiffDelta
+immutable DiffDelta
     status::Cint
     flags::UInt32
     similarity::UInt16
@@ -270,7 +270,7 @@ end
 
 Matches the [`git_index_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_time) struct.
 """
-@kwdef immutable IndexTime
+immutable IndexTime
     seconds::Int64
     nanoseconds::Cuint
 end
@@ -281,7 +281,7 @@ end
 In-memory representation of a file entry in the index.
 Matches the [`git_index_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_entry) struct.
 """
-@kwdef immutable IndexEntry
+immutable IndexEntry
     ctime::IndexTime
     mtime::IndexTime
 
@@ -325,7 +325,7 @@ end
 Describes a single instruction/operation to be performed during the rebase.
 Matches the `git_rebase_operation` struct.
 """
-@kwdef immutable RebaseOperation
+immutable RebaseOperation
     optype::Cint
     id::Oid
     exec::Cstring
@@ -355,7 +355,7 @@ Providing the differences between the file as it exists in HEAD and the index, a
 providing the differences between the index and the working directory.
 Matches the `git_status_entry` struct.
 """
-@kwdef immutable StatusEntry
+immutable StatusEntry
     status::Cuint
     head_to_index::Ptr{DiffDelta}
     index_to_workdir::Ptr{DiffDelta}

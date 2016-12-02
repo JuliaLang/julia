@@ -35,10 +35,10 @@ function Base.count(diff::GitDiff)
     return ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Void},), diff.ptr)
 end
 
-function Base.getindex(diff::GitDiff, i::Csize_t)
-    delta_ptr = ccall((:git_diff_get_delta, :libgit2), Ptr{Void},
-                       (Ptr{Void}, Csize_t), diff.ptr, i-1)
+function Base.getindex(diff::GitDiff, i::Integer)
+    delta_ptr = ccall((:git_diff_get_delta, :libgit2),
+                      Ptr{DiffDelta},
+                      (Ptr{Void}, Csize_t), diff.ptr, i-1)
     delta_ptr == C_NULL && return nothing
-    return unsafe_load(convert(Ptr{DiffDelta}, delta_ptr), 1)
+    return unsafe_load(delta_ptr)
 end
-Base.getindex(diff::GitDiff, i::Int) = getindex(diff, Csize_t(i))
