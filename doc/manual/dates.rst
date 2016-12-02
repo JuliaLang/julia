@@ -73,6 +73,13 @@ One note on parsing performance: using the ``Date(date_string,format_string)`` f
   2015-01-02
 
 
+To print a :class:`Date` or :class:`DateTime` object as a string use the ``Dates.format`` function:
+
+::
+
+  julia> Dates.format(Date(2016,2,1), "uuu d, yyyy")
+  "Feb 1, 2016"
+
 A full suite of parsing and formatting tests and examples is available in `tests/dates/io.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl>`_.
 
 Durations/Comparisons
