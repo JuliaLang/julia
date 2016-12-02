@@ -597,7 +597,7 @@ macro kwdef(expr)
     call_ex = Expr(:call, T)
     _kwdef!(expr.args[3], params_ex, call_ex)
     quote
-        $(esc(expr))
+        Base.@__doc__($(esc(expr)))
         $(esc(Expr(:call,T,params_ex))) = $(esc(call_ex))
     end
 end
