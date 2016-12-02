@@ -171,10 +171,10 @@ let b = IOBuffer()
 end
 
 
-@enumset VegetableSet carrot potato broccoli
+@flagenum VegetableSet carrot potato broccoli
 @test typeof(VegetableSet) == DataType
 @test isbits(VegetableSet)
-@test typeof(carrot) <: VegetableSet <: EnumSet
+@test typeof(carrot) <: VegetableSet <: FlagEnum
 @test Int(carrot) == 1
 @test Int(potato) == 2
 @test Int(broccoli) == 4
@@ -198,9 +198,10 @@ end
 @test convert(UInt128,broccoli) === 0x00000000000000000000000000000004
 @test typeof(convert(BigInt,carrot)) <: BigInt
 @test convert(BigInt,carrot) == 1
-@test carrot ⊆ carrot
-@test carrot ⊆ carrot ∪ potato
-@test carrot ⊈ potato
-@test VegetableSet() ⊆ carrot
-@test carrot ⊈ VegetableSet()
-@test setdiff(carrot ∪ potato, carrot) == potato
+@test carrot ∈ carrot
+@test carrot ∈ carrot | potato
+@test carrot ∉ potato
+@test VegetableSet() ∈ carrot
+@test carrot ∉ VegetableSet()
+@test carrot ∈ ~VegetableSet()
+@test ~carrot == potato|broccoli

@@ -27,7 +27,7 @@ module Consts
     const REF_LISTALL  = REF_OID | REF_SYMBOLIC
 
     # checkout
-    @enumset(CHECKOUT,
+    @flagenum(CHECKOUT,
              CHECKOUT_SAFE                    = 1 << 0,
              CHECKOUT_FORCE                   = 1 << 1,
              CHECKOUT_RECREATE_MISSING        = 1 << 2,
@@ -51,7 +51,7 @@ module Consts
     const CHECKOUT_UPDATE_SUBMODULES       = Cuint(1 << 16)
     const CHECKOUT_UPDATE_SUBMODULES_IF_CHANGED = Cuint(1 << 17)
 
-    @enumset(CHECKOUT_NOTIFY,
+    @flagenum(CHECKOUT_NOTIFY,
              CHECKOUT_NOTIFY_CONFLICT  = 1 << 0,
              CHECKOUT_NOTIFY_DIRTY     = 1 << 1,
              CHECKOUT_NOTIFY_UPDATED   = 1 << 2,
@@ -224,7 +224,7 @@ module Consts
     const STATUS_SHOW_WORKDIR_ONLY      = Cint(2)
 
     # status options
-    @enumset(STATUS_OPT,
+    @flagenum(STATUS_OPT,
              STATUS_OPT_INCLUDE_UNTRACKED                = 1 << 0,
              STATUS_OPT_INCLUDE_IGNORED                  = 1 << 1,
              STATUS_OPT_INCLUDE_UNMODIFIED               = 1 << 2,

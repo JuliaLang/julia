@@ -3,7 +3,7 @@
 module Enums
 
 import Core.Intrinsics.box
-export AbstractEnum, Enum, @enum, EnumSet, @enumset
+export AbstractEnum, Enum, @enum, FlagEnum, @flagenum
 
 abstract AbstractEnum
 abstract Enum <: AbstractEnum
@@ -141,25 +141,24 @@ macro enum(T,syms...)
     return blk
 end
 
-abstract EnumSet <: AbstractEnum
 
-Base.convert{T<:Integer}(::Type{T}, x::EnumSet) = convert(T, convert(Unsigned, x))
 
+abstract FlagEnum <: AbstractEnum
+
+Base.convert{T<:Integer}(::Type{T}, x::FlagEnum) = convert(T, convert(Unsigned, x))
 for op in (:|, :&, :xor)
-    @eval function Base.$op{T<:EnumSet}(x::T,y::T)
+    @eval function Base.$op{T<:FlagEnum}(x::T,y::T)
         reinterpret(T, ($op)(convert(Unsigned, x), convert(Unsigned, y)))
     end
 end
+Base.in{T<:FlagEnum}(x::T, y::T) = x & y == x
+Base.~{T<:FlagEnum}(x::T) = reinterpret(T, convert(Unsigned, typemax(T)) & ~convert(Unsigned, x))
 
-Base.union{T<:EnumSet}(x::T, y::T) = x | y
-Base.intersect{T<:EnumSet}(x::T, y::T) = x & y
-Base.issubset{T<:EnumSet}(x::T, y::T) = x & y == x
-Base.setdiff{T<:EnumSet}(x::T, y::T) = x & xor(x, y)
 
 """
     @enumset EnumName[::U] EnumValue1[=x] EnumValue2[=y]
 
-Create an [`EnumSet`](:obj:`EnumSet`) type with name `EnumName` and base member values of
+Create an [`FlagEnum`](:obj:`FlagEnum`) type with name `EnumName` and base member values of
 `EnumValue1` and `EnumValue2`, based on the unsigned integer type `U` (`UInt32` by
 default).  The optional assigned values of `x` and `y` must have exactly 1 bit set, and
 not overlap. `EnumName` can be used just like other types and enum member values as
@@ -175,9 +174,9 @@ julia> f(apple|kiwi)
 "I'm a FRUITSET with value: 5"
 ```
 """
-macro enumset(T,syms...)
+macro flagenum(T,syms...)
     if isempty(syms)
-        throw(ArgumentError("no arguments given for EnumSet $T"))
+        throw(ArgumentError("no arguments given for FlagEnum $T"))
     end
     if isa(T,Symbol)
         typename = T
@@ -189,14 +188,14 @@ macro enumset(T,syms...)
             throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an unsigned integer bitstype"))
         end
     else
-        throw(ArgumentError("invalid type expression for EnumSet $T"))
+        throw(ArgumentError("invalid type expression for FlagEnum $T"))
     end
     vals = Array{Tuple{Symbol,basetype}}(0)
     mask = zero(basetype)
     for s in syms
         if isa(s,Symbol)
             if mask & prevpow2(typemax(basetype)) != 0
-                throw(ArgumentError("overflow in value \"$s\" of EnumSet $typename"))
+                throw(ArgumentError("overflow in value \"$s\" of FlagEnum $typename"))
             end
             i = max(prevpow2(mask) << 1, 1)
         elseif isa(s,Expr) &&
@@ -204,13 +203,13 @@ macro enumset(T,syms...)
                length(s.args) == 2 && isa(s.args[1],Symbol)
             i = eval(current_module(),s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
-                throw(ArgumentError("invalid value for EnumSet $typename, $s=$i; values must be integers"))
+                throw(ArgumentError("invalid value for FlagEnum $typename, $s=$i; values must be integers"))
             end
             i = convert(basetype, i)
             if count_ones(i) != 1
-                throw(ArgumentError("invalid value for EnumSet $typename, $s=$i; value must have eactly 1 bit set"))
+                throw(ArgumentError("invalid value for FlagEnum $typename, $s=$i; value must have eactly 1 bit set"))
             elseif mask & i != 0
-                throw(ArgumentError("invalid value for EnumSet $typename, $s=$i; overlap with earlier value"))
+                throw(ArgumentError("invalid value for FlagEnum $typename, $s=$i; overlap with earlier value"))
             end
             s = s.args[1]
             hasexpr = true
@@ -226,7 +225,7 @@ macro enumset(T,syms...)
     values = basetype[i[2] for i in vals]
     blk = quote
         # enum definition
-        Base.@__doc__(bitstype $(sizeof(basetype) * 8) $(esc(typename)) <: EnumSet)
+        Base.@__doc__(bitstype $(sizeof(basetype) * 8) $(esc(typename)) <: FlagEnum)
         $(esc(typename))() = reinterpret($(esc(typename)), zero($basetype))
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             if 0 <= x <= $mask &&
@@ -237,10 +236,9 @@ macro enumset(T,syms...)
             end
         end
         Base.convert(::Type{$basetype}, x::$(esc(typename))) = reinterpret($basetype, x)
-        Base.convert(::Type{Unsigned}, x::$(esc(typename))) = reinterpret($basetype, x)
+        Base.convert(::Type{Unsigned},  x::$(esc(typename))) = reinterpret($basetype, x)
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))(0)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($mask)
-        Base.isless(x::$(esc(typename)), y::$(esc(typename))) = isless($basetype(x), $basetype(y))
         let insts = ntuple(i->$(esc(typename))($values[i]), $(length(vals)))
             Base.instances(::Type{$(esc(typename))}) = insts
         end
@@ -271,7 +269,7 @@ macro enumset(T,syms...)
             Base.show_datatype(io, t)
         end
         function Base.show(io::IO, ::MIME"text/plain", t::Type{$(esc(typename))})
-            print(io, "EnumSet ")
+            print(io, "FlagEnum ")
             Base.show_datatype(io, t)
             print(io, ":")
             for (sym, i) in $vals
