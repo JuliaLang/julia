@@ -388,20 +388,17 @@ julia> significand(15.2)*8
 ```
 """
 function significand{T<:AbstractFloat}(x::T)
-    xu = reinterpret(Unsigned,x)
-    xe = xu & exponent_mask(T)
-    if xe == 0 # x is subnormal
-        x == 0 && return x
-        xs = xu & sign_mask(T)
-        xu ⊻= xs
-        m = leading_zeros(xu)-exponent_bits(T)
-        xu <<= m
-        xu ⊻= xs
-    elseif xe == exponent_mask(T) # NaN or Inf
-        return x
+    xu = reinterpret(Unsigned, x)
+    xs = xu & ~sign_mask(T)
+    xs >= exponent_mask(T) && return x # NaN or Inf
+    if xs <= (~exponent_mask(T) & ~sign_mask(T)) # x is subnormal
+        xs == 0 && return x # +-0
+        m = unsigned(leading_zeros(xs) - exponent_bits(T))
+        xs <<= m
+        xu = xs | (xu & sign_mask(T))
     end
     xu = (xu & ~exponent_mask(T)) | exponent_one(T)
-    reinterpret(T,xu)
+    return reinterpret(T, xu)
 end
 
 """
