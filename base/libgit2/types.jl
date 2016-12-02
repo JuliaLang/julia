@@ -12,17 +12,35 @@ immutable Oid
 end
 Oid() = Oid(ntuple(i->zero(UInt8), OID_RAWSZ))
 
+"""
+    LibGit2.TimeStruct
+
+Time in a signature.
+Matches the [`git_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_time) struct.
+"""
 @kwdef immutable TimeStruct
     time::Int64     # time in seconds from epoch
     offset::Cint    # timezone offset in minutes
 end
 
+"""
+    LibGit2.SignatureStruct
+
+An action signature (e.g. for committers, taggers, etc).
+Matches the [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) struct.
+"""
 @kwdef immutable SignatureStruct
     name::Ptr{UInt8}  # full name of the author
     email::Ptr{UInt8} # email of the author
     when::TimeStruct  # time when the action happened
 end
 
+"""
+    LibGit2.StrArrayStruct
+
+Array of strings.
+Matches the [`git_strarray`](https://libgit2.github.com/libgit2/#HEAD/type/git_strarray) struct.
+"""
 @kwdef immutable StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
@@ -33,6 +51,12 @@ function Base.finalize(sa::StrArrayStruct)
     return sa_ptr[]
 end
 
+"""
+    LibGit2.Buffer
+
+A data buffer for exporting data from libgit2.
+Matches the [`git_buf`](https://libgit2.github.com/libgit2/#HEAD/type/git_buf) struct.
+"""
 @kwdef immutable Buffer
     ptr::Ptr{Cchar}
     asize::Csize_t
@@ -53,6 +77,11 @@ checkused!(p::Void) = false
 "Resets credentials for another use"
 reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
+"""
+    LibGit2.CheckoutOptions
+
+Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
+"""
 @kwdef immutable CheckoutOptions
     version::Cuint = one(Cuint)
 
@@ -84,6 +113,12 @@ reset!(p::AbstractCredentials, cnt::Int=3) = nothing
     perfdata_payload::Ptr{Void}
 end
 
+"""
+    LibGit2.RemoteCallbacks
+
+Callback settings.
+Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
+"""
 @kwdef immutable RemoteCallbacks
     version::Cuint                    = one(Cuint)
     sideband_progress::Ptr{Void}
@@ -104,6 +139,11 @@ function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractC
     RemoteCallbacks(credentials=credentials_cb(), payload=pointer_from_objref(payload))
 end
 
+"""
+    LibGit2.FetchOptions
+
+Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
+"""
 @kwdef immutable FetchOptions
     version::Cuint                  = one(Cuint)
     callbacks::RemoteCallbacks
@@ -115,6 +155,11 @@ end
     end
 end
 
+"""
+    LibGit2.CloneOptions
+
+Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
+"""
 @kwdef immutable CloneOptions
     version::Cuint                      = one(Cuint)
     checkout_opts::CheckoutOptions
@@ -128,7 +173,11 @@ end
     remote_cb_payload::Ptr{Void}
 end
 
-# git diff option struct
+"""
+    LibGit2.DiffOptionsStruct
+
+Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_options) struct.
+"""
 @kwdef immutable DiffOptionsStruct
     version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
     flags::UInt32                            = Consts.DIFF_NORMAL
@@ -151,6 +200,12 @@ end
     new_prefix::Cstring
 end
 
+"""
+    LibGit2.DiffFile
+
+Description of one side of a delta.
+Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+"""
 @kwdef immutable DiffFile
     id::Oid
     path::Cstring
@@ -159,6 +214,12 @@ end
     mode::UInt16
 end
 
+"""
+    LibGit2.DiffDelta
+
+Description of changes to one entry.
+Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+"""
 @kwdef immutable DiffDelta
     status::Cint
     flags::UInt32
@@ -169,6 +230,11 @@ end
 end
 
 # TODO: double check this when libgit2 v0.25.0 is released
+"""
+    LibGit2.MergeOptions
+
+Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_merge_options) struct.
+"""
 @kwdef immutable MergeOptions
     version::Cuint                    = one(Cuint)
     flags::Cint
@@ -185,6 +251,11 @@ end
     file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
 end
 
+"""
+    LibGit2.PushOptions
+
+Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
+"""
 @kwdef immutable PushOptions
     version::Cuint                     = one(Cuint)
     parallelism::Cint                  = one(Cint)
@@ -194,11 +265,22 @@ end
     end
 end
 
+"""
+    LibGit2.IndexTime
+
+Matches the [`git_index_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_time) struct.
+"""
 @kwdef immutable IndexTime
     seconds::Int64
     nanoseconds::Cuint
 end
 
+"""
+    LibGit2.IndexEntry
+
+In-memory representation of a file entry in the index.
+Matches the [`git_index_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_entry) struct.
+"""
 @kwdef immutable IndexEntry
     ctime::IndexTime
     mtime::IndexTime
@@ -219,7 +301,11 @@ end
 end
 Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
+"""
+    LibGit2.RebaseOptions
 
+Matches the `git_rebase_options` struct.
+"""
 @kwdef immutable RebaseOptions
     version::Cuint                 = one(Cuint)
     quiet::Cint                    = Cint(1)
@@ -233,6 +319,12 @@ Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
     checkout_opts::CheckoutOptions
 end
 
+"""
+    LibGit2.RebaseOperation
+
+Describes a single instruction/operation to be performed during the rebase.
+Matches the `git_rebase_operation` struct.
+"""
 @kwdef immutable RebaseOperation
     optype::Cint
     id::Oid
@@ -240,6 +332,12 @@ end
 end
 Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
 
+"""
+    LibGit2.StatusOptions
+
+Options to control how `git_status_foreach_ext()` will issue callbacks.
+Matches the `git_status_options` struct.
+"""
 @kwdef immutable StatusOptions
     version::Cuint           = one(Cuint)
     show::Cint               = Consts.STATUS_SHOW_INDEX_AND_WORKDIR
@@ -250,6 +348,13 @@ Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rb
     pathspec::StrArrayStruct
 end
 
+"""
+    LibGit2.StatusEntry
+
+Providing the differences between the file as it exists in HEAD and the index, and
+providing the differences between the index and the working directory.
+Matches the `git_status_entry` struct.
+"""
 @kwdef immutable StatusEntry
     status::Cuint
     head_to_index::Ptr{DiffDelta}
