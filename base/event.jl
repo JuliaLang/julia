@@ -90,6 +90,25 @@ is otherwise idle, unless the task performs a blocking operation such as [`wait`
 If a second argument `val` is provided, it will be passed to the task (via the return value of
 [`yieldto`](:func:`yieldto`)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
+
+```jldoctest
+julia> a5() = det(rand(1000, 1000));
+
+julia> b = Task(a5);
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskstarted(b)
+true
+
+julia> istaskdone(b)
+true
+```
 """
 function schedule(t::Task, arg; error=false)
     # schedule a task to be (re)started with the given value or exception

@@ -13,6 +13,14 @@ Tasks
 
    Create a ``Task`` (i.e. coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.
 
+   .. doctest::
+
+       julia> a() = det(rand(1000, 1000));
+
+       julia> b = Task(a);
+
+   In this example, ``b`` is a runnable ``Task`` that hasn't started yet.
+
 .. function:: yieldto(t::Task, arg = nothing)
 
    .. Docstring generated from Julia source
@@ -25,17 +33,42 @@ Tasks
 
    Get the currently running :class:`Task`\ .
 
-.. function:: istaskdone(task) -> Bool
+.. function:: istaskdone(t::Task) -> Bool
 
    .. Docstring generated from Julia source
 
    Determine whether a task has exited.
 
-.. function:: istaskstarted(task) -> Bool
+   .. doctest::
+
+       julia> a2() = det(rand(1000, 1000));
+
+       julia> b = Task(a2);
+
+       julia> istaskdone(b)
+       false
+
+       julia> schedule(b);
+
+       julia> yield();
+
+       julia> istaskdone(b)
+       true
+
+.. function:: istaskstarted(t::Task) -> Bool
 
    .. Docstring generated from Julia source
 
    Determine whether a task has started executing.
+
+   .. doctest::
+
+       julia> a3() = det(rand(1000, 1000));
+
+       julia> b = Task(a3);
+
+       julia> istaskstarted(b)
+       false
 
 .. function:: consume(task, values...)
 
@@ -93,6 +126,25 @@ Tasks
 
    If a second argument ``val`` is provided, it will be passed to the task (via the return value of :func:`yieldto`\ ) when it runs again. If ``error`` is ``true``\ , the value is raised as an exception in the woken task.
 
+   .. doctest::
+
+       julia> a5() = det(rand(1000, 1000));
+
+       julia> b = Task(a5);
+
+       julia> istaskstarted(b)
+       false
+
+       julia> schedule(b);
+
+       julia> yield();
+
+       julia> istaskstarted(b)
+       true
+
+       julia> istaskdone(b)
+       true
+
 .. function:: @schedule
 
    .. Docstring generated from Julia source
@@ -104,6 +156,22 @@ Tasks
    .. Docstring generated from Julia source
 
    Wrap an expression in a :class:`Task` without executing it, and return the :class:`Task`\ . This only creates a task, and does not run it.
+
+   .. doctest::
+
+       julia> a1() = det(rand(1000, 1000));
+
+       julia> b = @task a1();
+
+       julia> istaskstarted(b)
+       false
+
+       julia> schedule(b);
+
+       julia> yield();
+
+       julia> istaskdone(b)
+       true
 
 .. function:: sleep(seconds)
 
@@ -353,7 +421,7 @@ General Parallel Computing Support
    * :obj:`Task`\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
    * :obj:`RawFD`\ : Wait for changes on a file descriptor (see :func:`poll_fd` for keyword arguments and return code)
 
-   If no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to ``schedule`` or ``yieldto``\ .
+   If no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to :func:`schedule` or :func:`yieldto`\ .
 
    Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition is met before proceeding.
 

@@ -1813,7 +1813,7 @@ Block the current task until some event occurs, depending on the type of the arg
 * [`RawFD`](:obj:`RawFD`): Wait for changes on a file descriptor (see [`poll_fd`](:func:`poll_fd`) for keyword arguments and return code)
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
-restarted by an explicit call to `schedule` or `yieldto`.
+restarted by an explicit call to [`schedule`](:func:`schedule`) or [`yieldto`](:func:`yieldto`).
 
 Often `wait` is called within a `while` loop to ensure a waited-for condition is met before proceeding.
 """
@@ -1932,6 +1932,14 @@ IntSet
 
 Create a `Task` (i.e. coroutine) to execute the given function (which must be
 callable with no arguments). The task exits when this function returns.
+
+```jldoctest
+julia> a() = det(rand(1000, 1000));
+
+julia> b = Task(a);
+```
+
+In this example, `b` is a runnable `Task` that hasn't started yet.
 """
 Task
 
