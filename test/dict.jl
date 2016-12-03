@@ -147,6 +147,8 @@ let d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
 end
 
+@test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
+
 # issue #1821
 let
     d = Dict{String, Vector{Int}}()
@@ -374,6 +376,32 @@ let
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
+let
+    a = ObjectIdDict()
+    a[1] = a
+    a[a] = 2
+
+    sa = similar(a)
+    @test isempty(sa)
+    @test isa(sa, ObjectIdDict)
+
+    ca = copy(a)
+    @test length(ca) == length(a)
+    @test ca == a
+
+    ca = empty!(ca)
+    @test length(ca) == 0
+end
+
+let d = @inferred ObjectIdDict(i=>i for i=1:3)
+    @test isa(d, ObjectIdDict)
+    @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+end
+
+let d = @inferred ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test isa(d, ObjectIdDict)
+    @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+end
 
 # Issue #7944
 let d = Dict{Int,Int}()
