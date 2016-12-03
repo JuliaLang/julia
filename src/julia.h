@@ -1766,7 +1766,7 @@ typedef struct {
     int static_alloc;       // is the compiler allowed to allocate statically?
     int dynamic_alloc;      // is the compiler allowed to allocate dynamically (requires runtime)?
 } jl_cgparams_t;
-extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
+extern JL_DLLEXPORT const jl_cgparams_t jl_default_cgparams;
 
 #ifdef __cplusplus
 }

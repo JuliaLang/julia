@@ -32,9 +32,9 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
     return eval(e, NULL);
 }
 
-JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
-                                                       jl_code_info_t *src,
-                                                       jl_svec_t *sparam_vals)
+jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
+                                          jl_code_info_t *src,
+                                          jl_svec_t *sparam_vals)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *v=NULL;
