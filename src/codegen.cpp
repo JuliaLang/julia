@@ -530,7 +530,7 @@ typedef struct {
 
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
-typedef struct {
+struct jl_codectx_t {
     Function *f;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -560,8 +560,8 @@ typedef struct {
     bool debug_enabled;
     bool is_inbounds{false};
 
-    jl_cgparams_t *params;
-} jl_codectx_t;
+    const jl_cgparams_t *params;
+};
 
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx);
 
@@ -821,7 +821,7 @@ void jl_dump_compiles(void *s)
 
 // --- entry point ---
 //static int n_emit=0;
-static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_info_t *src, jl_llvm_functions_t *declarations, jl_cgparams_t *params);
+static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_info_t *src, jl_llvm_functions_t *declarations, const jl_cgparams_t *params);
 void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const DataLayout &DL);
 
 // this generates llvm code for the lambda info
@@ -829,7 +829,7 @@ void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const D
 // (and the shadow module), but doesn't yet compile
 // or generate object code for it
 extern "C"
-jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t *li, jl_code_info_t *src, jl_cgparams_t *params)
+jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t *li, jl_code_info_t *src, const jl_cgparams_t *params)
 {
     JL_TIMING(CODEGEN);
     assert(jl_is_method_instance(li));
@@ -1251,7 +1251,7 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 // this is paired with jl_dump_function_ir and jl_dump_function_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn(jl_method_instance_t *linfo, bool getwrapper, bool optimize, jl_cgparams_t params)
+void *jl_get_llvmf_defn(jl_method_instance_t *linfo, bool getwrapper, bool optimize, const jl_cgparams_t params)
 {
     // `source` is `NULL` for generated functions.
     // The `isstaged` check can be removed if that is not the case anymore.
@@ -1330,7 +1330,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, bool getwrapper, bool optim
 
 
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_decl(jl_method_instance_t *linfo, bool getwrapper, jl_cgparams_t params)
+void *jl_get_llvmf_decl(jl_method_instance_t *linfo, bool getwrapper, const jl_cgparams_t params)
 {
     // `source` is `NULL` for generated functions.
     // The `isstaged` check can be removed if that is not the case anymore.
@@ -4114,7 +4114,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, bool
 }
 
 // Compile to LLVM IR, using a specialized signature if applicable.
-static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_info_t *src, jl_llvm_functions_t *declarations, jl_cgparams_t *params)
+static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_info_t *src, jl_llvm_functions_t *declarations, const jl_cgparams_t *params)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     assert(declarations && "Capturing declarations is always required");

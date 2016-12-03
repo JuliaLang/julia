@@ -114,7 +114,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 
 #ifdef _OS_WINDOWS_
     if (!f_lib)
-        f_lib = jl_dlfind_win32(f_name);
+        f_lib = (char*)jl_dlfind_win32(f_name);
 #endif
 
     void *ptr = jl_dlsym(jl_get_library(f_lib), f_name);

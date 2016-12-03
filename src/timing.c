@@ -4,6 +4,10 @@
 #include "julia.h"
 #include "options.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef ENABLE_TIMINGS
 #include "timing.h"
 
@@ -63,4 +67,8 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block)
 void jl_init_timing(void) { }
 void jl_destroy_timing(void) { }
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif

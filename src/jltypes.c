@@ -68,7 +68,7 @@ JL_DLLEXPORT jl_value_t *jl_emptytuple=NULL;
 jl_svec_t *jl_emptysvec;
 jl_value_t *jl_nothing;
 
-jl_cgparams_t jl_default_cgparams;
+const jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 1, 1, 1};
 
 // --- type properties and predicates ---
 
@@ -3532,8 +3532,6 @@ void jl_init_types(void)
     jl_type_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Type"), jl_any_type, jl_emptysvec);
     jl_type_type_mt = jl_new_method_table(jl_type_type->name->name, ptls->current_module);
     jl_type_type->name->mt = jl_type_type_mt;
-
-    jl_default_cgparams = (jl_cgparams_t){1, 1, 1, 1, 1, 1, 1};
 
     // initialize them. lots of cycles.
     jl_datatype_type->name = jl_new_typename(jl_symbol("DataType"));
