@@ -1,0 +1,26 @@
+From 6c0f0a0bc5cdc214b139fc8c7180b0fe012ea1f7 Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Fri, 25 Nov 2016 12:48:50 +0900
+Subject: [PATCH] Mingw64 is not MSVC
+
+---
+ include/llvm/ADT/Triple.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/include/llvm/ADT/Triple.h b/include/llvm/ADT/Triple.h
+index b98f840..102b59b 100644
+--- a/include/llvm/ADT/Triple.h
++++ b/include/llvm/ADT/Triple.h
+@@ -517,8 +517,7 @@ public:
+ 
+   /// Is this a "Windows" OS targeting a "MSVCRT.dll" environment.
+   bool isOSMSVCRT() const {
+-    return isWindowsMSVCEnvironment() || isWindowsGNUEnvironment() ||
+-           isWindowsItaniumEnvironment();
++    return isWindowsMSVCEnvironment() || isWindowsItaniumEnvironment();
+   }
+ 
+   /// Tests whether the OS is Windows.
+-- 
+2.10.2
+

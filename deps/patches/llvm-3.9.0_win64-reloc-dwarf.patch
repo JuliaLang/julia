@@ -1,0 +1,183 @@
+diff --git a/include/llvm/MC/MCStreamer.h b/include/llvm/MC/MCStreamer.h
+index cd710ee..7cae156 100644
+--- a/include/llvm/MC/MCStreamer.h
++++ b/include/llvm/MC/MCStreamer.h
+@@ -470,7 +470,7 @@ public:
+   /// \brief Emits a COFF section relative relocation.
+   ///
+   /// \param Symbol - Symbol the section relative relocation should point to.
+-  virtual void EmitCOFFSecRel32(MCSymbol const *Symbol);
++  virtual void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset);
+ 
+   /// \brief Emit an ELF .size directive.
+   ///
+diff --git a/include/llvm/MC/MCWinCOFFStreamer.h b/include/llvm/MC/MCWinCOFFStreamer.h
+index fe1ada9..63e44f2 100644
+--- a/include/llvm/MC/MCWinCOFFStreamer.h
++++ b/include/llvm/MC/MCWinCOFFStreamer.h
+@@ -52,7 +52,7 @@ public:
+   void EndCOFFSymbolDef() override;
+   void EmitCOFFSafeSEH(MCSymbol const *Symbol) override;
+   void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
+-  void EmitCOFFSecRel32(MCSymbol const *Symbol) override;
++  void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
+   void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+                         unsigned ByteAlignment) override;
+   void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+diff --git a/lib/CodeGen/AsmPrinter/AsmPrinter.cpp b/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+index 272bace..9df876f 100644
+--- a/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
++++ b/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+@@ -1699,7 +1699,7 @@ void AsmPrinter::EmitLabelPlusOffset(const MCSymbol *Label, uint64_t Offset,
+                                      unsigned Size,
+                                      bool IsSectionRelative) const {
+   if (MAI->needsDwarfSectionOffsetDirective() && IsSectionRelative) {
+-    OutStreamer->EmitCOFFSecRel32(Label);
++    OutStreamer->EmitCOFFSecRel32(Label, Offset);
+     return;
+   }
+ 
+diff --git a/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp b/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp
+index 60f40d0..1ff4e6e 100644
+--- a/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp
++++ b/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp
+@@ -150,7 +150,7 @@ void AsmPrinter::emitDwarfSymbolReference(const MCSymbol *Label,
+   if (!ForceOffset) {
+     // On COFF targets, we have to emit the special .secrel32 directive.
+     if (MAI->needsDwarfSectionOffsetDirective()) {
+-      OutStreamer->EmitCOFFSecRel32(Label);
++      OutStreamer->EmitCOFFSecRel32(Label, /*Offset=*/0);
+       return;
+     }
+ 
+diff --git a/lib/CodeGen/AsmPrinter/CodeViewDebug.cpp b/lib/CodeGen/AsmPrinter/CodeViewDebug.cpp
+index ebf80de..13cba28 100644
+--- a/lib/CodeGen/AsmPrinter/CodeViewDebug.cpp
++++ b/lib/CodeGen/AsmPrinter/CodeViewDebug.cpp
+@@ -667,7 +667,7 @@ void CodeViewDebug::emitDebugInfoForFunction(const Function *GV,
+     OS.AddComment("Function type index");
+     OS.EmitIntValue(getFuncIdForSubprogram(GV->getSubprogram()).getIndex(), 4);
+     OS.AddComment("Function section relative address");
+-    OS.EmitCOFFSecRel32(Fn);
++    OS.EmitCOFFSecRel32(Fn, /*Offset=*/0);
+     OS.AddComment("Function section index");
+     OS.EmitCOFFSectionIndex(Fn);
+     OS.AddComment("Flags");
+@@ -2066,7 +2066,7 @@ void CodeViewDebug::emitDebugInfoForGlobal(const DIGlobalVariable *DIGV,
+   OS.AddComment("Type");
+   OS.EmitIntValue(getCompleteTypeIndex(DIGV->getType()).getIndex(), 4);
+   OS.AddComment("DataOffset");
+-  OS.EmitCOFFSecRel32(GVSym);
++  OS.EmitCOFFSecRel32(GVSym, /*Offset=*/0);
+   OS.AddComment("Segment");
+   OS.EmitCOFFSectionIndex(GVSym);
+   OS.AddComment("Name");
+diff --git a/lib/CodeGen/AsmPrinter/DIE.cpp b/lib/CodeGen/AsmPrinter/DIE.cpp
+index 2aaa85a..6b625ca 100644
+--- a/lib/CodeGen/AsmPrinter/DIE.cpp
++++ b/lib/CodeGen/AsmPrinter/DIE.cpp
+@@ -454,7 +454,7 @@ void DIEEntry::EmitValue(const AsmPrinter *AP, dwarf::Form Form) const {
+     Addr += CU->getDebugInfoOffset();
+     if (AP->MAI->doesDwarfUseRelocationsAcrossSections())
+       AP->EmitLabelPlusOffset(CU->getSectionSym(), Addr,
+-                              DIEEntry::getRefAddrSize(AP));
++                              DIEEntry::getRefAddrSize(AP), true);
+     else
+       AP->OutStreamer->EmitIntValue(Addr, DIEEntry::getRefAddrSize(AP));
+   } else
+diff --git a/lib/MC/MCAsmStreamer.cpp b/lib/MC/MCAsmStreamer.cpp
+index ef2f781..00419ac 100644
+--- a/lib/MC/MCAsmStreamer.cpp
++++ b/lib/MC/MCAsmStreamer.cpp
+@@ -149,7 +149,7 @@ public:
+   void EndCOFFSymbolDef() override;
+   void EmitCOFFSafeSEH(MCSymbol const *Symbol) override;
+   void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
+-  void EmitCOFFSecRel32(MCSymbol const *Symbol) override;
++  void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
+   void emitELFSize(MCSymbolELF *Symbol, const MCExpr *Value) override;
+   void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
+                         unsigned ByteAlignment) override;
+@@ -602,7 +602,7 @@ void MCAsmStreamer::EmitCOFFSectionIndex(MCSymbol const *Symbol) {
+   EmitEOL();
+ }
+ 
+-void MCAsmStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol) {
++void MCAsmStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
+   OS << "\t.secrel32\t";
+   Symbol->print(OS, MAI);
+   EmitEOL();
+diff --git a/lib/MC/MCCodeView.cpp b/lib/MC/MCCodeView.cpp
+index 65cff41..5dab392 100644
+--- a/lib/MC/MCCodeView.cpp
++++ b/lib/MC/MCCodeView.cpp
+@@ -156,7 +156,7 @@ void CodeViewContext::emitLineTableForFunction(MCObjectStreamer &OS,
+   OS.EmitIntValue(unsigned(ModuleSubstreamKind::Lines), 4);
+   OS.emitAbsoluteSymbolDiff(LineEnd, LineBegin, 4);
+   OS.EmitLabel(LineBegin);
+-  OS.EmitCOFFSecRel32(FuncBegin);
++  OS.EmitCOFFSecRel32(FuncBegin, /*Offset=*/0);
+   OS.EmitCOFFSectionIndex(FuncBegin);
+ 
+   // Actual line info.
+diff --git a/lib/MC/MCParser/COFFAsmParser.cpp b/lib/MC/MCParser/COFFAsmParser.cpp
+index 653627a..f717f05 100644
+--- a/lib/MC/MCParser/COFFAsmParser.cpp
++++ b/lib/MC/MCParser/COFFAsmParser.cpp
+@@ -450,7 +450,7 @@ bool COFFAsmParser::ParseDirectiveSecRel32(StringRef, SMLoc) {
+   MCSymbol *Symbol = getContext().getOrCreateSymbol(SymbolID);
+ 
+   Lex();
+-  getStreamer().EmitCOFFSecRel32(Symbol);
++  getStreamer().EmitCOFFSecRel32(Symbol, /*Offset=*/0);
+   return false;
+ }
+ 
+diff --git a/lib/MC/MCStreamer.cpp b/lib/MC/MCStreamer.cpp
+index 6c8828f..9927473 100644
+--- a/lib/MC/MCStreamer.cpp
++++ b/lib/MC/MCStreamer.cpp
+@@ -124,7 +124,7 @@ void MCStreamer::EmitSymbolValue(const MCSymbol *Sym, unsigned Size,
+   if (!IsSectionRelative)
+     EmitValueImpl(MCSymbolRefExpr::create(Sym, getContext()), Size);
+   else
+-    EmitCOFFSecRel32(Sym);
++    EmitCOFFSecRel32(Sym, /*Offset=*/0);
+ }
+ 
+ void MCStreamer::EmitGPRel64Value(const MCExpr *Value) {
+@@ -647,7 +647,7 @@ void MCStreamer::EmitCOFFSafeSEH(MCSymbol const *Symbol) {
+ void MCStreamer::EmitCOFFSectionIndex(MCSymbol const *Symbol) {
+ }
+ 
+-void MCStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol) {
++void MCStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
+ }
+ 
+ /// EmitRawText - If this file is backed by an assembly streamer, this dumps
+diff --git a/lib/MC/WinCOFFStreamer.cpp b/lib/MC/WinCOFFStreamer.cpp
+index 5c6407e..1444394 100644
+--- a/lib/MC/WinCOFFStreamer.cpp
++++ b/lib/MC/WinCOFFStreamer.cpp
+@@ -195,11 +195,18 @@ void MCWinCOFFStreamer::EmitCOFFSectionIndex(MCSymbol const *Symbol) {
+   DF->getContents().resize(DF->getContents().size() + 2, 0);
+ }
+ 
+-void MCWinCOFFStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol) {
++void MCWinCOFFStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
+   MCDataFragment *DF = getOrCreateDataFragment();
+-  const MCSymbolRefExpr *SRE = MCSymbolRefExpr::create(Symbol, getContext());
+-  MCFixup Fixup = MCFixup::create(DF->getContents().size(), SRE, FK_SecRel_4);
++  // Create Symbol A for the relocation relative reference.
++  const MCExpr *MCE = MCSymbolRefExpr::create(Symbol, getContext());
++  // Add the constant offset, if given
++  if (Offset)
++      MCE = MCBinaryExpr::createAdd(MCE, MCConstantExpr::create(Offset, getContext()), getContext());
++  // Build the secrel32 relocation.
++  MCFixup Fixup = MCFixup::create(DF->getContents().size(), MCE, FK_SecRel_4);
++  // Record the relocation.
+   DF->getFixups().push_back(Fixup);
++  // Emit 4 bytes (zeros) to the object file.
+   DF->getContents().resize(DF->getContents().size() + 4, 0);
+ }
+ 
