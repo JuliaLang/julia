@@ -2,49 +2,49 @@ language: cpp
 sudo: false
 matrix:
   include:
-    - os: linux
-      env: ARCH="i686"
-      compiler: "g++-5 -m32"
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-            - kalakris-cmake
-          packages:
-            - cmake
-            - bar
-            - time
-            - binutils
-            - gcc-5
-            - g++-5
-            - gcc-5-multilib
-            - g++-5-multilib
-            - make:i386
-            - libssl-dev:i386
-            - gfortran-5
-            - gfortran-5-multilib
-    - os: linux
-      env: ARCH="x86_64"
-      compiler: "g++-5 -m64"
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-            - kalakris-cmake
-          packages:
-            - cmake
-            - bar
-            - time
-            - g++-5
-            - gfortran-5
+    #     - os: linux
+    #       env: ARCH="i686"
+    #       compiler: "g++-5 -m32"
+    #       addons:
+    #         apt:
+    #           sources:
+    #             - ubuntu-toolchain-r-test
+    #             - kalakris-cmake
+    #           packages:
+    #             - cmake
+    #             - bar
+    #             - time
+    #             - binutils
+    #             - gcc-5
+    #             - g++-5
+    #             - gcc-5-multilib
+    #             - g++-5-multilib
+    #             - make:i386
+    #             - libssl-dev:i386
+    #             - gfortran-5
+    #             - gfortran-5-multilib
+    #     - os: linux
+    #       env: ARCH="x86_64"
+    #       compiler: "g++-5 -m64"
+    #       addons:
+    #         apt:
+    #           sources:
+    #             - ubuntu-toolchain-r-test
+    #             - kalakris-cmake
+    #           packages:
+    #             - cmake
+    #             - bar
+    #             - time
+    #             - g++-5
+    #             - gfortran-5
     - os: osx
       env: ARCH="x86_64"
-      osx_image: xcode7
-cache:
-  directories:
-    - $TRAVIS_BUILD_DIR/deps/srccache
-    - $TRAVIS_BUILD_DIR/deps/scratch
-    - $TRAVIS_BUILD_DIR/deps/usr-staging
+      osx_image: xcode6.4
+# cache:
+#   directories:
+#     - $TRAVIS_BUILD_DIR/deps/srccache
+#     - $TRAVIS_BUILD_DIR/deps/scratch
+#     - $TRAVIS_BUILD_DIR/deps/usr-staging
 branches:
   only:
     - master
@@ -76,6 +76,9 @@ before_install:
         echo "override ARCH=$ARCH" >> Make.user;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
+        rm -rf deps/srccache;
+        rm -rf deps/scratch;
+        rm -rf deps/usr-staging;
         brew update;
         brew install -v jq bar;
         BAR="bar";
@@ -97,6 +100,14 @@ before_install:
         TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - git clone -q git://git.kitenet.net/moreutils
 script:
+    - otool -L $(brew --prefix openblas-julia)/lib/libopenblas.dylib
+    - cnt=0;
+      IFS=$'\n' read -rd '' -a blasdeps <<<"$(otool -L $(brew --prefix openblas-julia)/lib/libopenblas.dylib)";
+      for blasdep in $blasdeps; do
+        if [ "$cnt" = 0 ]; then continue; fi;
+        d=${blasdep%% *};
+        if [ ! -e "$d" ]; then echo "libopenblas dependency $d not found"; fi;
+      done;
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
     # capture the log, but only print it if `make deps` fails
