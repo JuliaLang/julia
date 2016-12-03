@@ -558,3 +558,37 @@ end
 
 # #18213
 Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a deprecation
+
+@testset "WeakKeyDict" begin
+    A = [1]
+    B = [2]
+    C = [3]
+    local x = 0
+    local y = 0
+    local z = 0
+    finalizer(A, a->(x+=1))
+    finalizer(B, b->(y+=1))
+    finalizer(C, c->(z+=1))
+    wkd = WeakKeyDict()
+    wkd[A] = 2
+    wkd[B] = 3
+    wkd[C] = 4
+    @test length(wkd) == 3
+    @test !isempty(wkd)
+    res = pop!(wkd, C)
+    @test res == 4
+    @test C ∉ keys(wkd)
+    @test 4 ∉ values(wkd)
+    @test length(wkd) == 2
+    @test !isempty(wkd)
+    wkd = filter!( (k,v) -> k != B, wkd)
+    @test B ∉ keys(wkd)
+    @test 3 ∉ values(wkd)
+    @test length(wkd) == 1
+    @test !isempty(wkd)
+
+    wkd = empty!(wkd)
+    @test length(wkd) == 0
+    @test isempty(wkd)
+    @test isa(wkd, WeakKeyDict)
+end
