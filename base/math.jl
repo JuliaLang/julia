@@ -415,7 +415,7 @@ function frexp{T<:AbstractFloat}(x::T)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
     k = Int(xs >> significand_bits(T))
-    if xs <= (~exponent_mask(T) & ~sign_mask(T)) # x is subnormal
+    if k == 0 # x is subnormal
         xs == 0 && return x, 0 # +-0
         m = unsigned(leading_zeros(xs) - exponent_bits(T))
         xs <<= m
