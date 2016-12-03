@@ -99,6 +99,9 @@ LLVM_FLAGS += --disable-assertions
 endif # LLVM_ASSERTIONS
 ifeq ($(LLVM_DEBUG), 1)
 LLVM_FLAGS += --disable-optimized --enable-debug-symbols --enable-keep-symbols
+ifeq ($(OS), WINNT)
+LLVM_CXXFLAGS += -Wa,-mbig-obj
+endif # OS == WINNT
 else
 LLVM_FLAGS += --enable-optimized
 endif # LLVM_DEBUG
@@ -479,6 +482,11 @@ $(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-r282182)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
 $(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
+# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
+$(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
+$(eval $(call LLVM_PATCH,llvm-3.9.0_cygwin)) # R283427, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf))
+$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
