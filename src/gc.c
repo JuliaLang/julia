@@ -193,6 +193,13 @@ static void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
 
 static void run_finalizers(jl_ptls_t ptls)
 {
+    // Racy fast path:
+    // The race here should be OK since the race can only happen if
+    // another thread is writing to it with the lock held. In such case,
+    // we don't need to run pending finalizers since the writer thread
+    // will flush it.
+    if (to_finalize.len == 0)
+        return;
     JL_LOCK_NOGC(&finalizers_lock);
     if (to_finalize.len == 0) {
         JL_UNLOCK_NOGC(&finalizers_lock);
