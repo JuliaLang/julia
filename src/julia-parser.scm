@@ -92,8 +92,9 @@
 (define trans-op (string->symbol ".'"))
 (define ctrans-op (string->symbol "'"))
 (define vararg-op (string->symbol "..."))
+(define nullable-op (string->symbol "??"))
 
-(define operators (list* '~ '! '¬ '-> '√ '∛ '∜ ctrans-op trans-op vararg-op
+(define operators (list* '~ '! '¬ '-> '√ '∛ '∜ ctrans-op trans-op vararg-op nullable-op
                          (delete-duplicates
                           (apply append (map eval prec-names)))))
 
@@ -842,7 +843,7 @@
            (large-number? expr)
            (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
            ;; to allow x'y as a special case
-           #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
+           #;(and (pair? expr) (memq (car expr) '(|'| |.'| |??|))
                 (not (memv t '(#\( #\[ #\{))))
            )
        (not (ts:space? s))
@@ -1057,7 +1058,7 @@
                            `(macrocall (|.| ,ex (quote ,(cadr name)))
                                        ,@(cddr name))
                            `(|.| ,ex (quote ,name))))))))
-            ((|.'| |'|)
+            ((|.'| |'| |??|)
              (if (ts:space? s)
                  (error (string "space not allowed before \"" t "\"")))
              (take-token s)

@@ -2124,6 +2124,7 @@
 
    '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
+   '|??| (lambda (e) `(call  Nullable ,(expand-forms (cadr e))))
 
    'ccall
    (lambda (e)
