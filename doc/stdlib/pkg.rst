@@ -91,7 +91,7 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    .. Docstring generated from Julia source
 
-   If ``pkg`` is installed, return the installed version number, otherwise return ``nothing``\ .
+   If ``pkg`` is installed, return the installed version number. If ``pkg`` is registered, but not installed, return ``nothing``\ .
 
 .. function:: status()
 
