@@ -326,7 +326,7 @@
             (error "function static parameter names not unique"))
         (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
             (error "function argument and static parameter names must be distinct")))
-      (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
+      (if (or (and name (not (ssavalue? name)) (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
           (error (string "invalid function name \"" (deparse name) "\"")))
       (let* ((iscall (is-call-name? name))
              (name  (if iscall #f name))
@@ -944,28 +944,28 @@
 ;; handle ( )->( ) function expressions. blocks `(a;b=1)` on the left need to be
 ;; converted to argument lists with kwargs.
 (define (expand-arrow e)
-  (let ((a    (cadr e))
-        (body (caddr e)))
-    (let ((argl (if (pair? a)
-                    (if (eq? (car a) 'tuple)
-                        (map =-to-kw (cdr a))
-                        (if (eq? (car a) 'block)
-                            (cond ((length= a 1) '())
-                                  ((length= a 2) (list (cadr a)))
-                                  ((length= a 3)
-                                   (if (assignment? (caddr a))
-                                       `((parameters (kw ,@(cdr (caddr a)))) ,(cadr a))
-                                       `((parameters ,(caddr a)) ,(cadr a))))
-                                  (else
-                                   (error "more than one semicolon in argument list")))
-                            (list (=-to-kw a))))
-                    (list a)))
-          ;; TODO: always use a specific special name like #anon# or _, then ignore
-          ;; this as a local variable name.
-          (name (symbol (string "#" (current-julia-module-counter)))))
-      (expand-forms
-       `(block (local ,name)
-               (function (call ,name ,@argl) ,body))))))
+  (let* ((a    (cadr e))
+         (body (caddr e))
+         (argl (remove-empty-parameters (if (pair? a)
+                   (if (eq? (car a) 'tuple)
+                       (map =-to-kw (cdr a))
+                       (if (eq? (car a) 'block)
+                           (cond ((length= a 1) '())
+                                 ((length= a 2) (list (cadr a)))
+                                 ((length= a 3)
+                                  (if (assignment? (caddr a))
+                                      `((parameters (kw ,@(cdr (caddr a)))) ,(cadr a))
+                                      `((parameters ,(caddr a)) ,(cadr a))))
+                                 (else
+                                  (error "more than one semicolon in argument list")))
+                           (list (=-to-kw a))))
+                   (list a)))))
+        (expand-forms
+         (if (or (any kwarg? argl) (has-parameters? argl)) ;; optional and keyword arguments introduce a generic function with multiple definitions
+             (let ((name (symbol (string "#->" (current-julia-module-counter)))))
+                  `(block (local ,name)
+                         (function (call ,name ,@argl) ,body)))
+             `(function (call ,(make-ssavalue) ,@argl) ,body)))))
 
 (define (expand-let e)
   (let ((ex (cadr e))
@@ -2874,9 +2874,10 @@ f(x) = yt(x)
                   (vis   (if short '(() () ()) (lam:vinfo lam2)))
                   (cvs   (map car (cadr vis)))
                   (local? (lambda (s) (and (symbol? s)
-                               (or (assq s (car  (lam:vinfo lam)))
-                                   (assq s (cadr (lam:vinfo lam)))))))
-                  (local (and lam (local? name)))
+                                       (or (assq s (car  (lam:vinfo lam)))
+                                           (assq s (cadr (lam:vinfo lam)))))))
+                  (anon (ssavalue? name))
+                  (local (or anon (and lam (local? name))))
                   (sig      (and (not short) (caddr e)))
                   (sp-inits (if (or short (not (eq? (car sig) 'block)))
                                 '()
@@ -2885,7 +2886,7 @@ f(x) = yt(x)
                   (sig      (and sig (if (eq? (car sig) 'block)
                                          (last sig)
                                          sig))))
-             (if local
+             (if (and local (not anon))
                  (begin (if (memq name (lam:args lam))
                             (error (string "cannot add method to function argument " name)))
                         (if (eqv? (string.char (string name) 0) #\@)
@@ -2921,44 +2922,53 @@ f(x) = yt(x)
                                     ,(julia-expand-macros `(quote ,newlam))
                                     ,(last e))))))
                  ;; local case - lift to a new type at top level
-                 (let* ((exists (get namemap name #f))
-                        (type-name  (or exists
-                                        (and name
-                                             (symbol (string "#" name "#" (current-julia-module-counter))))))
-                        (alldefs (expr-find-all
-                                  (lambda (ex) (and (eq? (car ex) 'method)
-                                                    (not (eq? ex e))
-                                                    (length> ex 2)
-                                                    (eq? (method-expr-name ex) name)))
-                                  (lam:body lam)
-                                  identity
-                                  (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda))))))
-                        (all-capt-vars   (delete-duplicates
-                                          (apply append  ;; merge captured vars from all definitions
-                                                 cvs
-                                                 (map (lambda (methdef)
-                                                        (map car (cadr (lam:vinfo (cadddr methdef)))))
-                                                      alldefs))))
-                        (all-sparams   (delete-duplicates  ;; static params from all definitions
-                                        (apply append
-                                               (if lam2 (lam:sp lam2) '())
-                                               (map (lambda (methdef) (lam:sp (cadddr methdef)))
-                                                    alldefs))))
+                 (let* ((exists (if anon #f (get namemap name #f)))
+                        (type-name  (if anon
+                                        (symbol (string "#->" (current-julia-module-counter)))
+                                        (or exists
+                                          (and name
+                                               (symbol (string "#" name "#" (current-julia-module-counter)))))))
+                        (alldefs (and (not anon)
+                                      (expr-find-all
+                                        (lambda (ex) (and (eq? (car ex) 'method)
+                                                          (not (eq? ex e))
+                                                          (length> ex 2)
+                                                          (eq? (method-expr-name ex) name)))
+                                        (lam:body lam)
+                                        identity
+                                        (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
+                        (all-capt-vars  (if alldefs
+                                            (delete-duplicates
+                                             (apply append  ;; merge captured vars from all definitions
+                                                    cvs
+                                                    (map (lambda (methdef)
+                                                           (map car (cadr (lam:vinfo (cadddr methdef)))))
+                                                         alldefs)))
+                                            cvs))
+                        (all-sparams   (if alldefs
+                                           (delete-duplicates  ;; static params from all definitions
+                                            (apply append
+                                                   (if lam2 (lam:sp lam2) '())
+                                                   (map (lambda (methdef) (lam:sp (cadddr methdef)))
+                                                        alldefs)))
+                                            (if lam2 (lam:sp lam2) '())))
                         (capt-sp (simple-sort (intersect all-capt-vars all-sparams))) ; the intersection is the list of sparams that need to be captured
                         (capt-vars (diff all-capt-vars capt-sp)) ; remove capt-sp from capt-vars
                         (find-locals-in-method-sig (lambda (methdef)
                                                      (expr-find-all
                                                       (lambda (s) (and (not (eq? name s))
                                                                        (not (memq s capt-sp))
-                                                                       (or ;(local? s) ; TODO: make this work for local variables too?
+                                                                       (or ;(local? s) ; TODO: throw an error for local variables?
                                                                          (memq s (lam:sp lam)))))
                                                       (caddr methdef)
                                                       identity)))
-                        (sig-locals (simple-sort
-                                     (delete-duplicates  ;; locals used in sig from all definitions
-                                      (apply append      ;; will convert these into sparams for dispatch
-                                             (if lam2 (find-locals-in-method-sig e) '())
-                                             (map find-locals-in-method-sig alldefs)))))
+                        (sig-locals (if alldefs
+                                        (simple-sort
+                                         (delete-duplicates  ;; locals used in sig from all definitions
+                                          (apply append      ;; will convert these into sparams for dispatch
+                                                 (if lam2 (find-locals-in-method-sig e) '())
+                                                 (map find-locals-in-method-sig alldefs))))
+                                        (if lam2 (find-locals-in-method-sig e) '())))
                         (closure-param-names (append capt-sp sig-locals)) ; sparams for the closure method declaration
                         (closure-param-syms (map (lambda (s) (make-ssavalue)) closure-param-names))
                         (typedef  ;; expression to define the type
@@ -3011,16 +3021,16 @@ f(x) = yt(x)
                                       type-name
                                       `(call (core apply_type) ,type-name ,@P))
                                  ,@var-exprs))))
+                   (if (and name (not exists) (not anon)) (put! namemap name type-name))
                    `(toplevel-butlast
-                     ,@(if exists
-                           '()
-                            (begin (and name (put! namemap name type-name))
-                                   typedef))
+                     ,@(if exists '() typedef)
                      ,@sp-inits
                      ,@mk-method
-                     ,(if exists
-                          '(null)
-                          (convert-assignment name mk-closure fname lam interp)))))))
+                     ,(cond
+                        (anon `(= ,name ,mk-closure))
+                        (exists '(null))
+                        (else
+                          (convert-assignment name mk-closure fname lam interp))))))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
            (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
                      (list-tail (car (lam:vinfo e)) (length (lam:args e))))
