@@ -339,10 +339,6 @@ minmax{T<:AbstractFloat}(x::T, y::T) =
            ifelse((y > x) | (signbit(x) > signbit(y)), (x,y), (y,x)))
 
 
-inttype(::Type{Float64}) = Int64
-inttype(::Type{Float32}) = Int32
-inttype(::Type{Float16}) = Int16
-exponent_max{T<:AbstractFloat}(::Type{T}) = Int(exponent_mask(T) >> significand_bits(T))
 """
     ldexp(x, n)
 
@@ -353,41 +349,44 @@ julia> ldexp(5., 2)
 20.0
 ```
 """
-function ldexp{T<:AbstractFloat}(x::T, q::Integer)
-    n = Int(q)
+function ldexp{T<:AbstractFloat}(x::T, e::Integer)
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
     k = Int(xs >> significand_bits(T))
     if xs <= (~exponent_mask(T) & ~sign_mask(T)) # x is subnormal
         xs == 0 && return x # +-0
-        m = unsigned(leading_zeros(xs) - exponent_bits(T))
-        ys = xs << m
+        m = leading_zeros(xs) - exponent_bits(T)
+        ys = xs << unsigned(m)
         xu = ys | (xu & sign_mask(T))
-        k = 1 - signed(m)
-        if n < -50000 # underflow
-            # otherwise may have have an integer underflow in the following k += n computation
-            return flipsign(T(0.0), x)
-        end
+        k = 1 - m
+        # underflow, otherwise may have integer underflow in the following n + k
+        e < -50000 && return flipsign(T(0.0), x)
     end
+    # for cases larger than Int make sure we properly overlfow/underflow (optimized away)
+    if e > typemax(Int)
+        return flipsign(T(Inf), x)
+    elseif e < typemin(Int)
+        return flipsign(T(0.0), x)
+    end
+    n = e % Int
     k += n
-    if k >= exponent_max(T) # overflow
+    # overflow, if k is larger than maximum posible exponent
+    if k >= Int(exponent_mask(T) >> significand_bits(T))
         return flipsign(T(Inf), x)
     end
     if k > 0 # normal case
-        xu = (xu & ~exponent_mask(T)) | unsigned((k % inttype(T)) << significand_bits(T))
+        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
         return reinterpret(T, xu)
     else # subnormal case
         if k <= -significand_bits(T) # underflow
-            if n > 50000 # case of integer overflow in n + k
-                return flipsign(T(Inf), x)
-            else
-                return flipsign(T(0.0), x)
-            end
+            # overflow, for the case of integer overflow in n + k
+            e > 50000 && return flipsign(T(Inf), x)
+            return flipsign(T(0.0), x)
         end
         k += significand_bits(T)
-        xu = (xu & ~exponent_mask(T)) | unsigned((k % inttype(T)) << significand_bits(T))
         z = T(2.0)^-significand_bits(T)
+        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
 end
