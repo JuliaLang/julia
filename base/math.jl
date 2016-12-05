@@ -358,18 +358,15 @@ ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), 
 Get the exponent of a normalized floating-point number.
 """
 function exponent{T<:AbstractFloat}(x::T)
-    xu = reinterpret(Unsigned,x)
-    xe = xu & exponent_mask(T)
-    k = Int(xe >> significand_bits(T))
-    if xe == 0 # x is subnormal
-        x == 0 && throw(DomainError())
-        xu &= significand_mask(T)
-        m = leading_zeros(xu)-exponent_bits(T)
-        k = 1-m
-    elseif xe == exponent_mask(T) # NaN or Inf
-        throw(DomainError())
+    xs = reinterpret(Unsigned, x) & ~sign_mask(T)
+    xs >= exponent_mask(T) && return throw(DomainError()) # NaN or Inf
+    k = Int(xs >> significand_bits(T))
+    if xs <= (~exponent_mask(T) & ~sign_mask(T)) # x is subnormal
+        xs == 0 && throw(DomainError())
+        m = leading_zeros(xs) - exponent_bits(T)
+        k = 1 - m
     end
-    k - exponent_bias(T)
+    return k - exponent_bias(T)
 end
 
 """
