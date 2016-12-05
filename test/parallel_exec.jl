@@ -774,6 +774,18 @@ end
 # Test pmap with a generator type iterator
 @test [1:100...] == pmap(x->x, Base.Generator(x->(sleep(0.0001); x), 1:100))
 
+# Test pgenerate
+n = 10
+as = [rand(4,4) for i in 1:n]
+bs = deepcopy(as)
+cs = collect(Base.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
+svdas = map(svdfact, as)
+for i in 1:n
+    @test cs[i][:U] ≈ svdas[i][:U]
+    @test cs[i][:S] ≈ svdas[i][:S]
+    @test cs[i][:V] ≈ svdas[i][:V]
+end
+
 # Test asyncmap
 @test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
 
