@@ -53,6 +53,7 @@
                 ((top)        (deparse (cadr e)))
                 ((core)       (string "Core." (deparse (cadr e))))
                 ((globalref)  (string (deparse (cadr e)) "." (deparse (caddr e))))
+                ((outerref)   (string (deparse (cadr e))))
                 ((:)
                  (string (deparse (cadr e)) ': (deparse (caddr e))
                          (if (length> e 3)
@@ -105,7 +106,7 @@
 
 ;; predicates and accessors
 
-(define (quoted? e) (memq (car e) '(quote top core globalref line break inert)))
+(define (quoted? e) (memq (car e) '(quote top core globalref outerref line break inert meta)))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
