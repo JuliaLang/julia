@@ -469,6 +469,19 @@ triangular factor.
 
 [^AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. [doi:10.1137/120885991](http://dx.doi.org/10.1137/120885991)
 
+# Example
+
+```jldoctest
+julia> A = 2.7182818 * eye(2)
+2×2 Array{Float64,2}:
+ 2.71828  0.0
+ 0.0      2.71828
+
+julia> logm(A)
+2×2 Array{Float64,2}:
+ 1.0  0.0
+ 0.0  1.0
+```
 """
 function logm(A::StridedMatrix)
     # If possible, use diagonalization
@@ -508,6 +521,34 @@ function logm(a::Number)
 end
 logm(a::Complex) = log(a)
 
+"""
+    sqrtm(A)
+
+If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
+that is the unique matrix ``X`` with eigenvalues having positive real part such that
+``X^2 = A``. Otherwise, a nonprincipal square root is returned.
+
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](:func:`eigfact`)) is
+used to compute the square root. Otherwise, the square root is determined by means of the
+Björck-Hammarling method, which computes the complex Schur form ([`schur`](:func:`schur`))
+and then the complex square root of the triangular factor.
+
+[^BH83]: Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix", Linear Algebra and its Applications, 52-53, 1983, 127-140. [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
+
+# Example
+
+```jldoctest
+julia> A = [4 0; 0 4]
+2×2 Array{Int64,2}:
+ 4  0
+ 0  4
+
+julia> sqrtm(A)
+2×2 Array{Float64,2}:
+ 2.0  0.0
+ 0.0  2.0
+```
+"""
 function sqrtm{T<:Real}(A::StridedMatrix{T})
     if issymmetric(A)
         return full(sqrtm(Symmetric(A)))
