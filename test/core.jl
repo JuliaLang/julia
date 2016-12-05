@@ -560,6 +560,18 @@ end
 @test f19333(0) == 7
 @test x19333 == 5
 
+function h19333()
+    s = 0
+    for (i, j) in ((1, 2),)
+        s += i + j # use + as a global
+    end
+    for (k, +) in ((3, 4),)
+        s -= (k - +) # use + as a local
+    end
+    return s
+end
+@test h19333() == 4
+
 # let - new variables, including undefinedness
 function let_undef()
     first = true
