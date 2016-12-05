@@ -418,6 +418,16 @@ element type for which `norm` is defined), compute the `p`-norm (defaulting to `
 `A` were a vector of the corresponding length.
 
 For example, if `A` is a matrix and `p=2`, then this is equivalent to the Frobenius norm.
+
+# Example
+
+```jldoctest
+julia> vecnorm([1 2 3; 4 5 6; 7 8 9])
+16.881943016134134
+
+julia> vecnorm([1 2 3 4 5 6 7 8 9])
+16.881943016134134
+```
 """
 function vecnorm(itr, p::Real=2)
     isempty(itr) && return float(real(zero(eltype(itr))))
@@ -1134,6 +1144,21 @@ logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 
 Log of matrix determinant. Equivalent to `log(det(M))`, but may provide increased accuracy
 and/or speed.
+
+# Example
+
+```jldoctest
+julia> M = [1 0; 2 2]
+2×2 Array{Int64,2}:
+ 1  0
+ 2  2
+
+julia> logdet(M)
+0.6931471805599453
+
+julia> logdet(eye(3))
+0.0
+```
 """
 function logdet(A::AbstractMatrix)
     d,s = logabsdet(A)

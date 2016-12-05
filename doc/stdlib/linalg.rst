@@ -1110,6 +1110,24 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the Hessenberg decomposition of ``A`` and return a ``Hessenberg`` object. If ``F`` is the factorization object, the unitary matrix can be accessed with ``F[:Q]`` and the Hessenberg matrix with ``F[:H]``\ . When ``Q`` is extracted, the resulting type is the ``HessenbergQ`` object, and may be converted to a regular matrix with :func:`convert`  (or ``Array(_)`` for short).
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
+       3×3 Array{Float64,2}:
+        4.0  9.0  7.0
+        4.0  4.0  1.0
+        4.0  3.0  2.0
+
+       julia> F = hessfact(A);
+
+       julia> F[:Q] * F[:H] * F[:Q]'
+       3×3 Array{Float64,2}:
+        4.0  9.0  7.0
+        4.0  4.0  1.0
+        4.0  3.0  2.0
+
 .. function:: hessfact!(A) -> Hessenberg
 
    .. Docstring generated from Julia source
@@ -1808,6 +1826,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    For example, if ``A`` is a matrix and ``p=2``\ , then this is equivalent to the Frobenius norm.
 
+   **Example**
+
+   .. doctest::
+
+       julia> vecnorm([1 2 3; 4 5 6; 7 8 9])
+       16.881943016134134
+
+       julia> vecnorm([1 2 3 4 5 6 7 8 9])
+       16.881943016134134
+
 .. function:: normalize!(v, [p::Real=2])
 
    .. Docstring generated from Julia source
@@ -1898,6 +1926,21 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Log of matrix determinant. Equivalent to ``log(det(M))``\ , but may provide increased accuracy and/or speed.
+
+   **Example**
+
+   .. doctest::
+
+       julia> M = [1 0; 2 2]
+       2×2 Array{Int64,2}:
+        1  0
+        2  2
+
+       julia> logdet(M)
+       0.6931471805599453
+
+       julia> logdet(eye(3))
+       0.0
 
 .. function:: logabsdet(M)
 
@@ -2138,6 +2181,20 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. [AHR13] Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, "Computing the Fréchet derivative of the matrix logarithm and estimating the condition number", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. `doi:10.1137/120885991 <http://dx.doi.org/10.1137/120885991>`_
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = 2.7182818 * eye(2)
+       2×2 Array{Float64,2}:
+        2.71828  0.0
+        0.0      2.71828
+
+       julia> logm(A)
+       2×2 Array{Float64,2}:
+        1.0  0.0
+        0.0  1.0
+
 .. function:: sqrtm(A)
 
    .. Docstring generated from Julia source
@@ -2147,6 +2204,20 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    If ``A`` is symmetric or Hermitian, its eigendecomposition (:func:`eigfact`\ ) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method, which computes the complex Schur form (:func:`schur`\ ) and then the complex square root of the triangular factor.
 
    .. [BH83] Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix", Linear Algebra and its Applications, 52-53, 1983, 127-140. `doi:10.1016/0024-3795(83)80010-X <http://dx.doi.org/10.1016/0024-3795(83)80010-X>`_
+
+   **Example**
+
+   .. doctest::
+
+       julia> A = [4 0; 0 4]
+       2×2 Array{Int64,2}:
+        4  0
+        0  4
+
+       julia> sqrtm(A)
+       2×2 Array{Float64,2}:
+        2.0  0.0
+        0.0  2.0
 
 .. function:: lyap(A, C)
 
@@ -2320,6 +2391,22 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The transposition operator (``.'``\ ).
 
+   **Example**
+
+   .. doctest::
+
+       julia> A = [1 2 3; 4 5 6; 7 8 9]
+       3×3 Array{Int64,2}:
+        1  2  3
+        4  5  6
+        7  8  9
+
+       julia> transpose(A)
+       3×3 Array{Int64,2}:
+        1  4  7
+        2  5  8
+        3  6  9
+
 .. function:: transpose!(dest,src)
 
    .. Docstring generated from Julia source
@@ -2331,6 +2418,20 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    The conjugate transposition operator (``'``\ ).
+
+   **Example**
+
+   .. doctest::
+
+       julia> A =  [3+2im 9+2im; 8+7im  4+6im]
+       2×2 Array{Complex{Int64},2}:
+        3+2im  9+2im
+        8+7im  4+6im
+
+       julia> ctranspose(A)
+       2×2 Array{Complex{Int64},2}:
+        3-2im  8-7im
+        9-2im  4-6im
 
 .. function:: ctranspose!(dest,src)
 
