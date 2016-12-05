@@ -3210,6 +3210,7 @@ f(x) = yt(x)
                   ((or (eq? e 'true) (eq? e 'false)) #f)
                   ((symbol? e) (emit e) #f)  ;; keep symbols for undefined-var checking
                   ((and (pair? e) (eq? (car e) 'outerref)) (emit e) #f)  ;; keep globals for undefined-var checking
+                  ((and (pair? e) (eq? (car e) 'globalref)) (emit e) #f) ;; keep globals for undefined-var checking
                   (else #f)))
           (case (car e)
             ((call new)

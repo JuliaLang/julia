@@ -3683,6 +3683,13 @@ foo9677(x::Array) = invoke(foo9677,(AbstractArray,),x)
 f6846() = (please6846; 2)
 @test_throws UndefVarError f6846()
 
+module M6846
+    macro f()
+        return :(please6846; 2)
+    end
+end
+@test_throws UndefVarError @M6846.f()
+
 # issue #14758
 @test isa(eval(:(f14758(; $([]...)) = ())), Function)
 
