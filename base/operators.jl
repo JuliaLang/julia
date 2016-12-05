@@ -531,6 +531,20 @@ fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
     ctranspose(A)
 
 The conjugate transposition operator (`'`).
+
+# Example
+
+```jldoctest
+julia> A =  [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> ctranspose(A)
+2×2 Array{Complex{Int64},2}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
 """
 ctranspose(x) = conj(transpose(x))
 conj(x) = x

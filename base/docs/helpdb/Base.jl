@@ -2082,23 +2082,6 @@ Raise an `ErrorException` with the given message.
 error
 
 """
-    sqrtm(A)
-
-If `A` has no negative real eigenvalues, compute the principal matrix square root of `A`,
-that is the unique matrix ``X`` with eigenvalues having positive real part such that
-``X^2 = A``. Otherwise, a nonprincipal square root is returned.
-
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](:func:`eigfact`)) is
-used to compute the square root. Otherwise, the square root is determined by means of the
-Björck-Hammarling method, which computes the complex Schur form ([`schur`](:func:`schur`))
-and then the complex square root of the triangular factor.
-
-[^BH83]: Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix", Linear Algebra and its Applications, 52-53, 1983, 127-140. [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
-
-"""
-sqrtm
-
-"""
     readcsv(source, [T::Type]; options...)
 
 Equivalent to [`readdlm`](:func:`readdlm`) with `delim` set to comma, and type optionally defined by `T`.
