@@ -473,6 +473,22 @@ end
     transpose(A)
 
 The transposition operator (`.'`).
+
+# Example
+
+```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
+julia> transpose(A)
+3×3 Array{Int64,2}:
+ 1  4  7
+ 2  5  8
+ 3  6  9
+```
 """
 function transpose(A::AbstractMatrix)
     ind1, ind2 = indices(A)
