@@ -392,6 +392,12 @@ end
 @test lcfirst(GenericString("a")) == "a"
 @test ucfirst(GenericString("A")) == "A"
 
+# titlecase
+@test titlecase('ǉ') == 'ǈ'
+@test titlecase("ǉubljana") == "ǈubljana"
+@test titlecase("aBc ABC") == "ABc ABC"
+@test titlecase("abcD   EFG\n\thij") == "AbcD   EFG\n\tHij"
+
 # issue # 11464: uppercase/lowercase of GenericString becomes a String
 str = "abcdef\uff\uffff\u10ffffABCDEF"
 @test typeof(uppercase("abcdef")) == String
