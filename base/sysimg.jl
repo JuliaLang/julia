@@ -203,7 +203,7 @@ include("methodshow.jl")
 
 # core math functions
 include("floatfuncs.jl")
-include("math.jl")
+include("math/math.jl")
 importall .Math
 const (√)=sqrt
 const (∛)=cbrt
