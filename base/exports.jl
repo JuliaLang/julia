@@ -873,6 +873,7 @@ export
     strip,
     strwidth,
     summary,
+    titlecase,
     transcode,
     ucfirst,
     unescape_string,

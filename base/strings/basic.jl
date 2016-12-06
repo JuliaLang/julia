@@ -376,7 +376,7 @@ byte_string_classify(s::String) = byte_string_classify(s.data)
 isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) != 0
 isvalid(s::String) = isvalid(String, s)
 
-## uppercase and lowercase transformations ##
+## uppercase, lowercase, and titlecase transformations ##
 
 """
     uppercase(s::AbstractString)
@@ -401,6 +401,31 @@ julia> lowercase("STRINGS AND THINGS")
 ```
 """
 lowercase(s::AbstractString) = map(lowercase, s)
+
+"""
+    titlecase(s::AbstractString)
+
+Capitalizes the first character of each word in `s`.
+
+```jldoctest
+julia> titlecase("the julia programming language")
+"The Julia Programming Language"
+```
+"""
+function titlecase(s::AbstractString)
+    startword = true
+    b = IOBuffer()
+    for c in s
+        if isspace(c)
+            print(b, c)
+            startword = true
+        else
+            print(b, startword ? titlecase(c) : c)
+            startword = false
+        end
+    end
+    return String(take!(b))
+end
 
 """
     ucfirst(s::AbstractString)

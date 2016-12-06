@@ -407,6 +407,17 @@
        julia> lowercase("STRINGS AND THINGS")
        "strings and things"
 
+.. function:: titlecase(s::AbstractString)
+
+   .. Docstring generated from Julia source
+
+   Capitalizes the first character of each word in ``s``\ .
+
+   .. doctest::
+
+       julia> titlecase("the julia programming language")
+       "The Julia Programming Language"
+
 .. function:: ucfirst(s::AbstractString)
 
    .. Docstring generated from Julia source
