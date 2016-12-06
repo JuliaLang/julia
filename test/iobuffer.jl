@@ -213,3 +213,8 @@ let bstream = BufferStream()
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op
+
+# pr #19461
+let io = IOBuffer()
+    @test Base.buffer_writes(io) === io
+end
