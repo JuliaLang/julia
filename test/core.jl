@@ -560,6 +560,18 @@ end
 @test f19333(0) == 7
 @test x19333 == 5
 
+function h19333()
+    s = 0
+    for (i, j) in ((1, 2),)
+        s += i + j # use + as a global
+    end
+    for (k, +) in ((3, 4),)
+        s -= (k - +) # use + as a local
+    end
+    return s
+end
+@test h19333() == 4
+
 # let - new variables, including undefinedness
 function let_undef()
     first = true
@@ -3670,6 +3682,13 @@ foo9677(x::Array) = invoke(foo9677,(AbstractArray,),x)
 # issue #6846
 f6846() = (please6846; 2)
 @test_throws UndefVarError f6846()
+
+module M6846
+    macro f()
+        return :(please6846; 2)
+    end
+end
+@test_throws UndefVarError @M6846.f()
 
 # issue #14758
 @test isa(eval(:(f14758(; $([]...)) = ())), Function)
