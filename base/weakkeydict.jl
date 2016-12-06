@@ -1,5 +1,14 @@
 # weak key dictionaries
 
+"""
+    WeakKeyDict([itr])
+
+`WeakKeyDict()` constructs a hash table where the keys are weak
+references to objects, and thus may be garbage collected even when
+referenced in a hash table.
+
+See [`Dict`](@ref) for further help.
+"""
 type WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{Any,V}
     lock::Threads.RecursiveSpinLock
