@@ -232,9 +232,9 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
                     "\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead ",
                     "of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
             elseif code.func == :^ &&
-                    (code.file == Symbol("promotion.jl") || code.file == Symbol("math.jl") ||
+                    (code.file == Symbol("promotion.jl") || code.file == Symbol(joinpath("math","math.jl")) ||
                     code.file == Symbol(joinpath(".","promotion.jl")) ||
-                    code.file == Symbol(joinpath(".","math.jl")))
+                    code.file == Symbol(joinpath(".","math","math.jl")))
                 print(io, "\nExponentiation yielding a complex result requires a complex ",
                     "argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
             end

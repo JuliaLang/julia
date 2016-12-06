@@ -2,39 +2,39 @@
 
 module Math
 
-export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
-       asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
+export exp, exp2, exp10, expm1,
+       log, log2, log10, log1p,
+       sin, cos, tan, asin, acos, atan, atan2,
+       sec, csc, cot, asec, acsc, acot,
+       sinh, cosh, tanh, asinh, acosh, atanh,
        sech, csch, coth, asech, acsch, acoth,
        sinpi, cospi, sinc, cosc,
-       cosd, cotd, cscd, secd, sind, tand,
-       acosd, acotd, acscd, asecd, asind, atand, atan2,
+       sind, cosd, tand, asind, acosd, atand,
+       cotd, cscd, secd, acotd, acscd, asecd,
        rad2deg, deg2rad,
-       log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
-       cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
-       significand,
-       lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
-       clamp, clamp!, modf, ^, mod2pi, rem2pi,
-       airyai, airyaiprime, airybi, airybiprime,
-       airyaix, airyaiprimex, airybix, airybiprimex,
-       besselj0, besselj1, besselj, besseljx,
-       bessely0, bessely1, bessely, besselyx,
-       hankelh1, hankelh2, hankelh1x, hankelh2x,
-       besseli, besselix, besselk, besselkx, besselh, besselhx,
-       beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
-       erfinv, erfcinv, @evalpoly
+       exponent, significand, ldexp, frexp,
+       sqrt, cbrt, ^, hypot, modf,
+       max, min, minmax,
+       clamp, clamp!, mod2pi, @evalpoly
 
-import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
-             acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ^, exp2, muladd, rem,
-             exp10, expm1, log1p
+import Base: exp, exp2, exp10, expm1,
+       log, log2, log10, log1p,
+       sin, cos, tan, asin, acos, atan,
+       sinh, cosh, tanh, asinh, acosh, atanh,
+       sqrt, ^,
+       max, min, minmax, muladd
 
 using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
-            exponent_half, exponent_max, exponent_raw_max, fpinttype,
-            significand_mask, significand_bits, exponent_bits
+      exponent_half, exponent_max, exponent_raw_max, fpinttype,
+      significand_mask, significand_bits, exponent_bits
 
 using Core.Intrinsics: sqrt_llvm, powi_llvm
 
 typealias IEEEFloat Union{Float16,Float32,Float64}
+
+const libm = Base.libm_name
+const openspecfun = "libopenspecfun"
+
 # non-type specific math functions
 
 """
@@ -185,9 +185,6 @@ log(b::Number, x::Number) = log(promote(b,x)...)
 
 # type specific math functions
 
-const libm = Base.libm_name
-const openspecfun = "libopenspecfun"
-
 # functions with no domain error
 """
     sinh(x)
@@ -225,26 +222,12 @@ Compute the inverse hyperbolic sine of `x`.
 asinh(x)
 
 """
-    erf(x)
-
-Compute the error function of `x`, defined by ``\\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt``
-for arbitrary complex `x`.
-"""
-erf(x)
-
-"""
-    erfc(x)
-
-Compute the complementary error function of `x`, defined by ``1 - \\operatorname{erf}(x)``.
-"""
-erfc(x)
-
-"""
     expm1(x)
 
 Accurately compute ``e^x-1``.
 """
 expm1(x)
+
 for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :erf, :erfc, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
@@ -253,7 +236,7 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :erf, :erfc, :exp2, :expm1)
     end
 end
 # pure julia exp function
-include("special/exp.jl")
+include("exp.jl")
 exp(x::Real) = exp(float(x))
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
@@ -284,7 +267,7 @@ julia> exp2(5)
 ```
 """
 exp2(x::AbstractFloat) = 2^x
-for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
+for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :expm1)
     @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
 
@@ -412,8 +395,8 @@ There is an experimental variant in the `Base.Math.JuliaLibm` module, which is t
 faster and more accurate.
 """
 log1p(x)
-for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
-          :lgamma, :log1p)
+
+for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10, :log1p)
     @eval begin
         ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
         ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
@@ -917,8 +900,8 @@ muladd(x,y,z) = x*y+z
 
 # Float16 definitions
 
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p,:erf,:erfc)
+for func in (:sin, :cos, :tan, :asin, :acos, :atan, :sinh, :cosh, :tanh, :asinh, :acosh,
+             :atanh, :exp, :log, :log2, :log10, :log1p, :sqrt)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::Complex32) = Complex32($func(Complex64(a)))
@@ -933,14 +916,10 @@ end
 
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
-# More special functions
-include("special/trig.jl")
-include("special/bessel.jl")
-include("special/erf.jl")
-include("special/gamma.jl")
+include("trig.jl")
 
 module JuliaLibm
-include("special/log.jl")
+include("log.jl")
 end
 
 end # module
