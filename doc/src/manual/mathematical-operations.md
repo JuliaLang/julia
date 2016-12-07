@@ -1,595 +1,517 @@
-.. _man-mathematical-operations:
+# Mathematical Operations and Elementary Functions
 
-.. currentmodule:: Base
-
-**************************************************
- Mathematical Operations and Elementary Functions
-**************************************************
-
-Julia provides a complete collection of basic arithmetic and bitwise
-operators across all of its numeric primitive types, as well as
-providing portable, efficient implementations of a comprehensive
+Julia provides a complete collection of basic arithmetic and bitwise operators across all of its
+numeric primitive types, as well as providing portable, efficient implementations of a comprehensive
 collection of standard mathematical functions.
 
-Arithmetic Operators
---------------------
+## Arithmetic Operators
 
-The following `arithmetic operators
-<https://en.wikipedia.org/wiki/Arithmetic#Arithmetic_operations>`_
+The following [arithmetic operators](https://en.wikipedia.org/wiki/Arithmetic#Arithmetic_operations)
 are supported on all primitive numeric types:
 
-==========  ============== ======================================
-Expression  Name           Description
-==========  ============== ======================================
-``+x``      unary plus     the identity operation
-``-x``      unary minus    maps values to their additive inverses
-``x + y``   binary plus    performs addition
-``x - y``   binary minus   performs subtraction
-``x * y``   times          performs multiplication
-``x / y``   divide         performs division
-``x \ y``   inverse divide equivalent to ``y / x``
-``x ^ y``   power          raises ``x`` to the ``y``\ th power
-``x % y``   remainder      equivalent to ``rem(x,y)``
-==========  ============== ======================================
+| Expression | Name           | Description                            |
+|:---------- |:-------------- |:-------------------------------------- |
+| `+x`       | unary plus     | the identity operation                 |
+| `-x`       | unary minus    | maps values to their additive inverses |
+| `x + y`    | binary plus    | performs addition                      |
+| `x - y`    | binary minus   | performs subtraction                   |
+| `x * y`    | times          | performs multiplication                |
+| `x / y`    | divide         | performs division                      |
+| `x \ y`    | inverse divide | equivalent to `y / x`                  |
+| `x ^ y`    | power          | raises `x` to the `y`th power          |
+| `x % y`    | remainder      | equivalent to `rem(x,y)`               |
 
-as well as the negation on ``Bool`` types:
+as well as the negation on `Bool` types:
 
-==========  ============== ============================================
-Expression  Name           Description
-==========  ============== ============================================
-``!x``      negation       changes ``true`` to ``false`` and vice versa
-==========  ============== ============================================
+| Expression | Name     | Description                              |
+|:---------- |:-------- |:---------------------------------------- |
+| `!x`       | negation | changes `true` to `false` and vice versa |
 
-Julia's promotion system makes arithmetic operations on mixtures of argument
-types "just work" naturally and automatically. See :ref:`man-conversion-and-promotion`
-for details of the promotion system.
+Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
+naturally and automatically. See [Conversion and Promotion](@ref conversion-and-promotion) for details of the promotion
+system.
 
 Here are some simple examples using arithmetic operators:
 
-.. doctest::
+```julia
+julia> 1 + 2 + 3
+6
 
-    julia> 1 + 2 + 3
-    6
+julia> 1 - 2
+-1
 
-    julia> 1 - 2
-    -1
+julia> 3*2/12
+0.5
+```
 
-    julia> 3*2/12
-    0.5
+(By convention, we tend to space operators more tightly if they get applied before other nearby
+operators. For instance, we would generally write `-x + 2` to reflect that first `x` gets negated,
+and then `2` is added to that result.)
 
-(By convention, we tend to space operators more tightly if they get applied before
-other nearby operators. For instance, we would generally write ``-x + 2`` to reflect
-that first ``x`` gets negated, and then ``2`` is added to that result.)
+## Bitwise Operators
 
-Bitwise Operators
------------------
-
-The following `bitwise
-operators <https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators>`_
+The following [bitwise operators](https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators)
 are supported on all primitive integer types:
 
-===========  =========================================================================
-Expression   Name
-===========  =========================================================================
-``~x``       bitwise not
-``x & y``    bitwise and
-``x | y``    bitwise or
-``x ⊻ y``    bitwise xor (exclusive or)
-``x >>> y``  `logical shift <https://en.wikipedia.org/wiki/Logical_shift>`_ right
-``x >> y``   `arithmetic shift <https://en.wikipedia.org/wiki/Arithmetic_shift>`_ right
-``x << y``   logical/arithmetic shift left
-===========  =========================================================================
+| Expression | Name                                                                     |
+|:---------- |:------------------------------------------------------------------------ |
+| `~x`       | bitwise not                                                              |
+| `x & y`    | bitwise and                                                              |
+| `x \| y`   | bitwise or                                                               |
+| `x ⊻ y`    | bitwise xor (exclusive or)                                               |
+| `x >>> y`  | [logical shift](https://en.wikipedia.org/wiki/Logical_shift) right       |
+| `x >> y`   | [arithmetic shift](https://en.wikipedia.org/wiki/Arithmetic_shift) right |
+| `x << y`   | logical/arithmetic shift left                                            |
 
 Here are some examples with bitwise operators:
 
-.. doctest::
+```julia
+julia> ~123
+-124
 
-    julia> ~123
-    -124
+julia> 123 & 234
+106
 
-    julia> 123 & 234
-    106
+julia> 123 | 234
+251
 
-    julia> 123 | 234
-    251
+julia> 123 ⊻ 234
+145
 
-    julia> 123 ⊻ 234
-    145
+julia> xor(123, 234)
+145
 
-    julia> xor(123, 234)
-    145
+julia> ~UInt32(123)
+0xffffff84
 
-    julia> ~UInt32(123)
-    0xffffff84
+julia> ~UInt8(123)
+0x84
+```
 
-    julia> ~UInt8(123)
-    0x84
+## Updating operators
 
-Updating operators
-------------------
-Every binary arithmetic and bitwise operator also has an updating
-version that assigns the result of the operation back into its left
-operand. The updating version of the binary operator is formed by placing a
-``=`` immediately after the operator. For example, writing ``x += 3`` is
-equivalent to writing ``x = x + 3``::
+Every binary arithmetic and bitwise operator also has an updating version that assigns the result
+of the operation back into its left operand. The updating version of the binary operator is formed
+by placing a `=` immediately after the operator. For example, writing `x += 3` is equivalent to
+writing `x = x + 3`:
 
-      julia> x = 1
-      1
+```julia
+julia> x = 1
+1
 
-      julia> x += 3
-      4
+julia> x += 3
+4
 
-      julia> x
-      4
+julia> x
+4
+```
 
-The updating versions of all the binary arithmetic and bitwise operators
-are::
+The updating versions of all the binary arithmetic and bitwise operators are:
 
-    +=  -=  *=  /=  \=  ÷=  %=  ^=  &=  |=  ⊻=  >>>=  >>=  <<=
+```
++=  -=  *=  /=  \=  ÷=  %=  ^=  &=  |=  ⊻=  >>>=  >>=  <<=
+```
 
+!!! note
+    An updating operator rebinds the variable on the left-hand side. As a result, the type of the
+    variable may change.
 
-.. note::
-   An updating operator rebinds the variable on the left-hand side.
-   As a result, the type of the variable may change.
+    ```julia
+    julia> x = 0x01; typeof(x)
+    UInt8
 
-   .. doctest::
+    julia> x *= 2 #Same as x = x * 2
+    2
 
-      julia> x = 0x01; typeof(x)
-      UInt8
+    julia> isa(x, Int)
+    true
+    ```
 
-      julia> x *= 2 #Same as x = x * 2
-      2
+## Numeric Comparisons
 
-      julia> isa(x, Int)
-      true
+Standard comparison operations are defined for all the primitive numeric types:
 
-.. _man-numeric-comparisons:
-
-Numeric Comparisons
--------------------
-
-Standard comparison operations are defined for all the primitive numeric
-types:
-
-=================== ========================
-Operator            Name
-=================== ========================
-:obj:`==`           equality
-:obj:`\!=` :obj:`≠` inequality
-:obj:`<`            less than
-:obj:`<=` :obj:`≤`  less than or equal to
-:obj:`>`            greater than
-:obj:`>=` :obj:`≥`  greater than or equal to
-=================== ========================
+| Operator                     | Name                     |
+|:---------------------------- |:------------------------ |
+| [`==`](@ref)                 | equality                 |
+| [`!=`](@ref), [`≠`](@ref !=) | inequality               |
+| [`<`](@ref)                  | less than                |
+| [`<=`](@ref), [`≤`](@ref <=) | less than or equal to    |
+| [`>`](@ref)                  | greater than             |
+| [`>=`](@ref), [`≥`](@ref >=) | greater than or equal to |
 
 Here are some simple examples:
 
-.. doctest::
+```julia
+julia> 1 == 1
+true
 
-    julia> 1 == 1
-    true
+julia> 1 == 2
+false
 
-    julia> 1 == 2
-    false
+julia> 1 != 2
+true
 
-    julia> 1 != 2
-    true
+julia> 1 == 1.0
+true
 
-    julia> 1 == 1.0
-    true
+julia> 1 < 2
+true
 
-    julia> 1 < 2
-    true
+julia> 1.0 > 3
+false
 
-    julia> 1.0 > 3
-    false
+julia> 1 >= 1.0
+true
 
-    julia> 1 >= 1.0
-    true
+julia> -1 <= 1
+true
 
-    julia> -1 <= 1
-    true
+julia> -1 <= -1
+true
 
-    julia> -1 <= -1
-    true
+julia> -1 <= -2
+false
 
-    julia> -1 <= -2
-    false
+julia> 3 < -0.5
+false
+```
 
-    julia> 3 < -0.5
-    false
+Integers are compared in the standard manner -- by comparison of bits. Floating-point numbers
+are compared according to the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008):
 
-Integers are compared in the standard manner — by comparison of bits.
-Floating-point numbers are compared according to the `IEEE 754
-standard <https://en.wikipedia.org/wiki/IEEE_754-2008>`_:
-
--  Finite numbers are ordered in the usual manner.
--  Positive zero is equal but not greater than negative zero.
--  ``Inf`` is equal to itself and greater than everything else except ``NaN``.
--  ``-Inf`` is equal to itself and less then everything else except ``NaN``.
--  ``NaN`` is not equal to, not less than, and not greater than anything,
-   including itself.
+  * Finite numbers are ordered in the usual manner.
+  * Positive zero is equal but not greater than negative zero.
+  * `Inf` is equal to itself and greater than everything else except `NaN`.
+  * `-Inf` is equal to itself and less then everything else except `NaN`.
+  * `NaN` is not equal to, not less than, and not greater than anything, including itself.
 
 The last point is potentially surprising and thus worth noting:
 
-.. doctest::
+```julia
+julia> NaN == NaN
+false
 
-    julia> NaN == NaN
-    false
+julia> NaN != NaN
+true
 
-    julia> NaN != NaN
-    true
+julia> NaN < NaN
+false
 
-    julia> NaN < NaN
-    false
+julia> NaN > NaN
+false
+```
 
-    julia> NaN > NaN
-    false
+and can cause especial headaches with [Arrays](@ref):
 
-and can cause especial headaches with :ref:`Arrays <man-arrays>`:
+```julia
+julia> [1 NaN] == [1 NaN]
+false
+```
 
-.. doctest::
+Julia provides additional functions to test numbers for special values, which can be useful in
+situations like hash key comparisons:
 
-    julia> [1 NaN] == [1 NaN]
-    false
+| Function                | Tests if                  |
+|:----------------------- |:------------------------- |
+| [`isequal(x, y)`](@ref) | `x` and `y` are identical |
+| [`isfinite(x)`](@ref)   | `x` is a finite number    |
+| [`isinf(x)`](@ref)      | `x` is infinite           |
+| [`isnan(x)`](@ref)      | `x` is not a number       |
 
-Julia provides additional functions to test numbers for special values,
-which can be useful in situations like hash key comparisons:
+[`isequal()`](@ref) considers `NaN`s equal to each other:
 
-=============================== ==================================
-Function                        Tests if
-=============================== ==================================
-:func:`isequal(x, y) <isequal>` ``x`` and ``y`` are identical
-:func:`isfinite(x) <isfinite>`  ``x`` is a finite number
-:func:`isinf(x) <isinf>`        ``x`` is infinite
-:func:`isnan(x) <isnan>`        ``x`` is not a number
-=============================== ==================================
+```julia
+julia> isequal(NaN,NaN)
+true
 
-:func:`isequal` considers ``NaN``\ s equal to each other:
+julia> isequal([1 NaN], [1 NaN])
+true
 
-.. doctest::
+julia> isequal(NaN,NaN32)
+true
+```
 
-    julia> isequal(NaN,NaN)
-    true
+[`isequal()`](@ref) can also be used to distinguish signed zeros:
 
-    julia> isequal([1 NaN], [1 NaN])
-    true
+```julia
+julia> -0.0 == 0.0
+true
 
-    julia> isequal(NaN,NaN32)
-    true
+julia> isequal(-0.0, 0.0)
+false
+```
 
-:func:`isequal` can also be used to distinguish signed zeros:
+Mixed-type comparisons between signed integers, unsigned integers, and floats can be tricky. A
+great deal of care has been taken to ensure that Julia does them correctly.
 
-.. doctest::
+For other types, [`isequal()`](@ref) defaults to calling [`==()`](@ref), so if you want to define
+equality for your own types then you only need to add a [`==()`](@ref) method.  If you define
+your own equality function, you should probably define a corresponding [`hash()`](@ref) method
+to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
-    julia> -0.0 == 0.0
-    true
+### Chaining comparisons
 
-    julia> isequal(-0.0, 0.0)
-    false
-
-Mixed-type comparisons between signed integers, unsigned integers, and
-floats can be tricky. A great deal of care has been taken to ensure
-that Julia does them correctly.
-
-For other types, :func:`isequal` defaults to calling :func:`==`, so if you want to
-define equality for your own types then you only need to add a :func:`==`
-method.  If you define your own equality function, you should probably
-define a corresponding :func:`hash` method to ensure that ``isequal(x,y)``
-implies ``hash(x) == hash(y)``.
-
-Chaining comparisons
-~~~~~~~~~~~~~~~~~~~~
-
-Unlike most languages, with the `notable exception of
-Python <https://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators>`_,
+Unlike most languages, with the [notable exception of Python](https://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators),
 comparisons can be arbitrarily chained:
 
-.. doctest::
+```julia
+julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5
+true
+```
 
-    julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5
-    true
+Chaining comparisons is often quite convenient in numerical code. Chained comparisons use the
+`&&` operator for scalar comparisons, and the [`&`](@ref) operator for elementwise comparisons,
+which allows them to work on arrays. For example, `0 .< A .< 1` gives a boolean array whose entries
+are true where the corresponding elements of `A` are between 0 and 1.
 
-Chaining comparisons is often quite convenient in numerical code.
-Chained comparisons use the :obj:`&&` operator for scalar comparisons,
-and the :obj:`&` operator for elementwise comparisons, which allows them to
-work on arrays. For example, ``0 .< A .< 1`` gives a boolean array whose
-entries are true where the corresponding elements of ``A`` are between 0
-and 1.
-
-The operator :obj:`.\< <Base..\<>` is intended for array objects; the operation
-``A .< B`` is valid only if ``A`` and ``B`` have the same dimensions.  The
-operator returns an array with boolean entries and with the same dimensions
-as ``A`` and ``B``.  Such operators are called *elementwise*; Julia offers a
-suite of elementwise operators: :obj:`.* <Base..*>`, :obj:`.+ <Base..+>`, etc.  Some of the elementwise
-operators can take a scalar operand such as the example ``0 .< A .< 1`` in
-the preceding paragraph.
-This notation means that the scalar operand should be replicated for each entry of
-the array.
+The operator [`.<`](@ref) is intended for array objects; the operation `A .< B` is valid only
+if `A` and `B` have the same dimensions.  The operator returns an array with boolean entries and
+with the same dimensions as `A` and `B`.  Such operators are called *elementwise*; Julia offers
+a suite of elementwise operators: [`.*`](@ref), [`.+`](@ref), etc.  Some of the elementwise operators
+can take a scalar operand such as the example `0 .< A .< 1` in the preceding paragraph. This notation
+means that the scalar operand should be replicated for each entry of the array.
 
 Note the evaluation behavior of chained comparisons:
 
-.. doctest::
+```julia
+julia> v(x) = (println(x); x)
+v (generic function with 1 method)
 
-    julia> v(x) = (println(x); x)
-    v (generic function with 1 method)
+julia> v(1) < v(2) <= v(3)
+2
+1
+3
+true
 
-    julia> v(1) < v(2) <= v(3)
-    2
-    1
-    3
-    true
+julia> v(1) > v(2) <= v(3)
+2
+1
+false
+```
 
-    julia> v(1) > v(2) <= v(3)
-    2
-    1
-    false
+The middle expression is only evaluated once, rather than twice as it would be if the expression
+were written as `v(1) < v(2) && v(2) <= v(3)`. However, the order of evaluations in a chained
+comparison is undefined. It is strongly recommended not to use expressions with side effects (such
+as printing) in chained comparisons. If side effects are required, the short-circuit `&&` operator
+should be used explicitly (see [Short-Circuit Evaluation](@ref)).
 
-The middle expression is only evaluated once, rather than twice as it
-would be if the expression were written as
-``v(1) < v(2) && v(2) <= v(3)``. However, the order of evaluations in a
-chained comparison is undefined. It is strongly recommended not to use
-expressions with side effects (such as printing) in chained comparisons.
-If side effects are required, the short-circuit :obj:`&&` operator should
-be used explicitly (see :ref:`man-short-circuit-evaluation`).
+### Operator Precedence
 
-Operator Precedence
-~~~~~~~~~~~~~~~~~~~
+Julia applies the following order of operations, from highest precedence to lowest:
 
-Julia applies the following order of operations, from highest precedence
-to lowest:
+| Category       | Operators                                                                                         |
+|:-------------- |:------------------------------------------------------------------------------------------------- |
+| Syntax         | `.` followed by `::`                                                                              |
+| Exponentiation | `^` and its elementwise equivalent `.^`                                                           |
+| Fractions      | `//` and `.//`                                                                                    |
+| Multiplication | `* / % & \` and  `.* ./ .% .\`                                                                    |
+| Bitshifts      | `<< >> >>>` and `.<< .>> .>>>`                                                                    |
+| Addition       | `+ - \| ⊻` and `.+ .-`                                                                            |
+| Syntax         | `: ..` followed by `\|>`                                                                          |
+| Comparisons    | `> < >= <= == === != !== <:` and `.> .< .>= .<= .== .!=`                                          |
+| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=` and `.+= .-= .*= ./= .//= .\= .^= .÷= .%=` |
 
-================= =============================================================================================
-Category          Operators
-================= =============================================================================================
-Syntax            ``.`` followed by ``::``
-Exponentiation    ``^`` and its elementwise equivalent ``.^``
-Fractions         ``//`` and ``.//``
-Multiplication    ``* / % & \`` and  ``.* ./ .% .\``
-Bitshifts         ``<< >> >>>`` and ``.<< .>> .>>>``
-Addition          ``+ - | ⊻`` and ``.+ .-``
-Syntax            ``: ..`` followed by ``|>``
-Comparisons       ``> < >= <= == === != !== <:`` and ``.> .< .>= .<= .== .!=``
-Control flow      ``&&`` followed by ``||`` followed by ``?``
-Assignments       ``= += -= *= /= //= \= ^= ÷= %= |= &= ⊻= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .÷= .%=``
-================= =============================================================================================
+### Elementary Functions
 
-.. _man-elementary-functions:
+Julia provides a comprehensive collection of mathematical functions and operators. These mathematical
+operations are defined over as broad a class of numerical values as permit sensible definitions,
+including integers, floating-point numbers, rationals, and complexes, wherever such definitions
+make sense.
 
-Elementary Functions
-~~~~~~~~~~~~~~~~~~~~
+Moreover, these functions (like any Julia function) can be applied in "vectorized" fashion to
+arrays and other collections with the syntax `f.(A)`, e.g. `sin.(A)` will compute the elementwise
+sine of each element of an array `A`.  See [Dot Syntax for Vectorizing Functions](@ref).
 
-Julia provides a comprehensive collection of mathematical functions and
-operators. These mathematical operations are defined over as broad a
-class of numerical values as permit sensible definitions, including
-integers, floating-point numbers, rationals, and complexes, wherever
-such definitions make sense.
+## Numerical Conversions
 
-Moreover, these functions (like any Julia function) can be applied
-in "vectorized" fashion to arrays and other collections with the
-syntax ``f.(A)``, e.g. ``sin.(A)`` will compute the elementwise
-sine of each element of an array ``A``.  See :ref:`man-dot-vectorizing`.
+Julia supports three forms of numerical conversion, which differ in their handling of inexact
+conversions.
 
-.. _man-numerical-conversions:
+  * The notation `T(x)` or `convert(T,x)` converts `x` to a value of type `T`.
 
-Numerical Conversions
----------------------
-
-Julia supports three forms of numerical conversion, which differ in their
-handling of inexact conversions.
-
-- The notation ``T(x)`` or ``convert(T,x)`` converts ``x`` to a value of type ``T``.
-
-  -  If ``T`` is a floating-point type, the result is the nearest representable
-     value, which could be positive or negative infinity.
-
-  -  If ``T`` is an integer type, an ``InexactError`` is raised if ``x``
-     is not representable by ``T``.
-
-
-- ``x % T`` converts an integer ``x`` to a value of integer type ``T``
-  congruent to ``x`` modulo ``2^n``, where ``n`` is the number of bits in ``T``.
-  In other words, the binary representation is truncated to fit.
-
-- The :ref:`man-rounding-functions` take a type ``T`` as an optional argument.
-  For example, ``round(Int,x)`` is a shorthand for ``Int(round(x))``.
+      * If `T` is a floating-point type, the result is the nearest representable value, which could be
+        positive or negative infinity.
+      * If `T` is an integer type, an `InexactError` is raised if `x` is not representable by `T`.
+  * `x % T` converts an integer `x` to a value of integer type `T` congruent to `x` modulo `2^n`,
+    where `n` is the number of bits in `T`. In other words, the binary representation is truncated
+    to fit.
+  * The [Rounding functions](@ref) take a type `T` as an optional argument. For example, `round(Int,x)`
+    is a shorthand for `Int(round(x))`.
 
 The following examples show the different forms.
 
-.. doctest::
+```julia
+julia> Int8(127)
+127
 
-    julia> Int8(127)
-    127
+julia> Int8(128)
+ERROR: InexactError()
+ in Int8(::Int64) at ./sysimg.jl:66
+ ...
 
-    julia> Int8(128)
-    ERROR: InexactError()
-     in Int8(::Int64) at ./sysimg.jl:66
-     ...
+julia> Int8(127.0)
+127
 
-    julia> Int8(127.0)
-    127
+julia> Int8(3.14)
+ERROR: InexactError()
+ in convert(::Type{Int8}, ::Float64) at ./float.jl:635
+ in Int8(::Float64) at ./sysimg.jl:66
+ ...
 
-    julia> Int8(3.14)
-    ERROR: InexactError()
-     in convert(::Type{Int8}, ::Float64) at ./float.jl:635
-     in Int8(::Float64) at ./sysimg.jl:66
-     ...
+julia> Int8(128.0)
+ERROR: InexactError()
+ in convert(::Type{Int8}, ::Float64) at ./float.jl:635
+ in Int8(::Float64) at ./sysimg.jl:66
+ ...
 
-    julia> Int8(128.0)
-    ERROR: InexactError()
-     in convert(::Type{Int8}, ::Float64) at ./float.jl:635
-     in Int8(::Float64) at ./sysimg.jl:66
-     ...
+julia> 127 % Int8
+127
 
-    julia> 127 % Int8
-    127
+julia> 128 % Int8
+-128
 
-    julia> 128 % Int8
-    -128
+julia> round(Int8,127.4)
+127
 
-    julia> round(Int8,127.4)
-    127
+julia> round(Int8,127.6)
+ERROR: InexactError()
+ in trunc(::Type{Int8}, ::Float64) at ./float.jl:628
+ in round(::Type{Int8}, ::Float64) at ./float.jl:332
+ ...
+```
 
-    julia> round(Int8,127.6)
-    ERROR: InexactError()
-     in trunc(::Type{Int8}, ::Float64) at ./float.jl:628
-     in round(::Type{Int8}, ::Float64) at ./float.jl:332
-     ...
+See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.
 
-See :ref:`man-conversion-and-promotion` for how to define your own
-conversions and promotions.
+### Rounding functions
 
-.. _man-rounding-functions:
+| Function              | Description                      | Return type |
+|:--------------------- |:-------------------------------- |:----------- |
+| [`round(x)`](@ref)    | round `x` to the nearest integer | `typeof(x)` |
+| [`round(T, x)`](@ref) | round `x` to the nearest integer | `T`         |
+| [`floor(x)`](@ref)    | round `x` towards `-Inf`         | `typeof(x)` |
+| [`floor(T, x)`](@ref) | round `x` towards `-Inf`         | `T`         |
+| [`ceil(x)`](@ref)     | round `x` towards `+Inf`         | `typeof(x)` |
+| [`ceil(T, x)`](@ref)  | round `x` towards `+Inf`         | `T`         |
+| [`trunc(x)`](@ref)    | round `x` towards zero           | `typeof(x)` |
+| [`trunc(T, x)`](@ref) | round `x` towards zero           | `T`         |
 
-Rounding functions
-~~~~~~~~~~~~~~~~~~
+### Division functions
 
-=========================== ================================== =============
-Function                    Description                        Return type
-=========================== ================================== =============
-:func:`round(x) <round>`    round ``x`` to the nearest integer ``typeof(x)``
-:func:`round(T, x) <round>` round ``x`` to the nearest integer ``T``
-:func:`floor(x) <floor>`    round ``x`` towards ``-Inf``       ``typeof(x)``
-:func:`floor(T, x) <floor>` round ``x`` towards ``-Inf``       ``T``
-:func:`ceil(x) <ceil>`      round ``x`` towards ``+Inf``       ``typeof(x)``
-:func:`ceil(T, x) <ceil>`   round ``x`` towards ``+Inf``       ``T``
-:func:`trunc(x) <trunc>`    round ``x`` towards zero           ``typeof(x)``
-:func:`trunc(T, x) <trunc>` round ``x`` towards zero           ``T``
-=========================== ================================== =============
+| Function              | Description                                                                                               |
+|:--------------------- |:--------------------------------------------------------------------------------------------------------- |
+| [`div(x,y)`](@ref)    | truncated division; quotient rounded towards zero                                                         |
+| [`fld(x,y)`](@ref)    | floored division; quotient rounded towards `-Inf`                                                         |
+| [`cld(x,y)`](@ref)    | ceiling division; quotient rounded towards `+Inf`                                                         |
+| [`rem(x,y)`](@ref)    | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
+| [`mod(x,y)`](@ref)    | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
+| [`mod1(x,y)`](@ref)   | `mod()` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)` |
+| [`mod2pi(x)`](@ref)   | modulus with respect to 2pi;  `0 <= mod2pi(x)    < 2pi`                                                   |
+| [`divrem(x,y)`](@ref) | returns `(div(x,y),rem(x,y))`                                                                             |
+| [`fldmod(x,y)`](@ref) | returns `(fld(x,y),mod(x,y))`                                                                             |
+| [`gcd(x,y...)`](@ref) | greatest positive common divisor of `x`, `y`,...                                                          |
+| [`lcm(x,y...)`](@ref) | least positive common multiple of `x`, `y`,...                                                            |
 
-Division functions
-~~~~~~~~~~~~~~~~~~
+### Sign and absolute value functions
 
-============================ =======================================================================
-Function                     Description
-============================ =======================================================================
-:func:`div(x,y) <div>`       truncated division; quotient rounded towards zero
-:func:`fld(x,y) <fld>`       floored division; quotient rounded towards ``-Inf``
-:func:`cld(x,y) <cld>`       ceiling division; quotient rounded towards ``+Inf``
-:func:`rem(x,y) <rem>`       remainder; satisfies ``x == div(x,y)*y + rem(x,y)``; sign matches ``x``
-:func:`mod(x,y) <mod>`       modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``
-:func:`mod1(x,y) <mod1>`     ``mod()`` with offset 1; returns ``r∈(0,y]`` for ``y>0`` or ``r∈[y,0)`` for ``y<0``, where ``mod(r, y) == mod(x, y)``
-:func:`mod2pi(x) <mod2pi>`   modulus with respect to 2pi;  ``0 <= mod2pi(x)  < 2pi``
-:func:`divrem(x,y) <divrem>` returns ``(div(x,y),rem(x,y))``
-:func:`fldmod(x,y) <fldmod>` returns ``(fld(x,y),mod(x,y))``
-:func:`gcd(x,y...) <gcd>`    greatest positive common divisor of ``x``, ``y``,...
-:func:`lcm(x,y...) <lcm>`    least positive common multiple of ``x``, ``y``,...
-============================ =======================================================================
+| Function                | Description                                                |
+|:----------------------- |:---------------------------------------------------------- |
+| [`abs(x)`](@ref)        | a positive value with the magnitude of `x`                 |
+| [`abs2(x)`](@ref)       | the squared magnitude of `x`                               |
+| [`sign(x)`](@ref)       | indicates the sign of `x`, returning -1, 0, or +1          |
+| [`signbit(x)`](@ref)    | indicates whether the sign bit is on (true) or off (false) |
+| [`copysign(x,y)`](@ref) | a value with the magnitude of `x` and the sign of `y`      |
+| [`flipsign(x,y)`](@ref) | a value with the magnitude of `x` and the sign of `x*y`    |
 
-Sign and absolute value functions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### Powers, logs and roots
 
-================================ ===========================================================
-Function                         Description
-================================ ===========================================================
-:func:`abs(x) <abs>`             a positive value with the magnitude of ``x``
-:func:`abs2(x) <abs2>`           the squared magnitude of ``x``
-:func:`sign(x) <sign>`           indicates the sign of ``x``, returning -1, 0, or +1
-:func:`signbit(x) <signbit>`     indicates whether the sign bit is on (true) or off (false)
-:func:`copysign(x,y) <copysign>` a value with the magnitude of ``x`` and the sign of ``y``
-:func:`flipsign(x,y) <flipsign>` a value with the magnitude of ``x`` and the sign of ``x*y``
-================================ ===========================================================
+| Function                 | Description                                                                |
+|:------------------------ |:-------------------------------------------------------------------------- |
+| [`sqrt(x)`](@ref), `√x`  | square root of `x`                                                         |
+| [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
+| [`hypot(x,y)`](@ref)     | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
+| [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
+| [`expm1(x)`](@ref)       | accurate `exp(x)-1` for `x` near zero                                      |
+| [`ldexp(x,n)`](@ref)     | `x*2^n` computed efficiently for integer values of `n`                     |
+| [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
+| [`log(b,x)`](@ref)       | base `b` logarithm of `x`                                                  |
+| [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
+| [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
+| [`log1p(x)`](@ref)       | accurate `log(1+x)` for `x` near zero                                      |
+| [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
+| [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
-Powers, logs and roots
-~~~~~~~~~~~~~~~~~~~~~~
+For an overview of why functions like [`hypot()`](@ref), [`expm1()`](@ref), and [`log1p()`](@ref)
+are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
+and [hypot](http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
 
-==================================== ==============================================================================
-Function                             Description
-==================================== ==============================================================================
-:func:`sqrt(x) <sqrt>` ``√x``        square root of ``x``
-:func:`cbrt(x) <cbrt>` ``∛x``        cube root of ``x``
-:func:`hypot(x,y) <hypot>`           hypotenuse of right-angled triangle with other sides of length ``x`` and ``y``
-:func:`exp(x) <exp>`                 natural exponential function at ``x``
-:func:`expm1(x) <expm1>`             accurate ``exp(x)-1`` for ``x`` near zero
-:func:`ldexp(x,n) <ldexp>`           ``x*2^n`` computed efficiently for integer values of ``n``
-:func:`log(x) <log>`                 natural logarithm of ``x``
-:func:`log(b,x) <log>`               base ``b`` logarithm of ``x``
-:func:`log2(x) <log2>`               base 2 logarithm of ``x``
-:func:`log10(x) <log10>`             base 10 logarithm of ``x``
-:func:`log1p(x) <log1p>`             accurate ``log(1+x)`` for ``x`` near zero
-:func:`exponent(x) <exponent>`       binary exponent of ``x``
-:func:`significand(x) <significand>` binary significand (a.k.a. mantissa) of a floating-point number ``x``
-==================================== ==============================================================================
+### Trigonometric and hyperbolic functions
 
-For an overview of why functions like :func:`hypot`, :func:`expm1`, and :func:`log1p`
-are necessary and useful, see John D. Cook's excellent pair
-of blog posts on the subject: `expm1, log1p,
-erfc <http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/>`_,
-and
-`hypot <http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/>`_.
+All the standard trigonometric and hyperbolic functions are also defined:
 
-Trigonometric and hyperbolic functions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+```
+sin    cos    tan    cot    sec    csc
+sinh   cosh   tanh   coth   sech   csch
+asin   acos   atan   acot   asec   acsc
+asinh  acosh  atanh  acoth  asech  acsch
+sinc   cosc   atan2
+```
 
-All the standard trigonometric and hyperbolic functions are also defined::
+These are all single-argument functions, with the exception of [atan2](https://en.wikipedia.org/wiki/Atan2),
+which gives the angle in [radians](https://en.wikipedia.org/wiki/Radian) between the *x*-axis
+and the point specified by its arguments, interpreted as *x* and *y* coordinates.
 
-    sin    cos    tan    cot    sec    csc
-    sinh   cosh   tanh   coth   sech   csch
-    asin   acos   atan   acot   asec   acsc
-    asinh  acosh  atanh  acoth  asech  acsch
-    sinc   cosc   atan2
+Additionally, [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) are provided for more accurate computations
+of [`sin(pi*x)`](@ref) and [`cos(pi*x)`](@ref) respectively.
 
-These are all single-argument functions, with the exception of
-`atan2 <https://en.wikipedia.org/wiki/Atan2>`_, which gives the angle
-in `radians <https://en.wikipedia.org/wiki/Radian>`_ between the *x*-axis
-and the point specified by its arguments, interpreted as *x* and *y*
-coordinates.
+In order to compute trigonometric functions with degrees instead of radians, suffix the function
+with `d`. For example, [`sind(x)`](@ref) computes the sine of `x` where `x` is specified in degrees.
+The complete list of trigonometric functions with degree variants is:
 
-Additionally, :func:`sinpi(x) <sinpi>` and :func:`cospi(x) <cospi>` are provided for more accurate computations
-of :func:`sin(pi*x) <sin>` and :func:`cos(pi*x) <cos>` respectively.
+```
+sind   cosd   tand   cotd   secd   cscd
+asind  acosd  atand  acotd  asecd  acscd
+```
 
-In order to compute trigonometric functions with degrees
-instead of radians, suffix the function with ``d``. For example, :func:`sind(x) <sind>`
-computes the sine of ``x`` where ``x`` is specified in degrees.
-The complete list of trigonometric functions with degree variants is::
+### Special functions
 
-    sind   cosd   tand   cotd   secd   cscd
-    asind  acosd  atand  acotd  asecd  acscd
-
-Special functions
-~~~~~~~~~~~~~~~~~
-
-=================================================== ==============================================================================
-Function                                            Description
-=================================================== ==============================================================================
-:func:`erf(x) <erf>`                                `error function <https://en.wikipedia.org/wiki/Error_function>`_ at ``x``
-:func:`erfc(x) <erfc>`                              complementary error function, i.e. the accurate version of ``1-erf(x)`` for large ``x``
-:func:`erfinv(x) <erfinv>`                          inverse function to :func:`erf`
-:func:`erfcinv(x) <erfinvc>`                        inverse function to :func:`erfc`
-:func:`erfi(x) <erfi>`                              imaginary error function defined as ``-im * erf(x * im)``, where :const:`im` is the imaginary unit
-:func:`erfcx(x) <erfcx>`                            scaled complementary error function, i.e. accurate ``exp(x^2) * erfc(x)`` for large ``x``
-:func:`dawson(x) <dawson>`                          scaled imaginary error function, a.k.a. Dawson function, i.e. accurate ``exp(-x^2) * erfi(x) * sqrt(pi) / 2`` for large ``x``
-:func:`gamma(x) <gamma>`                            `gamma function <https://en.wikipedia.org/wiki/Gamma_function>`_ at ``x``
-:func:`lgamma(x) <lgamma>`                          accurate ``log(gamma(x))`` for large ``x``
-:func:`lfact(x) <lfact>`                            accurate ``log(factorial(x))`` for large ``x``; same as ``lgamma(x+1)`` for ``x > 1``, zero otherwise
-:func:`digamma(x) <digamma>`                        `digamma function <https://en.wikipedia.org/wiki/Digamma_function>`_ (i.e. the derivative of :func:`lgamma`) at ``x``
-:func:`beta(x,y) <beta>`                            `beta function <https://en.wikipedia.org/wiki/Beta_function>`_ at ``x,y``
-:func:`lbeta(x,y) <lbeta>`                          accurate ``log(beta(x,y))`` for large ``x`` or ``y``
-:func:`eta(x) <eta>`                                `Dirichlet eta function <https://en.wikipedia.org/wiki/Dirichlet_eta_function>`_ at ``x``
-:func:`zeta(x) <zeta>`                              `Riemann zeta function <https://en.wikipedia.org/wiki/Riemann_zeta_function>`_ at ``x``
-|airylist|                                          `Airy Ai function <https://en.wikipedia.org/wiki/Airy_function>`_ at ``z``
-|airyprimelist|                                     derivative of the Airy Ai function at ``z``
-:func:`airybi(z) <airybi>`, ``airy(2,z)``           `Airy Bi function <https://en.wikipedia.org/wiki/Airy_function>`_ at ``z``
-:func:`airybiprime(z) <airybiprime>`, ``airy(3,z)`` derivative of the Airy Bi function at ``z``
-:func:`airyx(z) <airyx>`, ``airyx(k,z)``            scaled Airy AI function and ``k`` th derivatives at ``z``
-:func:`besselj(nu,z) <besselj>`                     `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
-:func:`besselj0(z) <besselj0>`                      ``besselj(0,z)``
-:func:`besselj1(z) <besselj1>`                      ``besselj(1,z)``
-:func:`besseljx(nu,z) <besseljx>`                   scaled Bessel function of the first kind of order ``nu`` at ``z``
-:func:`bessely(nu,z) <bessely>`                     `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
-:func:`bessely0(z) <bessely0>`                      ``bessely(0,z)``
-:func:`bessely1(z) <bessely0>`                      ``bessely(1,z)``
-:func:`besselyx(nu,z) <besselyx>`                   scaled Bessel function of the second kind of order ``nu`` at ``z``
-:func:`besselh(nu,k,z) <besselh>`                   `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``
-:func:`hankelh1(nu,z) <hankelh1>`                   ``besselh(nu, 1, z)``
-:func:`hankelh1x(nu,z) <hankelh1x>`                 scaled ``besselh(nu, 1, z)``
-:func:`hankelh2(nu,z) <hankelh2>`                   ``besselh(nu, 2, z)``
-:func:`hankelh2x(nu,z) <hankelh2x>`                 scaled ``besselh(nu, 2, z)``
-:func:`besseli(nu,z) <besseli>`                     modified `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
-:func:`besselix(nu,z) <besselix>`                   scaled modified Bessel function of the first kind of order ``nu`` at ``z``
-:func:`besselk(nu,z) <besselk>`                     modified `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
-:func:`besselkx(nu,z) <besselkx>`                   scaled modified Bessel function of the second kind of order ``nu`` at ``z``
-=================================================== ==============================================================================
-
-.. |airylist| replace:: :func:`airy(z) <airy>`, :func:`airyai(z) <airyai>`, ``airy(0,z)``
-.. |airyprimelist| replace:: :func:`airyprime(z) <airyprime>`, :func:`airyaiprime(z) <airyaiprime>`, ``airy(1,z)``
+| Function                                                      | Description                                                                                                                                                     |
+|:------------------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`erf(x)`](@ref)                                              | [error function](https://en.wikipedia.org/wiki/Error_function) at `x`                                                                                           |
+| [`erfc(x)`](@ref)                                             | complementary error function, i.e. the accurate version of `1-erf(x)` for large `x`                                                                             |
+| [`erfinv(x)`](@ref)                                           | inverse function to [`erf()`](@ref)                                                                                                                             |
+| `erfcinv(x)`                                                  | inverse function to [`erfc()`](@ref)                                                                                                                            |
+| [`erfi(x)`](@ref)                                             | imaginary error function defined as `-im * erf(x * im)`, where [`im`](@ref) is the imaginary unit                                                               |
+| [`erfcx(x)`](@ref)                                            | scaled complementary error function, i.e. accurate `exp(x^2) * erfc(x)` for large `x`                                                                           |
+| [`dawson(x)`](@ref)                                           | scaled imaginary error function, a.k.a. Dawson function, i.e. accurate `exp(-x^2) * erfi(x) * sqrt(pi) / 2` for large `x`                                       |
+| [`gamma(x)`](@ref)                                            | [gamma function](https://en.wikipedia.org/wiki/Gamma_function) at `x`                                                                                           |
+| [`lgamma(x)`](@ref)                                           | accurate `log(gamma(x))` for large `x`                                                                                                                          |
+| [`lfact(x)`](@ref)                                            | accurate `log(factorial(x))` for large `x`; same as `lgamma(x+1)` for `x > 1`, zero otherwise                                                                   |
+| [`digamma(x)`](@ref)                                          | [digamma function](https://en.wikipedia.org/wiki/Digamma_function) (i.e. the derivative of [`lgamma()`](@ref)) at `x`                                           |
+| [`beta(x,y)`](@ref)                                           | [beta function](https://en.wikipedia.org/wiki/Beta_function) at `x,y`                                                                                           |
+| [`lbeta(x,y)`](@ref)                                          | accurate `log(beta(x,y))` for large `x` or `y`                                                                                                                  |
+| [`eta(x)`](@ref)                                              | [Dirichlet eta function](https://en.wikipedia.org/wiki/Dirichlet_eta_function) at `x`                                                                           |
+| [`zeta(x)`](@ref)                                             | [Riemann zeta function](https://en.wikipedia.org/wiki/Riemann_zeta_function) at `x`                                                                             |
+| [`airy(z)`](@ref), [`airyai(z)`](@ref), `airy(0,z)`           | [Airy Ai function](https://en.wikipedia.org/wiki/Airy_function) at `z`                                                                                          |
+| [`airyprime(z)`](@ref), [`airyaiprime(z)`](@ref), `airy(1,z)` | derivative of the Airy Ai function at `z`                                                                                                                       |
+| [`airybi(z)`](@ref), `airy(2,z)`                              | [Airy Bi function](https://en.wikipedia.org/wiki/Airy_function) at `z`                                                                                          |
+| [`airybiprime(z)`](@ref), `airy(3,z)`                         | derivative of the Airy Bi function at `z`                                                                                                                       |
+| [`airyx(z)`](@ref), `airyx(k,z)`                              | scaled Airy AI function and `k` th derivatives at `z`                                                                                                           |
+| [`besselj(nu,z)`](@ref)                                       | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the first kind of order `nu` at `z`                                                         |
+| [`besselj0(z)`](@ref)                                         | `besselj(0,z)`                                                                                                                                                  |
+| [`besselj1(z)`](@ref)                                         | `besselj(1,z)`                                                                                                                                                  |
+| [`besseljx(nu,z)`](@ref)                                      | scaled Bessel function of the first kind of order `nu` at `z`                                                                                                   |
+| [`bessely(nu,z)`](@ref)                                       | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the second kind of order `nu` at `z`                                                        |
+| [`bessely0(z)`](@ref)                                         | `bessely(0,z)`                                                                                                                                                  |
+| [`bessely1(z)`](@ref)                                         | `bessely(1,z)`                                                                                                                                                  |
+| [`besselyx(nu,z)`](@ref)                                      | scaled Bessel function of the second kind of order `nu` at `z`                                                                                                  |
+| [`besselh(nu,k,z)`](@ref)                                     | [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the third kind (a.k.a. Hankel function) of order `nu` at `z`; `k` must be either `1` or `2` |
+| [`hankelh1(nu,z)`](@ref)                                      | `besselh(nu, 1, z)`                                                                                                                                             |
+| [`hankelh1x(nu,z)`](@ref)                                     | scaled `besselh(nu, 1, z)`                                                                                                                                      |
+| [`hankelh2(nu,z)`](@ref)                                      | `besselh(nu, 2, z)`                                                                                                                                             |
+| [`hankelh2x(nu,z)`](@ref)                                     | scaled `besselh(nu, 2, z)`                                                                                                                                      |
+| [`besseli(nu,z)`](@ref)                                       | modified [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the first kind of order `nu` at `z`                                                |
+| [`besselix(nu,z)`](@ref)                                      | scaled modified Bessel function of the first kind of order `nu` at `z`                                                                                          |
+| [`besselk(nu,z)`](@ref)                                       | modified [Bessel function](https://en.wikipedia.org/wiki/Bessel_function) of the second kind of order `nu` at `z`                                               |
+| [`besselkx(nu,z)`](@ref)                                      | scaled modified Bessel function of the second kind of order `nu` at `z`                                                                                         |
