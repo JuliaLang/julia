@@ -105,10 +105,7 @@ julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink ju
 
 debug release : % : julia-%
 
-julia-genstdlib: julia-sysimg-$(JULIA_BUILD_MODE)
-	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) $(call cygpath_w, $(JULIAHOME)/doc/genstdlib.jl))
-
-docs: julia-genstdlib
+docs: julia-sysimg-$(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc
 
 check-whitespace:
@@ -120,21 +117,11 @@ endif
 
 release-candidate: release testall
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/contrib/add_license_to_files.jl #add license headers
-	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/genstdlib.jl
 	@#Check documentation
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/NEWS-update.jl #Add missing cross-references to NEWS.md
-	@$(MAKE) -C $(BUILDROOT)/doc unicode #Rebuild Unicode table if necessary
-	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/DocCheck.jl > $(BUILDROOT)/doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
-	@if [ -z "$(cat $(BUILDROOT)/doc/UNDOCUMENTED.rst)" ]; then \
-		rm $(BUILDROOT)/doc/UNDOCUMENTED.rst; \
-	else \
-		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
-		exit 1; \
-	fi
-	@$(MAKE) -C $(BUILDROOT)/doc html  SPHINXOPTS="-n" #Rebuild Julia HTML docs pedantically
-	@$(MAKE) -C $(BUILDROOT)/doc latex SPHINXOPTS="-n" #Rebuild Julia PDF docs pedantically
-	@$(MAKE) -C $(BUILDROOT)/doc doctest #Run Julia doctests
-	@$(MAKE) -C $(BUILDROOT)/doc linkcheck #Check all links
+	@$(MAKE) -C $(BUILDROOT)/doc html
+	@$(MAKE) -C $(BUILDROOT)/doc pdf
+	@$(MAKE) -C $(BUILDROOT)/doc check
 
 	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -329,8 +316,9 @@ define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
 
-install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html
+install: $(build_depsbindir)/stringreplace
 	@$(MAKE) $(QUIET_MAKE) all
+	@$(MAKE) $(QUIET_MAKE) docs
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
@@ -379,7 +367,6 @@ endif
 	# Copy documentation
 	cp -R -L $(build_docdir)/* $(DESTDIR)$(docdir)/
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
-	-rm $(DESTDIR)$(docdir)/html/.buildinfo
 	# Remove perf suite
 	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
 	# Remove various files which should not be installed
