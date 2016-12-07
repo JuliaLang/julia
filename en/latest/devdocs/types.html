@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>More about types · The Julia Language</title><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.5.0/styles/default.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Ubuntu+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="../assets/documenter.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../assets/documenter.js"></script><script src="../../versions.js"></script></head><body><nav class="toc"><a href="../index.html"><img class="logo" src="../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><form class="search" action="../search.html"><select id="version-selector" onChange="window.location.href=this.value"><option value="#" selected="selected" disabled="disabled">Version</option></select><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../index.html">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="../manual/introduction.html">Introduction</a></li><li><a class="toctext" href="../manual/getting-started.html">Getting Started</a></li><li><a class="toctext" href="../manual/variables.html">Variables</a></li><li><a class="toctext" href="../manual/integers-and-floating-point-numbers.html">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="../manual/mathematical-operations.html">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="../manual/complex-and-rational-numbers.html">Complex and Rational Numbers</a></li><li><a class="toctext" href="../manual/strings.html">Strings</a></li><li><a class="toctext" href="../manual/functions.html">Functions</a></li><li><a class="toctext" href="../manual/control-flow.html">Control Flow</a></li><li><a class="toctext" href="../manual/variables-and-scoping.html">Scope of Variables</a></li><li><a class="toctext" href="../manual/types.html">Types</a></li><li><a class="toctext" href="../manual/methods.html">Methods</a></li><li><a class="toctext" href="../manual/constructors.html">Constructors</a></li><li><a class="toctext" href="../manual/conversion-and-promotion.html">Conversion and Promotion</a></li><li><a class="toctext" href="../manual/interfaces.html">Interfaces</a></li><li><a class="toctext" href="../manual/modules.html">Modules</a></li><li><a class="toctext" href="../manual/documentation.html">Documentation</a></li><li><a class="toctext" href="../manual/metaprogramming.html">Metaprogramming</a></li><li><a class="toctext" href="../manual/arrays.html">Multi-dimensional Arrays</a></li><li><a class="toctext" href="../manual/linear-algebra.html">Linear algebra</a></li><li><a class="toctext" href="../manual/networking-and-streams.html">Networking and Streams</a></li><li><a class="toctext" href="../manual/parallel-computing.html">Parallel Computing</a></li><li><a class="toctext" href="../manual/dates.html">Date and DateTime</a></li><li><a class="toctext" href="../manual/interacting-with-julia.html">Interacting With Julia</a></li><li><a class="toctext" href="../manual/running-external-programs.html">Running External Programs</a></li><li><a class="toctext" href="../manual/calling-c-and-fortran-code.html">Calling C and Fortran Code</a></li><li><a class="toctext" href="../manual/handling-operating-system-variation.html">Handling Operating System Variation</a></li><li><a class="toctext" href="../manual/interacting-with-julia.html">Interacting With Julia</a></li><li><a class="toctext" href="../manual/embedding.html">Embedding Julia</a></li><li><a class="toctext" href="../manual/packages.html">Packages</a></li><li><a class="toctext" href="../manual/profile.html">Profiling</a></li><li><a class="toctext" href="../manual/stacktraces.html">Stack Traces</a></li><li><a class="toctext" href="../manual/performance-tips.html">Performance Tips</a></li><li><a class="toctext" href="../manual/workflow-tips.html">Workflow Tips</a></li><li><a class="toctext" href="../manual/style-guide.html">Style Guide</a></li><li><a class="toctext" href="../manual/faq.html">Frequently Asked Questions</a></li><li><a class="toctext" href="../manual/noteworthy-differences.html">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="../manual/unicode-input.html">Unicode Input</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../stdlib/base.html">Essentials</a></li><li><a class="toctext" href="../stdlib/collections.html">Collections and Data Structures</a></li><li><a class="toctext" href="../stdlib/math.html">Mathematics</a></li><li><a class="toctext" href="../stdlib/numbers.html">Numbers</a></li><li><a class="toctext" href="../stdlib/strings.html">Strings</a></li><li><a class="toctext" href="../stdlib/arrays.html">Arrays</a></li><li><a class="toctext" href="../stdlib/parallel.html">Tasks and Parallel Computing</a></li><li><a class="toctext" href="../stdlib/linalg.html">Linear Algebra</a></li><li><a class="toctext" href="../stdlib/constants.html">Constants</a></li><li><a class="toctext" href="../stdlib/file.html">Filesystem</a></li><li><a class="toctext" href="../stdlib/io-network.html">I/O and Network</a></li><li><a class="toctext" href="../stdlib/punctuation.html">Punctuation</a></li><li><a class="toctext" href="../stdlib/sort.html">Sorting and Related Functions</a></li><li><a class="toctext" href="../stdlib/pkg.html">Package Manager Functions</a></li><li><a class="toctext" href="../stdlib/dates.html">Dates and Time</a></li><li><a class="toctext" href="../stdlib/iterators.html">Iteration utilities</a></li><li><a class="toctext" href="../stdlib/test.html">Unit Testing</a></li><li><a class="toctext" href="../stdlib/c.html">C Interface</a></li><li><a class="toctext" href="../stdlib/libc.html">C Standard Library</a></li><li><a class="toctext" href="../stdlib/libdl.html">Dynamic Linker</a></li><li><a class="toctext" href="../stdlib/profile.html">Profiling</a></li><li><a class="toctext" href="../stdlib/simd-types.html">SIMD Support</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="reflection.html">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="init.html">Initialization of the Julia runtime</a></li><li><a class="toctext" href="eval.html">Eval of Julia code</a></li><li><a class="toctext" href="ast.html">Julia ASTs</a></li><li class="current"><a class="toctext" href="types.html">More about types</a><ul class="internal"><li><a class="toctext" href="#Types-and-sets-(and-Any-and-Union{}/Bottom)-1">Types and sets (and <code>Any</code> and <code>Union{}</code>/<code>Bottom</code>)</a></li><li><a class="toctext" href="#TypeVars-1">TypeVars</a></li><li><a class="toctext" href="#TypeNames-1">TypeNames</a></li><li><a class="toctext" href="#Tuple-types-1">Tuple-types</a></li><li><a class="toctext" href="#Introduction-to-the-internal-machinery:-jltypes.c-1">Introduction to the internal machinery: <code>jltypes.c</code></a></li><li><a class="toctext" href="#Subtyping-and-method-sorting-1">Subtyping and method sorting</a></li></ul></li><li><a class="toctext" href="object.html">Memory layout of Julia Objects</a></li><li><a class="toctext" href="functions.html">Julia Functions</a></li><li><a class="toctext" href="callconv.html">Calling Conventions</a></li><li><a class="toctext" href="cartesian.html">Base.Cartesian</a></li><li><a class="toctext" href="meta.html">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="subarrays.html">SubArrays</a></li><li><a class="toctext" href="sysimg.html">System Image Building</a></li><li><a class="toctext" href="llvm.html">Working with LLVM</a></li><li><a class="toctext" href="stdio.html">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="boundscheck.html">Bounds checking</a></li><li><a class="toctext" href="locks.html">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="offset-arrays.html">Arrays with custom indices</a></li></ul></li><li><span class="toctext">Devloping/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="backtraces.html">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="debuggingtips.html">gdb debugging tips</a></li><li><a class="toctext" href="valgrind.html">Using Valgrind with Julia</a></li><li><a class="toctext" href="sanitizers.html">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Developer Documentation</li><li>Documentation of Julia&#39;s Internals</li><li><a href="types.html">More about types</a></li></ul><a class="edit-page" href="https://github.com/JuliaLang/julia/tree/a304c557928d9eaa0a28af5fe96327d5da70d14b/doc/src/devdocs/types.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/></header><h1><a class="nav-anchor" id="More-about-types-1" href="#More-about-types-1">More about types</a></h1><p>If you&#39;ve used Julia for a while, you understand the fundamental role that types play.  Here we try to get under the hood, focusing particularly on <a href="../manual/types.html#Parametric-Types-1">Parametric Types</a>.</p><h2><a class="nav-anchor" id="Types-and-sets-(and-Any-and-Union{}/Bottom)-1" href="#Types-and-sets-(and-Any-and-Union{}/Bottom)-1">Types and sets (and <code>Any</code> and <code>Union{}</code>/<code>Bottom</code>)</a></h2><p>It&#39;s perhaps easiest to conceive of Julia&#39;s type system in terms of sets.  A concrete type corresponds to a single entity in the space of all possible types; an abstract type refers to a collection (set) of concrete types.  <code>Any</code> is a type that describes the entire universe of possible types; <code>Integer</code> is a subset of <code>Any</code> that includes <code>Int</code>, <code>Int8</code>, and other concrete types.  Internally, Julia also makes heavy use of another type known as <code>Bottom</code>, or equivalently, <code>Union{}</code>.  This corresponds to the empty set.</p><p>Julia&#39;s types support the standard operations of set theory: you can ask whether <code>T1</code> is a &quot;subset&quot; (subtype) of <code>T2</code> with <code>T1 &lt;: T2</code>.  Likewise, you intersect two types using <code>typeintersect</code>, take their union with <code>Union</code>, and compute a type that contains their union with <code>typejoin</code>:</p><pre><code class="language-julia">julia&gt; typeintersect(Int, Float64)
+Union{}
+
+julia&gt; Union{Int, Float64}
+Union{Float64,Int64}
+
+julia&gt; typejoin(Int, Float64)
+Real
+
+julia&gt; typeintersect(Signed, Union{UInt8, Int8})
+Int8
+
+julia&gt; Union{Signed, Union{UInt8, Int8}}
+Union{Signed,UInt8}
+
+julia&gt; typejoin(Signed, Union{UInt8, Int8})
+Integer
+
+julia&gt; typeintersect(Tuple{Integer,Float64}, Tuple{Int,Real})
+Tuple{Int64,Float64}
+
+julia&gt; Union{Tuple{Integer,Float64}, Tuple{Int,Real}}
+Union{Tuple{Int64,Real},Tuple{Integer,Float64}}
+
+julia&gt; typejoin(Tuple{Integer,Float64}, Tuple{Int,Real})
+Tuple{Integer,Real}</code></pre><p>While these operations may seem abstract, they lie at the heart of Julia.  For example, method dispatch is implemented by stepping through the items in a method list until reaching one for which <code>typeintersect(args, sig)</code> is not <code>Union{}</code>.  (Here, <code>args</code> is a tuple-type describing the types of the arguments, and <code>sig</code> is a tuple-type specifying the types in the function&#39;s signature.)  For this algorithm to work, it&#39;s important that methods be sorted by their specificity, and that the search begins with the most specific methods.  Consequently, Julia also implements a partial order on types; this is achieved by functionality that is similar to <code>&lt;:</code>, but with differences that will be discussed below.</p><h2><a class="nav-anchor" id="TypeVars-1" href="#TypeVars-1">TypeVars</a></h2><p>Many types take parameters; an easy example is <a href="../stdlib/arrays.html#Core.Array"><code>Array</code></a>, which takes two parameters often written as <code>Array{T,N}</code>.  Let&#39;s compare the following methods:</p><pre><code class="language-julia">f1(A::Array) = 1
+f2(A::Array{Int}) = 2
+f3{T}(A::Array{T}) = 3
+f4(A::Array{Any}) = 4
+f5{T&lt;:Any}(A::Array{T}) = 5</code></pre><p>All but <code>f4</code> can be called with <code>a = [1,2]</code>; all but <code>f2</code> can be called with <code>b = Any[1,2]</code>.</p><p>Let&#39;s look at these types a little more closely:</p><pre><code class="language-julia">julia&gt; Array
+Array{T,N}
+
+julia&gt; dump(Array)
+Array{T,N} &lt;: DenseArray{T,N}</code></pre><p>This indicates that <a href="../stdlib/arrays.html#Core.Array"><code>Array</code></a> is a shorthand for <code>Array{T,N}</code>.  If you type this at the REPL prompt–on its own, not while defining a function or type–you get an error <code>T not defined</code>. So what, exactly, are <code>T</code> and <code>N</code>? You can learn more by extracting these parameters:</p><pre><code class="language-julia">julia&gt; T,N = Array.parameters
+svec(T,N)
+
+julia&gt; dump(T)
+TypeVar
+  name: Symbol T
+  lb: Union{}
+  ub: Any
+  bound: Bool false</code></pre><p>A <code>TypeVar</code> is one of Julia&#39;s built-in types–it&#39;s defined in <code>jltypes.c</code>, although you can find a commented-out version in <code>boot.jl</code>.  The <code>name</code> field is straightforward: it&#39;s what&#39;s printed when showing the object.  <code>lb</code> and <code>ub</code> stand for &quot;lower bound&quot; and &quot;upper bound,&quot; respectively: these are the sets that constrain what types the TypeVar may represent.  In this case, <code>T</code>&#39;s lower bound is <code>Union{}</code> (i.e., <code>Bottom</code> or the empty set); in other words, this <code>TypeVar</code> is not constrained from below.  The upper bound is <code>Any</code>, so neither is it constrained from above.</p><p>In a method definition like:</p><pre><code class="language-julia">g{S&lt;:Integer}(x::S) = 0</code></pre><p>one can extract the underlying <code>TypeVar</code>:</p><pre><code class="language-julia">g{S&lt;:Integer}(x::S) = 0
+m = first(methods(g))
+p = m.sig.parameters
+tv = p[2]
+dump(tv)</code></pre><pre><code class="language-none">TypeVar
+  name: Symbol S
+  lb: Union{}
+  ub: Integer &lt;: Real
+  bound: Bool true</code></pre><p>Here <code>ub</code> is <code>Integer</code>, as specified in the function definition.</p><p>The last field of a <code>TypeVar</code> is <code>bound</code>.  This boolean value specifies whether the <code>TypeVar</code> is defined as one of the function parameters. For example:</p><pre><code class="language-julia">julia&gt; h1(A::Array, b::Real) = 1
+h1 (generic function with 1 method)
+
+julia&gt; h2{T&lt;:Real}(A::Array, b::T) = 1
+h2 (generic function with 1 method)
+
+julia&gt; h3{T&lt;:Real}(A::Array{T}, b::T) = 1
+h3 (generic function with 1 method)
+
+julia&gt; p1 = first(methods(h1)).sig.parameters
+svec(#h1,Array{T,N},Real)
+
+julia&gt; p2 = first(methods(h2)).sig.parameters
+svec(#h2,Array{T,N},T&lt;:Real)
+
+julia&gt; p3 = first(methods(h3)).sig.parameters
+svec(#h3,Array{T&lt;:Real,N},T&lt;:Real)
+
+julia&gt; dump(p1[2].parameters[1])
+TypeVar
+  name: Symbol T
+  lb: Union{}
+  ub: Any
+  bound: Bool false
+
+julia&gt; dump(p3[2].parameters[1])
+TypeVar
+  name: Symbol T
+  lb: Union{}
+  ub: Real &lt;: Number
+  bound: Bool true</code></pre><p>Note that <code>p2</code> shows two objects called <code>T</code>, but only one of them has the upper bound <code>Real</code>; in contrast, <code>p3</code> shows both of them bounded.  This is because in <code>h3</code>, the same type <code>T</code> is used in both places, whereas for <code>h2</code> the <code>T</code> inside the array is simply the default symbol used for the first parameter of <a href="../stdlib/arrays.html#Core.Array"><code>Array</code></a>.</p><p>One can construct <code>TypeVar</code>s manually:</p><pre><code class="language-julia">julia&gt; TypeVar(:V, Signed, Real, false)
+Signed&lt;:V&lt;:Real</code></pre><p>There are convenience versions that allow you to omit any of these arguments except the <code>name</code> symbol.</p><p>Armed with this information, we can do some sneaky things that reveal a lot about how Julia does dispatch:</p><pre><code class="language-julia">julia&gt; TV = TypeVar(:T, false)   # bound = false
+T
+
+julia&gt; candid{T}(A::Array{T}, x::T) = 0
+candid (generic function with 1 method)
+
+julia&gt; @eval sneaky{T}(A::Array{T}, x::$TV) = 1
+sneaky (generic function with 1 method)
+
+julia&gt; methods(candid)
+# 1 method for generic function &quot;candid&quot;:
+candid{T}(A::Array{T,N&lt;:Any}, x::T) in Main at none:1
+
+julia&gt; methods(sneaky)
+# 1 method for generic function &quot;sneaky&quot;:
+sneaky{T}(A::Array{T,N&lt;:Any}, x::T&lt;:Any) in Main at none:1</code></pre><p>These therefore print identically, but they have very different behavior:</p><pre><code class="language-julia">julia&gt; candid([1],3.2)
+ERROR: MethodError: no method matching candid(::Array{Int64,1}, ::Float64)
+Closest candidates are:
+  candid{T}(::Array{T,N}, !Matched::T) at none:1
+ ...
+
+julia&gt; sneaky([1],3.2)
+1</code></pre><p>To see what&#39;s happening, it&#39;s helpful to use Julia&#39;s internal <code>jl_()</code> function (defined in <code>builtins.c</code>) for display, because it prints bound <code>TypeVar</code> objects with a hash (<code>#T</code> instead of <code>T</code>):</p><pre><code class="language-julia">julia&gt; jl_(x) = ccall(:jl_, Void, (Any,), x)
+jl_ (generic function with 1 method)</code></pre><pre><code class="language-julia">julia&gt; jl_(first(methods(candid)).sig)
+Tuple{Main.#candid, Array{#T&lt;:Any, N&lt;:Any}, #T&lt;:Any}
+
+julia&gt; jl_(first(methods(sneaky)).sig)
+Tuple{Main.#sneaky, Array{#T&lt;:Any, N&lt;:Any}, T&lt;:Any}</code></pre><p>Even though both print as <code>T</code>, in <code>sneaky</code> the second <code>T</code> is not bound, and hence it isn&#39;t constrained to be the same type as the element type of the <a href="../stdlib/arrays.html#Core.Array"><code>Array</code></a>.</p><p>Some <code>TypeVar</code> interactions depend on the <code>bound</code> state, even when there are not two or more uses of the same <code>TypeVar</code>. For example:</p><pre><code class="language-julia">julia&gt; S = TypeVar(:S, false); T = TypeVar(:T, true)
+T
+
+# These would be the same no matter whether we used S or T
+julia&gt; Array{Array{S}} &lt;: Array{Array}
+true
+
+julia&gt; Array{Array{S}} &lt;: Array{Array{S}}
+true
+
+julia&gt; Array{Array} &lt;: Array{Array{S}}
+true
+
+# For these cases, it matters
+julia&gt; Array{Array{Int}} &lt;: Array{Array}
+false
+
+julia&gt; Array{Array{Int}} &lt;: Array{Array{S}}
+false
+
+julia&gt; Array{Array{Int}} &lt;: Array{Array{T}}
+true</code></pre><p>It&#39;s this latter construction that allows function declarations like</p><pre><code class="language-julia">foo{T,N}(A::Array{Array{T,N}}) = T,N</code></pre><p>to match despite the invariance of Julia&#39;s type parameters.</p><h2><a class="nav-anchor" id="TypeNames-1" href="#TypeNames-1">TypeNames</a></h2><p>The following two <a href="../stdlib/arrays.html#Core.Array"><code>Array</code></a> types are functionally equivalent, yet print differently via <code>jl_()</code>:</p><pre><code class="language-julia">julia&gt; TV, NV = TypeVar(:T), TypeVar(:N)
+(T,N)
+
+julia&gt; jl_(Array)
+Array
+
+julia&gt; jl_(Array{TV,NV})
+Array{T&lt;:Any, N&lt;:Any}</code></pre><p>These can be distinguished by examining the <code>name</code> field of the type, which is an object of type <code>TypeName</code>:</p><pre><code class="language-julia">julia&gt; dump(Array.name)
+TypeName
+  name: Symbol Array
+  module: Module Core
+  names: empty SimpleVector
+  primary: Array{T,N} &lt;: DenseArray{T,N}
+  cache: SimpleVector
+    ...
+
+  linearcache: SimpleVector
+    ...
+
+  uid: Int64 -7900426068641098781
+  mt: MethodTable
+    name: Symbol Array
+    defs: Void nothing
+    cache: Void nothing
+    max_args: Int64 0
+    kwsorter: #undef
+    module: Module Core
+    : Int64 0
+    : Int64 0</code></pre><p>In this case, the relevant field is <code>primary</code>, which holds a reference to the &quot;primary&quot; instance of the type:</p><pre><code class="language-julia">julia&gt; pointer_from_objref(Array)
+Ptr{Void} @0x00007fcc7de64850
+
+julia&gt; pointer_from_objref(Array.name.primary)
+Ptr{Void} @0x00007fcc7de64850
+
+julia&gt; pointer_from_objref(Array{TV,NV})
+Ptr{Void} @0x00007fcc80c4d930
+
+julia&gt; pointer_from_objref(Array{TV,NV}.name.primary)
+Ptr{Void} @0x00007fcc7de64850</code></pre><p>The <code>primary</code> field of <a href="../stdlib/arrays.html#Core.Array"><code>Array</code></a> points to itself, but for <code>Array{TV,NV}</code> it points back to the default definition of the type.</p><p>What about the other fields? <code>uid</code> assigns a unique integer to each type.  To examine the <code>cache</code> field, it&#39;s helpful to pick a type that is less heavily used than Array. Let&#39;s first create our own type:</p><pre><code class="language-julia">julia&gt; type MyType{T,N} end
+
+julia&gt; MyType{Int,2}
+MyType{Int64,2}
+
+julia&gt; MyType{Float32, 5}
+MyType{Float32,5}
+
+julia&gt; MyType.name.cache
+svec(MyType{Float32,5},MyType{Int64,2},#undef,#undef,#undef,#undef,#undef,#undef)</code></pre><p>(The cache is pre-allocated to have length 8, but only the first two entries are populated.) Consequently, when you instantiate a parametric type, each concrete type gets saved in a type-cache.  However, instances with <code>TypeVar</code> parameters are not cached.</p><h2><a class="nav-anchor" id="Tuple-types-1" href="#Tuple-types-1">Tuple-types</a></h2><p>Tuple-types constitute an interesting special case.  For dispatch to work on declarations like <code>x::Tuple</code>, the type has to be able to be able to accommodate any tuple.  Let&#39;s check the parameters:</p><pre><code class="language-julia">julia&gt; Tuple
+Tuple
+
+julia&gt; Tuple.parameters
+svec(Vararg{Any,N})</code></pre><p>It&#39;s worth noting that the parameter is a type, <code>Any</code>, rather than a <code>TypeVar T&lt;:Any</code>: compare</p><pre><code class="language-julia">julia&gt; jl_(Tuple.parameters)
+svec(Vararg{Any, N&lt;:Any})
+
+julia&gt; jl_(Array.parameters)
+svec(T&lt;:Any, N&lt;:Any)</code></pre><p>Unlike other types, tuple-types are covariant in their parameters, so this definition permits <code>Tuple</code> to match any type of tuple.  This is therefore equivalent to having an unbound <code>TypeVar</code> but distinct from a bound <code>TypeVar</code></p><pre><code class="language-julia">julia&gt; typeintersect(Tuple, Tuple{Int,Float64})
+Tuple{Int64,Float64}
+
+julia&gt; typeintersect(Tuple{Vararg{Any}}, Tuple{Int,Float64})
+Tuple{Int64,Float64}
+
+julia&gt; T = TypeVar(:T,false)
+T
+
+julia&gt; typeintersect(Tuple{Vararg{T}}, Tuple{Int,Float64})
+Tuple{Int64,Float64}
+
+julia&gt; T = TypeVar(:T,true)
+T
+
+julia&gt; typeintersect(Tuple{Vararg{T}}, Tuple{Int,Float64})
+Union{}</code></pre><p>Finally, it&#39;s worth noting that <code>Tuple{}</code> is distinct</p><pre><code class="language-julia">julia&gt; Tuple{}
+Tuple{}
+
+julia&gt; Tuple{}.parameters
+svec()
+
+julia&gt; typeintersect(Tuple{}, Tuple{Int})
+Union{}</code></pre><p>What is the &quot;primary&quot; tuple-type?</p><pre><code class="language-julia">julia&gt; pointer_from_objref(Tuple)
+Ptr{Void} @0x00007f5998a04370
+
+julia&gt; pointer_from_objref(Tuple{})
+Ptr{Void} @0x00007f5998a570d0
+
+julia&gt; pointer_from_objref(Tuple.name.primary)
+Ptr{Void} @0x00007f5998a04370
+
+julia&gt; pointer_from_objref(Tuple{}.name.primary)
+Ptr{Void} @0x00007f5998a04370</code></pre><p>so <code>Tuple == Tuple{Vararg{Any}}</code> is indeed the primary type.</p><h2><a class="nav-anchor" id="Introduction-to-the-internal-machinery:-jltypes.c-1" href="#Introduction-to-the-internal-machinery:-jltypes.c-1">Introduction to the internal machinery: <code>jltypes.c</code></a></h2><p>Many operations for dealing with types are found in the file <code>jltypes.c</code>. A good way to start is to watch type intersection in action.  Build Julia with <code>make debug</code> and fire up Julia within a debugger. <a href="debuggingtips.html#gdb-debugging-tips-1">gdb debugging tips</a> has some tips which may be useful.</p><p>Because the type intersection and matching code is used heavily in the REPL itself–and hence breakpoints in this code get triggered often–it will be easiest if you make the following definition:</p><pre><code class="language-julia">julia&gt; function myintersect(a,b)
+           ccall(:jl_breakpoint, Void, (Any,), nothing)
+           typeintersect(a, b)
+       end</code></pre><p>and then set a breakpoint in <code>jl_breakpoint</code>.  Once this breakpoint gets triggered, you can set breakpoints in other functions.</p><p>As a warm-up, try the following:</p><pre><code class="language-julia">myintersect(Tuple{Integer,Float64}, Tuple{Int,Real})</code></pre><p>Set a breakpoint in <code>intersect_tuple</code> and continue until it enters this function.  You should be able to see something like this:</p><pre><code class="language-none">Breakpoint 2, intersect_tuple (a=0x7ffdf7409150, b=0x7ffdf74091b0, penv=0x7fffffffcc90, eqc=0x7fffffffcc70, var=covariant) at jltypes.c:405
+405     {
+(gdb) call jl_(a)
+Tuple{Integer, Float64}
+(gdb) call jl_(b)
+Tuple{Int64, Real}</code></pre><p>The <code>var</code> argument is either <code>covariant</code> or <code>invariant</code>, the latter being used if you&#39;re matching the type parameters of <code>Array{T1}</code> against <code>Array{T2}</code>.  The other two inputs to this function (<code>penv</code> and <code>eqc</code>) may be currently mysterious, but we&#39;ll discuss them in a moment.  For now, step through the code until you get into the loop over the different entries in the tuple types <code>a</code> and <code>b</code>.  The key call is:</p><pre><code class="language-julia">ce = jl_type_intersect(ae,be,penv,eqc,var);</code></pre><p>which, if you examine <code>ae</code>, <code>be</code>, and <code>ce</code>, you&#39;ll see is just type intersection performed on these entries.</p><p>We can make it more interesting by trying a more complex case:</p><pre><code class="language-julia">julia&gt; T = TypeVar(:T, true)
+T
+
+julia&gt; myintersect(Tuple{Array{T}, T}, Tuple{Array{Int,2}, Int8})
+
+Breakpoint 1, jl_breakpoint (v=0x7ffdf35e8010) at builtins.c:1559
+1559    {
+(gdb) b intersect_tuple
+Breakpoint 3 at 0x7ffff6dcb07d: file jltypes.c, line 405.
+(gdb) c
+Continuing.
+
+Breakpoint 3, intersect_tuple (a=0x7ffdf74d7a90, b=0x7ffdf74d7af0, penv=0x7fffffffcc90, eqc=0x7fffffffcc70, var=covariant) at jltypes.c:405
+405     {
+(gdb) call jl_(a)
+Tuple{Array{＃T&lt;:Any, N&lt;:Any}, ＃T&lt;:Any}
+(gdb) call jl_(b)
+Tuple{Array{Int64, 2}, Int8}</code></pre><p>Let&#39;s watch how this bound <code>TypeVar</code> gets handled.  To follow this, you&#39;ll need to examine the variables <code>penv</code> and <code>eqc</code>, which are defined as:</p><pre><code class="language-none">typedef struct {
+    jl_value_t **data;
+    size_t n;
+    jl_svec_t *tvars;
+} cenv_t;</code></pre><p>These start out empty (with <code>penv-&gt;n == eqc-&gt;n == 0</code>).  Once we get into the loop and make the first call to <code>jl_type_intersect</code>, <code>eqc</code> (which stands for &quot;equality constraints&quot;) has the following value:</p><pre><code class="language-none">(gdb) p eqc-&gt;n
+$4 = 2
+(gdb) call jl_(eqc-&gt;data[0])
+＃T&lt;:Any
+(gdb) call jl_(eqc-&gt;data[1])
+Int64</code></pre><p>This is just a <code>var</code>, <code>value</code> list of pairs, indicating that <code>T</code> now has the value <code>Int64</code>.  If you now allow <code>intersect_tuple</code> to finish and keep progressing, you&#39;ll eventually get to <code>type_intersection_matching</code>.  This function contains a call to <code>solve_tvar_constraints</code>.  Roughly speaking, <code>eqc</code> defines <code>T = Int64</code>, but <code>env</code> defines it as <code>Int8</code>; this conflict is detected in <code>solve_tvar_constraints</code> and the resulting return is <code>jl_bottom_type</code>, aka <code>Union{}</code>.</p><h2><a class="nav-anchor" id="Subtyping-and-method-sorting-1" href="#Subtyping-and-method-sorting-1">Subtyping and method sorting</a></h2><p>Armed with this knowledge, you may find yourself surprised by the following:</p><pre><code class="language-julia">julia&gt; typeintersect(Tuple{Array{Int},Float64}, Tuple{Array{T},T})
+Union{}
+
+julia&gt; Tuple{Array{Int},Float64} &lt;: Tuple{Array{T},T}
+true</code></pre><p>where <code>T</code> is a bound <code>TypeVar</code>.  In other words, <code>A &lt;: B</code> does not imply that <code>typeintersect(A, B) == A</code>.  A little bit of digging reveals the reason why: <code>jl_subtype_le</code> does not use the <code>cenv_t</code> constraints that we just saw in <code>typeintersect</code>.</p><p><code>jltypes.c</code> contains three closely related collections of functions for testing how types <code>a</code> and <code>b</code> are ordered:</p><ul><li><p>The <code>subtype</code> functions implement <code>a &lt;: b</code>. Among other uses, they serve in matching function arguments against method signatures in the function cache.</p></li><li><p>The <code>type_morespecific</code> functions are used for imposing a partial order on functions in method tables (from most-to-least specific). Note that <code>jl_type_morespecific(a,b,0)</code> really means &quot;is <code>a</code> at least as specific as <code>b</code>?&quot; and not &quot;is <code>a</code> strictly more specific than <code>b</code>?&quot;</p></li><li><p>The <code>type_match</code> functions are similar to <code>type_morespecific</code>, but additionally accept (and employ) an environment to constrain typevars. The related <code>type_match_morespecific</code> functions call <code>type_match</code> with an argument <code>morespecific=1</code></p></li></ul><p>All three of these take an argument, <code>invariant</code>, which is set to 1 when comparing type parameters and otherwise is 0.</p><p>The rules for these are somewhat different. <code>subtype</code> is sensitive to the number arguments, but <code>type_morespecific</code> may not be. In particular, <code>Tuple{Int,AbstractFloat}</code> is more specific than <code>Tuple{Integer}</code>, even though it is not a subtype.  (Of <code>Tuple{Int,AbstractFloat}</code> and <code>Tuple{Integer,Float64}</code>, neither is more specific than the other.)  Likewise, <code>Tuple{Int,Vararg{Int}}</code> is not a subtype of <code>Tuple{Integer}</code>, but it is considered more specific. However, <code>morespecific</code> does get a bonus for length: in particular, <code>Tuple{Int,Int}</code> is more specific than <code>Tuple{Int,Vararg{Int}}</code>.</p><p>If you&#39;re debugging how methods get sorted, it can be convenient to define the function:</p><pre><code class="language-julia">args_morespecific(a, b) = ccall(:jl_args_morespecific, Cint, (Any,Any), a, b)</code></pre><p>which allows you to test whether arg-tuple <code>a</code> is more specific than arg-tuple <code>b</code>.</p><footer><hr/><a class="previous" href="ast.html"><span class="direction">Previous</span><span class="title">Julia ASTs</span></a><a class="next" href="object.html"><span class="direction">Next</span><span class="title">Memory layout of Julia Objects</span></a></footer></article></body></html>

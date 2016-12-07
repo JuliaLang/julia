@@ -1,0 +1,403 @@
+/*
+ * The default CSS style for Documenter.jl generated sites
+ *
+ * Heavily inspired by the Julia Sphinx theme
+ *     https://github.com/JuliaLang/JuliaDoc
+ * which extends the sphinx_rtd_theme
+ *     https://github.com/snide/sphinx_rtd_theme
+ *
+ * Part of Documenter.jl
+ *     https://github.com/JuliaDocs/Documenter.jl
+ *
+ * License: MIT
+ */
+
+/* fonts */
+body, input {
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  color: #222;
+  text-rendering: optimizeLegibility;
+}
+
+pre, code {
+  font-family: 'Ubuntu Mono', Monaco, courier, monospace;
+}
+
+a {
+    color: #2980b9;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #3091d1;
+}
+
+a:visited {
+    color: #9b59b6;
+}
+
+body {
+    line-height: 1.5;
+}
+
+h1 { font-size: 1.75em; }
+h2 { font-size: 1.50em; }
+h3 { font-size: 1.25em; }
+h4 { font-size: 1.15em; }
+h5 { font-size: 1.10em; }
+h6 { font-size: 1em; }
+
+h4, h5, h6 {
+    margin: 1em 0;
+}
+
+img {
+    max-width: 100%;
+}
+
+table {
+    border-collapse: collapse;
+    margin: 1em 0;
+}
+
+th, td {
+    border: 1px solid #e1e4e5;
+    padding: 0.5em 1em;
+}
+
+th {
+    border-bottom-width: 2px;
+}
+
+tr:nth-child(even) {
+    background-color: #f3f6f6;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid #e5e5e5;
+}
+
+/* Inline code and code blocks */
+
+code {
+    padding: 0.1em;
+    background-color: rgba(0,0,0,.04);
+    border-radius: 3px;
+}
+
+pre {
+    background-color: #f5f5f5;
+    border: 1px solid #dddddd;
+    border-radius: 3px;
+    padding: 0.5em;
+    overflow: auto;
+}
+
+pre code {
+    padding: 0;
+    background-color: initial;
+}
+
+/* Headers in admonitions and docstrings */
+.admonition h1,
+article section.docstring h1 {
+    font-size: 1.25em;
+}
+
+.admonition h2,
+article section.docstring h2 {
+    font-size: 1.10em;
+}
+
+.admonition h3,
+.admonition h4,
+.admonition h5,
+.admonition h6,
+article section.docstring h3,
+article section.docstring h4,
+article section.docstring h5,
+article section.docstring h6 {
+    font-size: 1em;
+}
+
+/* Navigation */
+nav.toc {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 20em;
+    overflow-y: auto;
+    padding: 1em 0;
+    background-color: #fcfcfc;
+    box-shadow: inset -14px 0px 5px -12px rgb(210,210,210);
+}
+
+nav.toc .logo {
+    margin: 0 auto;
+    display: block;
+    max-height: 6em;
+    max-width: 18em;
+}
+
+nav.toc h1 {
+    text-align: center;
+}
+
+nav.toc input {
+    display: block;
+    height: 2em;
+    width: 90%;
+    width: calc(100% - 5em);
+    margin: 0 auto;
+    padding: 0 1em;
+    border: 1px solid #c9c9c9;
+    border-radius: 1em;
+    font-size: smaller;
+}
+
+nav.toc select {
+    display: block;
+    height: 2em;
+    width: calc(100% - 3em);
+    margin: 5px auto;
+    font-size: smaller;
+    text-align: center;
+}
+
+nav.toc > ul * {
+    margin: 0;
+}
+
+nav.toc ul {
+    color: #b3b3b3;
+    padding: 0;
+    list-style: none;
+}
+
+nav.toc ul .toctext {
+    color: inherit;
+    display: block;
+}
+
+nav.toc ul a:hover {
+    background-color: #4e4a4a;
+}
+
+nav.toc ul.internal a {
+    color: inherit;
+    display: block;
+}
+
+nav.toc ul.internal a:hover {
+    background-color: #d6d6d6;
+}
+
+nav.toc ul.internal {
+    color: gray;
+    background-color: #e3e3e3;
+    box-shadow: inset -14px 0px 5px -12px rgb(210,210,210);
+    list-style: none;
+}
+
+nav.toc ul.internal li.toplevel {
+    border-top: 1px solid #c9c9c9;
+    font-weight: bold;
+}
+
+nav.toc ul.internal li.toplevel:first-child {
+    border-top: none;
+}
+
+nav.toc .toctext {
+    padding-top: 0.3em;
+    padding-bottom: 0.3em;
+    padding-right: 1em;
+}
+
+nav.toc ul .toctext {
+    padding-left: 1em;
+}
+
+nav.toc ul ul .toctext {
+    padding-left: 2em;
+}
+
+nav.toc ul ul ul .toctext {
+    padding-left: 3em;
+}
+
+nav.toc li.current > .toctext {
+    border-top: 1px solid #c9c9c9;
+    border-bottom: 1px solid #c9c9c9;
+    color: #404040;
+    font-weight: bold;
+    background-color: white;
+}
+
+article {
+    margin-left: 20em;
+    min-width: 20em;
+    max-width: 48em;
+    padding: 2em;
+}
+
+article > header {}
+
+article > header nav ul {
+    display: inline-block;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+article > header nav li {
+    display: inline-block;
+    padding-right: 0.2em;
+}
+
+article > header nav li:before {
+    content: "»";
+    padding-right: 0.2em;
+}
+
+article > header .edit-page {
+    float: right;
+}
+
+article > footer {}
+
+article > footer a.prev {
+    float: left;
+}
+article > footer a.next {
+    float: right;
+}
+
+article > footer a .direction:after {
+    content: ": ";
+}
+
+article hr {
+    margin: 1em 0;
+}
+
+article section.docstring {
+    border: 1px solid #ddd;
+    margin: 0.5em 0;
+    padding: 0.5em;
+    border-radius: 3px;
+}
+
+article section.docstring .docstring-header {
+    margin-bottom: 1em;
+}
+
+article section.docstring .docstring-binding {
+    color: #333;
+    font-weight: bold;
+}
+
+article section.docstring .docstring-category {
+    font-style: italic;
+}
+
+article section.docstring a.source-link {
+  float: left;
+  font-weight: bold;
+}
+
+.nav-anchor,
+.nav-anchor:hover,
+.nav-anchor:visited {
+    color: #333;
+}
+
+/*
+ * Admonitions
+ *
+ * Colors (title, body)
+ * warning: #f0b37e #ffedcc (orange)
+ * note:    #6ab0de #e7f2fa (blue)
+ * tip:     #1abc9c #dbfaf4 (green)
+*/
+.admonition {
+    border-radius: 3px;
+    background-color: #eeeeee;
+}
+
+.admonition-title {
+    border-radius: 3px 3px 0 0;
+    background-color: #9b9b9b;
+    padding: 0.15em 0.5em;
+}
+
+.admonition-text {
+    padding: 0.5em;
+}
+
+.admonition-text > :first-child {
+    margin-top: 0;
+}
+
+.admonition-text > :last-child {
+    margin-bottom: 0;
+}
+
+.admonition > .admonition-title:before {
+    font-family: "FontAwesome";
+    margin-right: 5px;
+    content: "\f06a";
+}
+
+.admonition.warning > .admonition-title {
+    background-color: #f0b37e;
+}
+
+.admonition.warning {
+    background-color: #ffedcc;
+}
+
+.admonition.note > .admonition-title {
+    background-color: #6ab0de;
+}
+
+.admonition.note {
+    background-color: #e7f2fa;
+}
+
+.admonition.tip > .admonition-title {
+    background-color: #1abc9c;
+}
+
+.admonition.tip {
+    background-color: #dbfaf4;
+}
+
+
+/* footnotes */
+.footnote {
+    padding-left: 0.8em;
+    border-left: 2px solid #ccc;
+}
+
+/* Search page */
+#search-results .category {
+    font-size: smaller;
+}
+
+#search-results .category:before {
+    content: " ";
+}
+
+/* Overriding the <code> block style of highligh.js.
+ * We have to override the padding and the background-color, since we style this
+ * part ourselves. Specifically, we style the <pre> surrounding the <code>, while
+ * highlight.js applies the .hljs style directly to the <code> tag.
+ */
+.hljs {
+    background-color: transparent;
+    padding: 0;
+}

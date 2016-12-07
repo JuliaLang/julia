@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Stack Traces · The Julia Language</title><link href="https://cdnjs.cloudflare.com/ajax/libs/normalize/4.2.0/normalize.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.5.0/styles/default.min.css" rel="stylesheet" type="text/css"/><link href="https://fonts.googleapis.com/css?family=Lato|Ubuntu+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet" type="text/css"/><link href="../assets/documenter.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.2.0/require.min.js" data-main="../assets/documenter.js"></script><script src="../../versions.js"></script></head><body><nav class="toc"><a href="../index.html"><img class="logo" src="../assets/logo.png" alt="The Julia Language logo"/></a><h1>The Julia Language</h1><form class="search" action="../search.html"><select id="version-selector" onChange="window.location.href=this.value"><option value="#" selected="selected" disabled="disabled">Version</option></select><input id="search-query" name="q" type="text" placeholder="Search docs"/></form><ul><li><a class="toctext" href="../index.html">Home</a></li><li><span class="toctext">Manual</span><ul><li><a class="toctext" href="introduction.html">Introduction</a></li><li><a class="toctext" href="getting-started.html">Getting Started</a></li><li><a class="toctext" href="variables.html">Variables</a></li><li><a class="toctext" href="integers-and-floating-point-numbers.html">Integers and Floating-Point Numbers</a></li><li><a class="toctext" href="mathematical-operations.html">Mathematical Operations and Elementary Functions</a></li><li><a class="toctext" href="complex-and-rational-numbers.html">Complex and Rational Numbers</a></li><li><a class="toctext" href="strings.html">Strings</a></li><li><a class="toctext" href="functions.html">Functions</a></li><li><a class="toctext" href="control-flow.html">Control Flow</a></li><li><a class="toctext" href="variables-and-scoping.html">Scope of Variables</a></li><li><a class="toctext" href="types.html">Types</a></li><li><a class="toctext" href="methods.html">Methods</a></li><li><a class="toctext" href="constructors.html">Constructors</a></li><li><a class="toctext" href="conversion-and-promotion.html">Conversion and Promotion</a></li><li><a class="toctext" href="interfaces.html">Interfaces</a></li><li><a class="toctext" href="modules.html">Modules</a></li><li><a class="toctext" href="documentation.html">Documentation</a></li><li><a class="toctext" href="metaprogramming.html">Metaprogramming</a></li><li><a class="toctext" href="arrays.html">Multi-dimensional Arrays</a></li><li><a class="toctext" href="linear-algebra.html">Linear algebra</a></li><li><a class="toctext" href="networking-and-streams.html">Networking and Streams</a></li><li><a class="toctext" href="parallel-computing.html">Parallel Computing</a></li><li><a class="toctext" href="dates.html">Date and DateTime</a></li><li><a class="toctext" href="interacting-with-julia.html">Interacting With Julia</a></li><li><a class="toctext" href="running-external-programs.html">Running External Programs</a></li><li><a class="toctext" href="calling-c-and-fortran-code.html">Calling C and Fortran Code</a></li><li><a class="toctext" href="handling-operating-system-variation.html">Handling Operating System Variation</a></li><li><a class="toctext" href="interacting-with-julia.html">Interacting With Julia</a></li><li><a class="toctext" href="embedding.html">Embedding Julia</a></li><li><a class="toctext" href="packages.html">Packages</a></li><li><a class="toctext" href="profile.html">Profiling</a></li><li class="current"><a class="toctext" href="stacktraces.html">Stack Traces</a><ul class="internal"><li><a class="toctext" href="#Viewing-a-stack-trace-1">Viewing a stack trace</a></li><li><a class="toctext" href="#Extracting-useful-information-1">Extracting useful information</a></li><li><a class="toctext" href="#Error-handling-1">Error handling</a></li><li><a class="toctext" href="#Comparison-with-[backtrace()](@ref)-1">Comparison with <a href="../stdlib/base.html#Base.backtrace"><code>backtrace()</code></a></a></li></ul></li><li><a class="toctext" href="performance-tips.html">Performance Tips</a></li><li><a class="toctext" href="workflow-tips.html">Workflow Tips</a></li><li><a class="toctext" href="style-guide.html">Style Guide</a></li><li><a class="toctext" href="faq.html">Frequently Asked Questions</a></li><li><a class="toctext" href="noteworthy-differences.html">Noteworthy Differences from other Languages</a></li><li><a class="toctext" href="unicode-input.html">Unicode Input</a></li></ul></li><li><span class="toctext">Standard Library</span><ul><li><a class="toctext" href="../stdlib/base.html">Essentials</a></li><li><a class="toctext" href="../stdlib/collections.html">Collections and Data Structures</a></li><li><a class="toctext" href="../stdlib/math.html">Mathematics</a></li><li><a class="toctext" href="../stdlib/numbers.html">Numbers</a></li><li><a class="toctext" href="../stdlib/strings.html">Strings</a></li><li><a class="toctext" href="../stdlib/arrays.html">Arrays</a></li><li><a class="toctext" href="../stdlib/parallel.html">Tasks and Parallel Computing</a></li><li><a class="toctext" href="../stdlib/linalg.html">Linear Algebra</a></li><li><a class="toctext" href="../stdlib/constants.html">Constants</a></li><li><a class="toctext" href="../stdlib/file.html">Filesystem</a></li><li><a class="toctext" href="../stdlib/io-network.html">I/O and Network</a></li><li><a class="toctext" href="../stdlib/punctuation.html">Punctuation</a></li><li><a class="toctext" href="../stdlib/sort.html">Sorting and Related Functions</a></li><li><a class="toctext" href="../stdlib/pkg.html">Package Manager Functions</a></li><li><a class="toctext" href="../stdlib/dates.html">Dates and Time</a></li><li><a class="toctext" href="../stdlib/iterators.html">Iteration utilities</a></li><li><a class="toctext" href="../stdlib/test.html">Unit Testing</a></li><li><a class="toctext" href="../stdlib/c.html">C Interface</a></li><li><a class="toctext" href="../stdlib/libc.html">C Standard Library</a></li><li><a class="toctext" href="../stdlib/libdl.html">Dynamic Linker</a></li><li><a class="toctext" href="../stdlib/profile.html">Profiling</a></li><li><a class="toctext" href="../stdlib/simd-types.html">SIMD Support</a></li></ul></li><li><span class="toctext">Developer Documentation</span><ul><li><a class="toctext" href="../devdocs/reflection.html">Reflection and introspection</a></li><li><span class="toctext">Documentation of Julia&#39;s Internals</span><ul><li><a class="toctext" href="../devdocs/init.html">Initialization of the Julia runtime</a></li><li><a class="toctext" href="../devdocs/eval.html">Eval of Julia code</a></li><li><a class="toctext" href="../devdocs/ast.html">Julia ASTs</a></li><li><a class="toctext" href="../devdocs/types.html">More about types</a></li><li><a class="toctext" href="../devdocs/object.html">Memory layout of Julia Objects</a></li><li><a class="toctext" href="../devdocs/functions.html">Julia Functions</a></li><li><a class="toctext" href="../devdocs/callconv.html">Calling Conventions</a></li><li><a class="toctext" href="../devdocs/cartesian.html">Base.Cartesian</a></li><li><a class="toctext" href="../devdocs/meta.html">Talking to the compiler (the <code>:meta</code> mechanism)</a></li><li><a class="toctext" href="../devdocs/subarrays.html">SubArrays</a></li><li><a class="toctext" href="../devdocs/sysimg.html">System Image Building</a></li><li><a class="toctext" href="../devdocs/llvm.html">Working with LLVM</a></li><li><a class="toctext" href="../devdocs/stdio.html">printf() and stdio in the Julia runtime</a></li><li><a class="toctext" href="../devdocs/boundscheck.html">Bounds checking</a></li><li><a class="toctext" href="../devdocs/locks.html">Proper maintenance and care of multi-threading locks</a></li><li><a class="toctext" href="../devdocs/offset-arrays.html">Arrays with custom indices</a></li></ul></li><li><span class="toctext">Devloping/debugging Julia&#39;s C code</span><ul><li><a class="toctext" href="../devdocs/backtraces.html">Reporting and analyzing crashes (segfaults)</a></li><li><a class="toctext" href="../devdocs/debuggingtips.html">gdb debugging tips</a></li><li><a class="toctext" href="../devdocs/valgrind.html">Using Valgrind with Julia</a></li><li><a class="toctext" href="../devdocs/sanitizers.html">Sanitizer support</a></li></ul></li></ul></li></ul></nav><article id="docs"><header><nav><ul><li>Manual</li><li><a href="stacktraces.html">Stack Traces</a></li></ul><a class="edit-page" href="https://github.com/JuliaLang/julia/tree/a304c557928d9eaa0a28af5fe96327d5da70d14b/doc/src/manual/stacktraces.md"><span class="fa"></span> Edit on GitHub</a></nav><hr/></header><h1><a class="nav-anchor" id="Stack-Traces-1" href="#Stack-Traces-1">Stack Traces</a></h1><p>The <code>StackTraces</code> module provides simple stack traces that are both human readable and easy to use programmatically.</p><h2><a class="nav-anchor" id="Viewing-a-stack-trace-1" href="#Viewing-a-stack-trace-1">Viewing a stack trace</a></h2><p>The primary function used to obtain a stack trace is <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a>:</p><pre><code class="language-julia">julia&gt; stacktrace()
+3-element Array{StackFrame,1}:
+ eval at boot.jl:265
+ [inlined code from REPL.jl:3] eval_user_input at REPL.jl:62
+ [inlined code from REPL.jl:92] anonymous at task.jl:63</code></pre><p>Calling <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> returns a vector of <a href="../stdlib/stacktraces.html#Base.StackTraces.StackFrame"><code>StackFrame</code></a> s. For ease of use, the alias <a href="../stdlib/stacktraces.html#Base.StackTraces.StackTrace"><code>StackTrace</code></a> can be used in place of <code>Vector{StackFrame}</code>. (Examples with <code>...</code> indicate that output may vary depending on how the code is run.)</p><pre><code class="language-julia">julia&gt; example() = stacktrace()
+example (generic function with 1 method)
+
+julia&gt; example()
+11-element Array{StackFrame,1}:
+  in example() at none:1
+  in eval(::Module, ::Any) at boot.jl:236
+  ...
+
+julia&gt; @noinline child() = stacktrace()
+child (generic function with 1 method)
+
+julia&gt; @noinline parent() = child()
+parent (generic function with 1 method)
+
+julia&gt; grandparent() = parent()
+grandparent (generic function with 1 method)
+
+julia&gt; grandparent()
+13-element Array{StackFrame,1}:
+  in child() at none:1
+  in parent() at none:1
+  in grandparent() at none:1
+  ...</code></pre><p>Note that when calling <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> you&#39;ll typically see a frame with <code>eval(...) at boot.jl</code>. When calling <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> from the REPL you&#39;ll also have a few extra frames in the stack from <code>REPL.jl</code>, usually looking something like this:</p><pre><code class="language-julia">julia&gt; example() = stacktrace()
+example (generic function with 1 method)
+
+julia&gt; example()
+5-element Array{StackFrame,1}:
+  in example() at REPL[1]:1
+  in eval(::Module, ::Any) at boot.jl:234
+  in eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:62
+  in macro expansion at REPL.jl:92 [inlined]
+  in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:46</code></pre><h2><a class="nav-anchor" id="Extracting-useful-information-1" href="#Extracting-useful-information-1">Extracting useful information</a></h2><p>Each <a href="../stdlib/stacktraces.html#Base.StackTraces.StackFrame"><code>StackFrame</code></a> contains the function name, file name, line number, lambda info, a flag indicating whether the frame has been inlined, a flag indicating whether it is a C function (by default C functions do not appear in the stack trace), and an integer representation of the pointer returned by <a href="../stdlib/base.html#Base.backtrace"><code>backtrace()</code></a>:</p><pre><code class="language-julia">julia&gt; top_frame = stacktrace()[1]
+ in eval(::Module, ::Any) at boot.jl:236
+
+julia&gt; top_frame.func
+:eval
+
+julia&gt; top_frame.file
+Symbol(&quot;./boot.jl&quot;)
+
+julia&gt; top_frame.line
+236
+
+julia&gt; top_frame.linfo
+Nullable{Core.MethodInstance}(MethodInstance for eval(::Module, ::Any))
+
+julia&gt; top_frame.inlined
+false
+
+julia&gt; top_frame.from_c
+false</code></pre><pre><code class="language-julia">julia&gt; top_frame.pointer
+13203085684</code></pre><p>This makes stack trace information available programmatically for logging, error handling, and more.</p><h2><a class="nav-anchor" id="Error-handling-1" href="#Error-handling-1">Error handling</a></h2><p>While having easy access to information about the current state of the callstack can be helpful in many places, the most obvious application is in error handling and debugging.</p><pre><code class="language-julia">julia&gt; @noinline bad_function() = undeclared_variable
+bad_function (generic function with 1 method)
+
+julia&gt; @noinline example() = try
+           bad_function()
+       catch
+           stacktrace()
+       end
+example (generic function with 1 method)
+
+julia&gt; example()
+11-element Array{StackFrame,1}:
+  in example() at none:4
+  in eval(::Module, ::Any) at boot.jl:236
+  ...</code></pre><p>You may notice that in the example above the first stack frame points points at line 4, where <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> is called, rather than line 2, where <em>bad_function</em> is called, and <code>bad_function</code>&#39;s frame is missing entirely. This is understandable, given that <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> is called from the context of the <em>catch</em>. While in this example it&#39;s fairly easy to find the actual source of the error, in complex cases tracking down the source of the error becomes nontrivial.</p><p>This can be remedied by calling <a href="../stdlib/stacktraces.html#Base.StackTraces.catch_stacktrace"><code>catch_stacktrace()</code></a> instead of <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a>. Instead of returning callstack information for the current context, <a href="../stdlib/stacktraces.html#Base.StackTraces.catch_stacktrace"><code>catch_stacktrace()</code></a> returns stack information for the context of the most recent exception:</p><pre><code class="language-julia">julia&gt; @noinline bad_function() = undeclared_variable
+bad_function (generic function with 1 method)
+
+julia&gt; @noinline example() = try
+           bad_function()
+       catch
+           catch_stacktrace()
+       end
+example (generic function with 1 method)
+
+julia&gt; example()
+12-element Array{StackFrame,1}:
+  in bad_function() at none:1
+  in example() at none:2
+  ...</code></pre><p>Notice that the stack trace now indicates the appropriate line number and the missing frame.</p><pre><code class="language-julia">julia&gt; @noinline child() = error(&quot;Whoops!&quot;)
+child (generic function with 1 method)
+
+julia&gt; @noinline parent() = child()
+parent (generic function with 1 method)
+
+julia&gt; @noinline function grandparent()
+           try
+               parent()
+           catch err
+               println(&quot;ERROR: &quot;, err.msg)
+               catch_stacktrace()
+           end
+       end
+grandparent (generic function with 1 method)
+
+julia&gt; grandparent()
+ERROR: Whoops!
+13-element Array{StackFrame,1}:
+  in child() at none:1
+  in parent() at none:1
+  in grandparent() at none:3
+  ...</code></pre><h2><a class="nav-anchor" id="Comparison-with-[backtrace()](@ref)-1" href="#Comparison-with-[backtrace()](@ref)-1">Comparison with <a href="../stdlib/base.html#Base.backtrace"><code>backtrace()</code></a></a></h2><p>A call to <a href="../stdlib/base.html#Base.backtrace"><code>backtrace()</code></a> returns a vector of <code>Ptr{Void}</code>, which may then be passed into <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> for translation:</p><pre><code class="language-julia">julia&gt; trace = backtrace()
+20-element Array{Ptr{Void},1}:
+ Ptr{Void} @0x0000000100a26fc2
+ Ptr{Void} @0x00000001029435df
+ Ptr{Void} @0x0000000102943635
+ Ptr{Void} @0x00000001009e9620
+ Ptr{Void} @0x00000001009fe1e8
+ Ptr{Void} @0x00000001009fc7b6
+ Ptr{Void} @0x00000001009fdae3
+ Ptr{Void} @0x00000001009fe0d2
+ Ptr{Void} @0x0000000100a1321b
+ Ptr{Void} @0x00000001009f64e7
+ Ptr{Void} @0x000000010265ac5d
+ Ptr{Void} @0x000000010265acc1
+ Ptr{Void} @0x00000001009e9620
+ Ptr{Void} @0x000000031007744b
+ Ptr{Void} @0x0000000310077537
+ Ptr{Void} @0x00000001009e9620
+ Ptr{Void} @0x000000031006feec
+ Ptr{Void} @0x00000003100701b0
+ Ptr{Void} @0x00000001009e9635
+ Ptr{Void} @0x0000000100a06418
+
+julia&gt; stacktrace(trace)
+5-element Array{StackFrame,1}:
+  in backtrace() at error.jl:26
+  in eval(::Module, ::Any) at boot.jl:231
+  in eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:62
+  in macro expansion at REPL.jl:92 [inlined]
+  in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:46</code></pre><p>Notice that the vector returned by <a href="../stdlib/base.html#Base.backtrace"><code>backtrace()</code></a> had 15 pointers, while the vector returned by <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> only has 4. This is because, by default, <a href="../stdlib/stacktraces.html#Base.StackTraces.stacktrace"><code>stacktrace()</code></a> removes any lower-level C functions from the stack. If you want to include stack frames from C calls, you can do it like this:</p><pre><code class="language-julia">julia&gt; stacktrace(trace, true)
+26-element Array{StackFrame,1}:
+  in jl_backtrace_from_here at stackwalk.c:104
+  in backtrace() at error.jl:26
+  in ip:0x102943635
+  in jl_call_method_internal at julia_internal.h:86 [inlined]
+  in jl_apply_generic at gf.c:1805
+  in do_call at interpreter.c:65
+  in eval at interpreter.c:188
+  in eval_body at interpreter.c:469
+  in jl_interpret_call at interpreter.c:573
+  in jl_toplevel_eval_flex at toplevel.c:543
+  in jl_toplevel_eval_in_warn at builtins.c:571
+  in eval(::Module, ::Any) at boot.jl:231
+  in ip:0x10265acc1
+  in jl_call_method_internal at julia_internal.h:86 [inlined]
+  in jl_apply_generic at gf.c:1805
+  in eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:62
+  in ip:0x310077537
+  in jl_call_method_internal at julia_internal.h:86 [inlined]
+  in jl_apply_generic at gf.c:1805
+  in macro expansion at REPL.jl:92 [inlined]
+  in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:46
+  in ip:0x3100701b0
+  in jl_call_method_internal at julia_internal.h:86 [inlined]
+  in jl_apply_generic at gf.c:1795
+  in jl_apply at julia.h:1388 [inlined]
+  in start_task at task.c:247</code></pre><p>Individual pointers returned by <a href="../stdlib/base.html#Base.backtrace"><code>backtrace()</code></a> can be translated into <a href="../stdlib/stacktraces.html#Base.StackTraces.StackFrame"><code>StackFrame</code></a> s by passing them into <a href="../stdlib/stacktraces.html#Base.StackTraces.lookup"><code>StackTraces.lookup()</code></a>:</p><pre><code class="language-julia">julia&gt; pointer = backtrace()[1];
+
+julia&gt; frame = StackTraces.lookup(pointer)
+1-element Array{StackFrame,1}:
+  in jl_backtrace_from_here at stackwalk.c:105
+
+julia&gt; println(&quot;The top frame is from $(frame[1].func)!&quot;)
+The top frame is from jl_backtrace_from_here!</code></pre><footer><hr/><a class="previous" href="profile.html"><span class="direction">Previous</span><span class="title">Profiling</span></a><a class="next" href="performance-tips.html"><span class="direction">Next</span><span class="title">Performance Tips</span></a></footer></article></body></html>
