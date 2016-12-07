@@ -1067,13 +1067,14 @@
              (take-token s)
              (loop (list* 'curly ex (parse-arglist s #\} ))))
             ((#\" #\`)
-             (if (and (symbol? ex) (not (operator? ex))
+             (if (and (or (symbol? ex) (valid-modref? ex))
+                      (not (operator? ex))
                       (not (ts:space? s)))
                  ;; custom string and command literals; x"s" => @x_str "s"
                  (let* ((macstr (begin (take-token s)
                                        (parse-raw-literal s t)))
                         (nxt (peek-token s))
-                        (macname (symbol (string #\@ ex (macsuffix t)))))
+                        (macname (macroify-name ex (macsuffix t))))
                    (if (and (symbol? nxt) (not (operator? nxt))
                             (not (ts:space? s)))
                        ;; string literal suffix, "s"x
@@ -2058,10 +2059,11 @@
        (or (symbol? (cadr e))
            (valid-modref? (cadr e)))))
 
-(define (macroify-name e)
-  (cond ((symbol? e)  (symbol (string #\@ e)))
-        ((valid-modref? e)  `(|.| ,(cadr e)
-                              (quote ,(macroify-name (cadr (caddr e))))))
+(define (macroify-name e . suffixes)
+  (cond ((symbol? e) (symbol (apply string #\@ e suffixes)))
+        ((valid-modref? e)
+         `(|.| ,(cadr e)
+               (quote ,(apply macroify-name (cadr (caddr e)) suffixes))))
         (else (error (string "invalid macro use \"@(" (deparse e) ")\"" )))))
 
 (define (simple-string-literal? e) (string? e))
