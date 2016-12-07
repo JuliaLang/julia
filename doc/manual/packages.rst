@@ -1044,3 +1044,19 @@ various releases of Julia. Examples of runtime checks::
     VERSION >= v"0.2.1" #get at least version 0.2.1
 
 See the section on :ref:`version number literals <man-version-number-literals>` for a more complete description.
+
+
+Deprecating Packages
+--------------------
+
+Some packages may eventually become unnecessary, be absorbed by other packages, or a simply not maintained.
+Removing a package from METADATA suddenly may cause issues for users who have the package installed either
+directly or as a dependency of another package. The following is the correct procedure for removing a package
+from METADATA:
+
+1. Tag a new release with an Julia version upper-bound equal to the current Julia release/pre-release ??? version. 
+   For example, if the package currently requires at least Julia 0.2 and the current release is Julia 0.4,
+   the version dependency should be listed as ``julia 0.2 0.4``.
+2. When a new stable version of Julia is released, all packages with a maximum version restriction that is 
+   one/two ??? minor releases behind will be removed from METADATA. For example, the package we just described
+   would be removed from METADATA when Julia 0.5/0.6 is released.
