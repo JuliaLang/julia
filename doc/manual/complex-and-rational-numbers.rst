@@ -278,7 +278,7 @@ Rationals can be easily converted to floating-point numbers:
 
 Conversion from rational to floating-point respects the following
 identity for any integral values of ``a`` and ``b``, with the exception
-of the case ``a == 0`` and ``b == 0``:
+of the case ``a = 0`` and ``b = 0``:
 
 .. doctest::
 
