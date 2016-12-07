@@ -1,143 +1,137 @@
-****************************
-Reflection and introspection
-****************************
-
-.. currentmodule:: Base
+# Reflection and introspection
 
 Julia provides a variety of runtime reflection capabilities.
 
-.. rubric:: Module bindings
+## Module bindings
 
-The exported names for a :obj:`Module` are available using :func:`names(m::Module) <names>`, which will return
-an array of :obj:`Symbol` elements representing the exported bindings.
-``names(m::Module, true)`` returns symbols for all bindings in ``m``, regardless of export status.
+The exported names for a `Module` are available using [`names(m::Module)`](@ref), which will return
+an array of [`Symbol`](@ref) elements representing the exported bindings. `names(m::Module, true)`
+returns symbols for all bindings in `m`, regardless of export status.
 
-.. rubric:: DataType fields
+## DataType fields
 
-The names of :obj:`DataType` fields may be interrogated
-using :func:`fieldnames`. For example, given the following type, ``fieldnames(Point)`` returns an arrays of :obj:`Symbol`
-elements representing the field names:
+The names of `DataType` fields may be interrogated using [`fieldnames()`](@ref). For example,
+given the following type, `fieldnames(Point)` returns an arrays of [`Symbol`](@ref) elements representing
+the field names:
 
-.. doctest::
+```julia
+julia> type Point
+           x::Int
+           y
+       end
 
-    julia> type Point
-               x::Int
-               y
-           end
+julia> fieldnames(Point)
+2-element Array{Symbol,1}:
+ :x
+ :y
+```
 
-    julia> fieldnames(Point)
-    2-element Array{Symbol,1}:
-     :x
-     :y
+The type of each field in a `Point` object is stored in the `types` field of the `Point` variable
+itself:
 
-The type of each field in a ``Point`` object is stored in the ``types`` field of the ``Point`` variable itself:
+```julia
+julia> Point.types
+svec(Int64,Any)
+```
 
-.. doctest::
+While `x` is annotated as an `Int`, `y` was unannotated in the type definition, therefore `y`
+defaults to the `Any` type.
 
-    julia> Point.types
-    svec(Int64,Any)
+Types are themselves represented as a structure called `DataType`:
 
-While ``x`` is annotated as an ``Int``, ``y`` was unannotated in the type definition, therefore ``y`` defaults to the ``Any`` type.
+```julia
+julia> typeof(Point)
+DataType
+```
 
-Types are themselves represented as a structure called :obj:`DataType`:
+Note that `fieldnames(DataType)` gives the names for each field of `DataType` itself, and one
+of these fields is the `types` field observed in the example above.
 
-.. doctest::
+## Subtypes
 
-    julia> typeof(Point)
-    DataType
+The *direct* subtypes of any `DataType` may be listed using [`subtypes()`](@ref). For example,
+the abstract `DataType``AbstractFloat` has four (concrete) subtypes:
 
-Note that ``fieldnames(DataType)`` gives the names for each field of :obj:`DataType` itself, and
-one of these fields is the ``types`` field observed in the example above.
+```julia
+julia> subtypes(AbstractFloat)
+4-element Array{DataType,1}:
+ BigFloat
+ Float16
+ Float32
+ Float64
+```
 
-.. rubric:: Subtypes
+Any abstract subtype will also be included in this list, but further subtypes thereof will not;
+recursive application of [`subtypes()`](@ref) may be used to inspect the full type tree.
 
-The *direct* subtypes of any :obj:`DataType` may be listed using
-:func:`subtypes`. For example, the abstract :obj:`DataType` :obj:`AbstractFloat`
-has four (concrete) subtypes:
+## DataType layout
 
-.. doctest::
+The internal representation of a `DataType` is critically important when interfacing with C code
+and several functions are available to inspect these details. [`isbits(T::DataType)`](@ref) returns
+true if `T` is stored with C-compatible alignment. [`fieldoffset(T::DataType, i::Integer)`](@ref)
+returns the (byte) offset for field *i* relative to the start of the type.
 
-    julia> subtypes(AbstractFloat)
-    4-element Array{DataType,1}:
-     BigFloat
-     Float16
-     Float32
-     Float64
+## Function methods
 
-Any abstract subtype will also be included in this list, but further subtypes
-thereof will not; recursive application of :func:`subtypes` may be used to inspect
-the full type tree.
+The methods of any generic function may be listed using [`methods()`](@ref). The method dispatch
+table may be searched for methods accepting a given type using [`methodswith()`](@ref).
 
-.. rubric:: DataType layout
+## Expansion and lowering
 
-The internal representation of a :obj:`DataType` is critically important when interfacing with
-C code and several functions are available to inspect these details.
-:func:`isbits(T::DataType) <isbits>` returns true if ``T`` is
-stored with C-compatible alignment.
-:func:`fieldoffset(T::DataType, i::Integer) <fieldoffset>` returns the (byte) offset for
-field `i` relative to the start of the type.
+As discussed in the [Metaprogramming](@ref) section, the [`macroexpand()`](@ref) function gives
+the unquoted and interpolated expression (`Expr`) form for a given macro. To use `macroexpand`,
+`quote` the expression block itself (otherwise, the macro will be evaluated and the result will
+be passed instead!). For example:
 
-.. rubric:: Function methods
+```julia
+julia> macroexpand( :(@edit println("")) )
+:((Base.edit)(println,(Base.typesof)("")))
+```
 
-The methods of any generic function may be listed using :func:`methods`. The method dispatch
-table may be searched for methods accepting a given type using :func:`methodswith`.
-
-.. rubric:: Expansion and lowering
-
-As discussed in the :ref:`Metaprogramming <man-metaprogramming>` section, the
-:func:`macroexpand` function gives the unquoted and interpolated expression (``Expr``) form
-for a given macro. To use ``macroexpand``, ``quote`` the expression block itself (otherwise,
-the macro will be evaluated and the result will be passed instead!). For example:
-
-.. doctest::
-
-   julia> macroexpand( :(@edit println("")) )
-   :((Base.edit)(println,(Base.typesof)("")))
-
-The functions :func:`Base.Meta.show_sexpr` and :func:`dump` are used to display S-expr style views
+The functions `Base.Meta.show_sexpr()` and [`dump()`](@ref) are used to display S-expr style views
 and depth-nested detail views for any expression.
 
-Finally, the :func:`expand` function gives the ``lowered`` form of any expression and is of particular
-interest for understanding both macros and top-level statements such as function declarations and
-variable assignments:
+Finally, the [`expand()`](@ref) function gives the `lowered` form of any expression and is of
+particular interest for understanding both macros and top-level statements such as function declarations
+and variable assignments:
 
-.. doctest::
+```julia
+julia> expand( :(f() = 1) )
+:(begin
+        $(Expr(:method, :f))
+        $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)),(Core.svec)())), CodeInfo(:(begin  # none, line 1:
+        return 1
+    end)), false))
+        return f
+    end)
+```
 
-    julia> expand( :(f() = 1) )
-    :(begin
-            $(Expr(:method, :f))
-            $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)),(Core.svec)())), CodeInfo(:(begin  # none, line 1:
-            return 1
-        end)), false))
-            return f
-        end)
-
-.. rubric:: Intermediate and compiled representations
+## Intermediate and compiled representations
 
 Inspecting the lowered form for functions requires selection of the specific method to display,
 because generic functions may have many methods with different type signatures. For this purpose,
-method-specific code-lowering is available using :func:`code_lowered(f::Function, (Argtypes...)) <code_lowered>`,
-and the type-inferred form is available using :func:`code_typed(f::Function, (Argtypes...)) <code_typed>`.
-:func:`code_warntype(f::Function, (Argtypes...)) <code_warntype>` adds
-highlighting to the output of :func:`code_typed` (see :ref:`man-code-warntype`).
+method-specific code-lowering is available using [`code_lowered(f::Function, (Argtypes...))`](@ref),
+and the type-inferred form is available using [`code_typed(f::Function, (Argtypes...))`](@ref).
+[`code_warntype(f::Function, (Argtypes...))`](@ref) adds highlighting to the output of [`code_typed()`](@ref)
+(see [`@code_warntype`](@ref)).
 
-Closer to the machine, the LLVM intermediate representation of a function may be printed using by
-:func:`code_llvm(f::Function, (Argtypes...)) <code_llvm>`, and finally the compiled machine code is
-available using :func:`code_native(f::Function, (Argtypes...)) <code_native>` (this will trigger JIT
-compilation/code generation for any function which has not previously been called).
+Closer to the machine, the LLVM intermediate representation of a function may be printed using
+by [`code_llvm(f::Function, (Argtypes...))`](@ref), and finally the compiled machine code is available
+using [`code_native(f::Function, (Argtypes...))`](@ref) (this will trigger JIT compilation/code
+generation for any function which has not previously been called).
 
-For convenience, there are macro versions of the above functions which take standard function calls
-and expand argument types automatically::
+For convenience, there are macro versions of the above functions which take standard function
+calls and expand argument types automatically:
 
-   julia> @code_llvm +(1,1)
+```julia
+julia> @code_llvm +(1,1)
 
-   ; Function Attrs: sspreq
-   define i64 @"julia_+_130862"(i64, i64) #0 {
-   top:
-       %2 = add i64 %1, %0, !dbg !8
-       ret i64 %2, !dbg !8
-   }
+; Function Attrs: sspreq
+define i64 @"julia_+_130862"(i64, i64) #0 {
+top:
+    %2 = add i64 %1, %0, !dbg !8
+    ret i64 %2, !dbg !8
+}
+```
 
-.. not testable due to name variations
-
-(likewise ``@code_typed``, ``@code_warntype``, ``@code_lowered``, and ``@code_native``)
+(likewise `@code_typed`, `@code_warntype`, `@code_lowered`, and `@code_native`)
