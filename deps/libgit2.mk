@@ -83,6 +83,11 @@ $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied: $(LIBGIT2_SRC_PATH
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-writer-fix.patch
 	echo 1 > $@
 
+$(LIBGIT2_SRC_PATH)/libgit2-win-http-parser.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-win-http-parser.patch
+	echo 1 > $@
+
 $(build_datarootdir)/julia/cert.pem: $(CERTFILE)
 	mkdir -p $(build_datarootdir)/julia
 	-cp $(CERTFILE) $@
@@ -91,7 +96,8 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied
+	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-win-http-parser.patch-applied
 
 ifneq ($(CERTFILE),)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem
