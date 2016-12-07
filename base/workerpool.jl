@@ -190,7 +190,7 @@ const _default_worker_pool = Ref{Nullable}(Nullable{WorkerPool}())
 """
     default_worker_pool()
 
-`WorkerPool` containing idle `workers()` - used by `remote(f)` and [`pmap`](:func:`pmap`) (by default).
+`WorkerPool` containing idle `workers()` - used by `remote(f)` and [`pmap`](@ref) (by default).
 """
 function default_worker_pool()
     # On workers retrieve the default worker pool from the master when accessed
@@ -209,7 +209,7 @@ end
     remote([::AbstractWorkerPool], f) -> Function
 
 Returns a lambda that executes function `f` on an available worker
-using [`remotecall_fetch`](:func:`remotecall_fetch`).
+using [`remotecall_fetch`](@ref).
 """
 remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), args...; kwargs...)
 remote(p::AbstractWorkerPool, f) = (args...; kwargs...)->remotecall_fetch(f, p, args...; kwargs...)
@@ -234,8 +234,8 @@ serialize(s::AbstractSerializer, cp::CachingPool) = throw(ErrorException("Cachin
     CachingPool(workers::Vector{Int})
 
 An implementation of an `AbstractWorkerPool`.
-[`remote`](:func:`remote`), [`remotecall_fetch`](:func:`remotecall_fetch`),
-[`pmap`](:func:`pmap`) (and other remote calls which execute functions remotely)
+[`remote`](@ref), [`remotecall_fetch`](@ref),
+[`pmap`](@ref) (and other remote calls which execute functions remotely)
 benefit from caching the serialized/deserialized functions on the worker nodes,
 especially closures (which may capture large amounts of data).
 

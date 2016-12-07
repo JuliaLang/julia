@@ -115,7 +115,7 @@ end
     merge!(d::Associative, others::Associative...)
 
 Update collection with pairs from the other collections.
-See also [`merge`](:func:`merge`).
+See also [`merge`](@ref).
 """
 function merge!(d::Associative, others::Associative...)
     for other in others
@@ -138,7 +138,7 @@ end
 """
     keytype(type)
 
-Get the key type of an associative collection type. Behaves similarly to [`eltype`](:func:`eltype`).
+Get the key type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 """
 keytype{K,V}(::Type{Associative{K,V}}) = K
 keytype(a::Associative) = keytype(typeof(a))
@@ -147,7 +147,7 @@ keytype{A<:Associative}(::Type{A}) = keytype(supertype(A))
 """
     valtype(type)
 
-Get the value type of an associative collection type. Behaves similarly to [`eltype`](:func:`eltype`).
+Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 """
 valtype{K,V}(::Type{Associative{K,V}}) = V
 valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))

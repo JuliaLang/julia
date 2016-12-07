@@ -831,8 +831,8 @@ end
     round(z, RoundingModeReal, RoundingModeImaginary)
 
 Returns the nearest integral value of the same type as the complex-valued `z` to `z`,
-breaking ties using the specified [`RoundingMode`](:obj:`RoundingMode`)s. The first
-[`RoundingMode`](:obj:`RoundingMode`) is used for rounding the real components while the
+breaking ties using the specified [`RoundingMode`](@ref)s. The first
+[`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 """
 function round{T<:AbstractFloat, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})

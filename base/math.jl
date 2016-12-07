@@ -65,7 +65,7 @@ clamp{T}(x::AbstractArray{T}, lo, hi) =
     clamp!(array::AbstractArray, lo, hi)
 
 Restrict values in `array` to the specified range, in-place.
-See also [`clamp`](:func:`clamp`).
+See also [`clamp`](@ref).
 """
 function clamp!{T}(x::AbstractArray{T}, lo, hi)
     @inbounds for i in eachindex(x)
@@ -163,7 +163,7 @@ log{T<:Number}(b::T, x::T) = log(x)/log(b)
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws [`DomainError`](:obj:`DomainError`) for negative `Real` arguments.
+Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
 
 ```jldoctest
 julia> log(4,8)
@@ -174,7 +174,7 @@ julia> log(4,2)
 ```
 
 !!! note
-    If `b` is a power of 2 or 10, [`log2`](:func:`log2`) or [`log10`](:func:`log10`) should be used, as these will
+    If `b` is a power of 2 or 10, [`log2`](@ref) or [`log10`](@ref) should be used, as these will
     typically be faster and more accurate. For example,
 
     ```jldoctest
@@ -272,7 +272,7 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws [`DomainError`](:obj:`DomainError`) for negative `Real` arguments. Use complex
+Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative `Real` arguments. Use complex
 negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt(x::Real) = sqrt(float(x))
@@ -590,7 +590,7 @@ end
 
 Combined multiply-add, computes `x*y+z` in an efficient manner. This may on some systems be
 equivalent to `x*y+z`, or to `fma(x,y,z)`. `muladd` is used to improve performance.
-See [`fma`](:func:`fma`).
+See [`fma`](@ref).
 """
 muladd(x,y,z) = x*y+z
 

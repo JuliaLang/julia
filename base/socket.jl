@@ -755,7 +755,7 @@ Listen on port on the address specified by `addr`.
 By default this listens on `localhost` only.
 To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
 `backlog` determines how many connections can be pending (not having
-called [`accept`](:func:`accept`)) before the server will begin to
+called [`accept`](@ref)) before the server will begin to
 reject them. The default value of `backlog` is 511.
 """
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
@@ -832,8 +832,8 @@ listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
 
-Get the IP address and the port that the given [`TCPSocket`](:obj:`TCPSocket`) is connected to
-(or bound to, in the case of [`TCPServer`](:obj:`TCPServer`)).
+Get the IP address and the port that the given `TCPSocket` is connected to
+(or bound to, in the case of `TCPServer`).
 """
 function getsockname(sock::Union{TCPServer,TCPSocket})
     rport = Ref{Cushort}(0)

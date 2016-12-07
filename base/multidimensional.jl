@@ -542,7 +542,7 @@ end
 """
     cumsum(A, dim=1)
 
-Cumulative sum along a dimension `dim` (defaults to 1). See also [`cumsum!`](:func:`cumsum!`)
+Cumulative sum along a dimension `dim` (defaults to 1). See also [`cumsum!`](@ref)
 to use a preallocated output array, both for performance and to control the precision of the
 output (e.g. to avoid overflow).
 
@@ -573,7 +573,7 @@ cumsum!(B, A, axis::Integer=1) = accumulate!(+, B, A, axis)
     cumprod(A, dim=1)
 
 Cumulative product along a dimension `dim` (defaults to 1). See also
-[`cumprod!`](:func:`cumprod!`) to use a preallocated output array, both for performance and
+[`cumprod!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow).
 
 ```jldoctest
@@ -600,10 +600,10 @@ cumprod!(B, A, axis::Integer=1) = accumulate!(*, B, A, axis)
     accumulate(op, A, dim=1)
 
 Cumulative operation `op` along a dimension `dim` (defaults to 1). See also
-[`accumulate!`](:func:`accumulate!`) to use a preallocated output array, both for performance and
+[`accumulate!`](@ref) to use a preallocated output array, both for performance and
 to control the precision of the output (e.g. to avoid overflow). For common operations
 there are specialized variants of `accumulate`, see:
-[`cumsum`](:func:`cumsum`), [`cumprod`](:func:`cumprod`)
+[`cumsum`](@ref), [`cumprod`](@ref)
 
 ```jldoctest
 julia> accumulate(+, [1,2,3])
@@ -683,7 +683,7 @@ end
     accumulate!(op, B, A, dim=1)
 
 Cumulative operation `op` on `A` along a dimension, storing the result in `B`. The dimension defaults to 1.
-See also [`accumulate`](:func:`accumulate`).
+See also [`accumulate`](@ref).
 """
 function accumulate!(op, B, A, axis::Integer=1)
     axis > 0 || throw(ArgumentError("axis must be a positive integer"))

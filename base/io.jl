@@ -14,15 +14,15 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
 
 Determine whether an object - such as a stream, timer, or mmap -- is not yet closed. Once an
 object is closed, it will never produce a new event. However, a closed stream may still have
-data to read in its buffer, use [`eof`](:func:`eof`) to check for the ability to read data.
-Use [`poll_fd`](:func:`poll_fd`) to be notified when a stream might be writable or readable.
+data to read in its buffer, use [`eof`](@ref) to check for the ability to read data.
+Use [`poll_fd`](@ref) to be notified when a stream might be writable or readable.
 """
 function isopen end
 
 """
     close(stream)
 
-Close an I/O stream. Performs a [`flush`](:func:`flush`) first.
+Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
 function flush end
@@ -555,7 +555,7 @@ iteratorsize(::Type{EachLine}) = SizeUnknown()
 
 Add a mark at the current position of stream `s`. Returns the marked position.
 
-See also [`unmark`](:func:`unmark`), [`reset`](:func:`reset`), [`ismarked`](:func:`ismarked`).
+See also [`unmark`](@ref), [`reset`](@ref), [`ismarked`](@ref).
 """
 function mark(io::IO)
     io.mark = position(io)
@@ -566,7 +566,7 @@ end
 
 Remove a mark from stream `s`. Returns `true` if the stream was marked, `false` otherwise.
 
-See also [`mark`](:func:`mark`), [`reset`](:func:`reset`), [`ismarked`](:func:`ismarked`).
+See also [`mark`](@ref), [`reset`](@ref), [`ismarked`](@ref).
 """
 function unmark(io::IO)
     !ismarked(io) && return false
@@ -580,7 +580,7 @@ end
 Reset a stream `s` to a previously marked position, and remove the mark. Returns the
 previously marked position. Throws an error if the stream is not marked.
 
-See also [`mark`](:func:`mark`), [`unmark`](:func:`unmark`), [`ismarked`](:func:`ismarked`).
+See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset{T<:IO}(io::T)
     ismarked(io) || throw(ArgumentError("$(T) not marked"))
@@ -595,7 +595,7 @@ end
 
 Returns `true` if stream `s` is marked.
 
-See also [`mark`](:func:`mark`), [`unmark`](:func:`unmark`), [`reset`](:func:`reset`).
+See also [`mark`](@ref), [`unmark`](@ref), [`reset`](@ref).
 """
 ismarked(io::IO) = io.mark >= 0
 

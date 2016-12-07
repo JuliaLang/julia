@@ -183,7 +183,7 @@ end
 """
     broadcast!(f, dest, As...)
 
-Like [`broadcast`](:func:`broadcast`), but store the result of
+Like [`broadcast`](@ref), but store the result of
 `broadcast(f, As...)` in the `dest` array.
 Note that `dest` is only used to store the result, and does not supply
 arguments to `f` unless it is also listed in the `As`,
@@ -356,7 +356,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 """
     bitbroadcast(f, As...)
 
-Like [`broadcast`](:func:`broadcast`), but allocates a `BitArray` to store the
+Like [`broadcast`](@ref), but allocates a `BitArray` to store the
 result, rather then an `Array`.
 
 ```jldoctest
@@ -374,7 +374,7 @@ julia> bitbroadcast(isodd,[1,2,3,4,5])
 """
     broadcast_getindex(A, inds...)
 
-Broadcasts the `inds` arrays to a common size like [`broadcast`](:func:`broadcast`)
+Broadcasts the `inds` arrays to a common size like [`broadcast`](@ref)
 and returns an array of the results `A[ks...]`,
 where `ks` goes over the positions in the broadcast result `A`.
 

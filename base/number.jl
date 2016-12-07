@@ -104,9 +104,9 @@ _default_type(::Type{Number}) = Int
 """
     factorial(n)
 
-Factorial of `n`.  If `n` is an [`Integer`](:obj:`Integer`), the factorial is computed as an
+Factorial of `n`.  If `n` is an `Integer`, the factorial is computed as an
 integer (promoted to at least 64 bits).  Note that this may overflow if `n` is not small,
 but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
-If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](:func:`gamma(n+1) <gamma>`).
+If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](@ref).
 """
 factorial(x::Number) = gamma(x + 1) # fallback for x not Integer

@@ -93,7 +93,7 @@ get(x::Nullable) = isnull(x) ? throw(NullException()) : x.value
 """
     unsafe_get(x)
 
-Return the value of `x` for [`Nullable`](:obj:`Nullable`) `x`; return `x` for
+Return the value of `x` for [`Nullable`](@ref) `x`; return `x` for
 all other `x`.
 
 This method does not check whether or not `x` is null before attempting to
@@ -127,7 +127,7 @@ unsafe_get(x) = x
 """
     isnull(x)
 
-Return whether or not `x` is null for [`Nullable`](:obj:`Nullable`) `x`; return
+Return whether or not `x` is null for [`Nullable`](@ref) `x`; return
 `false` for all other `x`.
 
 # Examples

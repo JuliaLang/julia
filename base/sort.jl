@@ -59,7 +59,7 @@ end
     issorted(v, by=identity, rev:Bool=false, order::Ordering=Forward)
 
 Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
-order is considered to be sorted just as they do for [`sort`](:func:`sort`).
+order is considered to be sorted just as they do for [`sort`](@ref).
 """
 issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
@@ -478,7 +478,7 @@ end
 """
     sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Variant of [`sort!`](:func:`sort!`) that returns a sorted copy of `v` leaving `v` itself unmodified.
+Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
@@ -518,7 +518,7 @@ appear in ascending order. If you choose a non-stable sorting algorithm such as 
 a different permutation that puts the array into order may be returned. The order is
 specified using the same keywords as `sort!`.
 
-See also [`sortperm!`](:func:`sortperm!`).
+See also [`sortperm!`](@ref).
 """
 function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
@@ -549,7 +549,7 @@ end
 """
     sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
-Like [`sortperm`](:func:`sortperm`), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
+Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
 (the default), ix is initialized to contain the values `1:length(v)`.
 """
 function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
@@ -598,7 +598,7 @@ end
     sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
 Sort a multidimensional array `A` along the given dimension.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sort(A::AbstractArray, dim::Integer;
@@ -636,7 +636,7 @@ end
     sortrows(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the rows of matrix `A` lexicographically.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sortrows(A::AbstractMatrix; kws...)
@@ -654,7 +654,7 @@ end
     sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the columns of matrix `A` lexicographically.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sortcols(A::AbstractMatrix; kws...)
