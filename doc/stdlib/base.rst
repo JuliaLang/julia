@@ -841,11 +841,17 @@ Nullables
          hasvalue: Bool false
          value: Int64 1
 
-.. function:: get(x::Nullable[, y])
+.. function:: get(x::Nullable, y)
 
    .. Docstring generated from Julia source
 
-   Attempt to access the value of ``x``\ . Returns the value if it is present; otherwise, returns ``y`` if provided, or throws a ``NullException`` if not.
+   Attempt to access the value of ``x``\ . Returns the value if it is present; otherwise, returns ``y``\ .
+
+.. function:: getindex(x::Nullable)
+
+   .. Docstring generated from Julia source
+
+   Attempt to access the value of ``x``\ . Throw a ``NullException`` if the value is not present. Usually, this is written as ``x[]``\ .
 
 .. function:: isnull(x)
 
