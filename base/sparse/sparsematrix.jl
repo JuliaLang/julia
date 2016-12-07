@@ -2267,12 +2267,14 @@ broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2
 
 # TODO: More appropriate location?
 conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
+(-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
 
 # TODO: The following definitions should be deprecated.
 ceil{To}(::Type{To}, A::SparseMatrixCSC) = ceil.(To, A)
 floor{To}(::Type{To}, A::SparseMatrixCSC) = floor.(To, A)
 trunc{To}(::Type{To}, A::SparseMatrixCSC) = trunc.(To, A)
 round{To}(::Type{To}, A::SparseMatrixCSC) = round.(To, A)
+
 
 ## Binary arithmetic and boolean operators
 
