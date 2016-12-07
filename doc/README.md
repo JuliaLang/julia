@@ -34,8 +34,6 @@ File layout
 
     conf.py             Sphinx configuration
     stdlib/             Julia standard library documentation
-    UNDOCUMENTED.rst    Undocumented functions (to be filled in and copied to
-                        the correct location in stdlib/)
 
 Sphinx extensions and theme
 ---------------------------
