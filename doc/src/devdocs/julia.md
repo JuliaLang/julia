@@ -1,27 +1,18 @@
-:orphan:
+# Documentation of Julia's Internals
 
-.. _devdocs-index:
-
-####################################
- Documentation of Julia's Internals
-####################################
-
-.. toctree::
-   :maxdepth: 1
-
-   init
-   eval
-   ast
-   types
-   object
-   functions
-   callconv
-   cartesian
-   meta
-   subarrays
-   sysimg
-   llvm
-   stdio
-   boundscheck
-   locks
-   offset-arrays
+  * [Initialization of the Julia runtime](@ref)
+  * [Eval of Julia code](@ref)
+  * [Julia ASTs](@ref)
+  * [More about types](@ref)
+  * [Memory layout of Julia Objects](@ref)
+  * [Julia Functions](@ref)
+  * [Calling Conventions](@ref)
+  * [Base.Cartesian](@ref)
+  * [Talking to the compiler (the `:meta` mechanism)](@ref)
+  * [SubArrays](@ref)
+  * [System Image Building](@ref)
+  * [Working with LLVM](@ref)
+  * [printf() and stdio in the Julia runtime](@ref)
+  * [Bounds checking](@ref)
+  * [Proper maintenance and care of multi-threading locks](@ref)
+  * [Arrays with custom indices](@ref)
