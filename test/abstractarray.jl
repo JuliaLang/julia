@@ -567,6 +567,9 @@ function test_cat(::Type{TestAbstractArray})
     # 13665, 19038
     @test @inferred(hcat([1.0 2.0], 3))::Array{Float64,2} == [1.0 2.0 3.0]
     @test @inferred(vcat([1.0, 2.0], 3))::Array{Float64,1} == [1.0, 2.0, 3.0]
+
+    @test @inferred(vcat(["a"], "b"))::Vector{String} == ["a", "b"]
+    @test @inferred(vcat((1,), (2.0,)))::Vector{Tuple{Real}} == [(1,), (2.0,)]
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
