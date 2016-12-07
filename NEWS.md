@@ -12,7 +12,7 @@ Language changes
     syntax uses backquotes (``` ` ```) instead of double quotes, and the
     resulting macro called is suffixed with `_cmd`. For instance, the syntax
     ``` q`xyz` ``` is equivalent to `@q_cmd "xyz"`. ([#18644])
-    
+
   * Nonstandard string and command literals can now be qualified with their
     module. For instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`.
     Previously, this syntax parsed as an implicit multiplication. ([#18690])
