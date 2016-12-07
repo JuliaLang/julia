@@ -1,88 +1,80 @@
-.. _man-workflow-tips:
-
-***************
- Workflow Tips
-***************
+# [Workflow Tips](@id man-workflow-tips)
 
 Here are some tips for working with Julia efficiently.
 
-REPL-based workflow
--------------------
+## REPL-based workflow
 
-As already elaborated in :ref:`man-interacting-with-julia`, Julia's
-REPL provides rich functionality that facilitates an efficient
-interactive workflow. Here are some tips that might further enhance your
-experience at the command line.
+As already elaborated in [Interacting With Julia](@ref), Julia's REPL provides rich functionality
+that facilitates an efficient interactive workflow. Here are some tips that might further enhance
+your experience at the command line.
 
-A basic editor/REPL workflow
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### A basic editor/REPL workflow
 
-The most basic Julia workflows involve using a text editor in
-conjunction with the ``julia`` command line. A common pattern includes
-the following elements:
+The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
+line. A common pattern includes the following elements:
 
-- **Put code under development in a temporary module.** Create a file,
-  say ``Tmp.jl``, and include within it ::
+  * **Put code under development in a temporary module.** Create a file, say `Tmp.jl`, and include
+    within it
 
-      module Tmp
+    ```
+    module Tmp
 
-      <your definitions here>
+    <your definitions here>
 
-      end
+    end
+    ```
+  * **Put your test code in another file.** Create another file, say `tst.jl`, which begins with
 
-- **Put your test code in another file.** Create another file, say
-  ``tst.jl``, which begins with ::
+    ```julia
+    import Tmp
+    ```
 
-      import Tmp
+    and includes tests for the contents of `Tmp`. The value of using `import` versus `using` is that
+    you can call `reload``("Tmp")` instead of having to restart the REPL when your definitions change.
+    Of course, the cost is the need to prepend `Tmp.` to uses of names defined in your module. (You
+    can lower that cost by keeping your module name short.)
 
-  and includes tests for the contents of ``Tmp``. The value of using
-  :obj:`import` versus :obj:`using` is that you can call :obj:`reload`
-  ``("Tmp")`` instead of having to restart the REPL when your
-  definitions change. Of course, the cost is the need to prepend
-  ``Tmp.`` to uses of names defined in your module. (You can lower that
-  cost by keeping your module name short.)
+    Alternatively, you can wrap the contents of your test file in a module, as
 
-  Alternatively, you can wrap the contents of your test file in a
-  module, as ::
+    ```
+    module Tst
+        using Tmp
 
-      module Tst
-          using Tmp
+        <scratch work>
 
-          <scratch work>
+    end
+    ```
 
-      end
+    The advantage is that you can now do `using``Tmp` in your test code and can therefore avoid prepending
+    `Tmp.` everywhere. The disadvantage is that code can no longer be selectively copied to the REPL
+    without some tweaking.
+  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `tst.jl`.
+    Occasionally restart the REPL, issuing
 
-  The advantage is that you can now do :obj:`using` ``Tmp`` in your
-  test code and can therefore avoid prepending ``Tmp.`` everywhere.
-  The disadvantage is that code can no longer be selectively copied
-  to the REPL without some tweaking.
+    ```julia
+    reload("Tmp")
+    include("tst.jl")
+    ```
 
-- **Lather. Rinse. Repeat.** Explore ideas at the ``julia`` command
-  prompt. Save good ideas in ``tst.jl``. Occasionally
-  restart the REPL, issuing ::
+### Simplify initialization
 
-      reload("Tmp")
-      include("tst.jl")
+To simplify restarting the REPL, put project-specific initialization code in a file, say `_init.jl`,
+which you can run on startup by issuing the command:
 
-Simplify initialization
-~~~~~~~~~~~~~~~~~~~~~~~
+```
+julia -L _init.jl
+```
 
-To simplify restarting the REPL, put project-specific initialization
-code in a file, say ``_init.jl``, which you can run on startup by
-issuing the command::
+If you further add the following to your `.juliarc.jl` file
 
-    julia -L _init.jl
+```julia
+isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))
+```
 
-If you further add the following to your ``.juliarc.jl`` file ::
+then calling `julia` from that directory will run the initialization code without the additional
+command line argument.
 
-    isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))
+## Browser-based workflow
 
-then calling ``julia`` from that directory will run the initialization
-code without the additional command line argument.
-
-Browser-based workflow
-----------------------
-
-It is also possible to interact with a Julia REPL in the browser via IJulia_. See the package home for details.
-
-.. _IJulia: https://github.com/JuliaLang/IJulia.jl
+It is also possible to interact with a Julia REPL in the browser via [IJulia](https://github.com/JuliaLang/IJulia.jl).
+See the package home for details.
