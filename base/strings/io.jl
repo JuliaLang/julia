@@ -310,6 +310,8 @@ unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 macro b_str(s); :($(unescape_string(s)).data); end
 
+macro raw_str(s); s; end
+
 ## multiline strings ##
 
 """

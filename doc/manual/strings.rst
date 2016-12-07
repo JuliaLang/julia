@@ -962,3 +962,12 @@ anything, as they are invalid in the semantic versioning scheme.
 Besides being used for the :const:`VERSION` constant, :obj:`VersionNumber` objects are
 widely used in the :mod:`Pkg <Base.Pkg>` module, to specify packages versions and their
 dependencies.
+
+Raw String Literals
+-------------------
+
+Raw strings without interpolation or unescaping can be expressed with
+non-standard string literals of the form ``raw"..."``. Raw string literals
+create ordinary :obj:`String` objects which contain enclosed contents exactly
+as entered with no interpolation or unescaping. This is useful for strings which
+contain code or markup in other languages which use $ or \\ as special characters.
