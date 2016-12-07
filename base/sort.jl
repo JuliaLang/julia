@@ -65,6 +65,24 @@ issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
+
+"""
+    select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
+`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
+at the position where it would appear if the array were fully sorted via a non-stable
+algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
+values at those indices is returned.
+
+!!! note
+
+    `select!` does not fully sort the input array `v`, but all elements will be correctly
+    ordered with respect to the value at index `k`. That is, for any indices `i` and `j`
+    such that `i <= k <= j`, then `v[i] <= v[k] <= v[j]`.
+"""
+function select! end
+
 function select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
     inds = indices(v, 1)
     sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
@@ -74,6 +92,13 @@ select!(v::AbstractVector, k::Union{Int,OrdinalRange};
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
+
+"""
+    select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+Variant of `select!` which copies `v` before partially sorting it, thereby returning the
+same thing as `select!` but leaving `v` unmodified.
+"""
 select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copymutable(v), k; kws...)
 
 

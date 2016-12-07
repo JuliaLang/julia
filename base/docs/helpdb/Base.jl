@@ -891,14 +891,6 @@ to 1.
 cumsum!
 
 """
-    select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Variant of `select!` which copies `v` before partially sorting it, thereby returning the
-same thing as `select!` but leaving `v` unmodified.
-"""
-select
-
-"""
     accept(server[,client])
 
 Accepts a connection on the given server and returns a connection to the client. An
@@ -1086,18 +1078,6 @@ getfield
 Bessel function of the first kind of order 1, ``J_1(x)``.
 """
 besselj1
-
-"""
-    select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
-`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
-at the position where it would appear if the array were fully sorted via a non-stable
-algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
-values at those indices is returned. Note that `select!` does not fully sort the input
-array.
-"""
-select!
 
 """
     maximum!(r, A)
