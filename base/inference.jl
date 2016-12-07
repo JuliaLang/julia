@@ -74,6 +74,7 @@ type InferenceState
     bestguess #::Type
     # current active instruction pointers
     ip::IntSet
+    pc´´::Int
     nstmts::Int
     # current exception handler info
     cur_hand #::Tuple{LineNum, Tuple{LineNum, ...}}
@@ -187,7 +188,7 @@ type InferenceState
         frame = new(
             sp, nl, inmodule, 0,
             params,
-            linfo, src, nargs, s, Union{}, W, n,
+            linfo, src, nargs, s, Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, ssavalue_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
@@ -1804,11 +1805,21 @@ function typeinf_frame(frame)
     W = frame.ip
     s = frame.stmt_types
     n = frame.nstmts
-    while !isempty(W)
+    while frame.pc´´ <= n
         # make progress on the active ip set
-        local pc::Int = first(W), pc´::Int
+        local pc::Int = frame.pc´´ # current program-counter
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
             #print(pc,": ",s[pc],"\n")
+            local pc´::Int = pc + 1 # next program-counter (after executing instruction)
+            if pc == frame.pc´´
+                # need to update pc´´ to point at the new lowest instruction in W
+                min_pc = next(W, Int64(pc) + 1)[1]
+                if min_pc >= W.limit
+                    frame.pc´´ = max(min_pc, n + 1)
+                else
+                    frame.pc´´ = min_pc
+                end
+            end
             delete!(W, pc)
             frame.currpc = pc
             frame.cur_hand = frame.handler_at[pc]
@@ -1818,13 +1829,15 @@ function typeinf_frame(frame)
                 break # this line threw an error and so there is no need to continue
                 # changes = s[pc]
             end
-            pc´ = pc + 1
             if frame.cur_hand !== () && isa(changes, StateUpdate)
                 # propagate new type info to exception handler
                 # the handling for Expr(:enter) propagates all changes from before the try/catch
                 # so this only needs to propagate any changes
                 l = frame.cur_hand[1]
                 if stupdate1!(s[l]::VarTable, changes::StateUpdate) !== false
+                    if l < frame.pc´´
+                        frame.pc´´ = l
+                    end
                     push!(W, l)
                 end
             end
@@ -1838,6 +1851,9 @@ function typeinf_frame(frame)
                     frame.src.ssavaluetypes[id] = tmerge(old, new)
                     for r in frame.ssavalue_uses[id]
                         if s[r] !== () # s[r] === () => unreached statement
+                            if r < frame.pc´´
+                                frame.pc´´ = r
+                            end
                             push!(W, r)
                         end
                     end
@@ -1861,6 +1877,9 @@ function typeinf_frame(frame)
                         newstate = stupdate!(s[l], changes)
                         if newstate !== false
                             # add else branch to active IP list
+                            if l < frame.pc´´
+                                frame.pc´´ = l
+                            end
                             push!(W, l)
                             s[l] = newstate
                         end
@@ -1875,6 +1894,9 @@ function typeinf_frame(frame)
                             # notify backedges of updated type information
                             for caller_pc in callerW
                                 if caller.stmt_types[caller_pc] !== ()
+                                    if caller_pc < caller.pc´´
+                                        caller.pc´´ = caller_pc
+                                    end
                                     push!(caller.ip, caller_pc)
                                 end
                             end
@@ -1890,6 +1912,9 @@ function typeinf_frame(frame)
                     new = s[pc]::Array{Any,1}
                     newstate = stupdate!(old, new)
                     if newstate !== false
+                        if l < frame.pc´´
+                            frame.pc´´ = l
+                        end
                         push!(W, l)
                         s[l] = newstate
                     end
@@ -1904,7 +1929,17 @@ function typeinf_frame(frame)
             pc´ > n && break # can't proceed with the fast-path fall-through
             frame.handler_at[pc´] = frame.cur_hand
             newstate = stupdate!(s[pc´], changes)
-            if newstate !== false
+            if isa(stmt, GotoNode) && frame.pc´´ < pc´
+                # if we are processing a goto node anyways,
+                # (such as a terminator for a loop, if-else, or try block),
+                # consider whether we should jump to an older backedge first,
+                # to try to traverse the statements in approximate dominator order
+                if newstate !== false
+                    s[pc´] = newstate
+                end
+                push!(W, pc´)
+                pc = frame.pc´´
+            elseif newstate !== false
                 s[pc´] = newstate
                 pc = pc´
             elseif pc´ in W
@@ -1916,6 +1951,7 @@ function typeinf_frame(frame)
     end
 
     # with no active ip's, type inference on frame is done if there are no outstanding (unfinished) edges
+    #@assert isempty(W)
     @assert !frame.inferred
     finished = isempty(frame.edges)
     if isempty(workq)
