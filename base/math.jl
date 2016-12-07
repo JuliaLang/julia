@@ -354,7 +354,7 @@ function ldexp{T<:AbstractFloat}(x::T, e::Integer)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
     k = Int(xs >> significand_bits(T))
-    if xs <= (~exponent_mask(T) & ~sign_mask(T)) # x is subnormal
+    if k == 0 # x is subnormal
         xs == 0 && return x # +-0
         m = leading_zeros(xs) - exponent_bits(T)
         ys = xs << unsigned(m)
