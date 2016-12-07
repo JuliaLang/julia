@@ -161,7 +161,7 @@ isconst(s::Symbol) = ccall(:jl_is_const, Cint, (Ptr{Void}, Any), C_NULL, s) != 0
     isconst([m::Module], s::Symbol) -> Bool
 
 Determine whether a global is declared `const` in a given `Module`. The default `Module`
-argument is [`current_module()`](:func:`current_module`).
+argument is [`current_module()`](@ref).
 """
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
@@ -195,7 +195,7 @@ datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefErro
 """
     isimmutable(v)
 
-Return `true` iff value `v` is immutable.  See [manual](:ref:`man-immutable-composite-types`)
+Return `true` iff value `v` is immutable.  See [Immutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 """
@@ -755,7 +755,7 @@ end
     method_exists(f, Tuple type) -> Bool
 
 Determine whether the given generic function has a method matching the given
-[`Tuple`](:obj:`Tuple`) of argument types.
+`Tuple` of argument types.
 
 ```jldoctest
 julia> method_exists(length, Tuple{Array})

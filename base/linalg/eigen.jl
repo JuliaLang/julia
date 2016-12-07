@@ -58,15 +58,15 @@ end
 """
     eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](:obj:`Eigen`) factorization object `F`
+Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
 which contains the eigenvalues in `F[:values]` and the eigenvectors in the columns of the
 matrix `F[:vectors]`. (The `k`th eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
 
-The following functions are available for `Eigen` objects: [`inv`](:func:`inv`), [`det`](:func:`det`), and [`isposdef`](:func:`isposdef`).
+The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 
-If `A` is [`Symmetric`](:class:`Symmetric`), [`Hermitian`](:class:`Hermitian`) or
-[`SymTridiagonal`](:class:`SymTridiagonal`), it is possible to calculate only a subset of
-the eigenvalues by specifying either a [`UnitRange`](:class:`UnitRange`) `irange` covering
+If `A` is [`Symmetric`](@ref), [`Hermitian`](@ref) or
+[`SymTridiagonal`](@ref), it is possible to calculate only a subset of
+the eigenvalues by specifying either a `UnitRange` `irange` covering
 indices of the sorted eigenvalues or a pair `vl` and `vu` for the lower and upper boundaries
 of the eigenvalues.
 
@@ -109,7 +109,7 @@ end
     eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
 
 Computes eigenvalues (`D`) and eigenvectors (`V`) of `A`.
-See [`eigfact`](:func:`eigfact`) for details on the
+See [`eigfact`](@ref) for details on the
 `irange`, `vl`, and `vu` arguments
 and the `permute` and `scale` keyword arguments.
 The eigenvectors are returned columnwise.
@@ -122,8 +122,8 @@ julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
 ```
 
-`eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the
-factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is recommended.
+`eig` is a wrapper around [`eigfact`](@ref), extracting all parts of the
+factorization to a tuple; where possible, using [`eigfact`](@ref) is recommended.
 """
 function eig(A::AbstractMatrix, args...)
     F = eigfact(A, args...)
@@ -135,9 +135,9 @@ end
 
 Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.) The `permute` and `scale` keywords are the same as
-for [`eigfact`](:func:`eigfact`).
+for [`eigfact`](@ref).
 
-For [`SymTridiagonal`](:class:`SymTridiagonal`) matrices, if the optional vector of
+For [`SymTridiagonal`](@ref) matrices, if the optional vector of
 eigenvalues `eigvals` is specified, returns the specific corresponding eigenvectors.
 
 # Example
@@ -159,7 +159,7 @@ eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:value
 """
     eigvals!(A,[irange,][vl,][vu]) -> values
 
-Same as [`eigvals`](:func:`eigvals`), but saves space by overwriting the input `A`, instead of creating a copy.
+Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 """
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     issymmetric(A) && return eigvals!(Symmetric(A))
@@ -316,8 +316,8 @@ eigfact(A::Number, B::Number) = eigfact(fill(A,1,1), fill(B,1,1))
 
 Computes generalized eigenvalues (`D`) and vectors (`V`) of `A` with respect to `B`.
 
-`eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the
-factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is recommended.
+`eig` is a wrapper around [`eigfact`](@ref), extracting all parts of the
+factorization to a tuple; where possible, using [`eigfact`](@ref) is recommended.
 
 # Example
 
@@ -349,7 +349,7 @@ end
 """
     eigvals!(A, B) -> values
 
-Same as [`eigvals`](:func:`eigvals`), but saves space by overwriting the input `A` (and `B`), instead of creating copies.
+Same as [`eigvals`](@ref), but saves space by overwriting the input `A` (and `B`), instead of creating copies.
 """
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))

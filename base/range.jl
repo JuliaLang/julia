@@ -380,7 +380,7 @@ isempty(r::LinSpace) = length(r) == 0
 """
     step(r)
 
-Get the step size of a [`Range`](:obj:`Range`) object.
+Get the step size of a `Range` object.
 ```jldoctest
 julia> step(1:10)
 1

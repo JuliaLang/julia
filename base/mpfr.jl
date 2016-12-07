@@ -51,7 +51,7 @@ promoted to a `BigFloat`.
 
 Note that because decimal literals are converted to floating point numbers when parsed,
 `BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
-constants from strings via [`parse`](:func:`parse`), or using the `big` string literal.
+constants from strings via [`parse`](@ref), or using the `big` string literal.
 
 ```jldoctest
 julia> BigFloat(2.1)

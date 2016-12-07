@@ -282,7 +282,7 @@ Returns a range describing the "default" indexes to be handled by the
 current process.  This range should be interpreted in the sense of
 linear indexing, i.e., as a sub-range of `1:length(S)`.  In
 multi-process contexts, returns an empty range in the parent process
-(or any process for which [`indexpids`](:func:`indexpids`) returns 0).
+(or any process for which [`indexpids`](@ref) returns 0).
 
 It's worth emphasizing that `localindexes` exists purely as a
 convenience, and you can partition work on the array among workers any

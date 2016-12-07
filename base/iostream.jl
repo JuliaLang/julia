@@ -263,7 +263,7 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 
-See [`read`](:func:`read`) for a description of the `all` option.
+See [`read`](@ref) for a description of the `all` option.
 """
 function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)

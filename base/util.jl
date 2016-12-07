@@ -79,7 +79,7 @@ gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 """
     tic()
 
-Set a timer to be read by the next call to [`toc`](:func:`toc`) or [`toq`](:func:`toq`). The
+Set a timer to be read by the next call to [`toc`](@ref) or [`toq`](@ref). The
 macro call `@time expr` can also be used to time evaluation.
 """
 function tic()
@@ -91,7 +91,7 @@ end
 """
     toq()
 
-Return, but do not print, the time elapsed since the last [`tic`](:func:`tic`). The
+Return, but do not print, the time elapsed since the last [`tic`](@ref). The
 macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
 """
 function toq()
@@ -108,7 +108,7 @@ end
 """
     toc()
 
-Print and return the time elapsed since the last [`tic`](:func:`tic`). The macro call
+Print and return the time elapsed since the last [`tic`](@ref). The macro call
 `@time expr` can also be used to time evaluation.
 """
 function toc()
@@ -184,8 +184,8 @@ A macro to execute an expression, printing the time it took to execute, the numb
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression.
 
-See also [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`), [`@elapsed`](:func:`@elapsed`), and
-[`@allocated`](:func:`@allocated`).
+See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
+[`@allocated`](@ref).
 """
 macro time(ex)
     quote
@@ -207,8 +207,8 @@ This is a verbose version of the `@time` macro. It first prints the same informa
 `@time`, then any non-zero memory allocation counters, and then returns the value of the
 expression.
 
-See also [`@time`](:func:`@time`), [`@timed`](:func:`@timed`), [`@elapsed`](:func:`@elapsed`), and
-[`@allocated`](:func:`@allocated`).
+See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
+[`@allocated`](@ref).
 """
 macro timev(ex)
     quote
@@ -227,8 +227,8 @@ end
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 number of seconds it took to execute as a floating-point number.
 
-See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`),
-and [`@allocated`](:func:`@allocated`).
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
+and [`@allocated`](@ref).
 """
 macro elapsed(ex)
     quote
@@ -254,8 +254,8 @@ effects of compilation, however, there still may be some allocations due to JIT 
 This also makes the results inconsistent with the `@time` macros, which do not try to adjust
 for the effects of compilation.
 
-See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`),
-and [`@elapsed`](:func:`@elapsed`).
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
+and [`@elapsed`](@ref).
 """
 macro allocated(ex)
     quote
@@ -278,8 +278,8 @@ A macro to execute an expression, and return the value of the expression, elapse
 total bytes allocated, garbage collection time, and an object with various memory allocation
 counters.
 
-See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@elapsed`](:func:`@elapsed`), and
-[`@allocated`](:func:`@allocated`).
+See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
+[`@allocated`](@ref).
 """
 macro timed(ex)
     quote

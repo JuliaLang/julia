@@ -19,7 +19,7 @@ BunchKaufman{T}(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetr
 """
     bkfact!(A, uplo::Symbol=:U, symmetric::Bool=issymmetric(A), rook::Bool=false) -> BunchKaufman
 
-`bkfact!` is the same as [`bkfact`](:func:`bkfact`), but saves space by overwriting the
+`bkfact!` is the same as [`bkfact`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy.
 """
 function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol = :U,
@@ -64,7 +64,7 @@ If `symmetric` is `true`, `A` is assumed to be symmetric. If `symmetric` is `fal
 `A` is assumed to be Hermitian. If `rook` is `true`, rook pivoting is used. If
 `rook` is false, rook pivoting is not used.
 The following functions are available for
-`BunchKaufman` objects: [`size`](:func:`size`), `\\`, [`inv`](:func:`inv`), [`issymmetric`](:func:`issymmetric`), [`ishermitian`](:func:`ishermitian`).
+`BunchKaufman` objects: [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref), [`ishermitian`](@ref).
 
 [^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0).
 

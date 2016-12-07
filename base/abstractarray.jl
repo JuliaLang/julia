@@ -267,9 +267,9 @@ linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
 Return `true` if the specified indices `I` are in bounds for the given
 array `A`. Subtypes of `AbstractArray` should specialize this method
 if they need to provide custom bounds checking behaviors; however, in
-many cases one can rely on `A`'s indices and [`checkindex`](:func:`checkindex`).
+many cases one can rely on `A`'s indices and [`checkindex`](@ref).
 
-See also [`checkindex`](:func:`checkindex`).
+See also [`checkindex`](@ref).
 """
 function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
@@ -304,7 +304,7 @@ usually in a 1-for-1 fashion,
     checkbounds_indices(Bool, (IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) &
                                                           checkbounds_indices(Bool, IA, I)
 
-Note that [`checkindex`](:func:`checkindex`) is being used to perform the actual
+Note that [`checkindex`](@ref) is being used to perform the actual
 bounds-check for a single dimension of the array.
 
 There are two important exceptions to the 1-1 rule: linear indexing and
@@ -714,8 +714,8 @@ A[iter] = 0
 ```
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a [`UnitRange`](:obj:`UnitRange`)
-if all inputs have fast linear indexing, a [`CartesianRange`](:obj:`CartesianRange`)
+iterable object that is fast for all arguments (a `UnitRange`
+if all inputs have fast linear indexing, a `CartesianRange`
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` returns an
 iterable that spans the largest range along each dimension.
@@ -1512,7 +1512,7 @@ sub2ind(::Tuple{}, I::Integer...) = (@_inline_meta; _sub2ind((), 1, 1, I...))
 """
     sub2ind(dims, i, j, k...) -> index
 
-The inverse of [`ind2sub`](:func:`ind2sub`), returns the linear index corresponding to the provided subscripts.
+The inverse of [`ind2sub`](@ref), returns the linear index corresponding to the provided subscripts.
 
 ```jldoctest
 julia> sub2ind((5,6,7),1,2,3)
@@ -1789,7 +1789,7 @@ promote_eltype_op(op, A, B, C, D...) = (@_pure_meta; promote_eltype_op(op, eltyp
 """
     map!(function, collection)
 
-In-place version of [`map`](:func:`map`).
+In-place version of [`map`](@ref).
 """
 map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
@@ -1848,7 +1848,7 @@ end
 """
     map!(function, destination, collection...)
 
-Like [`map`](:func:`map`), but stores the result in `destination` rather than a new
+Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the first collection.
 """
 map!{F}(f::F, dest::AbstractArray, As::AbstractArray...) = map_n!(f, dest, As)

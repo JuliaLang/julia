@@ -109,7 +109,7 @@ when the array is no longer referenced.
 This function is labelled "unsafe" because it will crash if `p` is not
 a valid memory address to data of the requested length.
 
-See also [`unsafe_string`](:func:`unsafe_string`), which takes a pointer
+See also [`unsafe_string`](@ref), which takes a pointer
 and makes a copy of the data.
 """
 unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false) =

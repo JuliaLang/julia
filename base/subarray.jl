@@ -76,9 +76,9 @@ _maybe_reshape_parent{N}(A::AbstractArray, ::NTuple{N, Bool}) = reshape(A, Val{N
 """
     view(A, inds...)
 
-Like [`getindex`](:func:`getindex`), but returns a view into the parent array `A` with the
-given indices instead of making a copy.  Calling [`getindex`](:func:`getindex`) or
-[`setindex!`](:func:`setindex!`) on the returned [`SubArray`](:obj:`SubArray`) computes the
+Like [`getindex`](@ref), but returns a view into the parent array `A` with the
+given indices instead of making a copy.  Calling [`getindex`](@ref) or
+[`setindex!`](@ref) on the returned `SubArray` computes the
 indices to the parent array on the fly without checking bounds.
 """
 function view(A::AbstractArray, I::ViewIndex...)

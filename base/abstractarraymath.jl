@@ -210,7 +210,7 @@ julia> circshift(b, (-1,0))
  1  5   9  13
 ```
 
-See also [`circshift!`](:func:`circshift!`).
+See also [`circshift!`](@ref).
 """
 function circshift(a::AbstractArray, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))

@@ -69,7 +69,7 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
 ``M \\times \\min(M, N)`` for a thin SVD.
 
-`svd` is a wrapper around [`svdfact`](:func:`svdfact(A)`), extracting all parts
+`svd` is a wrapper around [`svdfact`](@ref), extracting all parts
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
 efficient.
 
@@ -178,7 +178,7 @@ GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{
 """
     svdfact!(A, [thin=true]) -> SVD
 
-`svdfact!` is the same as [`svdfact`](:func:`svdfact`), but saves space by
+`svdfact!` is the same as [`svdfact`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy.
 
 If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
@@ -228,7 +228,7 @@ end
 """
     svd(A, B) -> U, V, Q, D1, D2, R0
 
-Wrapper around [`svdfact`](:func:`svdfact(A, B)`) extracting all parts of the
+Wrapper around [`svdfact`](@ref) extracting all parts of the
 factorization to a tuple. Direct use of
 `svdfact` is therefore generally more efficient. The function returns the generalized SVD of
 `A` and `B`, returning `U`, `V`, `Q`, `D1`, `D2`, and `R0` such that `A = U*D1*R0*Q'` and `B =
