@@ -152,7 +152,7 @@ end
     print([io::IO = STDOUT,] data::Vector, lidict::LineInfoDict; kwargs...)
 
 Prints profiling results to `io`. This variant is used to examine results exported by a
-previous call to [`retrieve`](:func:`retrieve`). Supply the vector `data` of backtraces and
+previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
 a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
@@ -228,7 +228,7 @@ Given a previous profiling run, determine who called a particular function. Supp
 filename (and optionally, range of line numbers over which the function is defined) allows
 you to disambiguate an overloaded method. The returned value is a vector containing a count
 of the number of calls and line information about the caller. One can optionally supply
-backtrace `data` obtained from [`retrieve`](:func:`retrieve`); otherwise, the current internal
+backtrace `data` obtained from [`retrieve`](@ref); otherwise, the current internal
 profile buffer is used.
 """
 function callers end
@@ -260,7 +260,7 @@ callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs
 
 Clears any stored memory allocation data when running julia with `--track-allocation`.
 Execute the command(s) you want to test (to force JIT-compilation), then call
-[`clear_malloc_data`](:func:`clear_malloc_data`). Then execute your command(s) again, quit
+[`clear_malloc_data`](@ref). Then execute your command(s) again, quit
 Julia, and examine the resulting `*.mem` files.
 """
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
@@ -289,10 +289,10 @@ error_codes = Dict(
     fetch() -> data
 
 Returns a reference to the internal buffer of backtraces. Note that subsequent operations,
-like [`clear`](:func:`clear`), can affect `data` unless you first make a copy. Note that the
+like [`clear`](@ref), can affect `data` unless you first make a copy. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
-internal use; [`retrieve`](:func:`retrieve`) may be a better choice for most users.
+internal use; [`retrieve`](@ref) may be a better choice for most users.
 """
 function fetch()
     len = len_data()

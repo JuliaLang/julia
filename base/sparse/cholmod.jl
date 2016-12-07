@@ -1264,7 +1264,7 @@ factorization `F`. `A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`
 or `Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
-See also [`cholfact`](:func:`cholfact`).
+See also [`cholfact`](@ref).
 
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
@@ -1306,8 +1306,8 @@ Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used.
 `F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
-but also the methods [`diag`](:func:`diag`), [`det`](:func:`det`), and
-[`logdet`](:func:`logdet`) are defined for `F`.
+but also the methods [`diag`](@ref), [`det`](@ref), and
+[`logdet`](@ref) are defined for `F`.
 You can also extract individual factors from `F`, using `F[:L]`.
 However, since pivoting is on by default, the factorization is internally
 represented as `A == P'*L*L'*P` with a permutation matrix `P`;
@@ -1356,7 +1356,7 @@ Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F
 `Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
-See also [`ldltfact`](:func:`ldltfact`).
+See also [`ldltfact`](@ref).
 
 !!! note
     This method uses the CHOLMOD library from SuiteSparse, which only supports
@@ -1403,8 +1403,8 @@ Compute the ``LDL'`` factorization of a sparse matrix `A`.
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used. `F = ldltfact(A)` is most frequently
 used to solve systems of equations `A*x = b` with `F\\b`. The returned
-factorization object `F` also supports the methods [`diag`](:func:`diag`),
-[`det`](:func:`det`), and [`logdet`](:func:`logdet`).
+factorization object `F` also supports the methods [`diag`](@ref),
+[`det`](@ref), and [`logdet`](@ref).
 You can extract individual factors from `F` using `F[:L]`.
 However, since pivoting is on by default, the factorization is internally
 represented as `A == P'*L*D*L'*P` with a permutation matrix `P`;

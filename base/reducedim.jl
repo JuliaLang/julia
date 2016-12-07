@@ -250,7 +250,7 @@ dimensions to reduce, and `v0` is the initial value to use in the reductions. Fo
 
 The associativity of the reduction is implementation-dependent; if you need a particular
 associativity, e.g. left-to-right, you should write your own loop. See documentation for
-[`reduce`](:func:`reduce`).
+[`reduce`](@ref).
 
 ```jldoctest
 julia> a = reshape(collect(1:16), (4,4))

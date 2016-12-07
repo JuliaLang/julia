@@ -15,8 +15,7 @@ For multiple collection arguments, apply `f` elementwise.
 Results are returned in order as they become available.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](:ref:`Code Availability
-and Loading Packages <man-parallel-computing-code-availability>`)
+[Code Availability and Loading Packages](@ref)
 for details.
 """
 function pgenerate(p::WorkerPool, f, c)
@@ -39,8 +38,7 @@ workers and tasks.
 For multiple collection arguments, apply `f` elementwise.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](:ref:`Code Availability
-and Loading Packages <man-parallel-computing-code-availability>`)
+[Code Availability and Loading Packages](@ref)
 for details.
 
 If a worker pool is not specified, all available workers, i.e., the default worker pool
@@ -48,7 +46,7 @@ is used.
 
 By default, `pmap` distributes the computation over all specified workers. To use only the
 local process and distribute over tasks, specify `distributed=false`.
-This is equivalent to [`asyncmap`](:func:`asyncmap`).
+This is equivalent to [`asyncmap`](@ref).
 
 `pmap` can also use a mix of processes and tasks via the `batch_size` argument. For batch sizes
 greater than 1, the collection is split into multiple batches, which are distributed across

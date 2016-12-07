@@ -232,7 +232,7 @@ asyncmap(f, c...) = collect(AsyncGenerator(f, c...))
 """
     asyncmap!(f, c)
 
-In-place version of [`asyncmap()`](:func:`asyncmap`).
+In-place version of [`asyncmap()`](@ref).
 """
 asyncmap!(f, c) = (for x in AsyncCollector(f, c, c) end; c)
 
@@ -240,6 +240,6 @@ asyncmap!(f, c) = (for x in AsyncCollector(f, c, c) end; c)
 """
     asyncmap!(f, results, c...)
 
-Like [`asyncmap()`](:func:`asyncmap`), but stores output in `results` rather returning a collection.
+Like [`asyncmap()`](@ref), but stores output in `results` rather returning a collection.
 """
 asyncmap!(f, r, c1, c...) = (for x in AsyncCollector(f, r, c1, c...) end; r)

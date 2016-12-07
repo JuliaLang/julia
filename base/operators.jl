@@ -217,7 +217,7 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
 """
     max(x, y, ...)
 
-Return the maximum of the arguments. See also the [`maximum`](:func:`maximum`) function
+Return the maximum of the arguments. See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
 """
 max(x,y) = ifelse(y < x, x, y)
@@ -225,7 +225,7 @@ max(x,y) = ifelse(y < x, x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments. See also the [`minimum`](:func:`minimum`) function
+Return the minimum of the arguments. See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
 """
 min(x,y) = ifelse(y < x, y, x)
@@ -233,7 +233,7 @@ min(x,y) = ifelse(y < x, y, x)
 """
     minmax(x, y)
 
-Return `(min(x,y), max(x,y))`. See also: [`extrema`](:func:`extrema`) that returns `(minimum(x), maximum(x))`.
+Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
 
 ```jldoctest
 julia> minmax('c','b')
@@ -354,7 +354,7 @@ julia> bits(Int8(3))
 julia> bits(Int8(12))
 "00001100"
 ```
-See also [`>>`](:func:`>>`), [`>>>`](:func:`>>>`).
+See also [`>>`](@ref), [`>>>`](@ref).
 """
 function <<(x::Integer, c::Integer)
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
@@ -392,7 +392,7 @@ julia> bits(Int8(-14))
 julia> bits(Int8(-4))
 "11111100"
 ```
-See also [`>>>`](:func:`>>>`), [`<<`](:func:`<<`).
+See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
@@ -409,7 +409,7 @@ Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
 shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
 is equivalent to `x << -n`.
 
-For `Unsigned` integer types, this is equivalent to [`>>`](:func:`>>`). For
+For `Unsigned` integer types, this is equivalent to [`>>`](@ref). For
 `Signed` integer types, this is equivalent to `signed(unsigned(x) >> n)`.
 
 ```jldoctest
@@ -423,9 +423,9 @@ julia> bits(Int8(60))
 "00111100"
 ```
 `BigInt`s are treated as if having infinite size, so no filling is required and this
-is equivalent to [`>>`](:func:`>>`).
+is equivalent to [`>>`](@ref).
 
-See also [`>>`](:func:`>>`), [`<<`](:func:`<<`).
+See also [`>>`](@ref), [`<<`](@ref).
 """
 >>>(x::Integer, c::Integer) =
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)

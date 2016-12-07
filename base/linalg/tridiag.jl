@@ -20,7 +20,7 @@ end
 Construct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal,
 respectively. The result is of type `SymTridiagonal` and provides efficient specialized
 eigensolvers, but may be converted into a regular matrix with
-[`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short).
+[`convert(Array, _)`](@ref) (or `Array(_)` for short).
 
 # Example
 
@@ -354,7 +354,7 @@ end
 Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal,
 respectively.  The result is of type `Tridiagonal` and provides efficient specialized linear
 solvers, but may be converted into a regular matrix with
-[`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short).
+[`convert(Array, _)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
 
 # Example

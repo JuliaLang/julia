@@ -18,7 +18,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     # Period accessors
     typ_str = period in (:Hour, :Minute, :Second, :Millisecond) ? "DateTime" : "TimeType"
     description = typ_str == "TimeType" ? "`Date` or `DateTime`" : "`$typ_str`"
-    reference = period == :Week ? " For details see [`$accessor_str(::$typ_str)`](:func:`$accessor_str`)." : ""
+    reference = period == :Week ? " For details see [`$accessor_str(::$typ_str)`](@ref)." : ""
     @eval begin
         @doc """
             $($period_str)(dt::$($typ_str)) -> $($period_str)

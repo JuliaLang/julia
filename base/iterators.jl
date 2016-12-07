@@ -129,7 +129,7 @@ end
 For a set of iterable objects, returns an iterable of tuples, where the `i`th tuple contains
 the `i`th component of each input iterable.
 
-Note that [`zip`](:func:`zip`) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
+Note that [`zip`](@ref) is its own inverse: `collect(zip(zip(a...)...)) == collect(a)`.
 
 ```jldoctest
 julia> a = 1:5
