@@ -7,7 +7,7 @@ $(eval $(call git-external,http_parser,HTTPPARSER,,,$(BUILDDIR)))
 # Manually set the PLATFORM flag to whatever $(OS) is, because at least one
 # person (@staticfloat) has the PLATFORM envvar set to something else.
 # Also manually set PREFIX to DESTDIR
-HTTPPARSER_FLAGS := PLATFORM=$(shell echo $(OS) | tr A-Z a-z) PREFIX=$(build_prefix) LIBDIR=$(build_shlibdir)
+HTTPPARSER_FLAGS := PLATFORM=$(shell echo $(OS) | tr A-Z a-z) PREFIX=$(build_prefix) LIBDIR=$(build_shlibdir) "CC=$(CC)" "AR=$(AR)"
 
 $(eval $(call staged-install, \
 	http_parser,$$(HTTPPARSER_SRC_DIR), \
