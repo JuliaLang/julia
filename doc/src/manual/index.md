@@ -1,47 +1,41 @@
+# The Julia Manual
 
-.. _manual-index:
-
-##################
- The Julia Manual
-##################
-
-.. toctree::
-   :maxdepth: 1
-
-   introduction
-   getting-started
-   variables
-   integers-and-floating-point-numbers
-   mathematical-operations
-   complex-and-rational-numbers
-   strings
-   functions
-   control-flow
-   variables-and-scoping
-   types
-   methods
-   constructors
-   conversion-and-promotion
-   interfaces
-   modules
-   documentation
-   metaprogramming
-   arrays
-   linear-algebra
-   networking-and-streams
-   parallel-computing
-   dates
-   running-external-programs
-   calling-c-and-fortran-code
-   handling-operating-system-variation
-   interacting-with-julia
-   embedding
-   packages
-   profile
-   stacktraces
-   performance-tips
-   workflow-tips
-   style-guide
-   faq
-   noteworthy-differences
-   unicode-input
+  * [Introduction](@ref man-introduction)
+  * [Getting Started](@ref)
+  * [Variables](@ref)
+  * [Integers and Floating-Point Numbers](@ref)
+  * [Mathematical Operations and Elementary Functions](@ref)
+  * [Complex and Rational Numbers](@ref)
+  * [Strings](@ref)
+  * [Functions](@ref)
+  * [Control Flow](@ref)
+  * [Scope of Variables](@ref scope-of-variables)
+  * [Types](@ref man-types)
+  * [Methods](@ref)
+  * [Constructors](@ref man-constructors)
+  * [Conversion and Promotion](@ref conversion-and-promotion)
+  * [Interfaces](@ref)
+  * [Modules](@ref)
+  * [Documentation](@ref)
+  * [Metaprogramming](@ref)
+  * [Multi-dimensional Arrays](@ref man-multi-dim-arrays)
+  * [Linear algebra](@ref)
+  * [Networking and Streams](@ref)
+  * [Parallel Computing](@ref)
+  * [Date and DateTime](@ref)
+  * [Running External Programs](@ref)
+  * [Calling C and Fortran Code](@ref)
+  * [Handling Operating System Variation](@ref)
+  * [Interacting With Julia](@ref)
+  * [Embedding Julia](@ref)
+  * [Packages](@ref)
+  * [Package Development](@ref)
+  * [Profiling](@ref)
+  * [Memory allocation analysis](@ref)
+  * [Stack Traces](@ref)
+  * [Performance Tips](@ref man-performance-tips)
+  * [Workflow Tips](@ref man-workflow-tips)
+  * [Style Guide](@ref)
+  * [Frequently Asked Questions](@ref)
+  * [Noteworthy Differences from other Languages](@ref)
+  * [Unicode Input](@ref)
