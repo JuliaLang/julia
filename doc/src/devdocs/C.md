@@ -1,15 +1,6 @@
-:orphan:
+# Developing/debugging Julia's C code
 
-.. _devdocs-c-index:
-
-#####################################
- Developing/debugging Julia's C code
-#####################################
-
-.. toctree::
-   :maxdepth: 1
-
-   backtraces
-   debuggingtips
-   valgrind
-   sanitizers
+  * [Reporting and analyzing crashes (segfaults)](@ref)
+  * [gdb debugging tips](@ref)
+  * [Using Valgrind with Julia](@ref)
+  * [Sanitizer support](@ref)
