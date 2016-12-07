@@ -1,102 +1,93 @@
+# Julia Documentation
 
-%%%%%%%%%%%%%%%%%%%%%
- Julia Documentation
-%%%%%%%%%%%%%%%%%%%%%
+## Manual
 
-* :ref:`manual`
-* :ref:`stdlib`
-* :ref:`devdocs`
+  * [Introduction](@ref man-introduction)
+  * [Getting Started](@ref)
+  * [Variables](@ref)
+  * [Integers and Floating-Point Numbers](@ref)
+  * [Mathematical Operations and Elementary Functions](@ref)
+  * [Complex and Rational Numbers](@ref)
+  * [Strings](@ref man-strings)
+  * [Functions](@ref man-functions)
+  * [Control Flow](@ref)
+  * [Scope of Variables](@ref scope-of-variables)
+  * [Types](@ref man-types)
+  * [Methods](@ref)
+  * [Constructors](@ref man-constructors)
+  * [Conversion and Promotion](@ref conversion-and-promotion)
+  * [Interfaces](@ref)
+  * [Modules](@ref modules)
+  * [Documentation](@ref)
+  * [Metaprogramming](@ref)
+  * [Multi-dimensional Arrays](@ref man-multi-dim-arrays)
+  * [Linear Algebra](@ref)
+  * [Networking and Streams](@ref)
+  * [Parallel Computing](@ref)
+  * [Date and DateTime](@ref)
+  * [Running External Programs](@ref)
+  * [Calling C and Fortran Code](@ref)
+  * [Handling Operating System Variation](@ref)
+  * [Interacting With Julia](@ref)
+  * [Embedding Julia](@ref)
+  * [Packages](@ref)
+  * [Profiling](@ref)
+  * [Stack Traces](@ref)
+  * [Performance Tips](@ref man-performance-tips)
+  * [Workflow Tips](@ref man-workflow-tips)
+  * [Style Guide](@ref)
+  * [Frequently Asked Questions](@ref)
+  * [Noteworthy Differences from other Languages](@ref)
+  * [Unicode Input](@ref)
 
-.. _manual:
+## Standard Library
 
-########
- Manual
-########
+  * [Essentials](@ref)
+  * [Collections and Data Structures](@ref)
+  * [Mathematics](@ref)
+  * [Numbers](@ref lib-numbers)
+  * [Strings](@ref lib-strings)
+  * [Arrays](@ref lib-arrays)
+  * [Tasks and Parallel Computing](@ref)
+  * [Linear Algebra](@ref)
+  * [Constants](@ref lib-constants)
+  * [Filesystem](@ref)
+  * [I/O and Network](@ref)
+  * [Punctuation](@ref)
+  * [Sorting and Related Functions](@ref)
+  * [Package Manager Functions](@ref)
+  * [Dates and Time](@ref)
+  * [Iteration utilities](@ref)
+  * [Unit Testing](@ref)
+  * [C Interface](@ref)
+  * [C Standard Library](@ref)
+  * [Dynamic Linker](@ref)
+  * [Profiling](@ref lib-profiling)
+  * [StackTraces](@ref)
+  * [SIMD Support](@ref)
 
-.. NOTE: keep this list in sync with manual/index.rst
-.. toctree::
-   :maxdepth: 1
+## Developer Documentation
 
-   manual/introduction
-   manual/getting-started
-   manual/variables
-   manual/integers-and-floating-point-numbers
-   manual/mathematical-operations
-   manual/complex-and-rational-numbers
-   manual/strings
-   manual/functions
-   manual/control-flow
-   manual/variables-and-scoping
-   manual/types
-   manual/methods
-   manual/constructors
-   manual/conversion-and-promotion
-   manual/interfaces
-   manual/modules
-   manual/documentation
-   manual/metaprogramming
-   manual/arrays
-   manual/linear-algebra
-   manual/networking-and-streams
-   manual/parallel-computing
-   manual/dates
-   manual/running-external-programs
-   manual/calling-c-and-fortran-code
-   manual/handling-operating-system-variation
-   manual/interacting-with-julia
-   manual/embedding
-   manual/packages
-   manual/profile
-   manual/stacktraces
-   manual/performance-tips
-   manual/workflow-tips
-   manual/style-guide
-   manual/faq
-   manual/noteworthy-differences
-   manual/unicode-input
-
-.. _stdlib:
-
-##################
- Standard Library
-##################
-
-.. NOTE: keep this list in sync with stdlib/index.rst
-.. toctree::
-   :maxdepth: 1
-
-   stdlib/base
-   stdlib/collections
-   stdlib/math
-   stdlib/numbers
-   stdlib/strings
-   stdlib/arrays
-   stdlib/parallel
-   stdlib/linalg
-   stdlib/constants
-   stdlib/file
-   stdlib/io-network
-   stdlib/punctuation
-   stdlib/sort
-   stdlib/pkg
-   stdlib/dates
-   stdlib/test
-   stdlib/c
-   stdlib/libc
-   stdlib/libdl
-   stdlib/profile
-   stdlib/stacktraces
-   stdlib/simd-types
-
-.. _devdocs:
-
-#######################
-Developer Documentation
-#######################
-
-.. toctree::
-   :maxdepth: 2
-
-   devdocs/reflection
-   devdocs/julia
-   devdocs/C
+  * [Reflection and introspection](@ref)
+  * Documentation of Julia's Internals
+      * [Initialization of the Julia runtime](@ref)
+      * [Eval of Julia code](@ref)
+      * [Julia ASTs](@ref)
+      * [More about types](@ref)
+      * [Memory layout of Julia Objects](@ref)
+      * [Julia Functions](@ref)
+      * [Calling Conventions](@ref)
+      * [Base.Cartesian](@ref)
+      * [Talking to the compiler (the `:meta` mechanism)](@ref)
+      * [SubArrays](@ref)
+      * [System Image Building](@ref)
+      * [Working with LLVM](@ref)
+      * [printf() and stdio in the Julia runtime](@ref)
+      * [Bounds checking](@ref)
+      * [Proper maintenance and care of multi-threading locks](@ref)
+      * [Arrays with custom indices](@ref)
+  * Developing/debugging Julia's C code
+      * [Reporting and analyzing crashes (segfaults)](@ref)
+      * [gdb debugging tips](@ref)
+      * [Using Valgrind with Julia](@ref)
+      * [Sanitizer support](@ref)
