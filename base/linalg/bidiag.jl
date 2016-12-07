@@ -18,7 +18,7 @@ end
 Constructs an upper (`isupper=true`) or lower (`isupper=false`) bidiagonal matrix using the
 given diagonal (`dv`) and off-diagonal (`ev`) vectors.  The result is of type `Bidiagonal`
 and provides efficient specialized linear solvers, but may be converted into a regular
-matrix with [`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short). `ev`'s length
+matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short). `ev`'s length
 must be one less than the length of `dv`.
 
 # Example
@@ -61,7 +61,7 @@ Bidiagonal(dv::AbstractVector, ev::AbstractVector) = throw(ArgumentError("did yo
 Constructs an upper (`uplo='U'`) or lower (`uplo='L'`) bidiagonal matrix using the
 given diagonal (`dv`) and off-diagonal (`ev`) vectors.  The result is of type `Bidiagonal`
 and provides efficient specialized linear solvers, but may be converted into a regular
-matrix with [`convert(Array, _)`](:func:`convert`) (or `Array(_)` for short). `ev`'s
+matrix with [`convert(Array, _)`](@ref) (or `Array(_)` for short). `ev`'s
 length must be one less than the length of `dv`.
 
 # Example

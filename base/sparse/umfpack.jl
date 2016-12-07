@@ -127,9 +127,9 @@ The relation between `F` and `A` is
 
 `F` further supports the following functions:
 
-- [`\\`](:func:`\\`)
-- [`cond`](:func:`cond`)
-- [`det`](:func:`det`)
+- [`\\`](@ref)
+- [`cond`](@ref)
+- [`det`](@ref)
 
 ** Implementation note **
 

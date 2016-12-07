@@ -315,7 +315,7 @@ and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in
 as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
 This serves as a warning of potential type instability. Not all non-leaf types are particularly
 problematic for performance, so the results need to be used judiciously.
-See [Manual](:ref:`man-code-warntype`) for more information.
+See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
@@ -460,7 +460,7 @@ It calls out to the `functionloc` function.
     @code_typed
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_typed`](:func:`code_typed`) on the resulting expression.
+[`code_typed`](@ref) on the resulting expression.
 """
 :@code_typed
 
@@ -468,7 +468,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_warntype
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_warntype`](:func:`code_warntype`) on the resulting expression.
+[`code_warntype`](@ref) on the resulting expression.
 """
 :@code_warntype
 
@@ -476,7 +476,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_lowered
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_lowered`](:func:`code_lowered`) on the resulting expression.
+[`code_lowered`](@ref) on the resulting expression.
 """
 :@code_lowered
 
@@ -484,7 +484,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_llvm
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_llvm`](:func:`code_llvm`) on the resulting expression.
+[`code_llvm`](@ref) on the resulting expression.
 """
 :@code_llvm
 
@@ -492,7 +492,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_native
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_native`](:func:`code_native`) on the resulting expression.
+[`code_native`](@ref) on the resulting expression.
 """
 :@code_native
 

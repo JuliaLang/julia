@@ -18,7 +18,7 @@ convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
 """
     ldltfact!(S::SymTridiagonal) -> LDLt
 
-Same as [`ldltfact`](:func:`ldltfact`), but saves space by overwriting the input `A`, instead of creating a copy.
+Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 """
 function ldltfact!{T<:Real}(S::SymTridiagonal{T})
     n = size(S,1)

@@ -190,7 +190,7 @@ end
 """
     diagind(M, k::Integer=0)
 
-A [`Range`](:class:`Range`) giving the indices of the `k`th diagonal of the matrix `M`.
+A `Range` giving the indices of the `k`th diagonal of the matrix `M`.
 
 # Example
 
@@ -211,7 +211,7 @@ diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
     diag(M, k::Integer=0)
 
 The `k`th diagonal of a matrix, as a vector.
-Use [`diagm`](:func:`diagm`) to construct a diagonal matrix.
+Use [`diagm`](@ref) to construct a diagonal matrix.
 
 # Example
 
@@ -333,7 +333,7 @@ Compute the matrix exponential of `A`, defined by
 e^A = \\sum_{n=0}^{\\infty} \\frac{A^n}{n!}.
 ```
 
-For symmetric or Hermitian `A`, an eigendecomposition ([`eigfact`](:func:`eigfact`)) is
+For symmetric or Hermitian `A`, an eigendecomposition ([`eigfact`](@ref)) is
 used, otherwise the scaling and squaring algorithm (see [^H05]) is chosen.
 
 [^H05]: Nicholas J. Higham, "The squaring and scaling method for the matrix exponential revisited", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. [doi:10.1137/090768539](http://dx.doi.org/10.1137/090768539)
@@ -459,10 +459,10 @@ the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`
 the eigenvalues ``\\lambda`` of ``X``. If `A` has nonpositive eigenvalues, a nonprincipal
 matrix function is returned whenever possible.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](:func:`eigfact`)) is
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
 used, if `A` is triangular an improved version of the inverse scaling and squaring method is
 employed (see [^AH12] and [^AHR13]). For general matrices, the complex Schur form
-([`schur`](:func:`schur`)) is computed and the triangular algorithm is used on the
+([`schur`](@ref)) is computed and the triangular algorithm is used on the
 triangular factor.
 
 [^AH12]: Awad H. Al-Mohy and Nicholas J. Higham, "Improved inverse  scaling and squaring algorithms for the matrix logarithm", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. [doi:10.1137/110852553](http://dx.doi.org/10.1137/110852553)
@@ -528,9 +528,9 @@ If `A` has no negative real eigenvalues, compute the principal matrix square roo
 that is the unique matrix ``X`` with eigenvalues having positive real part such that
 ``X^2 = A``. Otherwise, a nonprincipal square root is returned.
 
-If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](:func:`eigfact`)) is
+If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
 used to compute the square root. Otherwise, the square root is determined by means of the
-Björck-Hammarling method, which computes the complex Schur form ([`schur`](:func:`schur`))
+Björck-Hammarling method, which computes the complex Schur form ([`schur`](@ref))
 and then the complex square root of the triangular factor.
 
 [^BH83]: Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix", Linear Algebra and its Applications, 52-53, 1983, 127-140. [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
@@ -603,16 +603,16 @@ systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
 
 | Properties of `A`          | type of factorization                          |
 |:---------------------------|:-----------------------------------------------|
-| Positive-definite          | Cholesky (see [`cholfact`](:func:`cholfact`))  |
-| Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bkfact`](:func:`bkfact`)) |
-| Sparse Symmetric/Hermitian | LDLt (see [`ldltfact`](:func:`ldltfact`))      |
+| Positive-definite          | Cholesky (see [`cholfact`](@ref))  |
+| Dense Symmetric/Hermitian  | Bunch-Kaufman (see [`bkfact`](@ref)) |
+| Sparse Symmetric/Hermitian | LDLt (see [`ldltfact`](@ref))      |
 | Triangular                 | Triangular                                     |
 | Diagonal                   | Diagonal                                       |
 | Bidiagonal                 | Bidiagonal                                     |
-| Tridiagonal                | LU (see [`lufact`](:func:`lufact`))            |
-| Symmetric real tridiagonal | LDLt (see [`ldltfact`](:func:`ldltfact`))      |
-| General square             | LU (see [`lufact`](:func:`lufact`))            |
-| General non-square         | QR (see [`qrfact`](:func:`qrfact`))            |
+| Tridiagonal                | LU (see [`lufact`](@ref))            |
+| Symmetric real tridiagonal | LDLt (see [`ldltfact`](@ref))      |
+| General square             | LU (see [`lufact`](@ref))            |
+| General non-square         | QR (see [`qrfact`](@ref))            |
 
 If `factorize` is called on a Hermitian positive-definite matrix, for instance, then `factorize`
 will return a Cholesky factorization.

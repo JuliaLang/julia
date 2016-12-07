@@ -5,11 +5,11 @@
 """
     Condition()
 
-Create an edge-triggered event source that tasks can wait for. Tasks that call [`wait`](:func:`wait`) on a
-`Condition` are suspended and queued. Tasks are woken up when [`notify`](:func:`notify`) is later called on
-the `Condition`. Edge triggering means that only tasks waiting at the time [`notify`](:func:`notify`) is
+Create an edge-triggered event source that tasks can wait for. Tasks that call [`wait`](@ref) on a
+`Condition` are suspended and queued. Tasks are woken up when [`notify`](@ref) is later called on
+the `Condition`. Edge triggering means that only tasks waiting at the time [`notify`](@ref) is
 called can be woken up. For level-triggered notifications, you must keep extra state to keep
-track of whether a notification has happened. The [`Channel`](:class:`Channel`) type does
+track of whether a notification has happened. The [`Channel`](@ref) type does
 this, and so can be used for level-triggered events.
 """
 type Condition
@@ -60,7 +60,7 @@ n_waiters(c::Condition) = length(c.waitq)
 """
     @schedule
 
-Wrap an expression in a [`Task`](:obj:`Task`) and add it to the local machine's scheduler queue.
+Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
 """
 macro schedule(expr)
     expr = :(()->($expr))
@@ -84,11 +84,11 @@ schedule(t::Task) = enq_work(t)
 """
     schedule(t::Task, [val]; error=false)
 
-Add a [`Task`](:obj:`Task`) to the scheduler's queue. This causes the task to run constantly when the system
-is otherwise idle, unless the task performs a blocking operation such as [`wait`](:func:`wait`).
+Add a [`Task`](@ref) to the scheduler's queue. This causes the task to run constantly when the system
+is otherwise idle, unless the task performs a blocking operation such as [`wait`](@ref).
 
 If a second argument `val` is provided, it will be passed to the task (via the return value of
-[`yieldto`](:func:`yieldto`)) when it runs again. If `error` is `true`, the value is raised as an exception in
+[`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
 the woken task.
 
 ```jldoctest
@@ -223,10 +223,10 @@ end
     AsyncCondition()
 
 Create a async condition that wakes up tasks waiting for it
-(by calling [`wait`](:func:`wait`) on the object)
+(by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
-Waiting tasks are woken with an error when the object is closed (by [`close`](:func:`close`).
-Use [`isopen`](:func:`isopen`) to check whether it is still active.
+Waiting tasks are woken with an error when the object is closed (by [`close`](@ref).
+Use [`isopen`](@ref) to check whether it is still active.
 """
 type AsyncCondition
     handle::Ptr{Void}
@@ -297,9 +297,9 @@ end
 """
     Timer(delay, repeat=0)
 
-Create a timer that wakes up tasks waiting for it (by calling [`wait`](:func:`wait`) on the timer object) at
+Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) at
 a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the
-timer is closed (by [`close`](:func:`close`). Use [`isopen`](:func:`isopen`) to check whether a timer is still active.
+timer is closed (by [`close`](@ref). Use [`isopen`](@ref) to check whether a timer is still active.
 """
 type Timer
     handle::Ptr{Void}
@@ -387,7 +387,7 @@ Create a timer to call the given `callback` function. The `callback` is passed o
 the timer object itself. The callback will be invoked after the specified initial `delay`,
 and then repeating with the given `repeat` interval. If `repeat` is `0`, the timer is only
 triggered once. Times are in seconds. A timer is stopped and has its resources freed by
-calling [`close`](:func:`close`) on it.
+calling [`close`](@ref) on it.
 """
 function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
     t = Timer(timeout, repeat)

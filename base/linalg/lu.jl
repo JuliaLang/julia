@@ -23,8 +23,8 @@ end
 """
     lufact!(A, pivot=Val{true}) -> LU
 
-`lufact!` is the same as [`lufact`](:func:`lufact`), but saves space by overwriting the
-input `A`, instead of creating a copy. An [`InexactError`](:obj:`InexactError`)
+`lufact!` is the same as [`lufact`](@ref), but saves space by overwriting the
+input `A`, instead of creating a copy. An [`InexactError`](@ref)
 exception is thrown if the factorisation produces a number not representable by the
 element type of `A`, e.g. for integer types.
 """
@@ -108,13 +108,13 @@ The relationship between `F` and `A` is
 
 | Supported function               | `LU` | `LU{T,Tridiagonal{T}}` |
 |:---------------------------------|:-----|:-----------------------|
-| [`/`](:func:`/`)                 | ✓    |                        |
-| [`\\`](:func:`\\`)               | ✓    | ✓                      |
-| [`cond`](:func:`cond`)           | ✓    |                        |
-| [`det`](:func:`det`)             | ✓    | ✓                      |
-| [`logdet`](:func:`logdet`)       | ✓    | ✓                      |
-| [`logabsdet`](:func:`logabsdet`) | ✓    | ✓                      |
-| [`size`](:func:`size`)           | ✓    | ✓                      |
+| [`/`](@ref)                 | ✓    |                        |
+| [`\\`](@ref)               | ✓    | ✓                      |
+| [`cond`](@ref)           | ✓    |                        |
+| [`det`](@ref)             | ✓    | ✓                      |
+| [`logdet`](@ref)       | ✓    | ✓                      |
+| [`logabsdet`](@ref) | ✓    | ✓                      |
+| [`size`](@ref)           | ✓    | ✓                      |
 
 # Example
 
@@ -164,7 +164,7 @@ Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
 By default, pivoting is used. This can be overridden by passing
 `Val{false}` for the second argument.
 
-See also [`lufact`](:func:`lufact`).
+See also [`lufact`](@ref).
 
 # Example
 

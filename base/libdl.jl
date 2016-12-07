@@ -9,7 +9,7 @@ export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOC
 """
     DL_LOAD_PATH
 
-When calling [`dlopen`](:func:`dlopen`), the paths in this list will be searched first, in
+When calling [`dlopen`](@ref), the paths in this list will be searched first, in
 order, before searching the system locations for a valid library handle.
 """
 const DL_LOAD_PATH = String[]
@@ -39,7 +39,7 @@ const RTLD_FIRST     = 0x00000080
     RTLD_NOLOAD
     RTLD_NOW
 
-Enum constant for [`dlopen`](:func:`dlopen`). See your platform man page for details, if
+Enum constant for [`dlopen`](@ref). See your platform man page for details, if
 applicable.
 """ ->
 (RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL, RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW)
@@ -100,7 +100,7 @@ dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
 """
     dlopen_e(libfile::AbstractString [, flags::Integer])
 
-Similar to [`dlopen`](:func:`dlopen`), except returns a `NULL` pointer instead of raising errors.
+Similar to [`dlopen`](@ref), except returns a `NULL` pointer instead of raising errors.
 """
 function dlopen_e end
 

@@ -144,7 +144,7 @@ searchindex(s::ByteArray, t::ByteArray, i) = _searchindex(s,t,i)
 """
     searchindex(s::AbstractString, substring, [start::Integer])
 
-Similar to [`search`](:func:`search`), but return only the start index at which
+Similar to [`search`](@ref), but return only the start index at which
 the substring is found, or `0` if it is not.
 """
 searchindex(s::AbstractString, t::AbstractString, i::Integer) = _searchindex(s,t,i)
@@ -189,7 +189,7 @@ end
 """
     rsearch(s::AbstractString, chars::Chars, [start::Integer])
 
-Similar to [`search`](:func:`search`), but returning the last occurrence of the given characters within the
+Similar to [`search`](@ref), but returning the last occurrence of the given characters within the
 given string, searching in reverse from `start`.
 
 ```jldoctest
@@ -304,7 +304,7 @@ rsearchindex(s::ByteArray,t::ByteArray,i) = _rsearchindex(s,t,i)
 """
     rsearchindex(s::AbstractString, substring, [start::Integer])
 
-Similar to [`rsearch`](:func:`rsearch`), but return only the start index at which the substring is found, or `0` if it is not.
+Similar to [`rsearch`](@ref), but return only the start index at which the substring is found, or `0` if it is not.
 """
 rsearchindex(s::AbstractString, t::AbstractString, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))

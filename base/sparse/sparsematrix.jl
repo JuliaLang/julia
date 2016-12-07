@@ -52,7 +52,7 @@ Return a vector of the structural nonzero values in sparse array `A`. This
 includes zeros that are explicitly stored in the sparse array. The returned
 vector points directly to the internal nonzero storage of `A`, and any
 modifications to the returned vector will mutate `A` as well. See
-[`rowvals`](:func:`rowvals`) and [`nzrange`](:func:`nzrange`).
+[`rowvals`](@ref) and [`nzrange`](@ref).
 
 ```jldoctest
 julia> A = speye(3)
@@ -76,7 +76,7 @@ nonzeros(S::SparseMatrixCSC) = S.nzval
 Return a vector of the row indices of `A`. Any modifications to the returned
 vector will mutate `A` as well. Providing access to how the row indices are
 stored internally can be useful in conjunction with iterating over structural
-nonzero values. See also [`nonzeros`](:func:`nonzeros`) and [`nzrange`](:func:`nzrange`).
+nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 
 ```jldoctest
 julia> A = speye(3)
@@ -98,8 +98,8 @@ rowvals(S::SparseMatrixCSC) = S.rowval
     nzrange(A::SparseMatrixCSC, col::Integer)
 
 Return the range of indices to the structural nonzero values of a sparse matrix
-column. In conjunction with [`nonzeros`](:func:`nonzeros`) and
-[`rowvals`](:func:`rowvals`), this allows for convenient iterating over a sparse matrix :
+column. In conjunction with [`nonzeros`](@ref) and
+[`rowvals`](@ref), this allows for convenient iterating over a sparse matrix :
 
     A = sparse(I,J,V)
     rows = rowvals(A)
@@ -443,7 +443,7 @@ are set to `maximum(I)` and `maximum(J)` respectively. If the `combine` function
 supplied, `combine` defaults to `+` unless the elements of `V` are Booleans in which case
 `combine` defaults to `|`. All elements of `I` must satisfy `1 <= I[k] <= m`, and all
 elements of `J` must satisfy `1 <= J[k] <= n`. Numerical zeros in (`I`, `J`, `V`) are
-retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](:func:`dropzeros!`).
+retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](@ref).
 
 For additional documentation and an expert driver, see `Base.SparseArrays.sparse!`.
 
@@ -509,8 +509,8 @@ sparse(I::AbstractVector, J::AbstractVector, V::AbstractVector, m::Integer, n::I
         csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
         [csccolptr::Vector{Ti}], [cscrowval::Vector{Ti}, cscnzval::Vector{Tv}] )
 
-Parent of and expert driver for [`sparse`](:func:`sparse`);
-see [`sparse`](:func:`sparse`) for basic usage. This method
+Parent of and expert driver for [`sparse`](@ref);
+see [`sparse`](@ref) for basic usage. This method
 allows the user to provide preallocated storage for `sparse`'s intermediate objects and
 result as described below. This capability enables more efficient successive construction
 of `SparseMatrixCSC`s from coordinate representations, and also enables extraction of an
@@ -802,7 +802,7 @@ ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ftranspose(A, conj)
         A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
         C::SparseMatrixCSC{Tv,Ti})
 
-See [`permute!`](:func:`Base.SparseArrays.permute!`) for basic usage. Parent of `permute[!]`
+See [`permute!`](@ref) for basic usage. Parent of `permute[!]`
 methods operating on `SparseMatrixCSC`s that assume none of `X`, `A`, and `C` alias each
 other. As this method performs no argument checking, prefer the safer child methods
 (`permute[!]`) to direct use.
@@ -817,7 +817,7 @@ avoids an unnecessary length-`nnz(A)` array-sweep and associated recomputation o
 pointers. See [`halfperm!`](:func:Base.SparseArrays.halfperm!) for additional algorithmic
 information.
 
-See also: [`unchecked_aliasing_permute!`](:func:`Base.SparseArrays.unchecked_aliasing_permute!`)
+See also: `unchecked_aliasing_permute!`
 """
 function unchecked_noalias_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
         A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
@@ -832,9 +832,9 @@ end
         A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
         C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
 
-See [`permute!`](:func:`Base.SparseArrays.permute!`) for basic usage. Parent of `permute!`
+See [`permute!`](@ref) for basic usage. Parent of `permute!`
 methods operating on `SparseMatrixCSC`s where the source and destination matrices are the
-same. See [`unchecked_noalias_permute!`](:func:`Base.SparseArrays.unchecked_noalias_permute`)
+same. See `unchecked_noalias_permute!`
 for additional information; these methods are identical but for this method's requirement of
 the additional `workcolptr`, `length(workcolptr) >= A.n + 1`, which enables efficient
 handling of the source-destination aliasing.
@@ -987,10 +987,10 @@ must have enough storage to accommodate all allocated entries in `A` (`length(C.
 and `length(C.nzval) >= nnz(A)`).
 
 For additional (algorithmic) information, and for versions of these methods that forgo
-argument checking, see (unexported) parent methods [`unchecked_noalias_permute!`](:func:`Base.SparseArrays.unchecked_noalias_permute!`)
-and [`unchecked_aliasing_permute!`](:func:`Base.SparseArrays.unchecked_aliasing_permute!`).
+argument checking, see (unexported) parent methods `unchecked_noalias_permute!`
+and `unchecked_aliasing_permute!`.
 
-See also: [`permute`](:func:`Base.SparseArrays.permute`)
+See also: [`permute`](@ref)
 """
 function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
         A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq})
@@ -1042,7 +1042,7 @@ Bilaterally permute `A`, returning `PAQ` (`A[p,q]`). Column-permutation `q`'s le
 match `A`'s column count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s
 row count (`length(p) == A.m`).
 
-For expert drivers and additional information, see [`permute!`](:func:`Base.SparseArrays.permute!`).
+For expert drivers and additional information, see [`permute!`](@ref).
 """
 function permute{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
         p::AbstractVector{Tp}, q::AbstractVector{Tq})
@@ -1131,8 +1131,8 @@ droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) =
 Removes stored numerical zeros from `A`, optionally trimming resulting excess space from
 `A.rowval` and `A.nzval` when `trim` is `true`.
 
-For an out-of-place version, see [`dropzeros`](:func:`dropzeros`). For
-algorithmic information, see [`Base.SparseArrays.fkeep!`](:func:`Base.SparseArrays.fkeep!`).
+For an out-of-place version, see [`dropzeros`](@ref). For
+algorithmic information, see `fkeep!`.
 """
 dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
 """
@@ -1141,7 +1141,7 @@ dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 
 Generates a copy of `A` and removes stored numerical zeros from that copy, optionally
 trimming excess space from the result's `rowval` and `nzval` arrays when `trim` is `true`.
 
-For an in-place version and algorithmic information, see [`dropzeros!`](:func:`dropzeros!`).
+For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 """
 dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
@@ -1250,7 +1250,7 @@ which the probability of any element being nonzero is independently given by
 `p` (and hence the mean density of nonzeros is also exactly `p`). Nonzero
 values are sampled from the distribution specified by `rfn` and have the type `type`. The uniform
 distribution is used in case `rfn` is not specified. The optional `rng`
-argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
+argument specifies a random number generator, see [Random Numbers](@ref).
 """
 function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(r,1)))
@@ -1288,7 +1288,7 @@ sprand{T}(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) = sprand(GL
 Create a random sparse vector of length `m` or sparse matrix of size `m` by `n`
 with the specified (independent) probability `p` of any entry being nonzero,
 where nonzero values are sampled from the normal distribution. The optional `rng`
-argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
+argument specifies a random number generator, see [Random Numbers](@ref).
 """
 sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
 sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
@@ -1316,7 +1316,7 @@ julia> spones(A)
         [2, 4]  =  1.0
 ```
 
-Note the difference from [`speye`](:func:`speye`).
+Note the difference from [`speye`](@ref).
 """
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
@@ -1363,7 +1363,7 @@ julia> speye(A)
         [4, 4]  =  1.0
 ```
 
-Note the difference from [`spones`](:func:`spones`).
+Note the difference from [`spones`](@ref).
 """
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 eye(S::SparseMatrixCSC) = speye(S)

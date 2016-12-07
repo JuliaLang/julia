@@ -228,9 +228,9 @@ end
     besselh(nu, [k=1,] x)
 
 Bessel function of the third kind of order `nu` (the Hankel function). `k` is either 1 or 2,
-selecting [`hankelh1`](:func:`hankelh1`) or [`hankelh2`](:func:`hankelh2`), respectively.
+selecting [`hankelh1`](@ref) or [`hankelh2`](@ref), respectively.
 `k` defaults to 1 if it is omitted.
-(See also [`besselhx`](:func:`besselhx`) for an exponentially scaled variant.)
+(See also [`besselhx`](@ref) for an exponentially scaled variant.)
 """
 function besselh end
 
@@ -251,7 +251,7 @@ Compute the scaled Hankel function ``\\exp(∓iz) H_ν^{(k)}(z)``, where
 
 The reason for this function is that ``H_ν^{(k)}(z)`` is asymptotically
 proportional to ``\\exp(∓iz)/\\sqrt{z}`` for large ``|z|``, and so the
-[`besselh`](:func:`besselh`) function is susceptible to overflow or underflow
+[`besselh`](@ref) function is susceptible to overflow or underflow
 when `z` has a large imaginary part.  The `besselhx` function cancels this
 exponential factor (analytically), so it avoids these problems.
 """

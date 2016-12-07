@@ -506,7 +506,7 @@ end
 
 `@__FILE__` expands to a string with the absolute file path of the file containing the
 macro. Returns `nothing` if run from a REPL or an empty string if evaluated by
-`julia -e <expr>`. Alternatively see [`PROGRAM_FILE`](:data:`PROGRAM_FILE`).
+`julia -e <expr>`. Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__() source_path() end
 
@@ -565,7 +565,7 @@ end
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](:func:`include`), evaluate all expressions,
+Load the file using [`include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
@@ -628,11 +628,11 @@ compilecache(mod::Symbol) = compilecache(string(mod))
 """
     Base.compilecache(module::String)
 
-Creates a [precompiled cache file](:ref:`man-modules-initialization-precompilation`) for
+Creates a precompiled cache file for
 a module and all of its dependencies.
 This can be used to reduce package load times. Cache files are stored in
 `LOAD_CACHE_PATH[1]`, which defaults to `~/.julia/lib/VERSION`. See
-[Module initialization and precompilation](:ref:`Module initialization and precompilation <man-modules-initialization-precompilation>`)
+[Module initialization and precompilation](@ref)
 for important notes.
 """
 function compilecache(name::String)

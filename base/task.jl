@@ -53,7 +53,7 @@ end
 """
     @task
 
-Wrap an expression in a [`Task`](:class:`Task`) without executing it, and return the [`Task`](:class:`Task`). This only
+Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
 
 ```jldoctest
@@ -79,7 +79,7 @@ end
 """
     current_task()
 
-Get the currently running [`Task`](:class:`Task`).
+Get the currently running [`Task`](@ref).
 """
 current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 

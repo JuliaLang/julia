@@ -31,7 +31,7 @@ end
 
 Returns a boolean value indicating whether or not the object `x` can be written as the given
 `mime` type. (By default, this is determined automatically by the existence of the
-corresponding [`show`](:func:`show`) method for `typeof(x)`.)
+corresponding [`show`](@ref) method for `typeof(x)`.)
 """
 mimewritable{mime}(::MIME{mime}, x) =
   method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
@@ -78,7 +78,7 @@ _binreprmime(m::MIME, x::Vector{UInt8}) = x
     stringmime(mime, x)
 
 Returns an `AbstractString` containing the representation of `x` in the
-requested `mime` type. This is similar to [`reprmime`](:func:`reprmime`) except
+requested `mime` type. This is similar to [`reprmime`](@ref) except
 that binary data is base64-encoded as an ASCII string.
 """
 stringmime(m::MIME, x) = istextmime(m) ? reprmime(m, x) : _binstringmime(m, x)

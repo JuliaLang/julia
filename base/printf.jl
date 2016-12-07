@@ -1181,7 +1181,7 @@ Print `args` using C `printf()` style format specification string, with some cav
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`.
 
-Optionally, an [`IOStream`](:obj:`IOStream`)
+Optionally, an `IOStream`
 may be passed as the first argument to redirect output.
 
 # Examples

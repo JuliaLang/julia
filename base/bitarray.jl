@@ -33,7 +33,7 @@ end
     BitArray{N}(dims::NTuple{N,Int})
 
 Construct an uninitialized `BitArray` with the given dimensions.
-Behaves identically to the [`Array`](:func:`Array`) constructor.
+Behaves identically to the [`Array`](@ref) constructor.
 """
 BitArray(dims::Integer...) = BitArray(map(Int,dims))
 BitArray{N}(dims::NTuple{N,Int}) = BitArray{N}(dims...)
@@ -1187,7 +1187,7 @@ end
 """
     flipbits!(B::BitArray{N}) -> BitArray{N}
 
-Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
+Performs a bitwise not operation on `B`. See [`~`](@ref).
 
 ```jldoctest
 julia> A = trues(2,2)
@@ -1632,7 +1632,7 @@ rol!(B::BitVector, i::Integer) = rol!(B, B, i)
 
 Performs a left rotation operation, returning a new `BitVector`.
 `i` controls how far to rotate the bits.
-See also [`rol!`](:func:`rol!`).
+See also [`rol!`](@ref).
 
 ```jldoctest
 julia> A = BitArray([true, true, false, false, true])
@@ -1701,7 +1701,7 @@ ror!(B::BitVector, i::Integer) = ror!(B, B, i)
 
 Performs a right rotation operation on `B`, returning a new `BitVector`.
 `i` controls how far to rotate the bits.
-See also [`ror!`](:func:`ror!`).
+See also [`ror!`](@ref).
 
 ```jldoctest
 julia> A = BitArray([true, true, false, false, true])
