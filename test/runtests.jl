@@ -44,6 +44,16 @@ cd(dirname(@__FILE__)) do
     end
 
     @everywhere include("testdefs.jl")
+
+    #pretty print the information about gc and mem usage
+    name_align    = max(length("Test (Worker)"), maximum(map(x -> length(x) + 3 + ndigits(nworkers()), tests)))
+    elapsed_align = length("Time (s)")
+    gc_align      = length("GC (s)")
+    percent_align = length("GC %")
+    alloc_align   = length("Alloc (MB)")
+    rss_align     = length("RSS (MB)")
+    print_with_color(:white, rpad("Test (Worker)",name_align," "), " | ")
+    print_with_color(:white, "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n")
     results=[]
     @sync begin
         for p in workers()
@@ -66,6 +76,22 @@ cd(dirname(@__FILE__)) do
                             # single process testing, bail if mem limit reached, or, on an exception.
                             isa(resp, Exception) ? rethrow(resp) : error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                         end
+                    end
+                    if !isa(resp[1], Exception)
+                        print_with_color(:white, rpad(test*" ($p)", name_align, " "), " | ")
+                        time_str = @sprintf("%7.2f",resp[2])
+                        print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
+                        gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
+                        print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
+
+                        # since there may be quite a few digits in the percentage,
+                        # the left-padding here is less to make sure everything fits
+                        percent_str = @sprintf("%4.1f",100*resp[5].total_time/(10^9*resp[2]))
+                        print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
+                        alloc_str = @sprintf("%5.2f",resp[3]/2^20)
+                        print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
+                        rss_str = @sprintf("%5.2f",resp[6]/2^20)
+                        print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
                     end
                 end
             end
@@ -161,31 +187,6 @@ cd(dirname(@__FILE__)) do
     end
     println()
     Base.Test.print_test_results(o_ts,1)
-    #pretty print the information about gc and mem usage
-    name_align    = maximum(map(x -> length(x[1]), results))
-    elapsed_align = length("Total time (s):")
-    gc_align      = length("GC time (s):")
-    percent_align = length("Percent in gc:")
-    alloc_align   = length("Allocated (MB):")
-    rss_align     = length("RSS (MB):")
-    print_with_color(:white, rpad("Test:",name_align," "), " | ")
-    print_with_color(:white, "Total time (s): | GC time (s): | Percent in gc: | Allocated (MB): | RSS (MB):\n")
-    for res in results
-        if !isa(res[2][1], Exception)
-            print_with_color(:white, rpad("$(res[1])",name_align," "), " | ")
-            time_str = @sprintf("%7.2f",res[2][2])
-            print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
-            gc_str = @sprintf("%7.2f",res[2][5].total_time/10^9)
-            print_with_color(:white, rpad(gc_str,gc_align," "), " | ")
-            percent_str = @sprintf("%7.2f",100*res[2][5].total_time/(10^9*res[2][2]))
-            print_with_color(:white, rpad(percent_str,percent_align," "), " | ")
-            alloc_str = @sprintf("%7.2f",res[2][3]/2^20)
-            print_with_color(:white, rpad(alloc_str,alloc_align," "), " | ")
-            rss_str = @sprintf("%7.2f",res[2][6]/2^20)
-            print_with_color(:white, rpad(rss_str,rss_align," "), "\n")
-        end
-    end
-
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")
     else
