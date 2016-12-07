@@ -11,10 +11,11 @@ Language changes
     nonstandard command literal is like a nonstandard string literal, but the
     syntax uses backquotes (``` ` ```) instead of double quotes, and the
     resulting macro called is suffixed with `_cmd`. For instance, the syntax
-    ``` q`xyz` ``` is equivalent to `@q_cmd "xyz"`.
+    ``` q`xyz` ``` is equivalent to `@q_cmd "xyz"`. ([#18644])
+    
   * Nonstandard string and command literals can now be qualified with their
     module. For instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`.
-    Previously, this syntax parsed as an implicit multiplication.
+    Previously, this syntax parsed as an implicit multiplication. ([#18690])
 
 Breaking changes
 ----------------
@@ -716,6 +717,8 @@ Language tooling improvements
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
 [#18442]: https://github.com/JuliaLang/julia/issues/18442
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
+[#18644]: https://github.com/JuliaLang/julia/issues/18644
+[#18690]: https://github.com/JuliaLang/julia/issues/18690
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
