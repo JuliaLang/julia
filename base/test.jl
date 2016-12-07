@@ -44,7 +44,9 @@ immutable Pass <: Result
 end
 function Base.show(io::IO, t::Pass)
     print_with_color(:green, io, "Test Passed\n")
-    print(io, "  Expression: ", t.orig_expr)
+    if !(t.orig_expr === nothing)
+        print(io, "  Expression: ", t.orig_expr)
+    end
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
@@ -139,9 +141,9 @@ type Broken <: Result
 end
 function Base.show(io::IO, t::Broken)
     print_with_color(:yellow, io, "Test Broken\n")
-    if t.test_type == :skipped
+    if t.test_type == :skipped && !(t.orig_expr === nothing)
         println(io, "  Skipped: ", t.orig_expr)
-    else
+    elseif !(t.orig_expr === nothing)
         println(io, "Expression: ", t.orig_expr)
     end
 end
