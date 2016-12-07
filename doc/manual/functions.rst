@@ -422,29 +422,25 @@ Optional Arguments
 ------------------
 
 In many cases, function arguments have sensible default values and therefore
-might not need to be passed explicitly in every call. For example, the
-library function :func:`parse(type,num,base) <parse>` interprets a string as a number
-in some base. The ``base`` argument defaults to ``10``. This behavior can be
+might not need to be passed explicitly in every call. For example, consider the
+function ``f(x, y, z=1)``. The ``z`` argument defaults to ``1``. This behavior can be
 expressed concisely as::
 
-    function parse(type, num, base=10)
-        ###
+    function f(x, y, z=1)
+        return x, y, z
     end
 
 With this definition, the function can be called with either two or three
-arguments, and ``10`` is automatically passed when a third argument is not
+arguments, and ``1`` is automatically passed when a third argument is not
 specified:
 
 .. doctest::
 
-    julia> parse(Int,"12",10)
-    12
+    julia> f(2, 3)
+    (2,3,1)
 
-    julia> parse(Int,"12",3)
-    5
-
-    julia> parse(Int,"12")
-    12
+    julia> f(2, 3, 4)
+    (2,3,4)
 
 Optional arguments are actually just a convenient syntax for writing
 multiple method definitions with different numbers of arguments
