@@ -1,31 +1,25 @@
-.. _stdlib-index:
+# The Julia Standard Library
 
-############################
- The Julia Standard Library
-############################
-
-.. toctree::
-   :maxdepth: 1
-
-   base
-   collections
-   math
-   numbers
-   strings
-   arrays
-   parallel
-   linalg
-   constants
-   file
-   io-network
-   punctuation
-   sort
-   pkg
-   dates
-   iterators
-   test
-   c
-   libc
-   libdl
-   profile
-   simd-types
+  * [Essentials](@ref)
+  * [Collections and Data Structures](@ref)
+  * [Mathematics](@ref)
+  * [Numbers](@ref lib-numbers)
+  * [Strings](@ref lib-strings)
+  * [Arrays](@ref lib-arrays)
+  * [Tasks and Parallel Computing](@ref)
+  * [Linear Algebra](@ref)
+  * [Constants](@ref lib-constants)
+  * [Filesystem](@ref)
+  * [I/O and Network](@ref)
+  * [Punctuation](@ref)
+  * [Sorting and Related Functions](@ref)
+  * [Package Manager Functions](@ref)
+  * [Dates and Time](@ref)
+  * [Iteration utilities](@ref)
+  * [Unit Testing](@ref)
+  * [C Interface](@ref)
+  * [LLVM Interface](@ref)
+  * [C Standard Library](@ref)
+  * [Dynamic Linker](@ref)
+  * [Profiling](@ref lib-profiling)
+  * [SIMD Support](@ref)
