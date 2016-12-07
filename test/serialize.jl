@@ -77,6 +77,14 @@ create_serialization_stream() do s
     @test deserialize(s) === Tuple{}
 end
 
+# Dict
+create_serialization_stream() do s
+    dct = Dict("A"=>1, "B"=>2)
+    serialize(s, dct)
+    seek(s, 0)
+    @test deserialize(s) == dct
+end
+
 # Symbol
 create_serialization_stream() do s
     gensym(len) = Symbol(repeat("A", len))
