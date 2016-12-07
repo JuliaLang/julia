@@ -614,13 +614,13 @@ ldexp(a::Float16, b::Integer) = Float16(ldexp(Float32(a), b))
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
-include("special/trig.jl")
-include("special/bessel.jl")
-include("special/erf.jl")
-include("special/gamma.jl")
+include("trig.jl")
+include("bessel.jl")
+include("erf.jl")
+include("gamma.jl")
 
 module JuliaLibm
-include("special/log.jl")
+include("log.jl")
 end
 
 end # module
