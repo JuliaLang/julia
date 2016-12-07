@@ -36,6 +36,8 @@ immutable JLOptions
     outputo::Ptr{UInt8}
     outputji::Ptr{UInt8}
     incremental::Int8
+    image_file_specified::Int8
+    region_pg_cnt::Int32
 end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))

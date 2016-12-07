@@ -51,7 +51,8 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // output-o
                             NULL, // output-ji
                             0, // incremental
-                            0 // image_file_specified
+                            0, // image_file_specified
+                            0  // region_pg_cnt
 };
 
 static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
@@ -66,6 +67,9 @@ static const char opts[]  =
     " -H, --home <dir>          Set location of `julia` executable\n"
     " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
     " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n\n"
+
+    // config options
+    " --config-gc-region-size={N}     Set the garbage collector's region size in megabytes (suffix with 'M') or gigabytes (suffix with 'G')\n\n"
 
     // actions
     " -e, --eval <expr>         Evaluate <expr>\n"
@@ -144,7 +148,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_output_ji,
            opt_use_precompiled,
            opt_use_compilecache,
-           opt_incremental
+           opt_incremental,
+           opt_config_gc_region_size
     };
     static const char* const shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O:g:";
     static const struct option longopts[] = {
@@ -181,6 +186,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "polly",           required_argument, 0, opt_polly },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
+        // config options
+        { "config-gc-region-size", required_argument, 0, opt_config_gc_region_size },
         // hidden command line options
         { "worker",          required_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
@@ -504,6 +511,23 @@ restart_switch:
                 jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_OFF;
             else
                 jl_errorf("julia: invalid argument to --handle-signals (%s)", optarg);
+            break;
+        case opt_config_gc_region_size:
+            {
+                int s = strtol(optarg, &endptr, 10);
+                if (optarg == endptr || *(endptr + 1) != 0) {
+                    jl_errorf("julia: --config-gc-region-size=<n> must be an integer > 1 followed by a unit which can be one of 'M' (Mega) or 'G' (Giga). For example, '10M'");
+                } else if (*endptr == 'M') {
+                    jl_options.region_pg_cnt = 64 * s;
+                } else if (*endptr == 'G') {
+                    jl_options.region_pg_cnt = 65536 * s;
+                } else {
+                    jl_errorf("julia: --config-gc-region-size=<n> Invalid unit provided. Valid units are 'M' (Mega) and 'G' (Giga). For example '10M'");
+                }
+                if (jl_options.region_pg_cnt <= 64) {
+                    jl_errorf("julia: --config-gc-region-size=<n> GC region size must be greater than 1 MB");
+                }
+            }
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
