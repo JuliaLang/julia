@@ -175,7 +175,7 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    Construct a date formatting object that can be used for parsing date strings or formatting a date object as a string. For details on the syntax for ``format`` see :ref:`parsing <man-date-parsing>` and :ref:`formatting <man-date-formatting>`\ .
 
-.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+.. function:: DateTime(dt::AbstractString, df::AbstractDateFormat) -> DateTime
 
    .. Docstring generated from Julia source
 
@@ -211,11 +211,11 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    Construct a ``Date`` object by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime(::AbstractString, ::AbstractString)``\ .
 
-.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+.. function:: Date(dt::AbstractString, df::AbstractDateFormat) -> Date
 
    .. Docstring generated from Julia source
 
-   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
+   Parse a date from a date string ``dt`` using format ``df``\ .
 
 .. function:: now() -> DateTime
 
