@@ -17,8 +17,9 @@ Julia provides a variety of control flow constructs:
 -  :ref:`man-exception-handling`:
    ``try``-``catch``, :func:`error` and :func:`throw`.
 -  :ref:`man-tasks`: :func:`yieldto`.
+-  :ref:`man-unconditional-jump`: ``goto`` and ``label``.
 
-The first five control flow mechanisms are standard to high-level
+The first five and the last control flow mechanisms are standard to high-level
 programming languages. :class:`Task`\ s are not so standard: they provide non-local
 control flow, making it possible to switch between temporarily-suspended
 computations. This is a powerful construct: both exception handling and
@@ -1107,3 +1108,67 @@ Symbol         Meaning
 ``:done``      Successfully finished executing
 ``:failed``    Finished with an uncaught exception
 =============  ==================================================
+
+.. _man-unconditional-jump:
+
+Unconditional Jump
+------------------
+
+Unconditional jumps can be performed using the ``@goto`` and ``@label``
+statements. They are generally avoided as it becomes difficult to
+trace the control flow of the program. Any program using ``@goto`` can be rewritten
+using the other control flow statements. However, they are useful in a few cases like
+exiting from nested loops.
+
+.. doctest::
+
+    julia> begin
+           for i=1:10
+               for j=1:20
+                   println(i,j)
+                   if j==5
+                       @goto endofloop
+                   end
+               end
+           end
+           @label endofloop
+           end
+    11
+    12
+    13
+    14
+    15
+
+
+``@goto`` cannot jump to a top-level statement. It gives a ``referenced but not defined`` error.
+To use ``@goto`` without introducing a local scope at the top-level, enclose the code in ``begin``
+and ``end`` statements.
+
+.. doctest::
+
+    julia> i=0
+    0
+
+    julia> @label dothis
+
+    julia> i=i+1
+    1
+
+    julia> if i<10
+               @goto dothis
+           end
+    ERROR: syntax: label "dothis" referenced but not defined
+     in eval(::Module, ::Any) at ./boot.jl:267
+
+
+    julia> begin
+           i=0
+           @label dothis
+           i=i+1
+           if i<10
+               @goto dothis
+           end
+           end
+
+    julia> i
+    10
