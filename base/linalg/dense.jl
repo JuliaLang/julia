@@ -530,10 +530,14 @@ that is the unique matrix ``X`` with eigenvalues having positive real part such 
 
 If `A` is symmetric or Hermitian, its eigendecomposition ([`eigfact`](@ref)) is
 used to compute the square root. Otherwise, the square root is determined by means of the
-Björck-Hammarling method, which computes the complex Schur form ([`schur`](@ref))
+Björck-Hammarling method [^BH83], which computes the complex Schur form ([`schur`](@ref))
 and then the complex square root of the triangular factor.
 
-[^BH83]: Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix", Linear Algebra and its Applications, 52-53, 1983, 127-140. [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
+[^BH83]:
+
+    Åke Björck and Sven Hammarling, "A Schur method for the square root of a matrix",
+    Linear Algebra and its Applications, 52-53, 1983, 127-140.
+    [doi:10.1016/0024-3795(83)80010-X](http://dx.doi.org/10.1016/0024-3795(83)80010-X)
 
 # Example
 
