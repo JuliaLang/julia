@@ -7,7 +7,7 @@ unlock(::IO) = nothing
 reseteof(x::IO) = nothing
 
 const SZ_UNBUFFERED_IO = 65536
-buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
+buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 
 """
     isopen(object) -> Bool
