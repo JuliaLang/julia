@@ -108,13 +108,13 @@ The relationship between `F` and `A` is
 
 | Supported function               | `LU` | `LU{T,Tridiagonal{T}}` |
 |:---------------------------------|:-----|:-----------------------|
-| [`/`](@ref)                 | ✓    |                        |
-| [`\\`](@ref)               | ✓    | ✓                      |
-| [`cond`](@ref)           | ✓    |                        |
-| [`det`](@ref)             | ✓    | ✓                      |
-| [`logdet`](@ref)       | ✓    | ✓                      |
-| [`logabsdet`](@ref) | ✓    | ✓                      |
-| [`size`](@ref)           | ✓    | ✓                      |
+| [`/`](@ref)                      | ✓    |                        |
+| [`\\`](@ref)                     | ✓    | ✓                      |
+| [`cond`](@ref)                   | ✓    |                        |
+| [`det`](@ref)                    | ✓    | ✓                      |
+| [`logdet`](@ref)                 | ✓    | ✓                      |
+| [`logabsdet`](@ref)              | ✓    | ✓                      |
+| [`size`](@ref)                   | ✓    | ✓                      |
 
 # Example
 
