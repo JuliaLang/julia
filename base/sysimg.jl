@@ -277,9 +277,7 @@ include("channels.jl")
 include("clusterserialize.jl")
 include("multi.jl")
 include("workerpool.jl")
-include("pmap.jl")
 include("managers.jl")
-include("asyncmap.jl")
 
 # code loading
 include("loading.jl")
@@ -360,6 +358,10 @@ import .Dates: Date, DateTime, now
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
 importall .SparseArrays
+
+# parallel map
+include("asyncmap.jl")
+include("pmap.jl")
 
 # worker threads
 include("threadcall.jl")

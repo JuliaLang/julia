@@ -789,6 +789,33 @@ end
 # Test asyncmap
 @test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
 
+# num tasks
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:20; ntasks=5))) == 5
+
+# default num tasks
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200))) == 100
+
+# ntasks as a function
+let nt=0
+    global nt_func
+    nt_func() = (v=div(nt, 25); nt+=1; v)  # increment number of tasks by 1 for every 25th call.
+                                           # nt_func() will be called initally once and then for every
+                                           # iteration
+end
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200; ntasks=nt_func))) == 7
+
+# batch mode tests
+let ctr=0
+    global next_ctr
+    next_ctr() = (ctr+=1; ctr)
+end
+resp = asyncmap(x->(v=next_ctr(); map(_->v, x)), 1:22; ntasks=5, batch_size=5)
+@test length(resp) == 22
+@test length(unique(resp)) == 5
+
+input = rand(1:1000, 100)
+@test asyncmap(x->map(args->identity(args...), x), input; ntasks=5, batch_size=5) == input
+
 # check whether shape is retained
 a=rand(2,2)
 b=asyncmap(identity, a)
@@ -802,9 +829,50 @@ b=asyncmap(identity, c)
 @test size(b) == (10,)
 
 # check with an iterator that has only implements length()
-len_iter = (1,2,3,4,5)
-@test Base.iteratorsize(len_iter) == Base.HasLength()
-@test asyncmap(identity, len_iter) == Any[1,2,3,4,5]
+len_only_iterable = (1,2,3,4,5)
+@test Base.iteratorsize(len_only_iterable) == Base.HasLength()
+@test asyncmap(identity, len_only_iterable) == map(identity, len_only_iterable)
+
+# Error conditions
+@test_throws ArgumentError asyncmap(identity, 1:10; batch_size=0)
+@test_throws ArgumentError asyncmap(identity, 1:10; batch_size="10")
+@test_throws ArgumentError asyncmap(identity, 1:10; ntasks="10")
+
+# asyncmap and pmap with various types. Test for equivalence with map
+function testmap_equivalence(f, c...)
+    x1 = asyncmap(f,c...)
+    x2 = pmap(f,c...)
+    x3 = map(f,c...)
+
+    if Base.iteratorsize == Base.HasShape()
+        @test size(x1) == size(x3)
+        @test size(x2) == size(x3)
+    else
+        @test length(x1) == length(x3)
+        @test length(x2) == length(x3)
+    end
+
+    @test eltype(x1) == eltype(x3)
+    @test eltype(x2) == eltype(x3)
+
+    for (v1,v2) in zip(x1,x3)
+        @test v1==v2
+    end
+    for (v1,v2) in zip(x2,x3)
+        @test v1==v2
+    end
+end
+
+testmap_equivalence(identity, (1,2,3,4))
+testmap_equivalence(x->x>0?1.0:0.0, sparse(eye(5)))
+testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
+testmap_equivalence(x->x?false:true, BitArray(10,10))
+testmap_equivalence(x->"foobar", BitArray(10,10))
+testmap_equivalence((x,y,z)->string(x,y,z), BitArray(10), ones(10), "1234567890")
+
+@test asyncmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+@test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+
 
 # Test that the default worker pool cycles through all workers
 pmap(_->myid(), 1:nworkers())  # priming run
