@@ -12,6 +12,7 @@ HTTPPARSER_FLAGS := PLATFORM=$(shell echo $(OS) | tr A-Z a-z) PREFIX=$(build_pre
 $(eval $(call staged-install, \
 	http_parser,$$(HTTPPARSER_SRC_DIR), \
 	MAKE_INSTALL,$(HTTPPARSER_FLAGS),, \
+	[[ "$(OS)" == "WINNT" ]] && mv $(build_shlibdir)/libhttp_parser-2.7.dll $(build_shlibdir)/libhttp_parser.dll; \
 	$(INSTALL_NAME_CMD)libhttp_parser.$(SHLIB_EXT) $(build_shlibdir)/libhttp_parser.$(SHLIB_EXT)))
 
 $(BUILDDIR)/$(HTTPPARSER_SRC_DIR)/http_parser-makefile.patch-applied: $(BUILDDIR)/$(HTTPPARSER_SRC_DIR)/source-extracted
