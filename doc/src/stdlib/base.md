@@ -112,6 +112,7 @@ Base.typejoin
 Base.typeintersect
 Base.Val
 Base.Enums.@enum
+Base.Enums.@flagenum
 Base.instances
 ```
 

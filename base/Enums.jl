@@ -158,11 +158,11 @@ Base.~{T<:FlagEnum}(x::T) = reinterpret(T, convert(Unsigned, typemax(T)) & ~conv
 """
     @flagenum EnumName[::U] enumvalue1[=x] enumvalue1[=y]
 
-Create an [`FlagEnum`](:obj:`FlagEnum`) type with name `EnumName` and base member values
-of `enumvalue1` and `enumvalue1`, based on the unsigned integer type `U` (`UInt32` by
-default). If the values `x` and `y` are provided, they must each have exactly a single bit
-on, and naturally, not coincide. The `EnumName` type can be used just like other types,
-and enum member values as regular values, such as
+Create a `FlagEnum` type with name `EnumName` and base member values of `enumvalue1` and
+`enumvalue1`, based on the unsigned integer type `U` (`UInt32` by default). If the values
+`x` and `y` are provided, they must each have exactly a single bit on, and naturally, not
+coincide. The `EnumName` type can be used just like other types, and enum member values as
+regular values, such as
 
 ```jldoctest
 julia> @flagenum FruitFlags apple=1<<0 orange=1<<1 kiwi=1<<2
