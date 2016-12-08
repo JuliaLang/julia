@@ -390,7 +390,7 @@ for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
         function $f!{T<:UMFVTypes}(x::StridedVecOrMat{T}, lu::UmfpackLU{T}, b::StridedVecOrMat{T})
             n = size(x, 2)
             if n != size(b, 2)
-                throw(DimensionMismatch("in and output vectors must have the same number of columns"))
+                throw(DimensionMismatch("in and output arrays must have the same number of columns"))
             end
             for j in 1:n
                 solve!(view(x, :, j), lu, view(b, :, j), $umfpack)
@@ -403,7 +403,7 @@ for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
         function $f!{Tb<:Complex}(x::StridedVector{Tb}, lu::UmfpackLU{Float64}, b::StridedVector{Tb})
             m, n = size(x, 1), size(x, 2)
             if n != size(b, 2)
-                throw(DimensionMismatch("in and output vectors must have the same number of columns"))
+                throw(DimensionMismatch("in and output arrays must have the same number of columns"))
             end
             # TODO: Optionally let user allocate these and pass in somehow
             r = similar(b, Float64, m)
