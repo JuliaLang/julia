@@ -80,6 +80,7 @@ const PAGES = [
         "stdlib/libc.md",
         "stdlib/libdl.md",
         "stdlib/profile.md",
+        "stdlib/stacktraces.md",
         "stdlib/simd-types.md",
     ],
     "Developer Documentation" => [
