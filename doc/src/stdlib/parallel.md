@@ -26,6 +26,8 @@ Base.take!(::Channel)
 Base.isready(::Channel)
 Base.fetch(::Channel)
 Base.close(::Channel)
+Base.asyncmap
+Base.asyncmap!
 ```
 
 ## General Parallel Computing Support
@@ -40,7 +42,6 @@ Base.workers
 Base.rmprocs
 Base.interrupt
 Base.myid
-Base.asyncmap
 Base.pmap
 Base.RemoteException
 Base.Future
