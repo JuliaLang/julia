@@ -83,7 +83,7 @@ reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
 """
 @kwdef immutable CheckoutOptions
-    version::Cuint = one(Cuint)
+    version::Cuint = 1
 
     checkout_strategy::Cuint    = Consts.CHECKOUT_SAFE
 
@@ -120,7 +120,7 @@ Callback settings.
 Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
 """
 @kwdef immutable RemoteCallbacks
-    version::Cuint                    = one(Cuint)
+    version::Cuint                    = 1
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
     credentials::Ptr{Void}
@@ -145,10 +145,10 @@ end
 Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
 """
 @kwdef immutable FetchOptions
-    version::Cuint                  = one(Cuint)
+    version::Cuint                  = 1
     callbacks::RemoteCallbacks
     prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
-    update_fetchhead::Cint          = one(Cint)
+    update_fetchhead::Cint          = 1
     download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct
@@ -161,7 +161,7 @@ end
 Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
 """
 @kwdef immutable CloneOptions
-    version::Cuint                      = one(Cuint)
+    version::Cuint                      = 1
     checkout_opts::CheckoutOptions
     fetch_opts::FetchOptions
     bare::Cint
@@ -236,10 +236,10 @@ end
 Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_merge_options) struct.
 """
 @kwdef immutable MergeOptions
-    version::Cuint                    = one(Cuint)
+    version::Cuint                    = 1
     flags::Cint
-    rename_threshold::Cuint           = Cuint(50)
-    target_limit::Cuint               = Cuint(200)
+    rename_threshold::Cuint           = 50
+    target_limit::Cuint               = 200
     metric::Ptr{Void}
     @static if LibGit2.VERSION >= v"0.24.0"
         recursion_limit::Cuint
@@ -257,8 +257,8 @@ end
 Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
 """
 @kwdef immutable PushOptions
-    version::Cuint                     = one(Cuint)
-    parallelism::Cint                  = one(Cint)
+    version::Cuint                     = 1
+    parallelism::Cint                  = 1
     callbacks::RemoteCallbacks
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct
@@ -307,8 +307,8 @@ Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 Matches the `git_rebase_options` struct.
 """
 @kwdef immutable RebaseOptions
-    version::Cuint                 = one(Cuint)
-    quiet::Cint                    = Cint(1)
+    version::Cuint                 = 1
+    quiet::Cint                    = 1
     @static if LibGit2.VERSION >= v"0.24.0"
         inmemory::Cint
     end
@@ -339,7 +339,7 @@ Options to control how `git_status_foreach_ext()` will issue callbacks.
 Matches the `git_status_options` struct.
 """
 @kwdef immutable StatusOptions
-    version::Cuint           = one(Cuint)
+    version::Cuint           = 1
     show::Cint               = Consts.STATUS_SHOW_INDEX_AND_WORKDIR
     flags::Cuint             = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
                                Consts.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
