@@ -156,22 +156,22 @@ Base.~{T<:FlagEnum}(x::T) = reinterpret(T, convert(Unsigned, typemax(T)) & ~conv
 
 
 """
-    @flagenum FlagEnum[::U] EnumValue1[=x] EnumValue2[=y]
+    @flagenum EnumName[::U] enumvalue1[=x] enumvalue1[=y]
 
 Create an [`FlagEnum`](:obj:`FlagEnum`) type with name `EnumName` and base member values
-of `EnumValue1` and `EnumValue2`, based on the unsigned integer type `U` (`UInt32` by
-default). If the values `x` and `y` are provided, they must each have a single bit on, and
-naturally, not coincide. The `EnumName` type can be used just like other types, and enum
-member values as regular values, such as
+of `enumvalue1` and `enumvalue1`, based on the unsigned integer type `U` (`UInt32` by
+default). If the values `x` and `y` are provided, they must each have exactly a single bit
+on, and naturally, not coincide. The `EnumName` type can be used just like other types,
+and enum member values as regular values, such as
 
 ```jldoctest
-julia> @flagenum FRUITFLAGS apple=1<<0 orange=1<<1 kiwi=1<<2
+julia> @flagenum FruitFlags apple=1<<0 orange=1<<1 kiwi=1<<2
 
-julia> f(x::FRUITFLAGS) = "I'm a FRUITFLAGS with value: \$(Int(x))"
+julia> f(x::FruitFlags) = "I'm a FruitFlags with value: \$(Int(x))"
 f (generic function with 1 method)
 
 julia> f(apple|kiwi)
-"I'm a FRUITFLAGS with value: 5"
+"I'm a FruitFlags with value: 5"
 ```
 """
 macro flagenum(T,syms...)
