@@ -349,8 +349,49 @@ julia> ldexp(5., 2)
 20.0
 ```
 """
-ldexp(x::Float64,e::Integer) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, Int32(e))
-ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, Int32(e))
+function ldexp{T<:AbstractFloat}(x::T, e::Integer)
+    xu = reinterpret(Unsigned, x)
+    xs = xu & ~sign_mask(T)
+    xs >= exponent_mask(T) && return x # NaN or Inf
+    k = Int(xs >> significand_bits(T))
+    if k == 0 # x is subnormal
+        xs == 0 && return x # +-0
+        m = leading_zeros(xs) - exponent_bits(T)
+        ys = xs << unsigned(m)
+        xu = ys | (xu & sign_mask(T))
+        k = 1 - m
+        # underflow, otherwise may have integer underflow in the following n + k
+        e < -50000 && return flipsign(T(0.0), x)
+    end
+    # For cases where e of an Integer larger than Int make sure we properly
+    # overlfow/underflow; this is optimized away otherwise.
+    if e > typemax(Int)
+        return flipsign(T(Inf), x)
+    elseif e < typemin(Int)
+        return flipsign(T(0.0), x)
+    end
+    n = e % Int
+    k += n
+    # overflow, if k is larger than maximum posible exponent
+    if k >= Int(exponent_mask(T) >> significand_bits(T))
+        return flipsign(T(Inf), x)
+    end
+    if k > 0 # normal case
+        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
+        return reinterpret(T, xu)
+    else # subnormal case
+        if k <= -significand_bits(T) # underflow
+            # overflow, for the case of integer overflow in n + k
+            e > 50000 && return flipsign(T(Inf), x)
+            return flipsign(T(0.0), x)
+        end
+        k += significand_bits(T)
+        z = T(2.0)^-significand_bits(T)
+        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
+        return z*reinterpret(T, xu)
+    end
+end
+ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
     exponent(x) -> Int
@@ -604,7 +645,6 @@ for func in (:atan2,:hypot)
     end
 end
 
-ldexp(a::Float16, b::Integer) = Float16(ldexp(Float32(a), b))
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
