@@ -3497,13 +3497,20 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
 
         Value *bp = NULL, *name, *bp_owner = V_null;
         jl_binding_t *bnd = NULL;
-        if (jl_is_symbol(mn)) {
+        bool issym = jl_is_symbol(mn);
+        bool isglobalref = !issym && jl_is_globalref(mn);
+        if (issym || isglobalref) {
+            jl_module_t *mod = ctx->module;
+            if (isglobalref) {
+                mod = jl_globalref_mod(mn);
+                mn = (jl_value_t*)jl_globalref_name(mn);
+            }
             if (jl_symbol_name((jl_sym_t*)mn)[0] == '@')
                 jl_errorf("macro definition not allowed inside a local scope");
             name = literal_pointer_val(mn);
-            bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
+            bnd = jl_get_binding_for_method_def(mod, (jl_sym_t*)mn);
             bp = julia_binding_gv(bnd);
-            bp_owner = literal_pointer_val((jl_value_t*)ctx->module);
+            bp_owner = literal_pointer_val((jl_value_t*)mod);
         }
         else if (jl_is_slot(mn)) {
             int sl = jl_slot_number(mn)-1;
@@ -3527,10 +3534,15 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
+        jl_module_t *mod = ctx->module;
+        if (jl_is_globalref(sym)) {
+            mod = jl_globalref_mod(sym);
+            sym = jl_globalref_name(sym);
+        }
         if (jl_is_symbol(sym)) {
             JL_FEAT_REQUIRE(ctx, runtime);
             jl_binding_t *bnd = NULL;
-            (void)global_binding_pointer(ctx->module, sym, &bnd, true, ctx); assert(bnd);
+            (void)global_binding_pointer(mod, sym, &bnd, true, ctx); assert(bnd);
             builder.CreateCall(prepare_call(jldeclareconst_func),
                                literal_pointer_val(bnd));
         }
