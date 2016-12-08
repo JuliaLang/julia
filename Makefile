@@ -106,7 +106,7 @@ julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink ju
 debug release : % : julia-%
 
 docs: julia-sysimg-$(JULIA_BUILD_MODE)
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
