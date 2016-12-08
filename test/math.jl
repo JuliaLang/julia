@@ -70,12 +70,43 @@ end
         x,y = frexp(convert(T,NaN))
         @test isnan(x)
         @test y == 0
+
+        # more ldexp tests
+        @test ldexp(T(0.8), 4) === T(12.8)
+        @test ldexp(T(-0.854375), 5) === T(-27.34)
+        @test ldexp(T(1.0), typemax(Int)) === T(Inf)
+        @test ldexp(T(1.0), typemin(Int)) === T(0.0)
+        @test ldexp(prevfloat(realmin(T)), typemax(Int)) === T(Inf)
+        @test ldexp(prevfloat(realmin(T)), typemin(Int)) === T(0.0)
+
+        @test ldexp(T(0.8), Int128(4)) === T(12.8)
+        @test ldexp(T(-0.854375), Int128(5)) === T(-27.34)
+        @test ldexp(T(1.0), typemax(Int128)) === T(Inf)
+        @test ldexp(T(1.0), typemin(Int128)) === T(0.0)
+        @test ldexp(prevfloat(realmin(T)), typemax(Int128)) === T(Inf)
+        @test ldexp(prevfloat(realmin(T)), typemin(Int128)) === T(0.0)
+
+        @test ldexp(T(0.8), BigInt(4)) === T(12.8)
+        @test ldexp(T(-0.854375), BigInt(5)) === T(-27.34)
+        @test ldexp(T(1.0), BigInt(typemax(Int128))) === T(Inf)
+        @test ldexp(T(1.0), BigInt(typemin(Int128))) === T(0.0)
+        @test ldexp(prevfloat(realmin(T)), BigInt(typemax(Int128))) === T(Inf)
+        @test ldexp(prevfloat(realmin(T)), BigInt(typemin(Int128))) === T(0.0)
+
+        # Test also against BigFloat reference. Needs to be exactly rounded.
+        @test ldexp(realmin(T), -1) == T(ldexp(big(realmin(T)), -1))
+        @test ldexp(realmin(T), -2) == T(ldexp(big(realmin(T)), -2))
+        @test ldexp(realmin(T)/2, 0) == T(ldexp(big(realmin(T)/2), 0))
+        @test ldexp(realmin(T)/3, 0) == T(ldexp(big(realmin(T)/3), 0))
+        @test ldexp(realmin(T)/3, -1) == T(ldexp(big(realmin(T)/3), -1))
+        @test ldexp(realmin(T)/3, 11) == T(ldexp(big(realmin(T)/3), 11))
+        @test ldexp(realmin(T)/11, -10) == T(ldexp(big(realmin(T)/11), -10))
+        @test ldexp(-realmin(T)/11, -10) == T(ldexp(big(-realmin(T)/11), -10))
     end
 end
 
 # We compare to BigFloat instead of hard-coding
-# values, assuming that BigFloat has an independent and independently
-# tested implementation.
+# values, assuming that BigFloat has an independently tested implementation.
 @testset "basic math functions" begin
     @testset "$T" for T in (Float32, Float64)
         x = T(1//3)
