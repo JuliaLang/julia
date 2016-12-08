@@ -11,7 +11,7 @@ applied elementwise.
 
 `ntasks` specifies the number of tasks to run concurrently.
 Depending on the length of the collections, if `ntasks` is unspecified,
-up to a 100 tasks will be used for concurrent mapping.
+up to 100 tasks will be used for concurrent mapping.
 
 `ntasks` can also be specified as a zero-arg function. In this case, the
 number of tasks to run in parallel is checked before processing every element and a new
@@ -282,7 +282,7 @@ end
     AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing) -> iterator
 
 Returns an iterator which applies `f` to each element of `c` asynchronously
-and collects output into results.
+and collects output into `results`.
 
 Keyword args `ntasks` and `batch_size` have the same behavior as in
 [`asyncmap()`](@ref). If `batch_size` is specified, `f` must
@@ -291,11 +291,11 @@ be a function which operates on an array of argument tuples.
 !!! note
     `next(::AsyncCollector, state) -> (nothing, state)`. A successful return
     from `next` indicates that the next element from the input collection is
-    being processed asynchronously. It blocks till a free worker task becomes
+    being processed asynchronously. It blocks until a free worker task becomes
     available.
 
 !!! note
-    `for _ in AsyncCollector(f, results, c...) end` is equivalent to
+    `for _ in AsyncCollector(f, results, c...; ntasks=1) end` is equivalent to
     `map!(f, results, c...)`.
 """
 function AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing)
@@ -425,7 +425,8 @@ end
 """
     asyncmap!(f, results, c...; ntasks=0, batch_size=nothing)
 
-Like [`asyncmap()`](@ref), but stores output in `results` rather returning a collection.
+Like [`asyncmap()`](@ref), but stores output in `results` rather than
+returning a collection.
 """
 function asyncmap!(f, r, c1, c...; ntasks=0, batch_size=nothing)
     foreach(identity, AsyncCollector(f, r, c1, c...; ntasks=ntasks, batch_size=batch_size))
