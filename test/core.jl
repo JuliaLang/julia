@@ -3490,7 +3490,7 @@ end
 
 # issue 13855
 macro m13855()
-    Expr(:localize, :(() -> x))
+    Expr(:localize, :(() -> $(esc(:x))))
 end
 @noinline function foo13855(x)
     @m13855()
@@ -4794,3 +4794,30 @@ end
 @test let_Box4()() == 44
 @test let_Box5()() == 46
 @test let_noBox()() == 21
+
+module TestModuleAssignment
+using Base.Test
+@eval $(GlobalRef(TestModuleAssignment, :x)) = 1
+@test x == 1
+@eval $(GlobalRef(TestModuleAssignment, :x)) = 2
+@test x == 2
+end
+
+# issue #14893
+module M14893
+x = 14893
+macro m14893()
+    :x
+end
+function f14893()
+    x = 1
+    @m14893
+end
+end
+function f14893()
+    x = 2
+    M14893.@m14893
+end
+
+@test f14893() == 14893
+@test M14893.f14893() == 14893

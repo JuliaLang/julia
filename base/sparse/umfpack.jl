@@ -54,7 +54,7 @@ function umferror(status::Integer)
 end
 
 macro isok(A)
-    :(umferror($A))
+    :(umferror($(esc(A))))
 end
 
 # check the size of SuiteSparse_long
