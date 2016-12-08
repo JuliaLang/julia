@@ -584,7 +584,7 @@ function.
 ```
 @kwdef immutable Foo
     a::Cint            # implied default Cint(0)
-    b::Cint = Cint(1)  # specified default
+    b::Cint = 1        # specified default
     z::Cstring         # implied default Cstring(C_NULL)
     y::Bar             # implied default Bar()
 end
@@ -609,16 +609,18 @@ function _kwdef!(blk, params_ex, call_ex)
         ei = blk.args[i]
         isa(ei, Expr) || continue
         if ei.head == :(=)
-            # val::Typ = defexpr
-            dec = ei.args[1] # val::Typ
-            def = ei.args[2] # defexpr
-            push!(params_ex.args, Expr(:kw, dec, def))
-            push!(call_ex.args, dec.args[1])
+            # var::Typ = defexpr
+            dec = ei.args[1]  # var::Typ
+            var = dec.args[1] # var
+            def = ei.args[2]  # defexpr
+            push!(params_ex.args, Expr(:kw, var, def))
+            push!(call_ex.args, var)
             blk.args[i] = dec
         elseif ei.head == :(::)
-            dec = ei # val::Typ
+            dec = ei # var::Typ
+            var = dec.args[1] # var
             def = :(Base.kwdef_val($(ei.args[2])))
-            push!(params_ex.args, Expr(:kw, dec, def))
+            push!(params_ex.args, Expr(:kw, var, def))
             push!(call_ex.args, dec.args[1])
         elseif ei.head == :block
             # can arise with use of @static inside type decl
