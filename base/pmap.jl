@@ -117,11 +117,8 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
             f = wrap_on_error(f, on_error)
         end
 
-        return collect(AsyncGenerator(f, c; ntasks=()->nworkers(p)))
+        return asyncmap(f, c; ntasks=()->nworkers(p))
     else
-        batches = batchsplit(c, min_batch_count = length(p) * 3,
-                                max_batch_size = batch_size)
-
         # During batch processing, We need to ensure that if on_error is set, it is called
         # for each element in error, and that we return as many elements as the original list.
         # retry, if set, has to be called element wise and we will do a best-effort
@@ -132,7 +129,9 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
             f = wrap_on_error(f, (x,e)->BatchProcessingError(x,e); capture_data=true)
         end
         f = wrap_batch(f, p, on_error)
-        results = collect(Iterators.flatten(AsyncGenerator(f, batches; ntasks=()->nworkers(p))))
+        results = asyncmap(f, c; ntasks=()->nworkers(p), batch_size=batch_size)
+
+        # handle error processing....
         if (on_error !== nothing) || (retry_n > 0)
             process_batch_errors!(p, f_orig, results, on_error, retry_on, retry_n, retry_max_delay)
         end
@@ -176,7 +175,7 @@ function wrap_batch(f, p, on_error)
     end
 end
 
-asyncmap_batch(f) = batch -> asyncmap(f, batch)
+asyncmap_batch(f) = batch -> asyncmap(x->f(x...), batch)
 
 function process_batch_errors!(p, f, results, on_error, retry_on, retry_n, retry_max_delay)
     # Handle all the ones in error in another pmap, with batch size set to 1
