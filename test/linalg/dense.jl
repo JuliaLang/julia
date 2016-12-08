@@ -16,15 +16,22 @@ n2 = 2*n1
 
 srand(1234321)
 
-a = rand(n,n)
+ainit = rand(n,n)
 for elty in (Float32, Float64, Complex64, Complex128)
-    a = convert(Matrix{elty}, a)
-    # cond
-    @test_approx_eq_eps cond(a, 1) 4.837320054554436e+02 0.01
-    @test_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
-    @test_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
-    @test_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
-    @test_throws ArgumentError cond(a,3)
+    ainit = convert(Matrix{elty}, ainit)
+    for arraytype in ("Array", "SubArray")
+        if arraytype == "Array"
+            a = ainit
+        else
+            a = view(ainit, 1:n, 1:n)
+        end
+        # cond
+        @test_approx_eq_eps cond(a, 1) 4.837320054554436e+02 0.01
+        @test_approx_eq_eps cond(a, 2) 1.960057871514615e+02 0.01
+        @test_approx_eq_eps cond(a, Inf) 3.757017682707787e+02 0.01
+        @test_approx_eq_eps cond(a[:,1:5]) 10.233059337453463 0.01
+        @test_throws ArgumentError cond(a,3)
+    end
 end
 
 areal = randn(n,n)/2
@@ -35,75 +42,94 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
-    asym = a'+a                  # symmetric indefinite
-    apd  = a'*a                 # symmetric positive-definite
+    ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+    ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
     ε = εa = eps(abs(float(one(eltya))))
 
+    apd  = ainit'*ainit                 # symmetric positive-definite
     @test isposdef(apd,:U)
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+        binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
+        for arraytype in ("Array", "SubArray")
+            if arraytype == "Array"
+                a = ainit
+                b = binit
+            else
+                a = view(ainit, 1:n, 1:n)
+                b = view(binit, 1:n, 1:2)
+            end
 
 debug && println("Solve square general system of equations")
-    κ = cond(a,1)
-    x = a \ b
-    @test_throws DimensionMismatch b'\b
-    @test_throws DimensionMismatch b\b'
-    @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
-    @test zeros(eltya,n)\ones(eltya,n) ≈ zeros(eltya,n,1)\ones(eltya,n,1)
+            κ = cond(a,1)
+            x = a \ b
+            @test_throws DimensionMismatch b'\b
+            @test_throws DimensionMismatch b\b'
+            @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
+            @test zeros(eltya,n)\ones(eltya,n) ≈ zeros(eltya,n,1)\ones(eltya,n,1)
 
 
 debug && println("Test nullspace")
-        a15null = nullspace(a[:,1:n1]')
-        @test rank([a[:,1:n1] a15null]) == 10
-        @test_approx_eq_eps norm(a[:,1:n1]'a15null, Inf) zero(eltya) 300ε
-        @test_approx_eq_eps norm(a15null'a[:,1:n1], Inf) zero(eltya) 400ε
-        @test size(nullspace(b), 2) == 0
-        @test nullspace(zeros(eltya,n)) == eye(eltya,1)
+            a15null = nullspace(a[:,1:n1]')
+            @test rank([a[:,1:n1] a15null]) == 10
+            @test_approx_eq_eps norm(a[:,1:n1]'a15null, Inf) zero(eltya) 300ε
+            @test_approx_eq_eps norm(a15null'a[:,1:n1], Inf) zero(eltya) 400ε
+            @test size(nullspace(b), 2) == 0
+            @test nullspace(zeros(eltya,n)) == eye(eltya,1)
+        end
     end # for eltyb
 
-debug && println("Test pinv")
-    pinva15 = pinv(a[:,1:n1])
-    @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
-    @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
+    for arraytype in ("Array", "SubArray")
+        if arraytype == "Array"
+            a = ainit
+            a2 = ainit2
+        else
+            a = view(ainit, 1:n, 1:n)
+            a2 = view(ainit2, 1:n, 1:n)
+        end
 
-    @test size(pinv(ones(eltya,0,0))) == (0,0)
+debug && println("Test pinv")
+        pinva15 = pinv(a[:,1:n1])
+        @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
+        @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
+
+        @test size(pinv(ones(eltya,0,0))) == (0,0)
 
 debug && println("Lyapunov/Sylvester")
-    let
-        x = lyap(a, a2)
-        @test -a2 ≈ a*x + x*a'
-        x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
-        @test -a2[1:3, 4:n] ≈ a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
-    end
+        let
+            x = lyap(a, a2)
+            @test -a2 ≈ a*x + x*a'
+            x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
+            @test -a2[1:3, 4:n] ≈ a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
+        end
 
 debug && println("Matrix square root")
-    asq = sqrtm(a)
-    @test asq*asq ≈ a
-    asymsq = sqrtm(asym)
-    @test asymsq*asymsq ≈ asym
+        asq = sqrtm(a)
+        @test asq*asq ≈ a
+        asym = a'+a                  # symmetric indefinite
+        asymsq = sqrtm(asym)
+        @test asymsq*asymsq ≈ asym
+
+debug && println("Powers")
+        if eltya <: AbstractFloat
+            z = zero(eltya)
+            t = convert(eltya,2)
+            r = convert(eltya,2.5)
+            @test a^z ≈ eye(a)
+            @test a^t ≈ a^2
+            @test eye(eltya,n,n)^r ≈ eye(a)
+        end
+    end # end for loop over arraytype
 
 debug && println("Numbers")
     α = rand(eltya)
     A = zeros(eltya,1,1)
     A[1,1] = α
-    @test diagm(α) == A
-    @test expm(α) == exp(α)
-
-debug && println("Powers")
-    if eltya <: AbstractFloat
-        z = zero(eltya)
-        t = convert(eltya,2)
-        r = convert(eltya,2.5)
-        @test a^z ≈ eye(a)
-        @test a^t ≈ a^2
-        @test eye(eltya,n,n)^r ≈ eye(a)
-    end
+    @test diagm(α) == A # Test behavior of `diagm` when passed a scalar
+    @test expm(α) == exp(α) # `expm` should behave like `exp` with scalar argument
 
 debug && println("Factorize")
     d = rand(eltya,n)
@@ -131,11 +157,18 @@ debug && println("Factorize")
 end # for eltya
 
 # test triu/tril bounds checking
-A = rand(5,7)
-@test_throws(ArgumentError,triu(A,8))
-@test_throws(ArgumentError,triu(A,-6))
-@test_throws(ArgumentError,tril(A,8))
-@test_throws(ArgumentError,tril(A,-6))
+ainit = rand(5,7)
+for arraytype in ("Array", "SubArray")
+    if arraytype == "Array"
+        a = ainit
+    else
+        a = view(ainit, 1:size(ainit, 1), 1:size(ainit, 2))
+    end
+    @test_throws(ArgumentError,triu(a,8))
+    @test_throws(ArgumentError,triu(a,-6))
+    @test_throws(ArgumentError,tril(a,8))
+    @test_throws(ArgumentError,tril(a,-6))
+end
 
 # Test gradient
 for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
@@ -146,7 +179,9 @@ for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
         x = convert(Vector{elty}, complex([1:3;], [1:3;]))
         g = convert(Vector{elty}, complex(ones(3), ones(3)))
     end
+    xsub = view(x, 1:size(x, 1))
     @test gradient(x) ≈ g
+    @test gradient(xsub) ≈ g # Test gradient on SubArray
     @test gradient(ones(elty,1)) == zeros(elty,1)
 end
 
@@ -196,53 +231,48 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
     norm(x[1:1]) === norm(x[1], Inf)
 
     for i = 1:10
-        x = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
-            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
-            convert(Vector{elty}, randn(nnorm))
-        xs = view(x,1:2:nnorm)
-        y = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
-            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
-            convert(Vector{elty}, randn(nnorm))
-        ys = view(y,1:2:nnorm)
+        xinit = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
+                elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
+                convert(Vector{elty}, randn(nnorm))
+        yinit = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
+                elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
+                convert(Vector{elty}, randn(nnorm))
         α = elty <: Integer ? randn() :
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
-        # Absolute homogeneity
-        @test norm(α*x,-Inf) ≈ abs(α)*norm(x,-Inf)
-        @test norm(α*x,-1) ≈ abs(α)*norm(x,-1)
-        @test norm(α*x,1) ≈ abs(α)*norm(x,1)
-        @test norm(α*x) ≈ abs(α)*norm(x) # two is default
-        @test norm(α*x,3) ≈ abs(α)*norm(x,3)
-        @test norm(α*x,Inf) ≈ abs(α)*norm(x,Inf)
+        for arraytype in ("Array", "SubArray")
+            if arraytype == "Array"
+                x = xinit
+                y = yinit
+            else
+                x = view(xinit,1:2:nnorm)
+                y = view(yinit,1:2:nnorm)
+            end
+            # Absolute homogeneity
+            @test norm(α*x,-Inf) ≈ abs(α)*norm(x,-Inf)
+            @test norm(α*x,-1) ≈ abs(α)*norm(x,-1)
+            @test norm(α*x,1) ≈ abs(α)*norm(x,1)
+            @test norm(α*x) ≈ abs(α)*norm(x) # two is default
+            @test norm(α*x,3) ≈ abs(α)*norm(x,3)
+            @test norm(α*x,Inf) ≈ abs(α)*norm(x,Inf)
 
-        @test norm(α*xs,-Inf) ≈ abs(α)*norm(xs,-Inf)
-        @test norm(α*xs,-1) ≈ abs(α)*norm(xs,-1)
-        @test norm(α*xs,1) ≈ abs(α)*norm(xs,1)
-        @test norm(α*xs) ≈ abs(α)*norm(xs) # two is default
-        @test norm(α*xs,3) ≈ abs(α)*norm(xs,3)
-        @test norm(α*xs,Inf) ≈ abs(α)*norm(xs,Inf)
+            # Triangle inequality
+            @test norm(x + y,1) <= norm(x,1) + norm(y,1)
+            @test norm(x + y) <= norm(x) + norm(y) # two is default
+            @test norm(x + y,3) <= norm(x,3) + norm(y,3)
+            @test norm(x + y,Inf) <= norm(x,Inf) + norm(y,Inf)
 
-        # Triangle inequality
-        @test norm(x + y,1) <= norm(x,1) + norm(y,1)
-        @test norm(x + y) <= norm(x) + norm(y) # two is default
-        @test norm(x + y,3) <= norm(x,3) + norm(y,3)
-        @test norm(x + y,Inf) <= norm(x,Inf) + norm(y,Inf)
-
-        @test norm(xs + ys,1) <= norm(xs,1) + norm(ys,1)
-        @test norm(xs + ys) <= norm(xs) + norm(ys) # two is default
-        @test norm(xs + ys,3) <= norm(xs,3) + norm(ys,3)
-        @test norm(xs + ys,Inf) <= norm(xs,Inf) + norm(ys,Inf)
-
-        # Against vectorized versions
-        @test norm(x,-Inf) ≈ minimum(abs.(x))
-        @test norm(x,-1) ≈ inv(sum(1./abs.(x)))
-        @test norm(x,0) ≈ sum(x .!= 0)
-        @test norm(x,1) ≈ sum(abs.(x))
-        @test norm(x) ≈ sqrt(sum(abs2.(x)))
-        @test norm(x,3) ≈ cbrt(sum(abs.(x).^3.))
-        @test norm(x,Inf) ≈ maximum(abs.(x))
+            # Against vectorized versions
+            @test norm(x,-Inf) ≈ minimum(abs.(x))
+            @test norm(x,-1) ≈ inv(sum(1./abs.(x)))
+            @test norm(x,0) ≈ sum(x .!= 0)
+            @test norm(x,1) ≈ sum(abs.(x))
+            @test norm(x) ≈ sqrt(sum(abs2.(x)))
+            @test norm(x,3) ≈ cbrt(sum(abs.(x).^3.))
+            @test norm(x,Inf) ≈ maximum(abs.(x))
+        end
     end
-    ## Matrix (Operator)
+        ## Matrix (Operator)
         A = ones(elty,10,10)
         As = view(A,1:5,1:5)
         @test norm(A, 1) ≈ 10
@@ -253,39 +283,39 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test norm(As, Inf) ≈ 5
 
     for i = 1:10
-        A = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
-            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
-            convert(Matrix{elty}, randn(mmat, nmat))
-        As = view(A,1:nmat,1:nmat)
-        B = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
-            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
-            convert(Matrix{elty}, randn(mmat, nmat))
-        Bs = view(B,1:nmat,1:nmat)
+        Ainit = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
+                elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
+                convert(Matrix{elty}, randn(mmat, nmat))
+        Binit = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
+                elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
+                convert(Matrix{elty}, randn(mmat, nmat))
         α = elty <: Integer ? randn() :
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
 
-        # Absolute homogeneity
-        @test norm(α*A,1) ≈ abs(α)*norm(A,1)
-        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(α*A) ≈ abs(α)*norm(A) # two is default
-        @test norm(α*A,Inf) ≈ abs(α)*norm(A,Inf)
+        for arraytype in ("Array", "SubArray")
+            if arraytype == "Array"
+                A = Ainit
+                B = Binit
+            else
+                A = view(Ainit,1:nmat,1:nmat)
+                B = view(Binit,1:nmat,1:nmat)
+            end
 
-        @test norm(α*As,1) ≈ abs(α)*norm(As,1)
-        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(α*As) ≈ abs(α)*norm(As) # two is default
-        @test norm(α*As,Inf) ≈ abs(α)*norm(As,Inf)
+            # Absolute homogeneity
+            @test norm(α*A,1) ≈ abs(α)*norm(A,1)
+            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(α*A) ≈ abs(α)*norm(A) # two is default
+            @test norm(α*A,Inf) ≈ abs(α)*norm(A,Inf)
 
-        # Triangle inequality
-        @test norm(A + B,1) <= norm(A,1) + norm(B,1)
-        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A + B) <= norm(A) + norm(B) # two is default
-        @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
+            # Triangle inequality
+            @test norm(A + B,1) <= norm(A,1) + norm(B,1)
+            elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A + B) <= norm(A) + norm(B) # two is default
+            @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
 
-        @test norm(As + Bs,1) <= norm(As,1) + norm(Bs,1)
-        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
-        @test norm(As + Bs,Inf) <= norm(As,Inf) + norm(Bs,Inf)
-
-        # vecnorm:
-        for p = -2:3
-            @test norm(reshape(A, length(A)), p) == vecnorm(A, p)
+            # vecnorm:
+            for p = -2:3
+                @test norm(reshape(A, length(A)), p) == vecnorm(A, p)
+            end
         end
 
         # issue #10234
