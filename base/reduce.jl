@@ -579,11 +579,12 @@ true
 ```
 """
 any(f::Any, itr) = any(Predicate(f), itr)
-any(f::Predicate, itr) = mapreduce_sc_impl(f, |, itr)
-any(f::typeof(identity), itr) =
-    eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, |, itr) :
-        reduce(or_bool_only, false, itr)
+function any(f::Predicate, itr)
+    for x in itr
+        f(x) && return true
+    end
+    return false
+end
 
 """
     all(p, itr) -> Bool
@@ -596,11 +597,12 @@ true
 ```
 """
 all(f::Any, itr) = all(Predicate(f), itr)
-all(f::Predicate, itr) = mapreduce_sc_impl(f, &, itr)
-all(f::typeof(identity), itr) =
-    eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, &, itr) :
-        reduce(and_bool_only, true, itr)
+function all(f::Predicate, itr)
+    for x in itr
+        f(x) || return false
+    end
+    return true
+end
 
 ## in & contains
 
