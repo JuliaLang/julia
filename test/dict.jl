@@ -388,9 +388,11 @@ let
     ca = copy(a)
     @test length(ca) == length(a)
     @test ca == a
+    @test ca !== a # make sure they are different objects
 
     ca = empty!(ca)
     @test length(ca) == 0
+    @test length(a) == 2
 end
 
 let d = @inferred ObjectIdDict(i=>i for i=1:3)
@@ -401,6 +403,7 @@ end
 let d = @inferred ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
     @test isa(d, ObjectIdDict)
     @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+    @test eltype(d) == Pair{Any,Any}
 end
 
 # Issue #7944
