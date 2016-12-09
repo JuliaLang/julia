@@ -103,7 +103,7 @@ const PAGES = [
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
         ],
-        "Devloping/debugging Julia's C code" => [
+        "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
             "devdocs/debuggingtips.md",
             "devdocs/valgrind.md",
