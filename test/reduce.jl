@@ -224,6 +224,15 @@ let c = [0, 0], A = 1:1000
     @test c == [10,10]
 end
 
+# 19151 - always short circuit
+let c = Int[], d = Int[], A = 1:9
+    all((push!(c, x); x < 5) for x in A)
+    @test c == collect(1:5)
+
+    any((push!(d, x); x > 4) for x in A)
+    @test d == collect(1:5)
+end
+
 # any and all with functors
 
 immutable SomeFunctor end
