@@ -17,40 +17,49 @@ The following data types exist in lowered form:
 
   * `Expr`
 
-    has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
+    Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
+
   * `Slot`
 
-    identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
+    Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
     with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
     the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
     The types of these slots are found in the `slottypes` field of their `MethodInstance` object.
     Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
     field.
+
   * `CodeInfo`
 
-    wraps the IR of a method.
+    Wraps the IR of a method.
+
   * `LineNumberNode`
 
-    contains a single number, specifying the line number the next statement came from.
+    Contains a single number, specifying the line number the next statement came from.
+
   * `LabelNode`
 
-    branch target, a consecutively-numbered integer starting at 0
+    Branch target, a consecutively-numbered integer starting at 0.
+
   * `GotoNode`
 
-    unconditional branch
+    Unconditional branch.
+
   * `QuoteNode`
 
-    wraps an arbitrary value to reference as data. For example, the function `f() = :a` contains a
+    Wraps an arbitrary value to reference as data. For example, the function `f() = :a` contains a
     `QuoteNode` whose `value` field is the symbol `a`, in order to return the symbol itself instead
     of evaluating it.
+
   * `GlobalRef`
 
-    refers to global variable `name` in module `mod`
+    Refers to global variable `name` in module `mod`.
+
   * `SSAValue`
 
-    refers to a consecutively-numbered (starting at 0) static single assignment (SSA) variable inserted
+    Refers to a consecutively-numbered (starting at 0) static single assignment (SSA) variable inserted
     by the compiler.
+
   * `NewvarNode`
 
     Marks a point where a variable is created. This has the effect of resetting a variable to undefined.
@@ -61,26 +70,32 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
   * `call`
 
-    function call (dynamic dispatch). `args[1]` is the function to call, `args[2:end]` are the arguments.
+    Function call (dynamic dispatch). `args[1]` is the function to call, `args[2:end]` are the arguments.
+
   * `invoke`
 
-    function call (static dispatch). `args[1]` is the MethodInstance to call, `args[2:end]` are the
+    Function call (static dispatch). `args[1]` is the MethodInstance to call, `args[2:end]` are the
     arguments (including the function that is being called, at `args[2]`).
+
   * `static_parameter`
 
-    reference a static parameter by index.
+    Reference a static parameter by index.
+
   * `line`
 
-    line number and file name metadata. Unlike a `LineNumberNode`, can also contain a file name.
+    Line number and file name metadata. Unlike a `LineNumberNode`, can also contain a file name.
+
   * `gotoifnot`
 
-    conditional branch. If `args[1]` is false, goes to label identified in `args[2]`.
+    Conditional branch. If `args[1]` is false, goes to label identified in `args[2]`.
+
   * `=`
 
-    assignment
+    Assignment.
+
   * `method`
 
-    adds a method to a generic function and assigns the result if necessary.
+    Adds a method to a generic function and assigns the result if necessary.
 
     Has a 1-argument form and a 4-argument form. The 1-argument form arises from the syntax `function foo end`.
     In the 1-argument form, the argument is a symbol. If this symbol already names a function in the
@@ -91,64 +106,83 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
     type uniquely identifies the type to add the method to. When the type has fields, it wouldn't
     be clear whether the method was being added to the instance or its type.
 
-    The 4-argument form has the following arguments: `args[1]` - A function name, or `false` if unknown.
-    If a symbol, then the expression first behaves like the 1-argument form above. This argument is
-    ignored from then on. When this is `false`, it means a method is being added strictly by type,
-    `(::T)(x) = x`.
+    The 4-argument form has the following arguments:
 
-    `args[2]` - a `SimpleVector` of argument type data. `args[2][1]` is a `SimpleVector` of the argument
-    types, and `args[2][2]` is a `SimpleVector` of type variables corresponding to the method's static
-    parameters.
+      * `args[1]`
 
-    `args[3]` - a `CodeInfo` of the method itself. For "out of scope" method definitions (adding a
-    method to a function that also has methods defined in different scopes) this is an expression
-    that evaluates to a `:lambda` expression.
+        A function name, or `false` if unknown. If a symbol, then the expression first
+        behaves like the 1-argument form above. This argument is ignored from then on. When
+        this is `false`, it means a method is being added strictly by type, `(::T)(x) = x`.
 
-    `args[4]` - `true` or `false`, identifying whether the method is staged (`@generated function`)
+      * `args[2]`
+
+        A `SimpleVector` of argument type data. `args[2][1]` is a `SimpleVector` of the
+        argument types, and `args[2][2]` is a `SimpleVector` of type variables corresponding
+        to the method's static parameters.
+
+      * `args[3]`
+
+        A `CodeInfo` of the method itself. For "out of scope" method definitions (adding a
+        method to a function that also has methods defined in different scopes) this is an
+        expression that evaluates to a `:lambda` expression.
+
+      * `args[4]`
+
+        `true` or `false`, identifying whether the method is staged (`@generated function`).
+
   * `const`
 
-    declares a (global) variable as constant
+    Declares a (global) variable as constant.
   * `null`
 
-    has no arguments; simply yields the value `nothing`
+    Has no arguments; simply yields the value `nothing`.
+
   * `new`
 
-    allocates a new struct-like object. First argument is the type. The `new` pseudo-function is lowered
+    Allocates a new struct-like object. First argument is the type. The `new` pseudo-function is lowered
     to this, and the type is always inserted by the compiler.  This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
+
   * `return`
 
-    returns its argument as the value of the enclosing function.
+    Returns its argument as the value of the enclosing function.
+
   * `the_exception`
 
-    yields the caught exception inside a `catch` block. This is the value of the run time system variable
+    Yields the caught exception inside a `catch` block. This is the value of the run time system variable
     `jl_exception_in_transit`.
+
   * `enter`
 
-    enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
+    Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
     error.
+
   * `leave`
 
-    pop exception handlers. `args[1]` is the number of handlers to pop.
+    Pop exception handlers. `args[1]` is the number of handlers to pop.
+
   * `inbounds`
 
-    controls turning bounds checks on or off. A stack is maintained; if the first argument of this
+    Controls turning bounds checks on or off. A stack is maintained; if the first argument of this
     expression is true or false (`true` means bounds checks are disabled), it is pushed onto the stack.
     If the first argument is `:pop`, the stack is popped.
+
   * `boundscheck`
 
-    indicates the beginning or end of a section of code that performs a bounds check. Like `inbounds`,
+    Indicates the beginning or end of a section of code that performs a bounds check. Like `inbounds`,
     a stack is maintained, and the second argument can be one of: `true`, `false`, or `:pop`.
+
   * `copyast`
 
-    part of the implementation of quasi-quote. The argument is a surface syntax AST that is simply
+    Part of the implementation of quasi-quote. The argument is a surface syntax AST that is simply
     copied recursively and returned at run time.
+
   * `meta`
 
-    metadata. `args[1]` is typically a symbol specifying the kind of metadata, and the rest of the
+    Metadata. `args[1]` is typically a symbol specifying the kind of metadata, and the rest of the
     arguments are free-form. The following kinds of metadata are commonly used:
 
-    `:inline` and `:noinline`: Inlining hints.
+      * `:inline` and `:noinline`: Inlining hints.
 
       * `:push_loc`: enters a sequence of statements from a specified source location.
 
@@ -156,58 +190,79 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
           * `args[3]` optionally specifies the name of an (inlined) function that originally contained the
             code.
 
-    `:pop_loc`: returns to the source location before the matching `:push_loc`.
+      * `:pop_loc`: returns to the source location before the matching `:push_loc`.
 
 ### Method
 
 A unique'd container describing the shared metadata for a single (unspecialized) method.
 
-  * `name`, `module`, `file`, `line`, `sig` - Metadata to uniquely identify the method
+  * `name`, `module`, `file`, `line`, `sig`
 
-    for the computer and the human
+    Metadata to uniquely identify the method for the computer and the human.
 
-`ambig` - Cache of other methods that may be ambiguous with this one
+  * `ambig`
 
-  * `specializations` - Cache of all MethodInstance ever created for this Method,
+    Cache of other methods that may be ambiguous with this one.
 
-    used to ensure uniqueness. Uniqueness is required for efficiency, especially for incremental precompile
-    and tracking of method invalidation.
+  * `specializations`
 
-`source` - The original source code (compressed)
+    Cache of all MethodInstance ever created for this Method, used to ensure uniqueness.
+    Uniqueness is required for efficiency, especially for incremental precompile and
+    tracking of method invalidation.
 
-  * `roots` - Pointers to non-AST things that have been interpolated into the AST,
+  * `source`
 
-    required by compression of the AST, type-inference, or the generation of native code.
+    The original source code (compressed).
 
-`nargs`, `isva`, `called`, `isstaged` - Descriptive bit-fields for the source code of this Method.
+  * `roots`
+
+    Pointers to non-AST things that have been interpolated into the AST, required by
+    compression of the AST, type-inference, or the generation of native code.
+
+  * `nargs`, `isva`, `called`, `isstaged`
+
+    Descriptive bit-fields for the source code of this Method.
 
 ### MethodInstance
 
 A unique'd container describing a single callable signature for a Method. See especially [Proper maintenance and care of multi-threading locks](@ref)
 for important details on how to modify these fields safely.
 
-  * `specTypes` - The primary key for this MethodInstance.
+  * `specTypes`
 
-    Uniqueness is guaranteed through a `def.specializations` lookup.
-  * `def` - The `Method` that this function describes a specialization of.
+    The primary key for this MethodInstance. Uniqueness is guaranteed through a
+    `def.specializations` lookup.
 
-    Or `#undef`, if this is a top-level Lambda that is not part of a Method.
-  * `sparam_vals` - The values of the static parameters in specTypes
+  * `def`
 
-    indexed by `def.sparam_syms`. For the `MethodInstance` at `Method.unspecialized`, this is the
-    empty `SimpleVector`. But for a runtime `MethodInstance` from the `MethodTable` cache, this will
-    always be defined and indexable.
-  * `rettype` - The inferred return type for the `specFunctionObject` field,
+    The `Method` that this function describes a specialization of. Or `#undef`, if this is
+    a top-level Lambda that is not part of a Method.
 
-    which (in most cases) is also the computed return type for the function in general.
-  * `inferred` - May contain a cache of the inferred source for this function,
+  * `sparam_vals`
 
-    or other information about the inference result such as a constant return value may be put here
-    (if `jlcall_api == 2`), or it could be set to *nothing* to just indicate `rettype` is inferred
+    The values of the static parameters in `specTypes` indexed by `def.sparam_syms`. For the
+    `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`. But for a
+    runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
+    indexable.
 
-`ftpr` - The generic jlcall entry point
+  * `rettype`
 
-  * `jlcall_api` - The ABI to use when calling `fptr`. Some significant ones include:
+    The inferred return type for the `specFunctionObject` field, which (in most cases) is
+    also the computed return type for the function in general.
+
+  * `inferred`
+
+    May contain a cache of the inferred source for this function, or other information about
+    the inference result such as a constant return value may be put here (if `jlcall_api ==
+    2`), or it could be set to `nothing` to just indicate `rettype` is inferred.
+
+  * `ftpr`
+
+    The generic jlcall entry point.
+
+  * `jlcall_api`
+
+    The ABI to use when calling `fptr`. Some significant ones include:
 
       * 0 - not compiled yet
       * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
@@ -217,36 +272,53 @@ for important details on how to modify these fields safely.
 
 A temporary container for holding lowered source code.
 
-`code` - An `Any` array of statements, or a UInt8 array with a compressed representation of the
-code.
+  * `code`
 
-`slotnames` - An array of symbols giving the name of each slot (argument or local variable).
+    An `Any` array of statements, or a `UInt8` array with a compressed representation of the code.
 
-`slottypes` - An array of types for the slots.
+  * `slotnames`
 
-  * `slotflags` - A UInt8 array of slot properties, represented as bit flags:
+    An array of symbols giving the name of each slot (argument or local variable).
+
+  * `slottypes`
+
+    An array of types for the slots.
+
+  * `slotflags`
+
+    A `UInt8` array of slot properties, represented as bit flags:
 
       * 2  - assigned (only false if there are *no* assignment statements with this var on the left)
       * 8  - const (currently unused for local variables)
       * 16 - statically assigned once
       * 32 - might be used before assigned. This flag is only valid after type inference.
-  * `ssavaluetypes` - Either an array or an Int.
 
-    If an Int, it gives the number of compiler-inserted temporary locations in the function. If an
-    array, specifies a type for each location.
+  * `ssavaluetypes`
+
+    Either an array or an `Int`.
+
+    If an `Int`, it gives the number of compiler-inserted temporary locations in the
+    function. If an array, specifies a type for each location.
 
 Boolean properties:
 
-`inferred` - Whether this has been produced by type inference
+  * `inferred`
 
-`inlineable` - Whether this should be inlined
+    Whether this has been produced by type inference.
 
-  * `propagate_inbounds` - Whether this should should propagate `@inbounds` when inlined
+  * `inlineable`
 
-    for the purpose of eliding `@boundscheck` blocks
-  * `pure` - Whether this is known to be a pure function of its arguments,
+    Whether this should be inlined.
 
-    without respect to the state of the method caches or other mutable global state
+  * `propagate_inbounds`
+
+    Whether this should should propagate `@inbounds` when inlined for the purpose of eliding
+    `@boundscheck` blocks.
+
+  * `pure`
+
+    Whether this is known to be a pure function of its arguments, without respect to the
+    state of the method caches or other mutable global state.
 
 ## Surface syntax AST
 
