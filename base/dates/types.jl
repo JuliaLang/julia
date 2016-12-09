@@ -137,6 +137,18 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 
 ### CONSTRUCTORS ###
 # Core constructors
+
+function DateTime(xs::NTuple{7,Int})
+    0 < xs[2] < 13 || throw(ArgumentError("Month: $(xs[2]) out of range (1:12)"))
+    0 < xs[3] < daysinmonth(xs[1],xs[2])+1 || throw(ArgumentError("Day: $(xs[3]) out of range (1:$(daysinmonth(xs[1],xs[2])))"))
+    -1 < xs[4] < 24 || throw(ArgumentError("Hour: $(xs[4]) out of range (0:23)"))
+    -1 < xs[5] < 60 || throw(ArgumentError("Minute: $(xs[5]) out of range (0:59)"))
+    -1 < xs[6] < 60 || throw(ArgumentError("Second: $(xs[6]) out of range (0:59)"))
+    -1 < xs[7] < 1000 || throw(ArgumentError("Millisecond: $(xs[7]) out of range (0:999)"))
+    rata = xs[7] + 1000*(xs[6] + 60*xs[5] + 3600*xs[4] + 86400*Base.Dates.totaldays(xs[1],xs[2],xs[3]))
+    return DateTime(Base.Dates.UTM(rata))
+end
+
 """
     DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
 

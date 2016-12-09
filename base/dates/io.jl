@@ -1,29 +1,97 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# TODO: optimize this
-function Base.string(dt::DateTime)
-    y,m,d = yearmonthday(days(dt))
-    h,mi,s = hour(dt),minute(dt),second(dt)
-    yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
-    mm = lpad(m,2,"0")
-    dd = lpad(d,2,"0")
-    hh = lpad(h,2,"0")
-    mii = lpad(mi,2,"0")
-    ss = lpad(s,2,"0")
-    ms = millisecond(dt) == 0 ? "" : string(millisecond(dt)/1000.0)[2:end]
-    return "$yy-$mm-$(dd)T$hh:$mii:$ss$(ms)"
-end
-Base.show(io::IO,x::DateTime) = print(io,string(x))
-function Base.string(dt::Date)
-    y,m,d = yearmonthday(value(dt))
-    yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
-    mm = lpad(m,2,"0")
-    dd = lpad(d,2,"0")
-    return "$yy-$mm-$dd"
-end
-Base.show(io::IO,x::Date) = print(io,string(x))
+"""
+A type of token in a date time string
 
-### Parsing
+each subtype must define
+
+    tryparsenext(t::TokenType, str, i, [locale])
+
+and
+
+    format(io, t::TokenType, [locale])
+"""
+abstract AbstractDateToken
+
+"""
+Locale type for dates. By default `DateLocale{:english}()`
+is used. This object is passed as the last argument to
+`tryparsenext` and `format` defined for each `AbstractDateToken` type.
+"""
+immutable DateLocale{lang} end
+
+"""
+Information for parsing and formatting date time values.
+"""
+immutable DateFormat{D, T<:Tuple, L<:DateLocale, N}
+    result_type::Type{D}
+    tokens::T
+    locale::L
+    field_defaults::NTuple{N, Int}
+    field_order::NTuple{N,Int}
+end
+
+include("io-util.jl")
+
+### Token types ###
+
+immutable DatePart{c, n, fixedwidth} <: AbstractDateToken end
+
+### Numeric tokens
+
+for c in "yYmdHMS"
+    @eval begin
+        # in the case where the token is not to be treated fixed width
+        @inline function tryparsenext{N}(::DatePart{$c, N, false}, str, i, len)
+            tryparsenext_base10(str,i,len,20)
+        end
+
+        # parse upto a maximum of N numeric characters
+        # (will be chosen in case of yyyymmdd for example)
+        @inline function tryparsenext{N}(::DatePart{$c, N, true}, str, i, len)
+            tryparsenext_base10(str,i,len,N)
+        end
+    end
+end
+
+@inline function tryparsenext{N}(::DatePart{'s', N, false}, str, i, len)
+    tryparsenext_base10_frac(str,i,len,3)
+end
+
+@inline function tryparsenext{N}(::DatePart{'s', N, true}, str, i, len)
+    tryparsenext_base10_frac(str,i,len,N)
+end
+
+for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
+    @eval function format{N}(io, ::DatePart{$c, N}, dt, locale)
+        write(io, minwidth($fn(dt), N))
+    end
+end
+
+# special cases
+
+function format{N}(io, ::DatePart{'y', N}, dt, locale)
+    write(io, rfixwidth(year(dt), N))
+end
+
+function format{N}(io, ::DatePart{'s', N}, dt, locale)
+    write(io, string(millisecond(dt)/1000)[3:end])
+end
+
+function _show_content{c,N}(io::IO, ::DatePart{c,N})
+    for i=1:N
+        write(io, c)
+    end
+end
+
+function Base.show{c,N}(io::IO, d::DatePart{c,N})
+    write(io, "DatePart(")
+    _show_content(io, d)
+    write(io, ")")
+end
+
+### Text tokens
+
 const english = Dict{String,Int}("january"=>1,"february"=>2,"march"=>3,"april"=>4,
                  "may"=>5,"june"=>6,"july"=>7,"august"=>8,"september"=>9,
                  "october"=>10,"november"=>11,"december"=>12)
@@ -33,205 +101,149 @@ const abbrenglish = Dict{String,Int}("jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
 const MONTHTOVALUE = Dict{String,Dict{String,Int}}("english"=>english)
 const MONTHTOVALUEABBR = Dict{String,Dict{String,Int}}("english"=>abbrenglish)
 
-# Date/DateTime Parsing
-abstract Slot{T<:Any}
 
-immutable DelimitedSlot{T<:Any} <: Slot{T}
-    parser::Type{T}
-    letter::Char
-    width::Int
-    transition::Union{Regex,AbstractString}
+# fallback to tryparsenext methods that don't care about locale
+@inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
+    tryparsenext(d, str, i, len)
 end
 
-immutable FixedWidthSlot{T<:Any} <: Slot{T}
-    parser::Type{T}
-    letter::Char
-    width::Int
+function month_from_abbr_name{l}(word, locale::DateLocale{l})
+    get(MONTHTOVALUEABBR[string(l)], word, 0)
 end
 
-immutable DateFormat
-    slots::Array{Slot,1}
-    prefix::AbstractString # optional transition from the start of a string to the 1st slot
-    locale::AbstractString
+function month_from_name{l}(word, locale::DateLocale{l})
+    get(MONTHTOVALUE[string(l)], word, 0)
 end
 
-abstract DayOfWeekSlot
-
-# Slot rules translate letters into types. Note that
-# list of rules can be extended.
-immutable SlotRule
-    rules::Array{Type}
+function month_from_abbr_name(word, locale::DateLocale{:english})
+    get(abbrenglish, word, 0)
 end
-const SLOT_RULE = SlotRule(Array{Type}(256))
 
-getindex(collection::SlotRule, key::Char) = collection.rules[Int(key)]
-setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(key)] = value
-keys(c::SlotRule) = map(Char, filter(el -> isassigned(c.rules, el) && c.rules[el] != Void, eachindex(c.rules)))
+function month_from_name(word, locale::DateLocale{:english})
+    get(english, word, 0)
+end
 
-SLOT_RULE['y'] = Year
-SLOT_RULE['Y'] = Year
-SLOT_RULE['m'] = Month
-SLOT_RULE['u'] = Month
-SLOT_RULE['U'] = Month
-SLOT_RULE['e'] = DayOfWeekSlot
-SLOT_RULE['E'] = DayOfWeekSlot
-SLOT_RULE['d'] = Day
-SLOT_RULE['H'] = Hour
-SLOT_RULE['M'] = Minute
-SLOT_RULE['S'] = Second
-SLOT_RULE['s'] = Millisecond
+for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name]),
+    (fixed, nchars) in zip([false, true], [typemax(Int), :N])
+    @eval @inline function tryparsenext{N}(d::DatePart{$tok,N,$fixed}, str, i, len, locale)
+        R = Nullable{Int}
+        c, ii = tryparsenext_word(str, i, len, locale, $nchars)
+        word = str[i:ii-1]
+        x = $fn(lowercase(word), locale)
+        ((x == 0 ? R() : R(x)), ii)
+    end
+end
 
-duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
+# ignore day of week while parsing
+@inline function tryparsenext(d::Union{DatePart{'e'}, DatePart{'E'}}, str, i, len, locale)
+    tryparsenext_word(str, i, len, locale)
+end
+
+for (tok, fn) in zip("uU", [monthabbr, monthname])
+    @eval function format{l}(io, d::DatePart{$tok}, dt, locale::DateLocale{l})
+        write(io, $fn(dt; locale=string(l)))
+    end
+end
+
+for (tok, dict) in zip("eE", [:VALUETODAYOFWEEKABBR, :VALUETODAYOFWEEK])
+    @eval function format{l}(io, d::DatePart{$tok}, dt, locale::DateLocale{l})
+        write(io, $dict[string(l)][dayofweek(dt)])
+    end
+end
+
+
+### Delimiters
+
+immutable Delim{T, length} <: AbstractDateToken d::T end
+
+Delim(c::Char, n) = Delim{Char, n}(c)
+Delim(c::Char) = Delim(c,1)
+
+@inline function tryparsenext{N}(d::Delim{Char,N}, str, i::Int, len)
+    R = Nullable{Int}
+    for j=1:N
+        i > len && return (R(), i)
+        c, i = next(str, i)
+        c != d.d && return (R(), i)
+    end
+    return R(0), i
+end
+
+@inline function tryparsenext{N}(d::Delim{String,N}, str, i::Int, len)
+    R = Nullable{Int}
+    i1=i
+    i2=start(d.d)
+    for j=1:N
+        if i1 > len
+            return R(), i1
+        end
+        c1, i1 = next(str, i1)
+        c2, i2 = next(d.d, i2)
+        if c1 != c2
+            return R(), i1
+        end
+    end
+    return R(0), i1
+end
+
+function format(io, d::Delim, str, i)
+    write(io, d.d)
+end
+
+function _show_content{N}(io::IO, d::Delim{Char, N})
+    if d.d in keys(SLOT_RULE)
+        for i=1:N
+            write(io, '\\')
+            write(io, d.d)
+        end
+    else
+        for i=1:N
+            write(io, d.d)
+        end
+    end
+end
+
+function _show_content(io::IO, d::Delim)
+    for c in d.d
+        if c in keys(SLOT_RULE)
+            write(io, '\\')
+        end
+        write(io, c)
+    end
+end
+
+function Base.show(io::IO, d::Delim)
+    write(io, "Delim(")
+    _show_content(io, d)
+    write(io, ")")
+end
+
+### DateFormat construction
+
+
+abstract DayOfWeekSlot # special addition to Period types
+
+# mapping format specifiers to types
+const SLOT_RULE = Dict{Char, Type}(
+    'y' => Year,
+    'Y' => Year,
+    'm' => Month,
+    'u' => Month,
+    'U' => Month,
+    'e' => DayOfWeekSlot,
+    'E' => DayOfWeekSlot,
+    'd' => Day,
+    'H' => Hour,
+    'M' => Minute,
+    'S' => Second,
+    's' => Millisecond,
+)
 
 """
-    DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
+    DateFormat(format::AbstractString, locale=:english, result_type::Type=DateTime) -> DateFormat
 
 Construct a date formatting object that can be used for parsing date strings or
-formatting a date object as a string. For details on the syntax for `format` see
-[`DateTime(::AbstractString, ::AbstractString)`](@ref) and
-[`format`](@ref).
-"""
-function DateFormat(f::AbstractString, locale::AbstractString="english")
-    slots = Slot[]
-    prefix = ""
-    params = ()
-    last_offset = 1
-
-    letters = join(keys(SLOT_RULE), "")
-    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
-        letter = f[m.offset]
-        typ = SLOT_RULE[letter]
-
-        width = length(m.match)
-        tran = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
-
-        if isempty(params)
-            prefix = tran
-        else
-            slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
-            push!(slots,slot)
-        end
-
-        params = (typ,letter,width)
-        last_offset = m.offset + width
-    end
-
-    if !isempty(params)
-        if last_offset > endof(f)
-            slot = DelimitedSlot(params..., r"(?=\s|$)")
-        else
-            tran = replace(f[last_offset:end], r"\\(.)", s"\1")
-            if tran == ""
-                slot = FixedWidthSlot(params...)
-            else
-                slot = DelimitedSlot(params..., tran)
-            end
-        end
-        push!(slots,slot)
-    end
-
-    duplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
-    return DateFormat(slots,prefix,locale)
-end
-
-const SLOTERROR = ArgumentError("Non-digit character encountered")
-slotparse(slot,x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(x) : throw(SLOTERROR)
-function slotparse(slot::Slot{Month},x,locale)
-    if slot.letter == 'm'
-        ismatch(r"[^0-9\s]",x) ? throw(SLOTERROR) : return Month(x)
-    elseif slot.letter == 'u'
-        return Month(MONTHTOVALUEABBR[locale][lowercase(x)])
-    else
-        return Month(MONTHTOVALUE[locale][lowercase(x)])
-    end
-end
-slotparse(slot::Slot{Millisecond},x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
-slotparse(slot::Slot{DayOfWeekSlot},x,locale) = nothing
-
-function getslot(x,slot::DelimitedSlot,locale,cursor)
-    endind = first(search(x,slot.transition,nextind(x,cursor)))
-    if endind == 0 # we didn't find the next delimiter
-        s = x[cursor:end]
-        index = endof(x)+1
-    else
-        s = x[cursor:(endind-1)]
-        index = nextind(x,endind)
-    end
-    return index, slotparse(slot,s,locale)
-end
-getslot(x,slot,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)], locale))
-
-function parse(x::AbstractString,df::DateFormat)
-    x = strip(x)
-    startswith(x, df.prefix) && (x = replace(x, df.prefix, "", 1))
-    isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
-    if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].transition)) == 0
-        throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].transition)\", in date string"))
-    end
-    periods = Period[]
-    extra = Any[]  # Supports custom slot types such as TimeZone
-    cursor = 1
-    for slot in df.slots
-        cursor, pe = getslot(x,slot,df.locale,cursor)
-        pe !== nothing && (isa(pe,Period) ? push!(periods,pe) : push!(extra,pe))
-        cursor > endof(x) && break
-    end
-    sort!(periods,rev=true,lt=periodisless)
-    if isempty(extra)
-        return periods
-    else
-        return vcat(periods, extra)
-    end
-end
-
-slotformat(slot,dt,locale) = lpad(string(value(slot.parser(dt))),slot.width,"0")
-function slotformat(slot::Slot{Year},dt,locale)
-    s = lpad(string(value(slot.parser(dt))),slot.width,"0")
-    if slot.letter == 'y'
-        return s[(end-slot.width+1):end]  # Truncate the year
-    else # == 'Y'
-        return s
-    end
-end
-function slotformat(slot::Slot{Month},dt,locale)
-    if slot.letter == 'm'
-        return lpad(month(dt),slot.width,"0")
-    elseif slot.letter == 'u'
-        return VALUETOMONTHABBR[locale][month(dt)]
-    else
-        return VALUETOMONTH[locale][month(dt)]
-    end
-end
-function slotformat(slot::Slot{DayOfWeekSlot},dt,locale)
-    if slot.letter == 'e'
-        return VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
-    else # == 'E'
-        return VALUETODAYOFWEEK[locale][dayofweek(dt)]
-    end
-end
-slotformat(slot::Slot{Millisecond},dt,locale) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")
-
-function format(dt::TimeType,df::DateFormat)
-    f = df.prefix
-    for slot in df.slots
-        f *= slotformat(slot,dt,df.locale)
-        if isa(slot, DelimitedSlot)
-            f *= isa(slot.transition, AbstractString) ? slot.transition : ""
-        end
-    end
-    return f
-end
-
-# UI
-const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
-const ISODateFormat = DateFormat("yyyy-mm-dd")
-const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
-
-"""
-    DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
-
-Construct a `DateTime` by parsing the `dt` date string following the pattern given in
-the `format` string. The following character codes can be used to construct the `format`
+formatting a date object as a string. The following character codes can be used to construct the `format`
 string:
 
 | Code       | Matches   | Comment                                                      |
@@ -254,18 +266,117 @@ Characters not listed above are normally treated as delimiters between date and 
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
 "y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using
 backslash. The date "1995y01m" would have the format "y\\ym\\m".
+
+Creating a DateFormat object is expensive. Whenever possible, create it once and use it many times
+or try the `dateformat""` string macro. Using this macro creates the DateFormat object once at
+macro expansion time and reuses it later. see [`@dateformat_str`](@ref).
+
+See [`DateTime`](@ref) and [`format`](@ref) for how to use a DateFormat object to parse and write Date strings
+respectively.
 """
-DateTime(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = DateTime(dt,DateFormat(format,locale))
+function DateFormat(f::AbstractString, locale=:english, T::Type=DateTime; default_fields=(1,1,1,0,0,0,0))
+    tokens = AbstractDateToken[]
+    localeobj = DateLocale{Symbol(locale)}()
+    prefix = ""
+    dateorder = [Year, Month, Day, Hour, Minute, Second, Millisecond]
+    order = zeros(Int, length(default_fields))
+    last_offset = 1
+
+    letters = join(collect(keys(SLOT_RULE)), "")
+    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
+        letter = f[m.offset]
+        typ = SLOT_RULE[letter]
+
+        width = length(m.match)
+        delim = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
+
+        push_delim_token!(tokens, delim)
+        push!(tokens, DatePart{letter, width, true}())
+        idx = findfirst(dateorder, typ)
+        if idx != 0
+            order[idx] = length(tokens)
+        end
+
+        last_offset = m.offset+width
+    end
+
+    remaining = f[last_offset:end]
+    remaining = replace(remaining, r"\\(.)", s"\1")
+    push_delim_token!(tokens, remaining)
+    if length(tokens) > 0
+        tokens[end] = make_variable_width(tokens[end])
+    end
+
+    return DateFormat(T, (tokens...), localeobj, default_fields, (order...))
+end
+
+function Base.show(io::IO, df::DateFormat)
+    write(io, "dateformat\"")
+    for t in df.tokens
+        _show_content(io, t)
+    end
+    write(io, '"')
+end
+
+# Utility functions for DateFormat construction
+
+make_variable_width{C,N}(p::DatePart{C, N, true}) = DatePart{C, N, false}()
+make_variable_width(p) = p
+
+function push_delim_token!(tokens, delim)
+    if !isempty(delim)
+        if length(tokens) > 0
+            # before adding the delimiter make
+            # the previous token variable width
+            tokens[end] = make_variable_width(tokens[end])
+        end
+        if length(delim) == 1
+            push!(tokens, Delim(first(delim)))
+        else
+            push!(tokens, Delim{typeof(delim), length(delim)}(delim))
+        end
+    end
+end
+
+"""
+    dateformat"Y-m-d H:M:S"
+
+Create a [`DateFormat`](@ref) object. Similar to `DateFormat("Y-m-d H:M:S")`
+but creates the DateFormat object once during macro expansion.
+
+See [`DateFormat`](@ref) for details about format specifiers.
+"""
+macro dateformat_str(str)
+    DateFormat(str)
+end
+
+# Standard formats
+const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
+const ISODateFormat = DateFormat("yyyy-mm-dd", :english, Date)
+const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
+
+### API
+"""
+    DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+
+Construct a `DateTime` by parsing the `dt` date string following the pattern given in
+the `format` string.
+
+This method creates a `DateFormat` object each time it is called. If you are parsing many
+date strings of the same format, consider creating a [`DateFormat`](@ref) object once and using
+that as the second argument instead.
+"""
+DateTime(dt::AbstractString, format::AbstractString;locale::AbstractString="english") = DateTime(dt,DateFormat(format,locale))
 
 """
     DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date string following the pattern given in
-the [`DateFormat`](@ref) object. Similar to
+the [`DateFormat`](:func:`Dates.DateFormat`) object. Similar to
 `DateTime(::AbstractString, ::AbstractString)` but more efficient when repeatedly parsing
 similarly formatted date strings with a pre-created `DateFormat` object.
 """
-DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = DateTime(parse(dt,df)...)
+DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = tryfailparse(dt,df)
 
 """
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
@@ -274,14 +385,26 @@ Construct a `Date` object by parsing a `dt` date string following the pattern gi
 `format` string. Follows the same conventions as
 `DateTime(::AbstractString, ::AbstractString)`.
 """
-Date(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = Date(dt,DateFormat(format,locale))
+Date(dt::AbstractString,format::AbstractString;locale=:english) = Date(dt,DateFormat(format,locale, Date))
 
 """
     Date(dt::AbstractString, df::DateFormat) -> Date
 
 Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
-Date(dt::AbstractString,df::DateFormat=ISODateFormat) = Date(parse(dt,df)...)
+Date(dt::AbstractString,df::DateFormat=ISODateFormat) = Date(tryfailparse(dt,df))
+
+format(io, t, dt, locale) = format(io, t, dt)
+
+function format(io, dt::TimeType, fmt::DateFormat)
+    for t in fmt.tokens
+        format(io, t, dt, fmt.locale)
+    end
+end
+
+function format(dt::TimeType, fmt::DateFormat)
+    sprint(io->format(io, dt, fmt))
+end
 
 
 """
@@ -319,20 +442,39 @@ backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
 """
 format(dt::TimeType,f::AbstractString;locale::AbstractString="english") = format(dt,DateFormat(f,locale))
 
+# show
+
+function Base.show(io::IO, dt::DateTime)
+    if millisecond(dt) == 0
+        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS")
+    else
+        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS.s")
+    end
+end
+
+const simple_date = DateFormat("YYYY-mm-dd", :english, Date)
+function Base.show(io::IO, dt::Date)
+    format(io, dt, simple_date)
+end
+
+function Base.string(dt::TimeType)
+    sprint(io->show(io, dt))
+end
+
 # vectorized
 DateTime{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = DateTime(Y,DateFormat(format,locale))
 function DateTime{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
-    return reshape(DateTime[DateTime(parse(y,df)...) for y in Y], size(Y))
+    return reshape(DateTime[tryfailparse(y,df) for y in Y], size(Y))
 end
 Date{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Date(Y,DateFormat(format,locale))
 function Date{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateFormat)
-    return reshape(Date[Date(parse(y,df)...) for y in Y], size(Y))
+    return reshape(Date[Date(tryfailparse(y,df)) for y in Y], size(Y))
 end
 
-format{T<:TimeType}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Dates.format(Y,DateFormat(format,locale))
+format{T<:TimeType}(Y::AbstractArray{T},fmt::AbstractString;locale::AbstractString="english") = format(Y,DateFormat(fmt,locale))
 function format(Y::AbstractArray{Date},df::DateFormat=ISODateFormat)
-    return reshape([Dates.format(y,df) for y in Y], size(Y))
+    return reshape([format(y,df) for y in Y], size(Y))
 end
 function format(Y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
-    return reshape([Dates.format(y,df) for y in Y], size(Y))
+    return reshape([format(y,df) for y in Y], size(Y))
 end
