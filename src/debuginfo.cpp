@@ -1291,19 +1291,21 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
             }
         }
 
-        if (iswindows) {
-#if JL_LLVM_VERSION >= 30500
-            assert(debugobj->isCOFF());
-            const llvm::object::COFFObjectFile *coffobj = (const llvm::object::COFFObjectFile*)debugobj;
+        if (auto *OF = dyn_cast<const object::COFFObjectFile>(debugobj)) {
+            assert(iswindows);
+#if JL_LLVM_VERSION >= 30800
+            *slide = OF->getImageBase() - fbase;
+            *section_slide = 0; // Since LLVM 3.8+ addresses are adjusted correctly
+#elif JL_LLVM_VERSION >= 30500
             const llvm::object::pe32plus_header *pe32plus;
-            coffobj->getPE32PlusHeader(pe32plus);
+            OF->getPE32PlusHeader(pe32plus);
             if (pe32plus != NULL) {
                 *slide = pe32plus->ImageBase - fbase;
                 *section_slide = -(int64_t)pe32plus->ImageBase;
             }
             else {
                 const llvm::object::pe32_header *pe32;
-                coffobj->getPE32Header(pe32);
+                OF->getPE32Header(pe32);
                 if (pe32 == NULL) {
                     objfileentry_t entry = {};
                     objfilemap[fbase] = entry;
