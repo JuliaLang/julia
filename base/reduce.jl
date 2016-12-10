@@ -283,54 +283,6 @@ determine the neutral element of `op`.
 reduce(op, itr) = mapreduce(identity, op, itr)
 reduce(op, a::Number) = a
 
-### short-circuiting specializations of mapreduce
-
-## conditions and results of short-circuiting
-
-immutable Predicate{F}
-    f::F
-end
-(pred::Predicate)(x) = pred.f(x)::Bool
-
-const ShortCircuiting = Union{typeof(&), typeof(|)}
-
-## short-circuiting (sc) mapreduce definitions
-
-function mapreduce_sc_impl(f, op::typeof(&), itr)
-    for x in itr
-        f(x) || return false
-    end
-    return true
-end
-
-function mapreduce_sc_impl(f, op::typeof(|), itr)
-    for x in itr
-        f(x) && return true
-    end
-    return false
-end
-
-# mapreduce_sc tests if short-circuiting is safe;
-# if so, mapreduce_sc_impl is called. If it's not
-# safe, call mapreduce_no_sc, which redirects to
-# non-short-circuiting definitions.
-
-mapreduce_no_sc(f, op, itr::Any)           =  mapfoldl(f, op, itr)
-mapreduce_no_sc(f, op, itr::AbstractArray) = _mapreduce(f, op, itr)
-
-mapreduce_sc(f::Function,  op, itr) = mapreduce_no_sc(f, op, itr)
-mapreduce_sc(f::Predicate, op, itr) = mapreduce_sc_impl(f, op, itr)
-
-mapreduce_sc(f::typeof(identity), op, itr) =
-    eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, op, itr) :
-        mapreduce_no_sc(f, op, itr)
-
-mapreduce(f, op::ShortCircuiting, n::Number) = n
-mapreduce(f, op::ShortCircuiting, itr::AbstractArray) = mapreduce_sc(f,op,itr)
-mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
-
-
 ###### Specific reduction functions ######
 
 ## sum
@@ -558,16 +510,6 @@ false
 """
 all(itr) = all(identity, itr)
 
-nonboolean_error(f, op) = throw(ArgumentError("""
-    Using non-boolean collections with $f(itr) is not allowed, use
-    reduce($op, itr) instead. If you are using $f(map(f, itr)) or
-    $f([f(x) for x in itr]), use $f(f, itr) instead.
-"""))
-or_bool_only(a, b) = nonboolean_error(:any, :|)
-or_bool_only(a::Bool, b::Bool) = a|b
-and_bool_only(a, b) = nonboolean_error(:all, :&)
-and_bool_only(a::Bool, b::Bool) = a&b
-
 """
     any(p, itr) -> Bool
 
@@ -578,8 +520,7 @@ julia> any(i->(4<=i<=6), [3,5,7])
 true
 ```
 """
-any(f::Any, itr) = any(Predicate(f), itr)
-function any(f::Predicate, itr)
+function any(f, itr)
     for x in itr
         f(x) && return true
     end
@@ -596,8 +537,7 @@ julia> all(i->(4<=i<=6), [4,5,6])
 true
 ```
 """
-all(f::Any, itr) = all(Predicate(f), itr)
-function all(f::Predicate, itr)
+function all(f, itr)
     for x in itr
         f(x) || return false
     end
@@ -631,7 +571,7 @@ julia> 5 in a
 false
 ```
 """
-in(x, itr) = any(Predicate(y -> y == x), itr)
+in(x, itr) = any(y -> y == x, itr)
 
 const ∈ = in
 ∉(x, itr)=!∈(x, itr)
