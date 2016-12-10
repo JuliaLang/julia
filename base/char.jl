@@ -18,7 +18,7 @@ length(c::Char) = 1
 endof(c::Char) = 1
 getindex(c::Char) = c
 getindex(c::Char, i::Integer) = i == 1 ? c : throw(BoundsError())
-getindex(c::Char, I::Integer...) = all(Predicate(x -> x == 1), I) ? c : throw(BoundsError())
+getindex(c::Char, I::Integer...) = all(x -> x == 1, I) ? c : throw(BoundsError())
 first(c::Char) = c
 last(c::Char) = c
 eltype(::Type{Char}) = Char
