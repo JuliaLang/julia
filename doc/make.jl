@@ -1,7 +1,7 @@
 # Install dependencies needed to build the documentation.
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
 Pkg.init()
-write(Pkg.dir("REQUIRE"), "Documenter")
+cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
 Pkg.resolve()
 Pkg.update()
 
@@ -80,6 +80,7 @@ const PAGES = [
         "stdlib/libc.md",
         "stdlib/libdl.md",
         "stdlib/profile.md",
+        "stdlib/stacktraces.md",
         "stdlib/simd-types.md",
     ],
     "Developer Documentation" => [
@@ -102,7 +103,7 @@ const PAGES = [
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
         ],
-        "Devloping/debugging Julia's C code" => [
+        "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
             "devdocs/debuggingtips.md",
             "devdocs/valgrind.md",
