@@ -705,17 +705,19 @@ function testset_beginend(args, tests)
     # finally removing the testset and giving it a chance to take
     # action (such as reporting the results)
     quote
-        ts = $(testsettype)($desc; $options...)
-        push_testset(ts)
-        try
-            $(esc(tests))
-        catch err
-            # something in the test block threw an error. Count that as an
-            # error in this test set
-            record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
-        end
-        pop_testset()
-        finish(ts)
+        (()->begin
+            ts = $(testsettype)($desc; $options...)
+            push_testset(ts)
+            try
+                $(esc(tests))
+            catch err
+                # something in the test block threw an error. Count that as an
+                # error in this test set
+                record(ts, Error(:nontest_error, :(), err, catch_backtrace()))
+            end
+            pop_testset()
+            finish(ts)
+        end)()
     end
 end
 
@@ -777,19 +779,21 @@ function testset_forloop(args, testloop)
         end
     end
     quote
+        (()->begin
         arr = Array{Any,1}(0)
-        first_iteration = true
-        local ts
-        try
-            $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
-        finally
-            # Handle `return` in test body
-            if !first_iteration
-                pop_testset()
-                push!(arr, finish(ts))
+            first_iteration = true
+            local ts
+            try
+                $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+            finally
+                # Handle `return` in test body
+                if !first_iteration
+                    pop_testset()
+                    push!(arr, finish(ts))
+                end
             end
-        end
-        arr
+            arr
+        end)()
     end
 end
 
