@@ -385,6 +385,12 @@ let
     @test isempty(sa)
     @test isa(sa, ObjectIdDict)
 
+    @test length(a) == 2
+    @test 1 in keys(a)
+    @test a in keys(a)
+    @test a[1] === a
+    @test a[a] === 2
+
     ca = copy(a)
     @test length(ca) == length(a)
     @test ca == a
@@ -394,6 +400,9 @@ let
     @test length(ca) == 0
     @test length(a) == 2
 end
+
+@test length(ObjectIdDict(1=>2, 1.0=>3)) == 2
+@test length(Dict(1=>2, 1.0=>3)) == 1
 
 let d = @inferred ObjectIdDict(i=>i for i=1:3)
     @test isa(d, ObjectIdDict)
