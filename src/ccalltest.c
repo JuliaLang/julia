@@ -574,6 +574,178 @@ test_huge(5a, r1);
 test_huge(5b, r1);
 #endif // _COMPILER_INTEL_
 
+// Enough arguments for architectures that uses registers for integer or
+// floating point arguments to spill.
+JL_DLLEXPORT int test_long_args_intp(int *a1, int *a2, int *a3, int *a4,
+                                     int *a5, int *a6, int *a7, int *a8,
+                                     int *a9, int *a10, int *a11, int *a12,
+                                     int *a13, int *a14)
+{
+    return (*a1 + *a2 + *a3 + *a4 + *a5 + *a6 + *a7 + *a8 + *a9 + *a10 +
+            *a11 + *a12 + *a13 + *a14);
+}
+
+JL_DLLEXPORT int test_long_args_int(int a1, int a2, int a3, int a4,
+                                    int a5, int a6, int a7, int a8,
+                                    int a9, int a10, int a11, int a12,
+                                    int a13, int a14)
+{
+    return (a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 +
+            a11 + a12 + a13 + a14);
+}
+
+JL_DLLEXPORT float test_long_args_float(float a1, float a2, float a3,
+                                        float a4, float a5, float a6,
+                                        float a7, float a8, float a9,
+                                        float a10, float a11, float a12,
+                                        float a13, float a14)
+{
+    return (a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 +
+            a11 + a12 + a13 + a14);
+}
+
+JL_DLLEXPORT double test_long_args_double(double a1, double a2, double a3,
+                                          double a4, double a5, double a6,
+                                          double a7, double a8, double a9,
+                                          double a10, double a11, double a12,
+                                          double a13, double a14)
+{
+    return (a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 +
+            a11 + a12 + a13 + a14);
+}
+
+typedef struct {
+    int *a;
+    int *b;
+} struct_spill_pint;
+
+JL_DLLEXPORT int test_spill_int1(int *v1, struct_spill_pint s)
+{
+    return *v1 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int2(int *v1, int *v2, struct_spill_pint s)
+{
+    return *v1 + *v2 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int3(int *v1, int *v2, int *v3, struct_spill_pint s)
+{
+    return *v1 + *v2 + *v3 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int4(int *v1, int *v2, int *v3, int *v4,
+                                 struct_spill_pint s)
+{
+    return *v1 + *v2 + *v3 + *v4 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int5(int *v1, int *v2, int *v3, int *v4, int *v5,
+                                 struct_spill_pint s)
+{
+    return *v1 + *v2 + *v3 + *v4 + *v5 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int6(int *v1, int *v2, int *v3, int *v4, int *v5,
+                                 int *v6, struct_spill_pint s)
+{
+    return *v1 + *v2 + *v3 + *v4 + *v5 + *v6 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int7(int *v1, int *v2, int *v3, int *v4, int *v5,
+                                 int *v6, int *v7, struct_spill_pint s)
+{
+    return *v1 + *v2 + *v3 + *v4 + *v5 + *v6 + *v7 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int8(int *v1, int *v2, int *v3, int *v4, int *v5,
+                                 int *v6, int *v7, int *v8, struct_spill_pint s)
+{
+    return *v1 + *v2 + *v3 + *v4 + *v5 + *v6 + *v7 + *v8 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int9(int *v1, int *v2, int *v3, int *v4, int *v5,
+                                 int *v6, int *v7, int *v8, int *v9,
+                                 struct_spill_pint s)
+{
+    return *v1 + *v2 + *v3 + *v4 + *v5 + *v6 + *v7 + *v8 + *v9 + *s.a + *s.b;
+}
+
+JL_DLLEXPORT int test_spill_int10(int *v1, int *v2, int *v3, int *v4, int *v5,
+                                  int *v6, int *v7, int *v8, int *v9, int *v10,
+                                  struct_spill_pint s)
+{
+    return (*v1 + *v2 + *v3 + *v4 + *v5 + *v6 + *v7 + *v8 + *v9 + *v10 +
+            *s.a + *s.b);
+}
+
+typedef struct {
+    float a;
+    float b;
+} struct_spill_float;
+
+JL_DLLEXPORT float test_spill_float1(float v1, struct_spill_float s)
+{
+    return v1 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float2(float v1, float v2, struct_spill_float s)
+{
+    return v1 + v2 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float3(float v1, float v2, float v3,
+                                     struct_spill_float s)
+{
+    return v1 + v2 + v3 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float4(float v1, float v2, float v3, float v4,
+                                     struct_spill_float s)
+{
+    return v1 + v2 + v3 + v4 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float5(float v1, float v2, float v3, float v4,
+                                     float v5, struct_spill_float s)
+{
+    return v1 + v2 + v3 + v4 + v5 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float6(float v1, float v2, float v3, float v4,
+                                     float v5, float v6, struct_spill_float s)
+{
+    return v1 + v2 + v3 + v4 + v5 + v6 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float7(float v1, float v2, float v3, float v4,
+                                     float v5, float v6, float v7,
+                                     struct_spill_float s)
+{
+    return v1 + v2 + v3 + v4 + v5 + v6 + v7 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float8(float v1, float v2, float v3, float v4,
+                                     float v5, float v6, float v7, float v8,
+                                     struct_spill_float s)
+{
+    return v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float9(float v1, float v2, float v3, float v4,
+                                     float v5, float v6, float v7, float v8,
+                                     float v9, struct_spill_float s)
+{
+    return v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + s.a + s.b;
+}
+
+JL_DLLEXPORT float test_spill_float10(float v1, float v2, float v3, float v4,
+                                      float v5, float v6, float v7, float v8,
+                                      float v9, float v10, struct_spill_float s)
+{
+    return (v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10 + s.a + s.b);
+}
+
 JL_DLLEXPORT int get_c_int(void)
 {
     return c_int;
