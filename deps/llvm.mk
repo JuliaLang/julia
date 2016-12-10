@@ -476,15 +476,17 @@ $(eval $(call LLVM_PATCH,llvm-D21271-instcombine-tbaa-3.8)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-win64-reloc-dwarf))
 $(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
 else ifeq ($(LLVM_VER_SHORT),3.9)
+ifeq ($(LLVM_VER),3.9.0)
 # fix lowering for atomics on ppc
 $(eval $(call LLVM_PATCH,llvm-rL279933-ppc-atomicrmw-lowering)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-r282182)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-3.9.0_cygwin)) # R283427, Remove for 4.0
+endif
+$(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
 $(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
-$(eval $(call LLVM_PATCH,llvm-3.9.0_cygwin)) # R283427, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf))
 $(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
 endif # LLVM_VER
