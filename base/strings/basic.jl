@@ -108,7 +108,20 @@ julia> "Hello " * "world"
 (.*){T<:AbstractString}(v::Vector{T},s::AbstractString) = [i*s for i in v]
 (.*){T<:AbstractString}(s::AbstractString,v::Vector{T}) = [s*i for i in v]
 
-one(s::AbstractString) = ""
+
+"""
+```
+one{U<:AbstractString}(::Type{U})
+```
+
+String multiplicative identity. 
+
+```jldoctest
+julia> "Hello world" * one(String)
+"Hello world"
+```
+"""
+one{U<:AbstractString}(::Type{U}) = convert(U, "")
 
 length(s::DirectIndexString) = endof(s)
 
