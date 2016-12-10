@@ -114,7 +114,7 @@ julia> "Hello " * "world"
 one{U<:AbstractString}(::Type{U})
 ```
 
-String multiplicative identity. 
+String multiplicative identity.
 
 ```jldoctest
 julia> "Hello world" * one(String)
