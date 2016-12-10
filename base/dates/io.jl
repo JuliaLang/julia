@@ -372,7 +372,7 @@ DateTime(dt::AbstractString, format::AbstractString;locale::AbstractString="engl
     DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date string following the pattern given in
-the [`DateFormat`](:func:`Dates.DateFormat`) object. Similar to
+the [`DateFormat`](@ref) object. Similar to
 `DateTime(::AbstractString, ::AbstractString)` but more efficient when repeatedly parsing
 similarly formatted date strings with a pre-created `DateFormat` object.
 """
