@@ -27,8 +27,8 @@ immutable DateFormat{D, T<:Tuple, L<:DateLocale, N}
     result_type::Type{D}
     tokens::T
     locale::L
-    field_defaults::NTuple{N, Int}
-    field_order::NTuple{N,Int}
+    field_defaults::NTuple{N,Int64}
+    field_order::NTuple{N,Int64}
 end
 
 include("io-util.jl")

@@ -14,7 +14,7 @@ end
 
 @generated function _tryparse{T, N}(fmt::DateFormat{T, NTuple{N}}, str::AbstractString)
     quote
-        R = Nullable{NTuple{7,Int}}
+        R = Nullable{NTuple{7,Int64}}
         t = fmt.tokens
         l = fmt.locale
         len = endof(str)
@@ -31,7 +31,7 @@ end
 
         @label done
         parts = Base.@ntuple $N val
-        return R(reorder_args(parts, fmt.field_order, fmt.field_defaults, err_idx)::NTuple{7,Int})
+        return R(reorder_args(parts, fmt.field_order, fmt.field_defaults, err_idx)::NTuple{7,Int64})
 
         @label error
         return R((err_idx,state,0,0,0,0,0), false)
