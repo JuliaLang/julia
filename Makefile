@@ -56,7 +56,7 @@ julia_flisp.boot.inc.phony: julia-deps
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
 $(BUILDROOT)/doc/_build/html:
-	@$(MAKE) -C $(BUILDROOT)/doc html
+	@$(MAKE) docs
 
 # doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
 CLEAN_TARGETS += clean-docdir
@@ -316,9 +316,8 @@ define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
 
-install: $(build_depsbindir)/stringreplace
+install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html
 	@$(MAKE) $(QUIET_MAKE) all
-	@$(MAKE) $(QUIET_MAKE) docs
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
