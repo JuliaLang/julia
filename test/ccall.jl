@@ -1044,3 +1044,13 @@ function f17204(a)
 end
 @test ccall(cfunction(f17204, Vector{Any}, Tuple{Vector{Any}}),
             Vector{Any}, (Vector{Any},), Any[1:10;]) == Any[11:20;]
+
+# This used to trigger incorrect ccall callee inlining.
+# Not sure if there's a more reliable way to test this.
+# Do not put these in a function.
+@noinline g17413() = rand()
+@inline f17413() = (g17413(); g17413())
+ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+for i in 1:3
+    ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+end
