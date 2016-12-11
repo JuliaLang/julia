@@ -207,7 +207,7 @@ function show(io::IO, frame::StackFrame; full_path::Bool=false,
     if frame.file !== empty_sym
         file_info = full_path ? string(frame.file) : basename(string(frame.file))
         print(io, " at ")
-        Base.with_output_color(get(io, :hascolor, false) ? Base.stackframe_linfo_color() : :nothing, io) do io
+        Base.with_output_color(get(io, :hascolor, false) ? Base.stackframe_lineinfo_color() : :nothing, io) do io
             print(io, file_info, ":")
             if frame.line >= 0
                 print(io, frame.line)

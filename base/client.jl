@@ -63,7 +63,7 @@ warn_color()   = repl_color("JULIA_WARN_COLOR", default_color_warn)
 info_color()   = repl_color("JULIA_INFO_COLOR", default_color_info)
 input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
 answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
-stackframe_linfo_color() =    repl_color("JULIA_STACKFRAME_LINFO_COLOR", :bold)
+stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
