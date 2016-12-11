@@ -8,8 +8,6 @@ The goals of this package is to be
 * Round trippable, that is, from a stream of tokens the original string should be recoverable exactly.
 * Non error throwing. Instead of throwing errors a certain error token is returned.
 
-**Note:** This package does not currently work well with transpose and conjugate transpose operators like in `A' * b` and will try to tokenize this as the beginning of a `CHAR` literal.
-
 ### API
 
 #### Tokenization
