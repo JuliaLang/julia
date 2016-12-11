@@ -457,7 +457,7 @@ end
 # @macroexpand tests
 macro seven_dollar(ex)
     # simonbyrne example 18240
-    isa(ex,Expr) && ex.head == :$ ? 7 : ex
+    isa(ex,Expr) && ex.head == :$ ? 7 : esc(ex)
 end
 
 let
