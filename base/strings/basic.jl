@@ -108,7 +108,7 @@ julia> "Hello " * "world"
 (.*){T<:AbstractString}(v::Vector{T},s::AbstractString) = [i*s for i in v]
 (.*){T<:AbstractString}(s::AbstractString,v::Vector{T}) = [s*i for i in v]
 
-one{T<:AbstractString}(::Type{T}) = convert(U, "")
+one{T<:AbstractString}(::Type{T}) = convert(T, "")
 
 length(s::DirectIndexString) = endof(s)
 
