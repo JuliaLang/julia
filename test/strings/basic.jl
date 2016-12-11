@@ -416,6 +416,10 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test ["b","c"].*"a" == ["ba","ca"]
 @test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
 
+@test one(String) == ""
+@test prod(["*" for i in 1:3]) == "***"
+@test prod(["*" for i in 1:0]) == ""
+
 # Make sure NULL pointers are handled consistently by String
 @test_throws ArgumentError unsafe_string(Ptr{UInt8}(0))
 @test_throws ArgumentError unsafe_string(Ptr{UInt8}(0), 10)
