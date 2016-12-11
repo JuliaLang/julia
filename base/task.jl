@@ -397,10 +397,8 @@ end
 
 Like `@schedule`, `@async` wraps an expression in a `Task` and adds it to the local
 machine's scheduler queue. Additionally it adds the task to the set of items that the
-nearest enclosing `@sync` waits for. `@async` also wraps the expression in a `let x=x, y=y, ...`
-block to create a new scope with copies of all variables referenced in the expression.
+nearest enclosing `@sync` waits for.
 """
 macro async(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
     :(async_run_thunk($expr))
 end
