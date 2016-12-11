@@ -33,9 +33,11 @@ type Lexer{IO_t <: Union{IO, AbstractString}}
     current_row::Int
     current_col::Int
     current_pos::Int64
+
+    last_token::Tokens.Kind
 end
 
-Lexer(io) = Lexer(io, 1, 1, -1, 0, 1, 1, 1)
+Lexer(io) = Lexer(io, 1, 1, -1, 0, 1, 1, 1, Tokens.ERROR)
 
 
 # Iterator interface
@@ -162,6 +164,7 @@ function emit(l::Lexer, kind::Kind, str::String)
                 startpos(l), position(l) - 1,
                 str)
     @debug "emitted token: $tok:"
+    l.last_token = kind
     ignore!(l)
     return tok
 end
@@ -173,6 +176,7 @@ function emit(l::Lexer, kind::Kind, err::TokenError=Tokens.UNKNOWN)
                 startpos(l), position(l) - 1,
                 str)
     @debug "emitted token: $tok:"
+    l.last_token = kind
     ignore!(l)
     return tok
 end
@@ -426,7 +430,8 @@ function lex_digit(l::Lexer)
             break
         end
         if !accept_batch(l, isdigit)
-            return emit_error(l)
+            backup!(l)
+            return emit(l, Tokens.INTEGER)
         end
     end
 
@@ -467,16 +472,20 @@ function lex_digit(l::Lexer)
 end
 
 function lex_prime(l)
-    while true
-        c = readchar(l)
-        if eof(c)
-            return emit_error(l, Tokens.EOF_CHAR)
-        elseif c == '\\'
-            if eof(readchar(l))
+    if l.last_token ∈ [Tokens.IDENTIFIER, Tokens.DOT, Tokens.RPAREN, Tokens.RSQUARE]
+        return emit(l, Tokens.PRIME)
+    else
+        while true
+            c = readchar(l)
+            if eof(c)
                 return emit_error(l, Tokens.EOF_CHAR)
+            elseif c == '\\'
+                if eof(readchar(l))
+                    return emit_error(l, Tokens.EOF_CHAR)
+                end
+            elseif c == '\''
+                return emit(l, Tokens.CHAR)
             end
-        elseif c == '\''
-            return emit(l, Tokens.CHAR)
         end
     end
 end
