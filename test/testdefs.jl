@@ -8,7 +8,6 @@ function runtests(name, isolate=true)
         m = Main
     end
     eval(m, :(using Base.Test))
-    @printf("     \033[1m*\033[0m \033[31m%-21s\033[0m", name)
     ex = quote
         @timed @testset $"$name" begin
             include($"$name.jl")
@@ -16,7 +15,6 @@ function runtests(name, isolate=true)
     end
     res_and_time_data = eval(m, ex)
     rss = Sys.maxrss()
-    @printf(" maxrss %7.2f MB\n", rss / 2^20)
     #res_and_time_data[1] is the testset
     passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Base.Test.get_test_counts(res_and_time_data[1])
     if res_and_time_data[1].anynonpass == false
