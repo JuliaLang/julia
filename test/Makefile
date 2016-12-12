@@ -18,7 +18,7 @@ endif
 $(TESTS):
 	@cd $(SRCDIR) && \
 	$(ULIMIT_TEST) \
-	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
+	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no -e "Base.Test.runtests(ARGS)" $@)
 
 perf:
 	@$(MAKE) -C $(SRCDIR)/perf all
