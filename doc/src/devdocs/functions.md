@@ -102,7 +102,7 @@ that makes all types callable via `convert`:
 ```
 
 In this definition the function type is abstract, which is not normally supported. To make this
-work, all subtypes of `Type` (`Type`, `TypeConstructor`, `Union`, and `DataType`) currently share
+work, all subtypes of `Type` (`Type`, `UnionAll`, `Union`, and `DataType`) currently share
 a method table via special arrangement.
 
 ## Builtins
