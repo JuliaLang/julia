@@ -1277,7 +1277,8 @@ static Value *emit_arraysize_for_unsafe_dim(const jl_cgval_t &tinfo, jl_value_t 
     return dim > nd ? ConstantInt::get(T_size, 1) : emit_arraysize(tinfo, ex, dim, ctx);
 }
 
-static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_t nd, jl_value_t **args,
+// `nd == -1` means the dimension is unknown.
+static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, ssize_t nd, jl_value_t **args,
                                   size_t nidxs, jl_codectx_t *ctx)
 {
     Value *a = boxed(ainfo, ctx);
@@ -1302,6 +1303,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
         ii = builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
         if (k < nidxs-1) {
+            assert(nd >= 0);
             Value *d = emit_arraysize_for_unsafe_dim(ainfo, ex, k+1, nd, ctx);
 #if CHECK_BOUNDS==1
             if (bc) {
@@ -1319,7 +1321,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
     if (bc) {
         // We have already emitted a bounds check for each index except for
         // the last one which we therefore have to do here.
-        bool linear_indexing = nidxs < nd;
+        bool linear_indexing = nd == -1 || nidxs < (size_t)nd;
         if (linear_indexing) {
             // Compare the linearized index `i` against the linearized size of
             // the accessed array, i.e. `if !(i < alen) goto error`.
@@ -1328,6 +1330,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
         } else {
             // Compare the last index of the access against the last dimension of
             // the accessed array, i.e. `if !(last_index < last_dimension) goto error`.
+            assert(nd >= 0);
             Value *last_index = ii;
             Value *last_dimension = emit_arraysize_for_unsafe_dim(ainfo, ex, nidxs, nd, ctx);
             builder.CreateCondBr(builder.CreateICmpULT(last_index, last_dimension), endBB, failBB);
