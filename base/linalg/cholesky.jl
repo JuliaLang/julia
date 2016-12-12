@@ -238,9 +238,8 @@ julia> A = [1 2; 2 50]
  1   2
  2  50
 
- julia> cholfact!(A)
- ERROR: InexactError()
-  ...
+julia> cholfact!(A)
+ERROR: InexactError()
 ```
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})

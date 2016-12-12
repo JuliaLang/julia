@@ -353,11 +353,11 @@ type T12960 end
 let
     A = speye(3)
     B = similar(A, T12960)
-    @test sprint(show, B)  == "\n\t[1, 1]  =  #undef\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
-    @test sprint(print, B) == "\n\t[1, 1]  =  #undef\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n\t[1, 1]  =  #undef\n\t[1, 2]  =  $(curmod_prefix)T12960()\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
-    @test sprint(print, B) == "\n\t[1, 1]  =  #undef\n\t[1, 2]  =  $(curmod_prefix)T12960()\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [1, 2]  =  $(curmod_prefix)T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
+    @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [1, 2]  =  $(curmod_prefix)T12960()\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
 end
 
 # issue #13127
