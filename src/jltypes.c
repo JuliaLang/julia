@@ -468,29 +468,38 @@ static ssize_t lookup_type_idx(jl_typename_t *tn, jl_value_t **key, size_t n, in
     if (n==0) return -1;
     if (ordered) {
         jl_svec_t *cache = tn->cache;
-        jl_value_t **data = jl_svec_data(cache);
+        jl_datatype_t **data = (jl_datatype_t**)jl_svec_data(cache);
         size_t cl = jl_svec_len(cache);
         ssize_t lo = -1;
         ssize_t hi = cl;
         while (lo < hi-1) {
             ssize_t m = ((size_t)(lo+hi))>>1;
-            jl_datatype_t *tt = (jl_datatype_t*)data[m];
-            int cmp = typekey_compare(tt, key, n);
-            if (cmp == 0) return m;
-            if (cmp < 0)
-                hi = m;
-            else
+            int cmp = typekey_compare(data[m], key, n);
+            if (cmp > 0)
                 lo = m;
+            else
+                hi = m;
+        }
+        /*
+          When a module is replaced, the new versions of its types are different but
+          cannot be distinguished by typekey_compare, since the TypeNames can only
+          be distinguished by addresses, which don't have a reliable order. So we
+          need to allow sequences of typekey_compare-equal types in the ordered cache.
+        */
+        while (hi < cl && typekey_compare(data[hi], key, n) == 0) {
+            if (typekey_eq(data[hi], key, n))
+                return hi;
+            hi++;
         }
         return ~hi;
     }
     else {
         jl_svec_t *cache = tn->linearcache;
-        jl_value_t **data = jl_svec_data(cache);
+        jl_datatype_t **data = (jl_datatype_t**)jl_svec_data(cache);
         size_t cl = jl_svec_len(cache);
         ssize_t i;
         for(i=0; i < cl; i++) {
-            jl_datatype_t *tt = (jl_datatype_t*)data[i];
+            jl_datatype_t *tt = data[i];
             if (tt == NULL) return ~i;
             if (typekey_eq(tt, key, n))
                 return i;
