@@ -137,7 +137,7 @@ function Base.show(io::IO, S::SparseMatrixCSC)
     end
     pad = ndigits(max(S.m,S.n))
     k = 0
-    sep = "\n\t"
+    sep = "\n  "
     io = IOContext(io)
     if !haskey(io, :compact)
         io = IOContext(io, :compact => true)
