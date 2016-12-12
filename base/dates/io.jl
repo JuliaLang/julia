@@ -221,17 +221,17 @@ end
 ### DateFormat construction
 
 
-abstract DayOfWeekSlot # special addition to Period types
+abstract DayOfWeekToken # special addition to Period types
 
-# mapping format specifiers to types
+# mapping format specifiers to period types
 const SLOT_RULE = Dict{Char, Type}(
     'y' => Year,
     'Y' => Year,
     'm' => Month,
     'u' => Month,
     'U' => Month,
-    'e' => DayOfWeekSlot,
-    'E' => DayOfWeekSlot,
+    'e' => DayOfWeekToken,
+    'E' => DayOfWeekToken,
     'd' => Day,
     'H' => Hour,
     'M' => Minute,
@@ -277,9 +277,12 @@ respectively.
 function DateFormat(f::AbstractString, locale=:english, T::Type=DateTime; default_fields=(1,1,1,0,0,0,0))
     tokens = AbstractDateToken[]
     localeobj = DateLocale{Symbol(locale)}()
-    prefix = ""
+
+    # we store the indices of the token -> order in arguments to DateTime during
+    # construction of the DateFormat. This saves a lot of time while parsing
     dateorder = [Year, Month, Day, Hour, Minute, Second, Millisecond]
     order = zeros(Int, length(default_fields))
+
     last_offset = 1
 
     letters = join(collect(keys(SLOT_RULE)), "")

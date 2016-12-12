@@ -34,7 +34,7 @@ end
         return R(reorder_args(parts, fmt.field_order, fmt.field_defaults, err_idx)::NTuple{7,Int})
 
         @label error
-        return R((err_idx,state,0,0,0,0,0), true)
+        return R((err_idx,state,0,0,0,0,0), false)
     end
 end
 
@@ -44,18 +44,18 @@ function tryfailparse{T}(dt, df::DateFormat{T})
         err_data = maybedt.value # Unsafe! but _tryparse loads error data here
         err_idx = err_data[1]
         state = err_data[2]
-        # TODO: pretty print this output
+
         if err_idx > length(df.tokens)
-            throw(ArgumentError("Found extra tokens at the end of date time string"))
+            throw(ArgumentError("Found extra characters at the end of date time string"))
         else
-            throw(ArgumentError("Unable to parse date string. At token $(df.tokens[err_idx]) at char $(state)"))
+            throw(ArgumentError("Unable to parse date time. Expected token $(df.tokens[err_idx]) at char $(state)"))
         end
     else
         _create_timeobj(maybedt.value, T)
     end
 end
 
-_create_timeobj(tup, T::Type{DateTime}) = T(tup)
+_create_timeobj(tup, T::Type{DateTime}) = T(tup...)
 _create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
 
 function Base.tryparse{T}(df::DateFormat{T}, dt::AbstractString)
