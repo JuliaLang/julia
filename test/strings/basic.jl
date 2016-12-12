@@ -440,3 +440,23 @@ for s in ("Hello", "Σ", "こんにちは", "😊😁")
     @test next(s, endof(s))[2] > endof(s.data)
     @test nextind(s, endof(s)) > endof(s.data)
 end
+
+# Test cmp with AbstractStrings that don't index the same as UTF-8, which would include
+# (LegacyString.)UTF16String and (LegacyString.)UTF32String, among others.
+
+type CharStr <: AbstractString
+    chars::Vector{Char}
+    CharStr(x) = new(collect(x))
+end
+Base.start(x::CharStr) = start(x.chars)
+Base.next(x::CharStr, i::Int) = next(x.chars, i)
+Base.done(x::CharStr, i::Int) = done(x.chars, i)
+Base.endof(x::CharStr) = endof(x.chars)
+
+# Simple case, with just ANSI Latin 1 characters
+@test "áB" != CharStr("áá") # returns false with bug
+@test cmp("áB", CharStr("áá")) == -1 # returns 0 with bug
+
+# Case with Unicode characters
+@test cmp("\U1f596\U1f596", CharStr("\U1f596")) == 1   # Gives BoundsError with bug
+@test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
