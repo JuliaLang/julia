@@ -4397,7 +4397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.convert",
     "category": "Function",
-    "text": "convert(T, x)\n\nConvert x to a value of type T.\n\nIf T is an Integer type, an InexactError will be raised if x is not representable by T, for example if x is not integer-valued, or is outside the range supported by T.\n\njulia> convert(Int, 3.0)\n3\n\njulia> convert(Int, 3.5)\nERROR: InexactError()\n in convert(::Type{Int64}, ::Float64) at ./float.jl:656\n ...\n\nIf T is a AbstractFloat or Rational type, then it will return the closest value to x representable by T.\n\njulia> x = 1/3\n0.3333333333333333\n\njulia> convert(Float32, x)\n0.33333334f0\n\njulia> convert(Rational{Int32}, x)\n1//3\n\njulia> convert(Rational{Int64}, x)\n6004799503160661//18014398509481984\n\nIf T is a collection type and x a collection, the result of convert(T, x) may alias x.\n\njulia> x = Int[1,2,3];\n\njulia> y = convert(Vector{Int}, x);\n\njulia> y === x\ntrue\n\nSimilarly, if T is a composite type and x a related instance, the result of convert(T, x) may alias part or all of x.\n\njulia> x = speye(5);\n\njulia> typeof(x)\nSparseMatrixCSC{Float64,Int64}\n\njulia> y = convert(SparseMatrixCSC{Float64,Int64}, x);\n\njulia> z = convert(SparseMatrixCSC{Float32,Int64}, y);\n\njulia> y === x\ntrue\n\njulia> z === x\nfalse\n\njulia> z.colptr === x.colptr\ntrue\n\n\n\n"
+    "text": "convert(T, x)\n\nConvert x to a value of type T.\n\nIf T is an Integer type, an InexactError will be raised if x is not representable by T, for example if x is not integer-valued, or is outside the range supported by T.\n\njulia> convert(Int, 3.0)\n3\n\njulia> convert(Int, 3.5)\nERROR: InexactError()\n in convert(::Type{Int64}, ::Float64) at ./float.jl:656\n\nIf T is a AbstractFloat or Rational type, then it will return the closest value to x representable by T.\n\njulia> x = 1/3\n0.3333333333333333\n\njulia> convert(Float32, x)\n0.33333334f0\n\njulia> convert(Rational{Int32}, x)\n1//3\n\njulia> convert(Rational{Int64}, x)\n6004799503160661//18014398509481984\n\nIf T is a collection type and x a collection, the result of convert(T, x) may alias x.\n\njulia> x = Int[1,2,3];\n\njulia> y = convert(Vector{Int}, x);\n\njulia> y === x\ntrue\n\nSimilarly, if T is a composite type and x a related instance, the result of convert(T, x) may alias part or all of x.\n\njulia> x = speye(5);\n\njulia> typeof(x)\nSparseMatrixCSC{Float64,Int64}\n\njulia> y = convert(SparseMatrixCSC{Float64,Int64}, x);\n\njulia> z = convert(SparseMatrixCSC{Float32,Int64}, y);\n\njulia> y === x\ntrue\n\njulia> z === x\nfalse\n\njulia> z.colptr === x.colptr\ntrue\n\n\n\n"
 },
 
 {
@@ -4517,7 +4517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.sizeof",
     "category": "Method",
-    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(Complex128)\n16\n\nIf T is not a bitstype, an error is thrown.\n\njulia> sizeof(Base.LinAlg.LU)\nERROR: argument is an abstract type; size is indeterminate\n in sizeof(::Type{T}) at ./essentials.jl:99\n ...\n\n\n\n"
+    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(Complex128)\n16\n\nIf T is not a bitstype, an error is thrown.\n\njulia> sizeof(Base.LinAlg.LU)\nERROR: argument is an abstract type; size is indeterminate\n in sizeof(::Type{T}) at ./essentials.jl:99\n\n\n\n"
 },
 
 {
@@ -4813,7 +4813,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.unsafe_get",
     "category": "Function",
-    "text": "unsafe_get(x)\n\nReturn the value of x for Nullable x; return x for all other x.\n\nThis method does not check whether or not x is null before attempting to access the value of x for x::Nullable (hence \"unsafe\").\n\njulia> x = Nullable(1)\nNullable{Int64}(1)\n\njulia> unsafe_get(x)\n1\n\njulia> x = Nullable{String}()\nNullable{String}()\n\njulia> unsafe_get(x)\nERROR: UndefRefError: access to undefined reference\n in unsafe_get(::Nullable{String}) at ./nullable.jl:124\n ...\n\njulia> x = 1\n1\n\njulia> unsafe_get(x)\n1\n\n\n\n"
+    "text": "unsafe_get(x)\n\nReturn the value of x for Nullable x; return x for all other x.\n\nThis method does not check whether or not x is null before attempting to access the value of x for x::Nullable (hence \"unsafe\").\n\njulia> x = Nullable(1)\nNullable{Int64}(1)\n\njulia> unsafe_get(x)\n1\n\njulia> x = Nullable{String}()\nNullable{String}()\n\njulia> unsafe_get(x)\nERROR: UndefRefError: access to undefined reference\n in unsafe_get(::Nullable{String}) at ./nullable.jl:123\n\njulia> x = 1\n1\n\njulia> unsafe_get(x)\n1\n\n\n\n"
 },
 
 {
@@ -6541,7 +6541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
 },
 
 {
@@ -6709,7 +6709,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.unshift!",
     "category": "Function",
-    "text": "unshift!(collection, items...) -> collection\n\nInsert one or more items at the beginning of collection.\n\n  julia> unshift!([1, 2, 3, 4], 5, 6)\n  6-element Array{Int64,1}:\n   5\n   6\n   1\n   2\n   3\n   4\n\n\n\n"
+    "text": "unshift!(collection, items...) -> collection\n\nInsert one or more items at the beginning of collection.\n\njulia> unshift!([1, 2, 3, 4], 5, 6)\n6-element Array{Int64,1}:\n 5\n 6\n 1\n 2\n 3\n 4\n\n\n\n"
 },
 
 {
@@ -6733,7 +6733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.deleteat!",
     "category": "Function",
-    "text": "deleteat!(a::Vector, i::Integer)\n\nRemove the item at the given i and return the modified a. Subsequent items are shifted to fill the resulting gap.\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], 2)\n5-element Array{Int64,1}:\n 6\n 4\n 3\n 2\n 1\n\n\n\ndeleteat!(a::Vector, inds)\n\nRemove the items at the indices given by inds, and return the modified a. Subsequent items are shifted to fill the resulting gap. inds must be sorted and unique.\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)\n3-element Array{Int64,1}:\n 5\n 3\n 1\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))\nERROR: ArgumentError: indices must be unique and sorted\n in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:748\n ...\n\n\n\n"
+    "text": "deleteat!(a::Vector, i::Integer)\n\nRemove the item at the given i and return the modified a. Subsequent items are shifted to fill the resulting gap.\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], 2)\n5-element Array{Int64,1}:\n 6\n 4\n 3\n 2\n 1\n\n\n\ndeleteat!(a::Vector, inds)\n\nRemove the items at the indices given by inds, and return the modified a. Subsequent items are shifted to fill the resulting gap. inds must be sorted and unique.\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)\n3-element Array{Int64,1}:\n 5\n 3\n 1\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))\nERROR: ArgumentError: indices must be unique and sorted\n in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:747\n\n\n\n"
 },
 
 {
@@ -10437,7 +10437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.eachindex",
     "category": "Function",
-    "text": "eachindex(A...)\n\nCreates an iterable object for visiting each index of an AbstractArray A in an efficient manner. For array types that have opted into fast linear indexing (like Array), this is simply the range 1:length(A). For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. For other iterables, including strings and dictionaries, this returns an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).\n\nExample for a sparse 2-d array:\n\njulia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])\n2×3 sparse matrix with 3 Int64 nonzero entries:\n        [1, 1]  =  1\n        [2, 1]  =  -5\n        [1, 3]  =  2\n\njulia> for iter in eachindex(A)\n           @show iter.I[1], iter.I[2]\n           @show A[iter]\n       end\n(iter.I[1],iter.I[2]) = (1,1)\nA[iter] = 1\n(iter.I[1],iter.I[2]) = (2,1)\nA[iter] = -5\n(iter.I[1],iter.I[2]) = (1,2)\nA[iter] = 0\n(iter.I[1],iter.I[2]) = (2,2)\nA[iter] = 0\n(iter.I[1],iter.I[2]) = (1,3)\nA[iter] = 2\n(iter.I[1],iter.I[2]) = (2,3)\nA[iter] = 0\n\nIf you supply more than one AbstractArray argument, eachindex will create an iterable object that is fast for all arguments (a UnitRange if all inputs have fast linear indexing, a CartesianRange otherwise). If the arrays have different sizes and/or dimensionalities, eachindex returns an iterable that spans the largest range along each dimension.\n\n\n\n"
+    "text": "eachindex(A...)\n\nCreates an iterable object for visiting each index of an AbstractArray A in an efficient manner. For array types that have opted into fast linear indexing (like Array), this is simply the range 1:length(A). For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. For other iterables, including strings and dictionaries, this returns an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).\n\nExample for a sparse 2-d array:\n\njulia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])\n2×3 sparse matrix with 3 Int64 nonzero entries:\n  [1, 1]  =  1\n  [2, 1]  =  -5\n  [1, 3]  =  2\n\njulia> for iter in eachindex(A)\n           @show iter.I[1], iter.I[2]\n           @show A[iter]\n       end\n(iter.I[1],iter.I[2]) = (1,1)\nA[iter] = 1\n(iter.I[1],iter.I[2]) = (2,1)\nA[iter] = -5\n(iter.I[1],iter.I[2]) = (1,2)\nA[iter] = 0\n(iter.I[1],iter.I[2]) = (2,2)\nA[iter] = 0\n(iter.I[1],iter.I[2]) = (1,3)\nA[iter] = 2\n(iter.I[1],iter.I[2]) = (2,3)\nA[iter] = 0\n\nIf you supply more than one AbstractArray argument, eachindex will create an iterable object that is fast for all arguments (a UnitRange if all inputs have fast linear indexing, a CartesianRange otherwise). If the arrays have different sizes and/or dimensionalities, eachindex returns an iterable that spans the largest range along each dimension.\n\n\n\n"
 },
 
 {
@@ -10797,7 +10797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.vcat",
     "category": "Function",
-    "text": "vcat(A...)\n\nConcatenate along dimension 1.\n\njulia> a = [1 2 3 4 5]\n1×5 Array{Int64,2}:\n 1  2  3  4  5\n\njulia> b = [6 7 8 9 10; 11 12 13 14 15]\n2×5 Array{Int64,2}:\n  6   7   8   9  10\n 11  12  13  14  15\n\njulia> vcat(a,b)\n3×5 Array{Int64,2}:\n  1   2   3   4   5\n  6   7   8   9  10\n 11  12  13  14  15\n\njulia> c = ([1 2 3], [4 5 6])\n(\n[1 2 3],\n<BLANKLINE>\n[4 5 6])\n\njulia> vcat(c...)\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\n\n\n"
+    "text": "vcat(A...)\n\nConcatenate along dimension 1.\n\njulia> a = [1 2 3 4 5]\n1×5 Array{Int64,2}:\n 1  2  3  4  5\n\njulia> b = [6 7 8 9 10; 11 12 13 14 15]\n2×5 Array{Int64,2}:\n  6   7   8   9  10\n 11  12  13  14  15\n\njulia> vcat(a,b)\n3×5 Array{Int64,2}:\n  1   2   3   4   5\n  6   7   8   9  10\n 11  12  13  14  15\n\njulia> c = ([1 2 3], [4 5 6])\n(\n[1 2 3],\n\n[4 5 6])\n\njulia> vcat(c...)\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\n\n\n"
 },
 
 {
@@ -10981,7 +10981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permutedims",
     "category": "Function",
-    "text": "permutedims(A, perm)\n\nPermute the dimensions of array A. perm is a vector specifying a permutation of length ndims(A). This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to permutedims(A, [2,1]).\n\njulia> A = reshape(collect(1:8), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n<BLANKLINE>\n[:, :, 2] =\n 5  7\n 6  8\n\njulia> permutedims(A, [3, 2, 1])\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 5  7\n<BLANKLINE>\n[:, :, 2] =\n 2  4\n 6  8\n\n\n\n"
+    "text": "permutedims(A, perm)\n\nPermute the dimensions of array A. perm is a vector specifying a permutation of length ndims(A). This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to permutedims(A, [2,1]).\n\njulia> A = reshape(collect(1:8), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n[:, :, 2] =\n 5  7\n 6  8\n\njulia> permutedims(A, [3, 2, 1])\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 5  7\n\n[:, :, 2] =\n 2  4\n 6  8\n\n\n\n"
 },
 
 {
@@ -11061,7 +11061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.accumulate",
     "category": "Method",
-    "text": "accumulate(op, A, dim=1)\n\nCumulative operation op along a dimension dim (defaults to 1). See also accumulate! to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow). For common operations there are specialized variants of accumulate, see: cumsum, cumprod\n\njulia> accumulate(+, [1,2,3])\n3-element Array{Int64,1}:\n 1\n 3\n 6\n\njulia> accumulate(*, [1,2,3])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\naccumulate(op, v0, A)\n\nLike accumulate, but using a starting element v0. The first entry of the result will be op(v0, first(A)). For example:\n\njulia> accumulate(+, 100, [1,2,3])\n3-element Array{Int64,1}:\n 101\n 103\n 106\n\n julia> accumulate(min, 0, [1,2,-1])\n 3-element Array{Int64,1}:\n   0\n   0\n  -1\n\n\n\n"
+    "text": "accumulate(op, A, dim=1)\n\nCumulative operation op along a dimension dim (defaults to 1). See also accumulate! to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow). For common operations there are specialized variants of accumulate, see: cumsum, cumprod\n\njulia> accumulate(+, [1,2,3])\n3-element Array{Int64,1}:\n 1\n 3\n 6\n\njulia> accumulate(*, [1,2,3])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\naccumulate(op, v0, A)\n\nLike accumulate, but using a starting element v0. The first entry of the result will be op(v0, first(A)). For example:\n\njulia> accumulate(+, 100, [1,2,3])\n3-element Array{Int64,1}:\n 101\n 103\n 106\n\njulia> accumulate(min, 0, [1,2,-1])\n3-element Array{Int64,1}:\n  0\n  0\n -1\n\n\n\n"
 },
 
 {
@@ -11189,7 +11189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.mapslices",
     "category": "Function",
-    "text": "mapslices(f, A, dims)\n\nTransform the given dimensions of array A using function f. f is called on each slice of A of the form A[...,:,...,:,...]. dims is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if dims is [1,2] and A is 4-dimensional, f is called on A[:,:,i,j] for all i and j.\n\njulia> a = reshape(collect(1:16),(2,2,2,2))\n2×2×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n<BLANKLINE>\n[:, :, 2, 1] =\n 5  7\n 6  8\n<BLANKLINE>\n[:, :, 1, 2] =\n  9  11\n 10  12\n<BLANKLINE>\n[:, :, 2, 2] =\n 13  15\n 14  16\n\njulia> mapslices(sum, a, [1,2])\n1×1×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 10\n<BLANKLINE>\n[:, :, 2, 1] =\n 26\n<BLANKLINE>\n[:, :, 1, 2] =\n 42\n<BLANKLINE>\n[:, :, 2, 2] =\n 58\n\n\n\n"
+    "text": "mapslices(f, A, dims)\n\nTransform the given dimensions of array A using function f. f is called on each slice of A of the form A[...,:,...,:,...]. dims is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if dims is [1,2] and A is 4-dimensional, f is called on A[:,:,i,j] for all i and j.\n\njulia> a = reshape(collect(1:16),(2,2,2,2))\n2×2×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\n[:, :, 2, 1] =\n 5  7\n 6  8\n\n[:, :, 1, 2] =\n  9  11\n 10  12\n\n[:, :, 2, 2] =\n 13  15\n 14  16\n\njulia> mapslices(sum, a, [1,2])\n1×1×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 10\n\n[:, :, 2, 1] =\n 26\n\n[:, :, 1, 2] =\n 42\n\n[:, :, 2, 2] =\n 58\n\n\n\n"
 },
 
 {
@@ -11357,7 +11357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sparse",
     "category": "Function",
-    "text": "sparse(A)\n\nConvert an AbstractMatrix A into a sparse matrix.\n\njulia> A = eye(3)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\njulia> sparse(A)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n        [1, 1]  =  1.0\n        [2, 2]  =  1.0\n        [3, 3]  =  1.0\n\n\n\nsparse(I, J, V,[ m, n, combine])\n\nCreate a sparse matrix S of dimensions m x n such that S[I[k], J[k]] = V[k]. The combine function is used to combine duplicates. If m and n are not specified, they are set to maximum(I) and maximum(J) respectively. If the combine function is not supplied, combine defaults to + unless the elements of V are Booleans in which case combine defaults to |. All elements of I must satisfy 1 <= I[k] <= m, and all elements of J must satisfy 1 <= J[k] <= n. Numerical zeros in (I, J, V) are retained as structural nonzeros; to drop numerical zeros, use dropzeros!.\n\nFor additional documentation and an expert driver, see Base.SparseArrays.sparse!.\n\njulia> Is = [1; 2; 3];\n\njulia> Js = [1; 2; 3];\n\njulia> Vs = [1; 2; 3];\n\njulia> sparse(Is, Js, Vs)\n3×3 sparse matrix with 3 Int64 nonzero entries:\n        [1, 1]  =  1\n        [2, 2]  =  2\n        [3, 3]  =  3\n\n\n\n"
+    "text": "sparse(A)\n\nConvert an AbstractMatrix A into a sparse matrix.\n\njulia> A = eye(3)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\njulia> sparse(A)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\n\n\nsparse(I, J, V,[ m, n, combine])\n\nCreate a sparse matrix S of dimensions m x n such that S[I[k], J[k]] = V[k]. The combine function is used to combine duplicates. If m and n are not specified, they are set to maximum(I) and maximum(J) respectively. If the combine function is not supplied, combine defaults to + unless the elements of V are Booleans in which case combine defaults to |. All elements of I must satisfy 1 <= I[k] <= m, and all elements of J must satisfy 1 <= J[k] <= n. Numerical zeros in (I, J, V) are retained as structural nonzeros; to drop numerical zeros, use dropzeros!.\n\nFor additional documentation and an expert driver, see Base.SparseArrays.sparse!.\n\njulia> Is = [1; 2; 3];\n\njulia> Js = [1; 2; 3];\n\njulia> Vs = [1; 2; 3];\n\njulia> sparse(Is, Js, Vs)\n3×3 sparse matrix with 3 Int64 nonzero entries:\n  [1, 1]  =  1\n  [2, 2]  =  2\n  [3, 3]  =  3\n\n\n\n"
 },
 
 {
@@ -11381,7 +11381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.full",
     "category": "Function",
-    "text": "full(S)\n\nConvert a sparse matrix or vector S into a dense matrix or vector.\n\njulia> A = speye(3)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n        [1, 1]  =  1.0\n        [2, 2]  =  1.0\n        [3, 3]  =  1.0\n\njulia> full(A)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\n"
+    "text": "full(S)\n\nConvert a sparse matrix or vector S into a dense matrix or vector.\n\njulia> A = speye(3)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> full(A)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\n"
 },
 
 {
@@ -11389,7 +11389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.nnz",
     "category": "Function",
-    "text": "nnz(A)\n\nReturns the number of stored (filled) elements in a sparse array.\n\njulia> A = speye(3)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n        [1, 1]  =  1.0\n        [2, 2]  =  1.0\n        [3, 3]  =  1.0\n\njulia> nnz(A)\n3\n\n\n\n"
+    "text": "nnz(A)\n\nReturns the number of stored (filled) elements in a sparse array.\n\njulia> A = speye(3)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nnz(A)\n3\n\n\n\n"
 },
 
 {
@@ -11405,7 +11405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.spones",
     "category": "Function",
-    "text": "spones(S)\n\nCreate a sparse array with the same structure as that of S, but with every nonzero element having the value 1.0.\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 sparse matrix with 4 Float64 nonzero entries:\n        [4, 1]  =  2.0\n        [1, 2]  =  5.0\n        [3, 3]  =  3.0\n        [2, 4]  =  4.0\n\njulia> spones(A)\n4×4 sparse matrix with 4 Float64 nonzero entries:\n        [4, 1]  =  1.0\n        [1, 2]  =  1.0\n        [3, 3]  =  1.0\n        [2, 4]  =  1.0\n\nNote the difference from speye.\n\n\n\n"
+    "text": "spones(S)\n\nCreate a sparse array with the same structure as that of S, but with every nonzero element having the value 1.0.\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 sparse matrix with 4 Float64 nonzero entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> spones(A)\n4×4 sparse matrix with 4 Float64 nonzero entries:\n  [4, 1]  =  1.0\n  [1, 2]  =  1.0\n  [3, 3]  =  1.0\n  [2, 4]  =  1.0\n\nNote the difference from speye.\n\n\n\n"
 },
 
 {
@@ -11421,7 +11421,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.speye",
     "category": "Method",
-    "text": "speye(S)\n\nCreate a sparse identity matrix with the same size as S.\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 sparse matrix with 4 Float64 nonzero entries:\n        [4, 1]  =  2.0\n        [1, 2]  =  5.0\n        [3, 3]  =  3.0\n        [2, 4]  =  4.0\n\njulia> speye(A)\n4×4 sparse matrix with 4 Float64 nonzero entries:\n        [1, 1]  =  1.0\n        [2, 2]  =  1.0\n        [3, 3]  =  1.0\n        [4, 4]  =  1.0\n\nNote the difference from spones.\n\n\n\n"
+    "text": "speye(S)\n\nCreate a sparse identity matrix with the same size as S.\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 sparse matrix with 4 Float64 nonzero entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> speye(A)\n4×4 sparse matrix with 4 Float64 nonzero entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  1.0\n\nNote the difference from spones.\n\n\n\n"
 },
 
 {
@@ -11429,7 +11429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.spdiagm",
     "category": "Function",
-    "text": "spdiagm(B, d[, m, n])\n\nConstruct a sparse diagonal matrix. B is a tuple of vectors containing the diagonals and d is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, B can be a vector (instead of a tuple) and d can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, m and n specify the size of the resulting sparse matrix.\n\njulia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))\n5×5 sparse matrix with 8 Int64 nonzero entries:\n        [2, 1]  =  1\n        [1, 2]  =  4\n        [3, 2]  =  2\n        [2, 3]  =  3\n        [4, 3]  =  3\n        [3, 4]  =  2\n        [5, 4]  =  4\n        [4, 5]  =  1\n\n\n\n"
+    "text": "spdiagm(B, d[, m, n])\n\nConstruct a sparse diagonal matrix. B is a tuple of vectors containing the diagonals and d is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, B can be a vector (instead of a tuple) and d can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, m and n specify the size of the resulting sparse matrix.\n\njulia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))\n5×5 sparse matrix with 8 Int64 nonzero entries:\n  [2, 1]  =  1\n  [1, 2]  =  4\n  [3, 2]  =  2\n  [2, 3]  =  3\n  [4, 3]  =  3\n  [3, 4]  =  2\n  [5, 4]  =  4\n  [4, 5]  =  1\n\n\n\n"
 },
 
 {
@@ -11453,7 +11453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.nonzeros",
     "category": "Function",
-    "text": "nonzeros(A)\n\nReturn a vector of the structural nonzero values in sparse array A. This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of A, and any modifications to the returned vector will mutate A as well. See rowvals and nzrange.\n\njulia> A = speye(3)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n        [1, 1]  =  1.0\n        [2, 2]  =  1.0\n        [3, 3]  =  1.0\n\njulia> nonzeros(A)\n3-element Array{Float64,1}:\n 1.0\n 1.0\n 1.0\n\n\n\n"
+    "text": "nonzeros(A)\n\nReturn a vector of the structural nonzero values in sparse array A. This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of A, and any modifications to the returned vector will mutate A as well. See rowvals and nzrange.\n\njulia> A = speye(3)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nonzeros(A)\n3-element Array{Float64,1}:\n 1.0\n 1.0\n 1.0\n\n\n\n"
 },
 
 {
@@ -11461,7 +11461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.rowvals",
     "category": "Function",
-    "text": "rowvals(A::SparseMatrixCSC)\n\nReturn a vector of the row indices of A. Any modifications to the returned vector will mutate A as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also nonzeros and nzrange.\n\njulia> A = speye(3)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n        [1, 1]  =  1.0\n        [2, 2]  =  1.0\n        [3, 3]  =  1.0\n\njulia> rowvals(A)\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
+    "text": "rowvals(A::SparseMatrixCSC)\n\nReturn a vector of the row indices of A. Any modifications to the returned vector will mutate A as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also nonzeros and nzrange.\n\njulia> A = speye(3)\n3×3 sparse matrix with 3 Float64 nonzero entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> rowvals(A)\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
 },
 
 {
@@ -12573,7 +12573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Bidiagonal",
     "category": "Type",
-    "text": "Bidiagonal(dv, ev, isupper::Bool)\n\nConstructs an upper (isupper=true) or lower (isupper=false) bidiagonal matrix using the given diagonal (dv) and off-diagonal (ev) vectors.  The result is of type Bidiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). ev's length must be one less than the length of dv.\n\nExample\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\n julia> Bu = Bidiagonal(dv, ev, true) # ev is on the first superdiagonal\n 4×4 Bidiagonal{Int64}:\n  1  7  ⋅  ⋅\n  ⋅  2  8  ⋅\n  ⋅  ⋅  3  9\n  ⋅  ⋅  ⋅  4\n\n julia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal\n 4×4 Bidiagonal{Int64}:\n  1  ⋅  ⋅  ⋅\n  7  2  ⋅  ⋅\n  ⋅  8  3  ⋅\n  ⋅  ⋅  9  4\n\n\n\nBidiagonal(dv, ev, uplo::Char)\n\nConstructs an upper (uplo='U') or lower (uplo='L') bidiagonal matrix using the given diagonal (dv) and off-diagonal (ev) vectors.  The result is of type Bidiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). ev's length must be one less than the length of dv.\n\nExample\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal\n4×4 Bidiagonal{Int64}:\n 1  7  ⋅  ⋅\n ⋅  2  8  ⋅\n ⋅  ⋅  3  9\n ⋅  ⋅  ⋅  4\n\njulia> Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal\n4×4 Bidiagonal{Int64}:\n 1  ⋅  ⋅  ⋅\n 7  2  ⋅  ⋅\n ⋅  8  3  ⋅\n ⋅  ⋅  9  4\n\n\n\nBidiagonal(A, isupper::Bool)\n\nConstruct a Bidiagonal matrix from the main diagonal of A and its first super- (if isupper=true) or sub-diagonal (if isupper=false).\n\nExample\n\njulia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]\n4×4 Array{Int64,2}:\n 1  1  1  1\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4\n\njulia> Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A\n4×4 Bidiagonal{Int64}:\n 1  1  ⋅  ⋅\n ⋅  2  2  ⋅\n ⋅  ⋅  3  3\n ⋅  ⋅  ⋅  4\n\njulia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A\n4×4 Bidiagonal{Int64}:\n 1  ⋅  ⋅  ⋅\n 2  2  ⋅  ⋅\n ⋅  3  3  ⋅\n ⋅  ⋅  4  4\n\n\n\n"
+    "text": "Bidiagonal(dv, ev, isupper::Bool)\n\nConstructs an upper (isupper=true) or lower (isupper=false) bidiagonal matrix using the given diagonal (dv) and off-diagonal (ev) vectors.  The result is of type Bidiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). ev's length must be one less than the length of dv.\n\nExample\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> Bu = Bidiagonal(dv, ev, true) # ev is on the first superdiagonal\n4×4 Bidiagonal{Int64}:\n 1  7  ⋅  ⋅\n ⋅  2  8  ⋅\n ⋅  ⋅  3  9\n ⋅  ⋅  ⋅  4\n\njulia> Bl = Bidiagonal(dv, ev, false) # ev is on the first subdiagonal\n4×4 Bidiagonal{Int64}:\n 1  ⋅  ⋅  ⋅\n 7  2  ⋅  ⋅\n ⋅  8  3  ⋅\n ⋅  ⋅  9  4\n\n\n\nBidiagonal(dv, ev, uplo::Char)\n\nConstructs an upper (uplo='U') or lower (uplo='L') bidiagonal matrix using the given diagonal (dv) and off-diagonal (ev) vectors.  The result is of type Bidiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). ev's length must be one less than the length of dv.\n\nExample\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal\n4×4 Bidiagonal{Int64}:\n 1  7  ⋅  ⋅\n ⋅  2  8  ⋅\n ⋅  ⋅  3  9\n ⋅  ⋅  ⋅  4\n\njulia> Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal\n4×4 Bidiagonal{Int64}:\n 1  ⋅  ⋅  ⋅\n 7  2  ⋅  ⋅\n ⋅  8  3  ⋅\n ⋅  ⋅  9  4\n\n\n\nBidiagonal(A, isupper::Bool)\n\nConstruct a Bidiagonal matrix from the main diagonal of A and its first super- (if isupper=true) or sub-diagonal (if isupper=false).\n\nExample\n\njulia> A = [1 1 1 1; 2 2 2 2; 3 3 3 3; 4 4 4 4]\n4×4 Array{Int64,2}:\n 1  1  1  1\n 2  2  2  2\n 3  3  3  3\n 4  4  4  4\n\njulia> Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A\n4×4 Bidiagonal{Int64}:\n 1  1  ⋅  ⋅\n ⋅  2  2  ⋅\n ⋅  ⋅  3  3\n ⋅  ⋅  ⋅  4\n\njulia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A\n4×4 Bidiagonal{Int64}:\n 1  ⋅  ⋅  ⋅\n 2  2  ⋅  ⋅\n ⋅  3  3  ⋅\n ⋅  ⋅  4  4\n\n\n\n"
 },
 
 {
@@ -12613,7 +12613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lu",
     "category": "Function",
-    "text": "lu(A, pivot=Val{true}) -> L, U, p\n\nCompute the LU factorization of A, such that A[p,:] = L*U. By default, pivoting is used. This can be overridden by passing Val{false} for the second argument.\n\nSee also lufact.\n\nExample\n\njulia> A = [4. 3.; 6. 3.]\n2×2 Array{Float64,2}:\n 4.0  3.0\n 6.0  3.0\n\njulia> L, U, p = lu(A)\n(\n[1.0 0.0; 0.666667 1.0],\n<BLANKLINE>\n[6.0 3.0; 0.0 1.0],\n<BLANKLINE>\n[2,1])\n\njulia> A[p, :] == L * U\ntrue\n\n\n\n"
+    "text": "lu(A, pivot=Val{true}) -> L, U, p\n\nCompute the LU factorization of A, such that A[p,:] = L*U. By default, pivoting is used. This can be overridden by passing Val{false} for the second argument.\n\nSee also lufact.\n\nExample\n\njulia> A = [4. 3.; 6. 3.]\n2×2 Array{Float64,2}:\n 4.0  3.0\n 6.0  3.0\n\njulia> L, U, p = lu(A)\n(\n[1.0 0.0; 0.666667 1.0],\n\n[6.0 3.0; 0.0 1.0],\n\n[2,1])\n\njulia> A[p, :] == L * U\ntrue\n\n\n\n"
 },
 
 {
@@ -12653,7 +12653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact!",
     "category": "Function",
-    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorisation produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\n julia> cholfact!(A)\n ERROR: InexactError()\n  ...\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorisation produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
+    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorisation produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError()\n\n\n\ncholfact!(A, [uplo::Symbol,] Val{true}; tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorisation produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
 },
 
 {
@@ -12805,7 +12805,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigmax",
     "category": "Function",
-    "text": "eigmax(A; permute::Bool=true, scale::Bool=true)\n\nReturns the largest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmax(A)\n1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmax(A)\nERROR: DomainError:\n in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:219\n in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:217\n ...\n\n\n\n"
+    "text": "eigmax(A; permute::Bool=true, scale::Bool=true)\n\nReturns the largest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmax(A)\n1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmax(A)\nERROR: DomainError:\n in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:218\n in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:216\n\n\n\n"
 },
 
 {
@@ -12813,7 +12813,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigmin",
     "category": "Function",
-    "text": "eigmin(A; permute::Bool=true, scale::Bool=true)\n\nReturns the smallest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmin(A)\n-1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmin(A)\nERROR: DomainError:\n in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:261\n in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:259\n ...\n\n\n\n"
+    "text": "eigmin(A; permute::Bool=true, scale::Bool=true)\n\nReturns the smallest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmin(A)\n-1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmin(A)\nERROR: DomainError:\n in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:259\n in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:257\n\n\n\n"
 },
 
 {
@@ -12877,7 +12877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.schur",
     "category": "Function",
-    "text": "schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector\n\nComputes the Schur factorization of the matrix A. The methods return the (quasi) triangular Schur factor T and the orthogonal/unitary Schur vectors Z such that A = Z*T*Z'. The eigenvalues of A are returned in the vector λ.\n\nSee schurfact.\n\nExample\n\njulia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\njulia> T, Z, lambda = schur(A)\n(\n[2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999],\n<BLANKLINE>\n[0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522],\n<BLANKLINE>\nComplex{Float64}[2.0+8.28447e-6im,2.0-8.28447e-6im,1.99999+0.0im])\n\njulia> Z * T * Z'\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\n\n\nschur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nSee schurfact.\n\n\n\n"
+    "text": "schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector\n\nComputes the Schur factorization of the matrix A. The methods return the (quasi) triangular Schur factor T and the orthogonal/unitary Schur vectors Z such that A = Z*T*Z'. The eigenvalues of A are returned in the vector λ.\n\nSee schurfact.\n\nExample\n\njulia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\njulia> T, Z, lambda = schur(A)\n(\n[2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999],\n\n[0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522],\n\nComplex{Float64}[2.0+8.28447e-6im,2.0-8.28447e-6im,1.99999+0.0im])\n\njulia> Z * T * Z'\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\n\n\nschur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nSee schurfact.\n\n\n\n"
 },
 
 {
@@ -12917,7 +12917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svd",
     "category": "Function",
-    "text": "svd(A, [thin=true]) -> U, S, V\n\nComputes the SVD of A, returning U, vector S, and V such that A == U*diagm(S)*V'.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nsvd is a wrapper around svdfact, extracting all parts of the SVD factorization to a tuple. Direct use of svdfact is therefore more efficient.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> U, S, V = svd(A)\n(\n[0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],\n<BLANKLINE>\n[3.0,2.23607,2.0,0.0],\n[-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])\n\njulia> U*diagm(S)*V'\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvd(A, B) -> U, V, Q, D1, D2, R0\n\nWrapper around svdfact extracting all parts of the factorization to a tuple. Direct use of svdfact is therefore generally more efficient. The function returns the generalized SVD of A and B, returning U, V, Q, D1, D2, and R0 such that A = U*D1*R0*Q' and B = V*D2*R0*Q'.\n\n\n\n"
+    "text": "svd(A, [thin=true]) -> U, S, V\n\nComputes the SVD of A, returning U, vector S, and V such that A == U*diagm(S)*V'.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nsvd is a wrapper around svdfact, extracting all parts of the SVD factorization to a tuple. Direct use of svdfact is therefore more efficient.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> U, S, V = svd(A)\n(\n[0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],\n\n[3.0,2.23607,2.0,0.0],\n[-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])\n\njulia> U*diagm(S)*V'\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvd(A, B) -> U, V, Q, D1, D2, R0\n\nWrapper around svdfact extracting all parts of the factorization to a tuple. Direct use of svdfact is therefore generally more efficient. The function returns the generalized SVD of A and B, returning U, V, Q, D1, D2, and R0 such that A = U*D1*R0*Q' and B = V*D2*R0*Q'.\n\n\n\n"
 },
 
 {
@@ -17501,7 +17501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Unit Testing",
     "title": "Base.Test.@inferred",
     "category": "Macro",
-    "text": "@inferred f(x)\n\nTests that the call expression f(x) returns a value of the same type inferred by the compiler. It is useful to check for type stability.\n\nf(x) can be any call expression. Returns the result of f(x) if the types match, and an Error Result if it finds different types.\n\njulia> using Base.Test\n\njulia> f(a,b,c) = b > 1 ? 1 : 1.0\nf (generic function with 1 method)\n\njulia> typeof(f(1,2,3))\nInt64\n\njulia> @code_warntype f(1,2,3)\n...\nBody:\n  begin\n      unless (Base.slt_int)(1,b::Int64)::Bool goto 3\n      return 1\n      3:\n      return 1.0\n  end::UNION{FLOAT64,INT64}\n\njulia> @inferred f(1,2,3)\nERROR: return type Int64 does not match inferred return type Union{Float64,Int64}\n in error(::String) at ./error.jl:21\n ...\n\njulia> @inferred max(1,2)\n2\n\n\n\n"
+    "text": "@inferred f(x)\n\nTests that the call expression f(x) returns a value of the same type inferred by the compiler. It is useful to check for type stability.\n\nf(x) can be any call expression. Returns the result of f(x) if the types match, and an Error Result if it finds different types.\n\njulia> using Base.Test\n\njulia> f(a,b,c) = b > 1 ? 1 : 1.0\nf (generic function with 1 method)\n\njulia> typeof(f(1,2,3))\nInt64\n\njulia> @code_warntype f(1,2,3)\nVariables:\n  #self#::#f\n  a::Int64\n  b::Int64\n  c::Int64\n\nBody:\n  begin\n      unless (Base.slt_int)(1,b::Int64)::Bool goto 3\n      return 1\n      3:\n      return 1.0\n  end::UNION{FLOAT64,INT64}\n\njulia> @inferred f(1,2,3)\nERROR: return type Int64 does not match inferred return type Union{Float64,Int64}\n in error(::String) at ./error.jl:21\n\njulia> @inferred max(1,2)\n2\n\n\n\n"
 },
 
 {
