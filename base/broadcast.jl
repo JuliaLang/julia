@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_eltype_op, _default_eltype, linearindices, tail, OneTo, to_shape,
+using Base: @pure, promote_eltype_op, _promote_op, linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 import Base: broadcast
@@ -257,26 +257,22 @@ end
 @inline broadcast_elwise_op(f, As...) =
     broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
-ftype(f, A) = typeof(f)
-ftype(f, A...) = typeof(a -> f(a...))
-ftype(T::DataType, A) = Type{T}
-ftype(T::DataType, A...) = Type{T}
-ziptype(A) = Tuple{eltype(A)}
-ziptype(A, B) = Iterators.Zip2{Tuple{eltype(A)}, Tuple{eltype(B)}}
-@inline ziptype(A, B, C, D...) = Iterators.Zip{Tuple{eltype(A)}, ziptype(B, C, D...)}
+@pure typestuple(a) = Tuple{eltype(a)}
+@pure typestuple(T::Type) = Tuple{Type{T}}
+@pure typestuple(a, b...) = Tuple{typestuple(a).types..., typestuple(b...).types...}
 
 # broadcast methods that dispatch on the type of the final container
-@inline function broadcast_c(f, ::Type{Array}, As...)
-    T = _default_eltype(Base.Generator{ziptype(As...), ftype(f, As...)})
-    shape = broadcast_indices(As...)
+@inline function broadcast_c(f, ::Type{Array}, A, Bs...)
+    T = _promote_op(f, typestuple(A, Bs...))
+    shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
     if isleaftype(T)
-        return broadcast_t(f, T, shape, iter, As...)
+        return broadcast_t(f, T, shape, iter, A, Bs...)
     end
     if isempty(iter)
         return similar(Array{T}, shape)
     end
-    return broadcast_t(f, Any, shape, iter, As...)
+    return broadcast_t(f, Any, shape, iter, A, Bs...)
 end
 function broadcast_c(f, ::Type{Tuple}, As...)
     shape = broadcast_indices(As...)
@@ -351,7 +347,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
  "four: 4"
 ```
 """
-@inline broadcast(f, As...) = broadcast_c(f, containertype(As...), As...)
+@inline broadcast(f, A, Bs...) = broadcast_c(f, containertype(A, Bs...), A, Bs...)
 
 """
     bitbroadcast(f, As...)

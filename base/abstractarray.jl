@@ -1768,10 +1768,10 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
 end
 
 # These are needed because map(eltype, As) is not inferrable
-promote_eltype_op(::Any) = (@_pure_meta; Any)
-promote_eltype_op(op, A) = (@_pure_meta; promote_op(op, eltype(A)))
-promote_eltype_op(op, A, B) = (@_pure_meta; promote_op(op, eltype(A), eltype(B)))
-promote_eltype_op(op, A, B, C, D...) = (@_pure_meta; promote_eltype_op(op, eltype(A), promote_eltype_op(op, B, C, D...)))
+promote_eltype_op(::Any) = Any
+promote_eltype_op(op, A) = (@_inline_meta; promote_op(op, eltype(A)))
+promote_eltype_op(op, A, B) = (@_inline_meta; promote_op(op, eltype(A), eltype(B)))
+promote_eltype_op(op, A, B, C, D...) = (@_inline_meta; promote_eltype_op(op, eltype(A), promote_eltype_op(op, B, C, D...)))
 
 ## 1 argument
 
