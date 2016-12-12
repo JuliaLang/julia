@@ -2534,7 +2534,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 jl_value_t *ndp = jl_tparam1(aty);
                 if (jl_is_long(ndp) || nargs==2) {
                     jl_cgval_t ary = emit_expr(args[1], ctx);
-                    size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
+                    ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
                     Value *idx = emit_array_nd_index(ary, args[1], nd, &args[2], nargs-1, ctx);
                     if (jl_array_store_unboxed(ety) &&
                         jl_datatype_size(ety) == 0) {
@@ -2569,7 +2569,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 jl_value_t *ndp = jl_tparam1(aty);
                 if (jl_is_long(ndp) || nargs==3) {
                     jl_cgval_t ary = emit_expr(args[1], ctx);
-                    size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
+                    ssize_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : -1;
                     Value *idx = emit_array_nd_index(ary, args[1], nd, &args[3], nargs-2, ctx);
                     bool isboxed = !jl_array_store_unboxed(ety);
                     if (!isboxed && jl_datatype_size(ety) == 0) {
