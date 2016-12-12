@@ -42,11 +42,11 @@ end
         @test all([se33; se33_32bit] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
     end
 
-        se44 = speye(4)
-        sz42 = spzeros(4, 2)
-        sz41 = spzeros(4, 1)
-        sz34 = spzeros(3, 4)
-        se77 = speye(7)
+    se44 = speye(4)
+    sz42 = spzeros(4, 2)
+    sz41 = spzeros(4, 1)
+    sz34 = spzeros(3, 4)
+    se77 = speye(7)
     @testset "h+v concatenation" begin
         @test all([se44 sz42 sz41; sz34 se33] == se77)
     end
