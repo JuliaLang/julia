@@ -638,11 +638,11 @@ julia> accumulate(+, 100, [1,2,3])
  103
  106
 
- julia> accumulate(min, 0, [1,2,-1])
- 3-element Array{Int64,1}:
-   0
-   0
-  -1
+julia> accumulate(min, 0, [1,2,-1])
+3-element Array{Int64,1}:
+  0
+  0
+ -1
 ```
 """
 function accumulate(op, v0, A, axis::Integer=1)
