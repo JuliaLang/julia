@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function runtests(name, isolate=true)
+function runtest(name, isolate=true)
     if isolate
         mod_name = Symbol("TestMain_", replace(name, '/', '_'))
         m = eval(Main, :(module $mod_name end))

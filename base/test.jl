@@ -21,6 +21,8 @@ export detect_ambiguities
 export GenericString
 export runtests
 
+include("testdefs.jl")
+
 #-----------------------------------------------------------------------
 
 """
@@ -1175,20 +1177,20 @@ function move_to_node1!(tests, node1, ts)
 end
 
 function print_test_statistics(test, test_stats, worker, alignments)
-    print_with_color(:white, rpad(test*" ($worker)", alignments[1], " "), " | ")
-    time_str = @sprintf("%7.2f",test_stats[2])
-    print_with_color(:white, rpad(time_str,alignments[2]," "), " | ")
-    gc_str = @sprintf("%5.2f",test_stats[5].total_time/10^9)
-    print_with_color(:white, rpad(gc_str,alignments[3]," "), " | ")
-
+    name_str = rpad(test*" ($worker)", alignments[1], " ")
+    time_str = @sprintf("%7.2f", test_stats[2])
+    time_str = rpad(time_str, alignments[2], " ")
+    gc_str   = @sprintf("%5.2f", test_stats[5].total_time/10^9)
+    gc_str   = rpad(gc_str, alignments[3] ," ")
     # since there may be quite a few digits in the percentage,
     # the left-padding here is less to make sure everything fits
     percent_str = @sprintf("%4.1f",100*test_stats[5].total_time/(10^9*test_stats[2]))
-    print_with_color(:white, rpad(percent_str,alignments[4]," "), " | ")
+    percent_str = rpad(percent_str,alignments[4]," ")
     alloc_str = @sprintf("%5.2f",test_stats[3]/2^20)
-    print_with_color(:white, rpad(alloc_str,alignments[5]," "), " | ")
+    alloc_str = rpad(alloc_str,alignments[5]," ")
     rss_str = @sprintf("%5.2f",test_stats[6]/2^20)
-    print_with_color(:white, rpad(rss_str,alignments[6]," "), "\n")
+    rss_str = rpad(rss_str,alignments[6]," ")
+    print_with_color(:white, name_str, " | ", time_str, " | ", gc_str, " | ", percent_str, " | ", alloc_str, " | ", rss_str, "\n")
 end
 
 function runtests(names=["all"]; test_dir=joinpath(JULIA_HOME, "../../test/"))
@@ -1229,7 +1231,7 @@ function runtests(names=["all"]; test_dir=joinpath(JULIA_HOME, "../../test/"))
             BLAS.set_num_threads(1)
         end
 
-        #@everywhere include("../base/testdefs.jl")
+        @everywhere include("../base/testdefs.jl")
 
         #pretty print the information about gc and mem usage
         name_align    = max(length("Test (Worker)"), maximum(map(x -> length(x) + 3 + ndigits(nworkers()), tests)))
@@ -1249,7 +1251,7 @@ function runtests(names=["all"]; test_dir=joinpath(JULIA_HOME, "../../test/"))
                         test = shift!(tests)
                         local resp
                         try
-                            resp = remotecall_fetch(Base.runtests, p, test)
+                            resp = remotecall_fetch(runtest, p, test)
                         catch e
                             resp = [e]
                         end
@@ -1281,7 +1283,7 @@ function runtests(names=["all"]; test_dir=joinpath(JULIA_HOME, "../../test/"))
             # to the overall aggregator
             local resp
             try
-                resp = runtests(t)
+                resp = runtest(t)
             catch e
                 resp = [e]
             end

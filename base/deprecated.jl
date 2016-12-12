@@ -1134,4 +1134,7 @@ end)
 @deprecate cummin(A, dim=1) accumulate(min, A, dim=1)
 @deprecate cummax(A, dim=1) accumulate(max, A, dim=1)
 
+# #19567
+@deprecate runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2)) Base.Test.runtests(["all"], test_dir=joinpath(JULIA_HOME, "../../test"))
+
 # End deprecations scheduled for 0.6

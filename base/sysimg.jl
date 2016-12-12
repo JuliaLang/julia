@@ -294,7 +294,6 @@ include("deepcopy.jl")
 include("interactiveutil.jl")
 include("replutil.jl")
 include("test.jl")
-include("testdefs.jl")
 include("i18n.jl")
 using .I18n
 
