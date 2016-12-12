@@ -640,14 +640,14 @@ end
 Insert one or more `items` at the beginning of `collection`.
 
 ```jldoctest
-  julia> unshift!([1, 2, 3, 4], 5, 6)
-  6-element Array{Int64,1}:
-   5
-   6
-   1
-   2
-   3
-   4
+julia> unshift!([1, 2, 3, 4], 5, 6)
+6-element Array{Int64,1}:
+ 5
+ 6
+ 1
+ 2
+ 3
+ 4
 ```
 """
 function unshift!{T}(a::Array{T,1}, item)
@@ -731,8 +731,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:748
- ...
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:747
 ```
 """
 function deleteat!(a::Vector, inds)
@@ -774,7 +773,7 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
-```jldoctest
+```jldoctest splice!
 julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
 2
 
@@ -844,7 +843,7 @@ place of the removed items.
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
-```jldoctest
+```jldoctest splice!
 julia> splice!(A, 4:3, 2)
 0-element Array{Int64,1}
 

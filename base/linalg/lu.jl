@@ -177,9 +177,9 @@ julia> A = [4. 3.; 6. 3.]
 julia> L, U, p = lu(A)
 (
 [1.0 0.0; 0.666667 1.0],
-<BLANKLINE>
+
 [6.0 3.0; 0.0 1.0],
-<BLANKLINE>
+
 [2,1])
 
 julia> A[p, :] == L * U
