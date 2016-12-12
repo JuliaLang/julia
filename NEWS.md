@@ -4,6 +4,19 @@ Julia v0.6.0 Release Notes
 New language features
 ---------------------
 
+  * New type system capabilities ([#8974], [#18457])
+    * Type parameter constraints can refer to previous parameters, e.g.
+      `type Foo{R<:Real, A<:AbstractArray{R}}`. Can also be used in method definitions.
+    * New syntax `Array{T} where T<:Integer`, indicating a union of types over all
+      specified values of `T` (represented by a `UnionAll` type). This provides behavior
+      similar to parametric methods or `typealias`, but can be used anywhere a type is
+      accepted. This syntax can also be used in method definitions, e.g.
+      `function inv(M::Matrix{T}) where T<:AbstractFloat`.
+      Anonymous functions can have type parameters via the syntax
+      `((x::Array{T}) where T<:Real) -> 2x`.
+    * Much more accurate subtype and type intersection algorithms. Method sorting and
+      identification of equivalent and ambiguous methods are improved as a result.
+
 Language changes
 ----------------
 
@@ -98,6 +111,16 @@ This section lists changes that do not have deprecation warnings.
   * `retry` now inputs the keyword arguments `delays` and `check` instead of
     `n` and `max_delay`.  The previous functionality can be achieved setting
     `delays` to `ExponentialBackOff`. ([#19331])
+
+  * Parametric types with "unspecified" parameters, such as `Array`, are now represented
+    as `UnionAll` types instead of `DataType`s ([#18457]).
+
+  * `Union` types have two fields, `a` and `b`, instead of a single `types` field.
+    The empty type `Union{}` is represented by a singleton of type `BottomType` ([#18457]).
+
+  * The type `NTuple{N}` now refers to tuples where every element has the same type
+    (since it is shorthand for `NTuple{N,T} where T`). To get the old behavior of matching
+    any tuple, use `NTuple{N,Any}` ([#18457]).
 
 Library improvements
 --------------------
