@@ -208,9 +208,8 @@ julia> A = [0 im; -1 0]
 
 julia> eigmax(A)
 ERROR: DomainError:
- in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:219
- in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:217
- ...
+ in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:218
+ in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:216
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -250,9 +249,8 @@ julia> A = [0 im; -1 0]
 
 julia> eigmin(A)
 ERROR: DomainError:
- in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:261
- in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:259
- ...
+ in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:259
+ in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:257
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
