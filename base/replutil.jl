@@ -574,8 +574,7 @@ function show_backtrace(io::IO, t::Vector)
     n_frames != 0 && print(io, "\nStacktrace:")
     process_entry = (last_frame, n) -> begin
         frame_counter += 1
-        n_spaces_align = ndigits(n_frames) - ndigits(frame_counter) + 1
-        show_trace_entry(io, last_frame, n, prefix = string(" "^n_spaces_align, "[", frame_counter, "] "))
+        show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter, "] "))
     end
     process_backtrace(process_entry, t)
 end
