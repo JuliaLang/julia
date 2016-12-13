@@ -2,11 +2,11 @@
 
 macro chk1(expr,label=:error)
     quote
-        x = $(esc(expr))
-        if isnull(x[1])
+        val, i = $(esc(expr))
+        if isnull(val)
             @goto $label
         else
-            get(x[1]),x[2]
+            get(val), i
         end
     end
 end
@@ -55,8 +55,8 @@ function tryfailparse{T}(dt, df::DateFormat{T})
     end
 end
 
-_create_timeobj(tup, T::Type{DateTime}) = T(tup...)
-_create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
+@inline _create_timeobj(tup, T::Type{DateTime}) = T(tup...)
+@inline _create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
 
 function Base.tryparse{T}(df::DateFormat{T}, dt::AbstractString)
     R = Nullable{T}
@@ -65,16 +65,6 @@ function Base.tryparse{T}(df::DateFormat{T}, dt::AbstractString)
         R()
     else
         R(_create_timeobj(tup.value, T))
-    end
-end
-
-function Base.tryparse(df::DateFormat{Date}, dt::AbstractString)
-    R = Nullable{Date}
-    tup = _tryparse(df, dt)
-    if isnull(tup)
-        R()
-    else
-        R(Date(tup.value[1:3]...))
     end
 end
 
@@ -106,17 +96,6 @@ end
     return Nullable{Int}(d), i
 end
 
-@inline function tryparsenext_char(str,i,len,cc::Char)::Tuple{Nullable{Char},Int}
-    R = Nullable{Char}
-    i > len && @goto error
-    c,ii = next(str,i)
-    c == cc || @goto error
-    return R(c), ii
-
-    @label error
-    return R(), i
-end
-
 # fast version for English
 @inline function tryparsenext_word(str, i, len, locale::DateLocale{:english}, maxchars=0)
     max_pos = maxchars <= 0 ? len : min(i + maxchars - 1, len)
@@ -129,12 +108,11 @@ end
 end
 
 @inline function tryparsenext_word(str, i, len, locale, maxchars=0)
-    j = 1
-    while (maxchars <= 0 || j <= maxchars) && i <= len
+    max_pos = maxchars <= 0 ? len : min(chr2ind(str, ind2chr(str,i) + maxchars - 1), len)
+    while i <= max_pos
         c, ii = next(str, i)
         !isalpha(c) && break
         i = ii
-        j += 1
     end
     return Nullable{Int}(0), i
 end
