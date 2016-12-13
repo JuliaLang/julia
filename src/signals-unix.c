@@ -527,10 +527,30 @@ static void *signal_listener(void *arg)
     unw_context_t *signal_context;
     int sig, critical, profile;
     int i;
+    // prevent this thread from being used to run other,
+    // potentially blocking signal handlers
+    sigfillset(&sset);
+    sigdelset(&sset, SIGSEGV);
+    sigdelset(&sset, SIGILL);
+    sigdelset(&sset, SIGKILL);
+    sigdelset(&sset, SIGBUS);
+    sigdelset(&sset, SIGABRT);
+    sigdelset(&sset, SIGSYS);
+    pthread_sigmask(SIG_SETMASK, &sset, 0);
+
     jl_sigsetset(&sset);
     while (1) {
         profile = 0;
-        sigwait(&sset, &sig);
+        sig = 0;
+        errno = 0;
+        if (sigwait(&sset, &sig)) {
+            sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
+        }
+        if (!sig) {
+            // this should never happen, but it has been observed to occur on some buggy kernels (mach)
+            // when sigprocmask is incorrectly used on some other thread, instead of pthread_sigmask
+            continue;
+        }
 #ifndef HAVE_MACH
 #  ifdef HAVE_ITIMER
         profile = (sig == SIGPROF);
