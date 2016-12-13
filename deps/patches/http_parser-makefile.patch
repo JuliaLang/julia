@@ -1,0 +1,98 @@
+diff --git a/Makefile b/Makefile
+index b2476db..92a84c9 100644
+--- a/Makefile
++++ b/Makefile
+@@ -24,6 +24,9 @@ BINEXT ?=
+ ifeq (darwin,$(PLATFORM))
+ SONAME ?= libhttp_parser.2.7.1.dylib
+ SOEXT ?= dylib
++else ifeq (winnt,$(PLATFORM))
++SONAME ?= libhttp_parser-2.7.dll
++SOEXT  ?= dll
+ else ifeq (wine,$(PLATFORM))
+ CC = winegcc
+ BINEXT = .exe.so
+@@ -50,11 +53,17 @@ CFLAGS += -Wall -Wextra -Werror
+ CFLAGS_DEBUG = $(CFLAGS) -O0 -g $(CFLAGS_DEBUG_EXTRA)
+ CFLAGS_FAST = $(CFLAGS) -O3 $(CFLAGS_FAST_EXTRA)
+ CFLAGS_BENCH = $(CFLAGS_FAST) -Wno-unused-parameter
+-CFLAGS_LIB = $(CFLAGS_FAST) -fPIC
+ 
++ifeq (winnt,$(PLATFORM))
++CFLAGS_LIB = $(CFLAGS_FAST)
++else
++CFLAGS_LIB = $(CFLAGS_FAST) -fPIC
++endif
+ LDFLAGS_LIB = $(LDFLAGS) -shared
+ 
+ INSTALL ?= install
++STRIP ?= strip
++
+ PREFIX ?= $(DESTDIR)/usr/local
+ LIBDIR = $(PREFIX)/lib
+ INCLUDEDIR = $(PREFIX)/include
+@@ -64,6 +73,8 @@ ifneq (darwin,$(PLATFORM))
+ LDFLAGS_LIB += -Wl,-soname=$(SONAME)
+ endif
+ 
++all: library package
++
+ test: test_g test_fast
+ 	$(HELPER) ./test_g$(BINEXT)
+ 	$(HELPER) ./test_fast$(BINEXT)
+@@ -101,10 +112,12 @@ test-valgrind: test_g
+ libhttp_parser.o: http_parser.c http_parser.h Makefile
+ 	$(CC) $(CPPFLAGS_FAST) $(CFLAGS_LIB) -c http_parser.c -o libhttp_parser.o
+ 
+-library: libhttp_parser.o
++library: $(SONAME)
++$(SONAME): libhttp_parser.o
+ 	$(CC) $(LDFLAGS_LIB) -o $(SONAME) $<
+ 
+-package: http_parser.o
++package: libhttp_parser.a
++libhttp_parser.a: http_parser.o
+ 	$(AR) rcs libhttp_parser.a http_parser.o
+ 
+ url_parser: http_parser.o contrib/url_parser.c
+@@ -122,26 +135,28 @@ parsertrace_g: http_parser_g.o contrib/parsertrace.c
+ tags: http_parser.c http_parser.h test.c
+ 	ctags $^
+ 
+-install: library
+-	$(INSTALL) -D  http_parser.h $(INCLUDEDIR)/http_parser.h
+-	$(INSTALL) -D $(SONAME) $(LIBDIR)/$(SONAME)
+-	ln -s $(LIBDIR)/$(SONAME) $(LIBDIR)/libhttp_parser.$(SOEXT)
++install: library package
++	$(INSTALL) -d                    $(DESTDIR)$(INCLUDEDIR)
++	$(INSTALL) -m 0644 http_parser.h $(DESTDIR)$(INCLUDEDIR)/http_parser.h
++	$(INSTALL) -d                $(DESTDIR)$(LIBDIR)
++	$(INSTALL) -m 0644 $(SONAME) $(DESTDIR)$(LIBDIR)/$(SONAME)
++	ln -sf             $(SONAME) $(DESTDIR)$(LIBDIR)/libhttp_parser.$(SOEXT)
++	$(INSTALL) -m 0644 libhttp_parser.a $(DESTDIR)$(LIBDIR)/libhttp_parser.a
+ 
+-install-strip: library
+-	$(INSTALL) -D  http_parser.h $(INCLUDEDIR)/http_parser.h
+-	$(INSTALL) -D -s $(SONAME) $(LIBDIR)/$(SONAME)
+-	ln -s $(LIBDIR)/$(SONAME) $(LIBDIR)/libhttp_parser.$(SOEXT)
++install-strip: install
++	$(STRIP) $(DESTDIR)$(LIBDIR)/$(SONAME)
+ 
+ uninstall:
+-	rm $(INCLUDEDIR)/http_parser.h
+-	rm $(LIBDIR)/$(SONAME)
+-	rm $(LIBDIR)/libhttp_parser.so
++	rm $(DESTDIR)$(INCLUDEDIR)/http_parser.h
++	rm $(DESTDIR)$(LIBDIR)/$(SONAME)
++	rm $(DESTDIR)$(LIBDIR)/libhttp_parser.$(SOEXT)
++	rm $(DESTDIR)$(LIBDIR)/libhttp_parser.a
+ 
+ clean:
+ 	rm -f *.o *.a tags test test_fast test_g \
+ 		http_parser.tar libhttp_parser.so.* \
+ 		url_parser url_parser_g parsertrace parsertrace_g \
+-		*.exe *.exe.so
++		*.exe *.exe.so *.dll
+ 
+ contrib/url_parser.c:	http_parser.h
+ contrib/parsertrace.c:	http_parser.h
