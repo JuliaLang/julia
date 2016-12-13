@@ -35,56 +35,52 @@ include("io-util.jl")
 
 ### Token types ###
 
-immutable DatePart{c, n, fixedwidth} <: AbstractDateToken end
+immutable DatePart{letter} <: AbstractDateToken
+    width::Int
+    fixed::Bool
+end
 
 ### Numeric tokens
 
 for c in "yYmdHMS"
     @eval begin
-        # in the case where the token is not to be treated fixed width
-        @inline function tryparsenext{N}(::DatePart{$c, N, false}, str, i, len)
-            tryparsenext_base10(str,i,len,20)
-        end
-
-        # parse upto a maximum of N numeric characters
-        # (will be chosen in case of yyyymmdd for example)
-        @inline function tryparsenext{N}(::DatePart{$c, N, true}, str, i, len)
-            tryparsenext_base10(str,i,len,N)
+        @inline function tryparsenext(d::DatePart{$c}, str, i, len)
+            tryparsenext_base10(str,i,len,d.width)
         end
     end
 end
 
-@inline function tryparsenext{N}(::DatePart{'s', N, false}, str, i, len)
-    tryparsenext_base10_frac(str,i,len,3)
+@inline function tryparsenext(d::DatePart{'s'}, str, i, len)
+    tryparsenext_base10_frac(str,i,len,d.width)
 end
 
-@inline function tryparsenext{N}(::DatePart{'s', N, true}, str, i, len)
-    tryparsenext_base10_frac(str,i,len,N)
+@inline function tryparsenext(d::DatePart{'s'}, str, i, len)
+    tryparsenext_base10_frac(str,i,len,d.width)
 end
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
-    @eval function format{N}(io, ::DatePart{$c, N}, dt, locale)
-        write(io, minwidth($fn(dt), N))
+    @eval function format(io, d::DatePart{$c}, dt, locale)
+        write(io, minwidth($fn(dt), d.width))
     end
 end
 
 # special cases
 
-function format{N}(io, ::DatePart{'y', N}, dt, locale)
-    write(io, rfixwidth(year(dt), N))
+function format(io, d::DatePart{'y'}, dt, locale)
+    write(io, rfixwidth(year(dt), d.width))
 end
 
-function format{N}(io, ::DatePart{'s', N}, dt, locale)
+function format(io, d::DatePart{'s'}, dt, locale)
     write(io, string(millisecond(dt)/1000)[3:end])
 end
 
-function _show_content{c,N}(io::IO, ::DatePart{c,N})
-    for i=1:N
+function _show_content{c}(io::IO, d::DatePart{c})
+    for i=1:d.width
         write(io, c)
     end
 end
 
-function Base.show{c,N}(io::IO, d::DatePart{c,N})
+function Base.show{c}(io::IO, d::DatePart{c})
     write(io, "DatePart(")
     _show_content(io, d)
     write(io, ")")
@@ -123,11 +119,10 @@ function month_from_name(word, locale::DateLocale{:english})
     get(english, word, 0)
 end
 
-for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name]),
-    (fixed, nchars) in zip([false, true], [typemax(Int), :N])
-    @eval @inline function tryparsenext{N}(d::DatePart{$tok,N,$fixed}, str, i, len, locale)
+for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name])
+    @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         R = Nullable{Int}
-        c, ii = tryparsenext_word(str, i, len, locale, $nchars)
+        c, ii = tryparsenext_word(str, i, len, locale, d.width)
         word = str[i:ii-1]
         x = $fn(lowercase(word), locale)
         ((x == 0 ? R() : R(x)), ii)
@@ -296,9 +291,9 @@ function DateFormat(f::AbstractString, locale=:english, T::Type=DateTime; defaul
             typ = SLOT_RULE[letter]
 
             if isempty(tran)
-                push!(tokens, DatePart{letter,width,true}())
+                push!(tokens, DatePart{letter}(width, true))
             else
-                push!(tokens, DatePart{letter,width,false}())
+                push!(tokens, DatePart{letter}(width, false))
             end
 
             idx = findfirst(dateorder, typ)
@@ -324,7 +319,7 @@ function DateFormat(f::AbstractString, locale=:english, T::Type=DateTime; defaul
         letter, width = prev
         typ = SLOT_RULE[letter]
 
-        push!(tokens, DatePart{letter,width,false}())
+        push!(tokens, DatePart{letter}(width, false))
 
         idx = findfirst(dateorder, typ)
         if idx != 0
