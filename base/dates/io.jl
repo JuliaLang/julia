@@ -154,10 +154,12 @@ end
 
 ### Delimiters
 
-immutable Delim{T, length} <: AbstractDateToken d::T end
+immutable Delim{T,length} <: AbstractDateToken
+    d::T
+end
 
-Delim(c::Char, n) = Delim{Char, n}(c)
-Delim(c::Char) = Delim(c,1)
+Delim(d::Char) = Delim{Char,1}(d)
+Delim(d::String) = Delim{String,length(d)}(d)
 
 @inline function tryparsenext{N}(d::Delim{Char,N}, str, i::Int, len)
     R = Nullable{Int}
@@ -190,7 +192,7 @@ function format(io, d::Delim, str, i)
     write(io, d.d)
 end
 
-function _show_content{N}(io::IO, d::Delim{Char, N})
+function _show_content{N}(io::IO, d::Delim{Char,N})
     if d.d in keys(SLOT_RULE)
         for i=1:N
             write(io, '\\')
@@ -306,11 +308,7 @@ function DateFormat(f::AbstractString, locale=:english, T::Type=DateTime; defaul
         end
 
         if !isempty(tran)
-            if length(tran) == 1
-                push!(tokens, Delim(first(tran)))
-            else
-                push!(tokens, Delim{typeof(tran), length(tran)}(tran))
-            end
+            push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
         end
 
         letter = f[m.offset]
@@ -335,11 +333,7 @@ function DateFormat(f::AbstractString, locale=:english, T::Type=DateTime; defaul
     end
 
     if !isempty(tran)
-        if length(tran) == 1
-            push!(tokens, Delim(first(tran)))
-        else
-            push!(tokens, Delim{typeof(tran), length(tran)}(tran))
-        end
+        push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
     end
 
     return DateFormat(T, (tokens...), localeobj, default_fields, (order...))
