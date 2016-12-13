@@ -1755,3 +1755,73 @@ let
     @test map!(f, X, A, B, C) == sparse(map!(f, fX, fA, fB, fC))
     @test_throws DimensionMismatch map!(f, X, A, B, spzeros(N, M - 1))
 end
+
+# Test that broadcast! does not allocate unnecessarily
+let
+    # broadcast! over a single sparse matrix falls back to map!, tested above
+    N, M = 10, 12
+    # test broadcast! implementation specialized for a pair of (input) sparse matrices
+    f(x, y) = x + y + 1
+    A = sprand(N, M, 0.3)
+    B = convert(SparseMatrixCSC{Float32,Int32}, sprand(N, 1, 0.3))
+    # use different types to check internal type stability via allocation tests below
+    X = sparse(Array(A) .+ Array(B))
+    broadcast!(+, copy(X), A, B) # warmup for @allocated
+    @test (@allocated broadcast!(+, X, A, B)) == 0
+    X = sparse(Array(A) .* Array(B))
+    broadcast!(*, copy(X), A, B) # warmup for @allocated
+    @test (@allocated broadcast!(*, X, A, B)) == 0
+    X = sparse(broadcast(f, Array(A), Array(B)))
+    broadcast!(f, copy(X), A, B) # warmup for @allocated
+    @test (@allocated broadcast!(f, X, A, B)) == 0
+    # test broadcast! implementation for an arbitrary number of (input) sparse matrices
+    f(x, y, z) = x + y + z + 1
+    A = sprand(N, M, 0.2)
+    B = sprand(N, 1, 0.2)
+    C = convert(SparseMatrixCSC{Float32,Int32}, sprand(1, M, 0.2))
+    # use different types to check internal type stability via allocation tests below
+    X = sparse(Array(A) .+ Array(B) .+ Array(C))
+    broadcast!(+, copy(X), A, B, C) # warmup for @allocated
+    @test (@allocated broadcast!(+, X, A, B, C)) == 0
+    X = sparse(Array(A) .* Array(B) .* Array(C))
+    broadcast!(*, copy(X), A, B, C) # warmup for @allocated
+    @test (@allocated broadcast!(*, X, A, B, C)) == 0
+    X = sparse(broadcast(f, Array(A), Array(B), Array(C)))
+    broadcast!(f, copy(X), A, B, C) # warmup for @allocated
+    @test_broken (@allocated broadcast!(f, X, A, B, C)) == 0
+    # this last test allocates 16 bytes in the entry point for broadcast!, but none of the
+    # earlier tests of the same code path allocate. no allocation shows up with
+    # --track-allocation=user. allocation shows up on the first line of the entry point
+    # for broadcast! with --track-allocation=all, but that first line almost certainly
+    # should not allocate. so not certain what's going on.
+end
+
+# Test basic correctness of broadcast/broadcast! implementation for more than two (input) sparse matrices
+let
+    N, M = 10, 12
+    f(xs...) = sum(xs) + 1
+    A = sprand(N, M, 0.2)
+    B = sprand(N, 1, 0.2)
+    C = sprand(1, M, 0.2)
+    D = sprand(1, 1, 1.0)
+    E = spzeros(1, 1)
+    fA, fB, fC, fD, fE = map(Array, (A, B, C, D, E))
+    fX, fY = ones(fA), ones(fB)
+    X, Y = sparse(fX), sparse(fY)
+    for op in (+, *, f)
+        # horizontal expansion only
+        @test broadcast(op, A, B, B) == sparse(broadcast(op, fA, fB, fB))
+        @test broadcast!(op, X, A, B, B) == sparse(broadcast!(op, fX, fA, fB, fB))
+        # vertical expansion only
+        @test broadcast(op, B, D, E) == sparse(broadcast(op, fB, fD, fE))
+        @test broadcast!(op, Y, B, D, E) == sparse(broadcast!(op, fY, fB, fD, fE))
+        # separate horizontal and vertical expansion
+        @test broadcast(op, A, B, C) == sparse(broadcast(op, fA, fB, fC))
+        @test broadcast!(op, X, A, B, C) == sparse(broadcast!(op, fX, fA, fB, fC))
+        # simultaneous horizontal and vertical expansion
+        @test broadcast(op, A, B, C, D) == sparse(broadcast(op, fA, fB, fC, D))
+        @test broadcast!(op, X, A, B, C, D) == sparse(broadcast!(op, fX, fA, fB, fC, fD))
+    end
+    @test_throws DimensionMismatch broadcast(+, A, B, speye(N))
+    @test_throws DimensionMismatch broadcast!(+, X, A, B, speye(N))
+end
