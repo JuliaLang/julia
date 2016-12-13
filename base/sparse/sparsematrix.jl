@@ -1464,11 +1464,7 @@ _maxnnzfrom(Cm, Cn, A) = nnz(A) * div(Cm, A.m) * div(Cn, A.n)
 @inline _maxnnzfrom_each(Cm, Cn, As) = (_maxnnzfrom(Cm, Cn, first(As)), _maxnnzfrom_each(Cm, Cn, tail(As))...)
 @inline _unchecked_maxnnzbcres(Cm, Cn, As) = min(Cm * Cn, sum(_maxnnzfrom_each(Cm, Cn, As)))
 @inline _checked_maxnnzbcres(Cm, Cn, As...) = Cm != 0 && Cn != 0 ? _unchecked_maxnnzbcres(Cm, Cn, As) : 0
-function _broadcast_type(f, As...)
-    zt = Base.Broadcast.ziptype(As...)
-    ft = Base.Broadcast.ftype(f, As...)
-    return Base._default_eltype(Base.Generator{zt,ft})
-end
+_broadcast_type(f, As...) = Base._promote_op(f, Base.Broadcast.typestuple(As...))
 
 # _map_zeropres!/_map_notzeropres! specialized for a single sparse matrix
 "Stores only the nonzero entries of `map(f, Matrix(A))` in `C`."
