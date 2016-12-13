@@ -2,7 +2,6 @@ module Lexers
 
 include("utilities.jl")
 
-import Base: push!
 using Compat
 import Compat.String
 
@@ -39,14 +38,17 @@ end
 
 Lexer(io) = Lexer(io, 1, 1, -1, 0, 1, 1, 1, Tokens.ERROR)
 
+"""
+    tokenize(x)
 
-# Iterator interface
+Returns an `Iterable` containing the tokenized input. Can be reverted by e.g.
+`join(untokenize.(tokenize(x)))`.
+"""
 tokenize(x) = Lexer(x)
 
-if VERSION > v"v0.5.0-"
-    Base.iteratorsize(::Lexer) = Base.SizeUnknown()
-    Base.iteratoreltype(::Lexer) = Base.HasEltype()
-end
+# Iterator interface
+Base.iteratorsize(::Lexer) = Base.SizeUnknown()
+Base.iteratoreltype(::Lexer) = Base.HasEltype()
 
 Base.eltype(::Lexer) = Token
 
