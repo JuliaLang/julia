@@ -35,56 +35,52 @@ include("io-util.jl")
 
 ### Token types ###
 
-immutable DatePart{c, n, fixedwidth} <: AbstractDateToken end
+immutable DatePart{letter} <: AbstractDateToken
+    width::Int
+    fixed::Bool
+end
 
 ### Numeric tokens
 
 for c in "yYmdHMS"
     @eval begin
-        # in the case where the token is not to be treated fixed width
-        @inline function tryparsenext{N}(::DatePart{$c, N, false}, str, i, len)
-            tryparsenext_base10(str,i,len,20)
-        end
-
-        # parse upto a maximum of N numeric characters
-        # (will be chosen in case of yyyymmdd for example)
-        @inline function tryparsenext{N}(::DatePart{$c, N, true}, str, i, len)
-            tryparsenext_base10(str,i,len,N)
+        @inline function tryparsenext(d::DatePart{$c}, str, i, len)
+            tryparsenext_base10(str,i,len,d.width)
         end
     end
 end
 
-@inline function tryparsenext{N}(::DatePart{'s', N, false}, str, i, len)
-    tryparsenext_base10_frac(str,i,len,3)
+@inline function tryparsenext(d::DatePart{'s'}, str, i, len)
+    tryparsenext_base10_frac(str,i,len,d.width)
 end
 
-@inline function tryparsenext{N}(::DatePart{'s', N, true}, str, i, len)
-    tryparsenext_base10_frac(str,i,len,N)
+@inline function tryparsenext(d::DatePart{'s'}, str, i, len)
+    tryparsenext_base10_frac(str,i,len,d.width)
 end
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
-    @eval function format{N}(io, ::DatePart{$c, N}, dt, locale)
-        write(io, minwidth($fn(dt), N))
+    @eval function format(io, d::DatePart{$c}, dt, locale)
+        write(io, minwidth($fn(dt), d.width))
     end
 end
 
 # special cases
 
-function format{N}(io, ::DatePart{'y', N}, dt, locale)
-    write(io, rfixwidth(year(dt), N))
+function format(io, d::DatePart{'y'}, dt, locale)
+    write(io, rfixwidth(year(dt), d.width))
 end
 
-function format{N}(io, ::DatePart{'s', N}, dt, locale)
+function format(io, d::DatePart{'s'}, dt, locale)
     write(io, string(millisecond(dt)/1000)[3:end])
 end
 
-function _show_content{c,N}(io::IO, ::DatePart{c,N})
-    for i=1:N
+function _show_content{c}(io::IO, d::DatePart{c})
+    for i=1:d.width
         write(io, c)
     end
 end
 
-function Base.show{c,N}(io::IO, d::DatePart{c,N})
+function Base.show{c}(io::IO, d::DatePart{c})
     write(io, "DatePart(")
     _show_content(io, d)
     write(io, ")")
@@ -123,11 +119,10 @@ function month_from_name(word, locale::DateLocale{:english})
     get(english, word, 0)
 end
 
-for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name]),
-    (fixed, nchars) in zip([false, true], [typemax(Int), :N])
-    @eval @inline function tryparsenext{N}(d::DatePart{$tok,N,$fixed}, str, i, len, locale)
+for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name])
+    @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         R = Nullable{Int}
-        c, ii = tryparsenext_word(str, i, len, locale, $nchars)
+        c, ii = tryparsenext_word(str, i, len, locale, d.width)
         word = str[i:ii-1]
         x = $fn(lowercase(word), locale)
         ((x == 0 ? R() : R(x)), ii)
@@ -154,10 +149,12 @@ end
 
 ### Delimiters
 
-immutable Delim{T, length} <: AbstractDateToken d::T end
+immutable Delim{T,length} <: AbstractDateToken
+    d::T
+end
 
-Delim(c::Char, n) = Delim{Char, n}(c)
-Delim(c::Char) = Delim(c,1)
+Delim(d::Char) = Delim{Char,1}(d)
+Delim(d::String) = Delim{String,length(d)}(d)
 
 @inline function tryparsenext{N}(d::Delim{Char,N}, str, i::Int, len)
     R = Nullable{Int}
@@ -190,7 +187,7 @@ function format(io, d::Delim, str, i)
     write(io, d.d)
 end
 
-function _show_content{N}(io::IO, d::Delim{Char, N})
+function _show_content{N}(io::IO, d::Delim{Char,N})
     if d.d in keys(SLOT_RULE)
         for i=1:N
             write(io, '\\')
@@ -277,37 +274,61 @@ respectively.
 function DateFormat(f::AbstractString, locale=:english, T::Type=DateTime; default_fields=(1,1,1,0,0,0,0))
     tokens = AbstractDateToken[]
     localeobj = DateLocale{Symbol(locale)}()
+    prev = ()
+    prev_offset = 1
 
     # we store the indices of the token -> order in arguments to DateTime during
     # construction of the DateFormat. This saves a lot of time while parsing
-    dateorder = [Year, Month, Day, Hour, Minute, Second, Millisecond]
+    dateorder = (Year, Month, Day, Hour, Minute, Second, Millisecond)
     order = zeros(Int, length(default_fields))
 
-    last_offset = 1
-
-    letters = join(collect(keys(SLOT_RULE)), "")
+    letters = String(collect(keys(Base.Dates.SLOT_RULE)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
+        tran = replace(f[prev_offset:m.offset-1], r"\\(.)", s"\1")
+
+        if !isempty(prev)
+            letter, width = prev
+            typ = SLOT_RULE[letter]
+
+            if isempty(tran)
+                push!(tokens, DatePart{letter}(width, true))
+            else
+                push!(tokens, DatePart{letter}(width, false))
+            end
+
+            idx = findfirst(dateorder, typ)
+            if idx != 0
+                order[idx] = length(tokens)
+            end
+        end
+
+        if !isempty(tran)
+            push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
+        end
+
         letter = f[m.offset]
+        width = length(m.match)
+
+        prev = (letter, width)
+        prev_offset = m.offset + width
+    end
+
+    tran = replace(f[prev_offset:endof(f)], r"\\(.)", s"\1")
+
+    if !isempty(prev)
+        letter, width = prev
         typ = SLOT_RULE[letter]
 
-        width = length(m.match)
-        delim = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
+        push!(tokens, DatePart{letter}(width, false))
 
-        push_delim_token!(tokens, delim)
-        push!(tokens, DatePart{letter, width, true}())
         idx = findfirst(dateorder, typ)
         if idx != 0
             order[idx] = length(tokens)
         end
-
-        last_offset = m.offset+width
     end
 
-    remaining = f[last_offset:end]
-    remaining = replace(remaining, r"\\(.)", s"\1")
-    push_delim_token!(tokens, remaining)
-    if length(tokens) > 0
-        tokens[end] = make_variable_width(tokens[end])
+    if !isempty(tran)
+        push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
     end
 
     return DateFormat(T, (tokens...), localeobj, default_fields, (order...))
@@ -319,26 +340,6 @@ function Base.show(io::IO, df::DateFormat)
         _show_content(io, t)
     end
     write(io, '"')
-end
-
-# Utility functions for DateFormat construction
-
-make_variable_width{C,N}(p::DatePart{C, N, true}) = DatePart{C, N, false}()
-make_variable_width(p) = p
-
-function push_delim_token!(tokens, delim)
-    if !isempty(delim)
-        if length(tokens) > 0
-            # before adding the delimiter make
-            # the previous token variable width
-            tokens[end] = make_variable_width(tokens[end])
-        end
-        if length(delim) == 1
-            push!(tokens, Delim(first(delim)))
-        else
-            push!(tokens, Delim{typeof(delim), length(delim)}(delim))
-        end
-    end
 end
 
 """
