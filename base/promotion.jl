@@ -222,18 +222,22 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # operations, so it is advised against overriding them
 _default_type(T::Type) = (@_pure_meta; T)
 
+if isdefined(Core, :Inference)
+    _promote_op(f::ANY, t::ANY) = Core.Inference.return_type(f, t)
+else
+    _promote_op(f::ANY, t::ANY) = Any
+end
+
 promote_op(::Any...) = (@_pure_meta; Any)
 function promote_op{S}(f, ::Type{S})
     @_inline_meta
-    Z = Tuple{_default_type(S)}
-    T = _default_eltype(Generator{Z, typeof(f)})
+    T = _promote_op(f, Tuple{_default_type(S)})
     isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(S, T)
 end
 function promote_op{R,S}(f, ::Type{R}, ::Type{S})
     @_inline_meta
-    Z = Iterators.Zip2{Tuple{_default_type(R)}, Tuple{_default_type(S)}}
-    T = _default_eltype(Generator{Z, typeof(a -> f(a...))})
+    T = _promote_op(f, Tuple{_default_type(R), _default_type(S)})
     isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(R, S, T)
 end
