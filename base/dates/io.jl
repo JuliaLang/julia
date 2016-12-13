@@ -277,37 +277,69 @@ respectively.
 function DateFormat(f::AbstractString, locale=:english, T::Type=DateTime; default_fields=(1,1,1,0,0,0,0))
     tokens = AbstractDateToken[]
     localeobj = DateLocale{Symbol(locale)}()
+    prev = ()
+    prev_offset = 1
 
     # we store the indices of the token -> order in arguments to DateTime during
     # construction of the DateFormat. This saves a lot of time while parsing
-    dateorder = [Year, Month, Day, Hour, Minute, Second, Millisecond]
+    dateorder = (Year, Month, Day, Hour, Minute, Second, Millisecond)
     order = zeros(Int, length(default_fields))
 
-    last_offset = 1
-
-    letters = join(collect(keys(SLOT_RULE)), "")
+    letters = String(collect(keys(Base.Dates.SLOT_RULE)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
+        tran = replace(f[prev_offset:m.offset-1], r"\\(.)", s"\1")
+
+        if !isempty(prev)
+            letter, width = prev
+            typ = SLOT_RULE[letter]
+
+            if isempty(tran)
+                push!(tokens, DatePart{letter,width,true}())
+            else
+                push!(tokens, DatePart{letter,width,false}())
+            end
+
+            idx = findfirst(dateorder, typ)
+            if idx != 0
+                order[idx] = length(tokens)
+            end
+        end
+
+        if !isempty(tran)
+            if length(tran) == 1
+                push!(tokens, Delim(first(tran)))
+            else
+                push!(tokens, Delim{typeof(tran), length(tran)}(tran))
+            end
+        end
+
         letter = f[m.offset]
+        width = length(m.match)
+
+        prev = (letter, width)
+        prev_offset = m.offset + width
+    end
+
+    tran = replace(f[prev_offset:endof(f)], r"\\(.)", s"\1")
+
+    if !isempty(prev)
+        letter, width = prev
         typ = SLOT_RULE[letter]
 
-        width = length(m.match)
-        delim = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
+        push!(tokens, DatePart{letter,width,false}())
 
-        push_delim_token!(tokens, delim)
-        push!(tokens, DatePart{letter, width, true}())
         idx = findfirst(dateorder, typ)
         if idx != 0
             order[idx] = length(tokens)
         end
-
-        last_offset = m.offset+width
     end
 
-    remaining = f[last_offset:end]
-    remaining = replace(remaining, r"\\(.)", s"\1")
-    push_delim_token!(tokens, remaining)
-    if length(tokens) > 0
-        tokens[end] = make_variable_width(tokens[end])
+    if !isempty(tran)
+        if length(tran) == 1
+            push!(tokens, Delim(first(tran)))
+        else
+            push!(tokens, Delim{typeof(tran), length(tran)}(tran))
+        end
     end
 
     return DateFormat(T, (tokens...), localeobj, default_fields, (order...))
@@ -319,26 +351,6 @@ function Base.show(io::IO, df::DateFormat)
         _show_content(io, t)
     end
     write(io, '"')
-end
-
-# Utility functions for DateFormat construction
-
-make_variable_width{C,N}(p::DatePart{C, N, true}) = DatePart{C, N, false}()
-make_variable_width(p) = p
-
-function push_delim_token!(tokens, delim)
-    if !isempty(delim)
-        if length(tokens) > 0
-            # before adding the delimiter make
-            # the previous token variable width
-            tokens[end] = make_variable_width(tokens[end])
-        end
-        if length(delim) == 1
-            push!(tokens, Delim(first(delim)))
-        else
-            push!(tokens, Delim{typeof(delim), length(delim)}(delim))
-        end
-    end
 end
 
 """
