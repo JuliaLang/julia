@@ -10,7 +10,7 @@ NTuple
 
 ## indexing ##
 
-length(t::Tuple) = nfields(t)
+length{T<:Tuple}(t::T) = nfields(T)
 endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 getindex(t::Tuple, i::Int) = getfield(t, i)
