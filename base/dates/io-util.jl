@@ -55,8 +55,8 @@ function tryfailparse{T}(dt, df::DateFormat{T})
     end
 end
 
-_create_timeobj(tup, T::Type{DateTime}) = T(tup...)
-_create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
+@inline _create_timeobj(tup, T::Type{DateTime}) = T(tup...)
+@inline _create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
 
 function Base.tryparse{T}(df::DateFormat{T}, dt::AbstractString)
     R = Nullable{T}
