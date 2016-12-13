@@ -2,11 +2,11 @@
 
 macro chk1(expr,label=:error)
     quote
-        x = $(esc(expr))
-        if isnull(x[1])
+        val, i = $(esc(expr))
+        if isnull(val)
             @goto $label
         else
-            get(x[1]),x[2]
+            get(val), i
         end
     end
 end
