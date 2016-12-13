@@ -40,8 +40,8 @@ immutable DatePart{letter} <: AbstractDateToken
     fixed::Bool
 end
 
-min_width(d::DatePart) = d.fixed ? d.width : 1
-max_width(d::DatePart) = d.fixed ? d.width : 0
+@inline min_width(d::DatePart) = d.fixed ? d.width : 1
+@inline max_width(d::DatePart) = d.fixed ? d.width : 0
 
 ### Numeric tokens
 
