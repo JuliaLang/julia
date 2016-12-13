@@ -1701,7 +1701,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full)
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     assert(mark_sp == 0);
 
-    // 1. mark every object in the remset
+    // 1. fix GC bits of objects in the remset.
     reset_remset();
     for (int t_i = 0;t_i < jl_n_threads;t_i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[t_i];
@@ -1715,16 +1715,17 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full)
             void *ptr = ptls2->heap.rem_bindings.items[i];
             jl_astaggedvalue(ptr)->bits.gc = GC_OLD_MARKED;
         }
+    }
+
+    // 2. mark every object in the remsets and rem_binding
+    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
 
         for (int i = 0; i < ptls2->heap.last_remset->len; i++) {
             jl_value_t *item = (jl_value_t*)ptls2->heap.last_remset->items[i];
             push_root(ptls, item, 0, GC_OLD_MARKED);
         }
-    }
 
-    // 2. mark every object in a remembered binding
-    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
         int n_bnd_refyoung = 0;
         for (int i = 0; i < ptls2->heap.rem_bindings.len; i++) {
             jl_binding_t *ptr = (jl_binding_t*)ptls2->heap.rem_bindings.items[i];
