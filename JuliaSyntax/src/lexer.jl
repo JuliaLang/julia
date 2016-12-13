@@ -510,8 +510,13 @@ function lex_digit(l::Lexer)
             return emit(l, Tokens.INTEGER)
         end
         accept_batch(l, isdigit)
-        if accept(l, '.') # 3213.313.3123 is error
-            return emit_error(l)
+        if accept(l, '.')
+            if peekchar(l) == '.' # 1.23..3.21 is valid
+                backup!(l)
+                return emit(l, Tokens.FLOAT)
+            else # 3213.313.3123 is an error
+                return emit_error(l)
+            end
         elseif position(l) > longest # 323213.3232 candidate
             longest, kind = position(l), Tokens.FLOAT
         end
