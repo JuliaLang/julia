@@ -68,16 +68,6 @@ function Base.tryparse{T}(df::DateFormat{T}, dt::AbstractString)
     end
 end
 
-function Base.tryparse(df::DateFormat{Date}, dt::AbstractString)
-    R = Nullable{Date}
-    tup = _tryparse(df, dt)
-    if isnull(tup)
-        R()
-    else
-        R(Date(tup.value[1:3]...))
-    end
-end
-
 function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{Ni}, valid_till)
     ntuple(Val{Ni}) do i
         if idx[i] == 0 || idx[i] > valid_till
