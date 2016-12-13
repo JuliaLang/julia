@@ -1398,7 +1398,7 @@ end
 
 sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 
-## map/map! over sparse matrices
+## map/map! and broadcast/broadcast! over sparse matrices
 
 # map/map! entry points
 function map!{Tf,N}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N})
@@ -1412,8 +1412,8 @@ function map{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N})
     _checksameshape(A, Bs...)
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = fofzeros == zero(fofzeros)
-    maxnnzC = fpreszeros ? _sumnnzs(A, Bs...) : length(A)
-    entrytypeC = Base.Broadcast.promote_eltype_op(f, A, Bs...)
+    maxnnzC = fpreszeros ? min(length(A), _sumnnzs(A, Bs...)) : length(A)
+    entrytypeC = _broadcast_type(f, A, Bs...)
     indextypeC = _promote_indtype(A, Bs...)
     Ccolptr = Vector{indextypeC}(A.n + 1)
     Crowval = Vector{indextypeC}(maxnnzC)
@@ -1422,7 +1422,33 @@ function map{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N})
     return fpreszeros ? _map_zeropres!(f, C, A, Bs...) :
                         _map_notzeropres!(f, fofzeros, C, A, Bs...)
 end
-# map/map! entry point helper functions
+# broadcast/broadcast! entry points
+broadcast{Tf}(f::Tf, A::SparseMatrixCSC) = map(f, A)
+broadcast!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC) = map!(f, C, A)
+function broadcast!{Tf,N}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N})
+    _aresameshape(C, A, Bs...) && return map!(f, C, A, Bs...) # could avoid a second dims check in map
+    Base.Broadcast.check_broadcast_indices(indices(C), A, Bs...)
+    fofzeros = f(_zeros_eltypes(A, Bs...)...)
+    fpreszeros = fofzeros == zero(fofzeros)
+    return fpreszeros ? _broadcast_zeropres!(f, C, A, Bs...) :
+                        _broadcast_notzeropres!(f, fofzeros, C, A, Bs...)
+end
+function broadcast{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N})
+    _aresameshape(A, Bs...) && return map(f, A, Bs...) # could avoid a second dims check in map
+    fofzeros = f(_zeros_eltypes(A, Bs...)...)
+    fpreszeros = fofzeros == zero(fofzeros)
+    indextypeC = _promote_indtype(A, Bs...)
+    entrytypeC = _broadcast_type(f, A, Bs...)
+    Cm, Cn = Base.to_shape(Base.Broadcast.broadcast_indices(A, Bs...))
+    maxnnzC = fpreszeros ? _checked_maxnnzbcres(Cm, Cn, A, Bs...) : (Cm * Cn)
+    Ccolptr = Vector{indextypeC}(Cn + 1)
+    Crowval = Vector{indextypeC}(maxnnzC)
+    Cnzval = Vector{entrytypeC}(maxnnzC)
+    C = SparseMatrixCSC(Cm, Cn, Ccolptr, Crowval, Cnzval)
+    return fpreszeros ? _broadcast_zeropres!(f, C, A, Bs...) :
+                        _broadcast_notzeropres!(f, fofzeros, C, A, Bs...)
+end
+# map/map! and broadcast/broadcast! entry point helper functions
 @inline _sumnnzs(A) = nnz(A)
 @inline _sumnnzs(A, Bs...) = nnz(A) + _sumnnzs(Bs...)
 @inline _zeros_eltypes(A) = (zero(eltype(A)),)
@@ -1433,29 +1459,36 @@ end
 @inline _aresameshape(A, B) = size(A) == size(B)
 @inline _aresameshape(A, B, Cs...) = _aresameshape(A, B) ? _aresameshape(B, Cs...) : false
 @inline _checksameshape(As...) = _aresameshape(As...) || throw(DimensionMismatch("argument shapes must match"))
+_maxnnzfrom(Cm, Cn, A) = nnz(A) * div(Cm, A.m) * div(Cn, A.n)
+@inline _maxnnzfrom_each(Cm, Cn, ::Tuple{}) = ()
+@inline _maxnnzfrom_each(Cm, Cn, As) = (_maxnnzfrom(Cm, Cn, first(As)), _maxnnzfrom_each(Cm, Cn, tail(As))...)
+@inline _unchecked_maxnnzbcres(Cm, Cn, As) = min(Cm * Cn, sum(_maxnnzfrom_each(Cm, Cn, As)))
+@inline _checked_maxnnzbcres(Cm, Cn, As...) = Cm != 0 && Cn != 0 ? _unchecked_maxnnzbcres(Cm, Cn, As) : 0
+function _broadcast_type(f, As...)
+    zt = Base.Broadcast.ziptype(As...)
+    ft = Base.Broadcast.ftype(f, As...)
+    return Base._default_eltype(Base.Generator{zt,ft})
+end
 
 # _map_zeropres!/_map_notzeropres! specialized for a single sparse matrix
 "Stores only the nonzero entries of `map(f, Matrix(A))` in `C`."
 function _map_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC)
-    spaceC::Int = min(length(C.rowval), length(C.nzval))
+    spaceC = min(length(C.rowval), length(C.nzval))
     Ck = 1
     @inbounds for j in 1:C.n
         C.colptr[j] = Ck
         for Ak in nzrange(A, j)
             Cx = f(A.nzval[Ak])
             if Cx != zero(eltype(C))
-                if Ck > spaceC
-                    spaceC = maxnnzC = Ck + nnz(A) - (Ak - 1)
-                    length(C.rowval) < maxnnzC && resize!(C.rowval, maxnnzC)
-                    length(C.nzval) < maxnnzC && resize!(C.nzval, maxnnzC)
-                end
+                Ck > spaceC && (spaceC = _expandstorage!(C, Ck + nnz(A) - (Ak - 1)))
                 C.rowval[Ck] = A.rowval[Ak]
                 C.nzval[Ck] = Cx
                 Ck += 1
             end
         end
     end
-    C.colptr[C.n + 1] = Ck
+    @inbounds C.colptr[C.n + 1] = Ck
+    _trimstorage!(C, Ck - 1)
     return C
 end
 """
@@ -1463,18 +1496,11 @@ Densifies `C`, storing `fillvalue` in place of each unstored entry in `A` and
 `f(A[i,j])` in place of each stored entry `A[i,j]` in `A`.
 """
 function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMatrixCSC)
-    nnzC = C.m * C.n
-    # Expand C's storage if necessary
-    length(C.rowval) < nnzC && resize!(C.rowval, nnzC)
-    length(C.nzval) < nnzC && resize!(C.nzval, nnzC)
-    # Build C's structure
-    copy!(C.colptr, 1:C.m:(nnzC + 1))
-    for k in 1:C.m:(nnzC - C.m + 1)
-        copy!(C.rowval, k, 1:C.m)
-    end
+    # Build dense matrix structure in C, expanding storage if necessary
+    _densestructure!(C)
     # Populate values
     fill!(C.nzval, fillvalue)
-    @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(nnzC - 1)), Ak in nzrange(A, j)
+    @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1)), Ak in nzrange(A, j)
         Cx = f(A.nzval[Ak])
         Cx != fillvalue && (C.nzval[jo + A.rowval[Ak]] = Cx)
     end
@@ -1482,10 +1508,33 @@ function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMa
     # nonsequential access of C.nzval does not appear to improve performance.
     return C
 end
+# helper functions for these methods and some of those below
+function _expandstorage!(X::SparseMatrixCSC, maxstored)
+    length(X.rowval) < maxstored && resize!(X.rowval, maxstored)
+    length(X.nzval) < maxstored && resize!(X.nzval, maxstored)
+    return maxstored
+end
+function _trimstorage!(X::SparseMatrixCSC, maxstored)
+    resize!(X.rowval, maxstored)
+    resize!(X.nzval, maxstored)
+    return maxstored
+end
+function _densestructure!(X::SparseMatrixCSC)
+    nnzX = X.m * X.n
+    # Expand storage if necessary
+    resize!(X.rowval, nnzX)
+    resize!(X.nzval, nnzX)
+    # Build dense structure in C
+    copy!(X.colptr, 1:X.m:(nnzX + 1))
+    for k in 1:X.m:(nnzX - X.m + 1)
+        copy!(X.rowval, k, 1:X.m)
+    end
+    return X
+end
 
 # _map_zeropres!/_map_notzeropres! specialized for a pair of sparse matrices
 function _map_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
-    spaceC::Int = min(length(C.rowval), length(C.nzval))
+    spaceC = min(length(C.rowval), length(C.nzval))
     rowsentinelA = convert(eltype(A.rowval), C.m + 1)
     rowsentinelB = convert(eltype(B.rowval), C.m + 1)
     Ck = 1
@@ -1509,39 +1558,33 @@ function _map_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::Sp
                 Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
             end
             # NOTE: The ordering of the conditional chain above impacts which matrices this
-            # method performs best for. The above provides good performance all around.
+            # method performs best for. In the map situation (arguments have same shape, and
+            # likely same or similar stored entry pattern), the Ai == Bi and termination
+            # cases are equally or more likely than the Ai < Bi and Bi < Ai cases. Hence
+            # the ordering of the conditional chain above differs from that in the
+            # corresponding broadcast code (below).
             if Cx != zero(eltype(C))
-                if Ck > spaceC
-                    spaceC = maxnnzC = Ck + (nnz(A) - (Ak - 1)) + (nnz(B) - (Bk - 1))
-                    length(C.rowval) < maxnnzC && resize!(C.rowval, maxnnzC)
-                    length(C.nzval) < maxnnzC && resize!(C.nzval, maxnnzC)
-                end
+                Ck > spaceC && (spaceC = _expandstorage!(C, Ck + (nnz(A) - (Ak - 1)) + (nnz(B) - (Bk - 1))))
                 C.rowval[Ck] = Ci
                 C.nzval[Ck] = Cx
                 Ck += 1
             end
         end
     end
-    C.colptr[C.n + 1] = Ck
+    @inbounds C.colptr[C.n + 1] = Ck
+    _trimstorage!(C, Ck - 1)
     return C
 end
 function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
-    nnzC = C.m * C.n
-    # Expand C's storage if necessary
-    length(C.rowval) < nnzC && resize!(C.rowval, nnzC)
-    length(C.nzval) < nnzC && resize!(C.nzval, nnzC)
-    # Build C's structure
-    copy!(C.colptr, 1:C.m:(nnzC + 1))
-    for k in 1:C.m:(nnzC - C.m + 1)
-        copy!(C.rowval, k, 1:C.m)
-    end
+    # Build dense matrix structure in C, expanding storage if necessary
+    _densestructure!(C)
     # Populate values
     fill!(C.nzval, fillvalue)
     # NOTE: Combining this fill! into the loop below to avoid multiple sweeps over /
     # nonsequential access of C.nzval does not appear to improve performance.
     rowsentinelA = convert(eltype(A.rowval), C.m + 1)
     rowsentinelB = convert(eltype(B.rowval), C.m + 1)
-    @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(nnzC - 1))
+    @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
         Ak, stopAk = A.colptr[j], A.colptr[j + 1]
         Bk, stopBk = B.colptr[j], B.colptr[j + 1]
         Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
@@ -1564,10 +1607,249 @@ function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMa
     end
     return C
 end
+# _broadcast_zeropres!/_broadcast_notzeropres! specialized for a pair of (input) sparse matrices
+function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
+    isempty(C) && (fill!(C.colptr, 1); return C)
+    spaceC = min(length(C.rowval), length(C.nzval))
+    rowsentinelA = convert(eltype(A.rowval), C.m + 1)
+    rowsentinelB = convert(eltype(B.rowval), C.m + 1)
+    # A and B cannot have the same shape, as we directed that case to map in broadcast's
+    # entry point; here we need efficiently handle only heterogeneous combinations of matrices
+    # with no singleton dimensions ("matrices" hereafter), one singleton dimension ("columns"
+    # and "rows"), and two singleton dimensions ("scalars"). Cases involving scalars should
+    # be rare and optimizing that case complicates the code appreciably, so we largely
+    # ignore that case's performance below.
+    #
+    # We first divide the cases into two groups: those in which neither argument expands
+    # vertically (matrix-column combinations) and those in which an argument expands
+    # vertically (matrix-row and column-row combinations).
+    #
+    # NOTE: Placing the loops over columns outside the conditional chain segregating
+    # argument shape combinations eliminates some code replication but unfortunately
+    # hurts performance appreciably in some cases.
+    #
+    # Cases without vertical expansion
+    Ck = 1
+    if A.m == B.m
+        @inbounds for j in 1:C.n
+            C.colptr[j] = Ck
+            Ak, stopAk = A.n == 1 ? (A.colptr[1], A.colptr[2]) : (A.colptr[j], A.colptr[j + 1])
+            Bk, stopBk = B.n == 1 ? (B.colptr[1], B.colptr[2]) : (B.colptr[j], B.colptr[j + 1])
+            # Restructuring this k/stopk code to avoid unnecessary colptr retrievals does
+            # not improve performance signicantly. Leave in this less complex form.
+            Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+            Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+            while true
+                if Ai != Bi
+                    if Ai < Bi
+                        Cx, Ci = f(A.nzval[Ak], zero(eltype(B))), Ai
+                        Ak += one(Ak); Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+                    else # Ai > Bi
+                        Cx, Ci = f(zero(eltype(A)), B.nzval[Bk]), Bi
+                        Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+                    end
+                elseif #= Ai == Bi && =# Ai == rowsentinelA
+                    break # column complete
+                else #= Ai == Bi != rowsentinel =#
+                    Cx, Ci::eltype(C.rowval) = f(A.nzval[Ak], B.nzval[Bk]), Ai
+                    Ak += one(Ak); Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+                    Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+                end
+                # NOTE: The ordering of the conditional chain above impacts which matrices
+                # this method perform best for. In contrast to the map situation (arguments
+                # have same shape, and likely same or similar stored entry pattern), where
+                # the Ai == Bi and termination cases are equally or more likely than the
+                # Ai < Bi and Bi < Ai cases, in the broadcast situation (arguments have
+                # different shape, and likely largely disjoint expanded stored entry
+                # pattern) the Ai < Bi and Bi < Ai cases are equally or more likely than the
+                # Ai == Bi and termination cases. Hence the ordering of the conditional
+                # chain above differs from that in the corresponding map code.
+                if Cx != zero(eltype(C))
+                    Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
+                    C.rowval[Ck] = Ci
+                    C.nzval[Ck] = Cx
+                    Ck += 1
+                end
+            end
+        end
+    # Cases with vertical expansion
+    elseif A.m == 1 # && B.m != 1, vertically expand first argument
+        @inbounds for j in 1:C.n
+            C.colptr[j] = Ck
+            Ak, stopAk = A.n == 1 ? (A.colptr[1], A.colptr[2]) : (A.colptr[j], A.colptr[j + 1])
+            Bk, stopBk = B.n == 1 ? (B.colptr[1], B.colptr[2]) : (B.colptr[j], B.colptr[j + 1])
+            Ax = Ak < stopAk ? A.nzval[Ak] : zero(eltype(A))
+            fvAzB = f(Ax, zero(eltype(B)))
+            if fvAzB == zero(eltype(C))
+                # either A's jth column is empty, or A's jth column contains a nonzero value
+                # Ax but f(Ax, zero(eltype(B))) is nonetheless zero, so we can scan through
+                # B's jth column without storing every entry in C's jth column
+                while Bk < stopBk
+                    Cx = f(Ax, B.nzval[Bk])
+                    if Cx != zero(eltype(C))
+                        Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
+                        C.rowval[Ck] = B.rowval[Bk]
+                        C.nzval[Ck] = Cx
+                        Ck += 1
+                    end
+                    Bk += one(Bk)
+                end
+            else
+                # A's jth column is nonempty and f(Ax, zero(eltype(B))) is not zero, so
+                # we must store (likely) every entry in C's jth column
+                Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+                for Ci::eltype(C.rowval) in 1:C.m
+                    if Bi == Ci
+                        Cx = f(Ax, B.nzval[Bk])
+                        Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+                    else
+                        Cx = fvAzB
+                    end
+                    if Cx != zero(eltype(C))
+                        Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
+                        C.rowval[Ck] = Ci
+                        C.nzval[Ck] = Cx
+                        Ck += 1
+                    end
+                end
+            end
+        end
+    elseif B.m == 1 # && A.m != 1, vertically expand second argument
+        @inbounds for j in 1:C.n
+            C.colptr[j] = Ck
+            Ak, stopAk = A.n == 1 ? (A.colptr[1], A.colptr[2]) : (A.colptr[j], A.colptr[j + 1])
+            Bk, stopBk = B.n == 1 ? (B.colptr[1], B.colptr[2]) : (B.colptr[j], B.colptr[j + 1])
+            Bx = Bk < stopBk ? B.nzval[Bk] : zero(eltype(B))
+            fzAvB = f(zero(eltype(A)), Bx)
+            if fzAvB == zero(eltype(C))
+                # either B's jth column is empty, or B's jth column contains a nonzero value
+                # Bx but f(zero(eltype(A)), Bx) is nonetheless zero, so we can scan through
+                # A's jth column without storing every entry in C's jth column
+                while Ak < stopAk
+                    Cx = f(A.nzval[Ak], Bx)
+                    if Cx != zero(eltype(C))
+                        Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
+                        C.rowval[Ck] = A.rowval[Ak]
+                        C.nzval[Ck] = Cx
+                        Ck += 1
+                    end
+                    Ak += one(Ak)
+                end
+            else
+                # B's jth column is nonempty and f(zero(eltype(A)), Bx) is not zero, so
+                # we must store (likely) every entry in C's jth column
+                Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+                for Ci::eltype(C.rowval) in 1:C.m
+                    if Ai == Ci
+                        Cx = f(A.nzval[Ak], Bx)
+                        Ak += one(Ak); Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+                    else
+                        Cx = fzAvB
+                    end
+                    if Cx != zero(eltype(C))
+                        Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
+                        C.rowval[Ck] = Ci
+                        C.nzval[Ck] = Cx
+                        Ck += 1
+                    end
+                end
+            end
+        end
+    end
+    @inbounds C.colptr[C.n + 1] = Ck
+    _trimstorage!(C, Ck - 1)
+    return C
+end
+function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
+    # For information on this code, see comments in similar code in _broadcast_zeropres! above
+    # Build dense matrix structure in C, expanding storage if necessary
+    _densestructure!(C)
+    # Populate values
+    fill!(C.nzval, fillvalue)
+    rowsentinelA = convert(eltype(A.rowval), C.m + 1)
+    rowsentinelB = convert(eltype(B.rowval), C.m + 1)
+    # Cases without vertical expansion
+    if A.m == B.m
+        @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
+            Ak, stopAk = A.n == 1 ? (A.colptr[1], A.colptr[2]) : (A.colptr[j], A.colptr[j + 1])
+            Bk, stopBk = B.n == 1 ? (B.colptr[1], B.colptr[2]) : (B.colptr[j], B.colptr[j + 1])
+            Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+            Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+            while true
+                if Ai < Bi
+                    Cx, Ci = f(A.nzval[Ak], zero(eltype(B))), Ai
+                    Ak += one(Ak); Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+                elseif Ai > Bi
+                    Cx, Ci = f(zero(eltype(A)), B.nzval[Bk]), Bi
+                    Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+                elseif #= Ai == Bi && =# Ai == rowsentinelA
+                    break # column complete
+                else #= Ai == Bi != rowsentinel =#
+                    Cx, Ci::eltype(C.rowval) = f(A.nzval[Ak], B.nzval[Bk]), Ai
+                    Ak += one(Ak); Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+                    Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+                end
+                Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+            end
+        end
+    # Cases with vertical expansion
+    elseif A.m == 1 # && B.m != 1, vertically expand first argument
+        @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
+            Ak, stopAk = A.n == 1 ? (A.colptr[1], A.colptr[2]) : (A.colptr[j], A.colptr[j + 1])
+            Bk, stopBk = B.n == 1 ? (B.colptr[1], B.colptr[2]) : (B.colptr[j], B.colptr[j + 1])
+            Ax = Ak < stopAk ? A.nzval[Ak] : zero(eltype(A))
+            fvAzB = f(Ax, zero(eltype(B)))
+            if fvAzB == zero(eltype(C))
+                while Bk < stopBk
+                    Cx = f(Ax, B.nzval[Bk])
+                    Cx != fillvalue && (C.nzval[jo + B.rowval[Bk]] = Cx)
+                    Bk += one(Bk)
+                end
+            else
+                Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+                for Ci::eltype(C.rowval) in 1:C.m
+                    if Bi == Ci
+                        Cx = f(Ax, B.nzval[Bk])
+                        Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
+                    else
+                        Cx = fvAzB
+                    end
+                    Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+                end
+            end
+        end
+    elseif B.m == 1 # && A.m != 1, vertically expand second argument
+        @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
+            Ak, stopAk = A.n == 1 ? (A.colptr[1], A.colptr[2]) : (A.colptr[j], A.colptr[j + 1])
+            Bk, stopBk = B.n == 1 ? (B.colptr[1], B.colptr[2]) : (B.colptr[j], B.colptr[j + 1])
+            Bx = Bk < stopBk ? B.nzval[Bk] : zero(eltype(B))
+            fzAvB = f(zero(eltype(A)), Bx)
+            if fzAvB == zero(eltype(C))
+                while Ak < stopAk
+                    Cx = f(A.nzval[Ak], Bx)
+                    Cx != fillvalue && (C.nzval[jo + A.rowval[Ak]] = Cx)
+                    Ak += one(Ak)
+                end
+            else
+                Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+                for Ci::eltype(C.rowval) in 1:C.m
+                    if Ai == Ci
+                        Cx = f(A.nzval[Ak], Bx)
+                        Ak += one(Ak); Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
+                    else
+                        Cx = fzAvB
+                    end
+                    Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+                end
+            end
+        end
+    end
+    return C
+end
 
 # _map_zeropres!/_map_notzeropres! for more than two sparse matrices
 function _map_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{SparseMatrixCSC,N})
-    spaceC::Int = min(length(C.rowval), length(C.nzval))
+    spaceC = min(length(C.rowval), length(C.nzval))
     rowsentinel = C.m + 1
     Ck = 1
     stopks = _indforcol_all(1, As)
@@ -1585,11 +1867,7 @@ function _map_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{SparseMatrix
             vals, ks, rows = _fusedupdate_all(rowsentinel, activerow, rows, ks, stopks, As)
             Cx = f(vals...)
             if Cx != zero(eltype(C))
-                if Ck > spaceC
-                    spaceC = maxnnzC = Ck + _sumnnzs(As...) - (sum(ks) - N)
-                    length(C.rowval) < maxnnzC && resize!(C.rowval, maxnnzC)
-                    length(C.nzval) < maxnnzC && resize!(C.nzval, maxnnzC)
-                end
+                Ck > spaceC && (spaceC = _expandstorage!(C, Ck + min(length(C), _sumnnzs(As...)) - (sum(ks) - N)))
                 C.rowval[Ck] = activerow
                 C.nzval[Ck] = Cx
                 Ck += 1
@@ -1597,26 +1875,20 @@ function _map_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{SparseMatrix
             activerow = min(rows...)
         end
     end
-    C.colptr[C.n + 1] = Ck
+    @inbounds C.colptr[C.n + 1] = Ck
+    _trimstorage!(C, Ck - 1)
     return C
 end
 function _map_notzeropres!{Tf,N}(f::Tf, fillvalue, C::SparseMatrixCSC, As::Vararg{SparseMatrixCSC,N})
-    nnzC = C.m * C.n
-    # Expand C's storage if necessary
-    length(C.rowval) < nnzC && resize!(C.rowval, nnzC)
-    length(C.nzval) < nnzC && resize!(C.nzval, nnzC)
-    # Build C's structure
-    copy!(C.colptr, 1:C.m:(nnzC + 1))
-    for k in 1:C.m:(nnzC - C.m + 1)
-        copy!(C.rowval, k, 1:C.m)
-    end
+    # Build dense matrix structure in C, expanding storage if necessary
+    _densestructure!(C)
     # Populate values
     fill!(C.nzval, fillvalue)
     # NOTE: Combining this fill! into the loop below to avoid multiple sweeps over /
     # nonsequential access of C.nzval does not appear to improve performance.
     rowsentinel = C.m + 1
     stopks = _indforcol_all(1, As)
-    @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(nnzC - 1))
+    @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
         ks = stopks
         stopks = _indforcol_all(j + 1, As)
         rows = _rowforind_all(rowsentinel, ks, stopks, As)
@@ -1634,7 +1906,7 @@ function _map_notzeropres!{Tf,N}(f::Tf, fillvalue, C::SparseMatrixCSC, As::Varar
     end
     return C
 end
-# helper methods
+# helper methods for map/map! methods just above
 @inline _indforcol(j, A) = A.colptr[j]
 @inline _indforcol_all(j, ::Tuple{}) = ()
 @inline _indforcol_all(j, As) = (
@@ -1687,14 +1959,194 @@ end
                         rowsentinel, activerow, tail(rows), tail(ks), tail(stopks), tail(As))
 end
 
+# _broadcast_zeropres!/_broadcast_notzeropres! for more than two (input) sparse matrices
+function _broadcast_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{SparseMatrixCSC,N})
+    isempty(C) && (fill!(C.colptr, 1); return C)
+    spaceC = min(length(C.rowval), length(C.nzval))
+    expandsverts = _expandsvert_all(C, As)
+    expandshorzs = _expandshorz_all(C, As)
+    rowsentinel = C.m + 1
+    Ck = 1
+    @inbounds for j in 1:C.n
+        C.colptr[j] = Ck
+        ks = _startindforbccol_all(j, expandshorzs, As)
+        stopks = _stopindforbccol_all(j + 1, expandshorzs, As)
+        # Neither fusing ks and stopks construction, nor restructuring them to avoid repeated
+        # colptr lookups, improves performance significantly. So keep the less complex approach here.
+        isemptys = _isemptycol_all(ks, stopks)
+        defargs = _defargforcol_all(j, isemptys, expandsverts, ks, As)
+        rows = _initrowforcol_all(j, rowsentinel, isemptys, expandsverts, ks, As)
+        defaultCx = f(defargs...)
+        activerow = min(rows...)
+        if defaultCx == zero(eltype(C)) # zero-preserving column scan
+            while activerow < rowsentinel
+                # activerows = _isactiverow_all(activerow, rows)
+                # Cx = f(_gatherbcargs(activerows, defargs, ks, As)...)
+                # ks = _updateind_all(activerows, ks)
+                # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
+                args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
+                Cx = f(args...)
+                if Cx != zero(eltype(C))
+                    Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, As)))
+                    C.rowval[Ck] = activerow
+                    C.nzval[Ck] = Cx
+                    Ck += 1
+                end
+                activerow = min(rows...)
+            end
+        else # zero-non-preserving column scan
+            for Ci in 1:C.m
+                if Ci == activerow
+                    # activerows = _isactiverow_all(activerow, rows)
+                    # Cx = f(_gatherbcargs(activerows, defargs, ks, As)...)
+                    # ks = _updateind_all(activerows, ks)
+                    # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
+                    args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
+                    Cx = f(args...)
+                    activerow = min(rows...)
+                else
+                    Cx = defaultCx
+                end
+                if Cx != zero(eltype(C))
+                    Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, As)))
+                    C.rowval[Ck] = Ci
+                    C.nzval[Ck] = Cx
+                    Ck += 1
+                end
+            end
+        end
+    end
+    @inbounds C.colptr[C.n + 1] = Ck
+    _trimstorage!(C, Ck - 1)
+    return C
+end
+function _broadcast_notzeropres!{Tf,N}(f::Tf, fillvalue, C::SparseMatrixCSC, As::Vararg{SparseMatrixCSC,N})
+    isempty(C) && (fill!(C.colptr, 1); return C)
+    # Build dense matrix structure in C, expanding storage if necessary
+    _densestructure!(C)
+    # Populate values
+    fill!(C.nzval, fillvalue)
+    expandsverts = _expandsvert_all(C, As)
+    expandshorzs = _expandshorz_all(C, As)
+    rowsentinel = C.m + 1
+    @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
+        ks = _startindforbccol_all(j, expandshorzs, As)
+        stopks = _stopindforbccol_all(j + 1, expandshorzs, As)
+        # Neither fusing ks and stopks construction, nor restructuring them to avoid repeated
+        # colptr lookups, improves performance significantly. So keep the less complex approach here.
+        isemptys = _isemptycol_all(ks, stopks)
+        defargs = _defargforcol_all(j, isemptys, expandsverts, ks, As)
+        rows = _initrowforcol_all(j, rowsentinel, isemptys, expandsverts, ks, As)
+        defaultCx = f(defargs...)
+        activerow = min(rows...)
+        if defaultCx == fillvalue # fillvalue-preserving column scan
+            while activerow < rowsentinel
+                # activerows = _isactiverow_all(activerow, rows)
+                # Cx = f(_gatherbcargs(activerows, defargs, ks, As)...)
+                # ks = _updateind_all(activerows, ks)
+                # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
+                args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
+                Cx = f(args...)
+                Cx != fillvalue && (C.nzval[jo + activerow] = Cx)
+                activerow = min(rows...)
+            end
+        else # fillvalue-non-preserving column scan
+            for Ci in 1:C.m
+                if Ci == activerow
+                    # activerows = _isactiverow_all(activerow, rows)
+                    # Cx = f(_gatherbcargs(activerows, defargs, ks, As)...)
+                    # ks = _updateind_all(activerows, ks)
+                    # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
+                    args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
+                    Cx = f(args...)
+                    activerow = min(rows...)
+                else
+                    Cx = defaultCx
+                end
+                Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+            end
+        end
+    end
+    return C
+end
+# helper method for broadcast/broadcast! methods just above
+@inline _expandsvert(C, A) = A.m != C.m
+@inline _expandsvert_all(C, ::Tuple{}) = ()
+@inline _expandsvert_all(C, As) = (_expandsvert(C, first(As)), _expandsvert_all(C, tail(As))...)
+@inline _expandshorz(C, A) = A.n != C.n
+@inline _expandshorz_all(C, ::Tuple{}) = ()
+@inline _expandshorz_all(C, As) = (_expandshorz(C, first(As)), _expandshorz_all(C, tail(As))...)
+@inline _startindforbccol(j, expandshorz, A) = expandshorz ? A.colptr[1] : A.colptr[j]
+@inline _startindforbccol_all(j, ::Tuple{}, ::Tuple{}) = ()
+@inline _startindforbccol_all(j, expandshorzs, As) = (
+    _startindforbccol(j, first(expandshorzs), first(As)),
+    _startindforbccol_all(j, tail(expandshorzs), tail(As))...)
+@inline _stopindforbccol(j, expandshorz, A) = expandshorz ? A.colptr[2] : A.colptr[j]
+@inline _stopindforbccol_all(j, ::Tuple{}, ::Tuple{}) = ()
+@inline _stopindforbccol_all(j, expandshorzs, As) = (
+    _stopindforbccol(j, first(expandshorzs), first(As)),
+    _stopindforbccol_all(j, tail(expandshorzs), tail(As))...)
+@inline _isemptycol(k, stopk) = k == stopk
+@inline _isemptycol_all(::Tuple{}, ::Tuple{}) = ()
+@inline _isemptycol_all(ks, stopks) = (
+    _isemptycol(first(ks), first(stopks)),
+    _isemptycol_all(tail(ks), tail(stopks))...)
+@inline _initrowforcol(j, rowsentinel, isempty, expandsvert, k, A) =
+    expandsvert || isempty ? convert(eltype(A.rowval), rowsentinel) : A.rowval[k]
+@inline _initrowforcol_all(j, rowsentinel, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+@inline _initrowforcol_all(j, rowsentinel, isemptys, expandsverts, ks, As) = (
+    _initrowforcol(j, rowsentinel, first(isemptys), first(expandsverts), first(ks), first(As)),
+    _initrowforcol_all(j, rowsentinel, tail(isemptys), tail(expandsverts), tail(ks), tail(As))...)
+@inline _defargforcol(j, isempty, expandsvert, k, A) =
+    expandsvert && !isempty ? A.nzval[k] : zero(eltype(A))
+@inline _defargforcol_all(j, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+@inline _defargforcol_all(j, isemptys, expandsverts, ks, As) = (
+    _defargforcol(j, first(isemptys), first(expandsverts), first(ks), first(As)),
+    _defargforcol_all(j, tail(isemptys), tail(expandsverts), tail(ks), tail(As))...)
+# fusing the following defs. avoids a few branches and construction of a tuple, yielding 1-20% runtime reduction
+# @inline _isactiverow(activerow, row) = row == activerow
+# @inline _isactiverow_all(activerow, ::Tuple{}) = ()
+# @inline _isactiverow_all(activerow, rows) = (
+#     _isactiverow(activerow, first(rows)),
+#     _isactiverow_all(activerow, tail(rows))...)
+# @inline _gatherbcarg(isactiverow, defarg, k, A) = isactiverow ? A.nzval[k] : defarg
+# @inline _gatherbcargs(::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+# @inline _gatherbcargs(activerows, defargs, ks, As) = (
+#     _gatherbcarg(first(activerows), first(defargs), first(ks), first(As)),
+#     _gatherbcargs(tail(activerows), tail(defargs), tail(ks), tail(As))...)
+# @inline _updateind(isactiverow, k) = isactiverow ? (k + one(k)) : k
+# @inline _updateind_all(::Tuple{}, ::Tuple{}) = ()
+# @inline _updateind_all(activerows, ks) = (
+#     _updateind(first(activerows), first(ks)),
+#     _updateind_all(tail(activerows), tail(ks))...)
+# @inline _updaterow(rowsentinel, isrowactive, presrow, k, stopk, A) =
+#     isrowactive ? (k < stopk ? A.rowval[k] : oftype(presrow, rowsentinel)) : presrow
+# @inline _updaterow_all(rowsentinel, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+# @inline _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As) = (
+#     _updaterow(rowsentinel, first(activerows), first(rows), first(ks), first(stopks), first(As)),
+#     _updaterow_all(rowsentinel, tail(activerows), tail(rows), tail(ks), tail(stopks), tail(As))...)
+@inline function _fusedupdatebc(rowsentinel, activerow, row, defarg, k, stopk, A)
+    # returns (val, nextk, nextrow)
+    if row == activerow
+        nextk = k + one(k)
+        (A.nzval[k], nextk, (nextk < stopk ? A.rowval[nextk] : oftype(row, rowsentinel)))
+    else
+        (defarg, k, row)
+    end
+end
+@inline _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As) =
+    _fusedupdatebc_all((#=vals=#), (#=nextks=#), (#=nextrows=#), rowsentinel, activerow, rows, defargs, ks, stopks, As)
+@inline _fusedupdatebc_all(vals, nextks, nextrows, rowsent, activerow, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}, ::Tuple{}) =
+    (vals, nextks, nextrows)
+@inline function _fusedupdatebc_all(vals, nextks, nextrows, rowsentinel, activerow, rows, defargs, ks, stopks, As)
+    val, nextk, nextrow = _fusedupdatebc(rowsentinel, activerow, first(rows), first(defargs), first(ks), first(stopks), first(As))
+    return _fusedupdatebc_all((vals..., val), (nextks..., nextk), (nextrows..., nextrow),
+                        rowsentinel, activerow, tail(rows), tail(defargs), tail(ks), tail(stopks), tail(As))
+end
 
-## Broadcast operations involving a single sparse matrix and possibly broadcast scalars
 
-broadcast{Tf}(f::Tf, A::SparseMatrixCSC) = map(f, A)
-broadcast!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC) = map!(f, C, A)
 
-# Cover common broadcast operations involving a single sparse matrix and one or more
-# broadcast scalars.
+## broadcast/broadcast! operations involving sparse matrices and one or more broadcast scalars
 #
 # TODO: The minimal snippet below is not satisfying: A better solution would achieve
 # the same for (1) all broadcast scalar types (Base.Broadcast.containertype(x) == Any?) and
@@ -1706,285 +2158,6 @@ broadcast{Tf}(f::Tf, A::SparseMatrixCSC, y::Union{Number,Bool}) = broadcast(x ->
 # be folded into the two preceding definitions on resolution of #19096.
 broadcast{Tf,T}(f::Tf, ::Type{T}, A::SparseMatrixCSC) = broadcast(y -> f(T, y), A)
 broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), A)
-
-# TODO: The following definitions should be deprecated.
-ceil{To}(::Type{To}, A::SparseMatrixCSC) = ceil.(To, A)
-floor{To}(::Type{To}, A::SparseMatrixCSC) = floor.(To, A)
-trunc{To}(::Type{To}, A::SparseMatrixCSC) = trunc.(To, A)
-round{To}(::Type{To}, A::SparseMatrixCSC) = round.(To, A)
-
-# TODO: More appropriate location?
-conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
-
-## Broadcast operations involving two sparse matrices
-function broadcast{Tf}(f::Tf, A::SparseMatrixCSC, B::SparseMatrixCSC)
-    indextypeC = promote_type(eltype(A.rowval), eltype(B.rowval))
-    entrytypeC = Base.promote_eltype_op(f, A, B)
-    shapeC = Base.to_shape(Base.Broadcast.broadcast_indices(A, B))
-    C = spzeros(entrytypeC, indextypeC, shapeC)
-    return _broadcast_nodimscheck!(f, C, A, B)
-end
-function broadcast!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
-    Base.Broadcast.check_broadcast_indices(indices(C), A)
-    Base.Broadcast.check_broadcast_indices(indices(C), B)
-    return _broadcast_nodimscheck!(f, C, A, B)
-end
-function _broadcast_nodimscheck!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
-    # Check whether f(0...) yields zero, and branch appropriately
-    fofzeros = f(zero(eltype(A)), zero(eltype(B)))
-    fpreszeros = fofzeros == zero(fofzeros)
-    return fpreszeros ? _broadcast_binzeropres!(f, C, A, B) :
-                        _broadcast_notbinzeropres!(f, fofzeros, C, A, B)
-end
-# TODO: _broadcast_binzeropres! and _broadcast_notbinzeropres! could be more efficient and
-# clearer, possibly at the cost of additional code. Consider another rewrite.
-function _broadcast_binzeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
-    # Calculate upper bound on number of entries in C
-    isempty(C) && return C
-    maxnnzfromA = nnz(A) * div(C.n, A.n) * div(C.m, A.m)
-    maxnnzfromB = nnz(B) * div(C.n, B.n) * div(C.m, B.m)
-    maxnnzfromAB = maxnnzfromA + maxnnzfromB
-    nnzC = maxnnzfromAB
-    # Resize C to accomodate max number of entries in C
-    length(C.rowval) < nnzC && resize!(C.rowval, nnzC)
-    length(C.nzval) < nnzC && resize!(C.nzval, nnzC)
-
-    # Populate C column by column
-    Cptr = 1
-    C.colptr[1] = 1
-    @inbounds for j in 1:C.n
-        # Determine rowval/nzval ranges in A and B corresponding to C's jth column
-        # If A(/B) has only one column, then A(/B)'s single column corresponds to C's jth column
-        # If A(/B) has more than one column, then A(/B)'s jth column corresponds to C's jth column
-        Aptr, Astop = A.n == 1 ? (A.colptr[1], A.colptr[2]) : (A.colptr[j], A.colptr[j + 1])
-        Bptr, Bstop = B.n == 1 ? (B.colptr[1], B.colptr[2]) : (B.colptr[j], B.colptr[j + 1])
-
-        # The following conditional chain separates column-pairs into three cases: (1) the
-        # columns have the same number of rows, or either or both columns have only one row
-        # and contain no stored entries; (2) A has more than one row, B has only one row,
-        # and B's column has a stored entry in that one row; (3) B has more than oen row,
-        # A has only one row, and A's column has a stored entry in that one row.
-
-        if A.m == B.m || (A.m == 1 && Aptr == Astop) || (B.m == 1 && Bptr == Bstop)
-            # Case (1): the columns have the same number of rows, or either or both
-            # columns have only one row and contain no stored entries.
-            #
-            # If both columns contain stored entries, then sweep (in step) through those
-            # stored entries till exhaustion of either of the columns' stored entries.
-            # For each stored entry / entry-pair encountered, compute and store the
-            # appropriate row-value pair in C's jth column.
-            while Aptr < Astop && Bptr < Bstop
-                rowA = A.rowval[Aptr]
-                rowB = B.rowval[Bptr]
-                if rowA < rowB # an entry stored in A but not in B
-                    valC = f(A.nzval[Aptr], zero(eltype(C)))
-                    rowC::eltype(C.rowval) = rowA
-                    Aptr += one(Aptr)
-                elseif rowB < rowA # an entry stored in B but not in A
-                    valC = f(zero(eltype(C)), B.nzval[Bptr])
-                    rowC = rowB
-                    Bptr += one(Bptr)
-                else # rowA == rowB, an entry stored in both A and B
-                    valC = f(A.nzval[Aptr], B.nzval[Bptr])
-                    rowC = rowA
-                    Aptr += one(Aptr)
-                    Bptr += one(Bptr)
-                end
-                if valC != zero(eltype(C))
-                    C.rowval[Cptr] = rowC
-                    C.nzval[Cptr] = valC
-                    Cptr += 1
-                end
-            end
-            # If B's column had no stored entries, or we exhausted the stored entries in
-            # B's column without exhausting those in A's column, sweep over the (remaining)
-            # stored entries in A's column. For each such stored entry encountered, compute
-            # and store the appropriate row-value pair in C's jth column.
-            while Aptr < Astop
-                valC = f(A.nzval[Aptr], zero(eltype(B)))
-                if valC != zero(eltype(C))
-                    C.rowval[Cptr] = A.rowval[Aptr]
-                    C.nzval[Cptr] = valC
-                    Cptr += 1
-                end
-                Aptr += one(Aptr)
-            end
-            # If A's column had no stored entries, or we exhausted the stored entries in
-            # A's column without exhausting those in B's column, sweep over the (remaining)
-            # stored entries in A's column. For each such stored entry encountered, compute
-            # and store the appropriate row-value pair in C's jth column.
-            while Bptr < Bstop
-                valC = f(zero(eltype(A)), B.nzval[Bptr])
-                if valC != zero(eltype(C))
-                    C.rowval[Cptr] = B.rowval[Bptr]
-                    C.nzval[Cptr] = valC
-                    Cptr += 1
-                end
-                Bptr += one(Bptr)
-            end
-        elseif A.m != 1
-            # Case (2): A has more than one row, B has only a single row, and B's column
-            # has a stored entry in that row (A.m != 1 && B.m == 1 && (Bptr == Bstop - 1)).
-            # TODO: This could be substantially more efficient.
-            valB = B.nzval[Bptr]
-            rowA = Aptr < Astop ? A.rowval[Aptr] : -one(eltype(A.rowval))
-            for rowB::eltype(B.rowval) in 1:C.m
-                if Aptr >= Astop || rowA != rowB
-                    valC = f(zero(eltype(A)), valB)
-                    rowC::eltype(C.rowval) = rowB
-                else
-                    valC = f(A.nzval[Aptr], valB)
-                    rowC = rowA
-                    Aptr += one(Aptr)
-                    rowA = Aptr < Astop ? A.rowval[Aptr] : -one(eltype(A.rowval))
-                end
-                if valC != zero(eltype(C))
-                    C.rowval[Cptr] = rowC
-                    C.nzval[Cptr] = valC
-                    Cptr += 1
-                end
-            end
-        else
-            # Case (3): B has more than one row, A has only a single row, and A's column
-            # has a stored entry in that row (B.m != 1 && A.m == 1 && (Aptr == Astop - 1)).
-            # TODO: This could be substantially more efficient.
-            valA = A.nzval[Aptr]
-            rowB = Bptr < Bstop ? B.rowval[Bptr] : -one(eltype(B.rowval))
-            for rowA::eltype(A.rowval) in 1:C.m
-                if Bptr >= Bstop || rowA != rowB
-                    valC = f(valA, zero(eltype(B)))
-                    rowC::eltype(C.rowval) = rowA
-                else
-                    valC = f(valA, B.nzval[Bptr])
-                    rowC = rowB
-                    Bptr += one(Bptr)
-                    rowB = Bptr < Bstop ? B.rowval[Bptr] : -one(eltype(B.rowval))
-                end
-                if valC != zero(eltype(C))
-                    C.rowval[Cptr] = rowC
-                    C.nzval[Cptr] = valC
-                    Cptr += 1
-                end
-            end
-        end
-        # Tie off the column pointers for C's jth column and proceed to the next column
-        C.colptr[j + 1] = Cptr
-    end
-    resize!(C.rowval, Cptr - 1)
-    resize!(C.nzval, Cptr - 1)
-    return C
-end
-function _broadcast_notbinzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
-    # Allocate storage for dense C
-    nnzC = C.m * C.n
-    resize!(C.rowval, nnzC)
-    resize!(C.nzval, nnzC)
-    # Build structure for dense C
-    copy!(C.colptr, 1:C.m:(nnzC + 1))
-    for k in 1:C.m:(nnzC - C.m + 1)
-        copy!(C.rowval, k, 1:C.m)
-    end
-
-    # Populate C with fillvalue, then column by column from A and B
-    fill!(C.nzval, fillvalue)
-    @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(nnzC - 1))
-        # Determine rowval/nzval ranges in A and B corresponding to C's jth column
-        # If A(/B) has only one column, then A(/B)'s single column corresponds to C's jth column
-        # If A(/B) has more than one column, then A(/B)'s jth column corresponds to C's jth column
-        Aptr, Astop = A.n == 1 ? (A.colptr[1], A.colptr[2]) : (A.colptr[j], A.colptr[j + 1])
-        Bptr, Bstop = B.n == 1 ? (B.colptr[1], B.colptr[2]) : (B.colptr[j], B.colptr[j + 1])
-
-        # The following conditional chain separates column-pairs into three cases: (1) the
-        # columns have the same number of rows, or either or both columns have only one row
-        # and contain no stored entries; (2) A has more than one row, B has only one row,
-        # and B's column has a stored entry in that one row; (3) B has more than oen row,
-        # A has only one row, and A's column has a stored entry in that one row.
-
-        if A.m == B.m || (A.m == 1 && Aptr == Astop) || (B.m == 1 && Bptr == Bstop)
-            # Case (1): the columns have the same number of rows, or either or both
-            # columns have only one row and contain no stored entries.
-            #
-            # If both columns contain stored entries, then sweep (in step) through those
-            # stored entries till exhaustion of either of the columns' stored entries.
-            # For each stored entry / entry-pair encountered, compute and store the
-            # appropriate value in C's jth column.
-            while Aptr < Astop && Bptr < Bstop
-                rowA = A.rowval[Aptr]
-                rowB = B.rowval[Bptr]
-                if rowA < rowB # an entry stored in A but not in B
-                    valC = f(A.nzval[Aptr], zero(eltype(C)))
-                    rowC::eltype(C.rowval) = rowA
-                    Aptr += one(Aptr)
-                elseif rowB < rowA # an entry stored in B but not in A
-                    valC = f(zero(eltype(C)), B.nzval[Bptr])
-                    rowC = rowB
-                    Bptr += one(Bptr)
-                else # rowA == rowB, an entry stored in both A and B
-                    valC = f(A.nzval[Aptr], B.nzval[Bptr])
-                    rowC = rowA
-                    Aptr += one(Aptr)
-                    Bptr += one(Aptr)
-                end
-                valC != fillvalue && (C.nzval[jo + rowC] = valC)
-            end
-            # If B's column had no stored entries, or we exhausted the stored entries in
-            # B's column without exhausting those in A's column, sweep over the (remaining)
-            # stored entries in A's column. For each such stored entry encountered, compute
-            # and store the appropriate value in C's jth column.
-            while Aptr < Astop
-                valC = f(A.nzval[Aptr], zero(eltype(C)))
-                valC != fillvalue && (C.nzval[jo + A.rowval[Aptr]] = valC)
-                Aptr += one(Aptr)
-            end
-            # If A's column had no stored entries, or we exhausted the stored entries in
-            # A's column without exhausting those in B's column, sweep over the (remaining)
-            # stored entries in A's column. For each such stored entry encountered, compute
-            # and store the appropriate value in C's jth column.
-            while Bptr < Bstop
-                valC = f(zero(eltype(C)), B.nzval[Bptr])
-                valC != fillvalue && (C.nzval[jo + B.rowval[Bptr]] = valC)
-                Bptr += one(Bptr)
-            end
-        elseif A.m != 1
-            # Case (2): A has more than one row, B has only a single row, and B's column
-            # has a stored entry in that row (A.m != 1 && B.m == 1 && (Bptr == Bstop - 1)).
-            # TODO: This could be substantially more efficient.
-            valB = B.nzval[Bptr]
-            rowA = Aptr < Astop ? A.rowval[Aptr] : -one(eltype(A.rowval))
-            for rowB::eltype(B.rowval) in 1:C.m
-                if Aptr >= Astop || rowA != rowB
-                    valC = f(zero(eltype(C)), valB)
-                    rowC::eltype(C.rowval) = rowB
-                else
-                    valC = f(A.nzval[Aptr], valB)
-                    rowC = rowA
-                    Aptr += one(Aptr)
-                    rowA = Aptr < Astop ? A.rowval[Aptr] : -one(eltype(A.rowval))
-                end
-                valC != fillvalue && (C.nzval[jo + rowC] = valC)
-            end
-        else
-            # Case (3): B has more than one row, A has only a single row, and A's column
-            # has a stored entry in that row (B.m != 1 && A.m == 1 && (Aptr == Astop - 1)).
-            # TODO: This could be substantially more efficient.
-            valA = A.nzval[Aptr]
-            rowB = Bptr < Bstop ? B.rowval[Bptr] : -one(eltype(B.rowval))
-            for rowA::eltype(A.rowval) in 1:C.m
-                if Bptr >= Bstop || rowA != rowB
-                    valC = f(valA, zero(eltype(C)))
-                    rowC::eltype(C.rowval) = rowA
-                else
-                    valC = f(valA, B.nzval[Bptr])
-                    rowC = rowB
-                    Bptr += one(Bptr)
-                    rowB = Bptr < Bstop ? B.rowval[Bptr] : -one(eltype(B.rowval))
-                end
-                valC != fillvalue && (C.nzval[jo + rowC] = valC)
-            end
-        end
-    end
-    return C
-end
 
 
 ## Define unexported broadcast_zpreserving[!] methods
@@ -2095,6 +2268,15 @@ broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Unio
 broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{Tv,Ti}) =
                  broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
 
+
+# TODO: More appropriate location?
+conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
+
+# TODO: The following definitions should be deprecated.
+ceil{To}(::Type{To}, A::SparseMatrixCSC) = ceil.(To, A)
+floor{To}(::Type{To}, A::SparseMatrixCSC) = floor.(To, A)
+trunc{To}(::Type{To}, A::SparseMatrixCSC) = trunc.(To, A)
+round{To}(::Type{To}, A::SparseMatrixCSC) = round.(To, A)
 
 ## Binary arithmetic and boolean operators
 
