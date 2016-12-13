@@ -27,6 +27,9 @@ do33 = ones(3)
 end
 
 @testset "Sparse binary operation" begin
+    se33 = speye(3)
+    do33 = ones(3)
+
     @test all(Array(se33 + convert(SparseMatrixCSC{Float32,Int32}, se33)) == 2*eye(3))
     @test all(Array(se33 * convert(SparseMatrixCSC{Float32,Int32}, se33)) == eye(3))
 end
@@ -444,304 +447,71 @@ end
     @test Array(spdiagm(ones(2), -1, 3, 3)) == diagm(ones(2), -1)
 end
 
-@testset "Issues" begin
-    @testset "Issue #4986, reinterpret" begin
-        sfe22 = speye(Float64, 2)
-        mfe22 = eye(Float64, 2)
-        @test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)
+@testset "Issue #4986, reinterpret" begin
+    sfe22 = speye(Float64, 2)
+    mfe22 = eye(Float64, 2)
+    @test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)
+end
+
+@testset "Issue #5190" begin
+    @test_throws ArgumentError sparsevec([3,5,7],[0.1,0.0,3.2],4)
+end
+
+@testset "Issue #5386" begin
+    K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
+    @test length(K) == length(J) == length(V) == 1
+end
+
+@testset "https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ" begin
+    A = speye(Bool, 5)
+    @test find(A) == find(x -> x == true, A) == find(Array(A))
+end
+
+@testset "Issue #5824" begin
+    @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
+end
+
+@testset "Issue #5985" begin
+    @test sprand(Bool, 4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
+    @test sprand(Bool, 4, 5, 1.00) == sparse(ones(Bool, 4, 5))
+    sprb45nnzs = zeros(5)
+    for i=1:5
+        sprb45 = sprand(Bool, 4, 5, 0.5)
+        @test length(sprb45) == 20
+        sprb45nnzs[i] = sum(sprb45)[1]
+    end
+    @test 4 <= mean(sprb45nnzs) <= 16
+end
+
+@testset "Issue #5853, sparse diff" begin
+    for i=1:2, a=Any[[1 2 3], [1 2 3]', eye(3)]
+        @test all(diff(sparse(a),i) == diff(a,i))
+    end
+end
+
+# test for "access to undefined error" types that initially allocate elements as #undef
+@testset "Access to undefined error" begin
+    @test all(sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4]))
+    sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), 1)
+end
+
+@testset "Issue #6036" begin
+    P = spzeros(Float64, 3, 3)
+    for i = 1:3
+        P[i,i] = i
     end
 
-    @testset "Issue #5190" begin
-        @test_throws ArgumentError sparsevec([3,5,7],[0.1,0.0,3.2],4)
-    end
+    @test minimum(P) === 0.0
+    @test maximum(P) === 3.0
+    @test minimum(-P) === -3.0
+    @test maximum(-P) === 0.0
 
-    @testset "Issue #5386" begin
-        K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
-        @test length(K) == length(J) == length(V) == 1
-    end
+    @test maximum(P, (1,)) == [1.0 2.0 3.0]
+    @test maximum(P, (2,)) == reshape([1.0,2.0,3.0],3,1)
+    @test maximum(P, (1,2)) == reshape([3.0],1,1)
 
-    @testset "https://groups.google.com/d/msg/julia-users/Yq4dh8NOWBQ/GU57L90FZ3EJ" begin
-        A = speye(Bool, 5)
-        @test find(A) == find(x -> x == true, A) == find(Array(A))
-    end
-
-    @testset "Issue #5824" begin
-        @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
-    end
-
-    @testset "Issue #5985" begin
-        @test sprand(Bool, 4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
-        @test sprand(Bool, 4, 5, 1.00) == sparse(ones(Bool, 4, 5))
-        sprb45nnzs = zeros(5)
-        for i=1:5
-            sprb45 = sprand(Bool, 4, 5, 0.5)
-            @test length(sprb45) == 20
-            sprb45nnzs[i] = sum(sprb45)[1]
-        end
-        @test 4 <= mean(sprb45nnzs) <= 16
-    end
-
-    @testset "Issue #5853, sparse diff" begin
-        for i=1:2, a=Any[[1 2 3], [1 2 3]', eye(3)]
-            @test all(diff(sparse(a),i) == diff(a,i))
-        end
-    end
-
-    # test for "access to undefined error" types that initially allocate elements as #undef
-    @testset "Access to undefined error" begin
-        @test all(sparse(1:2, 1:2, Number[1,2])^2 == sparse(1:2, 1:2, [1,4]))
-        sd1 = diff(sparse([1,1,1], [1,2,3], Number[1,2,3]), 1)
-    end
-
-    @testset "Issue #6036" begin
-        P = spzeros(Float64, 3, 3)
-        for i = 1:3
-            P[i,i] = i
-        end
-
-        @test minimum(P) === 0.0
-        @test maximum(P) === 3.0
-        @test minimum(-P) === -3.0
-        @test maximum(-P) === 0.0
-
-        @test maximum(P, (1,)) == [1.0 2.0 3.0]
-        @test maximum(P, (2,)) == reshape([1.0,2.0,3.0],3,1)
-        @test maximum(P, (1,2)) == reshape([3.0],1,1)
-
-        @test maximum(sparse(-ones(3,3))) == -1
-        @test minimum(sparse(ones(3,3))) == 1
-    end
-
-    @testset "Issue 7507" begin
-        @test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10)
-    end
-
-    @testset "Issue 7650" begin
-        let S = spzeros(3, 3)
-            @test size(reshape(S, 9, 1)) == (9,1)
-        end
-
-        let X = eye(5), M = rand(5,4), C = spzeros(3,3)
-            SX = sparse(X); SM = sparse(M)
-            VX = vec(X); VSX = vec(SX)
-            VM = vec(M); VSM1 = vec(SM); VSM2 = sparsevec(M)
-            VC = vec(C)
-            @test VX == VSX
-            @test VM == VSM1
-            @test VM == VSM2
-            @test size(VC) == (9,)
-            @test nnz(VC) == 0
-            @test nnz(VSX) == 5
-        end
-    end
-
-    @testset "Issue 7677" begin
-        let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
-            B = reshape(A,25,1)
-            @test A == ACPY
-            C = reinterpret(Int64, A, (25, 1))
-            @test A == ACPY
-            D = reinterpret(Int64, copy(B))
-            @test C == D
-        end
-    end
-
-    @testset "Issue #8225" begin
-        @test_throws ArgumentError sparse([0],[-1],[1.0],2,2)
-    end
-
-    @testset "Issue #8363" begin
-        @test_throws ArgumentError sparsevec(Dict(-1=>1,1=>2))
-    end
-
-    @testset "Issue #8976" begin
-        @test conj.(sparse([1im])) == sparse(conj([1im]))
-        @test conj!(sparse([1im])) == sparse(conj!([1im]))
-    end
-
-    @testset "Issue #9525" begin
-        @test_throws ArgumentError sparse([3], [5], 1.0, 3, 3)
-    end
-
-    @testset "Issue #9917" begin
-        @test sparse([]') == reshape(sparse([]), 1, 0)
-        @test Array(sparse([])) == zeros(0)
-        @test_throws BoundsError sparse([])[1]
-        @test_throws BoundsError sparse([])[1] = 1
-        x = speye(100)
-        @test_throws BoundsError x[-10:10]
-    end
-
-    @testset "Issue 10407" begin
-        @test maximum(spzeros(5, 5)) == 0.0
-        @test minimum(spzeros(5, 5)) == 0.0
-    end
-
-    @testset "Issue #10411" begin
-        for (m,n) in ((2,-2),(-2,2),(-2,-2))
-            @test_throws ArgumentError spzeros(m,n)
-            @test_throws ArgumentError speye(m,n)
-            @test_throws ArgumentError sprand(m,n,0.2)
-        end
-    end
-
-    @testset "issue #10837, sparse constructors from special matrices" begin
-        T = Tridiagonal(randn(4),randn(5),randn(4))
-        S = sparse(T)
-        @test norm(Array(T) - Array(S)) == 0.0
-        T = SymTridiagonal(randn(5),rand(4))
-        S = sparse(T)
-        @test norm(Array(T) - Array(S)) == 0.0
-        B = Bidiagonal(randn(5),randn(4),true)
-        S = sparse(B)
-        @test norm(Array(B) - Array(S)) == 0.0
-        B = Bidiagonal(randn(5),randn(4),false)
-        S = sparse(B)
-        @test norm(Array(B) - Array(S)) == 0.0
-    end
-
-    @testset "Issue #12177, error path if triplet vectors are not all the same length" begin
-        @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
-        @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
-    end
-
-    @testset "Issue 12118: sparse matrices are closed under +, -, min, max" begin
-        let
-            A12118 = sparse([1,2,3,4,5], [1,2,3,4,5], [1,2,3,4,5])
-            B12118 = sparse([1,2,4,5],   [1,2,3,5],   [2,1,-1,-2])
-
-            @test A12118 + B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [3,3,3,-1,4,3])
-            @test typeof(A12118 + B12118) == SparseMatrixCSC{Int,Int}
-
-            @test A12118 - B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [-1,1,3,1,4,7])
-            @test typeof(A12118 - B12118) == SparseMatrixCSC{Int,Int}
-
-            @test max(A12118, B12118) == sparse([1,2,3,4,5], [1,2,3,4,5], [2,2,3,4,5])
-            @test typeof(max(A12118, B12118)) == SparseMatrixCSC{Int,Int}
-
-            @test min(A12118, B12118) == sparse([1,2,4,5], [1,2,3,5], [1,1,-1,-2])
-            @test typeof(min(A12118, B12118)) == SparseMatrixCSC{Int,Int}
-        end
-    end
-
-    @testset "Issue #13008" begin
-        @test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
-        @test_throws ArgumentError sparse(Int[], collect(1:5), collect(1:5))
-    end
-
-    @testset "Issue #13024" begin
-        let
-            A13024 = sparse([1,2,3,4,5], [1,2,3,4,5], fill(true,5))
-            B13024 = sparse([1,2,4,5],   [1,2,3,5],   fill(true,4))
-
-            @test A13024 & B13024 == sparse([1,2,5], [1,2,5], fill(true,3))
-            @test typeof(A13024 & B13024) == SparseMatrixCSC{Bool,Int}
-
-            @test A13024 | B13024 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-            @test typeof(A13024 | B13024) == SparseMatrixCSC{Bool,Int}
-
-            @test A13024 ⊻ B13024 == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
-            @test typeof(A13024 ⊻ B13024) == SparseMatrixCSC{Bool,Int}
-
-            @test max(A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-            @test typeof(max(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
-
-            @test min(A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
-            @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
-
-            for op in (+, -, &, |, xor)
-                @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
-            end
-            for op in (max, min)
-                @test op(A13024, B13024) == op.(Array(A13024), Array(B13024))
-            end
-        end
-    end
-
-    @testset "Issue #13792, use sparse triangular solvers for sparse triangular solves" begin
-        let
-            n = 100
-            A = sprandn(n, n, 0.5) + sqrt(n)*I
-            x = LowerTriangular(A)*ones(n)
-            @test LowerTriangular(A)\x ≈ ones(n)
-            x = UpperTriangular(A)*ones(n)
-            @test UpperTriangular(A)\x ≈ ones(n)
-            A[2,2] = 0
-            dropzeros!(A)
-            @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
-            @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
-        end
-    end
-
-    @testset "https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA" begin
-        @test sparse([1,1], [1,1], [true, true]) == sparse([1,1], [1,1], [true, true], 1, 1) == fill(true, 1, 1)
-        @test sparsevec([1,1], [true, true]) == sparsevec([1,1], [true, true], 1) == fill(true, 1)
-    end
-
-    @testset "Issue #16073" begin
-        @inferred sprand(1, 1, 1.0)
-        @inferred sprand(1, 1, 1.0, rand, Float64)
-        @inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))
-    end
-
-    @testset "Issue #14816" begin
-        let m = 5
-            intmat = fill(1, m, m)
-            ltintmat = LowerTriangular(rand(1:5, m, m))
-            @test isapprox(At_ldiv_B(ltintmat, sparse(intmat)), At_ldiv_B(ltintmat, intmat))
-        end
-    end
-
-    # Test temporary fix for issue #16548 in PR #16979. Brittle. Expect to remove with `\` revisions.
-    @testset "Issue #16548" begin
-        @test which(\, (SparseMatrixCSC, AbstractVecOrMat)).module == Base.SparseArrays
-    end
-
-    # Check that `broadcast` methods specialized for unary operations over `SparseMatrixCSC`s
-    # are called. (Issue #18705.) EDIT: #19239 unified broadcast over a single sparse matrix,
-    # eliminating the former operation classes.
-    @testset "Issue #18705" begin
-        @test isa(sin.(spdiagm(1.0:5.0)), SparseMatrixCSC)
-    end
-
-    @testset "Issue #19225" begin
-        let X = sparse([1 -1; -1 1])
-            for T in (Symmetric, Hermitian)
-                Y = T(copy(X))
-                _Y = similar(Y)
-                copy!(_Y, Y)
-                @test _Y == Y
-
-                W = T(copy(X), :L)
-                copy!(W, Y)
-                @test W.data == Y.data
-                @test W.uplo != Y.uplo
-
-                W[1,1] = 4
-                @test W == T(sparse([4 -1; -1 1]))
-                @test_throws ArgumentError (W[1,2] = 2)
-
-                @test Y + I == T(sparse([2 -1; -1 2]))
-                @test Y - I == T(sparse([0 -1; -1 0]))
-                @test Y * I == Y
-
-                @test Y + 1 == T(sparse([2 0; 0 2]))
-                @test Y - 1 == T(sparse([0 -2; -2 0]))
-                @test Y * 2 == T(sparse([2 -2; -2 2]))
-                @test Y / 1 == Y
-            end
-        end
-    end
-
-    @testset "Issue #19304" begin
-        @inferred hcat(sparse(rand(2,1)), eye(2,2))
-    end
-
-   # Check that `broadcast` methods specialized for unary operations over
-   # `SparseMatrixCSC`s determine a reasonable return type.
-    @testset "Issue #18974" begin
-        @test eltype(sin.(spdiagm(Int64(1):Int64(4)))) == Float64
-    end
+    @test maximum(sparse(-ones(3,3))) == -1
+    @test minimum(sparse(ones(3,3))) == 1
 end
 
 @testset "Unary functions" begin
@@ -1116,6 +886,57 @@ end
     end
 end
 
+@testset "Issue 7507" begin
+    @test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10)
+end
+
+@testset "Issue 7650" begin
+    let S = spzeros(3, 3)
+        @test size(reshape(S, 9, 1)) == (9,1)
+    end
+
+    let X = eye(5), M = rand(5,4), C = spzeros(3,3)
+        SX = sparse(X); SM = sparse(M)
+        VX = vec(X); VSX = vec(SX)
+        VM = vec(M); VSM1 = vec(SM); VSM2 = sparsevec(M)
+        VC = vec(C)
+        @test VX == VSX
+        @test VM == VSM1
+        @test VM == VSM2
+        @test size(VC) == (9,)
+        @test nnz(VC) == 0
+        @test nnz(VSX) == 5
+    end
+end
+
+@testset "Issue 7677" begin
+    let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
+        B = reshape(A,25,1)
+        @test A == ACPY
+        C = reinterpret(Int64, A, (25, 1))
+        @test A == ACPY
+        D = reinterpret(Int64, copy(B))
+        @test C == D
+    end
+end
+
+@testset "Issue #8225" begin
+    @test_throws ArgumentError sparse([0],[-1],[1.0],2,2)
+end
+
+@testset "Issue #8363" begin
+    @test_throws ArgumentError sparsevec(Dict(-1=>1,1=>2))
+end
+
+@testset "Issue #8976" begin
+    @test conj.(sparse([1im])) == sparse(conj([1im]))
+    @test conj!(sparse([1im])) == sparse(conj!([1im]))
+end
+
+@testset "Issue #9525" begin
+    @test_throws ArgumentError sparse([3], [5], 1.0, 3, 3)
+end
+
 @testset "indmax, indmin, findmax, findmin" begin
     let S = sprand(100,80, 0.5), A = Array(S)
         @test indmax(S) == indmax(A)
@@ -1301,6 +1122,43 @@ end
         @test lufact(a)\[2.0, 3.0] ≈ [2.0, 3.0]
         @test cholfact(a)\[2.0, 3.0] ≈ [2.0, 3.0]
     end
+end
+
+@testset "Issue #9917" begin
+    @test sparse([]') == reshape(sparse([]), 1, 0)
+    @test Array(sparse([])) == zeros(0)
+    @test_throws BoundsError sparse([])[1]
+    @test_throws BoundsError sparse([])[1] = 1
+    x = speye(100)
+    @test_throws BoundsError x[-10:10]
+end
+
+@testset "Issue 10407" begin
+    @test maximum(spzeros(5, 5)) == 0.0
+    @test minimum(spzeros(5, 5)) == 0.0
+end
+
+@testset "Issue #10411" begin
+    for (m,n) in ((2,-2),(-2,2),(-2,-2))
+        @test_throws ArgumentError spzeros(m,n)
+        @test_throws ArgumentError speye(m,n)
+        @test_throws ArgumentError sprand(m,n,0.2)
+    end
+end
+
+@testset "issue #10837, sparse constructors from special matrices" begin
+    T = Tridiagonal(randn(4),randn(5),randn(4))
+    S = sparse(T)
+    @test norm(Array(T) - Array(S)) == 0.0
+    T = SymTridiagonal(randn(5),rand(4))
+    S = sparse(T)
+    @test norm(Array(T) - Array(S)) == 0.0
+    B = Bidiagonal(randn(5),randn(4),true)
+    S = sparse(B)
+    @test norm(Array(B) - Array(S)) == 0.0
+    B = Bidiagonal(randn(5),randn(4),false)
+    S = sparse(B)
+    @test norm(Array(B) - Array(S)) == 0.0
 end
 
 @testset "spdiagm promotion" begin
@@ -1632,6 +1490,30 @@ end
     @test I - A == I - Array(A)
 end
 
+@testset "Issue #12177, error path if triplet vectors are not all the same length" begin
+    @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
+    @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
+end
+
+@testset "Issue 12118: sparse matrices are closed under +, -, min, max" begin
+    let
+        A12118 = sparse([1,2,3,4,5], [1,2,3,4,5], [1,2,3,4,5])
+        B12118 = sparse([1,2,4,5],   [1,2,3,5],   [2,1,-1,-2])
+
+        @test A12118 + B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [3,3,3,-1,4,3])
+        @test typeof(A12118 + B12118) == SparseMatrixCSC{Int,Int}
+
+        @test A12118 - B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [-1,1,3,1,4,7])
+        @test typeof(A12118 - B12118) == SparseMatrixCSC{Int,Int}
+
+        @test max(A12118, B12118) == sparse([1,2,3,4,5], [1,2,3,4,5], [2,2,3,4,5])
+        @test typeof(max(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+
+        @test min(A12118, B12118) == sparse([1,2,4,5], [1,2,3,5], [1,1,-1,-2])
+        @test typeof(min(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+    end
+end
+
 @testset "Sparse matrix norms" begin
     Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
     Ar = sprandn(10,10,.1)
@@ -1691,6 +1573,40 @@ end
     @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
 end
 
+@testset "Issue #13008" begin
+    @test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)
+    @test_throws ArgumentError sparse(Int[], collect(1:5), collect(1:5))
+end
+
+@testset "Issue #13024" begin
+    let
+        A13024 = sparse([1,2,3,4,5], [1,2,3,4,5], fill(true,5))
+        B13024 = sparse([1,2,4,5],   [1,2,3,5],   fill(true,4))
+
+        @test A13024 & B13024 == sparse([1,2,5], [1,2,5], fill(true,3))
+        @test typeof(A13024 & B13024) == SparseMatrixCSC{Bool,Int}
+
+        @test A13024 | B13024 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+        @test typeof(A13024 | B13024) == SparseMatrixCSC{Bool,Int}
+
+        @test A13024 ⊻ B13024 == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
+        @test typeof(A13024 ⊻ B13024) == SparseMatrixCSC{Bool,Int}
+
+        @test max(A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+        @test typeof(max(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+
+        @test min(A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
+        @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+
+        for op in (+, -, &, |, xor)
+            @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
+        end
+        for op in (max, min)
+            @test op(A13024, B13024) == op.(Array(A13024), Array(B13024))
+        end
+    end
+end
+
 @testset "spones" begin
     let A = 2. * speye(5,5)
         @test Array(spones(A)) == eye(Array(A))
@@ -1723,6 +1639,26 @@ end
     end
 end
 
+@testset "Issue #13792, use sparse triangular solvers for sparse triangular solves" begin
+    let
+        n = 100
+        A = sprandn(n, n, 0.5) + sqrt(n)*I
+        x = LowerTriangular(A)*ones(n)
+        @test LowerTriangular(A)\x ≈ ones(n)
+        x = UpperTriangular(A)*ones(n)
+        @test UpperTriangular(A)\x ≈ ones(n)
+        A[2,2] = 0
+        dropzeros!(A)
+        @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
+        @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
+    end
+end
+
+@testset "https://groups.google.com/forum/#!topic/julia-dev/QT7qpIpgOaA" begin
+    @test sparse([1,1], [1,1], [true, true]) == sparse([1,1], [1,1], [true, true], 1, 1) == fill(true, 1, 1)
+    @test sparsevec([1,1], [true, true]) == sparsevec([1,1], [true, true], 1) == fill(true, 1)
+end
+
 @testset "issparse for specialized matrix types" begin
     let
         m = sprand(10, 10, 0.1)
@@ -1748,6 +1684,12 @@ end
         m = sprand(Int32, 10, 10, 0.1)
         @test eltype(m) == Int32
     end
+end
+
+@testset "Issue #16073" begin
+    @inferred sprand(1, 1, 1.0)
+    @inferred sprand(1, 1, 1.0, rand, Float64)
+    @inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))
 end
 
 # Test that concatenations of combinations of sparse matrices with sparse matrices or dense
@@ -1777,10 +1719,63 @@ end
     end
 end
 
+@testset "Issue #14816" begin
+    let m = 5
+        intmat = fill(1, m, m)
+        ltintmat = LowerTriangular(rand(1:5, m, m))
+        @test isapprox(At_ldiv_B(ltintmat, sparse(intmat)), At_ldiv_B(ltintmat, intmat))
+    end
+end
+
+# Test temporary fix for issue #16548 in PR #16979. Brittle. Expect to remove with `\` revisions.
+@testset "Issue #16548" begin
+    @test which(\, (SparseMatrixCSC, AbstractVecOrMat)).module == Base.SparseArrays
+end
+
 @testset "Row indexing a SparseMatrixCSC with non-Int integer type" begin
     let A = sparse(UInt32[1,2,3], UInt32[1,2,3], [1.0,2.0,3.0])
         @test A[1,1:3] == A[1,:] == [1,0,0]
     end
+end
+
+# Check that `broadcast` methods specialized for unary operations over `SparseMatrixCSC`s
+# are called. (Issue #18705.) EDIT: #19239 unified broadcast over a single sparse matrix,
+# eliminating the former operation classes.
+@testset "Issue #18705" begin
+    @test isa(sin.(spdiagm(1.0:5.0)), SparseMatrixCSC)
+end
+
+@testset "Issue #19225" begin
+    let X = sparse([1 -1; -1 1])
+        for T in (Symmetric, Hermitian)
+            Y = T(copy(X))
+            _Y = similar(Y)
+            copy!(_Y, Y)
+            @test _Y == Y
+
+            W = T(copy(X), :L)
+            copy!(W, Y)
+            @test W.data == Y.data
+            @test W.uplo != Y.uplo
+
+            W[1,1] = 4
+            @test W == T(sparse([4 -1; -1 1]))
+            @test_throws ArgumentError (W[1,2] = 2)
+
+            @test Y + I == T(sparse([2 -1; -1 2]))
+            @test Y - I == T(sparse([0 -1; -1 0]))
+            @test Y * I == Y
+
+            @test Y + 1 == T(sparse([2 0; 0 2]))
+            @test Y - 1 == T(sparse([0 -2; -2 0]))
+            @test Y * 2 == T(sparse([2 -2; -2 2]))
+            @test Y / 1 == Y
+        end
+    end
+end
+
+@testset "Issue #19304" begin
+    @inferred hcat(sparse(rand(2,1)), eye(2,2))
 end
 
 # Test that broadcast[!](f, [C::SparseMatrixCSC], A::SparseMatrixCSC, B::SparseMatrixCSC)
@@ -1808,6 +1803,12 @@ end
             end
         end
     end
+end
+
+# Check that `broadcast` methods specialized for unary operations over
+# `SparseMatrixCSC`s determine a reasonable return type.
+@testset "Issue #18974" begin
+    @test eltype(sin.(spdiagm(Int64(1):Int64(4)))) == Float64
 end
 
 @testset "map[!] over sparse matrices" begin
