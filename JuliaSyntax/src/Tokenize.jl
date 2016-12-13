@@ -8,7 +8,7 @@ include("lexer.jl")
 import .Lexers: tokenize
 import .Tokens: untokenize
 
-export tokenize
+export tokenize, untokenize, Tokens
 
 if VERSION > v"0.5-"
     include("precompile.jl")
