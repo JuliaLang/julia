@@ -27,8 +27,8 @@ immutable DateFormat{D, T<:Tuple, L<:DateLocale, N}
     result_type::Type{D}
     tokens::T
     locale::L
-    field_defaults::NTuple{N, Int}
-    field_order::NTuple{N,Int}
+    field_defaults::NTuple{N,Int64}
+    field_order::NTuple{N,Int64}
 end
 
 include("io-util.jl")
@@ -45,17 +45,17 @@ end
 for c in "yYmdHMS"
     @eval begin
         @inline function tryparsenext(d::DatePart{$c}, str, i, len)
-            tryparsenext_base10(str,i,len,d.width)
+            tryparsenext_base10(str, i, len, d.fixed ? d.width : 1, d.fixed ? d.width : 20)
         end
     end
 end
 
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
-    tryparsenext_base10_frac(str,i,len,d.width)
-end
-
-@inline function tryparsenext(d::DatePart{'s'}, str, i, len)
-    tryparsenext_base10_frac(str,i,len,d.width)
+    ms, ii = tryparsenext_base10(str, i, len, d.fixed ? d.width : 1, d.width)
+    if !isnull(ms)
+        ms = Nullable{Int}(get(ms) * 10 ^ (3 - (ii - i)))
+    end
+    return ms, ii
 end
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
@@ -122,7 +122,7 @@ end
 for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         R = Nullable{Int}
-        c, ii = tryparsenext_word(str, i, len, locale, d.width)
+        c, ii = tryparsenext_word(str, i, len, locale, d.fixed ? d.width : typemax(Int))
         word = str[i:ii-1]
         x = $fn(lowercase(word), locale)
         ((x == 0 ? R() : R(x)), ii)
@@ -355,7 +355,7 @@ macro dateformat_str(str)
 end
 
 # Standard formats
-const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
+const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.sss")
 const ISODateFormat = DateFormat("yyyy-mm-dd", :english, Date)
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
