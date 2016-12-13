@@ -37,6 +37,7 @@ function testall(srcdir::AbstractString)
 
             seek(buf, 0)
             str = String(take!(buf))
+
             collect(Tokenize.tokenize(str))
 
             for token in tokens
