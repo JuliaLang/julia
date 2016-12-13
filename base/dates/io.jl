@@ -45,13 +45,13 @@ end
 for c in "yYmdHMS"
     @eval begin
         @inline function tryparsenext(d::DatePart{$c}, str, i, len)
-            tryparsenext_base10(str,i,len,d.fixed ? d.width : 1,d.width)
+            tryparsenext_base10(str, i, len, d.fixed ? d.width : 1, d.fixed ? d.width : 20)
         end
     end
 end
 
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
-    ms, ii = tryparsenext_base10(str,i,len,d.fixed ? d.width : 1,d.width)
+    ms, ii = tryparsenext_base10(str, i, len, d.fixed ? d.width : 1, d.width)
     if !isnull(ms)
         ms = Nullable{Int}(get(ms) * 10 ^ (3 - (ii - i)))
     end
@@ -122,7 +122,7 @@ end
 for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         R = Nullable{Int}
-        c, ii = tryparsenext_word(str, i, len, locale, d.width)
+        c, ii = tryparsenext_word(str, i, len, locale, d.fixed ? d.width : typemax(Int))
         word = str[i:ii-1]
         x = $fn(lowercase(word), locale)
         ((x == 0 ? R() : R(x)), ii)
