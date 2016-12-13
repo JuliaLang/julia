@@ -314,7 +314,7 @@ end
     end
 end
 
-@testset "Conjuagate" begin
+@testset "conjugate" begin
     cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     @test Array(conj.(cA)) == conj(Array(cA))
     @test Array(conj!(copy(cA))) == conj(Array(cA))
