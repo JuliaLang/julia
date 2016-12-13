@@ -88,49 +88,22 @@ function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{
     end
 end
 
-@inline function tryparsenext_base10_digit(str,i, len)
-    R = Nullable{Int}
-    i > len && @goto error
-    c,ii = next(str,i)
-    '0' <= c <= '9' || @goto error
-    return R(c-'0'), ii
-
-    @label error
-    return R(), i
-end
-
-@inline function tryparsenext_base10(str,i,len, maxdig)
-    R = Nullable{Int}
-    r,i = @chk1 tryparsenext_base10_digit(str,i, len)
-    for j = 2:maxdig
-        d,i = @chk1 tryparsenext_base10_digit(str,i,len) done
-        r = r*10 + d
-    end
-    @label done
-    return R(r), i
-
-    @label error
-    return R(), i
-end
-
-@inline function tryparsenext_base10_frac(str,i,len,maxdig)
-    R = Nullable{Int}
-    r,i = @chk1 tryparsenext_base10_digit(str,i,len)
-    for j = 2:maxdig
-        nd,i = tryparsenext_base10_digit(str,i,len)
-        if isnull(nd)
-            for k = j:maxdig
-                r *= 10
-            end
+@inline function tryparsenext_base10(str::AbstractString, i::Int, len::Int, min_width::Int=1, max_width::Int=0)
+    i > len && (return Nullable{Int}(), i)
+    min_pos = min_width <= 0 ? i : i + min_width - 1
+    max_pos = max_width <= 0 ? len : min(i + max_width - 1, len)
+    d::Int = 0
+    @inbounds while i <= max_pos
+        c, j = next(str, i)
+        if '0' <= c <= '9'
+            d = d * 10 + (c - '0')
+        else
             break
         end
-        d = get(nd)
-        r = 10*r + d
+        i = j
     end
-    return R(r), i
-
-    @label error
-    return R(), i
+    i > min_pos || (return Nullable{Int}(), i)
+    return Nullable{Int}(d), i
 end
 
 @inline function tryparsenext_char(str,i,len,cc::Char)::Tuple{Nullable{Char},Int}

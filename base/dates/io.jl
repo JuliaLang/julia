@@ -45,17 +45,17 @@ end
 for c in "yYmdHMS"
     @eval begin
         @inline function tryparsenext(d::DatePart{$c}, str, i, len)
-            tryparsenext_base10(str,i,len,d.width)
+            tryparsenext_base10(str,i,len,d.fixed ? d.width : 1,d.width)
         end
     end
 end
 
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
-    tryparsenext_base10_frac(str,i,len,d.width)
-end
-
-@inline function tryparsenext(d::DatePart{'s'}, str, i, len)
-    tryparsenext_base10_frac(str,i,len,d.width)
+    ms, ii = tryparsenext_base10(str,i,len,d.fixed ? d.width : 1,d.width)
+    if !isnull(ms)
+        ms = Nullable{Int}(get(ms) * 10 ^ (3 - (ii - i)))
+    end
+    return ms, ii
 end
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
