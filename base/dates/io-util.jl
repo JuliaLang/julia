@@ -106,17 +106,6 @@ end
     return Nullable{Int}(d), i
 end
 
-@inline function tryparsenext_char(str,i,len,cc::Char)::Tuple{Nullable{Char},Int}
-    R = Nullable{Char}
-    i > len && @goto error
-    c,ii = next(str,i)
-    c == cc || @goto error
-    return R(c), ii
-
-    @label error
-    return R(), i
-end
-
 # fast version for English
 @inline function tryparsenext_word(str, i, len, locale::DateLocale{:english}, maxchars=0)
     max_pos = maxchars <= 0 ? len : min(i + maxchars - 1, len)
@@ -129,12 +118,11 @@ end
 end
 
 @inline function tryparsenext_word(str, i, len, locale, maxchars=0)
-    j = 1
-    while (maxchars <= 0 || j <= maxchars) && i <= len
+    max_pos = maxchars <= 0 ? len : min(chr2ind(str, ind2chr(str,i) + maxchars - 1), len)
+    while i <= max_pos
         c, ii = next(str, i)
         !isalpha(c) && break
         i = ii
-        j += 1
     end
     return Nullable{Int}(0), i
 end
