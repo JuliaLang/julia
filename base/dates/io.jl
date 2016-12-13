@@ -355,7 +355,7 @@ macro dateformat_str(str)
 end
 
 # Standard formats
-const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
+const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.sss")
 const ISODateFormat = DateFormat("yyyy-mm-dd", :english, Date)
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
