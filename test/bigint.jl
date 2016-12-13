@@ -322,6 +322,16 @@ let padding = 4, low = big(4), high = big(2^20)
     @test oct(high, padding) == "4000000"
     @test dec(high, padding) == "1048576"
     @test hex(high, padding) == "100000"
+
+    @test bin(-low, padding) == "-0100" # handle negative numbers correctly
+    @test oct(-low, padding) == "-0004"
+    @test dec(-low, padding) == "-0004"
+    @test hex(-low, padding) == "-0004"
+
+    @test bin(-high, padding) == "-100000000000000000000"
+    @test oct(-high, padding) == "-4000000"
+    @test dec(-high, padding) == "-1048576"
+    @test hex(-high, padding) == "-100000"
 end
 
 @test isqrt(big(4)) == 2

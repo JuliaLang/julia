@@ -518,23 +518,29 @@ oct(n::BigInt) = base( 8, n)
 dec(n::BigInt) = base(10, n)
 hex(n::BigInt) = base(16, n)
 
-for f in (:bin, :oct, :dec, :hex)
-    @eval function ($f)(n::BigInt, pad::Int)
-        b = IOBuffer()
-        res = ($f)(n)
-        diff = pad - length(res)
-        for _ in 1:diff
-            write(b, "0")
-        end
-        write(b, res)
-        String(b)
-    end
-end
+bin(n::BigInt, pad::Int) = base( 2, n, pad)
+oct(n::BigInt, pad::Int) = base( 8, n, pad)
+dec(n::BigInt, pad::Int) = base(10, n, pad)
+hex(n::BigInt, pad::Int) = base(16, n, pad)
 
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
     unsafe_wrap(String, p, true)
+end
+
+function base(b::Integer, n::BigInt, pad::Integer)
+    s = base(b, n)
+    buf = IOBuffer()
+    if n < 0
+        s = s[2:end]
+        write(buf, '-')
+    end
+    for i in 1:pad-sizeof(s) # `s` is known to be ASCII, and `length` is slower
+        write(buf, '0')
+    end
+    write(buf, s)
+    String(buf)
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)
