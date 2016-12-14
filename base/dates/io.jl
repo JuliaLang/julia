@@ -383,7 +383,7 @@ the [`DateFormat`](@ref) object. Similar to
 `DateTime(::AbstractString, ::AbstractString)` but more efficient when repeatedly parsing
 similarly formatted date strings with a pre-created `DateFormat` object.
 """
-DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = tryfailparse(dt,df)
+DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = parse(df,dt)
 
 """
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
@@ -399,7 +399,7 @@ Date(dt::AbstractString,format::AbstractString;locale=:english) = Date(dt,DateFo
 
 Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
-Date(dt::AbstractString,df::DateFormat=ISODateFormat) = Date(tryfailparse(dt,df))
+Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(df,dt)
 
 format(io, t, dt, locale) = format(io, t, dt)
 
@@ -471,11 +471,11 @@ end
 # vectorized
 DateTime{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = DateTime(Y,DateFormat(format,locale))
 function DateTime{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
-    return reshape(DateTime[tryfailparse(y,df) for y in Y], size(Y))
+    return reshape(DateTime[parse(df,y) for y in Y], size(Y))
 end
 Date{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Date(Y,DateFormat(format,locale))
 function Date{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateFormat)
-    return reshape(Date[Date(tryfailparse(y,df)) for y in Y], size(Y))
+    return reshape(Date[Date(parse(df,y)) for y in Y], size(Y))
 end
 
 format{T<:TimeType}(Y::AbstractArray{T},fmt::AbstractString;locale::AbstractString="english") = format(Y,DateFormat(fmt,locale))

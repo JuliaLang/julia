@@ -12,11 +12,11 @@ macro chk1(expr,label=:error)
 end
 
 
-@generated function _tryparse{T, N}(fmt::DateFormat{T, NTuple{N}}, str::AbstractString, raise::Bool)
+@generated function tryparse_internal{T, N}(df::DateFormat{T, NTuple{N}}, str::AbstractString, raise::Bool=false)
     quote
         R = Nullable{NTuple{7,Int64}}
-        t = fmt.tokens
-        l = fmt.locale
+        t = df.tokens
+        l = df.locale
         len = endof(str)
 
         state = start(str)
@@ -31,38 +31,34 @@ end
 
         @label done
         parts = Base.@ntuple $N val
-        return R(reorder_args(parts, fmt.field_order, fmt.field_defaults, err_idx)::NTuple{7,Int64})
+        return R(reorder_args(parts, df.field_order, df.field_defaults, err_idx)::NTuple{7,Int64})
 
         @label error
-        raise && _raiseexception(t, err_idx, state)
+        raise && throw(gen_exception(t, err_idx, state))
         return R()
     end
 end
 
-function _raiseexception(tokens, err_idx, state)
+function gen_exception(tokens, err_idx, state)
     if err_idx > length(tokens)
-        throw(ArgumentError("Found extra characters at the end of date time string"))
+        ArgumentError("Found extra characters at the end of date time string")
     else
-        throw(ArgumentError("Unable to parse date time. Expected token $(tokens[err_idx]) at char $(state)"))
+        ArgumentError("Unable to parse date time. Expected token $(tokens[err_idx]) at char $(state)")
     end
-end
-
-function tryfailparse{T}(dt, df::DateFormat{T})
-    maybedt = _tryparse(df, dt, true)
-    _create_timeobj(maybedt.value, T)
 end
 
 @inline _create_timeobj(tup, T::Type{DateTime}) = T(tup...)
 @inline _create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
 
-function Base.tryparse{T}(df::DateFormat{T}, dt::AbstractString)
+function Base.tryparse{T}(df::DateFormat{T}, str::AbstractString)
     R = Nullable{T}
-    tup = _tryparse(df, dt, false)
-    if isnull(tup)
-        R()
-    else
-        R(_create_timeobj(tup.value, T))
-    end
+    nt = tryparse_internal(df, str, false)
+    Nullable{T}(isnull(nt) ? nothing : _create_timeobj(nt.value, T))
+end
+
+function Base.parse{T}(df::DateFormat{T}, str::AbstractString)
+    nt = tryparse_internal(df, str, true)
+    _create_timeobj(nt.value, T)
 end
 
 function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{Ni}, valid_till)
