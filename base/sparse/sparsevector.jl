@@ -402,7 +402,7 @@ function getindex(x::SparseMatrixCSC, I::UnitRange, j::Integer)
     # Restrict to the selected rows
     r1 = searchsortedfirst(x.rowval, first(I), c1, c2, Forward)
     r2 = searchsortedlast(x.rowval, last(I), c1, c2, Forward)
-    SparseVector(length(I), x.rowval[r1:r2] - first(I) + 1, x.nzval[r1:r2])
+    SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
