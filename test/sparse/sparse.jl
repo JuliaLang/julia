@@ -1692,6 +1692,9 @@ end
 # `SparseMatrixCSC`s determine a reasonable return type. (Issue #18974.)
 @test eltype(sin.(spdiagm(Int64(1):Int64(4)))) == Float64
 
+# Check calling of unary minus method specialized for SparseMatrixCSCs. (Issue #19503.)
+@test which(-, (SparseMatrixCSC,)).module == Base.SparseArrays
+
 # Test map/map! over sparse matrices
 let
     N, M = 10, 12
