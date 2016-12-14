@@ -1811,6 +1811,11 @@ end
     @test eltype(sin.(spdiagm(Int64(1):Int64(4)))) == Float64
 end
 
+# Check calling of unary minus method specialized for SparseMatrixCSCs
+@testset "Issue #19503" begin
+    @test which(-, (SparseMatrixCSC,)).module == Base.SparseArrays
+end
+
 @testset "map[!] over sparse matrices" begin
     let
         N, M = 10, 12
