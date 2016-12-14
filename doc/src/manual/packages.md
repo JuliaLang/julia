@@ -682,6 +682,10 @@ your `REQUIRE` file once `0.y` is officially released. If you don't edit the das
 suggesting that you support both the development and stable versions of the same version number!
 That would be madness.  See the [Requirements Specification](@ref) for the full format of `REQUIRE`.
 
+Lastly, in many cases you may need extra packages for testing. Additional packages which 
+are only required for tests should be specified in the `test/REQUIRE` file. This `REQUIRE`
+file has see same specification as the standard `REQUIRE` file.
+
 ### Guidelines for naming a package
 
 Package names should be sensible to most Julia users, *even to those who are not domain experts*.
@@ -1003,7 +1007,8 @@ however, you should also fix the `REQUIRE` file in the current version of the pa
 The `~/.julia/v0.6/REQUIRE` file, the `REQUIRE` file inside packages, and the `METADATA` package
 `requires` files use a simple line-based format to express the ranges of package versions which
 need to be installed.  Package `REQUIRE` and `METADATA requires` files should also include the
-range of versions of `julia` the package is expected to work with.
+range of versions of `julia` the package is expected to work with. Additionally, packages can
+include a `test/REQUIRE` file to specify additional packages which are only required for testing.
 
 Here's how these files are parsed and interpreted.
 
