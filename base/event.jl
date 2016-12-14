@@ -66,10 +66,12 @@ n_waiters(c::Condition) = length(c.waitq)
     @schedule
 
 Wrap an expression in a [`Task`](@ref) and add it to the local machine's scheduler queue.
+Similar to [`@async`](@ref) except that an enclosing `@sync` does NOT wait for tasks
+started with an `@schedule`.
 """
 macro schedule(expr)
-    expr = :(()->($expr))
-    :(enq_work(Task($(esc(expr)))))
+    thunk = esc(:(()->($expr)))
+    :(enq_work(Task($thunk)))
 end
 
 ## scheduler and work queue

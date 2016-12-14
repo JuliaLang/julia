@@ -472,6 +472,79 @@ have, it ends up having a substantial cost due to compilers (LLVM and GCC) not g
 around the added overflow checks. If this improves in the future, we could consider defaulting
 to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.
 
+### What are the possible causes of an `UndefVarError` during remote execution?
+
+As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
+by that name does not exist. Let us explore some of the possible causes.
+
+```julia
+julia> module Foo
+           foo() = remotecall_fetch(x->x, 2, "Hello")
+       end
+
+julia> Foo.foo()
+ERROR: On worker 2:
+UndefVarError: Foo not defined
+```
+
+The closure `x->x` carries a reference to `Foo`, and since `Foo` is unavailable on node 2,
+an `UndefVarError` is thrown.
+
+Globals under modules other than `Main` are not serialized by value to the remote node. Only a reference is sent.
+Functions which create global bindings (except under `Main`) may cause an `UndefVarError` to be thrown later.
+
+```julia
+julia> @everywhere module Foo
+           function foo()
+               global gvar = "Hello"
+               remotecall_fetch(()->gvar, 2)
+           end
+       end
+
+julia> Foo.foo()
+ERROR: On worker 2:
+UndefVarError: gvar not defined
+```
+
+In the above example, `@everywhere module Foo` defined `Foo` on all nodes. However the call to `Foo.foo()` created
+a new global binding `gvar` on the local node, but this was not found on node 2 resulting in an `UndefVarError` error.
+
+Note that this does not apply to globals created under module `Main`. Globals under module `Main` are serialized
+and new bindings created under `Main` on the remote node.
+
+```julia
+julia> gvar_self = "Node1"
+"Node1"
+
+julia> remotecall_fetch(()->gvar_self, 2)
+"Node1"
+
+julia> remotecall_fetch(whos, 2)
+	From worker 2:	                          Base  41762 KB     Module
+	From worker 2:	                          Core  27337 KB     Module
+	From worker 2:	                           Foo   2477 bytes  Module
+	From worker 2:	                          Main  46191 KB     Module
+	From worker 2:	                     gvar_self     13 bytes  String
+```
+
+This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
+variables are serialized as can be seen below.
+
+```julia
+julia> bar() = 1
+bar (generic function with 1 method)
+
+julia> remotecall_fetch(bar, 2)
+ERROR: On worker 2:
+UndefVarError: #bar not defined
+
+julia> anon_bar  = ()->1
+(::#21) (generic function with 1 method)
+
+julia> remotecall_fetch(anon_bar, 2)
+1
+```
+
 ## Packages and Modules
 
 ### What is the difference between "using" and "importall"?

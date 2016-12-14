@@ -188,37 +188,6 @@ end
 
 ## some macro utilities ##
 
-find_vars(e) = find_vars(e, [])
-function find_vars(e, lst)
-    if isa(e,Symbol)
-        if current_module()===Main && isdefined(e)
-            # Main runs on process 1, so send globals from there, excluding
-            # things defined in Base.
-            if !isdefined(Base,e) || eval(Base,e)!==eval(current_module(),e)
-                push!(lst, e)
-            end
-        end
-    elseif isa(e,Expr) && e.head !== :quote && e.head !== :top && e.head !== :core
-        for x in e.args
-            find_vars(x,lst)
-        end
-    end
-    lst
-end
-
-# wrap an expression in "let a=a,b=b,..." for each var it references
-localize_vars(expr) = localize_vars(expr, true)
-function localize_vars(expr, esca)
-    v = find_vars(expr)
-    # requires a special feature of the front end that knows how to insert
-    # the correct variables. the list of free variables cannot be computed
-    # from a macro.
-    if esca
-        v = map(esc,v)
-    end
-    Expr(:localize, expr, v...)
-end
-
 function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     if isempty(args)
         tag = sym

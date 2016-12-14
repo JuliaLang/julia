@@ -60,6 +60,7 @@ Base.isready(::Future)
 Base.WorkerPool
 Base.CachingPool
 Base.default_worker_pool
+Base.clear!(::CachingPool)
 Base.remote
 Base.remotecall(::Any, ::Base.AbstractWorkerPool, ::Any...)
 Base.remotecall_wait(::Any, ::Base.AbstractWorkerPool, ::Any...)
@@ -74,7 +75,7 @@ Base.@async
 Base.@sync
 Base.@parallel
 Base.@everywhere
-Base.clear!
+Base.clear!(::Any, ::Any; ::Any)
 Base.remoteref_id
 Base.channel_from_id
 Base.worker_id_from_socket
