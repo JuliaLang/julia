@@ -80,6 +80,10 @@ Library improvements
 
   * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
 
+  * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
+    That is, not every member of the input iterable will be visited if a `true` (in the case of `any`) or
+    `false` (in the case of `all`) value is found, and `mapreduce` will visit all members of the iterable.
+
 Compiler/Runtime improvements
 -----------------------------
 
