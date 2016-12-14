@@ -1,6 +1,6 @@
 ### Parsing utilities
 
-@generated function tryparse_internal{T, N}(df::DateFormat{T, NTuple{N}}, str::AbstractString, raise::Bool=false)
+@generated function tryparse_internal{N}(df::DateFormat{NTuple{N}}, str::AbstractString, raise::Bool=false)
     quote
         R = Nullable{NTuple{7,Int64}}
         t = df.tokens
@@ -39,13 +39,13 @@ end
 @inline _create_timeobj(tup, T::Type{DateTime}) = T(tup...)
 @inline _create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
 
-function Base.tryparse{T}(df::DateFormat{T}, str::AbstractString)
+function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
     R = Nullable{T}
     nt = tryparse_internal(df, str, false)
     Nullable{T}(isnull(nt) ? nothing : _create_timeobj(nt.value, T))
 end
 
-function Base.parse{T}(df::DateFormat{T}, str::AbstractString)
+function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
     nt = tryparse_internal(df, str, true)
     _create_timeobj(nt.value, T)
 end
