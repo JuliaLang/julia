@@ -240,6 +240,76 @@ and `fetch(Bref)`, it might be better to eliminate the parallelism altogether. O
 is replaced with a more expensive operation. Then it might make sense to add another [`@spawn`](@ref)
 statement just for this step.
 
+# Global variables
+Expressions executed remotely via `@spawn`, or closures specified for remote execution using
+`remotecall` may refer to global variables. Global bindings under module `Main` are treated
+a little differently compared to global bindings in other modules. Consider the following code
+snippet:
+
+```julia
+A = rand(10,10)
+remotecall_fetch(()->foo(A), 2)
+```
+
+Note that `A` is a global variable defined in the local workspace. Worker 2 does not have a variable called
+`A` under `Main`. The act of shipping the closure `()->foo(A)` to worker 2 results in `Main.A` being defined
+on 2. `Main.A` continues to exist on worker 2 even after the call `remotecall_fetch` returns. Remote calls
+with embedded global references (under `Main` module only) manage globals as follows:
+
+- New global bindings are created on destination workers if they are referenced as part of a remote call.
+
+- Global constants are declared as constants on remote nodes too.
+
+- Globals are re-sent to a destination worker only in the context of a remote call, and then only
+  if its value has changed. Also, the cluster does not synchronize global bindings across nodes.
+  For example:
+
+```julia
+A = rand(10,10)
+remotecall_fetch(()->foo(A), 2)  # worker 2
+A = rand(10,10)
+remotecall_fetch(()->foo(A), 3)  # worker 3
+A = nothing
+```
+
+  Executing the above snippet results in `Main.A` on worker 2 having a different value from
+  `Main.A` on worker 3, while the value of `Main.A` on node 1 is set to `nothing`.
+
+As you may have realized, while memory associated with globals may be collected when they are reassigned
+on the master, no such action is taken on the workers as the bindings continue to be valid.
+[`clear!`](@ref) can be used to manually reassign specific globals on remote nodes to `nothing` once
+they are no longer required. This will release any memory associated with them as part of a regular garbage
+collection cycle.
+
+Thus programs should be careful referencing globals in remote calls. In fact, it is preferable to avoid them
+altogether if possible. If you must reference globals, consider using `let` blocks to localize global variables.
+
+For example:
+
+```julia
+julia> A = rand(10,10);
+
+julia> remotecall_fetch(()->A, 2);
+
+julia> B = rand(10,10);
+
+julia> let B = B
+           remotecall_fetch(()->B, 2)
+       end;
+
+julia> @spawnat 2 whos();
+
+julia> 	From worker 2:	                             A    800 bytes  10×10 Array{Float64,2}
+	From worker 2:	                          Base               Module
+	From worker 2:	                          Core               Module
+	From worker 2:	                          Main               Module
+
+```
+
+As can be seen, global variable `A` is defined on worker 2, but `B` is captured as a local variable
+and hence a binding for `B` does not exist on worker 2.
+
+
 ## Parallel Map and Loops
 
 Fortunately, many useful parallel computations do not require data movement. A common example

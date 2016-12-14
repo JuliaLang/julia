@@ -278,17 +278,6 @@
                           (cadr e))
                      ,(resolve-expansion-vars- (caddr e) env m inarg))))
 
-           ((localize)
-            (let ((expr (cadr e))
-                  (lvars (map unescape (cddr e))))
-              (let ((vs (delete-duplicates
-                         (expr-find-all (lambda (v)
-                                          (and (symbol? v) (or (memq v lvars)
-                                                               (assq v env))))
-                                        expr identity)))
-                    (e2 (resolve-expansion-vars-with-new-env expr env m inarg)))
-                `(call (-> (tuple ,@vs) ,e2) ,@vs))))
-
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
                    (body   (resolve-expansion-vars- (cadr e) newenv m inarg)))
@@ -329,7 +318,6 @@
 (define (find-declared-vars-in-expansion e decl (outer #t))
   (cond ((or (not (pair? e)) (quoted? e)) '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'localize) '())
         ((eq? (car e) decl)     (map decl-var* (cdr e)))
         ((and (not outer) (function-def? e)) '())
         (else
@@ -340,7 +328,6 @@
 (define (find-assigned-vars-in-expansion e (outer #t))
   (cond ((or (not (pair? e)) (quoted? e))  '())
         ((eq? (car e) 'escape)  '())
-        ((eq? (car e) 'localize) '())
         ((and (not outer) (function-def? e))
          ;; pick up only function name
          (let ((fname (cond ((eq? (car e) '=) (cadr (cadr e)))
