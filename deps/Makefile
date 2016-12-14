@@ -21,7 +21,6 @@ include $(SRCDIR)/tools/git-external.mk
 #
 # autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv curl
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
-# entirely custom: virtualenv
 # CMake libs: libgit2 libssh2 mbedtls
 #
 # downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun, libgit2, libssh2
@@ -144,7 +143,7 @@ DEP_LIBS += lapack
 endif
 endif
 
-DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind virtualenv,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
+DEP_LIBS_STAGED := $(filter-out suitesparse suitesparse-wrapper osxunwind,$(DEP_LIBS)) # unlist targets that have not been converted to use the staged-install
 
 
 ## Common build target prefixes
@@ -162,7 +161,7 @@ uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-mbedtls get-libssh2 get-curl get-libgit2
+getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2
 
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
@@ -184,4 +183,3 @@ include $(SRCDIR)/mbedtls.mk
 include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
-include $(SRCDIR)/virtualenv.mk

@@ -1,4 +1,4 @@
-# Makefile for Sphinx documentation
+# Makefile for building documentation
 
 default: html
 
