@@ -1,71 +1,53 @@
 ### Parsing utilities
 
-macro chk1(expr,label=:error)
-    quote
-        val, i = $(esc(expr))
-        if isnull(val)
-            @goto $label
-        else
-            get(val), i
-        end
-    end
-end
-
-
-@generated function _tryparse{T, N}(fmt::DateFormat{T, NTuple{N}}, str::AbstractString)
+@generated function tryparse_internal{N}(df::DateFormat{NTuple{N}}, str::AbstractString, raise::Bool=false)
     quote
         R = Nullable{NTuple{7,Int64}}
-        t = fmt.tokens
-        l = fmt.locale
-        len = endof(str)
+        t = df.tokens
+        l = df.locale
+        pos, len = start(str), endof(str)
 
-        state = start(str)
         err_idx = 1
         Base.@nexprs $N i->val_i = 0
         Base.@nexprs $N i->(begin
-            state > len && @goto done
-            (val_i, state) = @chk1 tryparsenext(t[i], str, state, len, l)
+            pos > len && @goto done
+            nv, next_pos = tryparsenext(t[i], str, pos, len, l)
+            isnull(nv) && @goto error
+            val_i, pos = get(nv), next_pos
             err_idx += 1
         end)
-        state <= len && @goto error
+        pos <= len && @goto error
 
         @label done
         parts = Base.@ntuple $N val
-        return R(reorder_args(parts, fmt.field_order, fmt.field_defaults, err_idx)::NTuple{7,Int64})
+        return R(reorder_args(parts, df.field_order, df.field_defaults, err_idx)::NTuple{7,Int64})
 
         @label error
-        return R((err_idx,state,0,0,0,0,0), false)
+        raise && throw(gen_exception(t, err_idx, pos))
+        return R()
     end
 end
 
-function tryfailparse{T}(dt, df::DateFormat{T})
-    maybedt = _tryparse(df, dt)
-    if isnull(maybedt)
-        err_data = maybedt.value # Unsafe! but _tryparse loads error data here
-        err_idx = err_data[1]
-        state = err_data[2]
-
-        if err_idx > length(df.tokens)
-            throw(ArgumentError("Found extra characters at the end of date time string"))
-        else
-            throw(ArgumentError("Unable to parse date time. Expected token $(df.tokens[err_idx]) at char $(state)"))
-        end
+function gen_exception(tokens, err_idx, pos)
+    if err_idx > length(tokens)
+        ArgumentError("Found extra characters at the end of date time string")
     else
-        _create_timeobj(maybedt.value, T)
+        ArgumentError("Unable to parse date time. Expected token $(tokens[err_idx]) at char $pos")
     end
 end
 
 @inline _create_timeobj(tup, T::Type{DateTime}) = T(tup...)
 @inline _create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
 
-function Base.tryparse{T}(df::DateFormat{T}, dt::AbstractString)
+function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
     R = Nullable{T}
-    tup = _tryparse(df, dt)
-    if isnull(tup)
-        R()
-    else
-        R(_create_timeobj(tup.value, T))
-    end
+    nt = tryparse_internal(df, str, false)
+    Nullable{T}(isnull(nt) ? nothing : _create_timeobj(nt.value, T))
+end
+
+function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
+    nt = tryparse_internal(df, str, true)
+    _create_timeobj(nt.value, T)
 end
 
 function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{Ni}, valid_till)
