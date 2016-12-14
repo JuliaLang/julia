@@ -3213,7 +3213,7 @@ dawson
 Bitwise exclusive or of `x` and `y`.  The infix operation
 `a ⊻ b` is a synonym for `xor(a,b)`, and
 `⊻` can be typed by tab-completing `\xor`
-or `\vbar` in the Julia REPL.
+or `\veebar` in the Julia REPL.
 
 ```jldoctest
 julia> [true; true; false] ⊻ [true; false; false]
