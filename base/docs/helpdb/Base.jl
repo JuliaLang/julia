@@ -3210,7 +3210,10 @@ dawson
     xor(x, y)
     ⊻(x, y)
 
-Bitwise exclusive or.
+Bitwise exclusive or of `x` and `y`.  The infix operation
+`a ⊻ b` is a synonym for `xor(a,b)`, and
+`⊻` can be typed by tab-completing `\\xor`
+or `\\veebar` in the Julia REPL.
 
 ```jldoctest
 julia> [true; true; false] ⊻ [true; false; false]
