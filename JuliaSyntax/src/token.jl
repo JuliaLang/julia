@@ -37,11 +37,11 @@ _add_kws()
 
 # Error kind => description
 TOKEN_ERROR_DESCRIPTION = Dict{TokenError, String}(
-EOF_MULTICOMMENT => "unterminated multi-line comment #= ... =#",
-EOF_STRING => "unterminated string literal",
-EOF_CHAR => "unterminated character literal",
-EOF_CMD => "unterminated cmd literal",
-UNKNOWN => "unknown",
+  EOF_MULTICOMMENT => "unterminated multi-line comment #= ... =#",
+  EOF_STRING => "unterminated string literal",
+  EOF_CHAR => "unterminated character literal",
+  EOF_CMD => "unterminated cmd literal",
+  UNKNOWN => "unknown",
 )
 
 immutable Token

@@ -58,7 +58,9 @@ testall(joinpath(PKGPATH, "src"))
 testall(joinpath(PKGPATH, "test"))
 
 
-print("Lexed ", tot_files, " files in ", @sprintf("%3.4f", tot_time),
-      " seconds with a total of ", tot_tokens, " tokens with ", tot_errors, " errors")
+println("Lexed ", tot_files, " files in ", @sprintf("%3.4f", tot_time),
+        " seconds with a total of ", tot_tokens, " tokens with ", tot_errors, " errors")
 
 @test tot_errors == 0
+
+include("lexer.jl")

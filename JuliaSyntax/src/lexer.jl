@@ -52,7 +52,7 @@ Base.iteratoreltype(::Lexer) = Base.HasEltype()
 
 Base.eltype(::Lexer) = Token
 
-function Base.start{T}(l::Lexer{T})
+function Base.start(l::Lexer)
     seekstart(l)
     l.token_startpos = 0
     l.token_start_row = 1
