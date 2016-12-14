@@ -144,17 +144,6 @@ end
     return R(), i
 end
 
-# fast version for English
-@inline function tryparsenext_word(str, i, len, locale::DateLocale{:english}, maxchars=typemax(Int))
-    for j=1:maxchars
-        i > len && break
-        c, ii = next(str, i)
-        !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) && break
-        i=ii
-    end
-    return Nullable{Int}(0), i
-end
-
 @inline function tryparsenext_word(str, i, len, locale, maxchars=typemax(Int))
     for j=1:maxchars
         i > len && break
