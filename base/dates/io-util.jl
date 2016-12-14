@@ -12,7 +12,7 @@ macro chk1(expr,label=:error)
 end
 
 
-@generated function _tryparse{T, N}(fmt::DateFormat{T, NTuple{N}}, str::AbstractString)
+@generated function _tryparse{T, N}(fmt::DateFormat{T, NTuple{N}}, str::AbstractString, raise::Bool)
     quote
         R = Nullable{NTuple{7,Int64}}
         t = fmt.tokens
@@ -34,25 +34,22 @@ end
         return R(reorder_args(parts, fmt.field_order, fmt.field_defaults, err_idx)::NTuple{7,Int64})
 
         @label error
-        return R((err_idx,state,0,0,0,0,0), false)
+        raise && _raiseexception(t, err_idx, state)
+        return R()
+    end
+end
+
+function _raiseexception(tokens, err_idx, state)
+    if err_idx > length(tokens)
+        throw(ArgumentError("Found extra characters at the end of date time string"))
+    else
+        throw(ArgumentError("Unable to parse date time. Expected token $(tokens[err_idx]) at char $(state)"))
     end
 end
 
 function tryfailparse{T}(dt, df::DateFormat{T})
-    maybedt = _tryparse(df, dt)
-    if isnull(maybedt)
-        err_data = maybedt.value # Unsafe! but _tryparse loads error data here
-        err_idx = err_data[1]
-        state = err_data[2]
-
-        if err_idx > length(df.tokens)
-            throw(ArgumentError("Found extra characters at the end of date time string"))
-        else
-            throw(ArgumentError("Unable to parse date time. Expected token $(df.tokens[err_idx]) at char $(state)"))
-        end
-    else
-        _create_timeobj(maybedt.value, T)
-    end
+    maybedt = _tryparse(df, dt, true)
+    _create_timeobj(maybedt.value, T)
 end
 
 @inline _create_timeobj(tup, T::Type{DateTime}) = T(tup...)
@@ -60,7 +57,7 @@ end
 
 function Base.tryparse{T}(df::DateFormat{T}, dt::AbstractString)
     R = Nullable{T}
-    tup = _tryparse(df, dt)
+    tup = _tryparse(df, dt, false)
     if isnull(tup)
         R()
     else
