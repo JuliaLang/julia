@@ -364,7 +364,7 @@ function ldexp{T<:AbstractFloat}(x::T, e::Integer)
         e < -50000 && return flipsign(T(0.0), x)
     end
     # For cases where e of an Integer larger than Int make sure we properly
-    # overlfow/underflow; this is optimized away otherwise.
+    # overflow/underflow; this is optimized away otherwise.
     if e > typemax(Int)
         return flipsign(T(Inf), x)
     elseif e < typemin(Int)
