@@ -684,7 +684,7 @@ That would be madness.  See the [Requirements Specification](@ref) for the full 
 
 Lastly, in many cases you may need extra packages for testing. Additional packages which 
 are only required for tests should be specified in the `test/REQUIRE` file. This `REQUIRE`
-file has see same specification as the standard `REQUIRE` file.
+file has the same specification as the standard `REQUIRE` file.
 
 ### Guidelines for naming a package
 
