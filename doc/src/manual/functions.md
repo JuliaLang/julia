@@ -150,7 +150,7 @@ A few special expressions correspond to calls to functions with non-obvious name
 | Expression        | Calls                  |
 |:----------------- |:---------------------- |
 | `[A B C ...]`     | [`hcat()`](@ref)       |
-| `[A, B, C, ...]`  | [`vcat()`](@ref)       |
+| `[A; B; C; ...]`  | [`vcat()`](@ref)       |
 | `[A B; C D; ...]` | [`hvcat()`](@ref)      |
 | `A'`              | [`ctranspose()`](@ref) |
 | `A.'`             | [`transpose()`](@ref)  |
