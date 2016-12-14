@@ -176,7 +176,7 @@ static void gc_verify_track(jl_ptls_t ptls)
         arraylist_push(&lostval_parents_done, lostval);
         jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
-        pre_mark(ptls);
+        mark_all_roots(ptls);
         gc_mark_object_list(ptls, &to_finalize, 0);
         for (int i = 0;i < jl_n_threads;i++) {
             jl_ptls_t ptls2 = jl_all_tls_states[i];
@@ -222,7 +222,7 @@ void gc_verify(jl_ptls_t ptls)
     lostval_parents_done.len = 0;
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
-    pre_mark(ptls);
+    mark_all_roots(ptls);
     gc_mark_object_list(ptls, &to_finalize, 0);
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
