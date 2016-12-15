@@ -412,7 +412,7 @@ let m = 80, n = 100
     end
     @test Array(H) == Hr
 
-    V = vcat(A...)
+    V = cat(A...)
     @test isa(V, SparseVector{Float64,Int})
     @test length(V) == m * n
     Vr = vec(Hr)
