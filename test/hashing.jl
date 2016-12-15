@@ -6,7 +6,7 @@ types = Any[
     Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
     Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
 ]
-vals = vcat(
+vals = cat(
     typemin(Int64),
     -Int64(maxintfloat(Float64))+Int64[-4:1;],
     typemin(Int32),
