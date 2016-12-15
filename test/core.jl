@@ -4664,10 +4664,10 @@ catch e
 end == "generated function body is not pure. this likely means it contains a closure or comprehension."
 
 # issue #10981, long argument lists
-let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
-    # we introduce a new function `temp_vcat` to make sure there is no existing
+let a = fill(["sdf"], 2*10^6), temp_cat(x...) = cat(x...)
+    # we introduce a new function `temp_cat` to make sure there is no existing
     # method cache match, leading to a path that allocates a large tuple type.
-    b = temp_vcat(a...)
+    b = temp_cat(a...)
     @test isa(b, Vector{String})
     @test length(b) == 2*10^6
     @test b[1] == b[end] == "sdf"
