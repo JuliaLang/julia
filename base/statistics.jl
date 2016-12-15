@@ -183,7 +183,7 @@ var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) =
 Compute the sample variance of a vector or array `v`, optionally along dimensions in
 `region`. The algorithm will return an estimator of the generative distribution's variance
 under the assumption that each entry of `v` is an IID drawn from that generative
-distribution. This computation is equivalent to calculating `sumabs2(v - mean(v)) /
+distribution. This computation is equivalent to calculating `sum(abs2, v - mean(v)) /
 (length(v) - 1)`. If `corrected` is `true`, then the sum is scaled with `n-1`,
 whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x)`.
 The mean `mean` over the region may be provided.
@@ -296,7 +296,7 @@ _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
 
 # core functions
 
-unscaled_covzm(x::AbstractVector) = sumabs2(x)
+unscaled_covzm(x::AbstractVector) = sum(abs2, x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
 unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
@@ -436,11 +436,11 @@ function corzm(x::AbstractMatrix, vardim::Int=1)
     return cov2cor!(c, sqrt!(diag(c)))
 end
 corzm(x::AbstractVector, y::AbstractMatrix, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sumabs2(x)), sqrt!(sumabs2(y, vardim)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sum(abs2, x)), sqrt!(sum(abs2, y, vardim)))
 corzm(x::AbstractMatrix, y::AbstractVector, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt(sumabs2(y)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, vardim)), sqrt(sum(abs2, y)))
 corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
-    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt!(sumabs2(y, vardim)))
+    cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sum(abs2, x, vardim)), sqrt!(sum(abs2, y, vardim)))
 
 # corm
 

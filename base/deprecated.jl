@@ -1134,4 +1134,22 @@ end)
 @deprecate cummin(A, dim=1) accumulate(min, A, dim=1)
 @deprecate cummax(A, dim=1) accumulate(max, A, dim=1)
 
+# #19598
+@deprecate sumabs(x)                    sum(abs, x)
+@deprecate sumabs(A, region)            sum(abs, A, region)
+@deprecate sumabs2(x)                   sum(abs2, x)
+@deprecate sumabs2(A, region)           sum(abs2, A, region)
+@deprecate minabs(x)                    minimum(abs, x)
+@deprecate minabs(A, region)            minimum(abs, A, region)
+@deprecate maxabs(x)                    maximum(abs, x)
+@deprecate maxabs(A, region)            maximum(abs, A, region)
+@deprecate sumabs!(r, A)                sum!(abs, r, A)
+@deprecate sumabs!(r, A; init=false)    sum!(abs, r, A; init=false)
+@deprecate sumabs2!(r, A)               sum!(abs2, r, A)
+@deprecate sumabs2!(r, A; init=false)   sum!(abs2, r, A; init=false)
+@deprecate minabs!(r, A)                minimum!(abs, r, A)
+@deprecate minabs!(r, A; init=false)    minimum!(abs, r, A; init=false)
+@deprecate maxabs!(r, A)                maximum!(abs, r, A)
+@deprecate maxabs!(r, A; init=false)    maximum!(abs, r, A; init=false)
+
 # End deprecations scheduled for 0.6

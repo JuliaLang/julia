@@ -113,13 +113,6 @@ Cumulative minimum along a dimension. The dimension defaults to 1.
 cummin
 
 """
-    minabs!(r, A)
-
-Compute the minimum absolute values over the singleton dimensions of `r`, and write values to `r`.
-"""
-minabs!
-
-"""
     eigfact!(A, [B])
 
 Same as [`eigfact`](@ref), but saves space by overwriting the input `A` (and
@@ -531,13 +524,6 @@ Convert `y` to the type of `x` (`convert(typeof(x), y)`).
 oftype
 
 """
-    maxabs!(r, A)
-
-Compute the maximum absolute values over the singleton dimensions of `r`, and write values to `r`.
-"""
-maxabs!
-
-"""
     isfinite(f) -> Bool
 
 Test whether a number is finite.
@@ -726,13 +712,6 @@ Base.:(/)
 Show every part of the representation of a value.
 """
 dump
-
-"""
-    sumabs(A, dims)
-
-Sum absolute values of elements of an array over the given dimensions.
-"""
-sumabs(A, dims)
 
 """
     consume(task, values...)
@@ -1309,13 +1288,6 @@ Compute the inverse error complementary function of a real `x`, defined by
 erfcinv
 
 """
-    minabs(A, dims)
-
-Compute the minimum absolute values over given dimensions.
-"""
-minabs(A, dims)
-
-"""
     popdisplay()
     popdisplay(d::Display)
 
@@ -1530,14 +1502,6 @@ false
 Byte-swap an integer.
 """
 bswap
-
-"""
-    sumabs2!(r, A)
-
-Sum squared absolute values of elements of `A` over the singleton dimensions of `r`, and
-write results to `r`.
-"""
-sumabs2!
 
 """
     tanh(x)
@@ -1849,14 +1813,6 @@ false
 ```
 """
 isempty
-
-"""
-    sumabs!(r, A)
-
-Sum absolute values of elements of `A` over the singleton dimensions of `r`, and write
-results to `r`.
-"""
-sumabs!
 
 """
     hex2num(str)
@@ -2590,13 +2546,6 @@ it for new types as appropriate.
 promote_rule
 
 """
-    sumabs2(A, dims)
-
-Sum squared absolute values of elements of an array over the given dimensions.
-"""
-sumabs2(A,dims)
-
-"""
     showall(x)
 
 Similar to [`show`](@ref), except shows all elements of arrays.
@@ -2655,13 +2604,6 @@ catch_backtrace
 Compute cosine of `x`, where `x` is in radians.
 """
 cos
-
-"""
-    maxabs(A, dims)
-
-Compute the maximum absolute values over given dimensions.
-"""
-maxabs(A,dims)
 
 """
     done(iter, state) -> Bool

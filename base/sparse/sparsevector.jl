@@ -1284,8 +1284,6 @@ end
 ### Reduction
 
 sum(x::AbstractSparseVector) = sum(nonzeros(x))
-sumabs(x::AbstractSparseVector) = sumabs(nonzeros(x))
-sumabs2(x::AbstractSparseVector) = sumabs2(nonzeros(x))
 
 function maximum{T<:Real}(x::AbstractSparseVector{T})
     n = length(x)
@@ -1305,8 +1303,14 @@ function minimum{T<:Real}(x::AbstractSparseVector{T})
      min(zero(T), minimum(nonzeros(x))))::T
 end
 
-maxabs{T<:Number}(x::AbstractSparseVector{T}) = maxabs(nonzeros(x))
-minabs{T<:Number}(x::AbstractSparseVector{T}) = nnz(x) < length(x) ? abs(zero(T)) : minabs(nonzeros(x))
+for f in [:sum, :maximum, :minimum], op in [:abs, :abs2]
+    SV = :AbstractSparseVector
+    if f == :minimum
+        @eval ($f){T<:Number}(::typeof($op), x::$SV{T}) = nnz(x) < length(x) ? ($op)(zero(T)) : ($f)($op, nonzeros(x))
+    else
+        @eval ($f)(::typeof($op), x::$SV) = ($f)($op, nonzeros(x))
+    end
+end
 
 vecnorm(x::AbstractSparseVector, p::Real=2) = vecnorm(nonzeros(x), p)
 
@@ -1421,7 +1425,7 @@ function _spdot(f::Function,
 end
 
 function dot{Tx<:Number,Ty<:Number}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty})
-    x === y && return sumabs2(x)
+    x === y && return sum(abs2, x)
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
 

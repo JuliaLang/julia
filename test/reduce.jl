@@ -61,19 +61,6 @@ z = [-4, -3, 2, 5]
 fz = float(z)
 a = randn(32) # need >16 elements to trigger BLAS code path
 b = complex(randn(32), randn(32))
-@test sumabs(Float64[]) === 0.0
-@test sumabs([Int8(-2)]) === Int32(2)
-@test sumabs(z) === 14
-@test sumabs(fz) === 14.0
-@test sumabs(a) ≈ sum(abs.(a))
-@test sumabs(b) ≈ sum(abs.(b))
-
-@test sumabs2(Float64[]) === 0.0
-@test sumabs2([Int8(-2)]) === Int32(4)
-@test sumabs2(z) === 54
-@test sumabs2(fz) === 54.0
-@test sumabs2(a) ≈ sum(abs2.(a))
-@test sumabs2(b) ≈ sum(abs2.(b))
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, Tuple{Any}, itr)
@@ -151,14 +138,6 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test isnan(maximum([4., 3., NaN, 5., 2.]))
 @test isnan(minimum([4., 3., NaN, 5., 2.]))
 @test isequal(extrema([4., 3., NaN, 5., 2.]), (NaN,NaN))
-
-@test maxabs(Int[]) == 0
-@test_throws ArgumentError Base.minabs(Int[])
-
-@test maxabs(-2) == 2
-@test minabs(-2) == 2
-@test maxabs([1, -2, 3, -4]) == 4
-@test minabs([-1, 2, -3, 4]) == 1
 
 @test maximum(abs2, 3:7) == 49
 @test minimum(abs2, 3:7) == 9
