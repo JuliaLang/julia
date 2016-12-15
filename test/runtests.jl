@@ -2,4 +2,4 @@
 
 using Base.Test
 
-Base.Test.runtests(ARGS, test_dir=pwd())
+Base.Test.runtests(ARGS)

@@ -1193,7 +1193,7 @@ function print_test_statistics(test, test_stats, worker, alignments)
     print_with_color(:white, name_str, " | ", time_str, " | ", gc_str, " | ", percent_str, " | ", alloc_str, " | ", rss_str, "\n")
 end
 
-function runtests(names=["all"]; test_dir=joinpath(JULIA_HOME, "../../test/"), numcores::Int=ceil(Int, Sys.CPU_CORES / 2))
+function runtests(names=["all"]; test_dir=joinpath(JULIA_HOME, Base.DATAROOTDIR, "julia/test/"), numcores::Int=ceil(Int, Sys.CPU_CORES / 2))
     include(joinpath(test_dir, "choosetests.jl"))
     tests, n1_tests, bigmemtests, net_on = Main.choosetests(names)
     tests       = unique(tests)
