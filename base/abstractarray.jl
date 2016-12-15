@@ -987,26 +987,30 @@ promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 #TODO: ERROR CHECK
 cat(catdim::Integer) = Array{Any,1}(0)
 
+cat() = Array{Any,1}(0)
 vcat() = Array{Any,1}(0)
 hcat() = Array{Any,1}(0)
+typed_cat{T}(::Type{T}) = Array{T,1}(0)
 typed_vcat{T}(::Type{T}) = Array{T,1}(0)
 typed_hcat{T}(::Type{T}) = Array{T,1}(0)
 
 ## cat: special cases
-vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
-vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
+cat{T}(X::T...)          = T[ X[i] for i=1:length(X) ]
+cat{T<:Number}(X::T...)  = T[ X[i] for i=1:length(X) ]
+vcat{T}(X::T...)         = T[ X[i] for i=1:length(X), j=1:1 ]
+vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X), j=1:1 ]
 hcat{T}(X::T...)         = T[ X[j] for i=1:1, j=1:length(X) ]
 hcat{T<:Number}(X::T...) = T[ X[j] for i=1:1, j=1:length(X) ]
 
-vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
+vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X),1), X)
 hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
-typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,1}(length(X)), X)
+typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,1}(length(X),1), X)
 typed_hcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,2}(1,length(X)), X)
 
-vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
-vcat{T}(V::AbstractVector{T}...) = typed_vcat(T, V...)
+cat(V::AbstractVector...) = typed_cat(promote_eltype(V...), V...)
+cat{T}(V::AbstractVector{T}...) = typed_cat(T, V...)
 
-function typed_vcat{T}(::Type{T}, V::AbstractVector...)
+function typed_cat{T}(::Type{T}, V::AbstractVector...)
     n::Int = 0
     for Vk in V
         n += length(Vk)
@@ -1020,6 +1024,14 @@ function typed_vcat{T}(::Type{T}, V::AbstractVector...)
         pos = p1+1
     end
     a
+end
+
+vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
+vcat{T}(V::AbstractVector{T}...) = typed_vcat(T, V...)
+
+function typed_vcat{T}(::Type{T}, V::AbstractVector...)
+    a = typed_cat(T, V...)
+    reshape(a,length(a),1)
 end
 
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
