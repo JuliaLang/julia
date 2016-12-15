@@ -2154,7 +2154,7 @@ function hcat(B::BitVector...)
     return M
 end
 
-function vcat(V::BitVector...)
+function cat(V::BitVector...)
     n = 0
     for Vk in V
         n += length(Vk)
