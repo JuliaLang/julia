@@ -122,7 +122,7 @@ end
 
 Returns the singular values of `A`, saving space by overwriting the input.
 """
-svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = any([size(A)...].==0) ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
+svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = findfirst(size(A), 0) > 0 ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
 svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
 
 """

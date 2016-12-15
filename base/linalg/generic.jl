@@ -628,7 +628,7 @@ By default, the value of `tol` is the largest
 dimension of `M` multiplied by the [`eps`](@ref)
 of the [`eltype`](@ref) of `M`.
 """
-rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
+rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
 function rank(A::AbstractMatrix)
     m,n = size(A)
     (m == 0 || n == 0) && return 0

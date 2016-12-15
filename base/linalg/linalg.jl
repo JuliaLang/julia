@@ -10,7 +10,7 @@ import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, copy_transp
     imag, inv, isapprox, kron, ndims, parent, power_by_squaring, print_matrix,
     promote_rule, real, round, setindex!, show, similar, size, transpose, transpose!,
     trunc, broadcast
-using Base: promote_op, _length
+using Base: promote_op, _length, iszero
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
 using Base.Broadcast: broadcast_elwise_op

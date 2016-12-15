@@ -101,9 +101,9 @@ end
 parent(D::Diagonal) = D.diag
 
 ishermitian{T<:Real}(D::Diagonal{T}) = true
-ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
+ishermitian(D::Diagonal) = isreal(D.diag)
 issymmetric(D::Diagonal) = true
-isposdef(D::Diagonal) = all(D.diag .> 0)
+isposdef(D::Diagonal) = all(x -> x > 0, D.diag)
 
 factorize(D::Diagonal) = D
 
