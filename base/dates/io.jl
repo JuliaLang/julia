@@ -24,8 +24,6 @@ immutable DateFormat{T<:Tuple, N,D}
     result_type::Type{D}
 end
 
-include("io-util.jl")
-
 ### Token types ###
 
 immutable DatePart{letter} <: AbstractDateToken
