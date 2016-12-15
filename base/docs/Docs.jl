@@ -388,7 +388,7 @@ end
 `catdoc(xs...)`: Combine the documentation metadata `xs` into a single meta object.
 """
 catdoc() = nothing
-catdoc(xs...) = vcat(xs...)
+catdoc(xs...) = cat(xs...)
 
 const keywords = Dict{Symbol, DocStr}()
 
