@@ -681,7 +681,6 @@ add `julia 0.y-` to your `REQUIRE`. Just remember to change the `julia 0.y-` to 
 your `REQUIRE` file once `0.y` is officially released. If you don't edit the dash cruft you are
 suggesting that you support both the development and stable versions of the same version number!
 That would be madness.  See the [Requirements Specification](@ref) for the full format of `REQUIRE`.
-
 Lastly, in many cases you may need extra packages for testing. Additional packages which 
 are only required for tests should be specified in the `test/REQUIRE` file. This `REQUIRE`
 file has the same specification as the standard `REQUIRE` file.
