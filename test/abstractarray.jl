@@ -523,6 +523,7 @@ function test_cat(::Type{TestAbstractArray})
     D = [1:24...]
     i = rand(1:10)
 
+    @test cat() == Any[]
     @test cat(i) == Any[]
     @test vcat() == Any[]
     @test hcat() == Any[]
@@ -536,7 +537,7 @@ function test_cat(::Type{TestAbstractArray})
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
 
-    @test vcat(B1, B2) == TSlow(vcat([1:24...], [1:25...]))
+    @test cat(B1, B2) == TSlow(cat([1:24...], [1:25...]))
     @test hcat(C1, C2) == TSlow([1 2 1 2 3; 3 4 4 5 6])
     @test hcat(C1, C2, C1) == TSlow([1 2 1 2 3 1 2; 3 4 4 5 6 3 4])
 
@@ -566,7 +567,7 @@ function test_cat(::Type{TestAbstractArray})
 
     # 13665, 19038
     @test @inferred(hcat([1.0 2.0], 3))::Array{Float64,2} == [1.0 2.0 3.0]
-    @test @inferred(vcat([1.0, 2.0], 3))::Array{Float64,1} == [1.0, 2.0, 3.0]
+    @test @inferred(vcat([1.0, 2.0], 3))::Array{Float64,2} == [1.0; 2.0; 3.0]
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -732,7 +733,7 @@ let
     M = rand(n, n)
     # vector of vectors
     v = [[M]; [M]] # using vcat
-    @test size(v) == (2,)
+    @test size(v) == (2,1)
     @test !issparse(v)
     # matrix of vectors
     m1 = [[M] [M]] # using hcat
