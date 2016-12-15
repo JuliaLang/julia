@@ -1200,7 +1200,7 @@ function runtests(names=["all"]; test_dir=joinpath(JULIA_HOME, Base.DATAROOTDIR,
     n1_tests    = unique(n1_tests)
     bigmemtests = unique(bigmemtests)
     # In a constrained memory environment, run the tests which may need a lot of memory after all others
-    const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
+    max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
         parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
     else
         typemax(Csize_t)
@@ -1212,15 +1212,15 @@ function runtests(names=["all"]; test_dir=joinpath(JULIA_HOME, Base.DATAROOTDIR,
     end
 
     if haskey(ENV, "JULIA_TEST_EXEFLAGS")
-        const test_exeflags = `$(Base.shell_split(ENV["JULIA_TEST_EXEFLAGS"]))`
+        test_exeflags = `$(Base.shell_split(ENV["JULIA_TEST_EXEFLAGS"]))`
     else
-        const test_exeflags = `--check-bounds=yes --startup-file=no --depwarn=error`
+        test_exeflags = `--check-bounds=yes --startup-file=no --depwarn=error`
     end
 
     if haskey(ENV, "JULIA_TEST_EXENAME")
-        const test_exename = `$(Base.shell_split(ENV["JULIA_TEST_EXENAME"]))`
+        test_exename = `$(Base.shell_split(ENV["JULIA_TEST_EXENAME"]))`
     else
-        const test_exename = `$(joinpath(JULIA_HOME, Base.julia_exename()))`
+        test_exename = `$(joinpath(JULIA_HOME, Base.julia_exename()))`
     end
 
     cd(test_dir) do
