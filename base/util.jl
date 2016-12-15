@@ -303,34 +303,38 @@ end
 
 ## printing with color ##
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...)
+function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
+    have_color && bold && print(buf, text_colors[:bold])
     have_color && print(buf, get(text_colors, color, color_normal))
     try f(IOContext(buf, io), args...)
     finally
-        have_color && print(buf, color_normal)
+        have_color && print(buf, get(disable_text_style, color, text_colors[:default]))
+        have_color && (bold || color == :bold) && print(buf, disable_text_style[:bold])
         print(io, String(take!(buf)))
     end
 end
 
 """
-    print_with_color(color::Union{Symbol, Int}, [io], strings...)
+    print_with_color(color::Union{Symbol, Int}, [io], strings...; bold::Bool = false)
 
 Print strings in a color specified as a symbol.
 
 `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
+If the keyword `bold` is given as `true`, the result will be printed in bold.
 """
-print_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...) =
-    with_output_color(print, color, io, msg...)
-print_with_color(color::Union{Int, Symbol}, msg::AbstractString...) =
-    print_with_color(color, STDOUT, msg...)
-println_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...) =
-    with_output_color(println, color, io, msg...)
-println_with_color(color::Union{Int, Symbol}, msg::AbstractString...) =
-    println_with_color(color, STDOUT, msg...)
+print_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...; bold::Bool = false) =
+    with_output_color(print, color, io, msg...; bold = bold)
+print_with_color(color::Union{Int, Symbol}, msg::AbstractString...; bold::Bool = false) =
+    print_with_color(color, STDOUT, msg...; bold = bold)
+println_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...; bold::Bool = false) =
+    with_output_color(println, color, io, msg...; bold = bold)
+println_with_color(color::Union{Int, Symbol}, msg::AbstractString...; bold::Bool = false) =
+    println_with_color(color, STDOUT, msg...; bold = bold)
 
 ## warnings and messages ##
+
 
 """
     info(msg...; prefix="INFO: ")
@@ -349,7 +353,8 @@ MY INFO: hello world
 ```
 """
 function info(io::IO, msg...; prefix="INFO: ")
-    println_with_color(info_color(), io, prefix, chomp(string(msg...)))
+    print_with_color(info_color(), io, prefix; bold = true)
+    println_with_color(info_color(), io, chomp(string(msg...)))
 end
 info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
 
@@ -371,7 +376,8 @@ function warn(io::IO, msg...;
         (key in have_warned) && return
         push!(have_warned, key)
     end
-    print_with_color(warn_color(), io, prefix, str)
+    print_with_color(warn_color(), io, prefix; bold = true)
+    print_with_color(warn_color(), io, str)
     if bt !== nothing
         show_backtrace(io, bt)
     end

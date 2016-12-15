@@ -310,18 +310,21 @@ end
 atreplinit(customize_colors)
 ```
 
-The available color keys in `Base.text_colors` are `:black`, `:red`, `:green`, `:yellow`, `:blue`,
-`:magenta`, `:cyan`, `:white`, `:normal`, and `:bold` as well as the integers 0 to 255 for terminals
-with 256 color support. Similarly, you can change the colors for the help and shell prompts and
+The available color keys can be seen by typing `Base.text_colors` in the help mode of the REPL.
+In addition, the integers 0 to 255 can be used as color keys for terminals
+with 256 color support.
+
+You can also change the colors for the help and shell prompts and
 input and answer text by setting the appropriate field of `repl` in the `customize_colors` function
 above (respectively, `help_color`, `shell_color`, `input_color`, and `answer_color`). For the
 latter two, be sure that the `envcolors` field is also set to false.
 
-You can also customize the color used to render warning and informational messages by setting
-the appropriate environment variable. For instance, to render warning messages in yellow and informational
-messages in cyan you can add the following to your `juliarc.jl` file:
+You can also customize the color used to render warning and informational messages by
+setting the appropriate environment variables. For instance, to render error, warning, and informational
+messages respectively in magenta, yellow, and cyan you can add the following to your `juliarc.jl` file:
 
 ```julia
+ENV["JULIA_ERROR_COLOR"] = :magenta
 ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```

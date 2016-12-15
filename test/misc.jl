@@ -483,3 +483,20 @@ let
     end
     @test c_18711 == 1
 end
+
+let
+    old_have_color = Base.have_color
+    try
+        eval(Base, :(have_color = true))
+        buf = IOBuffer()
+        print_with_color(:red, buf, "foo")
+        # Check that we get back to normal text color in the end
+        @test String(take!(buf)) == "\e[31mfoo\e[39m"
+
+        # Check that boldness is turned off
+        print_with_color(:red, buf, "foo"; bold = true)
+        @test String(take!(buf)) == "\e[1m\e[31mfoo\e[39m\e[22m"
+    finally
+        eval(Base, :(have_color = $(old_have_color)))
+    end
+end
