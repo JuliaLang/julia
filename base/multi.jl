@@ -523,7 +523,7 @@ function rmprocs(pids...; waitfor = 0.0)
     lock(worker_lock)
     try
         rmprocset = []
-        for i in vcat(pids...)
+        for i in cat(pids...)
             if i == 1
                 warn("rmprocs: process 1 not removed")
             else
