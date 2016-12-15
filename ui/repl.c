@@ -239,12 +239,17 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     }
 #endif
     libsupport_init();
-    if (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0) {
-        jl_lisp_prompt();
-        return 0;
+    int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);
+    if (lisp_prompt) {
+        memmove(&argv[1], &argv[2], (argc-2)*sizeof(void*));
+        argc--;
     }
     jl_parse_opts(&argc, (char***)&argv);
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
+    if (lisp_prompt) {
+        jl_lisp_prompt();
+        return 0;
+    }
     int ret = true_main(argc, (char**)argv);
     jl_atexit_hook(ret);
     return ret;
