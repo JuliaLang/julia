@@ -475,8 +475,8 @@ end
 """
     any(itr) -> Bool
 
-Test whether any elements of a boolean collection are `true`.
-Not all items in `itr` will be visited if a `true` value is found.
+Test whether any elements of a boolean collection are `true`, returning `true` as
+soon as the first `true` value in `itr` is encountered (short-circuiting).
 
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -499,8 +499,8 @@ any(itr) = any(identity, itr)
 """
     all(itr) -> Bool
 
-Test whether all elements of a boolean collection are `true`.
-Not all items in `itr` will be visited if a `false` value is found.
+Test whether all elements of a boolean collection are `true`, returning `false` as
+soon as the first `false` value in `itr` is encountered (short-circuiting).
 
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -524,8 +524,9 @@ all(itr) = all(identity, itr)
 """
     any(p, itr) -> Bool
 
-Determine whether predicate `p` returns `true` for any elements of `itr`.
-Not all items in `itr` will be visited if a `true` value is found.
+Determine whether predicate `p` returns `true` for any elements of `itr`, returning
+`true` as soon as the first item in `itr` for which `p` returns `true` is encountered
+(short-circuiting).
 
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
@@ -549,8 +550,9 @@ end
 """
     all(p, itr) -> Bool
 
-Determine whether predicate `p` returns `true` for all elements of `itr`.
-Not all items in `itr` will be visited if a `false` value is found.
+Determine whether predicate `p` returns `true` for all elements of `itr`, returning
+`false` as soon as the first item in `itr` for which `p` returns `false` is encountered
+(short-circuiting).
 
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
