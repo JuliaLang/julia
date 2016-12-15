@@ -7317,7 +7317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.xor",
     "category": "Function",
-    "text": "xor(x, y)\n⊻(x, y)\n\nBitwise exclusive or.\n\njulia> [true; true; false] ⊻ [true; false; false]\n3-element Array{Bool,1}:\n false\n  true\n false\n\n\n\n"
+    "text": "xor(x, y)\n⊻(x, y)\n\nBitwise exclusive or of x and y.  The infix operation a ⊻ b is a synonym for xor(a,b), and ⊻ can be typed by tab-completing \\xor or \\veebar in the Julia REPL.\n\njulia> [true; true; false] ⊻ [true; false; false]\n3-element Array{Bool,1}:\n false\n  true\n false\n\n\n\n"
 },
 
 {
