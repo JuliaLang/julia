@@ -826,6 +826,8 @@ end
 
 isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 
+iszero(x::BigFloat) = x == Clong(0)
+
 @eval typemax(::Type{BigFloat}) = $(BigFloat( Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
