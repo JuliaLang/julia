@@ -92,6 +92,7 @@ linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,N}(::Type{AbstractArray{T,N}}) = T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
+
 """
     ndims(A::AbstractArray) -> Integer
 
@@ -980,6 +981,11 @@ replace_in_print_matrix(A::AbstractMatrix,i::Integer,j::Integer,s::AbstractStrin
 replace_in_print_matrix(A::AbstractVector,i::Integer,j::Integer,s::AbstractString) = s
 
 ## Concatenation ##
+eltypeof(x) = typeof(x)
+eltypeof(x::AbstractArray) = eltype(x)
+
+promote_eltypeof() = Bottom
+promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
 
 promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
@@ -1125,7 +1131,7 @@ _cs(d, concat, a, b) = concat ? (a + b) : (a == b ? a : throw(DimensionMismatch(
 dims2cat{n}(::Type{Val{n}}) = ntuple(i -> (i == n), Val{n})
 dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
 
-cat(dims, X...) = cat_t(dims, promote_eltype(X...), X...)
+cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
 
 function cat_t(dims, T::Type, X...)
     catdims = dims2cat(dims)
