@@ -341,6 +341,11 @@ dt = Dates.DateTime(2014,8,23,17,22,15)
 @test Dates.format(Dates.DateTime(2014,11,2,0,0,0,9),Dates.RFC1123Format) == "Sun, 02 Nov 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,12,5,0,0,0,9),Dates.RFC1123Format) == "Fri, 05 Dec 2014 00:00:00"
 
+dt = Dates.DateTime(2016,11,12,7,45,36)
+@test parse(Dates.DateTime,"Sat, 12 Nov 2016 07:45:36",Dates.RFC1123Format) == dt
+@test parse(Dates.DateTime,"Mon, 12 Nov 2016 07:45:36",Dates.RFC1123Format) == dt  # Wrong day of week
+@test_throws ArgumentError parse(Date,"Foo, 12 Nov 2016 07:45:36",Dates.RFC1123Format)
+
 # Issue 15195
 let f = "YY"
     @test Dates.format(Dates.Date(1999), f) == "1999"

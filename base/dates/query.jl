@@ -7,8 +7,14 @@ immutable DateLocale
     months_abbr::Vector{String}
     days_of_week::Vector{String}
     days_of_week_abbr::Vector{String}
-    month_to_value::Dict{String, Int}
-    month_to_value_abbr::Dict{String, Int}
+    month_value::Dict{String, Int}
+    month_abbr_value::Dict{String, Int}
+    day_of_week_value::Dict{String, Int}
+    day_of_week_abbr_value::Dict{String, Int}
+end
+
+function locale_dict{S<:AbstractString}(vec::Vector{S})
+    Dict{String, Int}(lowercase(vec[i]) => i for i in 1:length(vec))
 end
 
 """
@@ -22,10 +28,11 @@ month names.  This object is passed as the last argument to
 """
 function DateLocale(months::Vector, months_abbr::Vector,
                     days_of_week::Vector, days_of_week_abbr::Vector)
-    to_val = Dict{String, Int}(lowercase(months[i])=>i for i in 1:length(months))
-    to_val_abbr = Dict{String, Int}(lowercase(months_abbr[i])=>i for i in 1:length(months_abbr))
-    DateLocale(months, months_abbr, days_of_week,
-               days_of_week_abbr, to_val, to_val_abbr)
+    DateLocale(
+        months, months_abbr, days_of_week, days_of_week_abbr,
+        locale_dict(months), locale_dict(months_abbr),
+        locale_dict(days_of_week), locale_dict(days_of_week_abbr),
+    )
 end
 
 const ENGLISH = DateLocale(
@@ -39,6 +46,18 @@ const ENGLISH = DateLocale(
 
 const LOCALES = Dict{String, DateLocale}("english" => ENGLISH)
 
+function dayname_to_value(word::AbstractString, locale::DateLocale)
+    get(locale.day_of_week_value, lowercase(word), 0)
+end
+function dayabbr_to_value(word::AbstractString, locale::DateLocale)
+    get(locale.day_of_week_abbr_value, lowercase(word), 0)
+end
+function monthname_to_value(word::AbstractString, locale::DateLocale)
+    get(locale.month_value, lowercase(word), 0)
+end
+function monthabbr_to_value(word::AbstractString, locale::DateLocale)
+    get(locale.month_abbr_value, lowercase(word), 0)
+end
 
 # Date functions
 

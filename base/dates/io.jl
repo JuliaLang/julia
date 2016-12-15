@@ -85,27 +85,13 @@ end
     tryparsenext(d, str, i, len)
 end
 
-function month_to_value(word, locale::DateLocale)
-    get(locale.month_to_value, word, 0)
-end
-
-function month_to_value_abbr(word, locale::DateLocale)
-    get(locale.month_to_value_abbr, word, 0)
-end
-
-for (tok, fn) in zip("uU", [month_to_value_abbr, month_to_value])
+for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         R = Nullable{Int}
         word, i = tryparsenext_word(str, i, len, locale, max_width(d))
-        month = isnull(word) ? 0 : $fn(lowercase(get(word)), locale)
-        return Nullable{Int}(month == 0 ? nothing : month), i
+        val = isnull(word) ? 0 : $fn(get(word), locale)
+        return Nullable{Int}(val == 0 ? nothing : val), i
     end
-end
-
-# ignore day of week while parsing
-@inline function tryparsenext(::Union{DatePart{'e'}, DatePart{'E'}}, str, i, len, locale)
-    word, i = tryparsenext_word(str, i, len, locale)
-    return Nullable{Int}(isnull(word) ? nothing : 0), i
 end
 
 for (tok, fn) in zip("eE", [dayabbr, dayname])
