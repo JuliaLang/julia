@@ -256,7 +256,7 @@ type List
     List(b::Integer) = new(Any[], b)
 end
 
-List(xs...) = List(vcat(xs...))
+List(xs...) = List(cat(xs...))
 
 isordered(list::List) = list.ordered >= 0
 
