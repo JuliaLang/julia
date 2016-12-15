@@ -1,5 +1,45 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# Date Locales
+
+immutable DateLocale
+    months::Vector{String}
+    months_abbr::Vector{String}
+    days_of_week::Vector{String}
+    days_of_week_abbr::Vector{String}
+    month_to_value::Dict{String, Int}
+    month_to_value_abbr::Dict{String, Int}
+end
+
+"""
+    DateLocale(["January, "February",...], ["Jan", "Feb",...],
+               ["Monday", "Tuesday",...], ["Mon", "Tue",...])
+
+Create a locale for parsing textual month names. First argument is
+a vector of 12 month names, the second is a vector of 12 abbreviated
+month names.  This object is passed as the last argument to
+`tryparsenext` and `format` defined for each `AbstractDateToken` type.
+"""
+function DateLocale(months::Vector, months_abbr::Vector,
+                    days_of_week::Vector, days_of_week_abbr::Vector)
+    to_val = Dict{String, Int}(lowercase(months[i])=>i for i in 1:length(months))
+    to_val_abbr = Dict{String, Int}(lowercase(months_abbr[i])=>i for i in 1:length(months_abbr))
+    DateLocale(months, months_abbr, days_of_week,
+               days_of_week_abbr, to_val, to_val_abbr)
+end
+
+const ENGLISH = DateLocale(["January", "February", "March", "April",
+                            "May", "June", "July", "August", "September",
+                            "October", "November", "December"],
+                           ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+                           ["Monday", "Tuesday", "Wednesday", "Thursday",
+                            "Friday", "Saturday", "Sunday"],
+                           ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"])
+
+const LOCALES = Dict{String, DateLocale}("english" => ENGLISH)
+
+
 # Date functions
 
 ### Core query functions
@@ -29,21 +69,11 @@ dayofweek(dt::TimeType) = dayofweek(days(dt))
 
 const Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday = 1,2,3,4,5,6,7
 const Mon,Tue,Wed,Thu,Fri,Sat,Sun = 1,2,3,4,5,6,7
-const english_daysofweek = Dict(1=>"Monday",2=>"Tuesday",3=>"Wednesday",
-                                4=>"Thursday",5=>"Friday",6=>"Saturday",7=>"Sunday")
-const VALUETODAYOFWEEK = Dict{String,Dict{Int,String}}("english"=>english_daysofweek)
-const english_daysofweekabbr = Dict(1=>"Mon",2=>"Tue",3=>"Wed",
-                                    4=>"Thu",5=>"Fri",6=>"Sat",7=>"Sun")
-const VALUETODAYOFWEEKABBR = Dict{String,Dict{Int,String}}("english"=>english_daysofweekabbr)
-dayname(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dt]
 
-"""
-    dayabbr(dt::TimeType; locale="english") -> AbstractString
-
-Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
-in the given `locale`.
-"""
-dayabbr(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dt]
+dayname(dt::Integer, locale::DateLocale) = locale.days_of_week[dt]
+dayabbr(dt::Integer, locale::DateLocale) = locale.days_of_week_abbr[dt]
+dayname(dt::Integer;locale::AbstractString="english") = dayname(dt, LOCALES[locale])
+dayabbr(dt::Integer;locale::AbstractString="english") = dayabbr(dt, LOCALES[locale])
 
 """
     dayname(dt::TimeType; locale="english") -> AbstractString
@@ -51,9 +81,17 @@ dayabbr(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[loc
 Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in
 the given `locale`.
 """
-dayname(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dayofweek(dt)]
+dayname(dt::TimeType;locale::AbstractString="english") =
+   dayname(dayofweek(dt); locale=locale)
 
-dayabbr(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
+"""
+    dayabbr(dt::TimeType; locale="english") -> AbstractString
+
+Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
+in the given `locale`.
+"""
+dayabbr(dt::TimeType;locale::AbstractString="english") =
+   dayabbr(dayofweek(dt); locale=locale)
 
 # Convenience methods for each day
 ismonday(dt::TimeType) = dayofweek(dt) == Mon
@@ -101,30 +139,29 @@ end
 const January,February,March,April,May,June = 1,2,3,4,5,6
 const July,August,September,October,November,December = 7,8,9,10,11,12
 const Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec = 1,2,3,4,5,6,7,8,9,10,11,12
-const english_months = Dict(1=>"January",2=>"February",3=>"March",4=>"April",
-                            5=>"May",6=>"June",7=>"July",8=>"August",9=>"September",
-                            10=>"October",11=>"November",12=>"December")
-const VALUETOMONTH = Dict{String,Dict{Int,String}}("english"=>english_months)
-const englishabbr_months = Dict(1=>"Jan",2=>"Feb",3=>"Mar",4=>"Apr",
-                                5=>"May",6=>"Jun",7=>"Jul",8=>"Aug",9=>"Sep",
-                                10=>"Oct",11=>"Nov",12=>"Dec")
-const VALUETOMONTHABBR = Dict{String,Dict{Int,String}}("english"=>englishabbr_months)
-monthname(dt::Integer;locale::AbstractString="english") = VALUETOMONTH[locale][dt]
-monthabbr(dt::Integer;locale::AbstractString="english") = VALUETOMONTHABBR[locale][dt]
+
+monthname(dt::Integer, locale::DateLocale) = locale.months[dt]
+monthabbr(dt::Integer, locale::DateLocale) = locale.months_abbr[dt]
+monthname(dt::Integer; locale::AbstractString="english") =
+    monthname(dt, LOCALES[locale])
+monthabbr(dt::Integer; locale::AbstractString="english") =
+    monthabbr(dt, LOCALES[locale])
 
 """
     monthname(dt::TimeType; locale="english") -> AbstractString
 
 Return the full name of the month of the `Date` or `DateTime` in the given `locale`.
 """
-monthname(dt::TimeType;locale::AbstractString="english") = VALUETOMONTH[locale][month(dt)]
+monthname(dt::TimeType; locale::AbstractString="english") =
+    monthname(month(dt); locale=locale)
 
 """
     monthabbr(dt::TimeType; locale="english") -> AbstractString
 
 Return the abbreviated month name of the `Date` or `DateTime` in the given `locale`.
 """
-monthabbr(dt::TimeType;locale::AbstractString="english") = VALUETOMONTHABBR[locale][month(dt)]
+monthabbr(dt::TimeType; locale::AbstractString="english") =
+    monthabbr(month(dt); locale=locale)
 
 """
     daysinmonth(dt::TimeType) -> Int
@@ -160,7 +197,7 @@ function quarterofyear(dt::TimeType)
     m = month(dt)
     return m < 4 ? 1 : m < 7 ? 2 : m < 10 ? 3 : 4
 end
-const QUARTERDAYS = [0,90,181,273]
+const QUARTERDAYS = (0,90,181,273)
 
 """
     dayofquarter(dt::TimeType) -> Int

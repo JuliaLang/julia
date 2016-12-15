@@ -14,20 +14,13 @@ and
 abstract AbstractDateToken
 
 """
-Locale type for dates. By default `DateLocale{:english}()`
-is used. This object is passed as the last argument to
-`tryparsenext` and `format` defined for each `AbstractDateToken` type.
-"""
-immutable DateLocale{lang} end
-
-"""
 Information for parsing and formatting date time values.
 """
-immutable DateFormat{T<:Tuple, L<:DateLocale, N}
+immutable DateFormat{T<:Tuple, N}
     tokens::T
-    locale::L
-    field_defaults::NTuple{N,Int64}
-    field_order::NTuple{N,Int64}
+    locale::DateLocale
+    field_defaults::NTuple{N, Int}
+    field_order::NTuple{N,Int}
 end
 
 include("io-util.jl")
@@ -88,40 +81,21 @@ function Base.show{c}(io::IO, d::DatePart{c})
     write(io, ")")
 end
 
-### Text tokens
-
-const english = Dict{String,Int}("january"=>1,"february"=>2,"march"=>3,"april"=>4,
-                 "may"=>5,"june"=>6,"july"=>7,"august"=>8,"september"=>9,
-                 "october"=>10,"november"=>11,"december"=>12)
-const abbrenglish = Dict{String,Int}("jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
-                     "may"=>5,"jun"=>6,"jul"=>7,"aug"=>8,"sep"=>9,
-                     "oct"=>10,"nov"=>11,"dec"=>12)
-const MONTHTOVALUE = Dict{String,Dict{String,Int}}("english"=>english)
-const MONTHTOVALUEABBR = Dict{String,Dict{String,Int}}("english"=>abbrenglish)
-
 
 # fallback to tryparsenext methods that don't care about locale
 @inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
     tryparsenext(d, str, i, len)
 end
 
-function month_from_abbr_name{l}(word, locale::DateLocale{l})
-    get(MONTHTOVALUEABBR[string(l)], word, 0)
+function month_to_value(word, locale::DateLocale)
+    get(locale.month_to_value, word, 0)
 end
 
-function month_from_name{l}(word, locale::DateLocale{l})
-    get(MONTHTOVALUE[string(l)], word, 0)
+function month_to_value_abbr(word, locale::DateLocale)
+    get(locale.month_to_value_abbr, word, 0)
 end
 
-function month_from_abbr_name(word, locale::DateLocale{:english})
-    get(abbrenglish, word, 0)
-end
-
-function month_from_name(word, locale::DateLocale{:english})
-    get(english, word, 0)
-end
-
-for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name])
+for (tok, fn) in zip("uU", [month_to_value_abbr, month_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         R = Nullable{Int}
         c, ii = tryparsenext_word(str, i, len, locale, max_width(d))
@@ -132,31 +106,30 @@ for (tok, fn) in zip("uU", [month_from_abbr_name, month_from_name])
 end
 
 # ignore day of week while parsing
-@inline function tryparsenext(d::Union{DatePart{'e'}, DatePart{'E'}}, str, i, len, locale)
+@inline function tryparsenext(::Union{DatePart{'e'}, DatePart{'E'}}, str, i, len, locale)
     tryparsenext_word(str, i, len, locale)
 end
 
-for (tok, fn) in zip("uU", [monthabbr, monthname])
-    @eval function format{l}(io, d::DatePart{$tok}, dt, locale::DateLocale{l})
-        write(io, $fn(dt; locale=string(l)))
+for (tok, fn) in zip("eE", [dayabbr, dayname])
+    @eval function format(io, ::DatePart{$tok}, dt,  locale)
+        write(io, $fn(dayofweek(dt), locale))
     end
 end
 
-for (tok, dict) in zip("eE", [:VALUETODAYOFWEEKABBR, :VALUETODAYOFWEEK])
-    @eval function format{l}(io, d::DatePart{$tok}, dt, locale::DateLocale{l})
-        write(io, $dict[string(l)][dayofweek(dt)])
+for (tok, fn) in zip("uU", [monthabbr, monthname])
+    @eval function format(io, d::DatePart{$tok}, dt, locale::DateLocale)
+        write(io, $fn(month(dt), locale))
     end
 end
 
 
 ### Delimiters
 
-immutable Delim{T,length} <: AbstractDateToken
-    d::T
-end
+immutable Delim{T, length} <: AbstractDateToken d::T end
 
-Delim(d::Char) = Delim{Char,1}(d)
-Delim(d::String) = Delim{String,length(d)}(d)
+Delim(c::Char, n) = Delim{Char, n}(c)
+Delim(c::Char) = Delim(c,1)
+Delim{S<:AbstractString}(str::S) = Delim{S,length(str)}(str)
 
 @inline function tryparsenext{N}(d::Delim{Char,N}, str, i::Int, len)
     R = Nullable{Int}
@@ -189,7 +162,7 @@ function format(io, d::Delim, str, i)
     write(io, d.d)
 end
 
-function _show_content{N}(io::IO, d::Delim{Char,N})
+function _show_content{N}(io::IO, d::Delim{Char, N})
     if d.d in keys(SLOT_RULE)
         for i=1:N
             write(io, '\\')
@@ -219,7 +192,6 @@ end
 
 ### DateFormat construction
 
-
 abstract DayOfWeekToken # special addition to Period types
 
 # mapping format specifiers to period types
@@ -239,7 +211,7 @@ const SLOT_RULE = Dict{Char, Type}(
 )
 
 """
-    DateFormat(format::AbstractString, locale=:english, result_type::Type=DateTime) -> DateFormat
+    DateFormat(format::AbstractString, locale="english", default_fields::Type=(1,1,1,0,0,0,0)) -> DateFormat
 
 Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. The following character codes can be used to construct the `format`
@@ -273,9 +245,9 @@ macro expansion time and reuses it later. see [`@dateformat_str`](@ref).
 See [`DateTime`](@ref) and [`format`](@ref) for how to use a DateFormat object to parse and write Date strings
 respectively.
 """
-function DateFormat(f::AbstractString, locale=:english; default_fields=(1,1,1,0,0,0,0))
+function DateFormat(f::AbstractString, locale=ENGLISH, default_fields=(1,1,1,0,0,0,0))
     tokens = AbstractDateToken[]
-    localeobj = DateLocale{Symbol(locale)}()
+    localeobj = (isa(locale, AbstractString) ? LOCALES[locale] : locale)::DateLocale
     prev = ()
     prev_offset = 1
 
@@ -358,7 +330,7 @@ end
 
 # Standard formats
 const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.sss")
-const ISODateFormat = DateFormat("yyyy-mm-dd", :english)
+const ISODateFormat = DateFormat("yyyy-mm-dd")
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 ### API
@@ -391,7 +363,7 @@ Construct a `Date` object by parsing a `dt` date string following the pattern gi
 `format` string. Follows the same conventions as
 `DateTime(::AbstractString, ::AbstractString)`.
 """
-Date(dt::AbstractString,format::AbstractString;locale=:english) = parse(Date,dt,DateFormat(format,locale))
+Date(dt::AbstractString,format::AbstractString;locale=ENGLISH) = parse(Date,dt,DateFormat(format,locale))
 
 """
     Date(dt::AbstractString, df::DateFormat) -> Date
@@ -446,7 +418,7 @@ generate the string "1996-01-15T00:00:00" you could use `format`: "yyyy-mm-ddTHH
 Note that if you need to use a code character as a literal you can use the escape character
 backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
 """
-format(dt::TimeType,f::AbstractString;locale::AbstractString="english") = format(dt,DateFormat(f,locale))
+format(dt::TimeType,f::AbstractString;locale="english") = format(dt,DateFormat(f,locale))
 
 # show
 
@@ -458,7 +430,7 @@ function Base.show(io::IO, dt::DateTime)
     end
 end
 
-const simple_date = DateFormat("YYYY-mm-dd", :english)
+const simple_date = DateFormat("YYYY-mm-dd")
 function Base.show(io::IO, dt::Date)
     format(io, dt, simple_date)
 end
