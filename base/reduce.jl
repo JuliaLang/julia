@@ -476,6 +476,7 @@ end
     any(itr) -> Bool
 
 Test whether any elements of a boolean collection are `true`.
+Not all items in `itr` will be visited if a `true` value is found.
 
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -487,6 +488,10 @@ julia> a = [true,false,false,true]
 
 julia> any(a)
 true
+
+julia> any((println(i); v) for (i, v) in enumerate(a))
+1
+true
 ```
 """
 any(itr) = any(identity, itr)
@@ -495,6 +500,7 @@ any(itr) = any(identity, itr)
     all(itr) -> Bool
 
 Test whether all elements of a boolean collection are `true`.
+Not all items in `itr` will be visited if a `false` value is found.
 
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -506,6 +512,11 @@ julia> a = [true,false,false,true]
 
 julia> all(a)
 false
+
+julia> all((println(i); v) for (i, v) in enumerate(a))
+1
+2
+false
 ```
 """
 all(itr) = all(identity, itr)
@@ -514,9 +525,17 @@ all(itr) = all(identity, itr)
     any(p, itr) -> Bool
 
 Determine whether predicate `p` returns `true` for any elements of `itr`.
+Not all items in `itr` will be visited if a `true` value is found.
 
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
+true
+
+julia> any(i -> (println(i); i > 3), 1:10)
+1
+2
+3
+4
 true
 ```
 """
@@ -531,10 +550,17 @@ end
     all(p, itr) -> Bool
 
 Determine whether predicate `p` returns `true` for all elements of `itr`.
+Not all items in `itr` will be visited if a `false` value is found.
 
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
 true
+
+julia> all(i -> (println(i); i < 3), 1:10)
+1
+2
+3
+false
 ```
 """
 function all(f, itr)
