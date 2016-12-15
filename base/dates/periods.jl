@@ -309,12 +309,12 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x,y])
-(+)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,y))
+(+)(x::CompoundPeriod,y::Period) = CompoundPeriod(cat(x.periods,y))
 (+)(y::Period,x::CompoundPeriod) = x + y
-(+)(x::CompoundPeriod,y::CompoundPeriod) = CompoundPeriod(vcat(x.periods,y.periods))
+(+)(x::CompoundPeriod,y::CompoundPeriod) = CompoundPeriod(cat(x.periods,y.periods))
 # E.g. Year(1) - Month(1)
 (-)(x::Period,y::Period) = CompoundPeriod(Period[x,-y])
-(-)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,-y))
+(-)(x::CompoundPeriod,y::Period) = CompoundPeriod(cat(x.periods,-y))
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
 (-)(y::Union{Period,CompoundPeriod},x::CompoundPeriod) = (-x) + y
 
