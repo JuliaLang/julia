@@ -22,7 +22,7 @@
 
 let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
     expected = (1996, 2, 15, 24, 0, 0, 0)
-    @test get(Dates.tryparse_internal(Dates.DateFormat(format), str)) == expected
+    @test get(Dates.tryparse_internal(DateTime, Dates.DateFormat(format), str)) == expected
     @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
 end
 
@@ -340,6 +340,11 @@ dt = Dates.DateTime(2014,8,23,17,22,15)
 @test Dates.format(Dates.DateTime(2014,10,31,0,0,0,9),Dates.RFC1123Format) == "Fri, 31 Oct 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,11,2,0,0,0,9),Dates.RFC1123Format) == "Sun, 02 Nov 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,12,5,0,0,0,9),Dates.RFC1123Format) == "Fri, 05 Dec 2014 00:00:00"
+
+dt = Dates.DateTime(2016,11,12,7,45,36)
+@test parse(Dates.DateTime,"Sat, 12 Nov 2016 07:45:36",Dates.RFC1123Format) == dt
+@test parse(Dates.DateTime,"Mon, 12 Nov 2016 07:45:36",Dates.RFC1123Format) == dt  # Wrong day of week
+@test_throws ArgumentError parse(Date,"Foo, 12 Nov 2016 07:45:36",Dates.RFC1123Format)
 
 # Issue 15195
 let f = "YY"
