@@ -1,1 +1,3 @@
-include: [en/stable/_static/, en/stable/_sources/]
+includes:
+    - en/stable/_static/
+    - en/stable/_sources/
