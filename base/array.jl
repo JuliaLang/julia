@@ -954,7 +954,7 @@ function hcat{T}(V::Vector{T}...)
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
-function vcat{T}(arrays::Vector{T}...)
+function cat{T}(arrays::Vector{T}...)
     n = 0
     for a in arrays
         n += length(a)
@@ -981,8 +981,12 @@ function vcat{T}(arrays::Vector{T}...)
     return arr
 end
 
-cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
+function vcat{T}(arrays::Vector{T}...)
+    arr = cat(arrays...)
+    return reshape(arr,length(arr),1)
+end
 
+cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(x->1, n-1)..., length(x)))
 
 ## find ##
 
