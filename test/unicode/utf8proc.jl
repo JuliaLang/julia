@@ -79,7 +79,7 @@ end
 let
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
-    for c in vcat(alower,ulower)
+    for c in cat(alower,ulower)
         @test islower(c) == true
         @test isupper(c) == false
         @test isdigit(c) == false
@@ -89,7 +89,7 @@ let
     aupper=['A', 'D', 'J', 'Y', 'Z']
     uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
 
-    for c in vcat(aupper,uupper)
+    for c in cat(aupper,uupper)
         @test islower(c) == false
         @test isupper(c) == true
         @test isdigit(c) == false
@@ -97,7 +97,7 @@ let
     end
 
     nocase=['א','ﺵ']
-    alphas=vcat(alower,ulower,aupper,uupper,nocase)
+    alphas=cat(alower,ulower,aupper,uupper,nocase)
 
     for c in alphas
          @test isalpha(c) == true
@@ -117,7 +117,7 @@ let
          @test isnumber(c) == true
     end
 
-    alnums=vcat(alphas,anumber,unumber)
+    alnums=cat(alphas,anumber,unumber)
     for c in alnums
          @test isalnum(c) == true
          @test ispunct(c) == false
@@ -129,12 +129,12 @@ let
     apunct =['.',',',';',':','&']
     upunct =['‡', '؟', '჻' ]
 
-    for c in vcat(apunct,upunct)
+    for c in cat(apunct,upunct)
          @test ispunct(c) == true
          @test isalnum(c) == false
     end
 
-    for c in vcat(alnums,asymbol,usymbol,apunct,upunct)
+    for c in cat(alnums,asymbol,usymbol,apunct,upunct)
         @test isprint(c) == true
         @test isgraph(c) == true
         @test isspace(c) == false
@@ -150,13 +150,13 @@ let
     uspace = [ENSPACE, EMSPACE, THINSPACE]
     aspace = [' ']
     acntrl_space = ['\t', '\n', '\v', '\f', '\r']
-    for c in vcat(aspace,uspace)
+    for c in cat(aspace,uspace)
         @test isspace(c) == true
         @test isprint(c) == true
         @test isgraph(c) == false
     end
 
-    for c in vcat(acntrl_space)
+    for c in cat(acntrl_space)
         @test isspace(c) == true
         @test isprint(c) == false
         @test isgraph(c) == false
@@ -168,7 +168,7 @@ let
     latincontrol = [ Char(0x0080), Char(0x0085) ]
     ucontrol = [ Char(0x200E), Char(0x202E) ]
 
-    for c in vcat(acontrol, acntrl_space, latincontrol)
+    for c in cat(acontrol, acntrl_space, latincontrol)
         @test iscntrl(c) == true
         @test isalnum(c) == false
         @test isprint(c) == false
