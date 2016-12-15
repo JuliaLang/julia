@@ -211,7 +211,7 @@ const SLOT_RULE = Dict{Char, Type}(
 )
 
 """
-    DateFormat(format::AbstractString, locale="english", default_fields::Type=(1,1,1,0,0,0,0)) -> DateFormat
+    DateFormat(format::AbstractString, locale="english", default_fields=(1,1,1,0,0,0,0)) -> DateFormat
 
 Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. The following character codes can be used to construct the `format`
@@ -245,9 +245,8 @@ macro expansion time and reuses it later. see [`@dateformat_str`](@ref).
 See [`DateTime`](@ref) and [`format`](@ref) for how to use a DateFormat object to parse and write Date strings
 respectively.
 """
-function DateFormat(f::AbstractString, locale=ENGLISH, default_fields=(1,1,1,0,0,0,0))
+function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH, default_fields=(1,1,1,0,0,0,0))
     tokens = AbstractDateToken[]
-    localeobj = (isa(locale, AbstractString) ? LOCALES[locale] : locale)::DateLocale
     prev = ()
     prev_offset = 1
 
@@ -305,7 +304,11 @@ function DateFormat(f::AbstractString, locale=ENGLISH, default_fields=(1,1,1,0,0
         push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
     end
 
-    return DateFormat((tokens...), localeobj, default_fields, (order...))
+    return DateFormat((tokens...), locale, default_fields, (order...))
+end
+
+function DateFormat(f::AbstractString, locale::AbstractString, default_fields=(1,1,1,0,0,0,0))
+    DateFormat(f, LOCALES[locale], default_fields)
 end
 
 function Base.show(io::IO, df::DateFormat)
@@ -344,7 +347,7 @@ This method creates a `DateFormat` object each time it is called. If you are par
 date strings of the same format, consider creating a [`DateFormat`](@ref) object once and using
 that as the second argument instead.
 """
-DateTime(dt::AbstractString, format::AbstractString;locale::AbstractString="english") = parse(DateTime,dt,DateFormat(format,locale))
+DateTime(dt::AbstractString, format::AbstractString; locale="english") = parse(DateTime,dt,DateFormat(format,locale))
 
 """
     DateTime(dt::AbstractString, df::DateFormat) -> DateTime
@@ -363,7 +366,7 @@ Construct a `Date` object by parsing a `dt` date string following the pattern gi
 `format` string. Follows the same conventions as
 `DateTime(::AbstractString, ::AbstractString)`.
 """
-Date(dt::AbstractString,format::AbstractString;locale=ENGLISH) = parse(Date,dt,DateFormat(format,locale))
+Date(dt::AbstractString,format::AbstractString;locale="english") = parse(Date,dt,DateFormat(format,locale))
 
 """
     Date(dt::AbstractString, df::DateFormat) -> Date
@@ -440,16 +443,16 @@ function Base.string(dt::TimeType)
 end
 
 # vectorized
-DateTime{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = DateTime(Y,DateFormat(format,locale))
+DateTime{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale="english") = DateTime(Y,DateFormat(format,locale))
 function DateTime{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
     return reshape(DateTime[parse(DateTime,y,df) for y in Y], size(Y))
 end
-Date{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Date(Y,DateFormat(format,locale))
+Date{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale="english") = Date(Y,DateFormat(format,locale))
 function Date{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateFormat)
     return reshape(Date[Date(parse(Date,y,df)) for y in Y], size(Y))
 end
 
-format{T<:TimeType}(Y::AbstractArray{T},fmt::AbstractString;locale::AbstractString="english") = format(Y,DateFormat(fmt,locale))
+format{T<:TimeType}(Y::AbstractArray{T},fmt::AbstractString;locale="english") = format(Y,DateFormat(fmt,locale))
 function format(Y::AbstractArray{Date},df::DateFormat=ISODateFormat)
     return reshape([format(y,df) for y in Y], size(Y))
 end
