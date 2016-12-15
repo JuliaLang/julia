@@ -533,7 +533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Functions",
     "title": "Operators With Special Names",
     "category": "section",
-    "text": "A few special expressions correspond to calls to functions with non-obvious names. These are:Expression Calls\n[A B C ...] hcat()\n[A, B, C, ...] vcat()\n[A B; C D; ...] hvcat()\nA' ctranspose()\nA.' transpose()\n1:n colon()\nA[i] getindex()\nA[i]=x setindex!()These functions are included in the Base.Operators module even though they do not have operator-like names."
+    "text": "A few special expressions correspond to calls to functions with non-obvious names. These are:Expression Calls\n[A B C ...] hcat()\n[A; B; C; ...] vcat()\n[A B; C D; ...] hvcat()\nA' ctranspose()\nA.' transpose()\n1:n colon()\nA[i] getindex()\nA[i]=x setindex!()These functions are included in the Base.Operators module even though they do not have operator-like names."
 },
 
 {
