@@ -111,7 +111,7 @@ end
 """
     heapify!(v, ord::Ordering=Forward)
 
-In-place [`heapify`](:func:`heapify`).
+In-place [`heapify`](@ref).
 """
 function heapify!(xs::AbstractArray, o::Ordering=Forward)
     for i in heapparent(length(xs)):-1:1
@@ -182,7 +182,7 @@ end
 """
     PriorityQueue(K, V, [ord])
 
-Construct a new [`PriorityQueue`](:obj:`PriorityQueue`), with keys of type
+Construct a new [`PriorityQueue`](@ref), with keys of type
 `K` and values/priorites of type `V`.
 If an order is not given, the priority queue is min-ordered using
 the default comparison for `V`.

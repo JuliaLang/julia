@@ -723,7 +723,7 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # need to compute value before left-padding since trailing zeros are elided
     push!(blk.args, :(tmpout = IOBuffer()))
     push!(blk.args, :(print_fixed(tmpout,fprec,pt,len,$('#' in flags))))
-    push!(blk.args, :(tmpstr = takebuf_string(tmpout)))
+    push!(blk.args, :(tmpstr = String(take!(tmpout))))
     push!(blk.args, :(width -= length(tmpstr)))
     if '+' in flags || ' ' in flags
         push!(blk.args, :(width -= 1))
@@ -1111,7 +1111,7 @@ function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::C
     write(fmt, 'R')
     write(fmt, c)
     write(fmt, UInt8(0))
-    printf_fmt = takebuf_array(fmt)
+    printf_fmt = take!(fmt)
     @assert length(printf_fmt) == fmt_len
     bufsiz = length(DIGITS) - 1
     lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), DIGITS, bufsiz, printf_fmt, &d)
@@ -1174,6 +1174,23 @@ function _printf(macroname, io, fmt, args)
     Expr(:let, blk)
 end
 
+"""
+    @printf([io::IOStream], "%Fmt", args...)
+
+Print `args` using C `printf()` style format specification string, with some caveats:
+`Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
+`%e`, `%E`, `%f`, `%F`, `%g`, and `%G`.
+
+Optionally, an `IOStream`
+may be passed as the first argument to redirect output.
+
+# Examples
+
+```jldoctest
+julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
+Inf Inf NaN NaN\n
+```
+"""
 macro printf(args...)
     isempty(args) && throw(ArgumentError("@printf: called with no arguments"))
     if isa(args[1], AbstractString) || is_str_expr(args[1])
@@ -1185,12 +1202,26 @@ macro printf(args...)
     end
 end
 
+"""
+    @sprintf("%Fmt", args...)
+
+Return `@printf` formatted output as string.
+
+# Examples
+
+```jldoctest
+julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
+
+julia> println(s)
+this is a test            34.6
+```
+"""
 macro sprintf(args...)
     isempty(args) && throw(ArgumentError("@sprintf: called with zero arguments"))
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         throw(ArgumentError("@sprintf: first argument must be a format string"))
     letexpr = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
-    push!(letexpr.args[1].args, :(takebuf_string(out)))
+    push!(letexpr.args[1].args, :(String(take!(out))))
     letexpr
 end
 

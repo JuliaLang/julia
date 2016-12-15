@@ -189,7 +189,10 @@ const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
 function hash(s::Set, h::UInt)
     h = hash(hashs_seed, h)
     for x in s
-        h $= hash(x)
+        h ⊻= hash(x)
     end
     return h
 end
+
+convert{T}(::Type{Set{T}}, s::Set{T}) = s
+convert{T,S}(::Type{Set{T}}, x::Set{S}) = Set{T}(x)

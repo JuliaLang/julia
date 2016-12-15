@@ -46,7 +46,7 @@ withenv(k1=>k1, k2=>k2) do
     @test b_k1 && b_k2
     io = IOBuffer()
     show(io, ENV)
-    s = takebuf_string(io)
+    s = String(take!(io))
     @test contains(s, "$k1=$k1")
     @test contains(s, "$k2=$k2")
 

@@ -11,7 +11,7 @@ elseif is_windows()
     # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
     function isfile_casesensitive(path)
         isfile(path) || return false  # Fail fast
-        Filesystem.longpath(path) == path
+        basename(Filesystem.longpath(path)) == basename(path)
     end
 elseif is_apple()
     # HFS+ filesystem is case-preserving. The getattrlist API returns
@@ -486,10 +486,10 @@ function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
     while true
         s = t.storage
-        if !is(s, nothing) && haskey(s, :SOURCE_PATH)
+        if s !== nothing && haskey(s, :SOURCE_PATH)
             return s[:SOURCE_PATH]
         end
-        if is(t, t.parent)
+        if t === t.parent
             return default
         end
         t = t.parent
@@ -506,7 +506,7 @@ end
 
 `@__FILE__` expands to a string with the absolute file path of the file containing the
 macro. Returns `nothing` if run from a REPL or an empty string if evaluated by
-`julia -e <expr>`. Alternatively see [`PROGRAM_FILE`](:data:`PROGRAM_FILE`).
+`julia -e <expr>`. Alternatively see [`PROGRAM_FILE`](@ref).
 """
 macro __FILE__() source_path() end
 
@@ -519,15 +519,6 @@ evaluated by `julia -e <expr>`.
 """
 macro __DIR__() source_dir() end
 
-"""
-    include(path::AbstractString)
-
-Evaluate the contents of a source file in the current context. During including, a
-task-local include path is set to the directory containing the file. Nested calls to
-`include` will search relative to that path. All paths refer to files on node 1 when running
-in parallel, and files will be fetched from node 1. This function is typically used to load
-source interactively, or to combine files in packages that are broken into multiple source files.
-"""
 include_from_node1(path::AbstractString) = include_from_node1(String(path))
 function include_from_node1(_path::String)
     path, prev = _include_dependency(_path)
@@ -554,9 +545,27 @@ function include_from_node1(_path::String)
 end
 
 """
+    include(path::AbstractString...)
+
+Evaluate the contents of the input source file(s) in the current context. Returns the result
+of the last evaluated argument (of the last input file). During including, a
+task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. All paths refer to files on node 1 when running
+in parallel, and files will be fetched from node 1. This function is typically used to load
+source interactively, or to combine files in packages that are broken into multiple source files.
+"""
+function include(_path::AbstractString...)
+    local result
+    for path in _path
+        result = include(path)
+    end
+    result
+end
+
+"""
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](:func:`include`), evaluate all expressions,
+Load the file using [`include`](@ref), evaluate all expressions,
 and return the value of the last one.
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
@@ -619,11 +628,11 @@ compilecache(mod::Symbol) = compilecache(string(mod))
 """
     Base.compilecache(module::String)
 
-Creates a [precompiled cache file](:ref:`man-modules-initialization-precompilation`) for
+Creates a precompiled cache file for
 a module and all of its dependencies.
 This can be used to reduce package load times. Cache files are stored in
 `LOAD_CACHE_PATH[1]`, which defaults to `~/.julia/lib/VERSION`. See
-[Module initialization and precompilation](:ref:`Module initialization and precompilation <man-modules-initialization-precompilation>`)
+[Module initialization and precompilation](@ref)
 for important notes.
 """
 function compilecache(name::String)

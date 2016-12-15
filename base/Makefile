@@ -12,7 +12,7 @@ else
 CPP_STDOUT := $(CPP) -E
 endif
 
-all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl uv_constants.jl version_git.jl.phony)
+all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl uv_constants.jl version_git.jl.phony)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -26,9 +26,6 @@ $(BUILDDIR)/pcre_h.jl: $(PCRE_INCL_PATH)
 
 $(BUILDDIR)/errno_h.jl:
 	@$(call PRINT_PERL, echo '#include <errno.h>' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | LC_ALL=C sort > $@)
-
-$(BUILDDIR)/fenv_constants.jl: $(SRCDIR)/../src/fenv_constants.h
-	@$(PRINT_PERL) $(CPP_STDOUT) -DJULIA $< | tail -n 8 | perl -ple 's/\sFE_UN\w+/ 0x10/g; s/\sFE_O\w+/ 0x08/g; s/\sFE_DI\w+/ 0x04/g; s/\sFE_INV\w+/ 0x01/g; s/\sFE_TON\w+/ 0x00/g; s/\sFE_UP\w+/ 0x800/g; s/\sFE_DO\w+/ 0x400/g; s/\sFE_TOW\w+/ 0xc00/g' > $@
 
 $(BUILDDIR)/file_constants.jl: $(SRCDIR)/../src/file_constants.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) -DJULIA $< | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@)
@@ -106,7 +103,7 @@ clean:
 	rm -f $(BUILDDIR)/errno_h.jl
 	rm -f $(BUILDDIR)/build_h.jl
 	rm -f $(BUILDDIR)/build_h.jl.phony
-	rm -f $(BUILDDIR)/fenv_constants.jl
+	rm -f $(BUILDDIR)/fenv_constants.jl # To be removed
 	rm -f $(BUILDDIR)/uv_constants.jl
 	rm -f $(BUILDDIR)/file_constants.jl
 	rm -f $(BUILDDIR)/version_git.jl

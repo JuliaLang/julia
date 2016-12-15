@@ -42,10 +42,10 @@ end
     round([T,] x, [digits, [base]], [r::RoundingMode])
 
 Rounds `x` to an integer value according to the provided
-[`RoundingMode`](:obj:`RoundingMode`), returning a value of the same type as `x`. When not
+[`RoundingMode`](@ref), returning a value of the same type as `x`. When not
 specifying a rounding mode the global mode will be used
-(see [`rounding`](:func:`rounding`)), which by default is round to the nearest integer
-([`RoundNearest`](:obj:`RoundNearest`) mode), with ties (fractional values of 0.5) being
+(see [`rounding`](@ref)), which by default is round to the nearest integer
+([`RoundNearest`](@ref) mode), with ties (fractional values of 0.5) being
 rounded to the nearest even integer.
 
 ```jldoctest
@@ -59,11 +59,11 @@ julia> round(2.5)
 2.0
 ```
 
-The optional [`RoundingMode`](:obj:`RoundingMode`) argument will change how the number gets
+The optional [`RoundingMode`](@ref) argument will change how the number gets
 rounded.
 
 `round(T, x, [r::RoundingMode])` converts the result to type `T`, throwing an
-[`InexactError`](:exc:`InexactError`) if the value is not representable.
+[`InexactError`](@ref) if the value is not representable.
 
 `round(x, digits)` rounds to the specified number of digits after the decimal place (or
 before if negative). `round(x, digits, base)` rounds using a base other than 10.
@@ -267,6 +267,10 @@ else
     fma(x::Float32, y::Float32, z::Float32) = fma_libm(x,y,z)
     fma(x::Float64, y::Float64, z::Float64) = fma_libm(x,y,z)
 end
+function fma(a::Float16, b::Float16, c::Float16)
+    Float16(fma(Float32(a), Float32(b), Float32(c)))
+end
+
 # This is necessary at least on 32-bit Intel Linux, since fma_llvm may
 # have called glibc, and some broken glibc fma implementations don't
 # properly restore the rounding mode

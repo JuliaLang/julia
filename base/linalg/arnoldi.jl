@@ -4,7 +4,7 @@ using .ARPACK
 
 ## eigs
 """
-    eigs(A; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+    eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes eigenvalues `d` of `A` using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or
 general nonsymmetric matrices respectively.
@@ -90,7 +90,7 @@ function eigs(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
     eigs(convert(AbstractMatrix{Tnew}, A), convert(AbstractMatrix{Tnew}, B); kwargs...)
 end
 """
-    eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+    eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
 Computes generalized eigenvalues `d` of `A` and `B` using implicitly restarted Lanczos or Arnoldi iterations for
 real symmetric or general nonsymmetric matrices respectively.
@@ -115,10 +115,10 @@ The following keyword arguments are supported:
 | `:BE`   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric `A` only) |
 
 * `tol`: relative tolerance used in the convergence criterion for eigenvalues, similar to
-     `tol` in the [`eigs(A)`](:func:`eigs`) method for the ordinary eigenvalue
+     `tol` in the [`eigs(A)`](@ref) method for the ordinary eigenvalue
      problem, but effectively for the eigenvalues of ``B^{-1} A`` instead of ``A``.
      See the documentation for the ordinary eigenvalue problem in
-     [`eigs(A)`](:func:`eigs`) and the accompanying note about `tol`.
+     [`eigs(A)`](@ref) and the accompanying note about `tol`.
 * `maxiter`: Maximum number of iterations (default = 300)
 * `sigma`: Specifies the level shift used in inverse iteration. If `nothing` (default),
   defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to `sigma`
@@ -131,7 +131,7 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
-**Example**
+# Example
 
 ```julia
 X = sprand(10, 5, 0.2)
@@ -317,7 +317,7 @@ end
     svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, u0=zeros((0,)), v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)
 
 Computes the largest singular values `s` of `A` using implicitly restarted Lanczos
-iterations derived from [`eigs`](:func:`eigs`).
+iterations derived from [`eigs`](@ref).
 
 **Inputs**
 
@@ -328,9 +328,9 @@ iterations derived from [`eigs`](:func:`eigs`).
 * `nsv`: Number of singular values. Default: 6.
 * `ritzvec`: If `true`, return the left and right singular vectors `left_sv` and `right_sv`.
    If `false`, omit the singular vectors. Default: `true`.
-* `tol`: tolerance, see [`eigs`](:func:`eigs`).
-* `maxiter`: Maximum number of iterations, see [`eigs`](:func:`eigs`). Default: 1000.
-* `ncv`: Maximum size of the Krylov subspace, see [`eigs`](:func:`eigs`) (there called `nev`). Default: `2*nsv`.
+* `tol`: tolerance, see [`eigs`](@ref).
+* `maxiter`: Maximum number of iterations, see [`eigs`](@ref). Default: 1000.
+* `ncv`: Maximum size of the Krylov subspace, see [`eigs`](@ref) (there called `nev`). Default: `2*nsv`.
 * `u0`: Initial guess for the first left Krylov vector. It may have length `m` (the first dimension of `A`), or 0.
 * `v0`: Initial guess for the first right Krylov vector. It may have length `n` (the second dimension of `A`), or 0.
 
@@ -342,7 +342,7 @@ iterations derived from [`eigs`](:func:`eigs`).
 * `nmult`: Number of matrix--vector products used.
 * `resid`: Final residual vector.
 
-**Example**
+# Example
 
 ```julia
 X = sprand(10, 5, 0.2)

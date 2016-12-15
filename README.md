@@ -27,15 +27,13 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Packages:** <http://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
+- **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <http://julialang.org/community/>
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-The mailing list for developer discussion is
-<http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
-of messages is higher, and the discussions tend to be more esoteric. New
-developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
+New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
 
 ### External Resources
 <a name="External-Resources"/>
@@ -49,16 +47,17 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 ## Currently Supported Platforms
 
 - **Linux**
-- **Darwin/OS X**
+- **MacOS**
 - **FreeBSD**
 - **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER (little-endian) is available too.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit, except MacOS) architectures. Support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER8 (little-endian) has been added recently.
 
 <a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
 
-First, acquire the source code by cloning the git repository:
+First, make sure you have all the [required dependencies](#Required-Build-Tools-External-Libraries) installed.
+Then, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
@@ -202,8 +201,6 @@ You can also set `MARCH=native` for a maximum-performance build customized for t
 
 The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for Julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#System-Provided-Libraries).
 
-For a fast and easy current installation, the `before_install` section of [travis.yml](https://github.com/JuliaLang/julia/blob/master/.travis.yml) is a great resource.  Note that those instructions are for Ubuntu 12.04, and for later versions you may need to install newer versions of dependencies, such as `libunwind8-dev` instead of `libunwind7-dev`.
-
 #### RHEL/CentOS 6
 
 On RHEL/CentOS 6 systems, the default compiler (`gcc` 4.4) is too old to build Julia.
@@ -217,6 +214,7 @@ Install or contact your systems administrator to install a more recent version o
 ------------------------|---------------------
  OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX2 = 1` disables AVX2 instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed. </li></ul></li></ul><p> If you get an error that looks like ```../kernel/x86_64/dgemm_kernel_4x4_haswell.S:1709: Error: no such instruction: `vpermpd $ 0xb1,%ymm0,%ymm0'```, then you need to set `OPENBLAS_DYNAMIC_ARCH = 0` or `OPENBLAS_NO_AVX2 = 1`, or you need a newer version of `binutils` (2.18 or newer). ([Issue #7653](https://github.com/JuliaLang/julia/issues/7653))
 Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)).
+LibGit2 build failure | If LibGit2 configuration step reports `CMake Error at /usr/share/cmake-3.0/Modules/FindOpenSSL.cmake:294 (list):` then the versions of [OpenSSL and CMake are probably incompatible](https://cmake.org/Bug/view.php?id=15386). The recommended solution is to upgrade the version of CMake to 3.1.2 or above.
 
 ### OS X
 
@@ -245,10 +243,9 @@ You must use the `gmake` command on FreeBSD instead of `make`.
 Note that Julia is community-supported and we have little control over our upstream dependencies, you may still run into issues with dependencies and YMMV. Current known issues include:
 
  - The x86 arch doesn't support threading due to lack of compiler runtime library support (set `JULIA_THREADS=0`).
- - libunwind needs a small patch to its tests to compile.
  - OpenBLAS patches in pkg haven't been upstreamed.
  - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to work around this (upstream bug submitted to FreeBSD pkg maintainers).
- - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=/usr/local/lib` and `CPPFLAGS=/usr/local/include` to your environment or `Make.user` file to build successfully.
+ - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=-L/usr/local/lib` and `CPPFLAGS=-I/usr/local/include` to your environment or `Make.user` file to build successfully.
 
 
 ### Windows
@@ -266,14 +263,14 @@ Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
 - **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
+- **[python]** (>=2.7)          - needed to build LLVM.
 - **[gfortran]**                — compiling and linking Fortran libraries
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
 - **[cmake]**                   — needed to build `libgit2`.
-- **[openssl]**                 — needed for HTTPS support in `libgit2` on Linux, install via `apt-get install libssl-dev` or `yum install openssl-devel`.
-- **[pkg-config]**              - needed to build libgit2 correctly, especially for proxy support
+- **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
@@ -300,14 +297,13 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
 
-For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
-
 [GNU make]:     http://www.gnu.org/software/make
 [patch]:        http://www.gnu.org/software/patch
 [wget]:         http://www.gnu.org/software/wget
 [m4]:           http://www.gnu.org/software/m4
 [gcc]:          http://gcc.gnu.org
 [clang]:        http://clang.llvm.org
+[python]:       https://www.python.org/
 [gfortran]:     https://gcc.gnu.org/fortran/
 [curl]:         http://curl.haxx.se
 [fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
@@ -334,7 +330,6 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [utf8proc]:     http://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind
-[openssl]:      https://www.openssl.org
 [libssh2]:      https://www.libssh2.org
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
@@ -391,7 +386,7 @@ The Julia source code is organized as follows:
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
+If you would rather not compile the latest Julia from source, platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
 

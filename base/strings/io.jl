@@ -6,9 +6,9 @@
 """
     print(io::IO, x)
 
-Write to `io` (or to the default output stream [`STDOUT`](:obj:`STDOUT`)
+Write to `io` (or to the default output stream [`STDOUT`](@ref)
 if `io` is not given) a canonical (un-decorated) text representation
-of a value if there is one, otherwise call [`show`](:func:`show`).
+of a value if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 """
@@ -37,8 +37,8 @@ end
 """
     println(io::IO, xs...)
 
-Print (using [`print`](:func:`print`)) `xs` followed by a newline.
-If `io` is not supplied, prints to [`STDOUT`](:obj:`STDOUT`).
+Print (using [`print`](@ref)) `xs` followed by a newline.
+If `io` is not supplied, prints to [`STDOUT`](@ref).
 """
 println(io::IO, xs...) = print(io, xs..., '\n')
 
@@ -97,7 +97,7 @@ string_with_env(env, xs...) = print_to_string(xs...; env=env)
 """
     string(xs...)
 
-Create a string from any values using the [`print`](:func:`print`) function.
+Create a string from any values using the [`print`](@ref) function.
 """
 string(xs...) = print_to_string(xs...)
 
@@ -121,12 +121,12 @@ end
 """
     repr(x)
 
-Create a string from any value using the [`showall`](:func:`showall`) function.
+Create a string from any value using the [`showall`](@ref) function.
 """
 function repr(x)
     s = IOBuffer()
     showall(s, x)
-    takebuf_string(s)
+    String(take!(s))
 end
 
 # IOBuffer views of a (byte)string:
@@ -199,7 +199,7 @@ escape_nul(s::AbstractString, i::Int) =
 
 General escaping of traditional C and Unicode escape sequences.
 Any characters in `esc` are also escaped (with a backslash).
-See also [`unescape_string`](:func:`unescape_string`).
+See also [`unescape_string`](@ref).
 """
 function escape_string(io, s::AbstractString, esc::AbstractString)
     i = start(s)
@@ -251,7 +251,7 @@ unescape_chars(s::AbstractString, esc::AbstractString) =
     unescape_string([io,] s::AbstractString) -> AbstractString
 
 General unescaping of traditional C and Unicode escape sequences. Reverse of
-[`escape_string`](:func:`escape_string`).
+[`escape_string`](@ref).
 """
 function unescape_string(io, s::AbstractString)
     i = start(s)
@@ -397,7 +397,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             write(buf, ' ')
         end
     end
-    takebuf_string(buf)
+    String(take!(buf))
 end
 
 function convert(::Type{String}, chars::AbstractVector{Char})

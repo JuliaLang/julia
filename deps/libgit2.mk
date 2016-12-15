@@ -8,6 +8,10 @@ ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/libssh2
 endif
 
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
+endif
+
 ifneq ($(OS),WINNT)
 ifeq ($(USE_SYSTEM_CURL), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/curl
@@ -33,32 +37,64 @@ LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="-L$(bu
 endif
 
 ifeq ($(OS),Linux)
-LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
-	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
+# We need to bundle ca certs on linux now that we're using libgit2 with ssl
+ifeq ($(OS),Linux)
+OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)
+# This certfile location observed on Ubuntu 16.04
+ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca-certificates.crt ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/certs/ca-certificates.crt
+# This certfile location observed on openSUSE Leap 42.1
+else ifeq ($(shell [ -e $(OPENSSL_DIR)/ca-bundle.pem ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/ca-bundle.pem
+# This certfile location observed on Ubuntu 14.04
+else ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/cert.pem
+# This certfile location observed on Debian 7
+else ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
+CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
+endif
+endif # Linux
+
+LIBGIT2_SRC_PATH := $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)
+
+$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied
-	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-require-openssl.patch
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls.patch
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied
-	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
+$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
-	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-openssl-hang.patch
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-writer-fix.patch
 	echo 1 > $@
+
+$(build_datarootdir)/julia/cert.pem: $(CERTFILE)
+	mkdir -p $(build_datarootdir)/julia
+	-cp $(CERTFILE) $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied \
-	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied \
-	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied \
-	$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-agent-nonfatal.patch-applied
+	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied
 
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
+ifneq ($(CERTFILE),)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem
+endif
+
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
@@ -81,15 +117,6 @@ ifeq ($$(OS),WINNT)
 	cp $1/libgit2.$$(SHLIB_EXT) $2/$$(build_shlibdir)/libgit2.$$(SHLIB_EXT)
 else
 	$(call MAKE_INSTALL,$1,$2,$3)
-endif
-ifeq ($$(OS),Linux)
-	@# If we're on linux, copy over libssl and libcrypto for libgit2
-	-LIBGIT_LIBS=$$$$(ldd "$1/libgit2.$$(SHLIB_EXT)" | tail -n +2 | awk '{print $$$$(NF-1)}'); \
-	for LIB in libssl libcrypto; do \
-		LIB_PATH=$$$$(echo "$$$$LIBGIT_LIBS" | grep "$$$$LIB"); \
-		echo "LIB_PATH for $$$$LIB: $$$$LIB_PATH"; \
-		[ ! -z "$$$$LIB_PATH" ] && cp -v "$$$$LIB_PATH" $2/$$(build_shlibdir); \
-	done
 endif
 endef
 $(eval $(call staged-install, \

@@ -210,7 +210,7 @@ julia> circshift(b, (-1,0))
  1  5   9  13
 ```
 
-See also [`circshift!`](:func:`circshift!`).
+See also [`circshift!`](@ref).
 """
 function circshift(a::AbstractArray, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))
@@ -281,43 +281,6 @@ function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
     end
 
     return B + C
-end
-
-## ipermutedims in terms of permutedims ##
-
-"""
-    ipermutedims(A, perm)
-
-Like [`permutedims`](:func:`permutedims`), except the inverse of the given permutation is applied.
-
-```jldoctest
-julia> A = reshape(collect(1:8), (2,2,2))
-2×2×2 Array{Int64,3}:
-[:, :, 1] =
- 1  3
- 2  4
-<BLANKLINE>
-[:, :, 2] =
- 5  7
- 6  8
-
-julia> ipermutedims(A, [3, 2, 1])
-2×2×2 Array{Int64,3}:
-[:, :, 1] =
- 1  3
- 5  7
-<BLANKLINE>
-[:, :, 2] =
- 2  4
- 6  8
-```
-"""
-function ipermutedims(A::AbstractArray,perm)
-    iperm = Array{Int}(length(perm))
-    for (i,p) = enumerate(perm)
-        iperm[p] = i
-    end
-    return permutedims(A,iperm)
 end
 
 ## Other array functions ##

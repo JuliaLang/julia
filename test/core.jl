@@ -1,21 +1,21 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # test core language features
-
 const Bottom = Union{}
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
 
 macro testintersect(args...)
     _testintersect(args...)
 end
 
-function _testintersect(a, b, result, cmp=:is)
+function _testintersect(a, b, result, cmp=(===))
     quote
         @test $(esc(cmp))(typeintersect($(esc(a)), $(esc(b))), $(esc(result)))
         @test $(esc(cmp))(typeintersect($(esc(b)), $(esc(a))), $(esc(result)))
     end
 end
-
-isnot(x,y) = !is(x,y)
 
 # basic type relationships
 @test Int8 <: Integer
@@ -48,7 +48,7 @@ isnot(x,y) = !is(x,y)
 @test !(Type{Tuple{}} <: Type{Tuple{Vararg}})
 @test !(Type{Tuple{}} <: Type{NTuple{TypeVar(:N,true)}})
 let T = TypeVar(:T,true)
-    @testintersect(Array{Bottom},AbstractArray{T}, Bottom, isnot)
+    @testintersect(Array{Bottom},AbstractArray{T}, Bottom, !==)
     @testintersect(Tuple{Type{Ptr{UInt8}},Ptr{Bottom}},
                   Tuple{Type{Ptr{T}},Ptr{T}}, Bottom)
     @test !(Type{T} <: TypeVar)
@@ -64,7 +64,7 @@ let T = TypeVar(:T,true)
 
     @testintersect(Tuple{T, AbstractArray{T}},Tuple{Any, Array{Number,1}},
                   Tuple{Number, Array{Number,1}}, isequal)
-    @testintersect(Tuple{Array{T}, Array{T}}, Tuple{Array, Array{Any}}, Bottom, isnot)
+    @testintersect(Tuple{Array{T}, Array{T}}, Tuple{Array, Array{Any}}, Bottom, !==)
     f47{T}(x::Vector{Vector{T}}) = 0
     @test_throws MethodError f47(Array{Vector}(0))
     @test f47(Array{Vector{Int}}(0)) == 0
@@ -117,11 +117,11 @@ end
 @testintersect(Type{Function},Union,Bottom)
 @testintersect(Type{Int32}, DataType, Type{Int32})
 @test !(Type <: TypeVar)
-@testintersect(DataType, Type, Bottom, isnot)
-@testintersect(Union, Type, Bottom, isnot)
-@testintersect(DataType, Type{Int}, Bottom, isnot)
-@testintersect(DataType, Type{TypeVar(:T,Int)}, Bottom, isnot)
-@testintersect(DataType, Type{TypeVar(:T,Integer)}, Bottom, isnot)
+@testintersect(DataType, Type, Bottom, !==)
+@testintersect(Union, Type, Bottom, !==)
+@testintersect(DataType, Type{Int}, Bottom, !==)
+@testintersect(DataType, Type{TypeVar(:T,Int)}, Bottom, !==)
+@testintersect(DataType, Type{TypeVar(:T,Integer)}, Bottom, !==)
 
 @testintersect(Tuple{Vararg{Int}}, Tuple{Vararg{Bool}}, Tuple{})
 @testintersect(Type{Tuple{Vararg{Int}}}, Type{Tuple{Vararg{Bool}}}, Bottom)
@@ -136,8 +136,8 @@ end
 
 # Vararg{T,N}
 let N = TypeVar(:N,true)
-    @test is(Bottom,typeintersect(Tuple{Array{Int,N},Vararg{Int,N}}, Tuple{Vector{Int},Real,Real,Real}))
-    @test is(Bottom,typeintersect(Tuple{Vector{Int},Real,Real,Real}, Tuple{Array{Int,N},Vararg{Int,N}}))
+    @test Bottom === typeintersect(Tuple{Array{Int,N},Vararg{Int,N}}, Tuple{Vector{Int},Real,Real,Real})
+    @test Bottom === typeintersect(Tuple{Vector{Int},Real,Real,Real}, Tuple{Array{Int,N},Vararg{Int,N}})
     @test Tuple{Int,Vararg{Int,2}} == Tuple{Int,Int,Int}
     @test Tuple{Int,Vararg{Int,2}} === Tuple{Int,Int,Int}
     @test Tuple{Any, Any} === Tuple{Vararg{Any,2}}
@@ -220,6 +220,11 @@ end
 
 # with bound varargs
 
+_bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
+_bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
+@test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
+@test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
+
 # issue #11840
 typealias TT11840{T} Tuple{T,T}
 f11840(::Type) = "Type"
@@ -294,8 +299,8 @@ let
 end
 
 # typejoin with Vararg{T,N}
-@test is(typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}), Tuple{Int,Int,Vararg{Int}})
-@test is(typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}), Tuple{Vararg{Int}})
+@test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
+@test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -318,23 +323,23 @@ abstract Sup_{A,B}
 abstract Qux_{T} <: Sup_{Qux_{Int},T}
 
 @test Qux_{Int}.super <: Sup_
-@test is(Qux_{Int}, Qux_{Int}.super.parameters[1])
-@test is(Qux_{Int}.super.parameters[2], Int)
+@test ===(Qux_{Int}, Qux_{Int}.super.parameters[1])
+@test ===(Qux_{Int}.super.parameters[2], Int)
 @test Qux_{Char}.super <: Sup_
-@test is(Qux_{Int}, Qux_{Char}.super.parameters[1])
-@test is(Qux_{Char}.super.parameters[2], Char)
+@test ===(Qux_{Int}, Qux_{Char}.super.parameters[1])
+@test ===(Qux_{Char}.super.parameters[2], Char)
 
 @test Qux_.super.parameters[1].super <: Sup_
-@test is(Qux_{Int}, Qux_.super.parameters[1].super.parameters[1])
-@test is(Int, Qux_.super.parameters[1].super.parameters[2])
+@test ===(Qux_{Int}, Qux_.super.parameters[1].super.parameters[1])
+@test ===(Int, Qux_.super.parameters[1].super.parameters[2])
 
 type Foo_{T} x::Foo_{Int} end
 
-@test is(Foo_.types[1], Foo_{Int})
-@test is(Foo_.types[1].types[1], Foo_{Int})
+@test ===(Foo_.types[1], Foo_{Int})
+@test ===(Foo_.types[1].types[1], Foo_{Int})
 
 type Circ_{T} x::Circ_{T} end
-@test is(Circ_{Int}, Circ_{Int}.types[1])
+@test ===(Circ_{Int}, Circ_{Int}.types[1])
 
 abstract Sup2a_
 abstract Sup2b_{A <: Sup2a_, B} <: Sup2a_
@@ -356,13 +361,13 @@ type Node{T}
     v::Vector{Node}
 end
 
-@test is(Node{Int}.types[1].parameters[1], Node)
+@test ===(Node{Int}.types[1].parameters[1], Node)
 
 type Node2{T}
     v::Vector{Node2{T}}
 end
 
-@test is(Node2{Int}.types[1].parameters[1], Node2{Int})
+@test ===(Node2{Int}.types[1].parameters[1], Node2{Int})
 
 type FooFoo{A,B} y::FooFoo{A} end
 
@@ -402,7 +407,7 @@ let
         function bar()
             x = 100
         end
-    bar()
+        bar()
         x
     end
     @test foo() === convert(Int8,100)
@@ -429,11 +434,11 @@ sptest1{T,S}(x::T, y::S) = 43
 @test sptest1(1,"b") == 43
 
 sptest2{T}(x::T) = T
-@test is(sptest2(:a),Symbol)
+@test ===(sptest2(:a),Symbol)
 
 sptest3{T}(x::T) = y->T
 let m = sptest3(:a)
-    @test is(m(0),Symbol)
+    @test ===(m(0),Symbol)
 end
 
 sptest4{T}(x::T, y::T) = 42
@@ -542,6 +547,30 @@ let
     f7234_2()
 end
 @test glob_x3 == 12
+
+# interaction between local variable renaming and nested globals (#19333)
+x19333 = 1
+function f19333(x19333)
+    return let x19333 = x19333
+        g19333() = (global x19333 += 2)
+        g19333() + (x19333 += 1)
+    end + (x19333 += 1)
+end
+@test f19333(0) == 5
+@test f19333(0) == 7
+@test x19333 == 5
+
+function h19333()
+    s = 0
+    for (i, j) in ((1, 2),)
+        s += i + j # use + as a global
+    end
+    for (k, +) in ((3, 4),)
+        s -= (k - +) # use + as a local
+    end
+    return s
+end
+@test h19333() == 4
 
 # let - new variables, including undefinedness
 function let_undef()
@@ -692,8 +721,8 @@ let
     f{T}(a::Vector{Vector{T}}) = a
     g{T}(a::Vector{Vector{T}}) = a
     a = Vector{Int}[]
-    @test is(f(a), a)
-    @test is(g(a), a)
+    @test ===(f(a), a)
+    @test ===(g(a), a)
 end
 
 type _AA{T}; a::T; end
@@ -702,7 +731,7 @@ let
     local g, a
     g{T}(a::_AA{_AA{T}}) = a
     a = _AA(_AA(1))
-    @test is(g(a),a)
+    @test ===(g(a),a)
 end
 
 # Method specificity
@@ -1108,7 +1137,7 @@ let
     @test a==1 && b==2
 end
 
-# issue #1876
+@testset "issue #1876" begin
 let
     tst = 1
     m1(i) = (tst+=1;i-1)
@@ -1125,6 +1154,7 @@ let
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
+end
 end
 
 # issue #1632
@@ -1184,8 +1214,8 @@ immutable Foo2509; foo::Int; end
 
 # issue #2517
 immutable Foo2517; end
-@test repr(Foo2517()) == "Foo2517()"
-@test repr(Array{Foo2517}(1)) == "Foo2517[Foo2517()]"
+@test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
+@test repr(Array{Foo2517}(1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -1554,7 +1584,7 @@ abstract IT4805{N, T}
 let
     T = TypeVar(:T,Int,true)
     N = TypeVar(:N,true)
-    @testintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}, Bottom, isnot)
+    @testintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}, Bottom, !==)
 end
 
 let
@@ -2301,24 +2331,26 @@ g9535() = (f9535(),f9535())
 
 # weak references
 type Obj; x; end
-@noinline function mk_wr(r, wr)
-    x = Obj(1)
-    push!(r, x)
-    push!(wr, WeakRef(x))
+@testset "weak references" begin
+    @noinline function mk_wr(r, wr)
+        x = Obj(1)
+        push!(r, x)
+        push!(wr, WeakRef(x))
+    end
+    test_wr(r,wr) = @test r[1] == wr[1].value
+    function test_wr()
+        ref = []
+        wref = []
+        mk_wr(ref, wref)
+        test_wr(ref, wref)
+        gc()
+        test_wr(ref, wref)
+        pop!(ref)
+        gc()
+        @test wref[1].value === nothing
+    end
+    test_wr()
 end
-test_wr(r,wr) = @test r[1] == wr[1].value
-function test_wr()
-    ref = []
-    wref = []
-    mk_wr(ref, wref)
-    test_wr(ref, wref)
-    gc()
-    test_wr(ref, wref)
-    pop!(ref)
-    gc()
-    @test wref[1].value === nothing
-end
-test_wr()
 
 # issue #9947
 function f9947()
@@ -2431,7 +2463,7 @@ let x,y,f
     y = f() # invoke llvm constant folding
     @test Int(0x468ace) === Int(y)
     @test x !== y
-    @test string(y) == "Int24(0x468ace)"
+    @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
 end
 
 # issue #10570
@@ -3015,9 +3047,13 @@ function func8283 end
 @test_throws MethodError func8283()
 
 # issue #11243
-let a = [Pair(1,2), Pair("a","b")]
-    @test typeof(a) == Vector{Pair}
-    @test typeof(a) <: Vector{Pair}
+type Type11243{A, B}
+    x::A
+    y::B
+end
+let a = [Type11243(1,2), Type11243("a","b")]
+    @test typeof(a) == Vector{Type11243}
+    @test typeof(a) <: Vector{Type11243}
 end
 
 # issue #11065, #1571
@@ -3057,7 +3093,7 @@ x7864 = 1
 end
 
 @test_throws UndefVarError x7864
-using M7864
+using .M7864
 @test x7864 == 1
 
 # issue #11715
@@ -3126,13 +3162,13 @@ f11858(Any[Type{Foo11858}, Type{Bar11858}, typeof(g11858)])
 foo11904(x::Int) = x
 @inline function foo11904{S}(x::Nullable{S})
     if isbits(S)
-        Nullable(foo11904(x.value), x.isnull)
+        Nullable(foo11904(x.value), x.hasvalue)
     else
         throw_error()
     end
 end
 
-@test !foo11904(Nullable(1)).isnull
+@test !isnull(foo11904(Nullable(1)))
 
 # issue 11874
 immutable Foo11874
@@ -3288,7 +3324,7 @@ end
 
 const const_array_int1 = Array{Int}
 const const_array_int2 = Array{Int}
-test_eq_array_int() = is(const_array_int1, const_array_int2)
+test_eq_array_int() = ===(const_array_int1, const_array_int2)
 @test test_eq_array_int()
 
 # object_id of haspadding field
@@ -3399,14 +3435,14 @@ g13261() = f13261()
 # issue 13432
 @noinline function f13432(x)
     offset = x ? Base.Bottom : 1
-    return is(offset, Base.Bottom)
+    return ===(offset, Base.Bottom)
 end
 @test f13432(true) == true
 @test f13432(false) == false
 @noinline function f13432b(x)
     a = x ? 1 : 1.0
     b = x ? 1 : 1.0f0
-    return is(a, b)
+    return ===(a, b)
 end
 @test f13432b(true) == true
 @test f13432b(false) == false
@@ -3454,7 +3490,7 @@ end
 
 # issue 13855
 macro m13855()
-    Expr(:localize, :(() -> x))
+    Expr(:localize, :(() -> $(esc(:x))))
 end
 @noinline function foo13855(x)
     @m13855()
@@ -3610,6 +3646,17 @@ end
 @test TestMacroGlobalFunction.ff(1) == 2
 @test TestMacroGlobalFunction.gg(1) == 3
 
+# issue #18672
+macro x18672()
+    quote
+        function f
+        end
+    end
+end
+let
+    @test isa(@x18672, Function)
+end
+
 # issue #14564
 @test isa(object_id(Tuple.name.cache), Integer)
 
@@ -3635,6 +3682,13 @@ foo9677(x::Array) = invoke(foo9677,(AbstractArray,),x)
 # issue #6846
 f6846() = (please6846; 2)
 @test_throws UndefVarError f6846()
+
+module M6846
+    macro f()
+        return :(please6846; 2)
+    end
+end
+@test_throws UndefVarError @M6846.f()
 
 # issue #14758
 @test isa(eval(:(f14758(; $([]...)) = ())), Function)
@@ -3723,7 +3777,8 @@ end
 
 # issue #13229
 module I13229
-    using Base.Test
+using Base.Test
+if !startswith(string(Sys.ARCH), "arm")
     global z = 0
     @timed @profile for i = 1:5
         function f(x)
@@ -3732,6 +3787,9 @@ module I13229
         global z = f(i)
     end
     @test z == 10
+else
+    warn("@profile test skipped")
+end
 end
 
 # issue #15186
@@ -4391,6 +4449,15 @@ function f17613_2(x)::Float64
 end
 @test isa(f17613_2(1), Float64)
 
+type A1090 end
+Base.convert(::Type{Int}, ::A1090) = "hey"
+f1090()::Int = A1090()
+@test_throws TypeError f1090()
+
+# issue #19106
+function f19106()::Void end
+@test f19106() === nothing
+
 # issue #16783
 function f16783()
     T = UInt32
@@ -4495,6 +4562,14 @@ function f18054()
 end
 cfunction(f18054, Cint, ())
 
+# issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
+dummy18996() = return nothing
+function main18986()
+    cfunction(dummy18986, Void, ())
+    ccall((:dummy2, "this_is_a_nonexisting_library"), Void, ())
+end
+@test_throws ErrorException main18986()
+
 # issue #18085
 f18085(a,x...) = (0,)
 for (f,g) in ((:asin,:sin), (:acos,:cos))
@@ -4578,3 +4653,171 @@ end
 fVararg(x) = Vararg{x}
 gVararg(a::fVararg(Int)) = length(a)
 @test gVararg(1,2,3,4,5) == 5
+
+# issue #18577
+@generated f18577() = quote ()->1 end
+@test try
+    f18577()
+    false
+catch e
+    (e::ErrorException).msg
+end == "generated function body is not pure. this likely means it contains a closure or comprehension."
+
+# issue #10981, long argument lists
+let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
+    # we introduce a new function `temp_vcat` to make sure there is no existing
+    # method cache match, leading to a path that allocates a large tuple type.
+    b = temp_vcat(a...)
+    @test isa(b, Vector{String})
+    @test length(b) == 2*10^6
+    @test b[1] == b[end] == "sdf"
+end
+
+# issue #17255, take `deferred_alloc` into account
+# when calculating total allocation size.
+@noinline function f17255(n)
+    gc_enable(false)
+    b0 = Base.gc_bytes()
+    local a
+    for i in 1:n
+        a, t, allocd = @timed [Ref(1) for i in 1:1000]
+        @test allocd > 0
+        b1 = Base.gc_bytes()
+        if b1 < b0
+            return false, a
+        end
+    end
+    return true, a
+end
+@test f17255(10000)[1]
+gc_enable(true)
+
+# issue #18710
+bad_tvars{T}() = 1
+@test isa(@which(bad_tvars()), Method)
+@test_throws MethodError bad_tvars()
+
+# issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
+contains_Box(e::GlobalRef) = (e.name === :Box)
+contains_Box(e::ANY) = false
+contains_Box(e::Expr) = any(contains_Box, e.args)
+
+function let_noBox()
+    local x
+    for i = 1:2
+        if i == 1
+            x = 21
+        end
+        let x = x
+            return () -> x
+        end
+    end
+end
+function let_Box1()
+    local x
+    for i = 1:2
+        if i == 1
+            x = 22
+        end
+        let y = x
+            return () -> x
+        end
+    end
+end
+function let_Box2()
+    local x
+    for i = 1:2
+        if i == 1
+            x = 23
+        end
+        let x = x
+            # In the future, this may change to no-Box if lowering improves
+            return () -> x
+            x = 43
+        end
+    end
+end
+function let_Box3()
+    local x
+    for i = 1:2
+        if i == 1
+            x = 24
+        end
+        let y
+            # In the future, this may change to no-Box if lowering improves
+            y = x
+            return () -> x
+        end
+    end
+end
+function let_Box4()
+    local x, g
+    for i = 1:2
+        if i == 1
+            x = 25
+        end
+        let x = x
+            g = () -> x
+            x = 44
+        end
+        @test x == 25
+        return g
+    end
+end
+function let_Box5()
+    local x, g, h
+    for i = 1:2
+        if i == 1
+            x = 25
+        end
+        let x = x
+            g = () -> (x = 46)
+            h = () -> x
+        end
+        @test x == 25
+        @test h() == 25
+        @test g() == 46
+        @test h() == 46
+        @test x == 25
+        return g
+    end
+end
+@test any(contains_Box, (@code_lowered let_Box1()).code)
+@test any(contains_Box, (@code_lowered let_Box2()).code)
+@test any(contains_Box, (@code_lowered let_Box3()).code)
+@test any(contains_Box, (@code_lowered let_Box4()).code)
+@test any(contains_Box, (@code_lowered let_Box5()).code)
+@test !any(contains_Box, (@code_lowered let_noBox()).code)
+@test let_Box1()() == 22
+@test let_Box2()() == 23
+@test let_Box3()() == 24
+@test let_Box4()() == 44
+@test let_Box5()() == 46
+@test let_noBox()() == 21
+
+module TestModuleAssignment
+using Base.Test
+@eval $(GlobalRef(TestModuleAssignment, :x)) = 1
+@test x == 1
+@eval $(GlobalRef(TestModuleAssignment, :x)) = 2
+@test x == 2
+end
+
+# issue #14893
+module M14893
+x = 14893
+macro m14893()
+    :x
+end
+function f14893()
+    x = 1
+    @m14893
+end
+end
+function f14893()
+    x = 2
+    M14893.@m14893
+end
+
+@test f14893() == 14893
+@test M14893.f14893() == 14893

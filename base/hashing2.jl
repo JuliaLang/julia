@@ -3,11 +3,11 @@
 ## efficient value-based hashing of integers ##
 
 function hash_integer(n::Integer, h::UInt)
-    h = hash_uint((n % UInt) $ h) $ h
+    h ⊻= hash_uint((n % UInt) ⊻ h)
     n = abs(n)
     n >>>= sizeof(UInt) << 3
     while n != 0
-        h = hash_uint((n % UInt) $ h) $ h
+        h ⊻= hash_uint((n % UInt) ⊻ h)
         n >>>= sizeof(UInt) << 3
     end
     return h
@@ -18,9 +18,9 @@ function hash_integer(n::BigInt, h::UInt)
     s == 0 && return hash_integer(0, h)
     p = convert(Ptr{UInt}, n.d)
     b = unsafe_load(p)
-    h = hash_uint(ifelse(s < 0, -b, b) $ h) $ h
+    h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
     for k = 2:abs(s)
-        h = hash_uint(unsafe_load(p, k) $ h) $ h
+        h ⊻= hash_uint(unsafe_load(p, k) ⊻ h)
     end
     return h
 end
@@ -94,7 +94,7 @@ Special values:
 =#
 
 decompose(x::Integer) = x, 0, 1
-decompose(x::Rational) = num(x), 0, den(x)
+decompose(x::Rational) = numerator(x), 0, denominator(x)
 
 function decompose(x::Float16)::NTuple{3,Int}
     isnan(x) && return 0, 0, 0
@@ -144,7 +144,7 @@ end
 ## streamlined hashing for smallish rational types ##
 
 function hash{T<:BitInteger64}(x::Rational{T}, h::UInt)
-    num, den = Base.num(x), Base.den(x)
+    num, den = Base.numerator(x), Base.denominator(x)
     den == 1 && return hash(num, h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
     if isodd(den)

@@ -2,11 +2,11 @@
 
 module SparseArrays
 
-using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape
+using Base: ReshapedArray, promote_op, setindex_shape_check, to_shape, tail
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular, PosDefException
 
-import Base: +, -, *, \, &, |, $, .+, .-, .*, ./, .\, .^, .<, .!=, ==
+import Base: +, -, *, \, &, |, xor, .+, .-, .*, ./, .\, .^, .<, .!=, ==
 import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!
 import Base: A_mul_Bc, A_mul_Bt, Ac_mul_Bc, At_mul_Bt
 import Base: At_ldiv_B, Ac_ldiv_B, A_ldiv_B!
@@ -24,9 +24,9 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
     vcat, hcat, hvcat, cat, imag, indmax, ishermitian, kron, length, log, log1p, max, min,
     maximum, minimum, norm, one, promote_eltype, real, reinterpret, reshape, rot180,
     rotl90, rotr90, round, scale!, setindex!, similar, size, transpose, tril,
-    triu, vec, permute!
+    triu, vec, permute!, map, map!
 
-import Base.Broadcast: broadcast_shape
+import Base.Broadcast: broadcast_indices
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, dense, droptol!, dropzeros!, dropzeros,

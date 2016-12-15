@@ -631,7 +631,7 @@ Introduce a new name for an already expressible type. For example, in `base/boot
 `UInt` is type aliased to either `UInt64` or `UInt32` as appropriate for the size of
 pointers on the system:
 
-    if is(Int,Int64)
+    if Int === Int64
         typealias UInt UInt64
     else
         typealias UInt UInt32

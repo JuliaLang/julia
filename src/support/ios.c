@@ -683,7 +683,7 @@ static void _buf_init(ios_t *s, bufmode_t bm)
     s->size = s->bpos = 0;
 }
 
-char *ios_takebuf(ios_t *s, size_t *psize)
+char *ios_take_buffer(ios_t *s, size_t *psize)
 {
     char *buf;
 
@@ -1137,7 +1137,7 @@ char *ios_readline(ios_t *s)
     ios_mem(&dest, 0);
     ios_copyuntil(&dest, s, '\n');
     size_t n;
-    return ios_takebuf(&dest, &n);
+    return ios_take_buffer(&dest, &n);
 }
 
 extern int vasprintf(char **strp, const char *fmt, va_list ap);

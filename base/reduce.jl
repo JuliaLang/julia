@@ -52,7 +52,7 @@ end
 """
     mapfoldl(f, op, v0, itr)
 
-Like [`mapreduce`](:func:`mapreduce`), but with guaranteed left associativity. `v0` will be
+Like [`mapreduce`](@ref), but with guaranteed left associativity. `v0` will be
 used exactly once.
 """
 mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
@@ -66,7 +66,7 @@ this cannot be used with empty collections (see `reduce(op, itr)`).
 function mapfoldl(f, op, itr)
     i = start(itr)
     if done(itr, i)
-        return Base.mr_empty(f, op, eltype(itr))
+        return Base.mr_empty_iter(f, op, itr, iteratoreltype(itr))
     end
     (x, i) = next(itr, i)
     v0 = f(x)
@@ -76,7 +76,7 @@ end
 """
     foldl(op, v0, itr)
 
-Like [`reduce`](:func:`reduce`), but with guaranteed left associativity. `v0` will be used
+Like [`reduce`](@ref), but with guaranteed left associativity. `v0` will be used
 exactly once.
 """
 foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
@@ -110,7 +110,7 @@ end
 """
     mapfoldr(f, op, v0, itr)
 
-Like [`mapreduce`](:func:`mapreduce`), but with guaranteed right associativity. `v0` will be
+Like [`mapreduce`](@ref), but with guaranteed right associativity. `v0` will be
 used exactly once.
 """
 mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
@@ -126,7 +126,7 @@ mapfoldr(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, f(itr[i]), itr, i-1
 """
     foldr(op, v0, itr)
 
-Like [`reduce`](:func:`reduce`), but with guaranteed right associativity. `v0` will be used
+Like [`reduce`](@ref), but with guaranteed right associativity. `v0` will be used
 exactly once.
 """
 foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
@@ -154,7 +154,7 @@ function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer
         return v
     else
         # pairwise portion
-        imid = (ifirst + ilast) >>> 1
+        imid = (ifirst + ilast) >> 1
         v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)
@@ -176,9 +176,9 @@ Apply function `f` to each element in `itr`, and then reduce the result using th
 function `op`. `v0` must be a neutral element for `op` that will be returned for empty
 collections. It is unspecified whether `v0` is used for non-empty collections.
 
-[`mapreduce`](:func:`mapreduce`) is functionally equivalent to calling `reduce(op, v0,
+[`mapreduce`](@ref) is functionally equivalent to calling `reduce(op, v0,
 map(f, itr))`, but will in general execute faster since no intermediate collection needs to
-be created. See documentation for [`reduce`](:func:`reduce`) and [`map`](:func:`map`).
+be created. See documentation for [`reduce`](@ref) and [`map`](@ref).
 
 ```jldoctest
 julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
@@ -187,7 +187,7 @@ julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
 
 The associativity of the reduction is implementation-dependent. Additionally, some
 implementations may reuse the return value of `f` for elements that appear multiple times in
-`itr`. Use [`mapfoldl`](:func:`mapfoldl`) or [`mapfoldr`](:func:`mapfoldr`) instead for
+`itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
@@ -201,7 +201,8 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 
 # handling empty arrays
-mr_empty(f, op, T) = throw(ArgumentError("reducing over an empty collection is not allowed"))
+_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
+mr_empty(f, op, T) = _empty_reduce_error()
 # use zero(T)::T to improve type information when zero(T) is not defined
 mr_empty(::typeof(identity), op::typeof(+), T) = r_promote(op, zero(T)::T)
 mr_empty(::typeof(abs), op::typeof(+), T) = r_promote(op, abs(zero(T)::T))
@@ -213,6 +214,11 @@ mr_empty(::typeof(abs), op::typeof(max), T) = mr_empty(abs, scalarmax, T)
 mr_empty(::typeof(abs2), op::typeof(max), T) = mr_empty(abs2, scalarmax, T)
 mr_empty(f, op::typeof(&), T) = true
 mr_empty(f, op::typeof(|), T) = false
+
+mr_empty_iter(f, op, itr, ::HasEltype) = mr_empty(f, op, eltype(itr))
+mr_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
+mr_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
+mr_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 
@@ -258,8 +264,8 @@ used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`, `any(itr)
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
-should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](:func:`foldl`) or
-[`foldr`](:func:`foldr`) instead for guaranteed left or right associativity.
+should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](@ref) or
+[`foldr`](@ref) instead for guaranteed left or right associativity.
 
 Some operations accumulate error, and parallelism will also be easier if the reduction can
 be executed in groups. Future versions of Julia might change the algorithm. Note that the
@@ -512,43 +518,6 @@ function extrema(itr)
     return (vmin, vmax)
 end
 
-"""
-    extrema(A,dims) -> Array{Tuple}
-
-Compute the minimum and maximum elements of an array over the given dimensions.
-"""
-function extrema(A::AbstractArray, dims)
-    sz = [size(A)...]
-    sz[[dims...]] = 1
-    B = Array{Tuple{eltype(A),eltype(A)}}(sz...)
-    extrema!(B, A)
-end
-
-@generated function extrema!{T,N}(B, A::AbstractArray{T,N})
-    quote
-        sA = size(A)
-        sB = size(B)
-        @nloops $N i B begin
-            AI = @nref $N A i
-            (@nref $N B i) = (AI, AI)
-        end
-        Bmax = sB
-        Istart = ones(Int,ndims(A))
-        Istart[([sB...].==1) & ([sA...].!=1)] = 2
-        @inbounds @nloops $N i d->(Istart[d]:size(A,d)) begin
-            AI = @nref $N A i
-            @nexprs $N d->(j_d = min(Bmax[d], i_{d}))
-            BJ = @nref $N B j
-            if AI < BJ[1]
-                (@nref $N B j) = (AI, BJ[2])
-            elseif AI > BJ[2]
-                (@nref $N B j) = (BJ[1], AI)
-            end
-        end
-        B
-    end
-end
-
 ## all & any
 
 """
@@ -644,10 +613,10 @@ all(f::typeof(identity), itr) =
 
 Determine whether an item is in the given collection, in the sense that it is `==` to one of
 the values generated by iterating over the collection. Some collections need a slightly
-different definition; for example [`Set`](:obj:`Set`)s check whether the item
-[`isequal`](:func:`isequal`) to one of the elements. [`Dict`](:obj:`Dict`)s look for
-`(key,value)` pairs, and the key is compared using [`isequal`](:func:`isequal`). To test for
-the presence of a key in a dictionary, use [`haskey`](:func:`haskey`) or `k in keys(dict)`.
+different definition; for example [`Set`](@ref)s check whether the item
+[`isequal`](@ref) to one of the elements. [`Dict`](@ref)s look for
+`(key,value)` pairs, and the key is compared using [`isequal`](@ref). To test for
+the presence of a key in a dictionary, use [`haskey`](@ref) or `k in keys(dict)`.
 
 ```jldoctest
 julia> a = 1:3:20
@@ -699,7 +668,7 @@ end
     countnz(A)
 
 Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
-For sparse matrices, one should usually use [`nnz`](:func:`nnz`), which returns the number of stored values.
+For sparse matrices, one should usually use [`nnz`](@ref), which returns the number of stored values.
 
 ```jldoctest
 julia> A = [1 2 4; 0 0 1; 1 1 0]

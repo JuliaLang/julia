@@ -16,17 +16,17 @@ end
 # Tags
 create_serialization_stream() do s
     Serializer.writetag(s, Serializer.sertag(Bool))
-    @test takebuf_array(s)[end] == UInt8(Serializer.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
     Serializer.write_as_tag(s, Serializer.sertag(Bool))
-    @test takebuf_array(s)[end] == UInt8(Serializer.sertag(Bool))
+    @test take!(s)[end] == UInt8(Serializer.sertag(Bool))
 end
 
 create_serialization_stream() do s
     Serializer.write_as_tag(s, Serializer.sertag(Symbol))
-    data = takebuf_array(s)
+    data = take!(s)
     @test data[end-1] == 0x00
     @test data[end] == UInt8(Serializer.sertag(Symbol))
 end
@@ -75,6 +75,14 @@ create_serialization_stream() do s
     @test deserialize(s) === tpl
     @test deserialize(s) === lt
     @test deserialize(s) === Tuple{}
+end
+
+# Dict
+create_serialization_stream() do s
+    dct = Dict("A"=>1, "B"=>2)
+    serialize(s, dct)
+    seek(s, 0)
+    @test deserialize(s) == dct
 end
 
 # Symbol
@@ -279,19 +287,22 @@ create_serialization_stream() do s # Base generic function
 end
 
 # Anonymous Functions
-create_serialization_stream() do s
-    local g() = :magic_token_anon_fun_test
-    serialize(s, g)
-    serialize(s, g)
+main_ex = quote
+    $create_serialization_stream() do s
+        local g() = :magic_token_anon_fun_test
+        serialize(s, g)
+        serialize(s, g)
 
-    seekstart(s)
-    local g2 = deserialize(s)
-    @test g2 !== g
-    @test g2() == :magic_token_anon_fun_test
-    @test g2() == :magic_token_anon_fun_test
-    @test deserialize(s) === g2
+        seekstart(s)
+        local g2 = deserialize(s)
+        $Test.@test g2 !== g
+        $Test.@test g2() == :magic_token_anon_fun_test
+        $Test.@test g2() == :magic_token_anon_fun_test
+        $Test.@test deserialize(s) === g2
+    end
 end
-
+# This needs to be run on `Main` since the serializer treats it differently.
+eval(Main, main_ex)
 
 # Task
 create_serialization_stream() do s # user-defined type array
@@ -384,7 +395,7 @@ end
 using .Shell, .Instance1
 io = IOBuffer()
 serialize(io, foo)
-str = takebuf_string(io)
+str = String(take!(io))
 @test isempty(search(str, "Instance1"))
 @test !isempty(search(str, "Shell"))
 

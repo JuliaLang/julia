@@ -107,3 +107,6 @@ for priority in values(priorities)
     heappush!(xs, priority)
 end
 @test issorted([heappop!(xs) for _ in length(priorities)])
+
+@test Base.Collections.isheap([1, 2, 3], Base.Order.Forward)
+@test !Base.Collections.isheap([1, 2, 3], Base.Order.Reverse)

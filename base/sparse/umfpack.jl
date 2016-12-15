@@ -54,7 +54,7 @@ function umferror(status::Integer)
 end
 
 macro isok(A)
-    :(umferror($A))
+    :(umferror($(esc(A))))
 end
 
 # check the size of SuiteSparse_long
@@ -127,9 +127,9 @@ The relation between `F` and `A` is
 
 `F` further supports the following functions:
 
-- [`\\`](:func:`\\`)
-- [`cond`](:func:`cond`)
-- [`det`](:func:`det`)
+- [`\\`](@ref)
+- [`cond`](@ref)
+- [`det`](@ref)
 
 ** Implementation note **
 
@@ -154,7 +154,7 @@ lufact{Tv<:Union{Complex32,Complex64}, Ti<:UMFITypes}(A::SparseMatrixCSC{Tv,Ti})
 lufact{T<:AbstractFloat}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}}}) =
     throw(ArgumentError(string("matrix type ", typeof(A), "not supported. ",
     "Try lufact(convert(SparseMatrixCSC{Float64/Complex128,Int}, A)) for ",
-    "sparse floating point LU using UMFPACK or lufact(full(A)) for generic ",
+    "sparse floating point LU using UMFPACK or lufact(Array(A)) for generic ",
     "dense LU.")))
 lufact(A::SparseMatrixCSC) = lufact(float(A))
 
@@ -248,41 +248,42 @@ for itype in UmfpackIndexTypes
             U.numeric = tmp[1]
             return U
         end
-        function solve!(x::VecOrMat{Float64}, lu::UmfpackLU{Float64,$itype}, b::VecOrMat{Float64}, typ::Integer)
+        function solve!(x::StridedVector{Float64}, lu::UmfpackLU{Float64,$itype}, b::StridedVector{Float64}, typ::Integer)
             if x === b
                 throw(ArgumentError("output array must not be aliased with input array"))
             end
+            if stride(x, 1) != 1 || stride(b, 1) != 1
+                throw(ArgumentError("in and output vectors must have unit strides"))
+            end
             umfpack_numeric!(lu)
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
-            joff = 1
-            for k = 1:size(b,2)
-                @isok ccall(($sol_r, :libumfpack), $itype,
-                            ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
-                             Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
-                            typ, lu.colptr, lu.rowval, lu.nzval, pointer(x,joff), pointer(b,joff), lu.numeric, umf_ctrl, umf_info)
-                joff += size(b,1)
-            end
-            x
+            @isok ccall(($sol_r, :libumfpack), $itype,
+                ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
+                 Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64},
+                 Ptr{Float64}),
+                typ, lu.colptr, lu.rowval, lu.nzval,
+                x, b, lu.numeric, umf_ctrl,
+                umf_info)
+            return x
         end
-        function solve!(x::VecOrMat{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::VecOrMat{Complex128}, typ::Integer)
+        function solve!(x::StridedVector{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::StridedVector{Complex128}, typ::Integer)
             if x === b
                 throw(ArgumentError("output array must not be aliased with input array"))
             end
-            umfpack_numeric!(lu)
-            (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
-            n = size(b,1)
-            joff = 1
-            for k = 1:size(b,2)
-                @isok ccall(($sol_c, :libumfpack), $itype,
-                            ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
-                             Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
-                             Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
-                            typ, lu.colptr, lu.rowval, lu.nzval, C_NULL,
-                            pointer(x, joff), C_NULL, pointer(b, joff), C_NULL,
-                            lu.numeric, umf_ctrl, umf_info)
-                joff += n
+            if stride(x, 1) != 1 || stride(b, 1) != 1
+                throw(ArgumentError("in and output vectors must have unit strides"))
             end
-            x
+            umfpack_numeric!(lu)
+            (size(b, 1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
+            n = size(b, 1)
+            @isok ccall(($sol_c, :libumfpack), $itype,
+                        ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64},
+                         Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
+                         Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
+                        typ, lu.colptr, lu.rowval, lu.nzval,
+                        C_NULL, x, C_NULL, b,
+                        C_NULL, lu.numeric, umf_ctrl, umf_info)
+            return x
         end
         function det(lu::UmfpackLU{Float64,$itype})
             mx = Array{Float64}(1)
@@ -386,24 +387,36 @@ for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
                       (:Ac_ldiv_B!, :UMFPACK_At),
                       (:At_ldiv_B!, :UMFPACK_Aat))
     @eval begin
-        $f!{T<:UMFVTypes}(x::VecOrMat{T}, lu::UmfpackLU{T}, b::VecOrMat{T}) = solve!(x, lu, b, $umfpack)
-        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = $f!(b, lu, copy(b))
-        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = $f!(b, lu, copy(b))
-
-        function $f!{Tb<:Complex}(x::Vector{Tb}, lu::UmfpackLU{Float64}, b::Vector{Tb})
-            n = size(b, 1)
-            # TODO: Optionally let user allocate these and pass in somehow
-            r = similar(b, Float64)
-            i = similar(b, Float64)
-            solve!(r, lu, convert(Vector{Float64}, real(b)), $umfpack)
-            solve!(i, lu, convert(Vector{Float64}, imag(b)), $umfpack)
-            # We have checked size in solve!
-            @inbounds for k in eachindex(x)
-                x[k] = Tb(r[k] + im*i[k])
+        function $f!{T<:UMFVTypes}(x::StridedVecOrMat{T}, lu::UmfpackLU{T}, b::StridedVecOrMat{T})
+            n = size(x, 2)
+            if n != size(b, 2)
+                throw(DimensionMismatch("in and output arrays must have the same number of columns"))
+            end
+            for j in 1:n
+                solve!(view(x, :, j), lu, view(b, :, j), $umfpack)
             end
             return x
         end
-        $f!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb}) = $f!(b, lu, copy(b))
+        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::StridedVector{T}) = $f!(b, lu, copy(b))
+        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::StridedMatrix{T}) = $f!(b, lu, copy(b))
+
+        function $f!{Tb<:Complex}(x::StridedVector{Tb}, lu::UmfpackLU{Float64}, b::StridedVector{Tb})
+            m, n = size(x, 1), size(x, 2)
+            if n != size(b, 2)
+                throw(DimensionMismatch("in and output arrays must have the same number of columns"))
+            end
+            # TODO: Optionally let user allocate these and pass in somehow
+            r = similar(b, Float64, m)
+            i = similar(b, Float64, m)
+            for j in 1:n
+                solve!(r, lu, convert(Vector{Float64}, real(view(b, :, j))), $umfpack)
+                solve!(i, lu, convert(Vector{Float64}, imag(view(b, :, j))), $umfpack)
+
+                map!((t,s) -> t + im*s, view(x, :, j), r, i)
+            end
+            return x
+        end
+        $f!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::StridedVector{Tb}) = $f!(b, lu, copy(b))
     end
 end
 

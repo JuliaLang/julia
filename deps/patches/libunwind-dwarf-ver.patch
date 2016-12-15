@@ -1,0 +1,26 @@
+From 155540bf1b1b57bd73ba1e7c1c77f3e4467bf253 Mon Sep 17 00:00:00 2001
+From: Yichao Yu <yyc1992@gmail.com>
+Date: Sat, 1 Oct 2016 15:24:09 +0000
+Subject: [PATCH 2/3] Allow DWARF version 4
+
+---
+ src/dwarf/Gfde.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/dwarf/Gfde.c b/src/dwarf/Gfde.c
+index dc973fe..c1d6e1c 100644
+--- a/src/dwarf/Gfde.c
++++ b/src/dwarf/Gfde.c
+@@ -116,7 +116,8 @@ parse_cie (unw_addr_space_t as, unw_accessors_t *a, unw_word_t addr,
+   if ((ret = dwarf_readu8 (as, a, &addr, &version, arg)) < 0)
+     return ret;
+ 
+-  if (version != 1 && version != DWARF_CIE_VERSION)
++  if (version != 1 && version != DWARF_CIE_VERSION &&
++      !(version == 4 && DWARF_CIE_VERSION))
+     {
+       Debug (1, "Got CIE version %u, expected version 1 or "
+              STR (DWARF_CIE_VERSION) "\n", version);
+-- 
+2.10.0
+

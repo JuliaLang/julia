@@ -80,7 +80,7 @@
 # show
 io = IOBuffer()
 show(io,v"4.3.2+1.a")
-@test length(takebuf_string(io)) == 12
+@test length(String(take!(io))) == 12
 
 # conversion from Int
 @test convert(VersionNumber, 2) == v"2.0.0"
@@ -225,7 +225,7 @@ import Base.check_new_version
 import Base.banner
 io = IOBuffer()
 @test banner(io) === nothing
-@test length(takebuf_string(io)) > 50
+@test length(String(take!(io))) > 50
 
 # julia_version.h version test
 @test VERSION.major == ccall(:jl_ver_major, Cint, ())

@@ -170,14 +170,14 @@ function serialize_array_data(s::IO, a)
         count = 1
         for i = 2:length(a)
             if a[i] != last || count == 127
-                write(s, UInt8((UInt8(last)<<7) | count))
+                write(s, UInt8((UInt8(last) << 7) | count))
                 last = a[i]
                 count = 1
             else
                 count += 1
             end
         end
-        write(s, UInt8((UInt8(last)<<7) | count))
+        write(s, UInt8((UInt8(last) << 7) | count))
     else
         write(s, a)
     end
@@ -353,6 +353,11 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     isdefined(linfo, :def) && error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
     serialize(s, linfo.inferred)
+    if isdefined(linfo, :inferred_const)
+        serialize(s, linfo.inferred_const)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
     serialize(s, linfo.sparam_vals)
     serialize(s, linfo.rettype)
     serialize(s, linfo.specTypes)
@@ -654,6 +659,10 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, (Ptr{Void},), C_NULL)
     deserialize_cycle(s, linfo)
     linfo.inferred = deserialize(s)::CodeInfo
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        linfo.inferred_const = handle_deserialize(s, tag)
+    end
     linfo.sparam_vals = deserialize(s)::SimpleVector
     linfo.rettype = deserialize(s)
     linfo.specTypes = deserialize(s)
@@ -662,15 +671,16 @@ end
 
 function deserialize_array(s::AbstractSerializer)
     d1 = deserialize(s)
-    if isa(d1,Type)
+    if isa(d1, Type)
         elty = d1
         d1 = deserialize(s)
     else
         elty = UInt8
     end
-    if isa(d1,Integer)
+    if isa(d1, Integer)
         if elty !== Bool && isbits(elty)
-            return read!(s.io, Array{elty}(d1))
+            a = Array{elty, 1}(d1)
+            return read!(s.io, a)
         end
         dims = (Int(d1),)
     else
@@ -678,16 +688,17 @@ function deserialize_array(s::AbstractSerializer)
     end
     if isbits(elty)
         n = prod(dims)::Int
-        if elty === Bool && n>0
-            A = Array{Bool}(dims)
+        if elty === Bool && n > 0
+            A = Array{Bool, length(dims)}(dims)
             i = 1
             while i <= n
                 b = read(s.io, UInt8)::UInt8
-                v = (b>>7) != 0
-                count = b&0x7f
-                nxt = i+count
+                v = (b >> 7) != 0
+                count = b & 0x7f
+                nxt = i + count
                 while i < nxt
-                    A[i] = v; i+=1
+                    A[i] = v
+                    i += 1
                 end
             end
         else
@@ -695,7 +706,7 @@ function deserialize_array(s::AbstractSerializer)
         end
         return A
     end
-    A = Array{elty}(dims)
+    A = Array{elty, length(dims)}(dims)
     deserialize_cycle(s, A)
     for i = eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)

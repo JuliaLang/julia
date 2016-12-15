@@ -76,7 +76,7 @@ flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
 flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
 flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
 
-copysign(x::Signed, y::Signed)  = flipsign(x, x$y)
+copysign(x::Signed, y::Signed)  = flipsign(x, x ⊻ y)
 copysign(x::Signed, y::Float16) = copysign(x, reinterpret(Int16,y))
 copysign(x::Signed, y::Float32) = copysign(x, reinterpret(Int32,y))
 copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
@@ -149,7 +149,7 @@ rem{T<:BitUnsigned64}(x::T, y::T) = box(T,checked_urem_int(unbox(T,x),unbox(T,y)
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 function fld{T<:Integer}(x::T, y::T)
     d = div(x,y)
-    d - (signbit(x$y) & (d*y!=x))
+    d - (signbit(x ⊻ y) & (d*y!=x))
 end
 
 # cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)
@@ -167,7 +167,7 @@ end
 (~){T<:BitInteger}(x::T)       = box(T,not_int(unbox(T,x)))
 (&){T<:BitInteger}(x::T, y::T) = box(T,and_int(unbox(T,x),unbox(T,y)))
 (|){T<:BitInteger}(x::T, y::T) = box(T, or_int(unbox(T,x),unbox(T,y)))
-($){T<:BitInteger}(x::T, y::T) = box(T,xor_int(unbox(T,x),unbox(T,y)))
+xor{T<:BitInteger}(x::T, y::T) = box(T,xor_int(unbox(T,x),unbox(T,y)))
 
 bswap{T<:Union{Int8,UInt8}}(x::T) = x
 bswap{T<:Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}}(x::T) =
@@ -327,14 +327,7 @@ rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x&1)!=0)
 mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
 
-convert{Tf<:Union{Float32,Float64}}(T::BitSigned64T, x::Tf) =
-    box(T,checked_fptosi(T,unbox(Tf,x)))
-convert{Tf<:Union{Float32,Float64}}(T::BitUnsigned64T, x::Tf) =
-    box(T,checked_fptoui(T,unbox(Tf,x)))
-
-convert{Tf<:Union{Float32,Float64}}(T::Union{Type{Int128},Type{UInt128}}, x::Tf) =
-    (isinteger(x) || throw(InexactError()) ; trunc(T,x))
-
+unsafe_trunc{T<:Integer}(::Type{T}, x::Integer) = rem(x, T)
 for (Ts, Tu) in ((Int8, UInt8), (Int16, UInt16), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128))
     @eval convert(::Type{Signed}, x::$Tu) = convert($Ts, x)
     @eval convert(::Type{Unsigned}, x::$Ts) = convert($Tu, x)

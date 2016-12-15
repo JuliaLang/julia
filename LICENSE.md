@@ -29,6 +29,7 @@ for exceptions.
 
 Julia includes code from the following projects, which have their own licenses:
 
+- [crc32c.c](http://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software) (CRC-32c checksum code by Mark Adler) [[ZLib](https://opensource.org/licenses/Zlib)].
 - [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE) (for ccall/cfunction ABI definitions) [BSD-3]. The portion of code that Julia uses from LDC is [BSD-3] licensed.
 - [LLVM](http://llvm.org/releases/3.7.0/LICENSE.TXT) (for parts of src/jitlayers.cpp and src/disasm.cpp) [BSD-3, effectively]
 - [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementation on Windows) [MIT]
@@ -86,7 +87,6 @@ Julia bundles the following external programs and libraries on some platforms:
 - [BUSYBOX](https://github.com/rmyorston/busybox-w32/blob/master/LICENSE)
 - [ZLIB](http://zlib.net/zlib_license.html)
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
-- [OPENSSL](https://github.com/openssl/openssl/blob/master/LICENSE)
 
 On some platforms, distributions of Julia contain SSL certificate authority certificates,
 released under the [Mozilla Public License](https://en.wikipedia.org/wiki/Mozilla_Public_License).

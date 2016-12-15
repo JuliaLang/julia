@@ -188,7 +188,7 @@ end
     ^(s::AbstractString, n::Integer)
 
 Repeat `n` times the string `s`.
-The [`repeat`](:func:`repeat`) function is an alias to this operator.
+The [`repeat`](@ref) function is an alias to this operator.
 
 ```jldoctest
 julia> "Test "^3

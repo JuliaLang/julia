@@ -68,6 +68,8 @@ JL_DLLEXPORT jl_value_t *jl_emptytuple=NULL;
 jl_svec_t *jl_emptysvec;
 jl_value_t *jl_nothing;
 
+const jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 1, 1, 1};
+
 // --- type properties and predicates ---
 
 STATIC_INLINE int is_unspec(jl_datatype_t *dt)
@@ -2198,8 +2200,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         jl_value_t *va = iparams[ntp - 1];
         // return same `Tuple` object for types equal to it
         if (ntp == 1 && jl_tparam0(va) == (jl_value_t*)jl_any_type &&
-            jl_tparam1(va) == jl_tparam1(jl_tparam0(jl_anytuple_type)))
+            jl_tparam1(va) == jl_tparam1(jl_tparam0(jl_anytuple_type))) {
+            if (cacheable) JL_UNLOCK(&typecache_lock); // Might GC
             return (jl_value_t*)jl_anytuple_type;
+        }
         if (jl_is_long(jl_tparam1(va))) {
             ssize_t nt = jl_unbox_long(jl_tparam1(va));
             if (nt < 0)
@@ -3132,7 +3136,9 @@ int jl_args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap)
     if (changed) {
         JL_GC_PUSH1(&newtta);
         int ret;
-        if (swap)
+        if (type_eqv_(b, (jl_value_t*)newtta))
+            ret = swap;
+        else if (swap)
             ret = jl_args_morespecific_(b, (jl_value_t*)newtta);
         else
             ret = jl_args_morespecific_((jl_value_t*)newtta, b);
@@ -3922,11 +3928,12 @@ void jl_init_types(void)
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(12,
+                        jl_svec(13,
                                 jl_symbol("specTypes"),
                                 jl_symbol("rettype"),
                                 jl_symbol("sparam_vals"),
                                 jl_symbol("inferred"),
+                                jl_symbol("inferred_const"),
                                 jl_symbol("def"),
                                 jl_symbol("inInference"),
                                 jl_symbol("jlcall_api"),
@@ -3934,10 +3941,11 @@ void jl_init_types(void)
                                 jl_symbol("fptr"),
                                 jl_symbol("unspecialized_ducttape"),
                                 jl_symbol(""), jl_symbol("")),
-                        jl_svec(12,
+                        jl_svec(13,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_simplevector_type,
+                                jl_any_type,
                                 jl_any_type,
                                 jl_method_type,
                                 jl_bool_type,
@@ -3946,7 +3954,7 @@ void jl_init_types(void)
                                 jl_any_type, // void*
                                 jl_any_type, // void*
                                 jl_any_type, jl_any_type), // void*, void*
-                        0, 1, 4);
+                        0, 1, 3);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),
@@ -4008,10 +4016,10 @@ void jl_init_types(void)
 #endif
     jl_svecset(jl_methtable_type->types, 7, jl_int32_type); // uint32_t
     jl_svecset(jl_method_type->types, 10, jl_method_instance_type);
-    jl_svecset(jl_method_instance_type->types, 8, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 9, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 10, jl_voidpointer_type);
     jl_svecset(jl_method_instance_type->types, 11, jl_voidpointer_type);
+    jl_svecset(jl_method_instance_type->types, 12, jl_voidpointer_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

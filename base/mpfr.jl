@@ -51,7 +51,7 @@ promoted to a `BigFloat`.
 
 Note that because decimal literals are converted to floating point numbers when parsed,
 `BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
-constants from strings via [`parse`](:func:`parse`), or using the `big` string literal.
+constants from strings via [`parse`](@ref), or using the `big` string literal.
 
 ```jldoctest
 julia> BigFloat(2.1)
@@ -107,7 +107,7 @@ convert(::Type{BigFloat}, x::Union{Bool,Int8,Int16,Int32}) = BigFloat(convert(Cl
 convert(::Type{BigFloat}, x::Union{UInt8,UInt16,UInt32}) = BigFloat(convert(Culong,x))
 
 convert(::Type{BigFloat}, x::Union{Float16,Float32}) = BigFloat(Float64(x))
-convert(::Type{BigFloat}, x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
+convert(::Type{BigFloat}, x::Rational) = BigFloat(numerator(x)) / BigFloat(denominator(x))
 
 function tryparse(::Type{BigFloat}, s::AbstractString, base::Int=0)
     z = BigFloat()

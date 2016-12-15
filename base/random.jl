@@ -324,14 +324,14 @@ rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float32}) =
 
 function rand(r::MersenneTwister, ::Type{UInt64})
     reserve(r, 2)
-    rand_ui52_raw_inbounds(r) << 32 $ rand_ui52_raw_inbounds(r)
+    rand_ui52_raw_inbounds(r) << 32 ⊻ rand_ui52_raw_inbounds(r)
 end
 
 function rand(r::MersenneTwister, ::Type{UInt128})
     reserve(r, 3)
-    rand_ui52_raw_inbounds(r) % UInt128 << 96 $
-    rand_ui52_raw_inbounds(r) % UInt128 << 48 $
-    rand_ui52_raw_inbounds(r)
+    xor(rand_ui52_raw_inbounds(r) % UInt128 << 96,
+        rand_ui52_raw_inbounds(r) % UInt128 << 48,
+        rand_ui52_raw_inbounds(r))
 end
 
 rand(r::MersenneTwister, ::Type{Int64})   = reinterpret(Int64,  rand(r, UInt64))
@@ -447,7 +447,7 @@ function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Ty
     A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
     @inbounds for i in 1:n128
         u = A128[i]
-        u $= u << 26
+        u ⊻= u << 26
         # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
         # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
         # the bits needing to be random are
@@ -488,17 +488,17 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
         i = 0
         @inbounds while n-i >= 5
             u = A[i+=1]
-            A[n]    $= u << 48
-            A[n-=1] $= u << 36
-            A[n-=1] $= u << 24
-            A[n-=1] $= u << 12
+            A[n]    ⊻= u << 48
+            A[n-=1] ⊻= u << 36
+            A[n-=1] ⊻= u << 24
+            A[n-=1] ⊻= u << 12
             n-=1
         end
     end
     if n > 0
         u = rand_ui2x52_raw(r)
         for i = 1:n
-            @inbounds A[i] $= u << 12*i
+            @inbounds A[i] ⊻= u << 12*i
         end
     end
     A
@@ -1257,7 +1257,7 @@ end
     randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
-Also see the [`rand`](:func:`rand`) function.
+Also see the [`rand`](@ref) function.
 """
 function randn! end
 
@@ -1468,7 +1468,7 @@ end
 """
     shuffle!([rng=GLOBAL_RNG,] v)
 
-In-place version of [`shuffle`](:func:`shuffle`): randomly permute the array `v` in-place,
+In-place version of [`shuffle`](@ref): randomly permute the array `v` in-place,
 optionally supplying the random-number generator `rng`.
 """
 function shuffle!(r::AbstractRNG, a::AbstractVector)
@@ -1489,9 +1489,9 @@ shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
     shuffle([rng=GLOBAL_RNG,] v)
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
-number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
-To permute `v` in-place, see [`shuffle!`](:func:`shuffle!`).  To obtain randomly permuted
-indices, see [`randperm`](:func:`randperm`).
+number generator (see [Random Numbers](@ref)).
+To permute `v` in-place, see [`shuffle!`](@ref).  To obtain randomly permuted
+indices, see [`randperm`](@ref).
 """
 shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
@@ -1500,9 +1500,9 @@ shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
     randperm([rng=GLOBAL_RNG,] n::Integer)
 
 Construct a random permutation of length `n`. The optional `rng` argument specifies a random
-number generator (see [Random Numbers](:ref:`Random Numbers <random-numbers>`)).
-To randomly permute a arbitrary vector, see [`shuffle`](:func:`shuffle`)
-or [`shuffle!`](:func:`shuffle!`).
+number generator (see [Random Numbers](@ref)).
+To randomly permute a arbitrary vector, see [`shuffle`](@ref)
+or [`shuffle!`](@ref).
 """
 function randperm(r::AbstractRNG, n::Integer)
     a = Array{typeof(n)}(n)
@@ -1528,7 +1528,7 @@ randperm(n::Integer) = randperm(GLOBAL_RNG, n)
     randcycle([rng=GLOBAL_RNG,] n::Integer)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
-argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
+argument specifies a random number generator, see [Random Numbers](@ref).
 """
 function randcycle(r::AbstractRNG, n::Integer)
     a = Array{typeof(n)}(n)

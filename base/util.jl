@@ -16,7 +16,7 @@ time_ns() = ccall(:jl_hrtime, UInt64, ())
 # This type must be kept in sync with the C struct in src/gc.h
 immutable GC_Num
     allocd      ::Int64 # GC internal
-    deferred_alloc::Int64
+    deferred_alloc::Int64 # GC internal
     freed       ::Int64 # GC internal
     malloc      ::UInt64
     realloc     ::UInt64
@@ -46,10 +46,14 @@ immutable GC_Diff
     full_sweep  ::Int64 # Number of GC full collection
 end
 
+gc_total_bytes(gc_num::GC_Num) =
+    (gc_num.allocd + gc_num.deferred_alloc +
+     Int64(gc_num.collect) + Int64(gc_num.total_allocd))
+
 function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
-    old_allocd = old.allocd + Int64(old.collect) + Int64(old.total_allocd)
-    new_allocd = new.allocd + Int64(new.collect) + Int64(new.total_allocd)
+    old_allocd = gc_total_bytes(old)
+    new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd - old_allocd,
                    Int64(new.malloc       - old.malloc),
                    Int64(new.realloc      - old.realloc),
@@ -75,7 +79,7 @@ gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 """
     tic()
 
-Set a timer to be read by the next call to [`toc`](:func:`toc`) or [`toq`](:func:`toq`). The
+Set a timer to be read by the next call to [`toc`](@ref) or [`toq`](@ref). The
 macro call `@time expr` can also be used to time evaluation.
 """
 function tic()
@@ -87,13 +91,13 @@ end
 """
     toq()
 
-Return, but do not print, the time elapsed since the last [`tic`](:func:`tic`). The
+Return, but do not print, the time elapsed since the last [`tic`](@ref). The
 macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
 """
 function toq()
     t1 = time_ns()
     timers = get(task_local_storage(), :TIMERS, ())
-    if is(timers,())
+    if timers === ()
         error("toc() without tic()")
     end
     t0 = timers[1]::UInt64
@@ -104,7 +108,7 @@ end
 """
     toc()
 
-Print and return the time elapsed since the last [`tic`](:func:`tic`). The macro call
+Print and return the time elapsed since the last [`tic`](@ref). The macro call
 `@time expr` can also be used to time evaluation.
 """
 function toc()
@@ -180,8 +184,8 @@ A macro to execute an expression, printing the time it took to execute, the numb
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression.
 
-See also [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`), [`@elapsed`](:func:`@elapsed`), and
-[`@allocated`](:func:`@allocated`).
+See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
+[`@allocated`](@ref).
 """
 macro time(ex)
     quote
@@ -203,8 +207,8 @@ This is a verbose version of the `@time` macro. It first prints the same informa
 `@time`, then any non-zero memory allocation counters, and then returns the value of the
 expression.
 
-See also [`@time`](:func:`@time`), [`@timed`](:func:`@timed`), [`@elapsed`](:func:`@elapsed`), and
-[`@allocated`](:func:`@allocated`).
+See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
+[`@allocated`](@ref).
 """
 macro timev(ex)
     quote
@@ -223,8 +227,8 @@ end
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 number of seconds it took to execute as a floating-point number.
 
-See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`),
-and [`@allocated`](:func:`@allocated`).
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
+and [`@allocated`](@ref).
 """
 macro elapsed(ex)
     quote
@@ -250,8 +254,8 @@ effects of compilation, however, there still may be some allocations due to JIT 
 This also makes the results inconsistent with the `@time` macros, which do not try to adjust
 for the effects of compilation.
 
-See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@timed`](:func:`@timed`),
-and [`@elapsed`](:func:`@elapsed`).
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
+and [`@elapsed`](@ref).
 """
 macro allocated(ex)
     quote
@@ -274,8 +278,8 @@ A macro to execute an expression, and return the value of the expression, elapse
 total bytes allocated, garbage collection time, and an object with various memory allocation
 counters.
 
-See also [`@time`](:func:`@time`), [`@timev`](:func:`@timev`), [`@elapsed`](:func:`@elapsed`), and
-[`@allocated`](:func:`@allocated`).
+See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
+[`@allocated`](@ref).
 """
 macro timed(ex)
     quote
@@ -299,26 +303,38 @@ end
 
 ## printing with color ##
 
-function with_output_color(f::Function, color::Symbol, io::IO, args...)
+function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
     buf = IOBuffer()
+    have_color && bold && print(buf, text_colors[:bold])
     have_color && print(buf, get(text_colors, color, color_normal))
-    try f(buf, args...)
+    try f(IOContext(buf, io), args...)
     finally
-        have_color && print(buf, color_normal)
-        print(io, takebuf_string(buf))
+        have_color && print(buf, get(disable_text_style, color, text_colors[:default]))
+        have_color && (bold || color == :bold) && print(buf, disable_text_style[:bold])
+        print(io, String(take!(buf)))
     end
 end
 
-print_with_color(color::Symbol, io::IO, msg::AbstractString...) =
-    with_output_color(print, color, io, msg...)
-print_with_color(color::Symbol, msg::AbstractString...) =
-    print_with_color(color, STDOUT, msg...)
-println_with_color(color::Symbol, io::IO, msg::AbstractString...) =
-    with_output_color(println, color, io, msg...)
-println_with_color(color::Symbol, msg::AbstractString...) =
-    println_with_color(color, STDOUT, msg...)
+"""
+    print_with_color(color::Union{Symbol, Int}, [io], strings...; bold::Bool = false)
+
+Print strings in a color specified as a symbol.
+
+`color` may take any of the values $(Base.available_text_colors_docstring)
+or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
+If the keyword `bold` is given as `true`, the result will be printed in bold.
+"""
+print_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...; bold::Bool = false) =
+    with_output_color(print, color, io, msg...; bold = bold)
+print_with_color(color::Union{Int, Symbol}, msg::AbstractString...; bold::Bool = false) =
+    print_with_color(color, STDOUT, msg...; bold = bold)
+println_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...; bold::Bool = false) =
+    with_output_color(println, color, io, msg...; bold = bold)
+println_with_color(color::Union{Int, Symbol}, msg::AbstractString...; bold::Bool = false) =
+    println_with_color(color, STDOUT, msg...; bold = bold)
 
 ## warnings and messages ##
+
 
 """
     info(msg...; prefix="INFO: ")
@@ -337,7 +353,8 @@ MY INFO: hello world
 ```
 """
 function info(io::IO, msg...; prefix="INFO: ")
-    println_with_color(info_color(), io, prefix, chomp(string(msg...)))
+    print_with_color(info_color(), io, prefix; bold = true)
+    println_with_color(info_color(), io, chomp(string(msg...)))
 end
 info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
 
@@ -359,7 +376,8 @@ function warn(io::IO, msg...;
         (key in have_warned) && return
         push!(have_warned, key)
     end
-    print_with_color(warn_color(), io, prefix, str)
+    print_with_color(warn_color(), io, prefix; bold = true)
+    print_with_color(warn_color(), io, str)
     if bt !== nothing
         show_backtrace(io, bt)
     end
@@ -548,3 +566,14 @@ if is_windows()
     end
 
 end
+
+"""
+    crc32c(data, crc::UInt32=0x00000000)
+Compute the CRC-32c checksum of the given `data`, which can be
+an `Array{UInt8}` or a `String`.  Optionally, you can pass
+a starting `crc` integer to be mixed in with the checksum.
+(Technically, a little-endian checksum is computed.)
+"""
+function crc32c end
+crc32c(a::Array{UInt8}, crc::UInt32=0x00000000) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
+crc32c(s::String, crc::UInt32=0x00000000) = crc32c(s.data, crc)

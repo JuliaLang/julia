@@ -1,44 +1,30 @@
-Julia Documentation README
-==========================
+# Julia Documentation README
 
-Julia's documentation is written in reStructuredText, a good reference for which
-is the [Documenting Python](http://docs.python.org/devguide/documenting.html)
-chapter of the Python Developer's Guide.
+Julia's documentation is written in Markdown. A reference of all supported syntax can be found in the [manual](http://docs.julialang.org/en/latest/manual/documentation/#markdown-syntax). All documentation can be found in the Markdown files in `doc/src/` and the docstrings in Julia source files in `base/`.
 
+## Requirements
 
-Prerequisites for building the documentation
---------------------------------------------
+This documentation is built using the [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl) package.
 
-The documentation is built using [Sphinx](http://sphinx.pocoo.org/) and LaTeX.
-On ubuntu, you'll need the following packages installed:
+All dependencies are automatically installed into a sandboxed package directory in `doc/deps/` to avoid interfering with user-installed packages.
 
-    latex-cjk-all
-    texlive
-    texlive-lang-cjk
-    texlive-latex-extra
+## Building
 
-On OS X, you can install MacTex using the GUI installer
+To build Julia's documentation run
 
+```sh
+$ make docs
+```
 
-Building the documentation
---------------------------
+from the root directory. This will build the HTML documentation and output it to the `doc/_build/` folder.
 
-Build the documentation by running
+## Testing
 
-    $ make html
-    $ make latexpdf
+To run the doctests found in the manual run
 
+```sh
+$ make -C doc check
+```
 
-File layout
------------
+from the root directory.
 
-    conf.py             Sphinx configuration
-    stdlib/             Julia standard library documentation
-    UNDOCUMENTED.rst    Undocumented functions (to be filled in and copied to
-                        the correct location in stdlib/)
-
-Sphinx extensions and theme
----------------------------
-The extensions to Sphinx and the theme are in the
-https://github.com/JuliaLang/JuliaDoc repository, and can also be used to style
-package documentation.

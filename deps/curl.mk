@@ -19,7 +19,11 @@ $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted: $(SRCDIR)/srccache/curl-$(
 	touch -c $(SRCDIR)/srccache/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted
+$(SRCDIR)/srccache/curl-$(CURL_VER)/curl-mbedtls-includes.patch-applied: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted
+	cd $(SRCDIR)/srccache/curl-$(CURL_VER) && patch -p1 -f < $(SRCDIR)/patches/curl-mbedtls-includes.patch
+	echo 1 > $@
+
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted $(SRCDIR)/srccache/curl-$(CURL_VER)/curl-mbedtls-includes.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \

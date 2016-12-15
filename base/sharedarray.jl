@@ -15,7 +15,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # Local shmem map.
     s::Array{T,N}
 
-    # idx of current workers pid into the pids vector, 0 if this shared array is not mapped locally.
+    # idx of current worker's pid in the pids vector, 0 if this shared array is not mapped locally.
     pidx::Int
 
     # the local partition into the array when viewed as a single dimensional array.
@@ -254,15 +254,16 @@ end
 """
     procs(S::SharedArray)
 
-Get the vector of processes that have mapped the shared array.
+Get the vector of processes mapping the shared array.
 """
 procs(S::SharedArray) = S.pids
 
 """
     indexpids(S::SharedArray)
 
-Returns the index of the current worker into the `pids` vector, i.e., the list of workers
-mapping the SharedArray
+Returns the current worker's index in the list of workers
+mapping the `SharedArray` (i.e. in the same list returned by `procs(S)`), or
+0 if the `SharedArray` is not mapped locally.
 """
 indexpids(S::SharedArray) = S.pidx
 
@@ -281,11 +282,11 @@ Returns a range describing the "default" indexes to be handled by the
 current process.  This range should be interpreted in the sense of
 linear indexing, i.e., as a sub-range of `1:length(S)`.  In
 multi-process contexts, returns an empty range in the parent process
-(or any process for which `indexpids` returns 0).
+(or any process for which [`indexpids`](@ref) returns 0).
 
 It's worth emphasizing that `localindexes` exists purely as a
 convenience, and you can partition work on the array among workers any
-way you wish.  For a SharedArray, all indexes should be equally fast
+way you wish. For a `SharedArray`, all indexes should be equally fast
 for each worker process.
 """
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
@@ -343,7 +344,7 @@ end
 
 sub_1dim(S::SharedArray, pidx) = view(S.s, range_1dim(S, pidx))
 
-function init_loc_flds{T,N}(S::SharedArray{T,N})
+function init_loc_flds{T,N}(S::SharedArray{T,N}, empty_local=false)
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         if isa(S.refs[1], Future)
@@ -356,6 +357,9 @@ function init_loc_flds{T,N}(S::SharedArray{T,N})
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
+        if empty_local
+            S.s = Array{T}(ntuple(d->0,N))
+        end
         S.loc_subarr_1d = view(Array{T}(ntuple(d->0,N)), 1:0)
     end
 end
@@ -386,8 +390,26 @@ end
 
 function deserialize{T,N}(s::AbstractSerializer, t::Type{SharedArray{T,N}})
     S = invoke(deserialize, Tuple{AbstractSerializer, DataType}, s, t)
-    init_loc_flds(S)
+    init_loc_flds(S, true)
     S
+end
+
+function show(io::IO, S::SharedArray)
+    if length(S.s) > 0
+        invoke(show, (IO, DenseArray), io, S)
+    else
+        show(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
+    end
+end
+
+function show(io::IO, mime::MIME"text/plain", S::SharedArray)
+    if length(S.s) > 0
+        invoke(show, (IO, MIME"text/plain", DenseArray), io, MIME"text/plain"(), S)
+    else
+        # retrieve from the first worker mapping the array.
+        println(io, summary(S), ":")
+        showarray(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S), false; header=false)
+    end
 end
 
 convert(::Type{Array}, S::SharedArray) = S.s

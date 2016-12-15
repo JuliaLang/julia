@@ -27,6 +27,7 @@
 #include <polly/CodeGen/CodegenCleanup.h>
 #endif
 
+#include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Instrumentation.h>
@@ -34,12 +35,19 @@
 #if JL_LLVM_VERSION >= 30900
 #include <llvm/Transforms/Scalar/GVN.h>
 #endif
+#if JL_LLVM_VERSION >= 40000
+#include <llvm/Transforms/IPO/AlwaysInliner.h>
+#endif
 
 namespace llvm {
     extern Pass *createLowerSimdLoopPass();
 }
 
-#include <llvm/Bitcode/ReaderWriter.h>
+#if JL_LLVM_VERSION >= 40000
+#  include <llvm/Bitcode/BitcodeWriter.h>
+#else
+#  include <llvm/Bitcode/ReaderWriter.h>
+#endif
 #if JL_LLVM_VERSION >= 30500
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 #endif
@@ -102,7 +110,7 @@ void addOptimizationPasses(legacy::PassManager *PM)
 void addOptimizationPasses(PassManager *PM)
 #endif
 {
-    PM->add(createLowerGCFramePass(tbaa_gcframe));
+    PM->add(createLowerGCFramePass());
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass());
 #endif
@@ -118,7 +126,7 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(llvm::createMemorySanitizerPass(true));
 #endif
     if (jl_options.opt_level == 0) {
-        PM->add(createLowerPTLSPass(imaging_mode, tbaa_const));
+        PM->add(createLowerPTLSPass(imaging_mode));
         return;
     }
 #if JL_LLVM_VERSION >= 30700
@@ -141,13 +149,18 @@ void addOptimizationPasses(PassManager *PM)
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
     PM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
+#if JL_LLVM_VERSION >= 40000
+    PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+#else
+    PM->add(createAlwaysInlinerPass()); // Respect always_inline
+#endif
 
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
 #endif
     // Let the InstCombine pass remove the unnecessary load of
     // safepoint address first
-    PM->add(createLowerPTLSPass(imaging_mode, tbaa_const));
+    PM->add(createLowerPTLSPass(imaging_mode));
     PM->add(createSROAPass());                 // Break up aggregate allocas
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
@@ -299,7 +312,7 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_)
 // Resolve non-lock free atomic functions in the libatomic library.
 // This is the library that provides support for c11/c++11 atomic operations.
 static uint64_t resolve_atomic(const char *name)
@@ -446,8 +459,8 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
         addOptimizationPasses(&PM);
     }
     else {
-        PM.add(createLowerGCFramePass(tbaa_gcframe));
-        PM.add(createLowerPTLSPass(imaging_mode, tbaa_const));
+        PM.add(createLowerGCFramePass());
+        PM.add(createLowerPTLSPass(imaging_mode));
     }
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
@@ -499,7 +512,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
             else if (!(isIntrinsicFunction(F) ||
                        findUnmangledSymbol(F->getName()) ||
                        SectionMemoryManager::getSymbolAddressInProcess(
-                           F->getName()))) {
+                           getMangledName(F->getName())))) {
                 std::cerr << "FATAL ERROR: "
                           << "Symbol \"" << F->getName().str() << "\""
                           << "not found";
@@ -529,7 +542,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                         // Step 2: Search the program symbols
                         if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_)
                         if (uint64_t addr = resolve_atomic(Name.c_str()))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
 #endif

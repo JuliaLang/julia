@@ -338,6 +338,58 @@ public:
         };
 #endif
 
+#ifdef _CPU_ARM_
+        // ARM does not have/use .eh_frame
+        uint64_t arm_exidx_addr = 0;
+        size_t arm_exidx_len = 0;
+        uint64_t arm_text_addr = 0;
+        size_t arm_text_len = 0;
+        for (auto &section: obj.sections()) {
+            bool istext = false;
+            if (section.isText()) {
+                istext = true;
+            }
+            else {
+                StringRef sName;
+                if (section.getName(sName))
+                    continue;
+                if (sName != ".ARM.exidx") {
+                    continue;
+                }
+            }
+#if JL_LLVM_VERSION >= 30800
+            uint64_t loadaddr = L.getSectionLoadAddress(section);
+#else
+            uint64_t loadaddr = L.getSectionLoadAddress(sName);
+#endif
+            size_t seclen = section.getSize();
+            if (istext) {
+                arm_text_addr = loadaddr;
+                arm_text_len = seclen;
+                if (!arm_exidx_addr) {
+                    continue;
+                }
+            }
+            else {
+                arm_exidx_addr = loadaddr;
+                arm_exidx_len = seclen;
+                if (!arm_text_addr) {
+                    continue;
+                }
+            }
+            unw_dyn_info_t *di = new unw_dyn_info_t;
+            di->gp = 0;
+            di->format = UNW_INFO_FORMAT_ARM_EXIDX;
+            di->start_ip = (uintptr_t)arm_text_addr;
+            di->end_ip = (uintptr_t)(arm_text_addr + arm_text_len);
+            di->u.rti.name_ptr = 0;
+            di->u.rti.table_data = arm_exidx_addr;
+            di->u.rti.table_len = arm_exidx_len;
+            _U_dyn_register(di);
+            break;
+        }
+#endif
+
 #if defined(_OS_WINDOWS_)
         uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
         uint8_t *UnwindData = NULL;
@@ -1239,19 +1291,21 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
             }
         }
 
-        if (iswindows) {
-#if JL_LLVM_VERSION >= 30500
-            assert(debugobj->isCOFF());
-            const llvm::object::COFFObjectFile *coffobj = (const llvm::object::COFFObjectFile*)debugobj;
+        if (auto *OF = dyn_cast<const object::COFFObjectFile>(debugobj)) {
+            assert(iswindows);
+#if JL_LLVM_VERSION >= 30800
+            *slide = OF->getImageBase() - fbase;
+            *section_slide = 0; // Since LLVM 3.8+ addresses are adjusted correctly
+#elif JL_LLVM_VERSION >= 30500
             const llvm::object::pe32plus_header *pe32plus;
-            coffobj->getPE32PlusHeader(pe32plus);
+            OF->getPE32PlusHeader(pe32plus);
             if (pe32plus != NULL) {
                 *slide = pe32plus->ImageBase - fbase;
                 *section_slide = -(int64_t)pe32plus->ImageBase;
             }
             else {
                 const llvm::object::pe32_header *pe32;
-                coffobj->getPE32Header(pe32);
+                OF->getPE32Header(pe32);
                 if (pe32 == NULL) {
                     objfileentry_t entry = {};
                     objfilemap[fbase] = entry;
@@ -1645,7 +1699,8 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
     });
 }
 
-#elif defined(_OS_LINUX_) && JL_LLVM_VERSION >= 30700 && defined(JL_UNW_HAS_FORMAT_IP)
+#elif defined(_OS_LINUX_) && JL_LLVM_VERSION >= 30700 && \
+    defined(JL_UNW_HAS_FORMAT_IP) && !defined(_CPU_ARM_)
 #include <type_traits>
 
 struct unw_table_entry
@@ -1830,11 +1885,8 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
 
 void register_eh_frames(uint8_t *Addr, size_t Size)
 {
-#ifndef _CPU_ARM_
     // System unwinder
-    // Linux uses setjmp/longjmp exception handling on ARM.
     __register_frame(Addr);
-#endif
     // Our unwinder
     unw_dyn_info_t *di = new unw_dyn_info_t;
     // In a shared library, this is set to the address of the PLT.
@@ -1844,8 +1896,8 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     // I'm not a great fan of the naming of this constant, but it means the
     // right thing, which is a table of FDEs and ips.
     di->format = UNW_INFO_FORMAT_IP_OFFSET;
-    di->u.ti.name_ptr = 0;
-    di->u.ti.segbase = (unw_word_t)Addr;
+    di->u.rti.name_ptr = 0;
+    di->u.rti.segbase = (unw_word_t)Addr;
     // Now first count the number of FDEs
     size_t nentries = 0;
     processFDEs((char*)Addr, Size, [&](const char*){ nentries++; });
@@ -1951,8 +2003,8 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     }
     assert(end_ip != 0);
 
-    di->u.ti.table_len = nentries;
-    di->u.ti.table_data = (unw_word_t*)table;
+    di->u.rti.table_len = nentries * sizeof(*table) / sizeof(unw_word_t);
+    di->u.rti.table_data = (unw_word_t)table;
     di->start_ip = start_ip;
     di->end_ip = end_ip;
 
@@ -1961,12 +2013,20 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
-#ifndef _CPU_ARM_
     __deregister_frame(Addr);
-#endif
     // Deregistering with our unwinder requires a lookup table to find the
     // the allocated entry above (or we could look in libunwind's internal
     // data structures).
+}
+
+#elif defined(_CPU_ARM_)
+
+void register_eh_frames(uint8_t *Addr, size_t Size)
+{
+}
+
+void deregister_eh_frames(uint8_t *Addr, size_t Size)
+{
 }
 
 #else

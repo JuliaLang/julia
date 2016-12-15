@@ -56,11 +56,24 @@ Return both the real and imaginary parts of the complex number `z`.
 """
 reim(z) = (real(z), imag(z))
 
+"""
+    real(T::Type)
+
+Returns the type that represents the real part of a value of type `T`.
+e.g: for `T == Complex{R}`, returns `R`.
+Equivalent to `typeof(real(zero(T)))`.
+
+```jldoctest
+julia> real(Complex{Int})
+Int64
+
+julia> real(Float64)
+Float64
+```
+"""
+real(T::Type) = typeof(real(zero(T)))
 real{T<:Real}(::Type{T}) = T
 real{T<:Real}(::Type{Complex{T}}) = T
-
-complex{T<:Real}(::Type{T}) = Complex{T}
-complex{T<:Real}(::Type{Complex{T}}) = Complex{T}
 
 isreal(x::Real) = true
 isreal(z::Complex) = imag(z) == 0
@@ -75,9 +88,31 @@ isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
 isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))
 isinf(z::Complex) = isinf(real(z)) | isinf(imag(z))
 
-complex(x::Real, y::Real) = Complex(x, y)
-complex(x::Real) = Complex(x)
+"""
+    complex(r, [i])
+
+Convert real numbers or arrays to complex. `i` defaults to zero.
+"""
 complex(z::Complex) = z
+complex(x::Real) = Complex(x)
+complex(x::Real, y::Real) = Complex(x, y)
+
+"""
+    complex(T::Type)
+
+Returns an appropriate type which can represent a value of type `T` as a complex number.
+Equivalent to `typeof(complex(zero(T)))`.
+
+```jldoctest
+julia> complex(Complex{Int})
+Complex{Int64}
+
+julia> complex(Int)
+Complex{Int64}
+```
+"""
+complex{T<:Real}(::Type{T}) = Complex{T}
+complex{T<:Real}(::Type{Complex{T}}) = Complex{T}
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
@@ -126,8 +161,8 @@ const hash_0_imag = hash(0, h_imag)
 
 function hash(z::Complex, h::UInt)
     # TODO: with default argument specialization, this would be better:
-    # hash(real(z), h $ hash(imag(z), h $ h_imag) $ hash(0, h $ h_imag))
-    hash(real(z), h $ hash(imag(z), h_imag) $ hash_0_imag)
+    # hash(real(z), h ⊻ hash(imag(z), h ⊻ h_imag) ⊻ hash(0, h ⊻ h_imag))
+    hash(real(z), h ⊻ hash(imag(z), h_imag) ⊻ hash_0_imag)
 end
 
 ## generic functions of complex numbers ##
@@ -201,7 +236,7 @@ muladd(z::Complex, w::Complex, x::Real) =
     Complex(muladd(real(z), real(w), x) - imag(z)*imag(w), # TODO: use mulsub given #15985
             muladd(real(z), imag(w), imag(z) * real(w)))
 
-/(a::Real, z::Complex) = a*inv(z)
+/{R<:Real,S<:Complex}(a::R, z::S) = (T = promote_type(R,S); a*inv(T(z)))
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
 
 function /{T<:Real}(a::Complex{T}, b::Complex{T})
@@ -796,8 +831,8 @@ end
     round(z, RoundingModeReal, RoundingModeImaginary)
 
 Returns the nearest integral value of the same type as the complex-valued `z` to `z`,
-breaking ties using the specified [`RoundingMode`](:obj:`RoundingMode`)s. The first
-[`RoundingMode`](:obj:`RoundingMode`) is used for rounding the real components while the
+breaking ties using the specified [`RoundingMode`](@ref)s. The first
+[`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 """
 function round{T<:AbstractFloat, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
@@ -839,24 +874,45 @@ promote_array_type{S<:Union{Complex, Real}, T<:AbstractFloat}(F, ::Type{S}, ::Ty
 function complex{S<:Real,T<:Real}(A::AbstractArray{S}, B::AbstractArray{T})
     if size(A) != size(B); throw(DimensionMismatch()); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
-    for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-        @inbounds F[iF] = complex(A[iA], B[iB])
+    RF, RA, RB = eachindex(F), eachindex(A), eachindex(B)
+    if RF == RA == RB
+        for i in RA
+            @inbounds F[i] = complex(A[i], B[i])
+        end
+    else
+        for (iF, iA, iB) in zip(RF, RA, RB)
+            @inbounds F[iF] = complex(A[iA], B[iB])
+        end
     end
     return F
 end
 
 function complex{T<:Real}(A::Real, B::AbstractArray{T})
     F = similar(B, typeof(complex(A,zero(T))))
-    for (iF, iB) in zip(eachindex(F), eachindex(B))
-        @inbounds F[iF] = complex(A, B[iB])
+    RF, RB = eachindex(F), eachindex(B)
+    if RF == RB
+        for i in RB
+            @inbounds F[i] = complex(A, B[i])
+        end
+    else
+        for (iF, iB) in zip(RF, RB)
+            @inbounds F[iF] = complex(A, B[iB])
+        end
     end
     return F
 end
 
 function complex{T<:Real}(A::AbstractArray{T}, B::Real)
     F = similar(A, typeof(complex(zero(T),B)))
-    for (iF, iA) in zip(eachindex(F), eachindex(A))
-        @inbounds F[iF] = complex(A[iA], B)
+    RF, RA = eachindex(F), eachindex(A)
+    if RF == RA
+        for i in RA
+            @inbounds F[i] = complex(A[i], B)
+        end
+    else
+        for (iF, iA) in zip(RF, RA)
+            @inbounds F[iF] = complex(A[iA], B)
+        end
     end
     return F
 end

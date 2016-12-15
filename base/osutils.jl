@@ -4,7 +4,7 @@
     is_unix([os])
 
 Predicate for testing if the OS provides a Unix-like interface.
-See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+See documentation in [Handling Operating System Variation](@ref).
 """
 function is_unix(os::Symbol)
     if is_windows(os)
@@ -20,7 +20,7 @@ end
     is_linux([os])
 
 Predicate for testing if the OS is a derivative of Linux.
-See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+See documentation in [Handling Operating System Variation](@ref).
 """
 is_linux(os::Symbol) = (os == :Linux)
 
@@ -28,7 +28,7 @@ is_linux(os::Symbol) = (os == :Linux)
     is_bsd([os])
 
 Predicate for testing if the OS is a derivative of BSD.
-See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+See documentation in [Handling Operating System Variation](@ref).
 """
 is_bsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :Darwin || os == :Apple)
 
@@ -36,7 +36,7 @@ is_bsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os ==
     is_windows([os])
 
 Predicate for testing if the OS is a derivative of Microsoft Windows NT.
-See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+See documentation in [Handling Operating System Variation](@ref).
 """
 is_windows(os::Symbol) = (os == :Windows || os == :NT)
 
@@ -44,7 +44,7 @@ is_windows(os::Symbol) = (os == :Windows || os == :NT)
     is_apple([os])
 
 Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
-See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
+See documentation in [Handling Operating System Variation](@ref).
 """
 is_apple(os::Symbol) = (os == :Apple || os == :Darwin)
 

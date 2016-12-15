@@ -111,14 +111,14 @@ function ip_matches_func(ip, func::Symbol)
 end
 
 function display_error(io::IO, er, bt)
-    Base.with_output_color(:red, io) do io
-        print(io, "ERROR: ")
+    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
+    Base.with_output_color(Base.error_color(), io) do io
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
         if eval_ind != 0
             bt = bt[1:eval_ind-1]
         end
-        Base.showerror(io, er, bt)
+        Base.showerror(IOContext(io, :limit => true), er, bt)
     end
 end
 
@@ -646,7 +646,7 @@ function respond(f, repl, main; pass_empty = false)
         if !ok
             return transition(s, :abort)
         end
-        line = takebuf_string(buf)
+        line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
             val, bt = send_to_backend(f(line), backend(repl))
@@ -840,7 +840,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 return
             end
             edit_insert(sbuffer, input)
-            input = takebuf_string(sbuffer)
+            input = String(take!(sbuffer))
             oldpos = start(input)
             firstline = true
             isprompt_paste = false

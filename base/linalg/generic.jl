@@ -54,6 +54,8 @@ If `A` is a matrix and `b` is a vector, then `scale!(A,b)` scales each column `i
 thrown if the scaling produces a number not representable by the element type of `A`,
 e.g. for integer types.
 
+# Example
+
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -89,6 +91,8 @@ scale!(s::Number, X::AbstractArray) = generic_scale!(s, X)
 
 Compute the cross product of two 3-vectors.
 
+# Example
+
 ```jldoctest
 julia> a = [0;1;0]
 3-element Array{Int64,1}:
@@ -116,6 +120,8 @@ cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[
 
 Upper triangle of a matrix.
 
+# Example
+
 ```jldoctest
 julia> a = ones(4,4)
 4×4 Array{Float64,2}:
@@ -139,6 +145,8 @@ triu(M::AbstractMatrix) = triu!(copy(M))
 
 Lower triangle of a matrix.
 
+# Example
+
 ```jldoctest
 julia> a = ones(4,4)
 4×4 Array{Float64,2}:
@@ -161,6 +169,8 @@ tril(M::AbstractMatrix) = tril!(copy(M))
     triu(M, k::Integer)
 
 Returns the upper triangle of `M` starting from the `k`th superdiagonal.
+
+# Example
 
 ```jldoctest
 julia> a = ones(4,4)
@@ -192,6 +202,8 @@ triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
 
 Returns the lower triangle of `M` starting from the `k`th superdiagonal.
 
+# Example
+
 ```jldoctest
 julia> a = ones(4,4)
 4×4 Array{Float64,2}:
@@ -221,7 +233,7 @@ tril(M::AbstractMatrix,k::Integer) = tril!(copy(M),k)
     triu!(M)
 
 Upper triangle of a matrix, overwriting `M` in the process.
-See also [`triu`](:func:`triu`).
+See also [`triu`](@ref).
 """
 triu!(M::AbstractMatrix) = triu!(M,0)
 
@@ -229,7 +241,7 @@ triu!(M::AbstractMatrix) = triu!(M,0)
     tril!(M)
 
 Lower triangle of a matrix, overwriting `M` in the process.
-See also [`tril`](:func:`tril`).
+See also [`tril`](@ref).
 """
 tril!(M::AbstractMatrix) = tril!(M,0)
 
@@ -240,6 +252,8 @@ diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
 Finite difference operator of matrix or vector `A`. If `A` is a matrix,
 compute the finite difference over a dimension `dim` (default `1`).
+
+# Example
 
 ```jldoctest
 julia> a = [2 4; 6 16]
@@ -271,6 +285,8 @@ gradient(F::AbstractVector) = gradient(F, [1:length(F);])
 
 Compute differences along vector `F`, using `h` as the spacing between points. The default
 spacing is one.
+
+# Example
 
 ```jldoctest
 julia> a = [2,4,6,8];
@@ -402,6 +418,16 @@ element type for which `norm` is defined), compute the `p`-norm (defaulting to `
 `A` were a vector of the corresponding length.
 
 For example, if `A` is a matrix and `p=2`, then this is equivalent to the Frobenius norm.
+
+# Example
+
+```jldoctest
+julia> vecnorm([1 2 3; 4 5 6; 7 8 9])
+16.881943016134134
+
+julia> vecnorm([1 2 3 4 5 6 7 8 9])
+16.881943016134134
+```
 """
 function vecnorm(itr, p::Real=2)
     isempty(itr) && return float(real(zero(eltype(itr))))
@@ -472,9 +498,37 @@ For vectors, `p` can assume any numeric value (even though not all values produc
 mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
 in `abs(A)`, whereas `norm(A, -Inf)` returns the smallest.
 
+# Example
+
+```jldoctest
+julia> v = [3;-2;6]
+3-element Array{Int64,1}:
+  3
+ -2
+  6
+
+julia> norm(v)
+7.0
+
+julia> norm(v, Inf)
+6.0
+```
+
 For matrices, the matrix norm induced by the vector `p`-norm is used, where valid values of
 `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices, `p=2` is currently not
-implemented.) Use [`vecnorm`](:func:`vecnorm`) to compute the Frobenius norm.
+implemented.) Use [`vecnorm`](@ref) to compute the Frobenius norm.
+
+# Example
+
+```jldoctest
+julia> A = [1 -2 -3; 2 3 -1]
+2×3 Array{Int64,2}:
+ 1  -2  -3
+ 2   3  -1
+
+julia> norm(A, Inf)
+6.0
+```
 """
 function norm{T}(A::AbstractMatrix{T}, p::Real=2)
     if p == 2
@@ -550,6 +604,16 @@ dot(x::Number, y::Number) = vecdot(x, y)
     ⋅(x,y)
 
 Compute the dot product. For complex vectors, the first vector is conjugated.
+
+# Example
+
+```jldoctest
+julia> dot([1; 1], [2; 3])
+5
+
+julia> dot([im; im], [1; 1])
+0 - 2im
+```
 """
 dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
 
@@ -561,8 +625,8 @@ dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
 Compute the rank of a matrix by counting how many singular
 values of `M` have magnitude greater than `tol`.
 By default, the value of `tol` is the largest
-dimension of `M` multiplied by the [`eps`](:func:`eps`)
-of the [`eltype`](:func:`eltype`) of `M`.
+dimension of `M` multiplied by the [`eps`](@ref)
+of the [`eltype`](@ref) of `M`.
 """
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
@@ -577,6 +641,8 @@ rank(x::Number) = x==0 ? 0 : 1
     trace(M)
 
 Matrix trace. Sums the diagonal elements of `M`.
+
+# Example
 
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -608,6 +674,23 @@ Matrix inverse. Computes matrix `N` such that
 `M * N = I`, where `I` is the identity matrix.
 Computed by solving the left-division
 `N = M \\ I`.
+
+# Example
+
+```jldoctest
+julia> M = [2 5; 1 3]
+2×2 Array{Int64,2}:
+ 2  5
+ 1  3
+
+julia> N = inv(M)
+2×2 Array{Float64,2}:
+  3.0  -5.0
+ -1.0   2.0
+
+julia> M*N == N*M == eye(2)
+true
+```
 """
 function inv{T}(A::AbstractMatrix{T})
     S = typeof(zero(T)/one(T))
@@ -629,6 +712,20 @@ pivoted QR factorization of `A` and a rank estimate of `A` based on the R factor
 When `A` is sparse, a similar polyalgorithm is used. For indefinite matrices, the `LDLt`
 factorization does not use pivoting during the numerical factorization and therefore the
 procedure can fail even for invertible matrices.
+
+# Example
+
+```jldoctest
+julia> A = [1 0; 1 -2]; B = [32; -4];
+
+julia> X = A \\ B
+2-element Array{Float64,1}:
+ 32.0
+ 18.0
+
+julia> A * X == B
+true
+```
 """
 function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     m, n = size(A)
@@ -681,6 +778,8 @@ condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))
 
 Test whether a matrix is symmetric.
 
+# Example
+
 ```jldoctest
 julia> a = [1 2; 2 -1]
 2×2 Array{Int64,2}:
@@ -704,7 +803,7 @@ function issymmetric(A::AbstractMatrix)
     if indsm != indsn
         return false
     end
-    for i = first(indsn):last(indsn)-1, j = (i+1):last(indsn)
+    for i = first(indsn):last(indsn), j = (i):last(indsn)
         if A[i,j] != transpose(A[j,i])
             return false
         end
@@ -712,12 +811,14 @@ function issymmetric(A::AbstractMatrix)
     return true
 end
 
-issymmetric(x::Number) = true
+issymmetric(x::Number) = x == x
 
 """
     ishermitian(A) -> Bool
 
 Test whether a matrix is Hermitian.
+
+# Example
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -757,6 +858,8 @@ ishermitian(x::Number) = (x == conj(x))
 
 Test whether a matrix is upper triangular.
 
+# Example
+
 ```jldoctest
 julia> a = [1 2; 2 -1]
 2×2 Array{Int64,2}:
@@ -790,6 +893,8 @@ end
 
 Test whether a matrix is lower triangular.
 
+# Example
+
 ```jldoctest
 julia> a = [1 2; 2 -1]
 2×2 Array{Int64,2}:
@@ -822,6 +927,8 @@ end
     isdiag(A) -> Bool
 
 Test whether a matrix is diagonal.
+
+# Example
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -865,7 +972,7 @@ the squared error between `y` and `a + b*x` is minimized.
 
 See also:
 
-`\\`, [`cov`](:func:`cov`), [`std`](:func:`std`), [`mean`](:func:`mean`).
+`\\`, [`cov`](@ref), [`std`](@ref), [`mean`](@ref).
 
 """
 function linreg(x::AbstractVector, y::AbstractVector)
@@ -903,10 +1010,10 @@ scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
     peakflops(n::Integer=2000; parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
-[`gemm!`](:func:`Base.LinAlg.BLAS.gemm!`). By default, if no arguments are specified, it
+[`gemm!`](@ref Base.LinAlg.BLAS.gemm!). By default, if no arguments are specified, it
 multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
 multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
-[`BLAS.set_num_threads(n)`](:func:`Base.LinAlg.BLAS.set_num_threads`).
+[`BLAS.set_num_threads(n)`](@ref).
 
 If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
 the worker processors. The flop rate of the entire parallel computer is returned. When
@@ -1002,6 +1109,18 @@ end
     det(M)
 
 Matrix determinant.
+
+# Example
+
+```jldoctest
+julia> M = [1 0; 2 2]
+2×2 Array{Int64,2}:
+ 1  0
+ 2  2
+
+julia> det(M)
+2.0
+```
 """
 function det{T}(A::AbstractMatrix{T})
     if istriu(A) || istril(A)
@@ -1025,6 +1144,21 @@ logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 
 Log of matrix determinant. Equivalent to `log(det(M))`, but may provide increased accuracy
 and/or speed.
+
+# Example
+
+```jldoctest
+julia> M = [1 0; 2 2]
+2×2 Array{Int64,2}:
+ 1  0
+ 2  2
+
+julia> logdet(M)
+0.6931471805599453
+
+julia> logdet(eye(3))
+0.0
+```
 """
 function logdet(A::AbstractMatrix)
     d,s = logabsdet(A)
@@ -1046,7 +1180,7 @@ end
     normalize!(v, [p::Real=2])
 
 Normalize the vector `v` in-place with respect to the `p`-norm.
-See also [`vecnorm`](:func:`vecnorm`) and [`normalize`](:func:`normalize`).
+See also [`vecnorm`](@ref) and [`normalize`](@ref).
 """
 function normalize!(v::AbstractVector, p::Real=2)
     nrm = norm(v, p)
@@ -1075,7 +1209,9 @@ end
     normalize(v, [p::Real=2])
 
 Normalize the vector `v` with respect to the `p`-norm.
-See also [`normalize!`](:func:`normalize!`) and [`vecnorm`](:func:`vecnorm`).
+See also [`normalize!`](@ref) and [`vecnorm`](@ref).
+
+# Example
 
 ```jldoctest
 julia> a = [1,2,4];

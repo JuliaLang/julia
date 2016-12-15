@@ -260,29 +260,3 @@ function tolast(dt::TimeType, dow::Int; of::Union{Type{Year}, Type{Month}}=Month
     dt = of <: Month ? lastdayofmonth(dt) : lastdayofyear(dt)
     return adjust(ISDAYOFWEEK[dow], dt, Day(-1), 366)
 end
-
-function recur{T<:TimeType}(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000)
-    ((start != stop) & ((step > zero(step)) != (stop > start))) && return T[]
-    a = T[]
-    check = start <= stop ? 1 : -1
-    df = Dates.DateFunction(fun, negate, start)
-    while true
-        next = Dates.adjust(df, start, step, limit)
-        cmp(next, stop) == check && break
-        push!(a, next)
-        start = next + step
-    end
-    return a
-end
-
-"""
-    recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
-
-`func` takes a single TimeType argument and returns a `Bool` indicating whether the input
-should be "included" in the final set. `recur` applies `func` over each element in the range
-of `dr`, including those elements for which `func` returns `true` in the resulting Array,
-unless `negate=true`, then only elements where `func` returns `false` are included.
-"""
-function recur{T<:TimeType}(fun::Function, dr::StepRange{T};negate::Bool=false, limit::Int=10000)
-    return recur(fun, first(dr), last(dr); step=step(dr), negate=negate, limit=limit)
-end

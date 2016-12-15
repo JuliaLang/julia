@@ -3,6 +3,7 @@
 ## boolean conversions ##
 
 convert(::Type{Bool}, x::Bool) = x
+convert(::Type{Bool}, x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError())
 convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 
 # promote Bool to any other numeric type
@@ -13,12 +14,16 @@ typemax(::Type{Bool}) = true
 
 ## boolean operations ##
 
-!(x::Bool) = box(Bool,not_int(unbox(Bool,x)))
+function !(x::Bool)
+    ## We need a better heuristic to detect this automatically
+    @_pure_meta
+    return box(Bool,not_int(unbox(Bool,x)))
+end
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = box(Bool,and_int(unbox(Bool,x),unbox(Bool,y)))
 (|)(x::Bool, y::Bool) = box(Bool,or_int(unbox(Bool,x),unbox(Bool,y)))
-($)(x::Bool, y::Bool) = (x!=y)
+xor(x::Bool, y::Bool) = (x!=y)
 
 >>(x::Bool, c::Unsigned) = Int(x) >> c
 <<(x::Bool, c::Unsigned) = Int(x) << c

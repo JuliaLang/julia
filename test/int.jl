@@ -195,3 +195,9 @@ end
 @test true << 2 === 1 << 2
 @test true >> 2 === 1 >> 2
 @test true >>> 2 === 1 >>> 2
+
+@test @inferred(unsafe_trunc(Int8, 127)) === Int8(127)
+@test unsafe_trunc(Int8, 128) === Int8(-128)
+@test unsafe_trunc(Int8, -127) === Int8(-127)
+@test unsafe_trunc(Int8, -128) === Int8(-128)
+@test unsafe_trunc(Int8, -129) === Int8(127)

@@ -74,10 +74,16 @@ end
 """
     names(x::Module, all::Bool=false, imported::Bool=false)
 
-Get an array of the names exported by a `Module`, with optionally more `Module` globals
-according to the additional parameters.
+Get an array of the names exported by a `Module`, excluding deprecated names.
+If `all` is true, then the list also includes non-exported names defined in the module,
+deprecated names, and compiler-generated names.
+If `imported` is true, then names explicitly imported from other modules
+are also included.
+
+As a special case, all names defined in `Main` are considered \"exported\",
+since it is not idiomatic to explicitly export names from `Main`.
 """
-names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported))
+names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Cint,Cint), m, all, imported))
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -149,18 +155,18 @@ Determine the module containing the definition of a `DataType`.
 """
 datatype_module(t::DataType) = t.name.module
 
-isconst(s::Symbol) = ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
+isconst(s::Symbol) = ccall(:jl_is_const, Cint, (Ptr{Void}, Any), C_NULL, s) != 0
 
 """
     isconst([m::Module], s::Symbol) -> Bool
 
 Determine whether a global is declared `const` in a given `Module`. The default `Module`
-argument is [`current_module()`](:func:`current_module`).
+argument is [`current_module()`](@ref).
 """
 isconst(m::Module, s::Symbol) =
-    ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
+    ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
-# return an integer such that object_id(x)==object_id(y) if is(x,y)
+# return an integer such that object_id(x)==object_id(y) if x===y
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 immutable DataTypeLayout
@@ -189,7 +195,7 @@ datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefErro
 """
     isimmutable(v)
 
-Return `true` iff value `v` is immutable.  See [manual](:ref:`man-immutable-composite-types`)
+Return `true` iff value `v` is immutable.  See [Immutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 """
@@ -280,7 +286,7 @@ enumerated types (see `@enum`).
 function instances end
 
 # subtypes
-function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
+function _subtypes(m::Module, x::DataType, sts=Set{DataType}(), visited=Set{Module}())
     push!(visited, m)
     for s in names(m, true)
         if isdefined(m, s) && !isdeprecated(m, s)
@@ -305,7 +311,7 @@ are included, including those not visible in the current module.
 
 ```jldoctest
 julia> subtypes(Integer)
-4-element Array{Any,1}:
+4-element Array{DataType,1}:
  BigInt
  Bool
  Signed
@@ -462,7 +468,7 @@ function visit(f, mc::TypeMapLevel)
     nothing
 end
 function visit(f, d::TypeMapEntry)
-    while !is(d, nothing)
+    while d !== nothing
         f(d.func)
         d = d.next
     end
@@ -487,8 +493,31 @@ function uncompressed_ast(m::Method, s::CodeInfo)
     return s
 end
 
+# this type mirrors jl_cgparams_t (documented in julia.h)
+immutable CodegenParams
+    cached::Cint
+
+    runtime::Cint
+    exceptions::Cint
+    track_allocations::Cint
+    code_coverage::Cint
+    static_alloc::Cint
+    dynamic_alloc::Cint
+
+    CodegenParams(;cached::Bool=true,
+                   runtime::Bool=true, exceptions::Bool=true,
+                   track_allocations::Bool=true, code_coverage::Bool=true,
+                   static_alloc::Bool=true, dynamic_alloc::Bool=true) =
+        new(Cint(cached),
+            Cint(runtime), Cint(exceptions),
+            Cint(track_allocations), Cint(code_coverage),
+            Cint(static_alloc), Cint(dynamic_alloc))
+end
+
 # Printing code representations in IR and assembly
-function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
+function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool,
+                        strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
+                        optimize::Bool=true, params::CodegenParams=CodegenParams())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -503,21 +532,27 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool, strip_ir_me
     meth = func_for_method_checked(meth, tt)
     linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any), meth, tt, env)
     # get the code for it
-    return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module)
+    return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module, syntax, optimize, params)
 end
 
-function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool, strip_ir_metadata::Bool, dump_module::Bool)
+function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool,
+                        strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
+                        optimize::Bool=true, params::CodegenParams=CodegenParams())
+    if syntax != :att && syntax != :intel
+        throw(ArgumentError("'syntax' must be either :intel or :att"))
+    end
     if native
-        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool), linfo, wrapper)
+        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool, CodegenParams), linfo, wrapper, params)
     else
-        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Void}, (Any, Bool), linfo, wrapper)
+        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Void}, (Any, Bool, Bool, CodegenParams), linfo, wrapper, optimize, params)
     end
     if llvmf == C_NULL
         error("could not compile the specified method")
     end
 
     if native
-        str = ccall(:jl_dump_function_asm, Ref{String}, (Ptr{Void}, Cint), llvmf, 0)
+        str = ccall(:jl_dump_function_asm, Ref{String},
+                    (Ptr{Void}, Cint, Cstring), llvmf, 0, syntax)
     else
         str = ccall(:jl_dump_function_ir, Ref{String},
                     (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
@@ -542,14 +577,16 @@ code_llvm(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types)
 code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
 
 """
-    code_native([io], f, types)
+    code_native([io], f, types, [syntax])
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io` which defaults to `STDOUT`.
+Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax. Output is AT&T syntax by default.
 """
-code_native(io::IO, f::ANY, types::ANY=Tuple) =
-    print(io, _dump_function(f, types, true, false, false, false))
-code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types)
+code_native(io::IO, f::ANY, types::ANY=Tuple, syntax::Symbol=:att) =
+    print(io, _dump_function(f, types, true, false, false, false, syntax))
+code_native(f::ANY, types::ANY=Tuple, syntax::Symbol=:att) = code_native(STDOUT, f, types, syntax)
+code_native(::IO, ::ANY, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, types::ANY)
@@ -575,14 +612,11 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     end
     types = to_tuple_type(types)
     asts = []
-    for x in _methods(f,types,-1)
+    params = Core.Inference.InferenceParams()
+    for x in _methods(f, types, -1)
         meth = func_for_method_checked(x[3], types)
-        if optimize
-            (code, ty, inf) = Core.Inference.typeinf(meth, x[1], x[2], true)
-        else
-            (code, ty, inf) = Core.Inference.typeinf_uncached(meth, x[1], x[2], optimize=false)
-        end
-        inf || error("inference not successful") # Inference disabled
+        (code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
+        code === nothing && error("inference not successful") # Inference disabled?
         push!(asts, uncompressed_ast(meth, code) => ty)
     end
     return asts
@@ -595,10 +629,11 @@ function return_types(f::ANY, types::ANY=Tuple)
     end
     types = to_tuple_type(types)
     rt = []
-    for x in _methods(f,types,-1)
+    params = Core.Inference.InferenceParams()
+    for x in _methods(f, types, -1)
         meth = func_for_method_checked(x[3], types)
-        (code, ty, inf) = Core.Inference.typeinf(meth, x[1], x[2])
-        inf || error("inference not successful") # Inference disabled
+        ty = Core.Inference.typeinf_type(meth, x[1], x[2], true, params)
+        ty === nothing && error("inference not successful") # Inference disabled?
         push!(rt, ty)
     end
     return rt
@@ -629,7 +664,7 @@ function which(f::ANY, t::ANY)
             error("no method found for the specified argument types")
         end
         meth = m.func::Method
-        if ccall(:jl_has_call_ambiguities, Int32, (Any, Any), tt, meth) != 0
+        if ccall(:jl_has_call_ambiguities, Cint, (Any, Any), tt, meth) != 0
             error("method match is ambiguous for the specified argument types")
         end
         return meth
@@ -720,7 +755,7 @@ end
     method_exists(f, Tuple type) -> Bool
 
 Determine whether the given generic function has a method matching the given
-[`Tuple`](:obj:`Tuple`) of argument types.
+`Tuple` of argument types.
 
 ```jldoctest
 julia> method_exists(length, Tuple{Array})

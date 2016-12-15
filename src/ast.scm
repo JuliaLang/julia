@@ -53,6 +53,7 @@
                 ((top)        (deparse (cadr e)))
                 ((core)       (string "Core." (deparse (cadr e))))
                 ((globalref)  (string (deparse (cadr e)) "." (deparse (caddr e))))
+                ((outerref)   (string (deparse (cadr e))))
                 ((:)
                  (string (deparse (cadr e)) ': (deparse (caddr e))
                          (if (length> e 3)
@@ -105,7 +106,7 @@
 
 ;; predicates and accessors
 
-(define (quoted? e) (memq (car e) '(quote top core globalref line break inert)))
+(define (quoted? e) (memq (car e) '(quote top core globalref outerref line break inert meta)))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -172,7 +173,8 @@
   (and (pair? e) (eq? (car e) 'ssavalue)))
 
 (define (symbol-like? e)
-  (or (symbol? e) (ssavalue? e)))
+  (or (and (symbol? e) (not (eq? e 'true)) (not (eq? e 'false)))
+      (ssavalue? e)))
 
 (define (simple-atom? x)
   (or (number? x) (string? x) (char? x) (eq? x 'true) (eq? x 'false)))
@@ -226,6 +228,7 @@
 
 (define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
 (define (vinfo:asgn v) (< 0 (logand (caddr v) 2)))
+(define (vinfo:never-undef v) (< 0 (logand (caddr v) 4)))
 (define (vinfo:const v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:sa v) (< 0 (logand (caddr v) 16)))
 (define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
@@ -233,6 +236,8 @@
 (define (vinfo:set-capt! v c)  (set-car! (cddr v) (set-bit (caddr v) 1 c)))
 ;; whether var is assigned
 (define (vinfo:set-asgn! v a)  (set-car! (cddr v) (set-bit (caddr v) 2 a)))
+;; whether the assignments to var are known to dominate its usages
+(define (vinfo:set-never-undef! v a) (set-car! (cddr v) (set-bit (caddr v) 4 a)))
 ;; whether var is const
 (define (vinfo:set-const! v a) (set-car! (cddr v) (set-bit (caddr v) 8 a)))
 ;; whether var is assigned once

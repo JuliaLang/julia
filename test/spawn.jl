@@ -224,18 +224,19 @@ yield()
 @test consume(ducer) == 1
 @test consume(ducer) == 2
 
-# redirect_*
-let OLD_STDOUT = STDOUT,
-    fname = tempname(),
-    f = open(fname,"w")
+@testset "redirect_*" begin
+    let OLD_STDOUT = STDOUT,
+        fname = tempname(),
+        f = open(fname,"w")
 
-    redirect_stdout(f)
-    println("Hello World")
-    redirect_stdout(OLD_STDOUT)
-    close(f)
-    @test "Hello World\n" == readstring(fname)
-    @test is(OLD_STDOUT,STDOUT)
-    rm(fname)
+        redirect_stdout(f)
+        println("Hello World")
+        redirect_stdout(OLD_STDOUT)
+        close(f)
+        @test "Hello World\n" == readstring(fname)
+        @test OLD_STDOUT === STDOUT
+        rm(fname)
+    end
 end
 
 # Test that redirecting an IOStream does not crash the process
@@ -282,7 +283,7 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition(), t
+let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition(), t, infd, outfd
     @test_throws ArgumentError write(out, "not open error")
     t = @async begin # spawn writer task
         open(echo, "w", out) do in1
@@ -294,6 +295,8 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
                 write(in2, "orld\n")
             end
         end
+        infd = Base._fd(out.in)
+        outfd = Base._fd(out.out)
         show(out, out)
         notify(ready)
         @test isreadable(out)
@@ -326,13 +329,15 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test !isreadable(out)
     @test !iswritable(out)
     @test !isopen(out)
+    @test infd != Base._fd(out.in) == Base.INVALID_OS_HANDLE
+    @test outfd != Base._fd(out.out) == Base.INVALID_OS_HANDLE
     @test nb_available(out) == 0
     @test c == UInt8['w']
     @test lstrip(ln2) == "1\thello\n"
     @test ln1 == "orld\n"
     @test isempty(read(out))
     @test eof(out)
-    @test desc == "Pipe(open => active, 0 bytes waiting)"
+    @test desc == "Pipe($infd open => $outfd active, 0 bytes waiting)"
     wait(t)
 end
 
@@ -404,6 +409,17 @@ end
 # equality tests for AndCmds
 @test Base.AndCmds(`$echo abc`, `$echo def`) == Base.AndCmds(`$echo abc`, `$echo def`)
 @test Base.AndCmds(`$echo abc`, `$echo def`) != Base.AndCmds(`$echo abc`, `$echo xyz`)
+
+# test for correct error when an empty command is spawned (Issue 19094)
+@test_throws ArgumentError run(Base.Cmd(``))
+@test_throws ArgumentError run(Base.AndCmds(``, ``))
+@test_throws ArgumentError run(Base.AndCmds(``, `$truecmd`))
+@test_throws ArgumentError run(Base.AndCmds(`$truecmd`, ``))
+
+@test_throws ArgumentError spawn(Base.Cmd(``))
+@test_throws ArgumentError spawn(Base.AndCmds(``, ``))
+@test_throws ArgumentError spawn(Base.AndCmds(``, `$echo test`))
+@test_throws ArgumentError spawn(Base.AndCmds(`$echo test`, ``))
 
 # tests for reducing over collection of Cmd
 @test_throws ArgumentError reduce(&, Base.AbstractCmd[])
