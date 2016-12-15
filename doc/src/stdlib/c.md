@@ -8,7 +8,7 @@ Base.unsafe_convert
 Base.cconvert
 Base.unsafe_load
 Base.unsafe_store!
-Base.unsafe_copy!(::Ptr, ::Ptr, ::Any)
+Base.unsafe_copy!{T}(::Ptr{T}, ::Ptr{T}, ::Any)
 Base.unsafe_copy!(::Array, ::Any, ::Array, ::Any, ::Any)
 Base.copy!(::Any, ::Any)
 Base.copy!(::Any, ::Any, ::Any, ::Any, ::Any)
