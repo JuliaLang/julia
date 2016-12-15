@@ -4821,3 +4821,8 @@ end
 
 @test f14893() == 14893
 @test M14893.f14893() == 14893
+
+# issue #19599
+f19599{T}(x::((S)->Vector{S})(T)...) = 1
+@test f19599([1],[1]) == 1
+@test_throws MethodError f19599([1],[1.0])
