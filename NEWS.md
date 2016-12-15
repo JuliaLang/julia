@@ -54,6 +54,12 @@ Library improvements
     For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
     Please note that not all terminals support 256 colors.
 
+  * The function `print_with_color` no longer prints text in bold by default ([#18628]).
+    Instead, the function now take a keyword argument `bold::Bool` which determines whether to print in bold or not.
+    On some terminals, printing a color in non bold results in slightly darker colors being printed than when printing in bold.
+    Therefore, light versions of the colors are now supported.
+    For the available colors see the help entry on `print_with_color`.
+
   * The default color for info messages has been changed from blue to cyan ([#18442]).
     This can be changed back to the original color by setting the environment variable `JULIA_INFO_COLOR` to `"blue"`.
     One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
@@ -719,6 +725,7 @@ Language tooling improvements
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
+[#18628]: https://github.com/JuliaLang/julia/issues/18628
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
