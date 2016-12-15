@@ -13,8 +13,18 @@ immutable DateLocale
     day_of_week_abbr_value::Dict{String, Int}
 end
 
-function locale_dict{S<:AbstractString}(vec::Vector{S})
-    Dict{String, Int}(lowercase(vec[i]) => i for i in 1:length(vec))
+function locale_dict{S<:AbstractString}(names::Vector{S})
+    result = Dict{String, Int}()
+
+    # Keep both the common case-sensitive version of the name and an all lowercase
+    # version for case-insensitive matches. Storing both allows us to avoid using the
+    # lowercase function during parsing.
+    for i in 1:length(names)
+        name = names[i]
+        result[name] = i
+        result[lowercase(name)] = i
+    end
+    return result
 end
 
 """
@@ -46,17 +56,19 @@ const ENGLISH = DateLocale(
 
 const LOCALES = Dict{String, DateLocale}("english" => ENGLISH)
 
-function dayname_to_value(word::AbstractString, locale::DateLocale)
-    get(locale.day_of_week_value, lowercase(word), 0)
-end
-function dayabbr_to_value(word::AbstractString, locale::DateLocale)
-    get(locale.day_of_week_abbr_value, lowercase(word), 0)
-end
-function monthname_to_value(word::AbstractString, locale::DateLocale)
-    get(locale.month_value, lowercase(word), 0)
-end
-function monthabbr_to_value(word::AbstractString, locale::DateLocale)
-    get(locale.month_abbr_value, lowercase(word), 0)
+for (fn, field) in zip(
+    [:dayname_to_value, :dayabbr_to_value, :monthname_to_value, :monthabbr_to_value],
+    [:day_of_week_value, :day_of_week_abbr_value, :month_value, :month_abbr_value],
+)
+    @eval @inline function $fn(word::AbstractString, locale::DateLocale)
+        # Maximize performance by attempting to avoid the use of `lowercase` and trying
+        # a case-sensitive lookup first
+        value = get(locale.$field, word, 0)
+        if value == 0
+            value = get(locale.$field, lowercase(word), 0)
+        end
+        value
+    end
 end
 
 # Date functions
