@@ -79,14 +79,19 @@ end
     return Nullable{Int}(d), i
 end
 
-@inline function tryparsenext_word(str, i, len, locale, maxchars=0)
+@inline function tryparsenext_word(str::AbstractString, i, len, locale, maxchars=0)
+    word_start, word_end = i, 0
     max_pos = maxchars <= 0 ? len : min(chr2ind(str, ind2chr(str,i) + maxchars - 1), len)
     @inbounds while i <= max_pos
         c, ii = next(str, i)
-        !isalpha(c) && break
+        if isalpha(c)
+            word_end = i
+        else
+            break
+        end
         i = ii
     end
-    return Nullable{Int}(0), i
+    return Nullable{SubString}(word_end == 0 ? nothing : SubString(str, word_start, word_end)), i
 end
 
 function minwidth(num, n)
