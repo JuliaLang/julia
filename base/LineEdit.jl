@@ -918,7 +918,7 @@ function keymap{D<:Dict}(keymaps::Array{D})
 end
 
 const escape_defaults = merge!(
-    AnyDict(Char(i) => nothing for i=vcat(1:26, 28:31)), # Ignore control characters by default
+    AnyDict(Char(i) => nothing for i=cat(1:26, 28:31)), # Ignore control characters by default
     AnyDict( # And ignore other escape sequences by default
         "\e*" => nothing,
         "\e[*" => nothing,
