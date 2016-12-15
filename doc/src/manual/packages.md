@@ -833,6 +833,10 @@ INFO: Cloning FooBar from git@github.com:StefanKarpinski/FooBar.jl.git
 
 ### Tagging and Publishing Your Package
 
+!!! tip
+    If you are hosting your package on GitHub, you can use the [attobot integration](https://github.com/attobot/attobot)
+    to handle package registration, tagging and publishing.
+
 Once you've decided that `FooBar` is ready to be registered as an official package, you can add
 it to your local copy of `METADATA` using `PkgDev.register()`:
 
