@@ -23,6 +23,7 @@
         return R(reorder_args(parts, df.field_order, df.field_defaults, err_idx)::NTuple{7,Int64})
 
         @label error
+        # Note: Keeping exception generation in separate function helps with performance
         raise && throw(gen_exception(t, err_idx, pos))
         return R()
     end
@@ -66,13 +67,13 @@ end
     max_pos = max_width <= 0 ? len : min(i + max_width - 1, len)
     d::Int = 0
     @inbounds while i <= max_pos
-        c, j = next(str, i)
+        c, ii = next(str, i)
         if '0' <= c <= '9'
             d = d * 10 + (c - '0')
         else
             break
         end
-        i = j
+        i = ii
     end
     i > min_pos || (return Nullable{Int}(), i)
     return Nullable{Int}(d), i
@@ -80,7 +81,7 @@ end
 
 @inline function tryparsenext_word(str, i, len, locale, maxchars=0)
     max_pos = maxchars <= 0 ? len : min(chr2ind(str, ind2chr(str,i) + maxchars - 1), len)
-    while i <= max_pos
+    @inbounds while i <= max_pos
         c, ii = next(str, i)
         !isalpha(c) && break
         i = ii
