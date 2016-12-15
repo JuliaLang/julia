@@ -8,7 +8,7 @@ type MD
         new(content, meta)
 end
 
-MD(xs...) = MD(vcat(xs...))
+MD(xs...) = MD(cat(xs...))
 
 function MD(cfg::Config, xs...)
     md = MD(xs...)
