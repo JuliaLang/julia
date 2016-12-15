@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: @pure, promote_eltype_op, _promote_op, linearindices, tail, OneTo, to_shape,
+using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 import Base: broadcast
@@ -257,13 +257,22 @@ end
 @inline broadcast_elwise_op(f, As...) =
     broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
-@pure typestuple(a) = Tuple{eltype(a)}
-@pure typestuple(T::Type) = Tuple{Type{T}}
-@pure typestuple(a, b...) = Tuple{typestuple(a).types..., typestuple(b...).types...}
+ftype(f, A) = typeof(f)
+ftype(f, A...) = typeof(a -> f(a...))
+ftype(T::Type, A...) = Type{T}
+typestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
+typestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
+typestuple(a, b...) = (Base.@_pure_meta; Tuple{typestuple(a).types..., typestuple(b...).types...})
+ziptype(A) = typestuple(A)
+ziptype(A, B) = (Base.@_pure_meta; Iterators.Zip2{typestuple(A), typestuple(B)})
+@inline ziptype(A, B, C, D...) = Iterators.Zip{typestuple(A), ziptype(B, C, D...)}
+
+_broadcast_type(f, T::Type, As...) = Base._return_type(f, typestuple(T, As...))
+_broadcast_type(f, A, Bs...) = Base._default_eltype(Base.Generator{ziptype(A, Bs...), ftype(f, A, Bs...)})
 
 # broadcast methods that dispatch on the type of the final container
 @inline function broadcast_c(f, ::Type{Array}, A, Bs...)
-    T = _promote_op(f, typestuple(A, Bs...))
+    T = _broadcast_type(f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
     if isleaftype(T)
