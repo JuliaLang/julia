@@ -669,12 +669,12 @@ end
 
 ### Reduction
 
-# sum, sumabs, sumabs2, vecnorm
+# sum, vecnorm
 
 let x = spv_x1
     @test sum(x) == 4.0
-    @test sumabs(x) == 5.5
-    @test sumabs2(x) == 14.375
+    @test sum(abs, x) == 5.5
+    @test sum(abs2, x) == 14.375
 
     @test vecnorm(x) == sqrt(14.375)
     @test vecnorm(x, 1) == 5.5
@@ -682,13 +682,13 @@ let x = spv_x1
     @test vecnorm(x, Inf) == 3.5
 end
 
-# maximum, minimum, maxabs, minabs
+# maximum, minimum
 
 let x = spv_x1
     @test maximum(x) == 3.5
     @test minimum(x) == -0.75
-    @test maxabs(x) == 3.5
-    @test minabs(x) == 0.0
+    @test maximum(abs, x) == 3.5
+    @test minimum(abs, x) == 0.0
 end
 
 let x = abs.(spv_x1)
@@ -704,15 +704,15 @@ end
 let x = SparseVector(3, [1, 2, 3], [-4.5, 2.5, 3.5])
     @test maximum(x) == 3.5
     @test minimum(x) == -4.5
-    @test maxabs(x) == 4.5
-    @test minabs(x) == 2.5
+    @test maximum(abs, x) == 4.5
+    @test minimum(abs, x) == 2.5
 end
 
 let x = spzeros(Float64, 8)
     @test maximum(x) == 0.0
     @test minimum(x) == 0.0
-    @test maxabs(x) == 0.0
-    @test minabs(x) == 0.0
+    @test maximum(abs, x) == 0.0
+    @test minimum(abs, x) == 0.0
 end
 
 
@@ -759,8 +759,8 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
 
     # dot
     let dv = dot(xf, xf2)
-        @test dot(x, x) == sumabs2(x)
-        @test dot(x2, x2) == sumabs2(x2)
+        @test dot(x, x) == sum(abs2, x)
+        @test dot(x2, x2) == sum(abs2, x2)
         @test dot(x, x2) ≈ dv
         @test dot(x2, x) ≈ dv
         @test dot(Array(x), x2) ≈ dv
