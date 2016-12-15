@@ -180,7 +180,7 @@ function parse(x::AbstractString,df::DateFormat)
     if isempty(extra)
         return periods
     else
-        return vcat(periods, extra)
+        return cat(periods, extra)
     end
 end
 
