@@ -861,7 +861,7 @@ convert{T<:AbstractFloat}(::Type{LinSpace}, r::FloatRange{T}) =
 
 ## concatenation ##
 
-function vcat{T}(rs::Range{T}...)
+function cat{T}(rs::Range{T}...)
     n::Int = 0
     for ra in rs
         n += length(ra)
@@ -875,8 +875,8 @@ function vcat{T}(rs::Range{T}...)
     return a
 end
 
-convert{T}(::Type{Array{T,1}}, r::Range{T}) = vcat(r)
-collect(r::Range) = vcat(r)
+convert{T}(::Type{Array{T,1}}, r::Range{T}) = cat(r)
+collect(r::Range) = cat(r)
 
 reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))
 reverse(r::FloatRange)   = FloatRange(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
