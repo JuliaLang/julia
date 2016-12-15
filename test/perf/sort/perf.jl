@@ -90,7 +90,7 @@ else
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_qsortkiller"
                 data = data[1:size>>1]
                 data = sort!(data, alg=s)
-                data = vcat(reverse(data), data)
+                data = cat(reverse(data), data)
                 @timeit_init(sort!(qdata, alg=s), begin qdata=copy(data) end, name, "")
             end
         end
