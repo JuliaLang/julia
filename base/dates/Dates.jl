@@ -16,6 +16,7 @@ include("ranges.jl")
 include("adjusters.jl")
 include("rounding.jl")
 include("io.jl")
+include("parse.jl")
 
 export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,

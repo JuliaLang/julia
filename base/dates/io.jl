@@ -23,8 +23,6 @@ immutable DateFormat{T<:Tuple, N}
     field_order::NTuple{N,Int}
 end
 
-include("io-util.jl")
-
 ### Token types ###
 
 immutable DatePart{letter} <: AbstractDateToken
