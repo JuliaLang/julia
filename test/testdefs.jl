@@ -25,7 +25,7 @@ function runtests(name, isolate=true)
                              res_and_time_data[4],
                              res_and_time_data[5])
     end
-    vcat(collect(res_and_time_data), rss)
+    cat(collect(res_and_time_data), rss)
 end
 
 # looking in . messes things up badly
