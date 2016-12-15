@@ -382,7 +382,11 @@ end
 
 
 ## prod
+"""
+    prod(f, itr)
 
+Returns the product of `f` applied to each element of `itr`.
+"""
 prod(f::Callable, a) = mapreduce(f, *, a)
 
 """
