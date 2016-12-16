@@ -22,7 +22,7 @@
 
 let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
     expected = (1996, 2, 15, 24, 0, 0, 0)
-    @test get(Dates.tryparse_internal(DateTime, Dates.DateFormat(format), str)) == expected
+    @test get(Dates.tryparse_internal(DateTime, str, Dates.DateFormat(format))) == expected
     @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
 end
 

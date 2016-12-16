@@ -1,6 +1,6 @@
 ### Parsing utilities
 
-@generated function tryparse_internal{T<:TimeType, N}(::Type{T}, df::DateFormat{NTuple{N}}, str::AbstractString, raise::Bool=false)
+@generated function tryparse_internal{T<:TimeType, N}(::Type{T}, str::AbstractString, df::DateFormat{NTuple{N}}, raise::Bool=false)
     token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in df.parameters[1].parameters]
 
     types = slot_order(T)
@@ -61,13 +61,12 @@ function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{
 end
 
 function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
-    R = Nullable{T}
-    nt = tryparse_internal(T, df, str, false)
+    nt = tryparse_internal(T, str, df, false)
     Nullable{T}(isnull(nt) ? nothing : T(nt.value...))
 end
 
 function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
-    nt = tryparse_internal(T, df, str, true)
+    nt = tryparse_internal(T, str, df, true)
     T(nt.value...)
 end
 
