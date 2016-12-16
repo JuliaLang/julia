@@ -329,10 +329,6 @@ importall .DFT
 include("dsp.jl")
 importall .DSP
 
-# Numerical integration
-include("quadgk.jl")
-importall .QuadGK
-
 # Fast math
 include("fastmath.jl")
 importall .FastMath
@@ -396,5 +392,10 @@ end # baremodule Base
 
 using Base
 importall Base.Operators
+
+# stdlib packages
+# Numerical integration
+Base.include("../stdlib/QuadGK.jl")
+using QuadGK
 
 Base.isfile("userimg.jl") && Base.include("userimg.jl")
