@@ -41,6 +41,13 @@ function Base.next(rb::GitRebase)
     return unsafe_load(convert(Ptr{RebaseOperation}, rb_op_ptr_ptr[]), 1)
 end
 
+
+"""
+    LibGit2.commit(rb::GitRebase, sig::GitSignature)
+
+Commits the current patch to the rebase `rb`, using `sig` as the committer. Is silent if
+the commit has already been applied.
+"""
 function commit(rb::GitRebase, sig::GitSignature)
     oid_ptr = Ref(Oid())
     try
