@@ -13,6 +13,8 @@ include("utils.jl")
 include("consts.jl")
 include("types.jl")
 include("error.jl")
+using .Error
+
 include("signature.jl")
 include("oid.jl")
 include("reference.jl")
@@ -32,7 +34,6 @@ include("status.jl")
 include("tree.jl")
 include("callbacks.jl")
 
-using .Error
 
 immutable State
     head::Oid
@@ -434,7 +435,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
     with(head(repo)) do head_ref
         head_ann = GitAnnotated(repo, head_ref)
         upst_ann  = if isempty(upstream)
-            with(upstream(head_ref)) do brn_ref
+            with(LibGit2.upstream(head_ref)) do brn_ref
                 if brn_ref === nothing
                     throw(GitError(Error.Rebase, Error.ERROR,
                                    "There is no tracking information for the current branch."))
@@ -467,6 +468,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             finalize(head_ann)
         end
     end
+    return nothing
 end
 
 

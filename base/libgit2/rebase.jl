@@ -43,9 +43,12 @@ end
 
 function commit(rb::GitRebase, sig::GitSignature)
     oid_ptr = Ref(Oid())
-    @check ccall((:git_rebase_commit, :libgit2), Cint,
+    err = ccall((:git_rebase_commit, :libgit2), Error.Code,
                   (Ptr{Oid}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
-                   oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
+                oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
+    if err != Error.GIT_OK && err != Error.EAPPLIED
+        throw(Error.GitError(err))
+    end
     return oid_ptr[]
 end
 
