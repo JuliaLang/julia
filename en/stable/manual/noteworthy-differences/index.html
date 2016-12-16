@@ -1,0 +1,1020 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Noteworthy Differences from other Languages &mdash; Julia Language 0.5.1-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+        <link rel="next" title="Unicode Input" href="../unicode-input/"/>
+        <link rel="prev" title="Frequently Asked Questions" href="../faq/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id2">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#dot-syntax-for-vectorizing-functions">Dot Syntax for Vectorizing Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametrically-constrained-varargs-methods">Parametrically-constrained Varargs methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#function-like-objects">Function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#constructors-and-conversion">Constructors and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interfaces/">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#markdown-syntax">Markdown syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#markdown-syntax-extensions">Markdown Syntax Extensions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#io-output-contextual-properties">IO Output Contextual Properties</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#remote-references-and-abstractchannels">Remote references and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#remote-references-and-distributed-garbage-collection">Remote References and Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#id2">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays-and-distributed-garbage-collection">Shared Arrays and Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#network-requirements-for-localmanager-and-sshmanager">Network requirements for LocalManager and SSHManager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#cluster-cookie">Cluster cookie</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#multi-threading-experimental">Multi-threading (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#threadcall-experimental">&#64;threadcall (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../dates/">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#period-types">Period Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#rounding">Rounding</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#some-examples-of-c-wrappers">Some Examples of C Wrappers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../handling-operating-system-variation/">Handling Operating System Variation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#customizing-colors">Customizing Colors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../stacktraces/">Stack Traces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../stacktraces/#viewing-a-stack-trace">Viewing a stack trace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stacktraces/#extracting-useful-information">Extracting useful information</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stacktraces/#error-handling">Error handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../stacktraces/#comparison-with-backtrace">Comparison with <code class="docutils literal"><span class="pre">backtrace()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions-aka-function-barriers">Separate kernel functions (aka, function barriers)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#types-with-values-as-parameters">Types with values-as-parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#the-dangers-of-abusing-multiple-dispatch-aka-more-on-types-with-values-as-parameters">The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-vectors-and-matrices">Sparse Vectors and Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#multi-threading">Multi-Threading</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#ccall-using-a-threadpool-experimental">ccall using a threadpool (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#synchronization-primitives">Synchronization Primitives</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#low-level-matrix-operations">Low-level matrix operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/dates/">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#basic-unit-tests">Basic Unit Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#working-with-test-sets">Working with Test Sets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#other-test-macros">Other Test Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#broken-tests">Broken Tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#creating-custom-abstracttestset-types">Creating Custom <code class="docutils literal"><span class="pre">AbstractTestSet</span></code> Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libc/">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libdl/">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/stacktraces/">StackTraces</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/simd-types/">SIMD Support</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/init/">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/eval/">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/ast/">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/types/">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/object/">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/functions/">Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/callconv/">Calling Conventions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/subarrays/">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/llvm/">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/boundscheck/">Bounds checking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/locks/">Proper maintenance and care of multi-threading locks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/offset-arrays/">Arrays with custom indices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sanitizers/">Sanitizer support</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Noteworthy Differences from other Languages</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/noteworthy-differences.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="noteworthy-differences-from-other-languages">
+<span id="man-noteworthy-differences"></span><h1>Noteworthy Differences from other Languages<a class="headerlink" href="#noteworthy-differences-from-other-languages" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="noteworthy-differences-from-matlab">
+<h2>Noteworthy differences from MATLAB<a class="headerlink" href="#noteworthy-differences-from-matlab" title="Permalink to this headline">¶</a></h2>
+<p>Although MATLAB users may find Julia&#8217;s syntax familiar, Julia is not a MATLAB
+clone. There are major syntactic and functional differences. The following are
+some noteworthy differences that may trip up Julia users accustomed to MATLAB:</p>
+<ul class="simple">
+<li>Julia arrays are indexed with square brackets, <code class="docutils literal"><span class="pre">A[i,j]</span></code>.</li>
+<li>Julia arrays are assigned by reference. After <code class="docutils literal"><span class="pre">A=B</span></code>, changing elements of
+<code class="docutils literal"><span class="pre">B</span></code> will modify <code class="docutils literal"><span class="pre">A</span></code> as well.</li>
+<li>Julia values are passed and assigned by reference. If a function modifies an
+array, the changes will be visible in the caller.</li>
+<li>Julia does not automatically grow arrays in an assignment statement.
+Whereas in MATLAB <code class="docutils literal"><span class="pre">a(4)</span> <span class="pre">=</span> <span class="pre">3.2</span></code> can create the array <code class="docutils literal"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">[0</span> <span class="pre">0</span> <span class="pre">0</span> <span class="pre">3.2]</span></code>
+and <code class="docutils literal"><span class="pre">a(5)</span> <span class="pre">=</span> <span class="pre">7</span></code> can grow it into <code class="docutils literal"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">[0</span> <span class="pre">0</span> <span class="pre">0</span> <span class="pre">3.2</span> <span class="pre">7]</span></code>, the corresponding
+Julia statement <code class="docutils literal"><span class="pre">a[5]</span> <span class="pre">=</span> <span class="pre">7</span></code> throws an error if the length of <code class="docutils literal"><span class="pre">a</span></code> is less
+than 5 or if this statement is the first use of the identifier <code class="docutils literal"><span class="pre">a</span></code>.
+Julia has <a class="reference internal" href="../../stdlib/collections/#Base.push!" title="Base.push!"><code class="xref jl jl-func docutils literal"><span class="pre">push!()</span></code></a> and <a class="reference internal" href="../../stdlib/collections/#Base.append!" title="Base.append!"><code class="xref jl jl-func docutils literal"><span class="pre">append!()</span></code></a>, which grow <code class="xref jl jl-obj docutils literal"><span class="pre">Vector</span></code>s
+much more efficiently than MATLAB&#8217;s <code class="docutils literal"><span class="pre">a(end+1)</span> <span class="pre">=</span> <span class="pre">val</span></code>.</li>
+<li>The imaginary unit <code class="docutils literal"><span class="pre">sqrt(-1)</span></code> is represented in Julia as <a class="reference internal" href="../../stdlib/numbers/#Base.im" title="Base.im"><code class="xref jl jl-obj docutils literal"><span class="pre">im</span></code></a>, not
+<code class="docutils literal"><span class="pre">i</span></code> or <code class="docutils literal"><span class="pre">j</span></code> as in MATLAB.</li>
+<li>In Julia, literal numbers without a decimal point (such as <code class="docutils literal"><span class="pre">42</span></code>) create
+integers instead of floating point numbers. Arbitrarily large integer
+literals are supported. As a result, some operations such as <code class="docutils literal"><span class="pre">2^-1</span></code> will
+throw a domain error as the result is not an integer (see
+<a class="reference internal" href="../faq/#man-domain-error"><span>the FAQ entry on domain errors</span></a> for details).</li>
+<li>In Julia, multiple values are returned and assigned as tuples, e.g.
+<code class="docutils literal"><span class="pre">(a,</span> <span class="pre">b)</span> <span class="pre">=</span> <span class="pre">(1,</span> <span class="pre">2)</span></code> or <code class="docutils literal"><span class="pre">a,</span> <span class="pre">b</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">2</span></code>. MATLAB&#8217;s <code class="docutils literal"><span class="pre">nargout</span></code>, which is
+often used in MATLAB to do optional work based on the number of returned
+values, does not exist in Julia. Instead, users can use optional and keyword
+arguments to achieve similar capabilities.</li>
+<li>Julia has true one-dimensional arrays. Column vectors are of size <code class="docutils literal"><span class="pre">N</span></code>, not
+<code class="docutils literal"><span class="pre">Nx1</span></code>. For example, <a class="reference internal" href="../../stdlib/numbers/#Base.rand" title="Base.rand"><code class="xref jl jl-func docutils literal"><span class="pre">rand(N)</span></code></a> makes a 1-dimensional array.</li>
+<li>In Julia v0.3, concatenating scalars and arrays with the syntax <code class="docutils literal"><span class="pre">[x,y,z]</span></code>
+concatenates in the first dimension (&#8220;vertically&#8221;). For concatenation in the
+second dimension (&#8220;horizontally&#8221;), use spaces as in <code class="docutils literal"><span class="pre">[x</span> <span class="pre">y</span> <span class="pre">z]</span></code>. To
+construct block matrices (concatenating in the first two dimensions),
+the syntax <code class="docutils literal"><span class="pre">[a</span> <span class="pre">b;</span> <span class="pre">c</span> <span class="pre">d]</span></code> is used to avoid confusion. In Julia v0.4, the
+concatenation syntax <code class="docutils literal"><span class="pre">[x,</span> <span class="pre">[y,</span> <span class="pre">z]]</span></code> is deprecated in favor of <code class="docutils literal"><span class="pre">[x;</span> <span class="pre">[y,</span> <span class="pre">z]]</span></code>.</li>
+<li>In Julia, <code class="docutils literal"><span class="pre">a:b</span></code> and <code class="docutils literal"><span class="pre">a:b:c</span></code> construct <code class="xref jl jl-obj docutils literal"><span class="pre">Range</span></code> objects. To construct
+a full vector like in MATLAB, use <a class="reference internal" href="../../stdlib/collections/#Base.collect" title="Base.collect"><code class="xref jl jl-func docutils literal"><span class="pre">collect(a:b)</span></code></a>. Generally,
+there is no need to call <code class="docutils literal"><span class="pre">collect</span></code> though. <code class="docutils literal"><span class="pre">Range</span></code> will act like a normal
+array in most cases but is more efficient because it lazily computes its
+values. This pattern of creating specialized objects instead of full arrays
+is used frequently, and is also seen in functions such as <a class="reference internal" href="../../stdlib/arrays/#Base.linspace" title="Base.linspace"><code class="xref jl jl-func docutils literal"><span class="pre">linspace</span></code></a>, or with iterators such as <a class="reference internal" href="../../stdlib/collections/#Base.enumerate" title="Base.enumerate"><code class="xref jl jl-func docutils literal"><span class="pre">enumerate</span></code></a>, and
+<a class="reference internal" href="../../stdlib/collections/#Base.zip" title="Base.zip"><code class="xref jl jl-func docutils literal"><span class="pre">zip</span></code></a>. The special objects can mostly be used as if they were
+normal arrays.</li>
+<li>Functions in Julia return values from their last expression or the <code class="docutils literal"><span class="pre">return</span></code>
+keyword instead of listing the names of variables to return in the function
+definition (see <a class="reference internal" href="../functions/#man-return-keyword"><span>The return Keyword</span></a> for details).</li>
+<li>A Julia script may contain any number of functions, and all definitions will
+be externally visible when the file is loaded. Function definitions can be
+loaded from files outside the current working directory.</li>
+<li>In Julia, reductions such as <a class="reference internal" href="../../stdlib/collections/#Base.sum" title="Base.sum"><code class="xref jl jl-func docutils literal"><span class="pre">sum()</span></code></a>, <a class="reference internal" href="../../stdlib/collections/#Base.prod" title="Base.prod"><code class="xref jl jl-func docutils literal"><span class="pre">prod()</span></code></a>, and <a class="reference internal" href="../../stdlib/math/#Base.max" title="Base.max"><code class="xref jl jl-func docutils literal"><span class="pre">max()</span></code></a> are
+performed over every element of an array when called with a single argument,
+as in <code class="docutils literal"><span class="pre">sum(A)</span></code>, even if <code class="docutils literal"><span class="pre">A</span></code> has more than one dimension.</li>
+<li>In Julia, functions such as <a class="reference internal" href="../../stdlib/sort/#Base.sort" title="Base.sort"><code class="xref jl jl-func docutils literal"><span class="pre">sort()</span></code></a> that operate column-wise by default
+(<code class="docutils literal"><span class="pre">sort(A)</span></code> is equivalent to <code class="docutils literal"><span class="pre">sort(A,1)</span></code>) do not have special behavior for
+<code class="docutils literal"><span class="pre">1xN</span></code> arrays; the argument is returned unmodified since it still performs
+<code class="docutils literal"><span class="pre">sort(A,1)</span></code>. To sort a <code class="docutils literal"><span class="pre">1xN</span></code> matrix like a vector, use <code class="docutils literal"><span class="pre">sort(A,2)</span></code>.</li>
+<li>In Julia, if <code class="docutils literal"><span class="pre">A</span></code> is a 2-dimensional array, <code class="docutils literal"><span class="pre">fft(A)</span></code> computes a 2D FFT. In
+particular, it is not equivalent to <code class="docutils literal"><span class="pre">fft(A,1)</span></code>, which computes a 1D FFT
+acting column-wise.</li>
+<li>In Julia, parentheses must be used to call a function with zero arguments,
+like in <a class="reference internal" href="../../stdlib/base/#Base.tic" title="Base.tic"><code class="xref jl jl-func docutils literal"><span class="pre">tic()</span></code></a> and <a class="reference internal" href="../../stdlib/base/#Base.toc" title="Base.toc"><code class="xref jl jl-func docutils literal"><span class="pre">toc()</span></code></a>.</li>
+<li>Julia discourages the used of semicolons to end statements. The results of
+statements are not automatically printed (except at the interactive prompt),
+and lines of code do not need to end with semicolons. <a class="reference internal" href="../../stdlib/io-network/#Base.println" title="Base.println"><code class="xref jl jl-func docutils literal"><span class="pre">println()</span></code></a> or
+<a class="reference internal" href="../../stdlib/io-network/#Base.&#64;printf" title="Base.&#64;printf"><code class="xref jl jl-func docutils literal"><span class="pre">&#64;printf()</span></code></a> can be used to print specific output.</li>
+<li>In Julia, if <code class="docutils literal"><span class="pre">A</span></code> and <code class="docutils literal"><span class="pre">B</span></code> are arrays, logical comparison operations like
+<code class="docutils literal"><span class="pre">A</span> <span class="pre">==</span> <span class="pre">B</span></code> do not return an array of booleans. Instead, use <code class="docutils literal"><span class="pre">A</span> <span class="pre">.==</span> <span class="pre">B</span></code>, and
+similarly for the other boolean operators like <a class="reference internal" href="../../stdlib/math/#Base.&lt;" title="Base.&lt;"><code class="xref jl jl-obj docutils literal"><span class="pre">&lt;</span></code></a>, <a class="reference internal" href="../../stdlib/math/#Base.&gt;" title="Base.&gt;"><code class="xref jl jl-obj docutils literal"><span class="pre">&gt;</span></code></a> and
+<code class="xref jl jl-obj docutils literal"><span class="pre">=</span></code>.</li>
+<li>In Julia, the operators <a class="reference internal" href="../../stdlib/math/#Base.&amp;" title="Base.&amp;"><code class="xref jl jl-obj docutils literal"><span class="pre">&amp;</span></code></a>, <a class="reference internal" href="../../stdlib/math/#Base.|" title="Base.|"><code class="xref jl jl-obj docutils literal"><span class="pre">|</span></code></a>, and <a class="reference internal" href="../../stdlib/math/#Base.$" title="Base.$"><code class="xref jl jl-obj docutils literal"><span class="pre">$</span></code></a> perform the bitwise
+operations equivalent to <code class="docutils literal"><span class="pre">and</span></code>, <code class="docutils literal"><span class="pre">or</span></code>, and <code class="docutils literal"><span class="pre">xor</span></code> respectively in MATLAB,
+and have precedence similar to Python&#8217;s bitwise operators (unlike C). They
+can operate on scalars or element-wise across arrays and can be used to
+combine logical arrays, but note the difference in order of operations:
+parentheses may be required (e.g., to select elements of <code class="docutils literal"><span class="pre">A</span></code> equal to 1 or
+2 use <code class="docutils literal"><span class="pre">(A</span> <span class="pre">.==</span> <span class="pre">1)</span> <span class="pre">|</span> <span class="pre">(A</span> <span class="pre">.==</span> <span class="pre">2)</span></code>).</li>
+<li>In Julia, the elements of a collection can be passed as arguments to a
+function using the splat operator <code class="docutils literal"><span class="pre">...</span></code>, as in <code class="docutils literal"><span class="pre">xs=[1,2];</span> <span class="pre">f(xs...)</span></code>.</li>
+<li>Julia&#8217;s <a class="reference internal" href="../../stdlib/linalg/#Base.svd" title="Base.svd"><code class="xref jl jl-func docutils literal"><span class="pre">svd()</span></code></a> returns singular values as a vector instead of as a dense
+diagonal matrix.</li>
+<li>In Julia, <code class="docutils literal"><span class="pre">...</span></code> is not used to continue lines of code. Instead, incomplete
+expressions automatically continue onto the next line.</li>
+<li>In both Julia and MATLAB, the variable <code class="docutils literal"><span class="pre">ans</span></code> is set to the value of the
+last expression issued in an interactive session. In Julia, unlike MATLAB,
+<code class="docutils literal"><span class="pre">ans</span></code> is not set when Julia code is run in non-interactive mode.</li>
+<li>Julia&#8217;s <code class="docutils literal"><span class="pre">type</span></code>s do not support dynamically adding fields at runtime,
+unlike MATLAB&#8217;s <code class="docutils literal"><span class="pre">class</span></code>es. Instead, use a <a class="reference internal" href="../../stdlib/collections/#Base.Dict" title="Base.Dict"><code class="xref jl jl-obj docutils literal"><span class="pre">Dict</span></code></a>.</li>
+<li>In Julia each module has its own global scope/namespace, whereas in
+MATLAB there is just one global scope.</li>
+<li>In MATLAB, an idiomatic way to remove unwanted values is to use logical
+indexing, like in the expression <code class="docutils literal"><span class="pre">x(x&gt;3)</span></code> or in the statement
+<code class="docutils literal"><span class="pre">x(x&gt;3)</span> <span class="pre">=</span> <span class="pre">[]</span></code> to modify <code class="docutils literal"><span class="pre">x</span></code> in-place. In contrast, Julia provides the
+higher order functions <a class="reference internal" href="../../stdlib/collections/#Base.filter" title="Base.filter"><code class="xref jl jl-func docutils literal"><span class="pre">filter()</span></code></a> and <a class="reference internal" href="../../stdlib/collections/#Base.filter!" title="Base.filter!"><code class="xref jl jl-func docutils literal"><span class="pre">filter!()</span></code></a>, allowing users
+to write <code class="docutils literal"><span class="pre">filter(z-&gt;z&gt;3,</span> <span class="pre">x)</span></code> and <code class="docutils literal"><span class="pre">filter!(z-&gt;z&gt;3,</span> <span class="pre">x)</span></code> as alternatives to
+the corresponding transliterations <code class="docutils literal"><span class="pre">x[x.&gt;3]</span></code> and <code class="docutils literal"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">x[x.&gt;3]</span></code>. Using
+<a class="reference internal" href="../../stdlib/collections/#Base.filter!" title="Base.filter!"><code class="xref jl jl-func docutils literal"><span class="pre">filter!()</span></code></a> reduces the use of temporary arrays.</li>
+<li>The analogue of extracting (or &#8220;dereferencing&#8221;) all elements of a cell array,
+e.g. in <code class="docutils literal"><span class="pre">vertcat(A{:})</span></code> in MATLAB, is written using the splat operator in
+Julia, e.g. as <code class="docutils literal"><span class="pre">vcat(A...)</span></code>.</li>
+</ul>
+</div>
+<div class="section" id="noteworthy-differences-from-r">
+<h2>Noteworthy differences from R<a class="headerlink" href="#noteworthy-differences-from-r" title="Permalink to this headline">¶</a></h2>
+<p>One of Julia&#8217;s goals is to provide an effective language for data analysis
+and statistical programming. For users coming to Julia from R, these are some
+noteworthy differences:</p>
+<ul class="simple">
+<li>Julia&#8217;s single quotes enclose characters, not strings.</li>
+<li>Julia can create substrings by indexing into strings. In R, strings
+must be converted into character vectors before creating substrings.</li>
+<li>In Julia, like Python but unlike R, strings can be created with triple quotes
+<code class="docutils literal"><span class="pre">&quot;&quot;&quot;</span> <span class="pre">...</span> <span class="pre">&quot;&quot;&quot;</span></code>. This syntax is convenient for constructing strings that
+contain line breaks.</li>
+<li>In Julia, varargs are specified using the splat operator <code class="docutils literal"><span class="pre">...</span></code>, which
+always follows the name of a specific variable, unlike R, for which <code class="docutils literal"><span class="pre">...</span></code>
+can occur in isolation.</li>
+<li>In Julia, modulus is <code class="docutils literal"><span class="pre">mod(a,</span> <span class="pre">b)</span></code>, not <code class="docutils literal"><span class="pre">a</span> <span class="pre">%%</span> <span class="pre">b</span></code>. <code class="docutils literal"><span class="pre">%</span></code> in Julia is the
+remainder operator.</li>
+<li>In Julia, not all data structures support logical indexing. Furthermore,
+logical indexing in Julia is supported only with vectors of length equal to
+the object being indexed. For example:
+- In R, <code class="docutils literal"><span class="pre">c(1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4)[c(TRUE,</span> <span class="pre">FALSE)]</span></code> is equivalent to <code class="docutils literal"><span class="pre">c(1,3)</span></code>.
+- In R, <code class="docutils literal"><span class="pre">c(1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4)[c(TRUE,</span> <span class="pre">FALSE,</span> <span class="pre">TRUE,</span> <span class="pre">FALSE)]</span></code> is equivalent to <code class="docutils literal"><span class="pre">c(1,3)</span></code>.
+- In Julia, <code class="docutils literal"><span class="pre">[1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4][[true,</span> <span class="pre">false]]</span></code> throws a <a class="reference internal" href="../../stdlib/base/#Base.BoundsError" title="Base.BoundsError"><code class="xref jl jl-exc docutils literal"><span class="pre">BoundsError</span></code></a>.
+- In Julia, <code class="docutils literal"><span class="pre">[1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4][[true,</span> <span class="pre">false,</span> <span class="pre">true,</span> <span class="pre">false]]</span></code> produces <code class="docutils literal"><span class="pre">[1,</span> <span class="pre">3]</span></code>.</li>
+<li>Like many languages, Julia does not always allow operations on vectors of
+different lengths, unlike R where the vectors only need to share a common
+index range.  For example, <code class="docutils literal"><span class="pre">c(1,2,3,4)</span> <span class="pre">+</span> <span class="pre">c(1,2)</span></code> is valid R but the
+equivalent <code class="docutils literal"><span class="pre">[1:4]</span> <span class="pre">+</span> <span class="pre">[1:2]</span></code> will throw an error in Julia.</li>
+<li>Julia&#8217;s <code class="xref jl jl-func docutils literal"><span class="pre">apply()</span></code> takes the function first, then its arguments, unlike
+<code class="docutils literal"><span class="pre">lapply(&lt;structure&gt;,</span> <span class="pre">function,</span> <span class="pre">arg2,</span> <span class="pre">...)</span></code> in R.</li>
+<li>Julia uses <code class="docutils literal"><span class="pre">end</span></code> to denote the end of conditional blocks, like <code class="docutils literal"><span class="pre">if</span></code>,
+loop blocks, like <code class="docutils literal"><span class="pre">while</span></code>/<code class="docutils literal"><span class="pre">for</span></code>, and functions. In lieu of the one-line
+<code class="docutils literal"><span class="pre">if</span> <span class="pre">(</span> <span class="pre">cond</span> <span class="pre">)</span> <span class="pre">statement</span></code>, Julia allows statements of the form
+<code class="docutils literal"><span class="pre">if</span> <span class="pre">cond;</span> <span class="pre">statement;</span> <span class="pre">end</span></code>, <code class="docutils literal"><span class="pre">cond</span> <span class="pre">&amp;&amp;</span> <span class="pre">statement</span></code> and
+<code class="docutils literal"><span class="pre">!cond</span> <span class="pre">||</span> <span class="pre">statement</span></code>. Assignment statements in the latter two syntaxes must
+be explicitly wrapped in parentheses, e.g. <code class="docutils literal"><span class="pre">cond</span> <span class="pre">&amp;&amp;</span> <span class="pre">(x</span> <span class="pre">=</span> <span class="pre">value)</span></code>.</li>
+<li>In Julia, <code class="docutils literal"><span class="pre">&lt;-</span></code>, <code class="docutils literal"><span class="pre">&lt;&lt;-</span></code> and <code class="docutils literal"><span class="pre">-&gt;</span></code> are not assignment operators.</li>
+<li>Julia&#8217;s <code class="docutils literal"><span class="pre">-&gt;</span></code> creates an anonymous function, like Python.</li>
+<li>Julia constructs vectors using brackets. Julia&#8217;s <code class="docutils literal"><span class="pre">[1,</span> <span class="pre">2,</span> <span class="pre">3]</span></code> is the
+equivalent of R&#8217;s <code class="docutils literal"><span class="pre">c(1,</span> <span class="pre">2,</span> <span class="pre">3)</span></code>.</li>
+<li>Julia&#8217;s <a class="reference internal" href="../../stdlib/strings/#Base.*" title="Base.*"><code class="xref jl jl-obj docutils literal"><span class="pre">*</span></code></a> operator can perform matrix multiplication, unlike in R.
+If <code class="docutils literal"><span class="pre">A</span></code> and <code class="docutils literal"><span class="pre">B</span></code> are matrices, then <code class="docutils literal"><span class="pre">A</span> <span class="pre">*</span> <span class="pre">B</span></code> denotes a matrix
+multiplication in Julia, equivalent to R&#8217;s <code class="docutils literal"><span class="pre">A</span> <span class="pre">%*%</span> <span class="pre">B</span></code>. In R, this same
+notation would perform an element-wise (Hadamard) product. To get the
+element-wise multiplication operation, you need to write <code class="docutils literal"><span class="pre">A</span> <span class="pre">.*</span> <span class="pre">B</span></code> in Julia.</li>
+<li>Julia performs matrix transposition using the <code class="xref jl jl-obj docutils literal"><span class="pre">.'</span></code> operator and conjugated
+transposition using the <code class="xref jl jl-obj docutils literal"><span class="pre">'</span></code> operator. Julia&#8217;s <code class="docutils literal"><span class="pre">A.'</span></code> is therefore
+equivalent to R&#8217;s <code class="docutils literal"><span class="pre">t(A)</span></code>.</li>
+<li>Julia does not require parentheses when writing <code class="docutils literal"><span class="pre">if</span></code> statements or
+<code class="docutils literal"><span class="pre">for</span></code>/<code class="docutils literal"><span class="pre">while</span></code> loops: use <code class="docutils literal"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">[1,</span> <span class="pre">2,</span> <span class="pre">3]</span></code> instead of
+<code class="docutils literal"><span class="pre">for</span> <span class="pre">(i</span> <span class="pre">in</span> <span class="pre">c(1,</span> <span class="pre">2,</span> <span class="pre">3))</span></code> and <code class="docutils literal"><span class="pre">if</span> <span class="pre">i</span> <span class="pre">==</span> <span class="pre">1</span></code> instead of <code class="docutils literal"><span class="pre">if</span> <span class="pre">(i</span> <span class="pre">==</span> <span class="pre">1)</span></code>.</li>
+<li>Julia does not treat the numbers <code class="docutils literal"><span class="pre">0</span></code> and <code class="docutils literal"><span class="pre">1</span></code> as Booleans.
+You cannot write <code class="docutils literal"><span class="pre">if</span> <span class="pre">(1)</span></code> in Julia, because <code class="docutils literal"><span class="pre">if</span></code> statements accept only
+booleans. Instead, you can write <code class="docutils literal"><span class="pre">if</span> <span class="pre">true</span></code>, <code class="docutils literal"><span class="pre">if</span> <span class="pre">Bool(1)</span></code>, or <code class="docutils literal"><span class="pre">if</span> <span class="pre">1==1</span></code>.</li>
+<li>Julia does not provide <code class="docutils literal"><span class="pre">nrow</span></code> and <code class="docutils literal"><span class="pre">ncol</span></code>. Instead, use <code class="docutils literal"><span class="pre">size(M,</span> <span class="pre">1)</span></code>
+for <code class="docutils literal"><span class="pre">nrow(M)</span></code> and <code class="docutils literal"><span class="pre">size(M,</span> <span class="pre">2)</span></code> for <code class="docutils literal"><span class="pre">ncol(M)</span></code>.</li>
+<li>Julia is careful to distinguish scalars, vectors and matrices.  In R,
+<code class="docutils literal"><span class="pre">1</span></code> and <code class="docutils literal"><span class="pre">c(1)</span></code> are the same. In Julia, they can not be used
+interchangeably. One potentially confusing result of this is that
+<code class="docutils literal"><span class="pre">x'</span> <span class="pre">*</span> <span class="pre">y</span></code> for vectors <code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code> is a 1-element vector, not a scalar.
+To get a scalar, use <a class="reference internal" href="../../stdlib/linalg/#Base.dot" title="Base.dot"><code class="xref jl jl-func docutils literal"><span class="pre">dot(x,</span> <span class="pre">y)</span></code></a>.</li>
+<li>Julia&#8217;s <a class="reference internal" href="../../stdlib/linalg/#Base.diag" title="Base.diag"><code class="xref jl jl-func docutils literal"><span class="pre">diag()</span></code></a> and <a class="reference internal" href="../../stdlib/linalg/#Base.diagm" title="Base.diagm"><code class="xref jl jl-func docutils literal"><span class="pre">diagm()</span></code></a> are not like R&#8217;s.</li>
+<li>Julia cannot assign to the results of function calls on the left hand side of
+an assignment operation: you cannot write <code class="docutils literal"><span class="pre">diag(M)</span> <span class="pre">=</span> <span class="pre">ones(n)</span></code>.</li>
+<li>Julia discourages populating the main namespace with functions. Most
+statistical functionality for Julia is found in
+<a class="reference external" href="http://pkg.julialang.org/">packages</a> under the <a class="reference external" href="https://github.com/JuliaStats">JuliaStats organization</a>. For example:<ul>
+<li>Functions pertaining to probability distributions are provided by the
+<a class="reference external" href="https://github.com/JuliaStats/Distributions.jl">Distributions package</a>.</li>
+<li>The <a class="reference external" href="https://github.com/JuliaStats/DataFrames.jl">DataFrames package</a>
+provides data frames.</li>
+<li>Generalized linear models are provided by the <a class="reference external" href="https://github.com/JuliaStats/GLM.jl">GLM package</a>.</li>
+</ul>
+</li>
+<li>Julia provides tuples and real hash tables, but not R-style lists. When
+returning multiple items, you should typically use a tuple: instead of
+<code class="docutils literal"><span class="pre">list(a</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">b</span> <span class="pre">=</span> <span class="pre">2)</span></code>, use <code class="docutils literal"><span class="pre">(1,</span> <span class="pre">2)</span></code>.</li>
+<li>Julia encourages users to write their own types, which are easier to use than
+S3 or S4 objects in R. Julia&#8217;s multiple dispatch system means that
+<code class="docutils literal"><span class="pre">table(x::TypeA)</span></code> and <code class="docutils literal"><span class="pre">table(x::TypeB)</span></code> act like R&#8217;s <code class="docutils literal"><span class="pre">table.TypeA(x)</span></code>
+and <code class="docutils literal"><span class="pre">table.TypeB(x)</span></code>.</li>
+<li>In Julia, values are passed and assigned by reference. If a function modifies
+an array, the changes will be visible in the caller. This is very different
+from R and allows new functions to operate on large data structures much more
+efficiently.</li>
+<li>In Julia, vectors and matrices are concatenated using <a class="reference internal" href="../../stdlib/arrays/#Base.hcat" title="Base.hcat"><code class="xref jl jl-func docutils literal"><span class="pre">hcat()</span></code></a>,
+<a class="reference internal" href="../../stdlib/arrays/#Base.vcat" title="Base.vcat"><code class="xref jl jl-func docutils literal"><span class="pre">vcat()</span></code></a> and <a class="reference internal" href="../../stdlib/arrays/#Base.hvcat" title="Base.hvcat"><code class="xref jl jl-func docutils literal"><span class="pre">hvcat()</span></code></a>, not <code class="docutils literal"><span class="pre">c</span></code>, <code class="docutils literal"><span class="pre">rbind</span></code> and <code class="docutils literal"><span class="pre">cbind</span></code> like in R.</li>
+<li>In Julia, a range like <code class="docutils literal"><span class="pre">a:b</span></code> is not shorthand for a vector like in R,
+but is a specialized <code class="xref jl jl-obj docutils literal"><span class="pre">Range</span></code> that is used for iteration without high
+memory overhead. To convert a range into a vector, use <a class="reference internal" href="../../stdlib/collections/#Base.collect" title="Base.collect"><code class="xref jl jl-func docutils literal"><span class="pre">collect(a:b)</span></code></a>.</li>
+<li>Julia&#8217;s <a class="reference internal" href="../../stdlib/math/#Base.max" title="Base.max"><code class="xref jl jl-func docutils literal"><span class="pre">max()</span></code></a> and <a class="reference internal" href="../../stdlib/math/#Base.min" title="Base.min"><code class="xref jl jl-func docutils literal"><span class="pre">min()</span></code></a> are the equivalent of <code class="docutils literal"><span class="pre">pmax</span></code> and
+<code class="docutils literal"><span class="pre">pmin</span></code> respectively in R, but both arguments need to have the same
+dimensions.  While <a class="reference internal" href="../../stdlib/collections/#Base.maximum" title="Base.maximum"><code class="xref jl jl-func docutils literal"><span class="pre">maximum()</span></code></a> and <a class="reference internal" href="../../stdlib/collections/#Base.minimum" title="Base.minimum"><code class="xref jl jl-func docutils literal"><span class="pre">minimum()</span></code></a> replace <code class="docutils literal"><span class="pre">max</span></code> and
+<code class="docutils literal"><span class="pre">min</span></code> in R, there are important differences.</li>
+<li>Julia&#8217;s <a class="reference internal" href="../../stdlib/collections/#Base.sum" title="Base.sum"><code class="xref jl jl-func docutils literal"><span class="pre">sum()</span></code></a>, <a class="reference internal" href="../../stdlib/collections/#Base.prod" title="Base.prod"><code class="xref jl jl-func docutils literal"><span class="pre">prod()</span></code></a>, <a class="reference internal" href="../../stdlib/collections/#Base.maximum" title="Base.maximum"><code class="xref jl jl-func docutils literal"><span class="pre">maximum()</span></code></a>, and <a class="reference internal" href="../../stdlib/collections/#Base.minimum" title="Base.minimum"><code class="xref jl jl-func docutils literal"><span class="pre">minimum()</span></code></a> are
+different from their counterparts in R. They all accept one or two arguments.
+The first argument is an iterable collection such as an array.  If there is a
+second argument, then this argument indicates the dimensions, over which the
+operation is carried out.  For instance, let <code class="docutils literal"><span class="pre">A=[[1</span> <span class="pre">2],[3</span> <span class="pre">4]]</span></code> in Julia and
+<code class="docutils literal"><span class="pre">B=rbind(c(1,2),c(3,4))</span></code> be the same matrix in R.  Then <code class="docutils literal"><span class="pre">sum(A)</span></code> gives
+the same result as <code class="docutils literal"><span class="pre">sum(B)</span></code>, but <code class="docutils literal"><span class="pre">sum(A,</span> <span class="pre">1)</span></code> is a row vector containing
+the sum over each column and <code class="docutils literal"><span class="pre">sum(A,</span> <span class="pre">2)</span></code> is a column vector containing the
+sum over each row.  This contrasts to the behavior of R, where
+<code class="docutils literal"><span class="pre">sum(B,1)=11</span></code> and <code class="docutils literal"><span class="pre">sum(B,2)=12</span></code>.  If the second argument is a vector,
+then it specifies all the dimensions over which the sum is performed, e.g.,
+<code class="docutils literal"><span class="pre">sum(A,[1,2])=10</span></code>.  It should be noted that there is no error checking
+regarding the second argument.</li>
+<li>Julia has several functions that can mutate their arguments. For example,
+it has both <a class="reference internal" href="../../stdlib/sort/#Base.sort" title="Base.sort"><code class="xref jl jl-func docutils literal"><span class="pre">sort()</span></code></a> and <a class="reference internal" href="../../stdlib/sort/#Base.sort!" title="Base.sort!"><code class="xref jl jl-func docutils literal"><span class="pre">sort!()</span></code></a>.</li>
+<li>In R, performance requires vectorization. In Julia, almost the opposite is
+true: the best performing code is often achieved by using devectorized loops.</li>
+<li>Julia is eagerly evaluated and does not support R-style lazy evaluation. For
+most users, this means that there are very few unquoted expressions or column
+names.</li>
+<li>Julia does not support the <code class="docutils literal"><span class="pre">NULL</span></code> type.</li>
+<li>Julia lacks the equivalent of R&#8217;s <code class="docutils literal"><span class="pre">assign</span></code> or <code class="docutils literal"><span class="pre">get</span></code>.</li>
+<li>In Julia, <code class="docutils literal"><span class="pre">return</span></code> does not require parentheses.</li>
+<li>In R, an idiomatic way to remove unwanted values is to use logical indexing,
+like in the expression <code class="docutils literal"><span class="pre">x[x&gt;3]</span></code> or in the statement <code class="docutils literal"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">x[x&gt;3]</span></code> to
+modify <code class="docutils literal"><span class="pre">x</span></code> in-place. In contrast, Julia provides the higher order functions
+<a class="reference internal" href="../../stdlib/collections/#Base.filter" title="Base.filter"><code class="xref jl jl-func docutils literal"><span class="pre">filter()</span></code></a> and <a class="reference internal" href="../../stdlib/collections/#Base.filter!" title="Base.filter!"><code class="xref jl jl-func docutils literal"><span class="pre">filter!()</span></code></a>, allowing users to write
+<code class="docutils literal"><span class="pre">filter(z-&gt;z&gt;3,</span> <span class="pre">x)</span></code> and <code class="docutils literal"><span class="pre">filter!(z-&gt;z&gt;3,</span> <span class="pre">x)</span></code> as alternatives to the
+corresponding transliterations <code class="docutils literal"><span class="pre">x[x.&gt;3]</span></code> and <code class="docutils literal"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">x[x.&gt;3]</span></code>. Using
+<a class="reference internal" href="../../stdlib/collections/#Base.filter!" title="Base.filter!"><code class="xref jl jl-func docutils literal"><span class="pre">filter!()</span></code></a> reduces the use of temporary arrays.</li>
+</ul>
+</div>
+<div class="section" id="noteworthy-differences-from-python">
+<h2>Noteworthy differences from Python<a class="headerlink" href="#noteworthy-differences-from-python" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>In Julia, a vector of vectors can automatically concatenate into a
+one-dimensional vector <em>if</em> no explicit element type is specified. For example:<ul>
+<li>In Julia, <code class="docutils literal"><span class="pre">[1,</span> <span class="pre">[2,</span> <span class="pre">3]]</span></code> concatenates into <code class="docutils literal"><span class="pre">[1,</span> <span class="pre">2,</span> <span class="pre">3]</span></code>, like in R.</li>
+<li>In Julia, <code class="docutils literal"><span class="pre">Int[1,</span> <span class="pre">Int[2,</span> <span class="pre">3]]</span></code> will <em>not</em> concatenate, but instead throw an error.</li>
+<li>In Julia, <code class="docutils literal"><span class="pre">Any[1,</span> <span class="pre">[2,3]]</span></code> will <em>not</em> concatenate.</li>
+<li>In Julia, <code class="docutils literal"><span class="pre">Vector{Int}[[1,</span> <span class="pre">2],</span> <span class="pre">[3,</span> <span class="pre">4]]</span></code> will <em>not</em> concatenate, but
+produces an object similar to Python&#8217;s list of lists. This object is
+<em>different</em> from a two-dimensional <a class="reference internal" href="../../stdlib/arrays/#Base.Array" title="Base.Array"><code class="xref jl jl-obj docutils literal"><span class="pre">Array</span></code></a> of <code class="xref jl jl-obj docutils literal"><span class="pre">Int</span></code>s.</li>
+</ul>
+</li>
+<li>Julia requires <code class="docutils literal"><span class="pre">end</span></code> to end a block. Unlike Python, Julia has no <code class="docutils literal"><span class="pre">pass</span></code>
+keyword.</li>
+<li>In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.</li>
+<li>Julia&#8217;s slice indexing includes the last element, unlike in Python.
+<code class="docutils literal"><span class="pre">a[2:3]</span></code> in Julia is <code class="docutils literal"><span class="pre">a[1:3]</span></code> in Python.</li>
+<li>Julia does not support negative indexes. In particular, the last element of a
+list or array is indexed with <code class="xref jl jl-obj docutils literal"><span class="pre">end</span></code> in Julia, not <code class="docutils literal"><span class="pre">-1</span></code> as in Python.</li>
+<li>Julia&#8217;s list comprehensions do not support the optional <code class="docutils literal"><span class="pre">if</span></code> clause that
+Python has.</li>
+<li>Julia&#8217;s <code class="docutils literal"><span class="pre">for</span></code>, <code class="docutils literal"><span class="pre">if</span></code>, <code class="docutils literal"><span class="pre">while</span></code>, etc. blocks are terminated by the
+<code class="docutils literal"><span class="pre">end</span></code> keyword. Indentation level is not significant as it is in Python.</li>
+<li>Julia has no line continuation syntax: if, at the end of a line, the input so
+far is a complete expression, it is considered done; otherwise the input
+continues. One way to force an expression to continue is to wrap it in
+parentheses.</li>
+<li>Julia arrays are column major (Fortran ordered) whereas NumPy arrays are row
+major (C-ordered) by default. To get optimal performance when looping over
+arrays, the order of the loops should be reversed in Julia relative to NumPy
+(see relevant section of <a class="reference internal" href="../performance-tips/#man-performance-tips"><span>Performance Tips</span></a>).</li>
+<li>Julia&#8217;s updating operators (e.g. <code class="docutils literal"><span class="pre">+=</span></code>, <code class="docutils literal"><span class="pre">-=</span></code>, ...) are <em>not in-place</em>
+whereas NumPy&#8217;s are. This means <code class="docutils literal"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">ones(4);</span> <span class="pre">B</span> <span class="pre">=</span> <span class="pre">A;</span> <span class="pre">B</span> <span class="pre">+=</span> <span class="pre">3</span></code> doesn&#8217;t change
+values in <code class="docutils literal"><span class="pre">A</span></code>, it rather rebinds the name <code class="docutils literal"><span class="pre">B</span></code> to the result of the right-
+hand side <code class="docutils literal"><span class="pre">B</span> <span class="pre">=</span> <span class="pre">B</span> <span class="pre">+</span> <span class="pre">3</span></code>, which is a new array. Use <code class="docutils literal"><span class="pre">B[:]</span> <span class="pre">+=</span> <span class="pre">3</span></code>, explicit loops,
+or <code class="docutils literal"><span class="pre">InplaceOps.jl</span></code>.</li>
+<li>Julia evaluates default values of function arguments every time the method is
+invoked, unlike in Python where the default values are evaluated only once
+when the function is defined. For example, the function <code class="docutils literal"><span class="pre">f(x=rand())</span> <span class="pre">=</span> <span class="pre">x</span></code>
+returns a new random number every time it is invoked without argument. On the
+other hand, the function <code class="docutils literal"><span class="pre">g(x=[1,2])</span> <span class="pre">=</span> <span class="pre">push!(x,3)</span></code> returns <code class="docutils literal"><span class="pre">[1,2,3]</span></code> every
+time it is called as <code class="docutils literal"><span class="pre">g()</span></code>.</li>
+<li>In Julia <code class="docutils literal"><span class="pre">%</span></code> is the remainder operator, whereas in Python it is the modulus.</li>
+</ul>
+</div>
+<div class="section" id="noteworthy-differences-from-c-c">
+<h2>Noteworthy differences from C/C++<a class="headerlink" href="#noteworthy-differences-from-c-c" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li>Julia arrays are indexed with square brackets, and can have more than one
+dimension <code class="docutils literal"><span class="pre">A[i,j]</span></code>.
+This syntax is not just syntactic sugar for a reference to a pointer or address as in C/C++.
+See the Julia documentation for the syntax for array construction (it has changed between versions).</li>
+<li>In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.</li>
+<li>Julia arrays are assigned by reference. After <code class="docutils literal"><span class="pre">A=B</span></code>, changing elements of
+<code class="docutils literal"><span class="pre">B</span></code> will modify <code class="docutils literal"><span class="pre">A</span></code> as well. Updating operators like <code class="docutils literal"><span class="pre">+=</span></code> do not operate
+in-place, they are equivalent to <code class="docutils literal"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">A</span> <span class="pre">+</span> <span class="pre">B</span></code> which rebinds the left-hand
+side to the result of the right-hand side expression.</li>
+<li>Julia arrays are column major (Fortran ordered) whereas C/C++ arrays are row
+major ordered by default. To get optimal performance when looping over
+arrays, the order of the loops should be reversed in Julia relative to C/C++
+(see relevant section of <a class="reference internal" href="../performance-tips/#man-performance-tips"><span>Performance Tips</span></a>).</li>
+<li>Julia values are passed and assigned by reference. If a function modifies an
+array, the changes will be visible in the caller.</li>
+<li>In Julia, whitespace is significant, unlike C/C++, so care must be taken when adding/removing
+whitespace from a Julia program.</li>
+<li>In Julia, literal numbers without a decimal point (such as <code class="docutils literal"><span class="pre">42</span></code>) create signed
+integers, of type <code class="docutils literal"><span class="pre">Int</span></code>, but literals too large to fit in the machine word size
+will automatically be promoted to a larger size type, such as <code class="docutils literal"><span class="pre">Int64</span></code> (if <code class="docutils literal"><span class="pre">Int</span></code> is <code class="docutils literal"><span class="pre">Int32</span></code>),
+<code class="docutils literal"><span class="pre">Int128</span></code>, or the arbitrarily large <code class="docutils literal"><span class="pre">BigInt</span></code> type.
+There are no numeric literal suffixes, such as <code class="docutils literal"><span class="pre">L</span></code>, <code class="docutils literal"><span class="pre">LL</span></code>, <code class="docutils literal"><span class="pre">U</span></code>, <code class="docutils literal"><span class="pre">UL</span></code>, <code class="docutils literal"><span class="pre">ULL</span></code> to indicate unsigned
+and/or signed vs. unsigned.
+Decimal literals are always signed, and hexadecimal literals (which start with <code class="docutils literal"><span class="pre">0x</span></code> like C/C++),
+are unsigned.
+Hexadecimal literals also, unlike C/C++/Java and unlike decimal literals in Julia,
+have a type based on the <em>length</em> of the literal, including leading 0s.  For example,
+<code class="docutils literal"><span class="pre">0x0</span></code> and <code class="docutils literal"><span class="pre">0x00</span></code> have type UInt8, <code class="docutils literal"><span class="pre">0x000</span></code> and <code class="docutils literal"><span class="pre">0x0000</span></code> have type <code class="docutils literal"><span class="pre">UInt16</span></code>, then
+literals with 5 to 8 hex digits have type <code class="docutils literal"><span class="pre">UInt32</span></code>, 9 to 16 hex digits type <code class="docutils literal"><span class="pre">UInt64</span></code> and 17 to 32 hex digits type <code class="docutils literal"><span class="pre">UInt128</span></code>.
+This needs to be taken into account when defining
+hexadecimal masks, for example <code class="docutils literal"><span class="pre">~0xf</span> <span class="pre">==</span> <span class="pre">0xf0</span></code> is very different from <code class="docutils literal"><span class="pre">~0x000f</span> <span class="pre">==</span> <span class="pre">0xfff0</span></code>.
+64 bit <code class="docutils literal"><span class="pre">Float64</span></code> and 32 bit <code class="docutils literal"><span class="pre">Float32</span></code> bit literals are expressed as <code class="docutils literal"><span class="pre">1.0</span></code> and <code class="docutils literal"><span class="pre">1.0f0</span></code> respectively.
+Floating point literals are rounded (and not promoted to the <code class="docutils literal"><span class="pre">BigFloat</span></code> type) if they can not be exactly
+represented.  Floating point literals are closer in behavior to C/C++.
+Octal (prefixed with <code class="docutils literal"><span class="pre">0o</span></code>) and binary (prefixed with <code class="docutils literal"><span class="pre">0b</span></code>) literals are also treated as unsigned.</li>
+<li>String literals can be delimited with either <code class="docutils literal"><span class="pre">&quot;</span></code>  or <code class="docutils literal"><span class="pre">&quot;&quot;&quot;</span></code>, <code class="docutils literal"><span class="pre">&quot;&quot;&quot;</span></code> delimited literals can contain <code class="docutils literal"><span class="pre">&quot;</span></code>
+characters without quoting it like <code class="docutils literal"><span class="pre">&quot;\&quot;&quot;</span></code>
+String literals can have values of other variables or expressions interpolated into them,
+indicated by <code class="docutils literal"><span class="pre">$variablename</span></code> or <code class="docutils literal"><span class="pre">$(expression)</span></code>, which evaluates the variable name or the expression in the context of the function.</li>
+<li><code class="docutils literal"><span class="pre">//</span></code> indicates a <code class="docutils literal"><span class="pre">Rational</span></code> number, and not a single-line comment (which is <code class="docutils literal"><span class="pre">#</span></code> in Julia)</li>
+<li><code class="docutils literal"><span class="pre">#=</span></code> indicates the start of a multiline comment, and <code class="docutils literal"><span class="pre">=#</span></code> ends it.</li>
+<li>Functions in Julia return values from their last expression(s) or the <code class="docutils literal"><span class="pre">return</span></code>
+keyword.  Multiple values can be returned from functions and assigned as tuples, e.g.
+<code class="docutils literal"><span class="pre">(a,</span> <span class="pre">b)</span> <span class="pre">=</span> <span class="pre">myfunction()</span></code> or <code class="docutils literal"><span class="pre">a,</span> <span class="pre">b</span> <span class="pre">=</span> <span class="pre">myfunction()</span></code>, instead of having to pass pointers
+to values as one would have to do in C/C++ (i.e. <code class="docutils literal"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">myfunction(&amp;b)</span></code>.</li>
+<li>Julia does not require the use of semicolons to end statements. The results of
+expressions are not automatically printed (except at the interactive prompt, i.e. the REPL),
+and lines of code do not need to end with semicolons. <a class="reference internal" href="../../stdlib/io-network/#Base.println" title="Base.println"><code class="xref jl jl-func docutils literal"><span class="pre">println()</span></code></a> or
+<a class="reference internal" href="../../stdlib/io-network/#Base.&#64;printf" title="Base.&#64;printf"><code class="xref jl jl-func docutils literal"><span class="pre">&#64;printf()</span></code></a> can be used to print specific output.
+In the REPL, <code class="docutils literal"><span class="pre">;</span></code> can be used to suppress output.
+<code class="docutils literal"><span class="pre">;</span></code> also has a different meaning within <code class="docutils literal"><span class="pre">[</span> <span class="pre">]</span></code>, something to watch out for.
+<code class="docutils literal"><span class="pre">;</span></code> can be used to separate expressions on a single line, but are not strictly necessary in many cases,
+and are more an aid to readability.</li>
+<li>In Julia, the operator <a class="reference internal" href="../../stdlib/math/#Base.$" title="Base.$"><code class="xref jl jl-obj docutils literal"><span class="pre">$</span></code></a> performs the bitwise XOR operation, i.e. <a class="reference internal" href="../../stdlib/strings/#Base.^" title="Base.^"><code class="xref jl jl-obj docutils literal"><span class="pre">^</span></code></a>
+in C/C++.  Also, the bitwise operators do not have the same precedence as C/++,
+so parenthesis may be required.</li>
+<li>Julia&#8217;s <a class="reference internal" href="../../stdlib/strings/#Base.^" title="Base.^"><code class="xref jl jl-obj docutils literal"><span class="pre">^</span></code></a> is exponentiation (pow), not bitwise XOR as in C/C++ (use <a class="reference internal" href="../../stdlib/math/#Base.$" title="Base.$"><code class="xref jl jl-obj docutils literal"><span class="pre">$</span></code></a> in Julia)</li>
+<li>Julia has two right-shift operators, <code class="docutils literal"><span class="pre">&gt;&gt;</span></code> and <code class="docutils literal"><span class="pre">&gt;&gt;&gt;</span></code>.  <code class="docutils literal"><span class="pre">&gt;&gt;&gt;</span></code> performs an arithmetic shift,
+<code class="docutils literal"><span class="pre">&gt;&gt;</span></code> always performs a logical shift, unlike C/C++,
+where the meaning of <code class="docutils literal"><span class="pre">&gt;&gt;</span></code> depends on the type of the value being shifted.</li>
+<li>Julia&#8217;s <code class="docutils literal"><span class="pre">-&gt;</span></code> creates an anonymous function, it does not access a member via a pointer.</li>
+<li>Julia does not require parentheses when writing <code class="docutils literal"><span class="pre">if</span></code> statements or
+<code class="docutils literal"><span class="pre">for</span></code>/<code class="docutils literal"><span class="pre">while</span></code> loops: use <code class="docutils literal"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">[1,</span> <span class="pre">2,</span> <span class="pre">3]</span></code> instead of
+<code class="docutils literal"><span class="pre">for</span> <span class="pre">(int</span> <span class="pre">i=1;</span> <span class="pre">i</span> <span class="pre">&lt;=</span> <span class="pre">3;</span> <span class="pre">i++)</span></code> and <code class="docutils literal"><span class="pre">if</span> <span class="pre">i</span> <span class="pre">==</span> <span class="pre">1</span></code> instead of <code class="docutils literal"><span class="pre">if</span> <span class="pre">(i</span> <span class="pre">==</span> <span class="pre">1)</span></code>.</li>
+<li>Julia does not treat the numbers <code class="docutils literal"><span class="pre">0</span></code> and <code class="docutils literal"><span class="pre">1</span></code> as Booleans.
+You cannot write <code class="docutils literal"><span class="pre">if</span> <span class="pre">(1)</span></code> in Julia, because <code class="docutils literal"><span class="pre">if</span></code> statements accept only
+booleans. Instead, you can write <code class="docutils literal"><span class="pre">if</span> <span class="pre">true</span></code>, <code class="docutils literal"><span class="pre">if</span> <span class="pre">Bool(1)</span></code>, or <code class="docutils literal"><span class="pre">if</span> <span class="pre">1==1</span></code>.</li>
+<li>Julia uses <code class="docutils literal"><span class="pre">end</span></code> to denote the end of conditional blocks, like <code class="docutils literal"><span class="pre">if</span></code>,
+loop blocks, like <code class="docutils literal"><span class="pre">while</span></code>/<code class="docutils literal"><span class="pre">for</span></code>, and functions. In lieu of the one-line
+<code class="docutils literal"><span class="pre">if</span> <span class="pre">(</span> <span class="pre">cond</span> <span class="pre">)</span> <span class="pre">statement</span></code>, Julia allows statements of the form
+<code class="docutils literal"><span class="pre">if</span> <span class="pre">cond;</span> <span class="pre">statement;</span> <span class="pre">end</span></code>, <code class="docutils literal"><span class="pre">cond</span> <span class="pre">&amp;&amp;</span> <span class="pre">statement</span></code> and
+<code class="docutils literal"><span class="pre">!cond</span> <span class="pre">||</span> <span class="pre">statement</span></code>. Assignment statements in the latter two syntaxes must
+be explicitly wrapped in parentheses, e.g. <code class="docutils literal"><span class="pre">cond</span> <span class="pre">&amp;&amp;</span> <span class="pre">(x</span> <span class="pre">=</span> <span class="pre">value)</span></code>, because
+of the operator precedence.</li>
+<li>Julia has no line continuation syntax: if, at the end of a line, the input so
+far is a complete expression, it is considered done; otherwise the input
+continues. One way to force an expression to continue is to wrap it in
+parentheses.</li>
+<li>Julia macros operate on parsed expressions, rather than the text of the program,
+which allows them to perform sophisticated transformations of Julia code. Macro
+names start with the <code class="docutils literal"><span class="pre">&#64;</span></code> character, and have both a function-like syntax,
+<code class="docutils literal"><span class="pre">&#64;mymacro(arg1,</span> <span class="pre">arg2,</span> <span class="pre">arg3)</span></code>, and a statement-like syntax,
+<code class="docutils literal"><span class="pre">&#64;mymacro</span> <span class="pre">arg1</span> <span class="pre">arg2</span> <span class="pre">arg3</span></code>. The forms are interchangable; the function-like form
+is particularly useful if the macro appears within another expression, and is often clearest.
+The statement-like form is often used to annotate blocks, as in the parallel <code class="docutils literal"><span class="pre">for</span></code>
+construct: <code class="docutils literal"><span class="pre">&#64;parallel</span> <span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">1:n;</span> <span class="pre">#=</span> <span class="pre">body</span> <span class="pre">=#;</span> <span class="pre">end</span></code>. Where the end of the macro
+construct may be unclear, use the function-like form.</li>
+<li>Julia now has an enumeration type, expressed using the macro <code class="docutils literal"><span class="pre">&#64;enum(name,</span> <span class="pre">value1,</span> <span class="pre">value2,</span> <span class="pre">...)</span></code>
+For example: <code class="docutils literal"><span class="pre">&#64;enum(Fruit,</span> <span class="pre">Banana=1,</span> <span class="pre">Apple,</span> <span class="pre">Pear)</span></code></li>
+<li>By convention, functions that modify their arguments have a <code class="docutils literal"><span class="pre">!</span></code> at the end of the name,
+for example <code class="docutils literal"><span class="pre">push!</span></code>.</li>
+<li>In C++, by default, you have static dispatch, i.e. you need to annotate a function as virtual,
+in order to have dynamic dispatch.
+On the other hand, in Julia every method is &#8220;virtual&#8221; (although it&#8217;s more general than that
+since methods are dispatched on every argument type, not only <code class="docutils literal"><span class="pre">this</span></code>, using the most-specific-declaration rule).</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../unicode-input/" class="btn btn-neutral float-right" title="Unicode Input">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../faq/" class="btn btn-neutral" title="Frequently Asked Questions"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.5.1-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

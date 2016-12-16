@@ -1,0 +1,1504 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Control Flow &mdash; Julia Language 0.3.13-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.3.13-pre documentation" href="../../"/>
+        <link rel="next" title="Scope of Variables" href="../variables-and-scoping/"/>
+        <link rel="prev" title="Functions" href="../functions/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#elementary-functions">Elementary Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics"><tt class="docutils literal"><span class="pre">String</span></tt> Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <tt class="docutils literal"><span class="pre">return</span></tt> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#id1">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#for-loops-and-comprehensions">For Loops and Comprehensions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#tuple-types">Tuple Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#case-study-rational">Case Study: Rational</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-arrays">Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#constructing-distributed-arrays">Constructing Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-array-operations">Distributed Array Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays-experimental">Shared Arrays (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#passing-pointers-for-modifying-inputs">Passing Pointers for Modifying Inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#passing-julia-callback-functions-to-c">Passing Julia Callback Functions to C</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#handling-platform-variations">Handling Platform Variations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#tagging-package-versions">Tagging Package Versions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <tt class="docutils literal"><span class="pre">&#64;time</span></tt> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <cite>!</cite> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#try-to-avoid-nullable-fields">Try to avoid nullable fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <tt class="docutils literal"><span class="pre">base/</span></tt></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <tt class="docutils literal"><span class="pre">x-&gt;f(x)</span></tt></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#id1">Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#distributed-arrays">Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays-experimental-unix-only-feature">Shared Arrays (Experimental, UNIX-only feature)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/graphics/">Graphics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/graphics/#geometry">Geometry</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Control Flow</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/control-flow.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="control-flow">
+<span id="man-control-flow"></span><h1>Control Flow<a class="headerlink" href="#control-flow" title="Permalink to this headline">¶</a></h1>
+<p>Julia provides a variety of control flow constructs:</p>
+<ul class="simple">
+<li><a class="reference internal" href="#man-compound-expressions"><em>Compound Expressions</em></a>: <tt class="docutils literal"><span class="pre">begin</span></tt> and <tt class="docutils literal"><span class="pre">(;)</span></tt>.</li>
+<li><a class="reference internal" href="#man-conditional-evaluation"><em>Conditional Evaluation</em></a>:
+<tt class="docutils literal"><span class="pre">if</span></tt>-<tt class="docutils literal"><span class="pre">elseif</span></tt>-<tt class="docutils literal"><span class="pre">else</span></tt> and <tt class="docutils literal"><span class="pre">?:</span></tt> (ternary operator).</li>
+<li><a class="reference internal" href="#man-short-circuit-evaluation"><em>Short-Circuit Evaluation</em></a>:
+<tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt>, <tt class="docutils literal"><span class="pre">||</span></tt> and chained comparisons.</li>
+<li><a class="reference internal" href="#man-loops"><em>Repeated Evaluation: Loops</em></a>: <tt class="docutils literal"><span class="pre">while</span></tt> and <tt class="docutils literal"><span class="pre">for</span></tt>.</li>
+<li><a class="reference internal" href="#man-exception-handling"><em>Exception Handling</em></a>:
+<tt class="docutils literal"><span class="pre">try</span></tt>-<tt class="docutils literal"><span class="pre">catch</span></tt>, <a class="reference internal" href="../../stdlib/base/#Base.error" title="Base.error"><tt class="xref jl jl-func docutils literal"><span class="pre">error()</span></tt></a> and <a class="reference internal" href="../../stdlib/base/#Base.throw" title="Base.throw"><tt class="xref jl jl-func docutils literal"><span class="pre">throw()</span></tt></a>.</li>
+<li><a class="reference internal" href="#man-tasks"><em>Tasks (aka Coroutines)</em></a>: <a class="reference internal" href="../../stdlib/parallel/#Base.yieldto" title="Base.yieldto"><tt class="xref jl jl-func docutils literal"><span class="pre">yieldto()</span></tt></a>.</li>
+</ul>
+<p>The first five control flow mechanisms are standard to high-level
+programming languages. <a class="reference internal" href="../../stdlib/parallel/#Base.Task" title="Base.Task"><tt class="xref jl jl-class docutils literal"><span class="pre">Task</span></tt></a>s are not so standard: they provide non-local
+control flow, making it possible to switch between temporarily-suspended
+computations. This is a powerful construct: both exception handling and
+cooperative multitasking are implemented in Julia using tasks. Everyday
+programming requires no direct usage of tasks, but certain problems can
+be solved much more easily by using tasks.</p>
+<div class="section" id="compound-expressions">
+<span id="man-compound-expressions"></span><h2>Compound Expressions<a class="headerlink" href="#compound-expressions" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes it is convenient to have a single expression which evaluates
+several subexpressions in order, returning the value of the last
+subexpression as its value. There are two Julia constructs that
+accomplish this: <tt class="docutils literal"><span class="pre">begin</span></tt> blocks and <tt class="docutils literal"><span class="pre">(;)</span></tt> chains. The value of both
+compound expression constructs is that of the last subexpression. Here&#8217;s
+an example of a <tt class="docutils literal"><span class="pre">begin</span></tt> block:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span> <span class="o">=</span> <span class="k">begin</span>
+         <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
+         <span class="n">y</span> <span class="o">=</span> <span class="mi">2</span>
+         <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
+       <span class="k">end</span>
+<span class="mi">3</span>
+</pre></div>
+</div>
+<p>Since these are fairly small, simple expressions, they could easily be
+placed onto a single line, which is where the <tt class="docutils literal"><span class="pre">(;)</span></tt> chain syntax comes
+in handy:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span><span class="p">)</span>
+<span class="mi">3</span>
+</pre></div>
+</div>
+<p>This syntax is particularly useful with the terse single-line function
+definition form introduced in <a class="reference internal" href="../functions/#man-functions"><em>Functions</em></a>. Although it
+is typical, there is no requirement that <tt class="docutils literal"><span class="pre">begin</span></tt> blocks be multiline
+or that <tt class="docutils literal"><span class="pre">(;)</span></tt> chains be single-line:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">begin</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="k">end</span>
+<span class="mi">3</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+        <span class="n">x</span> <span class="o">+</span> <span class="n">y</span><span class="p">)</span>
+<span class="mi">3</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="conditional-evaluation">
+<span id="man-conditional-evaluation"></span><h2>Conditional Evaluation<a class="headerlink" href="#conditional-evaluation" title="Permalink to this headline">¶</a></h2>
+<p>Conditional evaluation allows portions of code to be evaluated or not
+evaluated depending on the value of a boolean expression. Here is the
+anatomy of the <tt class="docutils literal"><span class="pre">if</span></tt>-<tt class="docutils literal"><span class="pre">elseif</span></tt>-<tt class="docutils literal"><span class="pre">else</span></tt> conditional syntax:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span>
+  <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is less than y&quot;</span><span class="p">)</span>
+<span class="k">elseif</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span>
+  <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is greater than y&quot;</span><span class="p">)</span>
+<span class="k">else</span>
+  <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is equal to y&quot;</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>If the condition expression <tt class="docutils literal"><span class="pre">x</span> <span class="pre">&lt;</span> <span class="pre">y</span></tt> is <tt class="docutils literal"><span class="pre">true</span></tt>, then the corresponding block
+is evaluated; otherwise the condition expression <tt class="docutils literal"><span class="pre">x</span> <span class="pre">&gt;</span> <span class="pre">y</span></tt> is evaluated, and if
+it is <tt class="docutils literal"><span class="pre">true</span></tt>, the corresponding block is evaluated; if neither expression is
+true, the <tt class="docutils literal"><span class="pre">else</span></tt> block is evaluated. Here it is in action:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span>
+           <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is less than y&quot;</span><span class="p">)</span>
+         <span class="k">elseif</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span>
+           <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is greater than y&quot;</span><span class="p">)</span>
+         <span class="k">else</span>
+           <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is equal to y&quot;</span><span class="p">)</span>
+         <span class="k">end</span>
+       <span class="k">end</span>
+<span class="n">test</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">x</span> <span class="nb">is</span> <span class="n">less</span> <span class="n">than</span> <span class="n">y</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">x</span> <span class="nb">is</span> <span class="n">greater</span> <span class="n">than</span> <span class="n">y</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">x</span> <span class="nb">is</span> <span class="n">equal</span> <span class="n">to</span> <span class="n">y</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">elseif</span></tt> and <tt class="docutils literal"><span class="pre">else</span></tt> blocks are optional, and as many <tt class="docutils literal"><span class="pre">elseif</span></tt>
+blocks as desired can be used. The condition expressions in the
+<tt class="docutils literal"><span class="pre">if</span></tt>-<tt class="docutils literal"><span class="pre">elseif</span></tt>-<tt class="docutils literal"><span class="pre">else</span></tt> construct are evaluated until the first one
+evaluates to <tt class="docutils literal"><span class="pre">true</span></tt>, after which the associated block is evaluated,
+and no further condition expressions or blocks are evaluated.</p>
+<p><tt class="docutils literal"><span class="pre">if</span></tt> blocks are &#8220;leaky&#8221;, i.e. they do not introduce a local scope.
+This means that new variables defined inside the <tt class="docutils literal"><span class="pre">ìf</span></tt> clauses can
+be used after the <tt class="docutils literal"><span class="pre">if</span></tt> block, even if they weren&#8217;t defined before.
+So, we could have defined the <tt class="docutils literal"><span class="pre">test</span></tt> function above as</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span>
+           <span class="n">relation</span> <span class="o">=</span> <span class="s">&quot;less than&quot;</span>
+         <span class="k">elseif</span> <span class="n">x</span> <span class="o">==</span> <span class="n">y</span>
+           <span class="n">relation</span> <span class="o">=</span> <span class="s">&quot;equal to&quot;</span>
+         <span class="k">else</span>
+           <span class="n">relation</span> <span class="o">=</span> <span class="s">&quot;greater than&quot;</span>
+         <span class="k">end</span>
+         <span class="n">println</span><span class="p">(</span><span class="s">&quot;x is &quot;</span><span class="p">,</span> <span class="n">relation</span><span class="p">,</span> <span class="s">&quot; than y.&quot;</span><span class="p">)</span>
+       <span class="k">end</span><span class="p">;</span>
+</pre></div>
+</div>
+<p><tt class="docutils literal"><span class="pre">if</span></tt> blocks also return a value, which may seem unintuitive to users
+coming from many other languages. This value is simply the return value
+of the last executed statement in the branch that was chosen, so</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="mi">3</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mi">0</span>
+         <span class="s">&quot;positive!&quot;</span>
+       <span class="k">else</span>
+         <span class="s">&quot;negative...&quot;</span>
+       <span class="k">end</span>
+<span class="s">&quot;positive!&quot;</span>
+</pre></div>
+</div>
+<p>Note that very short conditional statements (one-liners) are frequently expressed using
+Short-Circuit Evaluation in Julia, as outlined in the next section.</p>
+<p>Unlike C, MATLAB, Perl, Python, and Ruby — but like Java, and a few
+other stricter, typed languages — it is an error if the value of a
+conditional expression is anything but <tt class="docutils literal"><span class="pre">true</span></tt> or <tt class="docutils literal"><span class="pre">false</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">if</span> <span class="mi">1</span>
+         <span class="n">println</span><span class="p">(</span><span class="s">&quot;true&quot;</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">non</span><span class="o">-</span><span class="n">boolean</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">used</span> <span class="k">in</span> <span class="n">boolean</span> <span class="n">context</span>
+</pre></div>
+</div>
+<p>This error indicates that the conditional was of the wrong type:
+<tt class="docutils literal"><span class="pre">Int64</span></tt> rather than the required <tt class="docutils literal"><span class="pre">Bool</span></tt>.</p>
+<p>The so-called &#8220;ternary operator&#8221;, <tt class="docutils literal"><span class="pre">?:</span></tt>, is closely related to the
+<tt class="docutils literal"><span class="pre">if</span></tt>-<tt class="docutils literal"><span class="pre">elseif</span></tt>-<tt class="docutils literal"><span class="pre">else</span></tt> syntax, but is used where a conditional
+choice between single expression values is required, as opposed to
+conditional execution of longer blocks of code. It gets its name from
+being the only operator in most languages taking three operands:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">?</span> <span class="n">b</span> <span class="p">:</span> <span class="n">c</span>
+</pre></div>
+</div>
+<p>The expression <tt class="docutils literal"><span class="pre">a</span></tt>, before the <tt class="docutils literal"><span class="pre">?</span></tt>, is a condition expression, and
+the ternary operation evaluates the expression <tt class="docutils literal"><span class="pre">b</span></tt>, before the <tt class="docutils literal"><span class="pre">:</span></tt>,
+if the condition <tt class="docutils literal"><span class="pre">a</span></tt> is <tt class="docutils literal"><span class="pre">true</span></tt> or the expression <tt class="docutils literal"><span class="pre">c</span></tt>, after the
+<tt class="docutils literal"><span class="pre">:</span></tt>, if it is <tt class="docutils literal"><span class="pre">false</span></tt>.</p>
+<p>The easiest way to understand this behavior is to see an example. In the
+previous example, the <tt class="docutils literal"><span class="pre">println</span></tt> call is shared by all three branches:
+the only real choice is which literal string to print. This could be
+written more concisely using the ternary operator. For the sake of
+clarity, let&#8217;s try a two-way version first:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;less than&quot;</span> <span class="p">:</span> <span class="s">&quot;not less than&quot;</span><span class="p">)</span>
+<span class="n">less</span> <span class="n">than</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;less than&quot;</span> <span class="p">:</span> <span class="s">&quot;not less than&quot;</span><span class="p">)</span>
+<span class="n">not</span> <span class="n">less</span> <span class="n">than</span>
+</pre></div>
+</div>
+<p>If the expression <tt class="docutils literal"><span class="pre">x</span> <span class="pre">&lt;</span> <span class="pre">y</span></tt> is true, the entire ternary operator
+expression evaluates to the string <tt class="docutils literal"><span class="pre">&quot;less</span> <span class="pre">than&quot;</span></tt> and otherwise it
+evaluates to the string <tt class="docutils literal"><span class="pre">&quot;not</span> <span class="pre">less</span> <span class="pre">than&quot;</span></tt>. The original three-way
+example requires chaining multiple uses of the ternary operator
+together:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">println</span><span class="p">(</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;x is less than y&quot;</span>    <span class="p">:</span>
+                            <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span> <span class="o">?</span> <span class="s">&quot;x is greater than y&quot;</span> <span class="p">:</span> <span class="s">&quot;x is equal to y&quot;</span><span class="p">)</span>
+<span class="n">test</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">x</span> <span class="nb">is</span> <span class="n">less</span> <span class="n">than</span> <span class="n">y</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">x</span> <span class="nb">is</span> <span class="n">greater</span> <span class="n">than</span> <span class="n">y</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">test</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">x</span> <span class="nb">is</span> <span class="n">equal</span> <span class="n">to</span> <span class="n">y</span>
+</pre></div>
+</div>
+<p>To facilitate chaining, the operator associates from right to left.</p>
+<p>It is significant that like <tt class="docutils literal"><span class="pre">if</span></tt>-<tt class="docutils literal"><span class="pre">elseif</span></tt>-<tt class="docutils literal"><span class="pre">else</span></tt>, the expressions
+before and after the <tt class="docutils literal"><span class="pre">:</span></tt> are only evaluated if the condition
+expression evaluates to <tt class="docutils literal"><span class="pre">true</span></tt> or <tt class="docutils literal"><span class="pre">false</span></tt>, respectively:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">v</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="o">?</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;yes&quot;</span><span class="p">)</span> <span class="p">:</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;no&quot;</span><span class="p">)</span>
+<span class="n">yes</span>
+<span class="s">&quot;yes&quot;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">?</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;yes&quot;</span><span class="p">)</span> <span class="p">:</span> <span class="n">v</span><span class="p">(</span><span class="s">&quot;no&quot;</span><span class="p">)</span>
+<span class="n">no</span>
+<span class="s">&quot;no&quot;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="short-circuit-evaluation">
+<span id="man-short-circuit-evaluation"></span><h2>Short-Circuit Evaluation<a class="headerlink" href="#short-circuit-evaluation" title="Permalink to this headline">¶</a></h2>
+<p>Short-circuit evaluation is quite similar to conditional evaluation. The
+behavior is found in most imperative programming languages having the
+<tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt> and <tt class="docutils literal"><span class="pre">||</span></tt> boolean operators: in a series of boolean expressions
+connected by these operators, only the minimum number of expressions are
+evaluated as are necessary to determine the final boolean value of the
+entire chain. Explicitly, this means that:</p>
+<ul class="simple">
+<li>In the expression <tt class="docutils literal"><span class="pre">a</span> <span class="pre">&amp;&amp;</span> <span class="pre">b</span></tt>, the subexpression <tt class="docutils literal"><span class="pre">b</span></tt> is only
+evaluated if <tt class="docutils literal"><span class="pre">a</span></tt> evaluates to <tt class="docutils literal"><span class="pre">true</span></tt>.</li>
+<li>In the expression <tt class="docutils literal"><span class="pre">a</span> <span class="pre">||</span> <span class="pre">b</span></tt>, the subexpression <tt class="docutils literal"><span class="pre">b</span></tt> is only
+evaluated if <tt class="docutils literal"><span class="pre">a</span></tt> evaluates to <tt class="docutils literal"><span class="pre">false</span></tt>.</li>
+</ul>
+<p>The reasoning is that <tt class="docutils literal"><span class="pre">a</span> <span class="pre">&amp;&amp;</span> <span class="pre">b</span></tt> must be <tt class="docutils literal"><span class="pre">false</span></tt> if <tt class="docutils literal"><span class="pre">a</span></tt> is
+<tt class="docutils literal"><span class="pre">false</span></tt>, regardless of the value of <tt class="docutils literal"><span class="pre">b</span></tt>, and likewise, the value of
+<tt class="docutils literal"><span class="pre">a</span> <span class="pre">||</span> <span class="pre">b</span></tt> must be true if <tt class="docutils literal"><span class="pre">a</span></tt> is <tt class="docutils literal"><span class="pre">true</span></tt>, regardless of the value of
+<tt class="docutils literal"><span class="pre">b</span></tt>. Both <tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt> and <tt class="docutils literal"><span class="pre">||</span></tt> associate to the right, but <tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt> has
+higher precedence than <tt class="docutils literal"><span class="pre">||</span></tt> does. It&#8217;s easy to experiment with
+this behavior:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="n">true</span><span class="p">)</span>
+<span class="n">t</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="n">false</span><span class="p">)</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">||</span> <span class="n">f</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>You can easily experiment in the same way with the associativity and
+precedence of various combinations of <tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt> and <tt class="docutils literal"><span class="pre">||</span></tt> operators.</p>
+<p>This behavior is frequently used in Julia to form an alternative to very short
+<tt class="docutils literal"><span class="pre">if</span></tt> statements. Instead of <tt class="docutils literal"><span class="pre">if</span> <span class="pre">&lt;cond&gt;</span> <span class="pre">&lt;statement&gt;</span> <span class="pre">end</span></tt>, one can write
+<tt class="docutils literal"><span class="pre">&lt;cond&gt;</span> <span class="pre">&amp;&amp;</span> <span class="pre">&lt;statement&gt;</span></tt> (which could be read as: &lt;cond&gt; <em>and then</em> &lt;statement&gt;).
+Similarly, instead of <tt class="docutils literal"><span class="pre">if</span> <span class="pre">!</span> <span class="pre">&lt;cond&gt;</span> <span class="pre">&lt;statement&gt;</span> <span class="pre">end</span></tt>, one can write
+<tt class="docutils literal"><span class="pre">&lt;cond&gt;</span> <span class="pre">||</span> <span class="pre">&lt;statement&gt;</span></tt> (which could be read as: &lt;cond&gt; <em>or else</em> &lt;statement&gt;).</p>
+<p>For example, a recursive factorial routine could be defined like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> factorial</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>
+           <span class="n">n</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">||</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;n must be non-negative&quot;</span><span class="p">)</span>
+           <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="k">return</span> <span class="mi">1</span>
+           <span class="n">n</span> <span class="o">*</span> <span class="n">factorial</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="n">factorial</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">factorial</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+<span class="mi">120</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">factorial</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="mi">1</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">factorial</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">n</span> <span class="n">must</span> <span class="n">be</span> <span class="n">non</span><span class="o">-</span><span class="n">negative</span>
+ <span class="k">in</span> <span class="n">factorial</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">2</span>
+</pre></div>
+</div>
+<p>Boolean operations <em>without</em> short-circuit evaluation can be done with the
+bitwise boolean operators introduced in <a class="reference internal" href="../mathematical-operations/#man-mathematical-operations"><em>Mathematical Operations and Elementary Functions</em></a>:
+<tt class="docutils literal"><span class="pre">&amp;</span></tt> and <tt class="docutils literal"><span class="pre">|</span></tt>. These are normal functions, which happen to support
+infix operator syntax, but always evaluate their arguments:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">|</span> <span class="n">t</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>Just like condition expressions used in <tt class="docutils literal"><span class="pre">if</span></tt>, <tt class="docutils literal"><span class="pre">elseif</span></tt> or the
+ternary operator, the operands of <tt class="docutils literal"><span class="pre">&amp;&amp;</span></tt> or <tt class="docutils literal"><span class="pre">||</span></tt> must be boolean
+values (<tt class="docutils literal"><span class="pre">true</span></tt> or <tt class="docutils literal"><span class="pre">false</span></tt>). Using a non-boolean value anywhere
+except for the last entry in a conditional chain is an error:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="n">true</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">non</span><span class="o">-</span><span class="n">boolean</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">used</span> <span class="k">in</span> <span class="n">boolean</span> <span class="n">context</span>
+</pre></div>
+</div>
+<p>On the other hand, any type of expression can be used at the end of a conditional chain.
+It will be evaluated and returned depending on the preceding conditionals:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">true</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+<span class="mi">2</span><span class="n">x2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+ <span class="mf">0.768448</span>  <span class="mf">0.673959</span>
+ <span class="mf">0.940515</span>  <span class="mf">0.395453</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">false</span> <span class="o">&amp;&amp;</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="repeated-evaluation-loops">
+<span id="man-loops"></span><h2>Repeated Evaluation: Loops<a class="headerlink" href="#repeated-evaluation-loops" title="Permalink to this headline">¶</a></h2>
+<p>There are two constructs for repeated evaluation of expressions: the
+<tt class="docutils literal"><span class="pre">while</span></tt> loop and the <tt class="docutils literal"><span class="pre">for</span></tt> loop. Here is an example of a <tt class="docutils literal"><span class="pre">while</span></tt>
+loop:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="mi">5</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+         <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+       <span class="k">end</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="mi">3</span>
+<span class="mi">4</span>
+<span class="mi">5</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">while</span></tt> loop evaluates the condition expression (<tt class="docutils literal"><span class="pre">i</span> <span class="pre">&lt;=</span> <span class="pre">5</span></tt> in this
+case), and as long it remains <tt class="docutils literal"><span class="pre">true</span></tt>, keeps also evaluating the body
+of the <tt class="docutils literal"><span class="pre">while</span></tt> loop. If the condition expression is <tt class="docutils literal"><span class="pre">false</span></tt> when the
+<tt class="docutils literal"><span class="pre">while</span></tt> loop is first reached, the body is never evaluated.</p>
+<p>The <tt class="docutils literal"><span class="pre">for</span></tt> loop makes common repeated evaluation idioms easier to
+write. Since counting up and down like the above <tt class="docutils literal"><span class="pre">while</span></tt> loop does is
+so common, it can be expressed more concisely with a <tt class="docutils literal"><span class="pre">for</span></tt> loop:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">5</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="mi">3</span>
+<span class="mi">4</span>
+<span class="mi">5</span>
+</pre></div>
+</div>
+<p>Here the <tt class="docutils literal"><span class="pre">1:5</span></tt> is a <tt class="docutils literal"><span class="pre">Range</span></tt> object, representing the sequence of
+numbers 1, 2, 3, 4, 5. The <tt class="docutils literal"><span class="pre">for</span></tt> loop iterates through these values,
+assigning each one in turn to the variable <tt class="docutils literal"><span class="pre">i</span></tt>. One rather important
+distinction between the previous <tt class="docutils literal"><span class="pre">while</span></tt> loop form and the <tt class="docutils literal"><span class="pre">for</span></tt>
+loop form is the scope during which the variable is visible. If the
+variable <tt class="docutils literal"><span class="pre">i</span></tt> has not been introduced in an other scope, in the <tt class="docutils literal"><span class="pre">for</span></tt>
+loop form, it is visible only inside of the <tt class="docutils literal"><span class="pre">for</span></tt> loop, and not
+afterwards. You&#8217;ll either need a new interactive session instance or a
+different variable name to test this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">5</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="mi">3</span>
+<span class="mi">4</span>
+<span class="mi">5</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">j</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">j</span> <span class="n">not</span> <span class="n">defined</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="../variables-and-scoping/#man-variables-and-scoping"><em>Scope of Variables</em></a> for a detailed
+explanation of variable scope and how it works in Julia.</p>
+<p>In general, the <tt class="docutils literal"><span class="pre">for</span></tt> loop construct can iterate over any container.
+In these cases, the alternative (but fully equivalent) keyword <tt class="docutils literal"><span class="pre">in</span></tt> is
+typically used instead of <tt class="docutils literal"><span class="pre">=</span></tt>, since it makes the code read more
+clearly:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">0</span><span class="p">]</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="mi">1</span>
+<span class="mi">4</span>
+<span class="mi">0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">s</span> <span class="k">in</span> <span class="p">[</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="s">&quot;bar&quot;</span><span class="p">,</span><span class="s">&quot;baz&quot;</span><span class="p">]</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="n">foo</span>
+<span class="n">bar</span>
+<span class="n">baz</span>
+</pre></div>
+</div>
+<p>Various types of iterable containers will be introduced and discussed in
+later sections of the manual (see, e.g., <a class="reference internal" href="../arrays/#man-arrays"><em>Multi-dimensional Arrays</em></a>).</p>
+<p>It is sometimes convenient to terminate the repetition of a <tt class="docutils literal"><span class="pre">while</span></tt>
+before the test condition is falsified or stop iterating in a <tt class="docutils literal"><span class="pre">for</span></tt>
+loop before the end of the iterable object is reached. This can be
+accomplished with the <tt class="docutils literal"><span class="pre">break</span></tt> keyword:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">while</span> <span class="n">true</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="mi">5</span>
+           <span class="k">break</span>
+         <span class="k">end</span>
+         <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+       <span class="k">end</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="mi">3</span>
+<span class="mi">4</span>
+<span class="mi">5</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">1000</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+         <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;=</span> <span class="mi">5</span>
+           <span class="k">break</span>
+         <span class="k">end</span>
+       <span class="k">end</span>
+<span class="mi">1</span>
+<span class="mi">2</span>
+<span class="mi">3</span>
+<span class="mi">4</span>
+<span class="mi">5</span>
+</pre></div>
+</div>
+<p>The above <tt class="docutils literal"><span class="pre">while</span></tt> loop would never terminate on its own, and the
+<tt class="docutils literal"><span class="pre">for</span></tt> loop would iterate up to 1000. These loops are both exited early
+by using the <tt class="docutils literal"><span class="pre">break</span></tt> keyword.</p>
+<p>In other circumstances, it is handy to be able to stop an iteration and
+move on to the next one immediately. The <tt class="docutils literal"><span class="pre">continue</span></tt> keyword
+accomplishes this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+         <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">!=</span> <span class="mi">0</span>
+           <span class="k">continue</span>
+         <span class="k">end</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="mi">3</span>
+<span class="mi">6</span>
+<span class="mi">9</span>
+</pre></div>
+</div>
+<p>This is a somewhat contrived example since we could produce the same
+behavior more clearly by negating the condition and placing the
+<tt class="docutils literal"><span class="pre">println</span></tt> call inside the <tt class="docutils literal"><span class="pre">if</span></tt> block. In realistic usage there is
+more code to be evaluated after the <tt class="docutils literal"><span class="pre">continue</span></tt>, and often there are
+multiple points from which one calls <tt class="docutils literal"><span class="pre">continue</span></tt>.</p>
+<p>Multiple nested <tt class="docutils literal"><span class="pre">for</span></tt> loops can be combined into a single outer loop,
+forming the cartesian product of its iterables:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">3</span><span class="p">:</span><span class="mi">4</span>
+         <span class="n">println</span><span class="p">((</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span>
+       <span class="k">end</span>
+<span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+<span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A <tt class="docutils literal"><span class="pre">break</span></tt> statement inside such a loop exits the entire nest of loops,
+not just the inner one.</p>
+</div>
+<div class="section" id="exception-handling">
+<span id="man-exception-handling"></span><h2>Exception Handling<a class="headerlink" href="#exception-handling" title="Permalink to this headline">¶</a></h2>
+<p>When an unexpected condition occurs, a function may be unable to return
+a reasonable value to its caller. In such cases, it may be best for the
+exceptional condition to either terminate the program, printing a
+diagnostic error message, or if the programmer has provided code to
+handle such exceptional circumstances, allow that code to take the
+appropriate action.</p>
+<div class="section" id="built-in-exceptions">
+<h3>Built-in <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt>s<a class="headerlink" href="#built-in-exceptions" title="Permalink to this headline">¶</a></h3>
+<p><tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt>s are thrown when an unexpected condition has occurred. The
+built-in <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt>s listed below all interrupt the normal flow of control.</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="100%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head"><tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt></th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><a class="reference internal" href="../../stdlib/base/#Base.ArgumentError" title="Base.ArgumentError"><tt class="xref jl jl-exc docutils literal"><span class="pre">ArgumentError</span></tt></a></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../../stdlib/base/#Base.BoundsError" title="Base.BoundsError"><tt class="xref jl jl-exc docutils literal"><span class="pre">BoundsError</span></tt></a></td>
+</tr>
+<tr class="row-even"><td><tt class="xref jl jl-exc docutils literal"><span class="pre">DivideError</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="xref jl jl-exc docutils literal"><span class="pre">DomainError</span></tt></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../../stdlib/base/#Base.EOFError" title="Base.EOFError"><tt class="xref jl jl-exc docutils literal"><span class="pre">EOFError</span></tt></a></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../../stdlib/base/#Base.ErrorException" title="Base.ErrorException"><tt class="xref jl jl-exc docutils literal"><span class="pre">ErrorException</span></tt></a></td>
+</tr>
+<tr class="row-even"><td><tt class="xref jl jl-exc docutils literal"><span class="pre">InexactError</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="xref jl jl-exc docutils literal"><span class="pre">InterruptException</span></tt></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../../stdlib/base/#Base.KeyError" title="Base.KeyError"><tt class="xref jl jl-exc docutils literal"><span class="pre">KeyError</span></tt></a></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../../stdlib/base/#Base.LoadError" title="Base.LoadError"><tt class="xref jl jl-exc docutils literal"><span class="pre">LoadError</span></tt></a></td>
+</tr>
+<tr class="row-even"><td><tt class="xref jl jl-exc docutils literal"><span class="pre">MemoryError</span></tt></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../../stdlib/base/#Base.MethodError" title="Base.MethodError"><tt class="xref jl jl-exc docutils literal"><span class="pre">MethodError</span></tt></a></td>
+</tr>
+<tr class="row-even"><td><tt class="xref jl jl-exc docutils literal"><span class="pre">OverflowError</span></tt></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../../stdlib/base/#Base.ParseError" title="Base.ParseError"><tt class="xref jl jl-exc docutils literal"><span class="pre">ParseError</span></tt></a></td>
+</tr>
+<tr class="row-even"><td><a class="reference internal" href="../../stdlib/base/#Base.SystemError" title="Base.SystemError"><tt class="xref jl jl-exc docutils literal"><span class="pre">SystemError</span></tt></a></td>
+</tr>
+<tr class="row-odd"><td><a class="reference internal" href="../../stdlib/base/#Base.TypeError" title="Base.TypeError"><tt class="xref jl jl-exc docutils literal"><span class="pre">TypeError</span></tt></a></td>
+</tr>
+<tr class="row-even"><td><tt class="xref jl jl-exc docutils literal"><span class="pre">UndefRefError</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="xref jl jl-exc docutils literal"><span class="pre">UndefVarError</span></tt></td>
+</tr>
+</tbody>
+</table>
+<p>For example, the <a class="reference internal" href="../../stdlib/math/#Base.sqrt" title="Base.sqrt"><tt class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></tt></a> function throws a <tt class="xref jl jl-exc docutils literal"><span class="pre">DomainError</span></tt> if applied to a
+negative real value:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span>
+<span class="n">sqrt</span> <span class="n">will</span> <span class="n">only</span> <span class="k">return</span> <span class="n">a</span> <span class="n">complex</span> <span class="n">result</span> <span class="k">if</span> <span class="n">called</span> <span class="n">with</span> <span class="n">a</span> <span class="n">complex</span> <span class="n">argument</span><span class="o">.</span>
+<span class="k">try</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">complex</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+ <span class="k">in</span> <span class="n">sqrt</span> <span class="n">at</span> <span class="n">math</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">133</span>
+</pre></div>
+</div>
+<p>You may define your own exceptions in the following way:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> MyCustomException</span> <span class="o">&lt;:</span> <span class="n">Exception</span> <span class="k">end</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-throw-function">
+<h3>The <a class="reference internal" href="../../stdlib/base/#Base.throw" title="Base.throw"><tt class="xref jl jl-func docutils literal"><span class="pre">throw()</span></tt></a> function<a class="headerlink" href="#the-throw-function" title="Permalink to this headline">¶</a></h3>
+<p>Exceptions can be created explicitly with <a class="reference internal" href="../../stdlib/base/#Base.throw" title="Base.throw"><tt class="xref jl jl-func docutils literal"><span class="pre">throw()</span></tt></a>. For example, a function
+defined only for nonnegative numbers could be written to <a class="reference internal" href="../../stdlib/base/#Base.throw" title="Base.throw"><tt class="xref jl jl-func docutils literal"><span class="pre">throw()</span></tt></a> a <tt class="xref jl jl-exc docutils literal"><span class="pre">DomainError</span></tt>
+if the argument is negative:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">&gt;=</span><span class="mi">0</span> <span class="o">?</span> <span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">)</span> <span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">DomainError</span><span class="p">())</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="mf">0.36787944117144233</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span>
+ <span class="k">in</span> <span class="n">f</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>Note that <tt class="xref jl jl-exc docutils literal"><span class="pre">DomainError</span></tt> without parentheses is not an exception, but a type of
+exception. It needs to be called to obtain an <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt> object:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">DomainError</span><span class="p">())</span> <span class="o">&lt;:</span> <span class="n">Exception</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">DomainError</span><span class="p">)</span> <span class="o">&lt;:</span> <span class="n">Exception</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Additionally, some exception types take one or more arguments that are used for
+error reporting:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">throw</span><span class="p">(</span><span class="n">UndefVarError</span><span class="p">(:</span><span class="n">x</span><span class="p">))</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
+</pre></div>
+</div>
+<p>This mechanism can be implemented easily by custom exception types following
+the way <tt class="xref jl jl-exc docutils literal"><span class="pre">UndefVarError</span></tt> is written:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> MyUndefVarError</span> <span class="o">&lt;:</span> <span class="n">Exception</span>
+           <span class="n">var</span><span class="p">::</span><span class="n">Symbol</span>
+       <span class="k">end</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">showerror</span><span class="p">(</span><span class="n">io</span><span class="p">::</span><span class="n">IO</span><span class="p">,</span> <span class="n">e</span><span class="p">::</span><span class="n">MyUndefVarError</span><span class="p">)</span> <span class="o">=</span> <span class="n">print</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">var</span><span class="p">,</span> <span class="s">&quot; not defined&quot;</span><span class="p">);</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="errors">
+<h3>Errors<a class="headerlink" href="#errors" title="Permalink to this headline">¶</a></h3>
+<p>The <a class="reference internal" href="../../stdlib/base/#Base.error" title="Base.error"><tt class="xref jl jl-func docutils literal"><span class="pre">error()</span></tt></a> function is used to produce an <a class="reference internal" href="../../stdlib/base/#Base.ErrorException" title="Base.ErrorException"><tt class="xref jl jl-exc docutils literal"><span class="pre">ErrorException</span></tt></a> that
+interrupts the normal flow of control.</p>
+<p>Suppose we want to stop execution immediately if the square root of a
+negative number is taken. To do this, we can define a fussy version of
+the <a class="reference internal" href="../../stdlib/math/#Base.sqrt" title="Base.sqrt"><tt class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></tt></a> function that raises an error if its argument is negative:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="p">:</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;negative x not allowed&quot;</span><span class="p">)</span>
+<span class="n">fussy_sqrt</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mf">1.4142135623730951</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">negative</span> <span class="n">x</span> <span class="n">not</span> <span class="n">allowed</span>
+ <span class="k">in</span> <span class="n">fussy_sqrt</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>If <tt class="docutils literal"><span class="pre">fussy_sqrt</span></tt> is called with a negative value from another function,
+instead of trying to continue execution of the calling function, it
+returns immediately, displaying the error message in the interactive
+session:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> verbose_fussy_sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+         <span class="n">println</span><span class="p">(</span><span class="s">&quot;before fussy_sqrt&quot;</span><span class="p">)</span>
+         <span class="n">r</span> <span class="o">=</span> <span class="n">fussy_sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+         <span class="n">println</span><span class="p">(</span><span class="s">&quot;after fussy_sqrt&quot;</span><span class="p">)</span>
+         <span class="k">return</span> <span class="n">r</span>
+       <span class="k">end</span>
+<span class="n">verbose_fussy_sqrt</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">verbose_fussy_sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">before</span> <span class="n">fussy_sqrt</span>
+<span class="n">after</span> <span class="n">fussy_sqrt</span>
+<span class="mf">1.4142135623730951</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">verbose_fussy_sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">before</span> <span class="n">fussy_sqrt</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">negative</span> <span class="n">x</span> <span class="n">not</span> <span class="n">allowed</span>
+ <span class="k">in</span> <span class="n">verbose_fussy_sqrt</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">3</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="warnings-and-informational-messages">
+<h3>Warnings and informational messages<a class="headerlink" href="#warnings-and-informational-messages" title="Permalink to this headline">¶</a></h3>
+<p>Julia also provides other functions that write messages to the standard error
+I/O, but do not throw any <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt>s and hence do not interrupt
+execution.:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">info</span><span class="p">(</span><span class="s">&quot;Hi&quot;</span><span class="p">);</span> <span class="mi">1</span><span class="o">+</span><span class="mi">1</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Hi</span>
+<span class="mi">2</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">warn</span><span class="p">(</span><span class="s">&quot;Hi&quot;</span><span class="p">);</span> <span class="mi">1</span><span class="o">+</span><span class="mi">1</span>
+<span class="n">WARNING</span><span class="p">:</span> <span class="n">Hi</span>
+<span class="mi">2</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;Hi&quot;</span><span class="p">);</span> <span class="mi">1</span><span class="o">+</span><span class="mi">1</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">Hi</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="the-try-catch-statement">
+<h3>The <tt class="docutils literal"><span class="pre">try/catch</span></tt> statement<a class="headerlink" href="#the-try-catch-statement" title="Permalink to this headline">¶</a></h3>
+<p>The <tt class="docutils literal"><span class="pre">try/catch</span></tt> statement allows for <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt>s to be tested for. For
+example, a customized square root function can be written to automatically
+call either the real or complex square root method on demand using
+<tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt>s :</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="k">try</span>
+         <span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+       <span class="k">catch</span>
+         <span class="n">sqrt</span><span class="p">(</span><span class="n">complex</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+       <span class="k">end</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="mf">1.0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="mf">0.0</span> <span class="o">+</span> <span class="mf">1.0</span><span class="nb">im</span>
+</pre></div>
+</div>
+<p>It is important to note that in real code computing this function, one would
+compare <tt class="docutils literal"><span class="pre">x</span></tt> to zero instead of catching an exception. The exception is much
+slower than simply comparing and branching.</p>
+<p><tt class="docutils literal"><span class="pre">try/catch</span></tt> statements also allow the <tt class="xref jl jl-exc docutils literal"><span class="pre">Exception</span></tt> to be saved in a
+variable. In this contrived example, the following example calculates the
+square root of the second element of <tt class="docutils literal"><span class="pre">x</span></tt> if <tt class="docutils literal"><span class="pre">x</span></tt> is indexable, otherwise
+assumes <tt class="docutils literal"><span class="pre">x</span></tt> is a real number and returns its square root:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt_second</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="k">try</span>
+         <span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+       <span class="k">catch</span> <span class="n">y</span>
+         <span class="k">if</span> <span class="nb">isa</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">DomainError</span><span class="p">)</span>
+           <span class="n">sqrt</span><span class="p">(</span><span class="n">complex</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="mi">0</span><span class="p">))</span>
+         <span class="k">elseif</span> <span class="nb">isa</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">BoundsError</span><span class="p">)</span>
+           <span class="n">sqrt</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+         <span class="k">end</span>
+       <span class="k">end</span>
+<span class="n">sqrt_second</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt_second</span><span class="p">([</span><span class="mi">1</span> <span class="mi">4</span><span class="p">])</span>
+<span class="mf">2.0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt_second</span><span class="p">([</span><span class="mi">1</span> <span class="o">-</span><span class="mi">4</span><span class="p">])</span>
+<span class="mf">0.0</span> <span class="o">+</span> <span class="mf">2.0</span><span class="nb">im</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt_second</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
+<span class="mf">3.0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt_second</span><span class="p">(</span><span class="o">-</span><span class="mi">9</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span>
+ <span class="k">in</span> <span class="n">sqrt_second</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">7</span>
+</pre></div>
+</div>
+<p>Note that the symbol following <tt class="docutils literal"><span class="pre">catch</span></tt> will always be interpreted as a
+name for the exception, so care is needed when writing <tt class="docutils literal"><span class="pre">try/catch</span></tt> expressions
+on a single line. The following code will <em>not</em> work to return the value of <tt class="docutils literal"><span class="pre">x</span></tt>
+in case of an error:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">try</span> <span class="n">bad</span><span class="p">()</span> <span class="k">catch</span> <span class="n">x</span> <span class="k">end</span>
+</pre></div>
+</div>
+<p>Instead, use a semicolon or insert a line break after <tt class="docutils literal"><span class="pre">catch</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">try</span> <span class="n">bad</span><span class="p">()</span> <span class="k">catch</span><span class="p">;</span> <span class="n">x</span> <span class="k">end</span>
+
+<span class="k">try</span> <span class="n">bad</span><span class="p">()</span>
+<span class="k">catch</span>
+  <span class="n">x</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">catch</span></tt> clause is not strictly necessary; when omitted, the default
+return value is <tt class="docutils literal"><span class="pre">false</span></tt>. Note that this behavior will change in Julia
+version 0.4, where the return value will instead be <tt class="docutils literal"><span class="pre">nothing</span></tt>.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">try</span> <span class="nb">error</span><span class="p">()</span> <span class="k">end</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>The power of the <tt class="docutils literal"><span class="pre">try/catch</span></tt> construct lies in the ability to unwind a deeply
+nested computation immediately to a much higher level in the stack of calling
+functions. There are situations where no error has occurred, but the ability to
+unwind the stack and pass a value to a higher level is desirable. Julia
+provides the <a class="reference internal" href="../../stdlib/base/#Base.rethrow" title="Base.rethrow"><tt class="xref jl jl-func docutils literal"><span class="pre">rethrow()</span></tt></a>, <a class="reference internal" href="../../stdlib/base/#Base.backtrace" title="Base.backtrace"><tt class="xref jl jl-func docutils literal"><span class="pre">backtrace()</span></tt></a> and <a class="reference internal" href="../../stdlib/base/#Base.catch_backtrace" title="Base.catch_backtrace"><tt class="xref jl jl-func docutils literal"><span class="pre">catch_backtrace()</span></tt></a> functions for
+more advanced error handling.</p>
+</div>
+<div class="section" id="finally-clauses">
+<h3>finally Clauses<a class="headerlink" href="#finally-clauses" title="Permalink to this headline">¶</a></h3>
+<p>In code that performs state changes or uses resources like files, there is
+typically clean-up work (such as closing files) that needs to be done when the
+code is finished. Exceptions potentially complicate this task, since they can
+cause a block of code to exit before reaching its normal end. The <tt class="docutils literal"><span class="pre">finally</span></tt>
+keyword provides a way to run some code when a given block of code exits,
+regardless of how it exits.</p>
+<p>For example, here is how we can guarantee that an opened file is closed:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">f</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;file&quot;</span><span class="p">)</span>
+<span class="k">try</span>
+    <span class="c"># operate on file f</span>
+<span class="n">finally</span>
+    <span class="n">close</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>When control leaves the <tt class="docutils literal"><span class="pre">try</span></tt> block (for example due to a <tt class="docutils literal"><span class="pre">return</span></tt>, or
+just finishing normally), <tt class="docutils literal"><span class="pre">close(f)</span></tt> will be executed. If
+the <tt class="docutils literal"><span class="pre">try</span></tt> block exits due to an exception, the exception will continue
+propagating. A <tt class="docutils literal"><span class="pre">catch</span></tt> block may be combined with <tt class="docutils literal"><span class="pre">try</span></tt> and <tt class="docutils literal"><span class="pre">finally</span></tt>
+as well. In this case the <tt class="docutils literal"><span class="pre">finally</span></tt> block will run after <tt class="docutils literal"><span class="pre">catch</span></tt> has
+handled the error.</p>
+</div>
+</div>
+<div class="section" id="tasks-aka-coroutines">
+<span id="man-tasks"></span><h2>Tasks (aka Coroutines)<a class="headerlink" href="#tasks-aka-coroutines" title="Permalink to this headline">¶</a></h2>
+<p>Tasks are a control flow feature that allows computations to be
+suspended and resumed in a flexible manner. This feature is sometimes
+called by other names, such as symmetric coroutines, lightweight
+threads, cooperative multitasking, or one-shot continuations.</p>
+<p>When a piece of computing work (in practice, executing a particular
+function) is designated as a <a class="reference internal" href="../../stdlib/parallel/#Base.Task" title="Base.Task"><tt class="xref jl jl-class docutils literal"><span class="pre">Task</span></tt></a>, it becomes possible to interrupt
+it by switching to another <a class="reference internal" href="../../stdlib/parallel/#Base.Task" title="Base.Task"><tt class="xref jl jl-class docutils literal"><span class="pre">Task</span></tt></a>. The original <a class="reference internal" href="../../stdlib/parallel/#Base.Task" title="Base.Task"><tt class="xref jl jl-class docutils literal"><span class="pre">Task</span></tt></a> can later be
+resumed, at which point it will pick up right where it left off. At
+first, this may seem similar to a function call. However there are two
+key differences. First, switching tasks does not use any space, so any
+number of task switches can occur without consuming the call stack.
+Second, switching among tasks can occur in any order, unlike function calls,
+where the called function must finish executing before control returns
+to the calling function.</p>
+<p>This kind of control flow can make it much easier to solve certain
+problems. In some problems, the various pieces of required work are not
+naturally related by function calls; there is no obvious &#8220;caller&#8221; or
+&#8220;callee&#8221; among the jobs that need to be done. An example is the
+producer-consumer problem, where one complex procedure is generating
+values and another complex procedure is consuming them. The consumer
+cannot simply call a producer function to get a value, because the
+producer may have more values to generate and so might not yet be ready
+to return. With tasks, the producer and consumer can both run as long as
+they need to, passing values back and forth as necessary.</p>
+<p>Julia provides the functions <a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> and <a class="reference internal" href="../../stdlib/parallel/#Base.consume" title="Base.consume"><tt class="xref jl jl-func docutils literal"><span class="pre">consume()</span></tt></a> for solving
+this problem. A producer is a function that calls <a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> on each
+value it needs to produce:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> producer</span><span class="p">()</span>
+         <span class="n">produce</span><span class="p">(</span><span class="s">&quot;start&quot;</span><span class="p">)</span>
+         <span class="k">for</span> <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">4</span>
+           <span class="n">produce</span><span class="p">(</span><span class="mi">2</span><span class="n">n</span><span class="p">)</span>
+         <span class="k">end</span>
+         <span class="n">produce</span><span class="p">(</span><span class="s">&quot;stop&quot;</span><span class="p">)</span>
+       <span class="k">end</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>To consume values, first the producer is wrapped in a <a class="reference internal" href="../../stdlib/parallel/#Base.Task" title="Base.Task"><tt class="xref jl jl-class docutils literal"><span class="pre">Task</span></tt></a>,
+then <a class="reference internal" href="../../stdlib/parallel/#Base.consume" title="Base.consume"><tt class="xref jl jl-func docutils literal"><span class="pre">consume()</span></tt></a> is called repeatedly on that object:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">p</span> <span class="o">=</span> <span class="n">Task</span><span class="p">(</span><span class="n">producer</span><span class="p">);</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">consume</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="s">&quot;start&quot;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">consume</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="mi">2</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">consume</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="mi">4</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">consume</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="mi">6</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">consume</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="mi">8</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">consume</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="s">&quot;stop&quot;</span>
+</pre></div>
+</div>
+<p>One way to think of this behavior is that <tt class="docutils literal"><span class="pre">producer</span></tt> was able to
+return multiple times. Between calls to <a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a>, the producer&#8217;s
+execution is suspended and the consumer has control.</p>
+<p>A Task can be used as an iterable object in a <tt class="docutils literal"><span class="pre">for</span></tt> loop, in which
+case the loop variable takes on all the produced values:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">x</span> <span class="k">in</span> <span class="n">Task</span><span class="p">(</span><span class="n">producer</span><span class="p">)</span>
+         <span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="n">start</span>
+<span class="mi">2</span>
+<span class="mi">4</span>
+<span class="mi">6</span>
+<span class="mi">8</span>
+<span class="n">stop</span>
+</pre></div>
+</div>
+<p>Note that the <a class="reference internal" href="../../stdlib/parallel/#Base.Task" title="Base.Task"><tt class="xref jl jl-func docutils literal"><span class="pre">Task()</span></tt></a> constructor expects a 0-argument function. A
+common pattern is for the producer to be parameterized, in which case a
+partial function application is needed to create a 0-argument <a class="reference internal" href="../functions/#man-anonymous-functions"><em>anonymous
+function</em></a>. This can be done either
+directly or by use of a convenience macro:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> mytask</span><span class="p">(</span><span class="n">myarg</span><span class="p">)</span>
+    <span class="o">...</span>
+<span class="k">end</span>
+
+<span class="n">taskHdl</span> <span class="o">=</span> <span class="n">Task</span><span class="p">(()</span> <span class="o">-&gt;</span> <span class="n">mytask</span><span class="p">(</span><span class="mi">7</span><span class="p">))</span>
+<span class="c"># or, equivalently</span>
+<span class="n">taskHdl</span> <span class="o">=</span> <span class="p">@</span><span class="n">task</span> <span class="n">mytask</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> and <a class="reference internal" href="../../stdlib/parallel/#Base.consume" title="Base.consume"><tt class="xref jl jl-func docutils literal"><span class="pre">consume()</span></tt></a> do not launch threads that can run on separate CPUs.
+True kernel threads are discussed under the topic of <a class="reference internal" href="../parallel-computing/#man-parallel-computing"><em>Parallel Computing</em></a>.</p>
+<div class="section" id="core-task-operations">
+<h3>Core task operations<a class="headerlink" href="#core-task-operations" title="Permalink to this headline">¶</a></h3>
+<p>While <a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> and <a class="reference internal" href="../../stdlib/parallel/#Base.consume" title="Base.consume"><tt class="xref jl jl-func docutils literal"><span class="pre">consume()</span></tt></a> illustrate the essential nature of tasks, they
+are actually implemented as library functions using a more primitive function,
+<a class="reference internal" href="../../stdlib/parallel/#Base.yieldto" title="Base.yieldto"><tt class="xref jl jl-func docutils literal"><span class="pre">yieldto()</span></tt></a>. <tt class="docutils literal"><span class="pre">yieldto(task,value)</span></tt> suspends the current task, switches
+to the specified <tt class="docutils literal"><span class="pre">task</span></tt>, and causes that task&#8217;s last <a class="reference internal" href="../../stdlib/parallel/#Base.yieldto" title="Base.yieldto"><tt class="xref jl jl-func docutils literal"><span class="pre">yieldto()</span></tt></a> call to return
+the specified <tt class="docutils literal"><span class="pre">value</span></tt>. Notice that <a class="reference internal" href="../../stdlib/parallel/#Base.yieldto" title="Base.yieldto"><tt class="xref jl jl-func docutils literal"><span class="pre">yieldto()</span></tt></a> is the only operation required
+to use task-style control flow; instead of calling and returning we are always
+just switching to a different task. This is why this feature is also called
+&#8220;symmetric coroutines&#8221;; each task is switched to and from using the same mechanism.</p>
+<p><a class="reference internal" href="../../stdlib/parallel/#Base.yieldto" title="Base.yieldto"><tt class="xref jl jl-func docutils literal"><span class="pre">yieldto()</span></tt></a> is powerful, but most uses of tasks do not invoke it directly.
+Consider why this might be. If you switch away from the current task, you will
+probably want to switch back to it at some point, but knowing when to switch
+back, and knowing which task has the responsibility of switching back, can
+require considerable coordination. For example, <a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> needs to maintain
+some state to remember who the consumer is. Not needing to manually keep track
+of the consuming task is what makes <a class="reference internal" href="../../stdlib/parallel/#Base.produce" title="Base.produce"><tt class="xref jl jl-func docutils literal"><span class="pre">produce()</span></tt></a> easier to use than <a class="reference internal" href="../../stdlib/parallel/#Base.yieldto" title="Base.yieldto"><tt class="xref jl jl-func docutils literal"><span class="pre">yieldto()</span></tt></a>.</p>
+<p>In addition to <a class="reference internal" href="../../stdlib/parallel/#Base.yieldto" title="Base.yieldto"><tt class="xref jl jl-func docutils literal"><span class="pre">yieldto()</span></tt></a>, a few other basic functions are needed to use tasks
+effectively.</p>
+<ul class="simple">
+<li><a class="reference internal" href="../../stdlib/parallel/#Base.current_task" title="Base.current_task"><tt class="xref jl jl-func docutils literal"><span class="pre">current_task()</span></tt></a> gets a reference to the currently-running task.</li>
+<li><a class="reference internal" href="../../stdlib/parallel/#Base.istaskdone" title="Base.istaskdone"><tt class="xref jl jl-func docutils literal"><span class="pre">istaskdone()</span></tt></a> queries whether a task has exited.</li>
+<li><tt class="xref jl jl-func docutils literal"><span class="pre">istaskstarted()</span></tt> queries whether a task has run yet.</li>
+<li><a class="reference internal" href="../../stdlib/parallel/#Base.task_local_storage" title="Base.task_local_storage"><tt class="xref jl jl-func docutils literal"><span class="pre">task_local_storage()</span></tt></a> manipulates a key-value store specific to the current task.</li>
+</ul>
+</div>
+<div class="section" id="tasks-and-events">
+<h3>Tasks and events<a class="headerlink" href="#tasks-and-events" title="Permalink to this headline">¶</a></h3>
+<p>Most task switches occur as a result of waiting for events such as I/O
+requests, and are performed by a scheduler included in the standard library.
+The scheduler maintains a queue of runnable tasks, and executes an event loop
+that restarts tasks based on external events such as message arrival.</p>
+<p>The basic function for waiting for an event is <a class="reference internal" href="../../stdlib/parallel/#Base.wait" title="Base.wait"><tt class="xref jl jl-func docutils literal"><span class="pre">wait()</span></tt></a>. Several objects
+implement <a class="reference internal" href="../../stdlib/parallel/#Base.wait" title="Base.wait"><tt class="xref jl jl-func docutils literal"><span class="pre">wait()</span></tt></a>; for example, given a <tt class="xref jl jl-class docutils literal"><span class="pre">Process</span></tt> object, <a class="reference internal" href="../../stdlib/parallel/#Base.wait" title="Base.wait"><tt class="xref jl jl-func docutils literal"><span class="pre">wait()</span></tt></a> will
+wait for it to exit. <a class="reference internal" href="../../stdlib/parallel/#Base.wait" title="Base.wait"><tt class="xref jl jl-func docutils literal"><span class="pre">wait()</span></tt></a> is often implicit; for example, a <a class="reference internal" href="../../stdlib/parallel/#Base.wait" title="Base.wait"><tt class="xref jl jl-func docutils literal"><span class="pre">wait()</span></tt></a>
+can happen inside a call to <a class="reference internal" href="../../stdlib/io-network/#Base.read" title="Base.read"><tt class="xref jl jl-func docutils literal"><span class="pre">read()</span></tt></a> to wait for data to be available.</p>
+<p>In all of these cases, <a class="reference internal" href="../../stdlib/parallel/#Base.wait" title="Base.wait"><tt class="xref jl jl-func docutils literal"><span class="pre">wait()</span></tt></a> ultimately operates on a <a class="reference internal" href="../../stdlib/parallel/#Base.Condition" title="Base.Condition"><tt class="xref jl jl-class docutils literal"><span class="pre">Condition</span></tt></a>
+object, which is in charge of queueing and restarting tasks. When a task
+calls <a class="reference internal" href="../../stdlib/parallel/#Base.wait" title="Base.wait"><tt class="xref jl jl-func docutils literal"><span class="pre">wait()</span></tt></a> on a <a class="reference internal" href="../../stdlib/parallel/#Base.Condition" title="Base.Condition"><tt class="xref jl jl-class docutils literal"><span class="pre">Condition</span></tt></a>, the task is marked as non-runnable, added
+to the condition&#8217;s queue, and switches to the scheduler. The scheduler will
+then pick another task to run, or block waiting for external events.
+If all goes well, eventually an event handler will call <a class="reference internal" href="../../stdlib/parallel/#Base.notify" title="Base.notify"><tt class="xref jl jl-func docutils literal"><span class="pre">notify()</span></tt></a> on the
+condition, which causes tasks waiting for that condition to become runnable
+again.</p>
+<p>A task created explicitly by calling <a class="reference internal" href="../../stdlib/parallel/#Base.Task" title="Base.Task"><tt class="xref jl jl-class docutils literal"><span class="pre">Task</span></tt></a> is initially not known to the
+scheduler. This allows you to manage tasks manually using <a class="reference internal" href="../../stdlib/parallel/#Base.yieldto" title="Base.yieldto"><tt class="xref jl jl-func docutils literal"><span class="pre">yieldto()</span></tt></a> if
+you wish. However, when such a task waits for an event, it still gets restarted
+automatically when the event happens, as you would expect. It is also
+possible to make the scheduler run a task whenever it can, without necessarily
+waiting for any events. This is done by calling <a class="reference internal" href="../../stdlib/parallel/#Base.schedule" title="Base.schedule"><tt class="xref jl jl-func docutils literal"><span class="pre">schedule()</span></tt></a>, or using
+the <a class="reference internal" href="../../stdlib/parallel/#Base.&#64;schedule" title="Base.&#64;schedule"><tt class="xref jl jl-obj docutils literal"><span class="pre">&#64;schedule</span></tt></a> or <a class="reference internal" href="../../stdlib/parallel/#Base.&#64;async" title="Base.&#64;async"><tt class="xref jl jl-obj docutils literal"><span class="pre">&#64;async</span></tt></a> macros (see <a class="reference internal" href="../parallel-computing/#man-parallel-computing"><em>Parallel Computing</em></a> for
+more details).</p>
+</div>
+<div class="section" id="task-states">
+<h3>Task states<a class="headerlink" href="#task-states" title="Permalink to this headline">¶</a></h3>
+<p>Tasks have a <tt class="docutils literal"><span class="pre">state</span></tt> field that describes their execution status. A task
+state is one of the following symbols:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="21%" />
+<col width="79%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Symbol</th>
+<th class="head">Meaning</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">:runnable</span></tt></td>
+<td>Currently running, or available to be switched to</td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">:waiting</span></tt></td>
+<td>Blocked waiting for a specific event</td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">:queued</span></tt></td>
+<td>In the scheduler&#8217;s run queue about to be restarted</td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">:done</span></tt></td>
+<td>Successfully finished executing</td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">:failed</span></tt></td>
+<td>Finished with an uncaught exception</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../variables-and-scoping/" class="btn btn-neutral float-right" title="Scope of Variables">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../functions/" class="btn btn-neutral" title="Functions"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.3.13-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

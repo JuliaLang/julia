@@ -1,0 +1,1647 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Types &mdash; Julia Language 0.3.13-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.3.13-pre documentation" href="../../"/>
+        <link rel="next" title="Methods" href="../methods/"/>
+        <link rel="prev" title="Scope of Variables" href="../variables-and-scoping/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#elementary-functions">Elementary Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics"><tt class="docutils literal"><span class="pre">String</span></tt> Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <tt class="docutils literal"><span class="pre">return</span></tt> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#id1">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#for-loops-and-comprehensions">For Loops and Comprehensions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tuple-types">Tuple Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#operations-on-types">Operations on Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#case-study-rational">Case Study: Rational</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-arrays">Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#constructing-distributed-arrays">Constructing Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-array-operations">Distributed Array Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays-experimental">Shared Arrays (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#passing-pointers-for-modifying-inputs">Passing Pointers for Modifying Inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#passing-julia-callback-functions-to-c">Passing Julia Callback Functions to C</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#handling-platform-variations">Handling Platform Variations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#tagging-package-versions">Tagging Package Versions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <tt class="docutils literal"><span class="pre">&#64;time</span></tt> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <cite>!</cite> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#try-to-avoid-nullable-fields">Try to avoid nullable fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <tt class="docutils literal"><span class="pre">base/</span></tt></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <tt class="docutils literal"><span class="pre">x-&gt;f(x)</span></tt></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#id1">Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#distributed-arrays">Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays-experimental-unix-only-feature">Shared Arrays (Experimental, UNIX-only feature)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/graphics/">Graphics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/graphics/#geometry">Geometry</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Types</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/types.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="types">
+<span id="man-types"></span><h1>Types<a class="headerlink" href="#types" title="Permalink to this headline">¶</a></h1>
+<p>Type systems have traditionally fallen into two quite different camps:
+static type systems, where every program expression must have a type
+computable before the execution of the program, and dynamic type
+systems, where nothing is known about types until run time, when the
+actual values manipulated by the program are available. Object
+orientation allows some flexibility in statically typed languages by
+letting code be written without the precise types of values being known
+at compile time. The ability to write code that can operate on different
+types is called polymorphism. All code in classic dynamically typed
+languages is polymorphic: only by explicitly checking types, or when
+objects fail to support operations at run-time, are the types of any
+values ever restricted.</p>
+<p>Julia&#8217;s type system is dynamic, but gains some of the advantages of
+static type systems by making it possible to indicate that certain
+values are of specific types. This can be of great assistance in
+generating efficient code, but even more significantly, it allows method
+dispatch on the types of function arguments to be deeply integrated with
+the language. Method dispatch is explored in detail in
+<a class="reference internal" href="../methods/#man-methods"><em>Methods</em></a>, but is rooted in the type system presented
+here.</p>
+<p>The default behavior in Julia when types are omitted is to allow values
+to be of any type. Thus, one can write many useful Julia programs
+without ever explicitly using types. When additional expressiveness is
+needed, however, it is easy to gradually introduce explicit type
+annotations into previously &#8220;untyped&#8221; code. Doing so will typically
+increase both the performance and robustness of these systems, and
+perhaps somewhat counterintuitively, often significantly simplify them.</p>
+<p>Describing Julia in the lingo of <a class="reference external" href="http://en.wikipedia.org/wiki/Type_system">type
+systems</a>, it is: dynamic,
+nominative and parametric. Generic types can be parameterized,
+and the hierarchical relationships
+between types are explicitly declared, rather than implied by compatible
+structure. One particularly distinctive feature of Julia&#8217;s type system
+is that concrete types may not subtype each other: all concrete types
+are final and may only have abstract types as their supertypes. While
+this might at first seem unduly restrictive, it has many beneficial
+consequences with surprisingly few drawbacks. It turns out that being
+able to inherit behavior is much more important than being able to
+inherit structure, and inheriting both causes significant difficulties
+in traditional object-oriented languages. Other high-level aspects of
+Julia&#8217;s type system that should be mentioned up front are:</p>
+<ul class="simple">
+<li>There is no division between object and non-object values: all values
+in Julia are true objects having a type that belongs to a single,
+fully connected type graph, all nodes of which are equally
+first-class as types.</li>
+<li>There is no meaningful concept of a &#8220;compile-time type&#8221;: the only
+type a value has is its actual type when the program is running. This
+is called a &#8220;run-time type&#8221; in object-oriented languages where the
+combination of static compilation with polymorphism makes this
+distinction significant.</li>
+<li>Only values, not variables, have types — variables are simply names
+bound to values.</li>
+<li>Both abstract and concrete types can be parameterized by other types.
+They can also be parameterized by symbols, by values of any type for
+which <a class="reference internal" href="../../stdlib/base/#Base.isbits" title="Base.isbits"><tt class="xref jl jl-func docutils literal"><span class="pre">isbits()</span></tt></a> returns true (essentially, things like numbers and bools
+that are stored like C types or structs with no pointers to other objects),
+and also by tuples thereof. Type parameters may be omitted when they
+do not need to be referenced or restricted.</li>
+</ul>
+<p>Julia&#8217;s type system is designed to be powerful and expressive, yet
+clear, intuitive and unobtrusive. Many Julia programmers may never feel
+the need to write code that explicitly uses types. Some kinds of
+programming, however, become clearer, simpler, faster and more robust
+with declared types.</p>
+<div class="section" id="type-declarations">
+<h2>Type Declarations<a class="headerlink" href="#type-declarations" title="Permalink to this headline">¶</a></h2>
+<p>The <tt class="docutils literal"><span class="pre">::</span></tt> operator can be used to attach type annotations to
+expressions and variables in programs. There are two primary reasons to
+do this:</p>
+<ol class="arabic simple">
+<li>As an assertion to help confirm that your program works the way you
+expect,</li>
+<li>To provide extra type information to the compiler, which can then
+improve performance in some cases</li>
+</ol>
+<p>When appended to an expression computing a <em>value</em>, the <tt class="docutils literal"><span class="pre">::</span></tt>
+operator is read as &#8220;is an instance of&#8221;. It can be used
+anywhere to assert that the value of the expression on the left is an
+instance of the type on the right. When the type on the right is
+concrete, the value on the left must have that type as its
+implementation —&nbsp;recall that all concrete types are final, so no
+implementation is a subtype of any other. When the type is abstract, it
+suffices for the value to be implemented by a concrete type that is a
+subtype of the abstract type. If the type assertion is not true, an
+exception is thrown, otherwise, the left-hand value is returned:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">2</span><span class="p">)::</span><span class="n">FloatingPoint</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">typeassert</span><span class="p">:</span> <span class="n">expected</span> <span class="n">FloatingPoint</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">2</span><span class="p">)::</span><span class="kt">Int</span>
+<span class="mi">3</span>
+</pre></div>
+</div>
+<p>This allows a type assertion to be attached to any expression
+in-place. The most common usage of <tt class="docutils literal"><span class="pre">::</span></tt> as an assertion is in
+function/methods signatures, such as <tt class="docutils literal"><span class="pre">f(x::Int8)</span> <span class="pre">=</span> <span class="pre">...</span></tt> (see
+<a class="reference internal" href="../methods/#man-methods"><em>Methods</em></a>).</p>
+<p>When appended to a <em>variable</em> in a statement context, the <tt class="docutils literal"><span class="pre">::</span></tt>
+operator means something a bit
+different: it declares the variable to always have the specified type,
+like a type declaration in a statically-typed language such as C. Every
+value assigned to the variable will be converted to the declared type
+using <a class="reference internal" href="../../stdlib/base/#Base.convert" title="Base.convert"><tt class="xref jl jl-func docutils literal"><span class="pre">convert()</span></tt></a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+         <span class="n">x</span><span class="p">::</span><span class="kt">Int8</span> <span class="o">=</span> <span class="mi">1000</span>
+         <span class="n">x</span>
+       <span class="k">end</span>
+<span class="n">foo</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="p">()</span>
+<span class="o">-</span><span class="mi">24</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="kt">Int8</span>
+</pre></div>
+</div>
+<p>This feature is useful for avoiding performance &#8220;gotchas&#8221; that could
+occur if one of the assignments to a variable changed its type
+unexpectedly.</p>
+<p>The &#8220;declaration&#8221; behavior only occurs in specific contexts:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span><span class="p">::</span><span class="kt">Int8</span>        <span class="c"># a variable by itself</span>
+<span class="kd">local</span> <span class="n">x</span><span class="p">::</span><span class="kt">Int8</span>  <span class="c"># in a local declaration</span>
+<span class="n">x</span><span class="p">::</span><span class="kt">Int8</span> <span class="o">=</span> <span class="mi">10</span>   <span class="c"># as the left-hand side of an assignment</span>
+</pre></div>
+</div>
+<p>and applies to the whole current scope, even before the declaration.
+Currently, type declarations cannot be used in global scope, e.g. in
+the REPL, since Julia does not yet have constant-type globals.  Note
+that in a function return statement, the first two of the above
+expressions compute a value and then <tt class="docutils literal"><span class="pre">::</span></tt> is a type assertion and
+not a declaration.</p>
+</div>
+<div class="section" id="abstract-types">
+<span id="man-abstract-types"></span><h2>Abstract Types<a class="headerlink" href="#abstract-types" title="Permalink to this headline">¶</a></h2>
+<p>Abstract types cannot be instantiated, and serve only as nodes in the
+type graph, thereby describing sets of related concrete types: those
+concrete types which are their descendants. We begin with abstract types
+even though they have no instantiation because they are the backbone of
+the type system: they form the conceptual hierarchy which makes Julia&#8217;s
+type system more than just a collection of object implementations.</p>
+<p>Recall that in <a class="reference internal" href="../integers-and-floating-point-numbers/#man-integers-and-floating-point-numbers"><em>Integers and Floating-Point Numbers</em></a>, we
+introduced a variety of concrete types of numeric values: <tt class="xref jl jl-class docutils literal"><span class="pre">Int8</span></tt>,
+<tt class="xref jl jl-class docutils literal"><span class="pre">Uint8</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int16</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Uint16</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int32</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Uint32</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int64</span></tt>,
+<tt class="xref jl jl-class docutils literal"><span class="pre">Uint64</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int128</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Uint128</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Float16</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Float32</span></tt>, and
+<tt class="xref jl jl-class docutils literal"><span class="pre">Float64</span></tt>.  Although they have different representation sizes, <tt class="xref jl jl-class docutils literal"><span class="pre">Int8</span></tt>,
+<tt class="xref jl jl-class docutils literal"><span class="pre">Int16</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int32</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int64</span></tt>  and <tt class="xref jl jl-class docutils literal"><span class="pre">Int128</span></tt> all have in common that
+they are signed integer types. Likewise <tt class="xref jl jl-class docutils literal"><span class="pre">Uint8</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Uint16</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Uint32</span></tt>,
+<tt class="xref jl jl-class docutils literal"><span class="pre">Uint64</span></tt> and <tt class="xref jl jl-class docutils literal"><span class="pre">Uint128</span></tt> are all unsigned integer types, while
+<tt class="xref jl jl-class docutils literal"><span class="pre">Float16</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Float32</span></tt> and <tt class="xref jl jl-class docutils literal"><span class="pre">Float64</span></tt> are distinct in being
+floating-point types rather than integers. It is common for a piece of code
+to make sense, for example, only if its arguments are some kind of integer,
+but not really depend on what particular <em>kind</em> of integer.  For example,
+the greatest common denominator algorithm works for all kinds of integers,
+but will not work for floating-point numbers.  Abstract types allow the
+construction of a hierarchy of types, providing&nbsp;a context into which
+concrete types can fit.  This allows you, for example, to easily program to
+any type that is an integer, without restricting an algorithm to a specific
+type of integer.</p>
+<p>Abstract types are declared using the <tt class="docutils literal"><span class="pre">abstract</span></tt> keyword. The general
+syntaxes for declaring an abstract type are:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span>abstract «name»
+abstract «name» &lt;: «supertype»
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">abstract</span></tt> keyword introduces a new abstract type, whose name is
+given by <tt class="docutils literal"><span class="pre">«name»</span></tt>. This name can be optionally followed by <tt class="docutils literal"><span class="pre">&lt;:</span></tt> and
+an already-existing type, indicating that the newly declared abstract
+type is a subtype of this &#8220;parent&#8221; type.</p>
+<p>When no supertype is given, the default supertype is <tt class="xref jl jl-obj docutils literal"><span class="pre">Any</span></tt> — a
+predefined abstract type that all objects are instances of and all types
+are subtypes of. In type theory, <tt class="xref jl jl-obj docutils literal"><span class="pre">Any</span></tt> is commonly called &#8220;top&#8221;
+because it is at the apex of the type graph. Julia also has a predefined
+abstract &#8220;bottom&#8221; type, at the nadir of the type graph, which is called
+<tt class="docutils literal"><span class="pre">None</span></tt>. It is the exact opposite of <tt class="xref jl jl-obj docutils literal"><span class="pre">Any</span></tt>: no object is an instance
+of <tt class="docutils literal"><span class="pre">None</span></tt> and all types are supertypes of <tt class="docutils literal"><span class="pre">None</span></tt>.</p>
+<p>Let&#8217;s consider some of the abstract types that make up Julia&#8217;s numerical
+hierarchy:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span><span class="nc"> Number</span>
+<span class="k">abstract</span><span class="nc"> Real</span>     <span class="o">&lt;:</span> <span class="n">Number</span>
+<span class="k">abstract</span><span class="nc"> FloatingPoint</span> <span class="o">&lt;:</span> <span class="n">Real</span>
+<span class="k">abstract</span><span class="nc"> Integer</span>  <span class="o">&lt;:</span> <span class="n">Real</span>
+<span class="k">abstract</span><span class="nc"> Signed</span>   <span class="o">&lt;:</span> <span class="n">Integer</span>
+<span class="k">abstract</span><span class="nc"> Unsigned</span> <span class="o">&lt;:</span> <span class="n">Integer</span>
+</pre></div>
+</div>
+<p>The <tt class="xref jl jl-obj docutils literal"><span class="pre">Number</span></tt> type is a direct child type of <tt class="xref jl jl-obj docutils literal"><span class="pre">Any</span></tt>, and <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt> is
+its child. In turn, <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt> has two children (it has more, but only two
+are shown here; we&#8217;ll get to the others later): <tt class="xref jl jl-class docutils literal"><span class="pre">Integer</span></tt> and
+<tt class="xref jl jl-class docutils literal"><span class="pre">FloatingPoint</span></tt>, separating the world into representations of integers and
+representations of real numbers. Representations of real numbers
+include, of course, floating-point types, but also include other types,
+such as rationals. Hence, <tt class="xref jl jl-class docutils literal"><span class="pre">FloatingPoint</span></tt> is a proper subtype of
+<tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt>, including only floating-point representations of real numbers.
+Integers are further subdivided into <tt class="xref jl jl-obj docutils literal"><span class="pre">Signed</span></tt> and <tt class="xref jl jl-obj docutils literal"><span class="pre">Unsigned</span></tt>
+varieties.</p>
+<p>The <tt class="docutils literal"><span class="pre">&lt;:</span></tt> operator in general means &#8220;is a subtype of&#8221;, and, used in
+declarations like this, declares the right-hand type to be an immediate
+supertype of the newly declared type. It can also be used in expressions
+as a subtype operator which returns <tt class="docutils literal"><span class="pre">true</span></tt> when its left operand is a
+subtype of its right operand:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Integer</span> <span class="o">&lt;:</span> <span class="n">Number</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Integer</span> <span class="o">&lt;:</span> <span class="n">FloatingPoint</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>An important use of abstract types is to provide default implementations for
+concrete types. To give a simple example, consider:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> myplus</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+ <span class="n">x</span><span class="o">+</span><span class="n">y</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>The first thing to note is that the above argument declarations are equivalent
+to <tt class="docutils literal"><span class="pre">x::Any</span></tt> and <tt class="docutils literal"><span class="pre">y::Any</span></tt>. When this function is invoked, say as
+<tt class="docutils literal"><span class="pre">myplus(2,5)</span></tt>, the dispatcher chooses the most specific method named
+<tt class="docutils literal"><span class="pre">myplus</span></tt> that matches the given arguments. (See <a class="reference internal" href="../methods/#man-methods"><em>Methods</em></a> for more
+information on multiple dispatch.)</p>
+<p>Assuming no method more specific than the above is found, Julia next internally
+defines and compiles a method called <tt class="docutils literal"><span class="pre">myplus</span></tt> specifically for two <tt class="xref jl jl-class docutils literal"><span class="pre">Int</span></tt>
+arguments based on the generic function given above, i.e., it implicitly
+defines and compiles:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> myplus</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span><span class="n">y</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>
+ <span class="n">x</span><span class="o">+</span><span class="n">y</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>and finally, it invokes this specific method.</p>
+<p>Thus, abstract types allow programmers to write generic functions that can
+later be used as the default method by many combinations of concrete types.
+Thanks to multiple dispatch, the programmer has full control over whether the
+default or more specific method is used.</p>
+<p>An important point to note is that there is no loss in performance if the
+programmer relies on a function whose arguments are abstract types, because it
+is recompiled for each tuple of argument concrete types with which it is
+invoked. (There may be a performance issue, however, in the case of function
+arguments that are containers of abstract types; see <a class="reference internal" href="../performance-tips/#man-performance-tips"><em>Performance Tips</em></a>.)</p>
+</div>
+<div class="section" id="bits-types">
+<h2>Bits Types<a class="headerlink" href="#bits-types" title="Permalink to this headline">¶</a></h2>
+<p>A bits type is a concrete type whose data consists of plain old bits.
+Classic examples of bits types are integers and floating-point values.
+Unlike most languages, Julia lets you declare your own bits types,
+rather than providing only a fixed set of built-in bits types. In fact,
+the standard bits types are all defined in the language itself:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">bitstype</span> <span class="mi">16</span> <span class="n">Float16</span> <span class="o">&lt;:</span> <span class="n">FloatingPoint</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Float32</span> <span class="o">&lt;:</span> <span class="n">FloatingPoint</span>
+<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">Float64</span> <span class="o">&lt;:</span> <span class="n">FloatingPoint</span>
+
+<span class="k">bitstype</span> <span class="mi">8</span>  <span class="kt">Bool</span> <span class="o">&lt;:</span> <span class="n">Integer</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="n">Char</span> <span class="o">&lt;:</span> <span class="n">Integer</span>
+
+<span class="k">bitstype</span> <span class="mi">8</span>  <span class="kt">Int8</span>     <span class="o">&lt;:</span> <span class="n">Signed</span>
+<span class="k">bitstype</span> <span class="mi">8</span>  <span class="kt">Uint8</span>    <span class="o">&lt;:</span> <span class="n">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">16</span> <span class="kt">Int16</span>    <span class="o">&lt;:</span> <span class="n">Signed</span>
+<span class="k">bitstype</span> <span class="mi">16</span> <span class="kt">Uint16</span>   <span class="o">&lt;:</span> <span class="n">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Int32</span>    <span class="o">&lt;:</span> <span class="n">Signed</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Uint32</span>   <span class="o">&lt;:</span> <span class="n">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">Int64</span>    <span class="o">&lt;:</span> <span class="n">Signed</span>
+<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">Uint64</span>   <span class="o">&lt;:</span> <span class="n">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">128</span> <span class="n">Int128</span>  <span class="o">&lt;:</span> <span class="n">Signed</span>
+<span class="k">bitstype</span> <span class="mi">128</span> <span class="n">Uint128</span> <span class="o">&lt;:</span> <span class="n">Unsigned</span>
+</pre></div>
+</div>
+<p>The general syntaxes for declaration of a <tt class="docutils literal"><span class="pre">bitstype</span></tt> are:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">bitstype</span> <span class="n">«bits»</span> <span class="n">«name»</span>
+<span class="k">bitstype</span> <span class="n">«bits»</span> <span class="n">«name»</span> <span class="o">&lt;:</span> <span class="n">«supertype»</span>
+</pre></div>
+</div>
+<p>The number of bits indicates how much storage the type requires and the
+name gives the new type a name. A bits type can optionally be declared
+to be a subtype of some supertype. If a supertype is omitted, then the
+type defaults to having <tt class="xref jl jl-obj docutils literal"><span class="pre">Any</span></tt> as its immediate supertype. The
+declaration of <tt class="xref jl jl-obj docutils literal"><span class="pre">Bool</span></tt> above therefore means that a boolean value takes
+eight bits to store, and has <tt class="xref jl jl-class docutils literal"><span class="pre">Integer</span></tt> as its immediate supertype.
+Currently, only sizes that are multiples of 8 bits are supported.
+Therefore, boolean values, although they really need just a single bit,
+cannot be declared to be any smaller than eight bits.</p>
+<p>The types <tt class="xref jl jl-obj docutils literal"><span class="pre">Bool</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int8</span></tt> and <tt class="xref jl jl-class docutils literal"><span class="pre">Uint8</span></tt> all have identical
+representations: they are eight-bit chunks of memory. Since Julia&#8217;s type
+system is nominative, however, they are not interchangeable despite
+having identical structure. Another fundamental difference between them
+is that they have different supertypes: <tt class="xref jl jl-obj docutils literal"><span class="pre">Bool</span></tt>&#8216;s direct supertype is
+<tt class="xref jl jl-class docutils literal"><span class="pre">Integer</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int8</span></tt>&#8216;s is <tt class="xref jl jl-obj docutils literal"><span class="pre">Signed</span></tt>, and <tt class="xref jl jl-class docutils literal"><span class="pre">Uint8</span></tt>&#8216;s is <tt class="xref jl jl-obj docutils literal"><span class="pre">Unsigned</span></tt>.
+All other differences between <tt class="xref jl jl-obj docutils literal"><span class="pre">Bool</span></tt>, <tt class="xref jl jl-class docutils literal"><span class="pre">Int8</span></tt>, and <tt class="xref jl jl-class docutils literal"><span class="pre">Uint8</span></tt> are
+matters of behavior — the way functions are defined to act when given
+objects of these types as arguments. This is why a nominative type
+system is necessary: if structure determined type, which in turn
+dictates behavior, then it would be impossible to make <tt class="xref jl jl-obj docutils literal"><span class="pre">Bool</span></tt> behave any
+differently than <tt class="xref jl jl-class docutils literal"><span class="pre">Int8</span></tt> or <tt class="xref jl jl-class docutils literal"><span class="pre">Uint8</span></tt>.</p>
+</div>
+<div class="section" id="composite-types">
+<span id="man-composite-types"></span><h2>Composite Types<a class="headerlink" href="#composite-types" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference external" href="http://en.wikipedia.org/wiki/Composite_data_type">Composite types</a>
+are called records, structures (<tt class="docutils literal"><span class="pre">struct</span></tt>s in C), or objects in various
+languages. A composite type is a collection of named fields, an instance
+of which can be treated as a single value. In many languages, composite
+types are the only kind of user-definable type, and they are by far the
+most commonly used user-defined type in Julia as well.</p>
+<p>In mainstream
+object oriented languages, such as C++, Java, Python and Ruby, composite
+types also have named functions associated with them, and the
+combination is called an &#8220;object&#8221;. In purer object-oriented languages,
+such as Python and Ruby, all values are objects whether they are
+composites or not. In less pure object oriented languages, including C++
+and Java, some values, such as integers and floating-point values, are
+not objects, while instances of user-defined composite types are true
+objects with associated methods. In Julia, all values are objects,
+but functions are not bundled with the objects they
+operate on. This is necessary since Julia chooses which method of a
+function to use by multiple dispatch, meaning that the types of <em>all</em> of
+a function&#8217;s arguments are considered when selecting a method, rather
+than just the first one (see <a class="reference internal" href="../methods/#man-methods"><em>Methods</em></a> for more
+information on methods and dispatch). Thus, it would be inappropriate
+for functions to &#8220;belong&#8221; to only their first argument. Organizing
+methods into function objects rather than having
+named bags of methods &#8220;inside&#8221; each object ends up being a highly
+beneficial aspect of the language design.</p>
+<p>Since composite types are the most common form of user-defined concrete
+type, they are simply introduced with the <tt class="docutils literal"><span class="pre">type</span></tt> keyword followed by a
+block of field names, optionally annotated with types using the <tt class="docutils literal"><span class="pre">::</span></tt>
+operator:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> Foo</span>
+         <span class="n">bar</span>
+         <span class="n">baz</span><span class="p">::</span><span class="kt">Int</span>
+         <span class="n">qux</span><span class="p">::</span><span class="kt">Float64</span>
+       <span class="k">end</span>
+</pre></div>
+</div>
+<p>Fields with no type annotation default to <tt class="xref jl jl-obj docutils literal"><span class="pre">Any</span></tt>, and can accordingly
+hold any type of value.</p>
+<p>New objects of composite type <tt class="docutils literal"><span class="pre">Foo</span></tt> are created by applying the
+<tt class="docutils literal"><span class="pre">Foo</span></tt> type object like a function to values for its fields:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span> <span class="o">=</span> <span class="n">Foo</span><span class="p">(</span><span class="s">&quot;Hello, world.&quot;</span><span class="p">,</span> <span class="mi">23</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">)</span>
+<span class="n">Foo</span><span class="p">(</span><span class="s">&quot;Hello, world.&quot;</span><span class="p">,</span><span class="mi">23</span><span class="p">,</span><span class="mf">1.5</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span>
+<span class="n">Foo</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">methods</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>When a type is applied like a function it is called a <em>constructor</em>.
+Two constructors are generated automatically (these are called <em>default
+constructors</em>). One accepts any arguments and calls <a class="reference internal" href="../../stdlib/base/#Base.convert" title="Base.convert"><tt class="xref jl jl-func docutils literal"><span class="pre">convert()</span></tt></a> to convert
+them to the types of the fields, and the other accepts arguments that
+match the field types exactly. The reason both of these are generated is
+that this makes it easier to add new definitions without inadvertently
+replacing a default constructor.</p>
+<p>Since the <tt class="docutils literal"><span class="pre">bar</span></tt> field is unconstrained in type, any value will do.
+However, the value for <tt class="docutils literal"><span class="pre">baz</span></tt> must be convertible to <tt class="xref jl jl-class docutils literal"><span class="pre">Int</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Foo</span><span class="p">((),</span> <span class="mf">23.5</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
+ <span class="k">in</span> <span class="n">Foo</span> <span class="n">at</span> <span class="n">no</span> <span class="n">file</span>
+</pre></div>
+</div>
+<p>You may find a list of field names using the <tt class="docutils literal"><span class="pre">names</span></tt> function.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">names</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Symbol</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+ <span class="p">:</span><span class="n">bar</span>
+ <span class="p">:</span><span class="n">baz</span>
+ <span class="p">:</span><span class="n">qux</span>
+</pre></div>
+</div>
+<p>You can access the field values of a composite object using the
+traditional <tt class="docutils literal"><span class="pre">foo.bar</span></tt> notation:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="o">.</span><span class="n">bar</span>
+<span class="s">&quot;Hello, world.&quot;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="o">.</span><span class="n">baz</span>
+<span class="mi">23</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="o">.</span><span class="n">qux</span>
+<span class="mf">1.5</span>
+</pre></div>
+</div>
+<p>You can also change the values as one would expect:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="o">.</span><span class="n">qux</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="mf">2.0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="o">.</span><span class="n">bar</span> <span class="o">=</span> <span class="mi">1</span><span class="o">//</span><span class="mi">2</span>
+<span class="mi">1</span><span class="o">//</span><span class="mi">2</span>
+</pre></div>
+</div>
+<p>Composite types with no fields are singletons; there can be only one
+instance of such types:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> NoFields</span>
+<span class="k">end</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">is</span><span class="p">(</span><span class="n">NoFields</span><span class="p">(),</span> <span class="n">NoFields</span><span class="p">())</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">is</span></tt> function confirms that the &#8220;two&#8221; constructed instances of
+<tt class="docutils literal"><span class="pre">NoFields</span></tt> are actually one and the same. Singleton types are
+described in further detail <a class="reference external" href="#man-singleton-types">below</a>.</p>
+<p>There is much more to say about how instances of composite types are
+created, but that discussion depends on both <a class="reference external" href="#man-parametric-types">Parametric
+Types</a> and on <a class="reference internal" href="../methods/#man-methods"><em>Methods</em></a>, and is
+sufficiently important to be addressed in its own section:
+<a class="reference internal" href="../constructors/#man-constructors"><em>Constructors</em></a>.</p>
+</div>
+<div class="section" id="immutable-composite-types">
+<span id="man-immutable-composite-types"></span><h2>Immutable Composite Types<a class="headerlink" href="#immutable-composite-types" title="Permalink to this headline">¶</a></h2>
+<p>It is also possible to define <em>immutable</em> composite types by using
+the keyword <tt class="docutils literal"><span class="pre">immutable</span></tt> instead of <tt class="docutils literal"><span class="pre">type</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">Complex</span>
+  <span class="n">real</span><span class="p">::</span><span class="kt">Float64</span>
+  <span class="n">imag</span><span class="p">::</span><span class="kt">Float64</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>Such types behave much like other composite types, except that instances
+of them cannot be modified. Immutable types have several advantages:</p>
+<ul class="simple">
+<li>They are more efficient in some cases. Types like the <tt class="docutils literal"><span class="pre">Complex</span></tt>
+example above can be packed efficiently into arrays, and in some
+cases the compiler is able to avoid allocating immutable objects
+entirely.</li>
+<li>It is not possible to violate the invariants provided by the
+type&#8217;s constructors.</li>
+<li>Code using immutable objects can be easier to reason about.</li>
+</ul>
+<p>An immutable object might contain mutable objects, such as arrays, as
+fields. Those contained objects will remain mutable; only the fields of the
+immutable object itself cannot be changed to point to different objects.</p>
+<p>A useful way to think about immutable composites is that each instance is
+associated with specific field values &#8212; the field values alone tell
+you everything about the object. In contrast, a mutable object is like a
+little container that might hold different values over time, and so is
+not identified with specific field values. In deciding whether to make a
+type immutable, ask whether two instances with the same field values
+would be considered identical, or if they might need to change independently
+over time. If they would be considered identical, the type should probably
+be immutable.</p>
+<p>To recap, two essential properties define immutability
+in Julia:</p>
+<ul class="simple">
+<li>An object with an immutable type is passed around (both in assignment
+statements and in function calls) by copying, whereas a mutable type is
+passed around by reference.</li>
+<li>It is not permitted to modify the fields of a composite immutable
+type.</li>
+</ul>
+<p>It is instructive, particularly for readers whose background is C/C++, to consider
+why these two properties go hand in hand.  If they were separated,
+i.e., if the fields of objects passed around by copying could be modified,
+then it would become more difficult to reason about certain instances of generic code.  For example,
+suppose <tt class="docutils literal"><span class="pre">x</span></tt> is a function argument of an abstract type, and suppose that the function
+changes a field: <tt class="docutils literal"><span class="pre">x.isprocessed</span> <span class="pre">=</span> <span class="pre">true</span></tt>.  Depending on whether <tt class="docutils literal"><span class="pre">x</span></tt> is passed by copying
+or by reference, this statement may or may not alter the actual argument in the
+calling routine.  Julia
+sidesteps the possibility of creating functions with unknown effects in this
+scenario by forbidding modification of fields
+of objects passed around by copying.</p>
+</div>
+<div class="section" id="declared-types">
+<h2>Declared Types<a class="headerlink" href="#declared-types" title="Permalink to this headline">¶</a></h2>
+<p>The three kinds of types discussed in the previous three sections
+are actually all closely related. They share the same key properties:</p>
+<ul class="simple">
+<li>They are explicitly declared.</li>
+<li>They have names.</li>
+<li>They have explicitly declared supertypes.</li>
+<li>They may have parameters.</li>
+</ul>
+<p>Because of these shared properties, these types are internally
+represented as instances of the same concept, <tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt>, which
+is the type of any of these types:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Real</span><span class="p">)</span>
+<span class="n">DataType</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="kt">Int</span><span class="p">)</span>
+<span class="n">DataType</span>
+</pre></div>
+</div>
+<p>A <tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt> may be abstract or concrete. If it is concrete, it
+has a specified size, storage layout, and (optionally) field names.
+Thus a bits type is a <tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt> with nonzero size, but no field
+names. A composite type is a <tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt> that has field names or
+is empty (zero size).</p>
+<p>Every concrete value in the system is either an instance of some
+<tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt>, or is a tuple.</p>
+</div>
+<div class="section" id="tuple-types">
+<h2>Tuple Types<a class="headerlink" href="#tuple-types" title="Permalink to this headline">¶</a></h2>
+<p>Tuples are an abstraction of the arguments of a function —&nbsp;without the
+function itself. The salient aspects of a function&#8217;s arguments are their
+order and their types. The type of a tuple of values is the tuple of
+types of values:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="mf">2.5</span><span class="p">))</span>
+<span class="p">(</span><span class="kt">Int64</span><span class="p">,</span><span class="n">ASCIIString</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Accordingly, a tuple of types can be used anywhere a type is expected:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span> <span class="p">::</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">,</span><span class="n">String</span><span class="p">,</span><span class="kt">Any</span><span class="p">)</span>
+<span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span> <span class="p">::</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">,</span><span class="n">String</span><span class="p">,</span><span class="kt">Float32</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">typeassert</span><span class="p">:</span> <span class="n">expected</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">,</span><span class="n">String</span><span class="p">,</span><span class="kt">Float32</span><span class="p">),</span> <span class="n">got</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">,</span><span class="n">ASCIIString</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If one of the components of the tuple is not a type, however, you will
+get an error:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span> <span class="p">::</span> <span class="p">(</span><span class="kt">Int64</span><span class="p">,</span><span class="n">String</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">typeassert</span><span class="p">:</span> <span class="n">expected</span> <span class="n">Type</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Top</span><span class="p">},</span> <span class="n">got</span> <span class="p">(</span><span class="n">DataType</span><span class="p">,</span><span class="n">DataType</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that the empty tuple <tt class="docutils literal"><span class="pre">()</span></tt> is its own type:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(())</span>
+<span class="p">()</span>
+</pre></div>
+</div>
+<p>Tuple types are <em>covariant</em> in their constituent types, which means
+that one tuple type is a subtype of another if elements of the first
+are subtypes of the corresponding elements of the second. For
+example:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="kt">Int</span><span class="p">,</span><span class="n">String</span><span class="p">)</span> <span class="o">&lt;:</span> <span class="p">(</span><span class="n">Real</span><span class="p">,</span><span class="kt">Any</span><span class="p">)</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="kt">Int</span><span class="p">,</span><span class="n">String</span><span class="p">)</span> <span class="o">&lt;:</span> <span class="p">(</span><span class="n">Real</span><span class="p">,</span><span class="n">Real</span><span class="p">)</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="kt">Int</span><span class="p">,</span><span class="n">String</span><span class="p">)</span> <span class="o">&lt;:</span> <span class="p">(</span><span class="n">Real</span><span class="p">,)</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Intuitively, this corresponds to the type of a function&#8217;s arguments
+being a subtype of the function&#8217;s signature (when the signature matches).</p>
+</div>
+<div class="section" id="type-unions">
+<h2>Type Unions<a class="headerlink" href="#type-unions" title="Permalink to this headline">¶</a></h2>
+<p>A type union is a special abstract type which includes as objects all
+instances of any of its argument types, constructed using the special
+<tt class="docutils literal"><span class="pre">Union</span></tt> function:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">IntOrString</span> <span class="o">=</span> <span class="n">Union</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span><span class="n">String</span><span class="p">)</span>
+<span class="n">Union</span><span class="p">(</span><span class="n">String</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="p">::</span> <span class="n">IntOrString</span>
+<span class="mi">1</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;Hello!&quot;</span> <span class="p">::</span> <span class="n">IntOrString</span>
+<span class="s">&quot;Hello!&quot;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mf">1.0</span> <span class="p">::</span> <span class="n">IntOrString</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">typeassert</span><span class="p">:</span> <span class="n">expected</span> <span class="n">Union</span><span class="p">(</span><span class="n">String</span><span class="p">,</span><span class="kt">Int64</span><span class="p">),</span> <span class="n">got</span> <span class="kt">Float64</span>
+</pre></div>
+</div>
+<p>The compilers for many languages have an internal union construct for
+reasoning about types; Julia simply exposes it to the programmer. The
+union of no types is the &#8220;bottom&#8221; type, <tt class="docutils literal"><span class="pre">None</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Union</span><span class="p">()</span>
+<span class="kt">None</span>
+</pre></div>
+</div>
+<p>Recall from the <a class="reference external" href="#Any+and+None">discussion above</a> that <tt class="docutils literal"><span class="pre">None</span></tt> is the
+abstract type which is the subtype of all other types, and which no
+object is an instance of. Since a zero-argument <tt class="docutils literal"><span class="pre">Union</span></tt> call has no
+argument types for objects to be instances of, it should produce a
+type which no objects are instances of —&nbsp;i.e. <tt class="docutils literal"><span class="pre">None</span></tt>.</p>
+</div>
+<div class="section" id="man-parametric-types">
+<span id="id2"></span><h2>Parametric Types<a class="headerlink" href="#man-parametric-types" title="Permalink to this headline">¶</a></h2>
+<p>An important and powerful feature of Julia&#8217;s type system is that it is
+parametric: types can take parameters, so that type declarations
+actually introduce a whole family of new types — one for each possible
+combination of parameter values. There are many languages that support
+some version of <a class="reference external" href="http://en.wikipedia.org/wiki/Generic_programming">generic
+programming</a>,&nbsp;wherein
+data structures and algorithms to manipulate them may be specified
+without specifying the exact types involved. For example, some form of
+generic programming exists in ML, Haskell, Ada, Eiffel, C++, Java, C#,
+F#, and Scala, just to name a few. Some of these languages support true
+parametric polymorphism (e.g. ML, Haskell, Scala), while others support
+ad-hoc, template-based styles of generic programming (e.g. C++, Java).
+With so many different varieties of generic programming and parametric
+types in various languages, we won&#8217;t even attempt to compare Julia&#8217;s
+parametric types to other languages, but will instead focus on
+explaining Julia&#8217;s system in its own right. We will note, however, that
+because Julia is a dynamically typed language and doesn&#8217;t need to make
+all type decisions at compile time, many traditional difficulties
+encountered in static parametric type systems can be relatively easily
+handled.</p>
+<p>All declared types (the <tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt> variety) can be parameterized, with
+the same syntax in each case. We will discuss them in the following
+order: first, parametric composite types, then parametric abstract
+types, and finally parametric bits types.</p>
+<div class="section" id="parametric-composite-types">
+<h3>Parametric Composite Types<a class="headerlink" href="#parametric-composite-types" title="Permalink to this headline">¶</a></h3>
+<p>Type parameters are introduced immediately after the type name,
+surrounded by curly braces:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+  <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+  <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>This declaration defines a new parametric type, <tt class="docutils literal"><span class="pre">Point{T}</span></tt>, holding
+two &#8220;coordinates&#8221; of type <tt class="docutils literal"><span class="pre">T</span></tt>. What, one may ask, is <tt class="docutils literal"><span class="pre">T</span></tt>? Well,
+that&#8217;s precisely the point of parametric types: it can be any type at
+all (or an integer, actually, although here it&#8217;s clearly used as a
+type). <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt> is a concrete type equivalent to the type
+defined by replacing <tt class="docutils literal"><span class="pre">T</span></tt> in the definition of <tt class="docutils literal"><span class="pre">Point</span></tt> with
+<tt class="xref jl jl-class docutils literal"><span class="pre">Float64</span></tt>. Thus, this single declaration actually declares an
+unlimited number of types: <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt>, <tt class="docutils literal"><span class="pre">Point{String}</span></tt>,
+<tt class="docutils literal"><span class="pre">Point{Int64}</span></tt>, etc. Each of these is now a usable concrete type:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="n">String</span><span class="p">}</span>
+<span class="n">Point</span><span class="p">{</span><span class="n">String</span><span class="p">}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The type <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt> is a point whose coordinates are 64-bit
+floating-point values, while the type <tt class="docutils literal"><span class="pre">Point{String}</span></tt> is a &#8220;point&#8221;
+whose &#8220;coordinates&#8221; are string objects (see <a class="reference internal" href="../strings/#man-strings"><em>Strings</em></a>).
+However, <tt class="docutils literal"><span class="pre">Point</span></tt> itself is also a valid type object:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span>
+<span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here the <tt class="docutils literal"><span class="pre">T</span></tt> is the dummy type symbol used in the original declaration
+of <tt class="docutils literal"><span class="pre">Point</span></tt>. What does <tt class="docutils literal"><span class="pre">Point</span></tt> by itself mean? It is an abstract type
+that contains all the specific instances <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt>,
+<tt class="docutils literal"><span class="pre">Point{String}</span></tt>, etc.:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="n">String</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>Other types, of course, are not subtypes of it:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span> <span class="o">&lt;:</span> <span class="n">Point</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">String</span> <span class="o">&lt;:</span> <span class="n">Point</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Concrete <tt class="docutils literal"><span class="pre">Point</span></tt> types with different values of <tt class="docutils literal"><span class="pre">T</span></tt> are never
+subtypes of each other:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>This last point is very important:</p>
+<blockquote>
+<div><strong>Even though</strong> <tt class="docutils literal"><span class="pre">Float64</span> <span class="pre">&lt;:</span> <span class="pre">Real</span></tt> <strong>we DO NOT have</strong>
+<tt class="docutils literal"><span class="pre">Point{Float64}</span> <span class="pre">&lt;:</span> <span class="pre">Point{Real}</span></tt><strong>.</strong></div></blockquote>
+<p>In other words, in the parlance of type theory, Julia&#8217;s type parameters
+are <em>invariant</em>, rather than being covariant (or even contravariant).
+This is for practical reasons: while any instance of <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt>
+may conceptually be like an instance of <tt class="docutils literal"><span class="pre">Point{Real}</span></tt> as well, the two
+types have different representations in memory:</p>
+<ul class="simple">
+<li>An instance of <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt> can be represented compactly and
+efficiently as an immediate pair of 64-bit values;</li>
+<li>An instance of <tt class="docutils literal"><span class="pre">Point{Real}</span></tt> must be able to hold any pair of
+instances of <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt>. Since objects that are instances of <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt>
+can be of arbitrary size and structure, in practice an instance of
+<tt class="docutils literal"><span class="pre">Point{Real}</span></tt> must be represented as a pair of pointers to
+individually allocated <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt> objects.</li>
+</ul>
+<p>The efficiency gained by being able to store <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt> objects
+with immediate values is magnified enormously in the case of arrays: an
+<tt class="docutils literal"><span class="pre">Array{Float64}</span></tt> can be stored as a contiguous memory block of 64-bit
+floating-point values, whereas an <tt class="docutils literal"><span class="pre">Array{Real}</span></tt> must be an array of
+pointers to individually allocated <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt> objects —&nbsp;which may well be
+<a class="reference external" href="http://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing">boxed</a>
+64-bit floating-point values, but also might be arbitrarily large,
+complex objects, which are declared to be implementations of the
+<tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt> abstract type.</p>
+<p>How does one construct a <tt class="docutils literal"><span class="pre">Point</span></tt> object? It is possible to define
+custom constructors for composite types, which will be discussed in
+detail in <a class="reference internal" href="../constructors/#man-constructors"><em>Constructors</em></a>, but in the absence of any
+special constructor declarations, there are two default ways of creating
+new composite objects, one in which the type parameters are explicitly
+given and the other in which they are implied by the arguments to the
+object constructor.</p>
+<p>Since the type <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt> is a concrete type equivalent to
+<tt class="docutils literal"><span class="pre">Point</span></tt> declared with <tt class="xref jl jl-class docutils literal"><span class="pre">Float64</span></tt> in place of <tt class="docutils literal"><span class="pre">T</span></tt>, it can be applied
+as a constructor accordingly:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For the default constructor, exactly one argument must be supplied for
+each field:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`Point{Float64}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(::</span><span class="kt">Float64</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">,</span><span class="mf">3.0</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`Point{Float64}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(::</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Only one default constructor is generated for parametric types, since
+overriding it is not possible. This constructor accepts any arguments
+and converts them to the field types.</p>
+<p>In many cases, it is redundant to provide the type of <tt class="docutils literal"><span class="pre">Point</span></tt> object
+one wants to construct, since the types of arguments to the constructor
+call already implicitly provide type information. For that reason, you
+can also apply <tt class="docutils literal"><span class="pre">Point</span></tt> itself as a constructor, provided that the
+implied value of the parameter type <tt class="docutils literal"><span class="pre">T</span></tt> is unambiguous:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In the case of <tt class="docutils literal"><span class="pre">Point</span></tt>, the type of <tt class="docutils literal"><span class="pre">T</span></tt> is unambiguously implied if
+and only if the two arguments to <tt class="docutils literal"><span class="pre">Point</span></tt> have the same type. When this
+isn&#8217;t the case, the constructor will fail with a no method error:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`Point{T}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}(::</span><span class="kt">Int64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Constructor methods to appropriately handle such mixed cases can be
+defined, but that will not be discussed until later on in
+<a class="reference internal" href="../constructors/#man-constructors"><em>Constructors</em></a>.</p>
+</div>
+<div class="section" id="parametric-abstract-types">
+<h3>Parametric Abstract Types<a class="headerlink" href="#parametric-abstract-types" title="Permalink to this headline">¶</a></h3>
+<p>Parametric abstract type declarations declare a collection of abstract
+types, in much the same way:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span><span class="nc"> Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>With this declaration, <tt class="docutils literal"><span class="pre">Pointy{T}</span></tt> is a distinct abstract type for
+each type or integer value of <tt class="docutils literal"><span class="pre">T</span></tt>. As with parametric composite types,
+each such instance is a subtype of <tt class="docutils literal"><span class="pre">Pointy</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>Parametric abstract types are invariant, much as parametric composite
+types are:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Much as plain old abstract types serve to create a useful hierarchy of
+types over concrete types, parametric abstract types serve the same
+purpose with respect to parametric composite types. We could, for
+example, have declared <tt class="docutils literal"><span class="pre">Point{T}</span></tt> to be a subtype of <tt class="docutils literal"><span class="pre">Pointy{T}</span></tt> as
+follows:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+  <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+  <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>Given such a declaration, for each choice of <tt class="docutils literal"><span class="pre">T</span></tt>, we have <tt class="docutils literal"><span class="pre">Point{T}</span></tt>
+as a subtype of <tt class="docutils literal"><span class="pre">Pointy{T}</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="n">String</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">String</span><span class="p">}</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>This relationship is also invariant:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>What purpose do parametric abstract types like <tt class="docutils literal"><span class="pre">Pointy</span></tt> serve?
+Consider if we create a point-like implementation that only requires a
+single coordinate because the point is on the diagonal line <em>x = y</em>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> DiagPoint</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+  <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>Now both <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt> and <tt class="docutils literal"><span class="pre">DiagPoint{Float64}</span></tt> are
+implementations of the <tt class="docutils literal"><span class="pre">Pointy{Float64}</span></tt> abstraction, and similarly
+for every other possible choice of type <tt class="docutils literal"><span class="pre">T</span></tt>. This allows programming
+to a common interface shared by all <tt class="docutils literal"><span class="pre">Pointy</span></tt> objects, implemented for
+both <tt class="docutils literal"><span class="pre">Point</span></tt> and <tt class="docutils literal"><span class="pre">DiagPoint</span></tt>. This cannot be fully demonstrated,
+however, until we have introduced methods and dispatch in the next
+section, <a class="reference internal" href="../methods/#man-methods"><em>Methods</em></a>.</p>
+<p>There are situations where it may not make sense for type parameters to
+range freely over all possible types. In such situations, one can
+constrain the range of <tt class="docutils literal"><span class="pre">T</span></tt> like so:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span><span class="nc"> Pointy</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>With such a declaration, it is acceptable to use any type that is a
+subtype of <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt> in place of <tt class="docutils literal"><span class="pre">T</span></tt>, but not types that are not
+subtypes of <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
+<span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
+<span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">String</span><span class="p">}</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">Pointy</span><span class="p">:</span> <span class="k">in</span> <span class="n">T</span><span class="p">,</span> <span class="n">expected</span> <span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">,</span> <span class="n">got</span> <span class="n">Type</span><span class="p">{</span><span class="n">String</span><span class="p">}</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">Pointy</span><span class="p">:</span> <span class="k">in</span> <span class="n">T</span><span class="p">,</span> <span class="n">expected</span> <span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
+</pre></div>
+</div>
+<p>Type parameters for parametric composite types can be restricted in the
+same manner:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+  <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+  <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>To give a real-world example of how all this parametric type
+machinery can be useful, here is the actual definition of Julia&#8217;s
+<tt class="xref jl jl-obj docutils literal"><span class="pre">Rational</span></tt> immutable type (except that we omit the constructor here
+for simplicity), representing an exact ratio of integers:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Integer</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Real</span>
+  <span class="n">num</span><span class="p">::</span><span class="n">T</span>
+  <span class="n">den</span><span class="p">::</span><span class="n">T</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>It only makes sense to take ratios of integer values, so the parameter
+type <tt class="docutils literal"><span class="pre">T</span></tt> is restricted to being a subtype of <tt class="xref jl jl-class docutils literal"><span class="pre">Integer</span></tt>, and a ratio
+of integers represents a value on the real number line, so any
+<tt class="xref jl jl-obj docutils literal"><span class="pre">Rational</span></tt> is an instance of the <tt class="xref jl jl-obj docutils literal"><span class="pre">Real</span></tt> abstraction.</p>
+<div class="section" id="singleton-types">
+<span id="man-singleton-types"></span><h4>Singleton Types<a class="headerlink" href="#singleton-types" title="Permalink to this headline">¶</a></h4>
+<p>There is a special kind of abstract parametric type that must be
+mentioned here: singleton types. For each type, <tt class="docutils literal"><span class="pre">T</span></tt>, the &#8220;singleton
+type&#8221; <tt class="docutils literal"><span class="pre">Type{T}</span></tt> is an abstract type whose only instance is the object
+<tt class="docutils literal"><span class="pre">T</span></tt>. Since the definition is a little difficult to parse, let&#8217;s look
+at some examples:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="n">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">Real</span><span class="p">,</span> <span class="n">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">Real</span><span class="p">,</span> <span class="n">Type</span><span class="p">{</span><span class="n">Real</span><span class="p">})</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="n">Type</span><span class="p">{</span><span class="n">Real</span><span class="p">})</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>In other words, <a class="reference internal" href="../../stdlib/base/#Base.isa" title="Base.isa"><tt class="xref jl jl-func docutils literal"><span class="pre">isa(A,Type{B})</span></tt></a> is true if and only if <tt class="docutils literal"><span class="pre">A</span></tt> and
+<tt class="docutils literal"><span class="pre">B</span></tt> are the same object and that object is a type. Without the
+parameter, <tt class="xref jl jl-obj docutils literal"><span class="pre">Type</span></tt> is simply an abstract type which has all type
+objects as its instances, including, of course, singleton types:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span><span class="n">Type</span><span class="p">)</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="n">Type</span><span class="p">)</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">Real</span><span class="p">,</span><span class="n">Type</span><span class="p">)</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>Any object that is not a type is not an instance of <tt class="docutils literal"><span class="pre">Type</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">Type</span><span class="p">)</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="n">Type</span><span class="p">)</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Until we discuss <a class="reference internal" href="../methods/#man-parametric-methods"><em>Parametric Methods</em></a>
+and <a class="reference internal" href="../conversion-and-promotion/#man-conversion"><em>conversions</em></a>, it is
+difficult to explain the utility of the singleton type construct, but in
+short, it allows one to specialize function behavior on specific type
+<em>values</em>. This is useful for writing
+methods (especially parametric ones) whose behavior depends on a type
+that is given as an explicit argument rather than implied by the type of
+one of its arguments.</p>
+<p>A few popular languages have singleton types, including Haskell, Scala
+and Ruby. In general usage, the term &#8220;singleton type&#8221; refers to a type
+whose only instance is a single value. This meaning applies to Julia&#8217;s
+singleton types, but with that caveat that only type objects have
+singleton types.</p>
+</div>
+</div>
+<div class="section" id="parametric-bits-types">
+<h3>Parametric Bits Types<a class="headerlink" href="#parametric-bits-types" title="Permalink to this headline">¶</a></h3>
+<p>Bits types can also be declared parametrically. For example, pointers
+are represented as boxed bits types which would be declared in Julia
+like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># 32-bit system:</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+
+<span class="c"># 64-bit system:</span>
+<span class="k">bitstype</span> <span class="mi">64</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>The slightly odd feature of these declarations as compared to typical
+parametric composite types, is that the type parameter <tt class="docutils literal"><span class="pre">T</span></tt> is not used
+in the definition of the type itself —&nbsp;it is just an abstract tag,
+essentially defining an entire family of types with identical structure,
+differentiated only by their type parameter. Thus, <tt class="docutils literal"><span class="pre">Ptr{Float64}</span></tt> and
+<tt class="docutils literal"><span class="pre">Ptr{Int64}</span></tt> are distinct types, even though they have identical
+representations. And of course, all specific pointer types are subtype
+of the umbrella <tt class="docutils literal"><span class="pre">Ptr</span></tt> type:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Ptr</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Ptr</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="type-aliases">
+<h2>Type Aliases<a class="headerlink" href="#type-aliases" title="Permalink to this headline">¶</a></h2>
+<p>Sometimes it is convenient to introduce a new name for an already
+expressible type. For such occasions, Julia provides the <tt class="docutils literal"><span class="pre">typealias</span></tt>
+mechanism. For example, <tt class="xref jl jl-class docutils literal"><span class="pre">Uint</span></tt> is type aliased to either <tt class="xref jl jl-class docutils literal"><span class="pre">Uint32</span></tt> or
+<tt class="xref jl jl-class docutils literal"><span class="pre">Uint64</span></tt> as is appropriate for the size of pointers on the system:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># 32-bit system:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Uint</span>
+<span class="kt">Uint32</span>
+
+<span class="c"># 64-bit system:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Uint</span>
+<span class="kt">Uint64</span>
+</pre></div>
+</div>
+<p>This is accomplished via the following code in <tt class="docutils literal"><span class="pre">base/boot.jl</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="nb">is</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+    <span class="k">typealias</span><span class="nc"> Uint</span> <span class="kt">Uint64</span>
+<span class="k">else</span>
+    <span class="k">typealias</span><span class="nc"> Uint</span> <span class="kt">Uint32</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>Of course, this depends on what <tt class="xref jl jl-class docutils literal"><span class="pre">Int</span></tt> is aliased to —&nbsp;but that is
+predefined to be the correct type —&nbsp;either <tt class="xref jl jl-class docutils literal"><span class="pre">Int32</span></tt> or <tt class="xref jl jl-class docutils literal"><span class="pre">Int64</span></tt>.</p>
+<p>For parametric types, <tt class="docutils literal"><span class="pre">typealias</span></tt> can be convenient for providing
+names for cases where some of the parameter choices are fixed.
+Julia&#8217;s arrays have type <tt class="docutils literal"><span class="pre">Array{T,N}</span></tt> where <tt class="docutils literal"><span class="pre">T</span></tt> is the element type
+and <tt class="docutils literal"><span class="pre">N</span></tt> is the number of array dimensions. For convenience, writing
+<tt class="docutils literal"><span class="pre">Array{Float64}</span></tt> allows one to specify the element type without
+specifying the dimension:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Array</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>However, there is no way to equally simply restrict just the dimension
+but not the element type. Yet, one often needs to ensure an object
+is a vector or a matrix (imposing restrictions on the number of dimensions).
+For that reason, the following type aliases are provided:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span><span class="nc"> Vector</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span>
+<span class="k">typealias</span><span class="nc"> Matrix</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>Writing <tt class="docutils literal"><span class="pre">Vector{Float64}</span></tt> is equivalent to writing
+<tt class="docutils literal"><span class="pre">Array{Float64,1}</span></tt>, and the umbrella type <tt class="docutils literal"><span class="pre">Vector</span></tt> has as instances
+all <tt class="docutils literal"><span class="pre">Array</span></tt> objects where the second parameter —&nbsp;the number of array
+dimensions —&nbsp;is 1, regardless of what the element type is. In languages
+where parametric types must always be specified in full, this is not
+especially helpful, but in Julia, this allows one to write just
+<tt class="docutils literal"><span class="pre">Matrix</span></tt> for the abstract type including all two-dimensional dense
+arrays of any element type.</p>
+<p>This declaration of <tt class="docutils literal"><span class="pre">Vector</span></tt> creates a subtype relation
+<tt class="docutils literal"><span class="pre">Vector{Int}</span> <span class="pre">&lt;:</span> <span class="pre">Vector</span></tt>.  However, it is not always the case that a parametric
+<tt class="docutils literal"><span class="pre">typealias</span></tt> statement creates such a relation; for example, the statement:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span><span class="nc"> AA</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="n">Array</span><span class="p">{</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">},</span><span class="mi">1</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>does not create the relation <tt class="docutils literal"><span class="pre">AA{Int}</span> <span class="pre">&lt;:</span> <span class="pre">AA</span></tt>.  The reason is that <tt class="docutils literal"><span class="pre">Array{Array{T,1},1}</span></tt> is not
+an abstract type at all; in fact, it is a concrete type describing a
+1-dimensional array in which each entry
+is an object of type <tt class="docutils literal"><span class="pre">Array{T,1}</span></tt> for some value of <tt class="docutils literal"><span class="pre">T</span></tt>.</p>
+</div>
+<div class="section" id="operations-on-types">
+<h2>Operations on Types<a class="headerlink" href="#operations-on-types" title="Permalink to this headline">¶</a></h2>
+<p>Since types in Julia are themselves objects, ordinary functions can
+operate on them. Some functions that are particularly useful for working
+with or exploring types have already been introduced, such as the <tt class="docutils literal"><span class="pre">&lt;:</span></tt>
+operator, which indicates whether its left hand operand is a subtype of
+its right hand operand.</p>
+<p>The <tt class="docutils literal"><span class="pre">isa</span></tt> function tests if an object is of a given type and returns
+true or false:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="kt">Int</span><span class="p">)</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">FloatingPoint</span><span class="p">)</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>The <a class="reference internal" href="../../stdlib/base/#Base.typeof" title="Base.typeof"><tt class="xref jl jl-func docutils literal"><span class="pre">typeof()</span></tt></a> function, already used throughout the manual in examples,
+returns the type of its argument. Since, as noted above, types are
+objects, they also have types, and we can ask what their types are:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Rational</span><span class="p">)</span>
+<span class="n">DataType</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Union</span><span class="p">(</span><span class="n">Real</span><span class="p">,</span><span class="kt">Float64</span><span class="p">,</span><span class="n">Rational</span><span class="p">))</span>
+<span class="n">DataType</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">((</span><span class="n">Rational</span><span class="p">,</span><span class="kt">None</span><span class="p">))</span>
+<span class="p">(</span><span class="n">DataType</span><span class="p">,</span><span class="n">UnionType</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>What if we repeat the process? What is the type of a type of a type?
+As it happens, types are all composite values and thus all have a type of
+<tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">DataType</span><span class="p">)</span>
+<span class="n">DataType</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">UnionType</span><span class="p">)</span>
+<span class="n">DataType</span>
+</pre></div>
+</div>
+<p>The reader may note that <tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt> shares with the empty tuple
+(see <a class="reference external" href="#tuple-types">above</a>), the distinction of being its own type
+(i.e. a fixed point of the <a class="reference internal" href="../../stdlib/base/#Base.typeof" title="Base.typeof"><tt class="xref jl jl-func docutils literal"><span class="pre">typeof()</span></tt></a> function). This leaves any number
+of tuple types recursively built with <tt class="docutils literal"><span class="pre">()</span></tt> and <tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt> as
+their only atomic values, which are their own type:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(())</span>
+<span class="p">()</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">DataType</span><span class="p">)</span>
+<span class="n">DataType</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(((),))</span>
+<span class="p">((),)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">((</span><span class="n">DataType</span><span class="p">,))</span>
+<span class="p">(</span><span class="n">DataType</span><span class="p">,)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(((),</span><span class="n">DataType</span><span class="p">))</span>
+<span class="p">((),</span><span class="n">DataType</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>All fixed points of <a class="reference internal" href="../../stdlib/base/#Base.typeof" title="Base.typeof"><tt class="xref jl jl-func docutils literal"><span class="pre">typeof()</span></tt></a> are like this.</p>
+<p>Another operation that applies to some types is <a class="reference internal" href="../../stdlib/base/#Base.super" title="Base.super"><tt class="xref jl jl-func docutils literal"><span class="pre">super()</span></tt></a>, which
+reveals a type&#8217;s supertype.
+Only declared types (<tt class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></tt>) have unambiguous supertypes:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">super</span><span class="p">(</span><span class="kt">Float64</span><span class="p">)</span>
+<span class="n">FloatingPoint</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">super</span><span class="p">(</span><span class="n">Number</span><span class="p">)</span>
+<span class="kt">Any</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">super</span><span class="p">(</span><span class="n">String</span><span class="p">)</span>
+<span class="kt">Any</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">super</span><span class="p">(</span><span class="kt">Any</span><span class="p">)</span>
+<span class="kt">Any</span>
+</pre></div>
+</div>
+<p>If you apply <a class="reference internal" href="../../stdlib/base/#Base.super" title="Base.super"><tt class="xref jl jl-func docutils literal"><span class="pre">super()</span></tt></a> to other type objects (or non-type objects), a
+<a class="reference internal" href="../../stdlib/base/#Base.MethodError" title="Base.MethodError"><tt class="xref jl jl-exc docutils literal"><span class="pre">MethodError</span></tt></a> is raised:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">super</span><span class="p">(</span><span class="n">Union</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">))</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`super`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">super</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="n">Union</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)})</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">super</span><span class="p">(</span><span class="kt">None</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`super`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">super</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="kt">None</span><span class="p">})</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">super</span><span class="p">((</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">))</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`super`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">super</span><span class="p">(::</span><span class="n">Type</span><span class="p">{(</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)})</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../methods/" class="btn btn-neutral float-right" title="Methods">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../variables-and-scoping/" class="btn btn-neutral" title="Scope of Variables"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.3.13-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

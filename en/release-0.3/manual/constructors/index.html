@@ -1,0 +1,1073 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Constructors &mdash; Julia Language 0.3.13-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.3.13-pre documentation" href="../../"/>
+        <link rel="next" title="Conversion and Promotion" href="../conversion-and-promotion/"/>
+        <link rel="prev" title="Methods" href="../methods/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#elementary-functions">Elementary Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics"><tt class="docutils literal"><span class="pre">String</span></tt> Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <tt class="docutils literal"><span class="pre">return</span></tt> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#id1">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#for-loops-and-comprehensions">For Loops and Comprehensions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#tuple-types">Tuple Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#case-study-rational">Case Study: Rational</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-arrays">Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#constructing-distributed-arrays">Constructing Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-array-operations">Distributed Array Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays-experimental">Shared Arrays (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#passing-pointers-for-modifying-inputs">Passing Pointers for Modifying Inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#passing-julia-callback-functions-to-c">Passing Julia Callback Functions to C</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#handling-platform-variations">Handling Platform Variations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#tagging-package-versions">Tagging Package Versions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <tt class="docutils literal"><span class="pre">&#64;time</span></tt> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <cite>!</cite> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#try-to-avoid-nullable-fields">Try to avoid nullable fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <tt class="docutils literal"><span class="pre">base/</span></tt></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <tt class="docutils literal"><span class="pre">x-&gt;f(x)</span></tt></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#id1">Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#distributed-arrays">Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays-experimental-unix-only-feature">Shared Arrays (Experimental, UNIX-only feature)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/graphics/">Graphics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/graphics/#geometry">Geometry</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Constructors</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/constructors.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="constructors">
+<span id="man-constructors"></span><h1>Constructors<a class="headerlink" href="#constructors" title="Permalink to this headline">¶</a></h1>
+<p>Constructors <a class="footnote-reference" href="#id2" id="id1">[1]</a> are functions that create new objects —&nbsp;specifically,
+instances of <a class="reference internal" href="../types/#man-composite-types"><em>Composite Types</em></a>. In Julia,
+type objects also serve as constructor functions: they create new
+instances of themselves when applied to an argument tuple as a function.
+This much was already mentioned briefly when composite types were
+introduced. For example:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Foo</span>
+  <span class="n">bar</span>
+  <span class="n">baz</span>
+<span class="k">end</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span> <span class="o">=</span> <span class="n">Foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="o">.</span><span class="n">bar</span>
+<span class="mi">1</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="o">.</span><span class="n">baz</span>
+<span class="mi">2</span>
+</pre></div>
+</div>
+<p>For many types, forming new objects by binding their field values
+together is all that is ever needed to create instances. There are,
+however, cases where more functionality is required when creating
+composite objects. Sometimes invariants must be enforced, either by
+checking arguments or by transforming them. <a class="reference external" href="http://en.wikipedia.org/wiki/Recursion_%28computer_science%29#Recursive_data_structures_.28structural_recursion.29">Recursive data
+structures</a>,
+especially those that may be self-referential, often cannot be
+constructed cleanly without first being created in an incomplete state
+and then altered programmatically to be made whole, as a separate step
+from object creation. Sometimes, it&#8217;s just convenient to be able to
+construct objects with fewer or different types of parameters than they
+have fields. Julia&#8217;s system for object construction addresses all of
+these cases and more.</p>
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>Nomenclature: while the term “constructor” generally refers to
+the entire function which constructs objects of a type, it is common to
+abuse terminology slightly and refer to specific constructor methods as
+“constructors”. In such situations, it is generally clear from context
+that the term is used to mean “constructor method” rather than
+“constructor function”, especially as it is often used in the sense of
+singling out a particular method of the constructor from all of the
+others.</td></tr>
+</tbody>
+</table>
+<div class="section" id="outer-constructor-methods">
+<h2>Outer Constructor Methods<a class="headerlink" href="#outer-constructor-methods" title="Permalink to this headline">¶</a></h2>
+<p>A constructor is just like any other function in Julia in that&nbsp;its
+overall behavior is defined by the combined behavior of its methods.
+Accordingly, you can add functionality to a constructor by simply
+defining new methods. For example, let&#8217;s say you want to add a
+constructor method for <tt class="docutils literal"><span class="pre">Foo</span></tt> objects that takes only one argument and
+uses the given value for both the <tt class="docutils literal"><span class="pre">bar</span></tt> and <tt class="docutils literal"><span class="pre">baz</span></tt> fields. This is
+simple:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Foo</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">Foo</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">x</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Foo</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">Foo</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>You could also add a zero-argument <tt class="docutils literal"><span class="pre">Foo</span></tt> constructor method that
+supplies default values for both of the <tt class="docutils literal"><span class="pre">bar</span></tt> and <tt class="docutils literal"><span class="pre">baz</span></tt> fields:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Foo</span><span class="p">()</span> <span class="o">=</span> <span class="n">Foo</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Foo</span><span class="p">()</span>
+<span class="n">Foo</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here the zero-argument constructor method calls the single-argument
+constructor method, which in turn calls the automatically provided
+two-argument constructor method. For reasons that will become clear very
+shortly, additional constructor methods declared as normal methods like
+this are called <em>outer</em> constructor methods. Outer constructor methods
+can only ever create a new instance by calling another constructor
+method, such as the automatically provided default ones.</p>
+</div>
+<div class="section" id="inner-constructor-methods">
+<h2>Inner Constructor Methods<a class="headerlink" href="#inner-constructor-methods" title="Permalink to this headline">¶</a></h2>
+<p>While outer constructor methods succeed in addressing the problem of
+providing additional convenience methods for constructing objects, they
+fail to address the other two use cases mentioned in the introduction of
+this chapter: enforcing invariants, and allowing construction of
+self-referential objects. For these problems, one needs <em>inner</em>
+constructor methods. An inner constructor method is much like an outer
+constructor method, with two differences:</p>
+<ol class="arabic simple">
+<li>It is declared inside the block of a type declaration, rather than
+outside of it like normal methods.</li>
+<li>It has access to a special locally existent function called <tt class="docutils literal"><span class="pre">new</span></tt>
+that creates objects of the block&#8217;s type.</li>
+</ol>
+<p>For example, suppose one wants to declare a type that holds a pair of
+real numbers, subject to the constraint that the first number is
+not greater than the second one. One could declare it like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> OrderedPair</span>
+  <span class="n">x</span><span class="p">::</span><span class="n">Real</span>
+  <span class="n">y</span><span class="p">::</span><span class="n">Real</span>
+
+  <span class="n">OrderedPair</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span> <span class="o">?</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;out of order&quot;</span><span class="p">)</span> <span class="p">:</span> <span class="nb">new</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>Now <tt class="docutils literal"><span class="pre">OrderedPair</span></tt> objects can only be constructed such that
+<tt class="docutils literal"><span class="pre">x</span> <span class="pre">&lt;=</span> <span class="pre">y</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">OrderedPair</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">OrderedPair</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">OrderedPair</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">out</span> <span class="n">of</span> <span class="n">order</span>
+ <span class="k">in</span> <span class="n">OrderedPair</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">5</span>
+</pre></div>
+</div>
+<p>You can still reach in and directly change the field values to violate
+this invariant, but messing around with an object&#8217;s internals uninvited is
+considered poor form. You (or someone else) can also provide additional
+outer constructor methods at any later point, but once a type is
+declared, there is no way to add more inner constructor methods. Since
+outer constructor methods can only create objects by calling other
+constructor methods, ultimately, some inner constructor must be called
+to create an object. This guarantees that all objects of the declared
+type must come into existence by a call to one of the inner constructor
+methods provided with the type, thereby giving some degree of
+enforcement of a type&#8217;s invariants.</p>
+<p>Of course, if the type is declared as <tt class="docutils literal"><span class="pre">immutable</span></tt>, then its
+constructor-provided invariants are fully enforced. This is an important
+consideration when deciding whether a type should be immutable.</p>
+<p>If any inner constructor method is defined, no default constructor
+method is provided: it is presumed that you have supplied yourself with
+all the inner constructors you need. The default constructor is
+equivalent to writing your own inner constructor method that takes all
+of the object&#8217;s fields as parameters (constrained to be of the correct
+type, if the corresponding field has a type), and passes them to
+<tt class="docutils literal"><span class="pre">new</span></tt>, returning the resulting object:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Foo</span>
+  <span class="n">bar</span>
+  <span class="n">baz</span>
+
+  <span class="n">Foo</span><span class="p">(</span><span class="n">bar</span><span class="p">,</span><span class="n">baz</span><span class="p">)</span> <span class="o">=</span> <span class="nb">new</span><span class="p">(</span><span class="n">bar</span><span class="p">,</span><span class="n">baz</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>This declaration has the same effect as the earlier definition of the
+<tt class="docutils literal"><span class="pre">Foo</span></tt> type without an explicit inner constructor method. The following
+two types are equivalent —&nbsp;one with a default constructor, the other
+with an explicit constructor:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> T1</span>
+  <span class="n">x</span><span class="p">::</span><span class="kt">Int64</span>
+<span class="k">end</span>
+
+<span class="k">type</span><span class="nc"> T2</span>
+  <span class="n">x</span><span class="p">::</span><span class="kt">Int64</span>
+  <span class="n">T2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="nb">new</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="k">end</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">T1</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">T1</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">T2</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">T2</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">T1</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="n">T1</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">T2</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="n">T2</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It is considered good form to provide as few inner constructor methods
+as possible: only those taking all arguments explicitly and enforcing
+essential error checking and transformation. Additional convenience
+constructor methods, supplying default values or auxiliary
+transformations, should be provided as outer constructors that call the
+inner constructors to do the heavy lifting. This separation is typically
+quite natural.</p>
+</div>
+<div class="section" id="incomplete-initialization">
+<h2>Incomplete Initialization<a class="headerlink" href="#incomplete-initialization" title="Permalink to this headline">¶</a></h2>
+<p>The final problem which has still not been addressed is construction of
+self-referential objects, or more generally, recursive data structures.
+Since the fundamental difficulty may not be immediately obvious, let us
+briefly explain it. Consider the following recursive type declaration:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> SelfReferential</span>
+  <span class="n">obj</span><span class="p">::</span><span class="n">SelfReferential</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>This type may appear innocuous enough, until one considers how to
+construct an instance of it. If <tt class="docutils literal"><span class="pre">a</span></tt> is an instance of
+<tt class="docutils literal"><span class="pre">SelfReferential</span></tt>, then a second instance can be created by the call:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">b</span> <span class="o">=</span> <span class="n">SelfReferential</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>But how does one construct the first instance when no instance exists to
+provide as a valid value for its <tt class="docutils literal"><span class="pre">obj</span></tt> field? The only solution is to
+allow creating an incompletely initialized instance of
+<tt class="docutils literal"><span class="pre">SelfReferential</span></tt> with an unassigned <tt class="docutils literal"><span class="pre">obj</span></tt> field, and using that
+incomplete instance as a valid value for the <tt class="docutils literal"><span class="pre">obj</span></tt> field of another
+instance, such as, for example, itself.</p>
+<p>To allow for the creation of incompletely initialized objects, Julia
+allows the <tt class="docutils literal"><span class="pre">new</span></tt> function to be called with fewer than the number of
+fields that the type has, returning an object with the unspecified
+fields uninitialized. The inner constructor method can then use the
+incomplete object, finishing its initialization before returning it.
+Here, for example, we take another crack at defining the
+<tt class="docutils literal"><span class="pre">SelfReferential</span></tt> type, with a zero-argument inner constructor
+returning instances having <tt class="docutils literal"><span class="pre">obj</span></tt> fields pointing to themselves:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> SelfReferential</span>
+  <span class="n">obj</span><span class="p">::</span><span class="n">SelfReferential</span>
+
+  <span class="n">SelfReferential</span><span class="p">()</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="nb">new</span><span class="p">();</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span> <span class="o">=</span> <span class="n">x</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>We can verify that this constructor works and constructs objects that
+are, in fact, self-referential:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">SelfReferential</span><span class="p">();</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">is</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">x</span><span class="o">.</span><span class="n">obj</span><span class="o">.</span><span class="n">obj</span><span class="p">)</span>
+<span class="n">true</span>
+</pre></div>
+</div>
+<p>Although it is generally a good idea to return a fully initialized
+object from an inner constructor, incompletely initialized objects can
+be returned:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> Incomplete</span>
+         <span class="n">xx</span>
+         <span class="n">Incomplete</span><span class="p">()</span> <span class="o">=</span> <span class="nb">new</span><span class="p">()</span>
+       <span class="k">end</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span> <span class="o">=</span> <span class="n">Incomplete</span><span class="p">();</span>
+</pre></div>
+</div>
+<p>While you are allowed to create objects with uninitialized fields, any
+access to an uninitialized reference is an immediate error:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span><span class="o">.</span><span class="n">xx</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">access</span> <span class="n">to</span> <span class="n">undefined</span> <span class="n">reference</span>
+</pre></div>
+</div>
+<p>This avoids the need to continually check for <tt class="docutils literal"><span class="pre">null</span></tt> values.
+However, not all object fields are references. Julia considers some
+types to be &#8220;plain data&#8221;, meaning all of their data is self-contained
+and does not reference other objects. The plain data types consist of bits
+types (e.g. <tt class="docutils literal"><span class="pre">Int</span></tt>) and immutable structs of other plain data types.
+The initial contents of a plain data type are undefined:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> HasPlain</span>
+         <span class="n">n</span><span class="p">::</span><span class="kt">Int</span>
+         <span class="n">HasPlain</span><span class="p">()</span> <span class="o">=</span> <span class="nb">new</span><span class="p">()</span>
+       <span class="k">end</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">HasPlain</span><span class="p">()</span>
+<span class="n">HasPlain</span><span class="p">(</span><span class="mi">438103441441</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Arrays of plain data types exhibit the same behavior.</p>
+<p>You can pass incomplete objects to other functions from inner constructors to
+delegate their completion:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Lazy</span>
+  <span class="n">xx</span>
+
+  <span class="n">Lazy</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">=</span> <span class="n">complete_me</span><span class="p">(</span><span class="nb">new</span><span class="p">(),</span> <span class="n">v</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>As with incomplete objects returned from constructors, if
+<tt class="docutils literal"><span class="pre">complete_me</span></tt> or any of its callees try to access the <tt class="docutils literal"><span class="pre">xx</span></tt> field of
+the <tt class="docutils literal"><span class="pre">Lazy</span></tt> object before it has been initialized, an error will be
+thrown immediately.</p>
+</div>
+<div class="section" id="parametric-constructors">
+<h2>Parametric Constructors<a class="headerlink" href="#parametric-constructors" title="Permalink to this headline">¶</a></h2>
+<p>Parametric types add a few wrinkles to the constructor story. Recall
+from <a class="reference internal" href="../types/#man-parametric-types"><em>Parametric Types</em></a> that, by default,
+instances of parametric composite types can be constructed either with
+explicitly given type parameters or with type parameters implied by the
+types of the arguments given to the constructor. Here are some examples:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}</span>
+         <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+         <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+       <span class="k">end</span>
+
+<span class="c">## implicit T ##</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`Point{T&lt;:Real}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}(::</span><span class="kt">Int64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span>
+
+<span class="c">## explicit T ##</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
+ <span class="k">in</span> <span class="n">Point</span> <span class="n">at</span> <span class="n">no</span> <span class="n">file</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As you can see, for constructor calls with explicit type parameters, the
+arguments are converted to the implied field types: <tt class="docutils literal"><span class="pre">Point{Int64}(1,2)</span></tt>
+works, but <tt class="docutils literal"><span class="pre">Point{Int64}(1.0,2.5)</span></tt> raises an
+<tt class="docutils literal"><span class="pre">InexactError</span></tt> when converting <tt class="docutils literal"><span class="pre">2.5</span></tt> to <tt class="docutils literal"><span class="pre">Int64</span></tt>.
+When the type is implied by the
+arguments to the constructor call, as in <tt class="docutils literal"><span class="pre">Point(1,2)</span></tt>, then the types
+of the arguments must agree — otherwise the <tt class="docutils literal"><span class="pre">T</span></tt> cannot be determined —
+but any pair of real arguments with matching type may be given to the
+generic <tt class="docutils literal"><span class="pre">Point</span></tt> constructor.</p>
+<p>What&#8217;s really going on here is that <tt class="docutils literal"><span class="pre">Point</span></tt>, <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt> and
+<tt class="docutils literal"><span class="pre">Point{Int64}</span></tt> are all different constructor functions. In fact,
+<tt class="docutils literal"><span class="pre">Point{T}</span></tt> is a distinct constructor function for each type <tt class="docutils literal"><span class="pre">T</span></tt>.
+Without any explicitly provided inner constructors, the declaration of
+the composite type <tt class="docutils literal"><span class="pre">Point{T&lt;:Real}</span></tt> automatically provides an inner
+constructor, <tt class="docutils literal"><span class="pre">Point{T}</span></tt>, for each possible type <tt class="docutils literal"><span class="pre">T&lt;:Real</span></tt>, that
+behaves just like non-parametric default inner constructors do. It also
+provides a single general outer <tt class="docutils literal"><span class="pre">Point</span></tt> constructor that takes pairs
+of real arguments, which must be of the same type. This automatic
+provision of constructors is equivalent to the following explicit
+declaration:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}</span>
+  <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+  <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+
+  <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="nb">new</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<span class="k">end</span>
+
+<span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}(</span><span class="n">x</span><span class="p">::</span><span class="n">T</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Some features of parametric constructor definitions at work here deserve
+comment. First, inner constructor declarations always define methods of
+<tt class="docutils literal"><span class="pre">Point{T}</span></tt> rather than methods of the general <tt class="docutils literal"><span class="pre">Point</span></tt> constructor
+function. Since <tt class="docutils literal"><span class="pre">Point</span></tt> is not a concrete type, it makes no sense for
+it to even have inner constructor methods at all. Thus, the inner method
+declaration <tt class="docutils literal"><span class="pre">Point(x,y)</span> <span class="pre">=</span> <span class="pre">new(x,y)</span></tt> provides an inner
+constructor method for each value of <tt class="docutils literal"><span class="pre">T</span></tt>. It is this method
+declaration that defines the behavior of constructor calls with explicit
+type parameters like <tt class="docutils literal"><span class="pre">Point{Int64}(1,2)</span></tt> and
+<tt class="docutils literal"><span class="pre">Point{Float64}(1.0,2.0)</span></tt>. The outer constructor declaration, on the
+other hand, defines a method for the general <tt class="docutils literal"><span class="pre">Point</span></tt> constructor which
+only applies to pairs of values of the same real type. This declaration
+makes constructor calls without explicit type parameters, like
+<tt class="docutils literal"><span class="pre">Point(1,2)</span></tt> and <tt class="docutils literal"><span class="pre">Point(1.0,2.5)</span></tt>, work. Since the method
+declaration restricts the arguments to being of the same type, calls
+like <tt class="docutils literal"><span class="pre">Point(1,2.5)</span></tt>, with arguments of different types, result in &#8220;no
+method&#8221; errors.</p>
+<p>Suppose we wanted to make the constructor call <tt class="docutils literal"><span class="pre">Point(1,2.5)</span></tt> work by
+&#8220;promoting&#8221; the integer value <tt class="docutils literal"><span class="pre">1</span></tt> to the floating-point value <tt class="docutils literal"><span class="pre">1.0</span></tt>.
+The simplest way to achieve this is to define the following additional
+outer constructor method:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="kt">Float64</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">(</span><span class="nb">convert</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="n">x</span><span class="p">),</span><span class="n">y</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>This method uses the <a class="reference internal" href="../../stdlib/base/#Base.convert" title="Base.convert"><tt class="xref jl jl-func docutils literal"><span class="pre">convert()</span></tt></a> function to explicitly convert <tt class="docutils literal"><span class="pre">x</span></tt> to
+<tt class="xref jl jl-class docutils literal"><span class="pre">Float64</span></tt> and then delegates construction to the general constructor
+for the case where both arguments are <tt class="xref jl jl-class docutils literal"><span class="pre">Float64</span></tt>. With this method
+definition what was previously a <a class="reference internal" href="../../stdlib/base/#Base.MethodError" title="Base.MethodError"><tt class="xref jl jl-exc docutils literal"><span class="pre">MethodError</span></tt></a> now successfully
+creates a point of type <tt class="docutils literal"><span class="pre">Point{Float64}</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>However, other similar calls still don&#8217;t work:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mf">1.5</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`Point{T&lt;:Real}`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}(::</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Int64</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For a much more general way of making all such calls work sensibly, see
+<a class="reference internal" href="../conversion-and-promotion/#man-conversion-and-promotion"><em>Conversion and Promotion</em></a>. At the risk
+of spoiling the suspense, we can reveal here that all it takes is
+the following outer method definition to make all calls to the general
+<tt class="docutils literal"><span class="pre">Point</span></tt> constructor work as one would expect:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Real</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">Point</span><span class="p">(</span><span class="nb">promote</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span><span class="o">...</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">promote</span></tt> function converts all its arguments to a common type
+—&nbsp;in this case <tt class="xref jl jl-class docutils literal"><span class="pre">Float64</span></tt>. With this method definition, the <tt class="docutils literal"><span class="pre">Point</span></tt>
+constructor promotes its arguments the same way that numeric operators
+like <a class="reference internal" href="../../stdlib/math/#Base.+" title="Base.+"><tt class="xref jl jl-obj docutils literal"><span class="pre">+</span></tt></a> do, and works for all kinds of real numbers:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mf">1.5</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.5</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}}(</span><span class="mi">1</span><span class="o">//</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">0.5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Thus, while the implicit type parameter constructors provided by default
+in Julia are fairly strict, it is possible to make them behave in a more
+relaxed but sensible manner quite easily. Moreover, since constructors
+can leverage all of the power of the type system, methods, and multiple
+dispatch, defining sophisticated behavior is typically quite simple.</p>
+</div>
+<div class="section" id="case-study-rational">
+<h2>Case Study: Rational<a class="headerlink" href="#case-study-rational" title="Permalink to this headline">¶</a></h2>
+<p>Perhaps the best way to tie all these pieces together is to present a
+real world example of a parametric composite type and its constructor
+methods. To that end, here is beginning of
+<a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/rational.jl">rational.jl</a>,
+which implements Julia&#8217;s <a class="reference internal" href="../complex-and-rational-numbers/#man-rational-numbers"><em>Rational Numbers</em></a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Integer</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Real</span>
+    <span class="n">num</span><span class="p">::</span><span class="n">T</span>
+    <span class="n">den</span><span class="p">::</span><span class="n">T</span>
+
+    <span class="k">function</span><span class="nf"> Rational</span><span class="p">(</span><span class="n">num</span><span class="p">::</span><span class="n">T</span><span class="p">,</span> <span class="n">den</span><span class="p">::</span><span class="n">T</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">num</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">den</span> <span class="o">==</span> <span class="mi">0</span>
+            <span class="nb">error</span><span class="p">(</span><span class="s">&quot;invalid rational: 0//0&quot;</span><span class="p">)</span>
+        <span class="k">end</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">gcd</span><span class="p">(</span><span class="n">den</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span>
+        <span class="n">num</span> <span class="o">=</span> <span class="n">div</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
+        <span class="n">den</span> <span class="o">=</span> <span class="n">div</span><span class="p">(</span><span class="n">den</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
+        <span class="nb">new</span><span class="p">(</span><span class="n">num</span><span class="p">,</span> <span class="n">den</span><span class="p">)</span>
+    <span class="k">end</span>
+<span class="k">end</span>
+<span class="n">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Integer</span><span class="p">}(</span><span class="n">n</span><span class="p">::</span><span class="n">T</span><span class="p">,</span> <span class="n">d</span><span class="p">::</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="n">Rational</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span>
+<span class="n">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">d</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">Rational</span><span class="p">(</span><span class="nb">promote</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span><span class="o">...</span><span class="p">)</span>
+<span class="n">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">one</span><span class="p">(</span><span class="n">n</span><span class="p">))</span>
+
+<span class="o">//</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">d</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">Rational</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="n">d</span><span class="p">)</span>
+<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Rational</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">num</span> <span class="o">//</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">den</span><span class="o">*</span><span class="n">y</span><span class="p">)</span>
+<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Rational</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span><span class="o">*</span><span class="n">y</span><span class="o">.</span><span class="n">den</span><span class="p">)</span> <span class="o">//</span> <span class="n">y</span><span class="o">.</span><span class="n">num</span>
+<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Complex</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">complex</span><span class="p">(</span><span class="n">real</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">//</span><span class="n">y</span><span class="p">,</span> <span class="n">imag</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">//</span><span class="n">y</span><span class="p">)</span>
+<span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Real</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Complex</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;//</span><span class="n">real</span><span class="p">(</span><span class="n">y</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;</span><span class="p">)</span>
+
+<span class="k">function</span><span class="nf"> </span><span class="o">//</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Complex</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">Complex</span><span class="p">)</span>
+    <span class="n">xy</span> <span class="o">=</span> <span class="n">x</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;</span>
+    <span class="n">yy</span> <span class="o">=</span> <span class="n">real</span><span class="p">(</span><span class="n">y</span><span class="o">*</span><span class="n">y</span><span class="o">&#39;</span><span class="p">)</span>
+    <span class="n">complex</span><span class="p">(</span><span class="n">real</span><span class="p">(</span><span class="n">xy</span><span class="p">)</span><span class="o">//</span><span class="n">yy</span><span class="p">,</span> <span class="n">imag</span><span class="p">(</span><span class="n">xy</span><span class="p">)</span><span class="o">//</span><span class="n">yy</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>The first line —&nbsp;<tt class="docutils literal"><span class="pre">immutable</span> <span class="pre">Rational{T&lt;:Int}</span> <span class="pre">&lt;:</span> <span class="pre">Real</span></tt> — declares that
+<tt class="xref jl jl-class docutils literal"><span class="pre">Rational</span></tt> takes one type parameter of an integer type, and is itself
+a real type. The field declarations <tt class="docutils literal"><span class="pre">num::T</span></tt> and <tt class="docutils literal"><span class="pre">den::T</span></tt> indicate
+that the data held in a <tt class="docutils literal"><span class="pre">Rational{T}</span></tt> object are a pair of integers of
+type <tt class="docutils literal"><span class="pre">T</span></tt>, one representing the rational value&#8217;s numerator and the
+other representing its denominator.</p>
+<p>Now things get interesting. <tt class="xref jl jl-class docutils literal"><span class="pre">Rational</span></tt> has a single inner constructor
+method which checks that both of <tt class="docutils literal"><span class="pre">num</span></tt> and <tt class="docutils literal"><span class="pre">den</span></tt> aren&#8217;t zero and
+ensures that every rational is constructed in &#8220;lowest terms&#8221; with a
+non-negative denominator. This is accomplished by dividing the given
+numerator and denominator values by their greatest common divisor,
+computed using the <tt class="docutils literal"><span class="pre">gcd</span></tt> function. Since <tt class="docutils literal"><span class="pre">gcd</span></tt> returns the greatest
+common divisor of its arguments with sign matching the first argument
+(<tt class="docutils literal"><span class="pre">den</span></tt> here),&nbsp;after this division the new value of <tt class="docutils literal"><span class="pre">den</span></tt> is
+guaranteed to be non-negative. Because this is the only inner
+constructor for <tt class="xref jl jl-class docutils literal"><span class="pre">Rational</span></tt>, we can be certain that <tt class="xref jl jl-class docutils literal"><span class="pre">Rational</span></tt>
+objects are always constructed in this normalized form.</p>
+<p><tt class="xref jl jl-class docutils literal"><span class="pre">Rational</span></tt> also provides several outer constructor methods for
+convenience. The first is the &#8220;standard&#8221; general constructor that infers
+the type parameter <tt class="docutils literal"><span class="pre">T</span></tt> from the type of the numerator and denominator
+when they have the same type. The second applies when the given
+numerator and denominator values have different types: it promotes them
+to a common type and then delegates construction to the outer
+constructor for arguments of matching type. The third outer constructor
+turns integer values into rationals by supplying a value of <tt class="docutils literal"><span class="pre">1</span></tt> as the
+denominator.</p>
+<p>Following the outer constructor definitions, we have a number of methods
+for the <a class="reference internal" href="../../stdlib/math/#Base.//" title="Base.//"><tt class="xref jl jl-obj docutils literal"><span class="pre">//</span></tt></a> operator, which provides a syntax for writing rationals.
+Before these definitions, <a class="reference internal" href="../../stdlib/math/#Base.//" title="Base.//"><tt class="xref jl jl-obj docutils literal"><span class="pre">//</span></tt></a> is a completely undefined operator with
+only syntax and no meaning. Afterwards, it behaves just as described in
+<a class="reference internal" href="../complex-and-rational-numbers/#man-rational-numbers"><em>Rational Numbers</em></a>
+—&nbsp;its entire behavior is defined in these few lines. The first and most
+basic definition just makes <tt class="docutils literal"><span class="pre">a//b</span></tt> construct a <tt class="xref jl jl-class docutils literal"><span class="pre">Rational</span></tt> by
+applying the <tt class="xref jl jl-class docutils literal"><span class="pre">Rational</span></tt> constructor to <tt class="docutils literal"><span class="pre">a</span></tt> and <tt class="docutils literal"><span class="pre">b</span></tt> when they are
+integers. When one of the operands of <a class="reference internal" href="../../stdlib/math/#Base.//" title="Base.//"><tt class="xref jl jl-obj docutils literal"><span class="pre">//</span></tt></a> is already a rational
+number, we construct a new rational for the resulting ratio slightly
+differently; this behavior is actually identical to division of a
+rational with an integer. Finally, applying <a class="reference internal" href="../../stdlib/math/#Base.//" title="Base.//"><tt class="xref jl jl-obj docutils literal"><span class="pre">//</span></tt></a> to complex integral
+values creates an instance of <tt class="docutils literal"><span class="pre">Complex{Rational}</span></tt> — a complex number
+whose real and imaginary parts are rationals:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="nb">im</span><span class="p">)</span><span class="o">//</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="mi">2</span><span class="nb">im</span><span class="p">)</span>
+<span class="o">-</span><span class="mi">3</span><span class="o">//</span><span class="mi">5</span> <span class="o">+</span> <span class="mi">4</span><span class="o">//</span><span class="mi">5</span><span class="o">*</span><span class="nb">im</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">Complex</span><span class="p">{</span><span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}}</span> <span class="p">(</span><span class="n">constructor</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ans</span> <span class="o">&lt;:</span> <span class="n">Complex</span><span class="p">{</span><span class="n">Rational</span><span class="p">}</span>
+<span class="n">false</span>
+</pre></div>
+</div>
+<p>Thus, although the <a class="reference internal" href="../../stdlib/math/#Base.//" title="Base.//"><tt class="xref jl jl-obj docutils literal"><span class="pre">//</span></tt></a> operator usually returns an instance of
+<tt class="xref jl jl-class docutils literal"><span class="pre">Rational</span></tt>, if either of its arguments are complex integers, it will
+return an instance of <tt class="docutils literal"><span class="pre">Complex{Rational}</span></tt> instead. The interested
+reader should consider perusing the rest of
+<a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/rational.jl">rational.jl</a>:
+it is short, self-contained, and implements an entire basic Julia type
+in just a little over a hundred lines of code.</p>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../conversion-and-promotion/" class="btn btn-neutral float-right" title="Conversion and Promotion">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../methods/" class="btn btn-neutral" title="Methods"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.3.13-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

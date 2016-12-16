@@ -1,0 +1,928 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Profiling &mdash; Julia Language 0.4.8-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.4.8-pre documentation" href="../../"/>
+        <link rel="next" title="Performance Tips" href="../performance-tips/"/>
+        <link rel="prev" title="Packages" href="../packages/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#call-overloading-and-function-like-objects">Call overloading and function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#constructors-call-and-conversion">Constructors, Call, and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interfaces/">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#markdown-syntax-notes">Markdown Syntax Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#remoterefs-and-abstractchannels">RemoteRefs and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-garbage-collection">Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../dates/">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#period-types">Period Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#handling-operating-system-variation">Handling Operating System Variation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/dates/">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#test-framework">Test Framework</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libc/">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libdl/">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/init/">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/eval/">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/ast/">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/types/">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/object/">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/subarrays/">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/llvm/">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/promote-op/">Operator-sensitive promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Profiling</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/profile.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="profiling">
+<span id="man-profiling"></span><h1>Profiling<a class="headerlink" href="#profiling" title="Permalink to this headline">¶</a></h1>
+<p>The <a class="reference internal" href="../../stdlib/profile/#module-Profile" title="Profile"><code class="xref jl jl-mod docutils literal"><span class="pre">Profile</span></code></a> module provides tools to help developers improve the
+performance of their code. When used, it takes measurements on running
+code, and produces output that helps you understand how much time is
+spent on individual line(s).  The most common usage is to identify
+&#8220;bottlenecks&#8221; as targets for optimization.</p>
+<p><a class="reference internal" href="../../stdlib/profile/#module-Profile" title="Profile"><code class="xref jl jl-mod docutils literal"><span class="pre">Profile</span></code></a> implements what is known as a &#8220;sampling&#8221; or <a class="reference external" href="https://en.wikipedia.org/wiki/Profiling_(computer_programming)">statistical
+profiler</a>.  It
+works by periodically taking a backtrace during the execution of any
+task. Each backtrace captures the currently-running function and
+line number, plus the complete chain of function calls that led to
+this line, and hence is a &#8220;snapshot&#8221; of the current state of
+execution.</p>
+<p>If much of your run time is spent executing a particular line of code,
+this line will show up frequently in the set of all backtraces.  In
+other words, the &#8220;cost&#8221; of a given line&#8212;or really, the cost of the
+sequence of function calls up to and including this line&#8212;is
+proportional to how often it appears in the set of all backtraces.</p>
+<p>A sampling profiler does not provide complete line-by-line coverage,
+because the backtraces occur at intervals (by default, 1 ms on Unix
+systems and 10 ms on Windows, although the actual scheduling is
+subject to operating system load). Moreover, as discussed further
+below, because samples are collected at a sparse subset of all
+execution points, the data collected by a sampling profiler is subject
+to statistical noise.</p>
+<p>Despite these limitations, sampling profilers have substantial strengths:</p>
+<ul class="simple">
+<li>You do not have to make any modifications to your code to take
+timing measurements (in contrast to the alternative <a class="reference external" href="https://github.com/timholy/IProfile.jl">instrumenting
+profiler</a>).</li>
+<li>It can profile into Julia&#8217;s core code and even (optionally) into C
+and Fortran libraries.</li>
+<li>By running &#8220;infrequently&#8221; there is very little performance overhead;
+while profiling, your code can run at nearly native speed.</li>
+</ul>
+<p>For these reasons, it&#8217;s recommended that you try using the built-in
+sampling profiler before considering any alternatives.</p>
+<div class="section" id="basic-usage">
+<h2>Basic usage<a class="headerlink" href="#basic-usage" title="Permalink to this headline">¶</a></h2>
+<p>Let&#8217;s work with a simple test case:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> myfunc</span><span class="p">()</span>
+    <span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">200</span><span class="p">)</span>
+    <span class="n">maximum</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>It&#8217;s a good idea to first run the code you intend to profile at least
+once (unless you want to profile Julia&#8217;s JIT-compiler):</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">myfunc</span><span class="p">()</span>  <span class="c"># run once to force compilation</span>
+</pre></div>
+</div>
+<p>Now we&#8217;re ready to profile this function:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">profile</span> <span class="n">myfunc</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>To see the profiling results, there is a <a class="reference external" href="https://github.com/timholy/ProfileView.jl">graphical browser</a> available, but here
+we&#8217;ll use the text-based display that comes with the standard library:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Profile</span><span class="o">.</span><span class="n">print</span><span class="p">()</span>
+      <span class="mi">23</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">_start</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">373</span>
+        <span class="mi">23</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">run_repl</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">166</span>
+           <span class="mi">23</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">eval_user_input</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">91</span>
+              <span class="mi">23</span> <span class="n">profile</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">anonymous</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">14</span>
+                 <span class="mi">8</span>  <span class="n">none</span><span class="p">;</span> <span class="n">myfunc</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">2</span>
+                  <span class="mi">8</span> <span class="n">dSFMT</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">dsfmt_gv_fill_array_close_open!</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">128</span>
+                 <span class="mi">15</span> <span class="n">none</span><span class="p">;</span> <span class="n">myfunc</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">3</span>
+                  <span class="mi">2</span>  <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">max</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">35</span>
+                  <span class="mi">2</span>  <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">max</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">36</span>
+                  <span class="mi">11</span> <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">max</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">37</span>
+</pre></div>
+</div>
+<p>Each line of this display represents a particular spot (line number)
+in the code.  Indentation is used to indicate the nested sequence of
+function calls, with more-indented lines being deeper in the sequence
+of calls.  In each line, the first &#8220;field&#8221; indicates the number of
+backtraces (samples) taken <em>at this line or in any functions executed
+by this line</em>. The second field is the file name, followed by a
+semicolon; the third is the function name followed by a semicolon, and
+the fourth is the line number.  Note that the specific line numbers
+may change as Julia&#8217;s code changes; if you want to follow along, it&#8217;s
+best to run this example yourself.</p>
+<p>In this example, we can see that the top level is <code class="docutils literal"><span class="pre">client.jl</span></code>&#8216;s
+<code class="docutils literal"><span class="pre">_start</span></code> function. This is the first Julia function that gets called
+when you launch Julia.  If you examine line 373 of <code class="docutils literal"><span class="pre">client.jl</span></code>,
+you&#8217;ll see that (at the time of this writing) it calls <code class="xref jl jl-func docutils literal"><span class="pre">run_repl()</span></code>,
+mentioned on the second line. This in turn calls <code class="xref jl jl-func docutils literal"><span class="pre">eval_user_input()</span></code>.
+These are the functions in <code class="docutils literal"><span class="pre">client.jl</span></code> that interpret what you type
+at the REPL, and since we&#8217;re working interactively these functions
+were invoked when we entered <code class="docutils literal"><span class="pre">&#64;profile</span> <span class="pre">myfunc()</span></code>.  The next line
+reflects actions taken in the <a class="reference internal" href="../../stdlib/profile/#Base.&#64;profile" title="Base.&#64;profile"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;profile</span></code></a> macro.</p>
+<p>The first line shows that 23 backtraces were taken at line 373 of
+<code class="docutils literal"><span class="pre">client.jl</span></code>, but it&#8217;s not that this line was &#8220;expensive&#8221; on its own:
+the second line reveals that all 23 of these backtraces were actually
+triggered inside its call to <code class="docutils literal"><span class="pre">run_repl</span></code>, and so on. To find out
+which operations are actually taking the time, we need to look deeper
+in the call chain.</p>
+<p>The first &#8220;important&#8221; line in this output is this one:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="mi">8</span>  <span class="n">none</span><span class="p">;</span> <span class="n">myfunc</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">2</span>
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">none</span></code> refers to the fact that we defined <code class="docutils literal"><span class="pre">myfunc</span></code> in the REPL,
+rather than putting it in a file; if we had used a file, this would
+show the file name. Line 2 of <code class="docutils literal"><span class="pre">myfunc()</span></code> contains the call to
+<code class="docutils literal"><span class="pre">rand</span></code>, and there were 8 (out of 23) backtraces that occurred at
+this line. Below that, you can see a call to
+<code class="xref jl jl-func docutils literal"><span class="pre">dsfmt_gv_fill_array_close_open!()</span></code> inside <code class="docutils literal"><span class="pre">dSFMT.jl</span></code>. You might be surprised not to see the
+<code class="docutils literal"><span class="pre">rand</span></code> function listed explicitly: that&#8217;s because <code class="docutils literal"><span class="pre">rand</span></code> is <em>inlined</em>,
+and hence doesn&#8217;t appear in the backtraces.</p>
+<p>A little further down, you see:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="mi">15</span> <span class="n">none</span><span class="p">;</span> <span class="n">myfunc</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">3</span>
+</pre></div>
+</div>
+<p>Line 3 of <code class="docutils literal"><span class="pre">myfunc</span></code> contains the call to <code class="docutils literal"><span class="pre">max</span></code>, and there were 15
+(out of 23) backtraces taken here. Below that, you can see the
+specific places in <code class="docutils literal"><span class="pre">base/reduce.jl</span></code> that carry out the
+time-consuming operations in the <code class="docutils literal"><span class="pre">max</span></code> function for this type of
+input data.</p>
+<p>Overall, we can tentatively conclude that finding the maximum element
+is approximately twice as expensive as generating the random
+numbers. We could increase our confidence in this result by collecting
+more samples:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">profile</span> <span class="p">(</span><span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">100</span><span class="p">;</span> <span class="n">myfunc</span><span class="p">();</span> <span class="k">end</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Profile</span><span class="o">.</span><span class="n">print</span><span class="p">()</span>
+       <span class="mi">3121</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">_start</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">373</span>
+        <span class="mi">3121</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">run_repl</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">166</span>
+           <span class="mi">3121</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">eval_user_input</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">91</span>
+              <span class="mi">3121</span> <span class="n">profile</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">anonymous</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">1</span>
+                 <span class="mi">848</span>  <span class="n">none</span><span class="p">;</span> <span class="n">myfunc</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">2</span>
+                  <span class="mi">842</span> <span class="n">dSFMT</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">dsfmt_gv_fill_array_close_open!</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">128</span>
+                 <span class="mi">1510</span> <span class="n">none</span><span class="p">;</span> <span class="n">myfunc</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">3</span>
+                  <span class="mi">74</span>   <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">max</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">35</span>
+                  <span class="mi">122</span>  <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">max</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">36</span>
+                  <span class="mi">1314</span> <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">max</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">37</span>
+</pre></div>
+</div>
+<p>In general, if you have <code class="docutils literal"><span class="pre">N</span></code> samples collected at a line, you can
+expect an uncertainty on the order of <code class="docutils literal"><span class="pre">sqrt(N)</span></code> (barring other
+sources of noise, like how busy the computer is with other tasks). The
+major exception to this rule is garbage collection, which runs
+infrequently but tends to be quite expensive. (Since Julia&#8217;s garbage
+collector is written in C, such events can be detected using the
+<code class="docutils literal"><span class="pre">C=true</span></code> output mode described below, or by using <a class="reference external" href="https://github.com/timholy/ProfileView.jl">ProfileView.jl</a>.)</p>
+<p>This illustrates the default &#8220;tree&#8221; dump; an alternative is the &#8220;flat&#8221;
+dump, which accumulates counts independent of their nesting:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Profile</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">format</span><span class="o">=</span><span class="p">:</span><span class="n">flat</span><span class="p">)</span>
+ <span class="n">Count</span> <span class="n">File</span>         <span class="n">Function</span>                         <span class="n">Line</span>
+  <span class="mi">3121</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span>    <span class="n">_start</span>                            <span class="mi">373</span>
+  <span class="mi">3121</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span>    <span class="n">eval_user_input</span>                    <span class="mi">91</span>
+  <span class="mi">3121</span> <span class="n">client</span><span class="o">.</span><span class="n">jl</span>    <span class="n">run_repl</span>                          <span class="mi">166</span>
+   <span class="mi">842</span> <span class="n">dSFMT</span><span class="o">.</span><span class="n">jl</span>     <span class="n">dsfmt_gv_fill_array_close_open!</span>   <span class="mi">128</span>
+   <span class="mi">848</span> <span class="n">none</span>         <span class="n">myfunc</span>                              <span class="mi">2</span>
+  <span class="mi">1510</span> <span class="n">none</span>         <span class="n">myfunc</span>                              <span class="mi">3</span>
+  <span class="mi">3121</span> <span class="n">profile</span><span class="o">.</span><span class="n">jl</span>   <span class="n">anonymous</span>                           <span class="mi">1</span>
+    <span class="mi">74</span> <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span>    <span class="n">max</span>                                <span class="mi">35</span>
+   <span class="mi">122</span> <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span>    <span class="n">max</span>                                <span class="mi">36</span>
+  <span class="mi">1314</span> <span class="n">reduce</span><span class="o">.</span><span class="n">jl</span>    <span class="n">max</span>                                <span class="mi">37</span>
+</pre></div>
+</div>
+<p>If your code has recursion, one potentially-confusing point is that a
+line in a &#8220;child&#8221; function can accumulate more counts than there are
+total backtraces. Consider the following function definitions:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">dumbsum</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">1</span> <span class="o">?</span> <span class="mi">1</span> <span class="p">:</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">dumbsum</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">dumbsum3</span><span class="p">()</span> <span class="o">=</span> <span class="n">dumbsum</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>If you were to profile <code class="docutils literal"><span class="pre">dumbsum3</span></code>, and a backtrace was taken while it was executing <code class="docutils literal"><span class="pre">dumbsum(1)</span></code>, the backtrace would look like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">dumbsum3</span>
+    <span class="n">dumbsum</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">dumbsum</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">dumbsum</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Consequently, this child function gets 3 counts, even though the
+parent only gets one.  The &#8220;tree&#8221; representation makes this much
+clearer, and for this reason (among others) is probably the most
+useful way to view the results.</p>
+</div>
+<div class="section" id="accumulation-and-clearing">
+<h2>Accumulation and clearing<a class="headerlink" href="#accumulation-and-clearing" title="Permalink to this headline">¶</a></h2>
+<p>Results from <a class="reference internal" href="../../stdlib/profile/#Base.&#64;profile" title="Base.&#64;profile"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;profile</span></code></a> accumulate in a buffer; if you run multiple
+pieces of code under <a class="reference internal" href="../../stdlib/profile/#Base.&#64;profile" title="Base.&#64;profile"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;profile</span></code></a>, then <a class="reference internal" href="../../stdlib/profile/#Base.Profile.print" title="Base.Profile.print"><code class="xref jl jl-func docutils literal"><span class="pre">Profile.print()</span></code></a> will show
+you the combined results. This can be very useful, but sometimes you
+want to start fresh; you can do so with <a class="reference internal" href="../../stdlib/profile/#Base.Profile.clear" title="Base.Profile.clear"><code class="xref jl jl-func docutils literal"><span class="pre">Profile.clear()</span></code></a>.</p>
+</div>
+<div class="section" id="options-for-controlling-the-display-of-profile-results">
+<h2>Options for controlling the display of profile results<a class="headerlink" href="#options-for-controlling-the-display-of-profile-results" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference internal" href="../../stdlib/profile/#Base.Profile.print" title="Base.Profile.print"><code class="xref jl jl-func docutils literal"><span class="pre">Profile.print()</span></code></a> has more options than we&#8217;ve described so far.
+Let&#8217;s see the full declaration:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> print</span><span class="p">(</span><span class="n">io</span><span class="p">::</span><span class="n">IO</span> <span class="o">=</span> <span class="n">STDOUT</span><span class="p">,</span> <span class="n">data</span> <span class="o">=</span> <span class="n">fetch</span><span class="p">();</span> <span class="n">format</span> <span class="o">=</span> <span class="p">:</span><span class="n">tree</span><span class="p">,</span> <span class="n">C</span> <span class="o">=</span> <span class="n">false</span><span class="p">,</span> <span class="n">combine</span> <span class="o">=</span> <span class="n">true</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">tty_cols</span><span class="p">(),</span> <span class="n">maxdepth</span> <span class="o">=</span> <span class="nb">typemax</span><span class="p">(</span><span class="kt">Int</span><span class="p">),</span> <span class="n">sortedby</span> <span class="o">=</span> <span class="p">:</span><span class="n">filefuncline</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Let&#8217;s discuss these arguments in order:</p>
+<ul>
+<li><p class="first">The first argument allows you to save the results to a file, but the
+default is to print to <code class="docutils literal"><span class="pre">STDOUT</span></code> (the console).</p>
+</li>
+<li><p class="first">The second argument contains the data you want to analyze; by
+default that is obtained from <a class="reference internal" href="../../stdlib/profile/#Base.Profile.fetch" title="Base.Profile.fetch"><code class="xref jl jl-func docutils literal"><span class="pre">Profile.fetch()</span></code></a>, which pulls out
+the backtraces from a pre-allocated buffer. For example, if you want
+to profile the profiler, you could say:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">data</span> <span class="o">=</span> <span class="n">copy</span><span class="p">(</span><span class="n">Profile</span><span class="o">.</span><span class="n">fetch</span><span class="p">())</span>
+<span class="n">Profile</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+<span class="p">@</span><span class="n">profile</span> <span class="n">Profile</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">STDOUT</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="c"># Prints the previous results</span>
+<span class="n">Profile</span><span class="o">.</span><span class="n">print</span><span class="p">()</span>                      <span class="c"># Prints results from Profile.print()</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">The first keyword argument, <code class="docutils literal"><span class="pre">format</span></code>, was introduced above. The
+possible choices are <code class="docutils literal"><span class="pre">:tree</span></code> and <code class="docutils literal"><span class="pre">:flat</span></code>.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">C</span></code>, if set to <code class="docutils literal"><span class="pre">true</span></code>, allows you to see even the calls to C
+code.  Try running the introductory example with <code class="docutils literal"><span class="pre">Profile.print(C</span> <span class="pre">=</span>
+<span class="pre">true)</span></code>. This can be extremely helpful in deciding whether it&#8217;s
+Julia code or C code that is causing a bottleneck; setting
+<code class="docutils literal"><span class="pre">C=true</span></code> also improves the interpretability of the nesting, at
+the cost of longer profile dumps.</p>
+</li>
+<li><p class="first">Some lines of code contain multiple operations; for example, <code class="docutils literal"><span class="pre">s</span> <span class="pre">+=</span>
+<span class="pre">A[i]</span></code> contains both an array reference (<code class="docutils literal"><span class="pre">A[i]</span></code>) and a sum
+operation.  These correspond to different lines in the generated
+machine code, and hence there may be two or more different addresses
+captured during backtraces on this line.  <code class="docutils literal"><span class="pre">combine=true</span></code> lumps
+them together, and is probably what you typically want, but you can
+generate an output separately for each unique instruction pointer
+with <code class="docutils literal"><span class="pre">combine=false</span></code>.</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">cols</span></code> allows you to control the number of columns that you are
+willing to use for display.  When the text would be wider than the
+display, you might see output like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="mi">33</span> <span class="n">inference</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">abstract_call</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">645</span>
+  <span class="mi">33</span> <span class="n">inference</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">abstract_call</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">645</span>
+    <span class="mi">33</span> <span class="o">...</span><span class="n">rence</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">abstract_call_gf</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">567</span>
+       <span class="mi">33</span> <span class="o">...</span><span class="n">nce</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">typeinf</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">1201</span>
+     <span class="o">+</span><span class="mi">1</span> <span class="mi">5</span>  <span class="o">...</span><span class="n">nce</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="o">...</span><span class="n">t_interpret</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">900</span>
+     <span class="o">+</span><span class="mi">3</span> <span class="mi">5</span> <span class="o">...</span><span class="n">ence</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">abstract_eval</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">758</span>
+     <span class="o">+</span><span class="mi">4</span> <span class="mi">5</span> <span class="o">...</span><span class="n">ence</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="o">...</span><span class="n">ct_eval_call</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">733</span>
+     <span class="o">+</span><span class="mi">6</span> <span class="mi">5</span> <span class="o">...</span><span class="n">ence</span><span class="o">.</span><span class="n">jl</span><span class="p">;</span> <span class="n">abstract_call</span><span class="p">;</span> <span class="n">line</span><span class="p">:</span> <span class="mi">645</span>
+</pre></div>
+</div>
+<p>File/function names are sometimes truncated (with <code class="docutils literal"><span class="pre">...</span></code>),
+and indentation is truncated with a <code class="docutils literal"><span class="pre">+n</span></code> at the beginning,
+where <code class="docutils literal"><span class="pre">n</span></code> is the number of extra spaces that would have been
+inserted, had there been room. If you want a complete profile
+of deeply-nested code, often a good idea is to save to a file and
+use a very wide <code class="docutils literal"><span class="pre">cols</span></code> setting:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">s</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;/tmp/prof.txt&quot;</span><span class="p">,</span><span class="s">&quot;w&quot;</span><span class="p">)</span>
+<span class="n">Profile</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="n">cols</span> <span class="o">=</span> <span class="mi">500</span><span class="p">)</span>
+<span class="n">close</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">maxdepth</span></code> can be used to limit the size of the output in
+<code class="docutils literal"><span class="pre">:tree</span></code> format (it nests only up to level <code class="docutils literal"><span class="pre">maxdepth</span></code>)</p>
+</li>
+<li><p class="first"><code class="docutils literal"><span class="pre">sortedby</span> <span class="pre">=</span> <span class="pre">:count</span></code> sorts the <code class="docutils literal"><span class="pre">:flat</span></code> format in order of
+increasing counts</p>
+</li>
+</ul>
+</div>
+<div class="section" id="configuration">
+<h2>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference internal" href="../../stdlib/profile/#Base.&#64;profile" title="Base.&#64;profile"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;profile</span></code></a> just accumulates backtraces, and the analysis happens
+when you call <a class="reference internal" href="../../stdlib/profile/#Base.Profile.print" title="Base.Profile.print"><code class="xref jl jl-func docutils literal"><span class="pre">Profile.print()</span></code></a>. For a long-running computation,
+it&#8217;s entirely possible that the pre-allocated buffer for storing
+backtraces will be filled. If that happens, the backtraces stop but
+your computation continues. As a consequence, you may miss some
+important profiling data (you will get a warning when that happens).</p>
+<p>You can obtain and configure the relevant parameters this way:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Profile</span><span class="o">.</span><span class="n">init</span><span class="p">()</span>            <span class="c"># returns the current settings</span>
+<span class="n">Profile</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">delay</span><span class="p">)</span>
+<span class="n">Profile</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">delay</span> <span class="o">=</span> <span class="mf">0.01</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal"><span class="pre">n</span></code> is the total number of instruction pointers you can store, with
+a default value of <code class="docutils literal"><span class="pre">10^6</span></code>. If your typical backtrace is 20
+instruction pointers, then you can collect 50000 backtraces, which
+suggests a statistical uncertainty of less than 1%. This may be good
+enough for most applications.</p>
+<p>Consequently, you are more likely to need to modify <code class="docutils literal"><span class="pre">delay</span></code>,
+expressed in seconds, which sets the amount of time that Julia gets
+between snapshots to perform the requested computations. A very
+long-running job might not need frequent backtraces. The default
+setting is <code class="docutils literal"><span class="pre">delay</span> <span class="pre">=</span> <span class="pre">0.001</span></code>.  Of course, you can decrease the delay
+as well as increase it; however, the overhead of profiling grows once
+the delay becomes similar to the amount of time needed to take a
+backtrace (~30 microseconds on the author&#8217;s laptop).</p>
+</div>
+</div>
+<div class="section" id="memory-allocation-analysis">
+<span id="man-track-allocation"></span><h1>Memory allocation analysis<a class="headerlink" href="#memory-allocation-analysis" title="Permalink to this headline">¶</a></h1>
+<p>One of the most common techniques to improve performance is to reduce
+memory allocation.  The total amount of allocation can be measured
+with <a class="reference internal" href="../../stdlib/base/#Base.&#64;time" title="Base.&#64;time"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;time</span></code></a> and <a class="reference internal" href="../../stdlib/base/#Base.&#64;allocated" title="Base.&#64;allocated"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;allocated</span></code></a>, and specific lines triggering
+allocation can often be inferred from profiling via the cost of
+garbage collection that these lines incur.  However, sometimes it is
+more efficient to directly measure the amount of memory allocated by
+each line of code.</p>
+<p>To measure allocation line-by-line, start Julia with the
+<code class="docutils literal"><span class="pre">--track-allocation=&lt;setting&gt;</span></code> command-line option, for which you
+can choose <code class="docutils literal"><span class="pre">none</span></code> (the default, do not measure allocation), <code class="docutils literal"><span class="pre">user</span></code>
+(measure memory allocation everywhere except Julia&#8217;s core code), or
+<code class="docutils literal"><span class="pre">all</span></code> (measure memory allocation at each line of Julia code).
+Allocation gets measured for each line of compiled code.  When you quit
+Julia, the cumulative results are written to text files with <code class="docutils literal"><span class="pre">.mem</span></code>
+appended after the file name, residing in the same directory as the
+source file.  Each line lists the total number of bytes allocated.
+The <code class="docutils literal"><span class="pre">Coverage</span></code> package contains some elementary analysis tools, for
+example to sort the lines in order of number of bytes allocated.</p>
+<p>In interpreting the results, there are a few important details.  Under
+the <code class="docutils literal"><span class="pre">user</span></code> setting, the first line of any function directly called
+from the REPL will exhibit allocation due to events that happen in the
+REPL code itself.  More significantly, JIT-compilation also adds to
+allocation counts, because much of Julia&#8217;s compiler is written in
+Julia (and compilation usually requires memory allocation).  The
+recommended procedure is to force compilation by executing all the
+commands you want to analyze, then call <a class="reference internal" href="../../stdlib/profile/#Base.Profile.clear_malloc_data" title="Base.Profile.clear_malloc_data"><code class="xref jl jl-func docutils literal"><span class="pre">Profile.clear_malloc_data()</span></code></a> to
+reset all allocation counters.  Finally, execute the desired commands
+and quit Julia to trigger the generation of the <code class="docutils literal"><span class="pre">.mem</span></code> files.</p>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../performance-tips/" class="btn btn-neutral float-right" title="Performance Tips">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../packages/" class="btn btn-neutral" title="Packages"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.4.8-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

@@ -1,0 +1,1547 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>I/O and Network &mdash; Julia Language 0.4.8-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.4.8-pre documentation" href="../../"/>
+        <link rel="next" title="Punctuation" href="../punctuation/"/>
+        <link rel="prev" title="Filesystem" href="../file/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables-and-scoping/#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables-and-scoping/#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#call-overloading-and-function-like-objects">Call overloading and function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#constructors-call-and-conversion">Constructors, Call, and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/interfaces/">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interfaces/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interfaces/#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interfaces/#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/documentation/">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#markdown-syntax-notes">Markdown Syntax Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#remoterefs-and-abstractchannels">RemoteRefs and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#distributed-garbage-collection">Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/dates/">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#period-types">Period Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#handling-operating-system-variation">Handling Operating System Variation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/noteworthy-differences/#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/unicode-input/">Unicode Input</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel/#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linalg/#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../file/">Filesystem</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dates/">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../test/#test-framework">Test Framework</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../c/#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../libc/">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../libdl/">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/init/">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/eval/">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/ast/">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/types/">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/object/">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/subarrays/">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/llvm/">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/promote-op/">Operator-sensitive promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>I/O and Network</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/stdlib/io-network.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="i-o-and-network">
+<h1>I/O and Network<a class="headerlink" href="#i-o-and-network" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="general-i-o">
+<h2>General I/O<a class="headerlink" href="#general-i-o" title="Permalink to this headline">¶</a></h2>
+<dl class="data">
+<dt id="Base.STDOUT">
+<code class="descname">STDOUT</code><a class="headerlink" href="#Base.STDOUT" title="Permalink to this definition">¶</a></dt>
+<dd><p>Global variable referring to the standard out stream.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="Base.STDERR">
+<code class="descname">STDERR</code><a class="headerlink" href="#Base.STDERR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Global variable referring to the standard error stream.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="Base.STDIN">
+<code class="descname">STDIN</code><a class="headerlink" href="#Base.STDIN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Global variable referring to the standard input stream.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.open">
+<code class="descname">open</code><span class="sig-paren">(</span><em>file_name</em><span class="optional">[</span>, <em>read</em>, <em>write</em>, <em>create</em>, <em>truncate</em>, <em>append</em><span class="optional">]</span><span class="sig-paren">)</span> &rarr; IOStream<a class="headerlink" href="#Base.open" title="Permalink to this definition">¶</a></dt>
+<dd><p>Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">open</code><span class="sig-paren">(</span><em>file_name</em><span class="optional">[</span>, <em>mode</em><span class="optional">]</span><span class="sig-paren">)</span> &rarr; IOStream</dt>
+<dd><p>Alternate syntax for open, where a string-based mode specifier is used instead of the five booleans. The values of <code class="docutils literal"><span class="pre">mode</span></code> correspond to those from <code class="docutils literal"><span class="pre">fopen(3)</span></code> or Perl <code class="docutils literal"><span class="pre">open</span></code>, and are equivalent to setting the following boolean groups:</p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="11%" />
+<col width="89%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td>r</td>
+<td>read</td>
+</tr>
+<tr class="row-even"><td>r+</td>
+<td>read, write</td>
+</tr>
+<tr class="row-odd"><td>w</td>
+<td>write, create, truncate</td>
+</tr>
+<tr class="row-even"><td>w+</td>
+<td>read, write, create, truncate</td>
+</tr>
+<tr class="row-odd"><td>a</td>
+<td>write, create, append</td>
+</tr>
+<tr class="row-even"><td>a+</td>
+<td>read, write, create, append</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">open</code><span class="sig-paren">(</span><em>command</em>, <em>mode::AbstractString=&quot;r&quot;</em>, <em>stdio=DevNull</em><span class="sig-paren">)</span></dt>
+<dd><p>Start running <code class="docutils literal"><span class="pre">command</span></code> asynchronously, and return a tuple
+<code class="docutils literal"><span class="pre">(stream,process)</span></code>.  If <code class="docutils literal"><span class="pre">mode</span></code> is <code class="docutils literal"><span class="pre">&quot;r&quot;</span></code>, then <code class="docutils literal"><span class="pre">stream</span></code>
+reads from the process&#8217;s standard output and <code class="docutils literal"><span class="pre">stdio</span></code> optionally
+specifies the process&#8217;s standard input stream.  If <code class="docutils literal"><span class="pre">mode</span></code> is
+<code class="docutils literal"><span class="pre">&quot;w&quot;</span></code>, then <code class="docutils literal"><span class="pre">stream</span></code> writes to the process&#8217;s standard input
+and <code class="docutils literal"><span class="pre">stdio</span></code> optionally specifies the process&#8217;s standard output
+stream.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">open</code><span class="sig-paren">(</span><em>f::Function</em>, <em>command</em>, <em>mode::AbstractString=&quot;r&quot;</em>, <em>stdio=DevNull</em><span class="sig-paren">)</span></dt>
+<dd><p>Similar to <code class="docutils literal"><span class="pre">open(command,</span> <span class="pre">mode,</span> <span class="pre">stdio)</span></code>, but calls <code class="docutils literal"><span class="pre">f(stream)</span></code>
+on the resulting read or write stream, then closes the stream
+and waits for the process to complete.  Returns the value returned
+by <code class="docutils literal"><span class="pre">f</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">open</code><span class="sig-paren">(</span><em>f::Function</em>, <em>args...</em><span class="sig-paren">)</span></dt>
+<dd><p>Apply the function <code class="docutils literal"><span class="pre">f</span></code> to the result of <code class="docutils literal"><span class="pre">open(args...)</span></code> and close the resulting file descriptor upon completion.</p>
+<p><strong>Example</strong>: <code class="docutils literal"><span class="pre">open(readall,</span> <span class="pre">&quot;file.txt&quot;)</span></code></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.IOBuffer">
+<code class="descname">IOBuffer</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; IOBuffer<a class="headerlink" href="#Base.IOBuffer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an in-memory I/O stream.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">IOBuffer</code><span class="sig-paren">(</span><em>size::Int</em><span class="sig-paren">)</span></dt>
+<dd><p>Create a fixed size IOBuffer. The buffer will not grow dynamically.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">IOBuffer</code><span class="sig-paren">(</span><em>string</em><span class="sig-paren">)</span></dt>
+<dd><p>Create a read-only IOBuffer on the data underlying the given string</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">IOBuffer</code><span class="sig-paren">(</span><span class="optional">[</span><em>data</em><span class="optional">]</span><span class="optional">[</span>, <em>readable</em>, <em>writable</em><span class="optional">[</span>, <em>maxsize</em><span class="optional">]</span><span class="optional">]</span><span class="sig-paren">)</span></dt>
+<dd><p>Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.takebuf_array">
+<code class="descname">takebuf_array</code><span class="sig-paren">(</span><em>b::IOBuffer</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.takebuf_array" title="Permalink to this definition">¶</a></dt>
+<dd><p>Obtain the contents of an <code class="docutils literal"><span class="pre">IOBuffer</span></code> as an array, without copying. Afterwards, the IOBuffer is reset to its initial state.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.takebuf_string">
+<code class="descname">takebuf_string</code><span class="sig-paren">(</span><em>b::IOBuffer</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.takebuf_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Obtain the contents of an <code class="docutils literal"><span class="pre">IOBuffer</span></code> as a string, without copying. Afterwards, the IOBuffer is reset to its initial state.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.fdio">
+<code class="descname">fdio</code><span class="sig-paren">(</span><span class="optional">[</span><em>name::AbstractString</em>, <span class="optional">]</span><em>fd::Integer</em><span class="optional">[</span>, <em>own::Bool</em><span class="optional">]</span><span class="sig-paren">)</span> &rarr; IOStream<a class="headerlink" href="#Base.fdio" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an <code class="docutils literal"><span class="pre">IOStream</span></code> object from an integer file descriptor. If <code class="docutils literal"><span class="pre">own</span></code> is <code class="docutils literal"><span class="pre">true</span></code>, closing this object will close the underlying descriptor. By default, an <code class="docutils literal"><span class="pre">IOStream</span></code> is closed when it is garbage collected. <code class="docutils literal"><span class="pre">name</span></code> allows you to associate the descriptor with a named file.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.flush">
+<code class="descname">flush</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.flush" title="Permalink to this definition">¶</a></dt>
+<dd><p>Commit all currently buffered writes to the given stream.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.close">
+<code class="descname">close</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Close an I/O stream. Performs a <code class="docutils literal"><span class="pre">flush</span></code> first.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.write">
+<code class="descname">write</code><span class="sig-paren">(</span><em>stream</em>, <em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.write" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write the canonical binary representation of a value to the given stream. Returns the number of bytes written into the stream.</p>
+<p>You can write multiple values with the same :func:<code class="docutils literal"><span class="pre">write</span></code> call. i.e. the following are equivalent:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">write</span><span class="p">(</span><span class="n">stream</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="o">...</span><span class="p">)</span>
+<span class="n">write</span><span class="p">(</span><span class="n">stream</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">write</span><span class="p">(</span><span class="n">stream</span><span class="p">,</span> <span class="n">y</span><span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.read">
+<code class="descname">read</code><span class="sig-paren">(</span><em>stream</em>, <em>type</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.read" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a value of the given type from a stream, in canonical binary representation.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">read</code><span class="sig-paren">(</span><em>stream</em>, <em>type</em>, <em>dims</em><span class="sig-paren">)</span></dt>
+<dd><p>Read a series of values of the given type from a stream, in canonical binary representation. <code class="docutils literal"><span class="pre">dims</span></code> is either a tuple or a series of integer arguments specifying the size of <code class="docutils literal"><span class="pre">Array</span></code> to return.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.read!">
+<code class="descname">read!</code><span class="sig-paren">(</span><em>stream</em>, <em>array::Array</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.read!" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read binary data from a stream, filling in the argument <code class="docutils literal"><span class="pre">array</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readbytes!">
+<code class="descname">readbytes!</code><span class="sig-paren">(</span><em>stream</em>, <em>b::Vector{UInt8}</em>, <em>nb=length(b); all=true</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readbytes!" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read at most <code class="docutils literal"><span class="pre">nb</span></code> bytes from the stream into <code class="docutils literal"><span class="pre">b</span></code>, returning the number of bytes read (increasing the size of <code class="docutils literal"><span class="pre">b</span></code> as needed).</p>
+<p>See <code class="docutils literal"><span class="pre">readbytes</span></code> for a description of the <code class="docutils literal"><span class="pre">all</span></code> option.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readbytes">
+<code class="descname">readbytes</code><span class="sig-paren">(</span><em>stream</em>, <em>nb=typemax(Int); all=true</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readbytes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read at most <code class="docutils literal"><span class="pre">nb</span></code> bytes from the stream, returning a <code class="docutils literal"><span class="pre">Vector{UInt8}</span></code> of the bytes read.</p>
+<p>If <code class="docutils literal"><span class="pre">all</span></code> is <code class="docutils literal"><span class="pre">true</span></code> (the default), this function will block repeatedly trying to read all requested bytes, until an error or end-of-file occurs. If <code class="docutils literal"><span class="pre">all</span></code> is <code class="docutils literal"><span class="pre">false</span></code>, at most one <code class="docutils literal"><span class="pre">read</span></code> call is performed, and the amount of data returned is device-dependent. Note that not all stream types support the <code class="docutils literal"><span class="pre">all</span></code> option.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.position">
+<code class="descname">position</code><span class="sig-paren">(</span><em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.position" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the current position of a stream.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.seek">
+<code class="descname">seek</code><span class="sig-paren">(</span><em>s</em>, <em>pos</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.seek" title="Permalink to this definition">¶</a></dt>
+<dd><p>Seek a stream to the given position.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.seekstart">
+<code class="descname">seekstart</code><span class="sig-paren">(</span><em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.seekstart" title="Permalink to this definition">¶</a></dt>
+<dd><p>Seek a stream to its beginning.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.seekend">
+<code class="descname">seekend</code><span class="sig-paren">(</span><em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.seekend" title="Permalink to this definition">¶</a></dt>
+<dd><p>Seek a stream to its end.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.skip">
+<code class="descname">skip</code><span class="sig-paren">(</span><em>s</em>, <em>offset</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.skip" title="Permalink to this definition">¶</a></dt>
+<dd><p>Seek a stream relative to the current position.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.mark">
+<code class="descname">mark</code><span class="sig-paren">(</span><em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.mark" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a mark at the current position of stream <code class="docutils literal"><span class="pre">s</span></code>.  Returns the marked position.</p>
+<p>See also <a class="reference internal" href="#Base.unmark" title="Base.unmark"><code class="xref jl jl-func docutils literal"><span class="pre">unmark()</span></code></a>, <a class="reference internal" href="#Base.reset" title="Base.reset"><code class="xref jl jl-func docutils literal"><span class="pre">reset()</span></code></a>, <a class="reference internal" href="#Base.ismarked" title="Base.ismarked"><code class="xref jl jl-func docutils literal"><span class="pre">ismarked()</span></code></a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.unmark">
+<code class="descname">unmark</code><span class="sig-paren">(</span><em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.unmark" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove a mark from stream <code class="docutils literal"><span class="pre">s</span></code>.
+Returns <code class="docutils literal"><span class="pre">true</span></code> if the stream was marked, <code class="docutils literal"><span class="pre">false</span></code> otherwise.</p>
+<p>See also <a class="reference internal" href="#Base.mark" title="Base.mark"><code class="xref jl jl-func docutils literal"><span class="pre">mark()</span></code></a>, <a class="reference internal" href="#Base.reset" title="Base.reset"><code class="xref jl jl-func docutils literal"><span class="pre">reset()</span></code></a>, <a class="reference internal" href="#Base.ismarked" title="Base.ismarked"><code class="xref jl jl-func docutils literal"><span class="pre">ismarked()</span></code></a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.reset">
+<code class="descname">reset</code><span class="sig-paren">(</span><em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reset a stream <code class="docutils literal"><span class="pre">s</span></code> to a previously marked position, and remove the mark.
+Returns the previously marked position.
+Throws an error if the stream is not marked.</p>
+<p>See also <a class="reference internal" href="#Base.mark" title="Base.mark"><code class="xref jl jl-func docutils literal"><span class="pre">mark()</span></code></a>, <a class="reference internal" href="#Base.unmark" title="Base.unmark"><code class="xref jl jl-func docutils literal"><span class="pre">unmark()</span></code></a>, <a class="reference internal" href="#Base.ismarked" title="Base.ismarked"><code class="xref jl jl-func docutils literal"><span class="pre">ismarked()</span></code></a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.ismarked">
+<code class="descname">ismarked</code><span class="sig-paren">(</span><em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.ismarked" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns <code class="docutils literal"><span class="pre">true</span></code> if stream <code class="docutils literal"><span class="pre">s</span></code> is marked.</p>
+<p>See also <a class="reference internal" href="#Base.mark" title="Base.mark"><code class="xref jl jl-func docutils literal"><span class="pre">mark()</span></code></a>, <a class="reference internal" href="#Base.unmark" title="Base.unmark"><code class="xref jl jl-func docutils literal"><span class="pre">unmark()</span></code></a>, <a class="reference internal" href="#Base.reset" title="Base.reset"><code class="xref jl jl-func docutils literal"><span class="pre">reset()</span></code></a></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.eof">
+<code class="descname">eof</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.eof" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this function will block to wait for more data if necessary, and then return <code class="docutils literal"><span class="pre">false</span></code>. Therefore it is always safe to read one byte after seeing <code class="docutils literal"><span class="pre">eof</span></code> return <code class="docutils literal"><span class="pre">false</span></code>. <code class="docutils literal"><span class="pre">eof</span></code> will return <code class="docutils literal"><span class="pre">false</span></code> as long as buffered data is still available, even if the remote end of a connection is closed.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.isreadonly">
+<code class="descname">isreadonly</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.isreadonly" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determine whether a stream is read-only.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.isopen">
+<code class="descname">isopen</code><span class="sig-paren">(</span><em>object</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.isopen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determine whether an object - such as a stream, timer, or mmap – is not yet closed. Once an object is closed, it will never produce a new event. However, a closed stream may still have data to read in its buffer, use <code class="docutils literal"><span class="pre">eof</span></code> to check for the ability to read data. Use <code class="docutils literal"><span class="pre">poll_fd</span></code> to be notified when a stream might be writable or readable.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.serialize">
+<code class="descname">serialize</code><span class="sig-paren">(</span><em>stream</em>, <em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.serialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write an arbitrary value to a stream in an opaque format, such that it can be read back by <code class="docutils literal"><span class="pre">deserialize</span></code>. The read-back value will be as identical as possible to the original. In general, this process will not work if the reading and writing are done by different versions of Julia, or an instance of Julia with a different system image. <code class="docutils literal"><span class="pre">Ptr</span></code> values are serialized as all-zero bit patterns (<code class="docutils literal"><span class="pre">NULL</span></code>).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.deserialize">
+<code class="descname">deserialize</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.deserialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a value written by <code class="docutils literal"><span class="pre">serialize</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.print_escaped">
+<code class="descname">print_escaped</code><span class="sig-paren">(</span><em>io</em>, <em>str::AbstractString</em>, <em>esc::AbstractString</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.print_escaped" title="Permalink to this definition">¶</a></dt>
+<dd><p>General escaping of traditional C and Unicode escape sequences, plus any characters in esc are also escaped (with a backslash).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.print_unescaped">
+<code class="descname">print_unescaped</code><span class="sig-paren">(</span><em>io</em>, <em>s::AbstractString</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.print_unescaped" title="Permalink to this definition">¶</a></dt>
+<dd><p>General unescaping of traditional C and Unicode escape sequences. Reverse of <a class="reference internal" href="#Base.print_escaped" title="Base.print_escaped"><code class="xref jl jl-func docutils literal"><span class="pre">print_escaped()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.print_joined">
+<code class="descname">print_joined</code><span class="sig-paren">(</span><em>io</em>, <em>items</em>, <em>delim</em><span class="optional">[</span>, <em>last</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.print_joined" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print elements of <code class="docutils literal"><span class="pre">items</span></code> to <code class="docutils literal"><span class="pre">io</span></code> with <code class="docutils literal"><span class="pre">delim</span></code> between them. If <code class="docutils literal"><span class="pre">last</span></code> is specified, it is used as the final delimiter instead of <code class="docutils literal"><span class="pre">delim</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.print_shortest">
+<code class="descname">print_shortest</code><span class="sig-paren">(</span><em>io</em>, <em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.print_shortest" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print the shortest possible representation, with the minimum number of consecutive non-zero digits, of number <code class="docutils literal"><span class="pre">x</span></code>, ensuring that it would parse to the exact same number.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.fd">
+<code class="descname">fd</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.fd" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous <code class="docutils literal"><span class="pre">File</span></code>&#8216;s and <code class="docutils literal"><span class="pre">IOStream</span></code>&#8216;s not to any of the asynchronous streams.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.redirect_stdout">
+<code class="descname">redirect_stdout</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.redirect_stdout" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a pipe to which all C and Julia level <code class="docutils literal"><span class="pre">STDOUT</span></code> output will be redirected. Returns a tuple <code class="docutils literal"><span class="pre">(rd,wr)</span></code> representing the pipe ends. Data written to <code class="docutils literal"><span class="pre">STDOUT</span></code> may now be read from the rd end of the pipe. The wr end is given for convenience in case the old <code class="docutils literal"><span class="pre">STDOUT</span></code> object was cached by the user and needs to be replaced elsewhere.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">redirect_stdout</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span></dt>
+<dd><p>Replace <code class="docutils literal"><span class="pre">STDOUT</span></code> by stream for all C and Julia level output to <code class="docutils literal"><span class="pre">STDOUT</span></code>. Note that <code class="docutils literal"><span class="pre">stream</span></code> must be a TTY, a <code class="docutils literal"><span class="pre">Pipe</span></code> or a <code class="docutils literal"><span class="pre">TCPSocket</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.redirect_stderr">
+<code class="descname">redirect_stderr</code><span class="sig-paren">(</span><span class="optional">[</span><em>stream</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.redirect_stderr" title="Permalink to this definition">¶</a></dt>
+<dd><p>Like redirect_stdout, but for STDERR</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.redirect_stdin">
+<code class="descname">redirect_stdin</code><span class="sig-paren">(</span><span class="optional">[</span><em>stream</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.redirect_stdin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read from STDIN, may be written to wr.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readchomp">
+<code class="descname">readchomp</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readchomp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read the entirety of <code class="docutils literal"><span class="pre">x</span></code> as a string but remove trailing newlines. Equivalent to <code class="docutils literal"><span class="pre">chomp(readall(x))</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.truncate">
+<code class="descname">truncate</code><span class="sig-paren">(</span><em>file</em>, <em>n</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.truncate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Resize the file or buffer given by the first argument to exactly <code class="docutils literal"><span class="pre">n</span></code> bytes, filling previously unallocated space with &#8216;\0&#8217; if the file or buffer is grown</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.skipchars">
+<code class="descname">skipchars</code><span class="sig-paren">(</span><em>stream</em>, <em>predicate; linecomment::Char</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.skipchars" title="Permalink to this definition">¶</a></dt>
+<dd><p>Advance the stream until before the first character for which <code class="docutils literal"><span class="pre">predicate</span></code> returns <code class="docutils literal"><span class="pre">false</span></code>. For example <code class="docutils literal"><span class="pre">skipchars(stream,</span> <span class="pre">isspace)</span></code> will skip all whitespace. If keyword argument <code class="docutils literal"><span class="pre">linecomment</span></code> is specified, characters from that character through the end of a line will also be skipped.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.countlines">
+<code class="descname">countlines</code><span class="sig-paren">(</span><em>io</em><span class="optional">[</span>, <em>eol::Char</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.countlines" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read <code class="docutils literal"><span class="pre">io</span></code> until the end of the stream/file and count the number of lines. To specify a file pass the filename as the first argument. EOL markers other than &#8216;\n&#8217; are supported by passing them as the second argument.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.PipeBuffer">
+<code class="descname">PipeBuffer</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.PipeBuffer" title="Permalink to this definition">¶</a></dt>
+<dd><p>An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">PipeBuffer</code><span class="sig-paren">(</span><em>data::Vector{UInt8}</em><span class="optional">[</span>, <em>maxsize</em><span class="optional">]</span><span class="sig-paren">)</span></dt>
+<dd><p>Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readavailable">
+<code class="descname">readavailable</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readavailable" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read all available data on the stream, blocking the task only if no data is available. The result is a <code class="docutils literal"><span class="pre">Vector{UInt8,1}</span></code>.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="text-i-o">
+<h2>Text I/O<a class="headerlink" href="#text-i-o" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="Base.show">
+<code class="descname">show</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.show" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write an informative text representation of a value to the current output stream. New types should overload <code class="docutils literal"><span class="pre">show(io,</span> <span class="pre">x)</span></code> where the first argument is a stream. The representation used by <code class="docutils literal"><span class="pre">show</span></code> generally includes Julia-specific formatting and type information.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.showcompact">
+<code class="descname">showcompact</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.showcompact" title="Permalink to this definition">¶</a></dt>
+<dd><p>Show a more compact representation of a value. This is used for printing array elements. If a new type has a different compact representation, it should overload <code class="docutils literal"><span class="pre">showcompact(io,</span> <span class="pre">x)</span></code> where the first argument is a stream.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.showall">
+<code class="descname">showall</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.showall" title="Permalink to this definition">¶</a></dt>
+<dd><p>Similar to <code class="docutils literal"><span class="pre">show</span></code>, except shows all elements of arrays.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.summary">
+<code class="descname">summary</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.summary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a string giving a brief description of a value. By default returns <code class="docutils literal"><span class="pre">string(typeof(x))</span></code>. For arrays, returns strings like &#8220;2x2 Float64 Array&#8221;.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.print">
+<code class="descname">print</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.print" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call <code class="docutils literal"><span class="pre">show</span></code>. The representation used by <code class="docutils literal"><span class="pre">print</span></code> includes minimal formatting and tries to avoid Julia-specific details.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.println">
+<code class="descname">println</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.println" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print (using <a class="reference internal" href="#Base.print" title="Base.print"><code class="xref jl jl-func docutils literal"><span class="pre">print()</span></code></a>) <code class="docutils literal"><span class="pre">x</span></code> followed by a newline.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.print_with_color">
+<code class="descname">print_with_color</code><span class="sig-paren">(</span><em>color::Symbol</em>, <span class="optional">[</span><em>io</em>, <span class="optional">]</span><em>strings...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.print_with_color" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print strings in a color specified as a symbol, for example <code class="docutils literal"><span class="pre">:red</span></code> or <code class="docutils literal"><span class="pre">:blue</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.info">
+<code class="descname">info</code><span class="sig-paren">(</span><em>msg</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Display an informational message. Argument <code class="docutils literal"><span class="pre">msg</span></code> is a string describing the information to be displayed.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.warn">
+<code class="descname">warn</code><span class="sig-paren">(</span><em>msg</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.warn" title="Permalink to this definition">¶</a></dt>
+<dd><p>Display a warning. Argument <code class="docutils literal"><span class="pre">msg</span></code> is a string describing the warning to be displayed.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.&#64;printf">
+<code class="descname">&#64;printf</code><span class="sig-paren">(</span><span class="optional">[</span><em>io::IOStream</em>, <span class="optional">]</span><em>&quot;%Fmt&quot;</em>, <em>args...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.@printf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print <code class="docutils literal"><span class="pre">args</span></code> using C <code class="docutils literal"><span class="pre">printf()</span></code> style format specification string. Optionally, an <code class="docutils literal"><span class="pre">IOStream</span></code> may be passed as the first argument to redirect output.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.&#64;sprintf">
+<code class="descname">&#64;sprintf</code><span class="sig-paren">(</span><em>&quot;%Fmt&quot;</em>, <em>args...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.@sprintf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return <code class="docutils literal"><span class="pre">&#64;printf</span></code> formatted output as string.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="p">@</span><span class="n">sprintf</span> <span class="s">&quot;this is a </span><span class="si">%s</span><span class="s"> </span><span class="si">%15.1f</span><span class="s">&quot;</span> <span class="s">&quot;test&quot;</span> <span class="mf">34.567</span><span class="p">;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+<span class="n">this</span> <span class="nb">is</span> <span class="n">a</span> <span class="n">test</span>            <span class="mf">34.6</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.sprint">
+<code class="descname">sprint</code><span class="sig-paren">(</span><em>f::Function</em>, <em>args...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.sprint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Call the given function with an I/O stream and the supplied extra arguments. Everything written to this I/O stream is returned as a string.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.showerror">
+<code class="descname">showerror</code><span class="sig-paren">(</span><em>io</em>, <em>e</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.showerror" title="Permalink to this definition">¶</a></dt>
+<dd><p>Show a descriptive representation of an exception object.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.dump">
+<code class="descname">dump</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.dump" title="Permalink to this definition">¶</a></dt>
+<dd><p>Show all user-visible structure of a value.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.xdump">
+<code class="descname">xdump</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.xdump" title="Permalink to this definition">¶</a></dt>
+<dd><p>Show all structure of a value, including all fields of objects.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readall">
+<code class="descname">readall</code><span class="sig-paren">(</span><em>stream::IO</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readall" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read the entire contents of an I/O stream as a string.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">readall</code><span class="sig-paren">(</span><em>filename::AbstractString</em><span class="sig-paren">)</span></dt>
+<dd><p>Open <code class="docutils literal"><span class="pre">filename</span></code>, read the entire contents as a string, then close the file. Equivalent to <code class="docutils literal"><span class="pre">open(readall,</span> <span class="pre">filename)</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readline">
+<code class="descname">readline</code><span class="sig-paren">(</span><em>stream=STDIN</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given <code class="docutils literal"><span class="pre">stream</span></code> (defaults to <code class="docutils literal"><span class="pre">STDIN</span></code>),</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readuntil">
+<code class="descname">readuntil</code><span class="sig-paren">(</span><em>stream</em>, <em>delim</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readuntil" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a string, up to and including the given delimiter byte.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readlines">
+<code class="descname">readlines</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readlines" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read all lines as an array.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.eachline">
+<code class="descname">eachline</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.eachline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an iterable object that will yield each line from a stream.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readdlm">
+<code class="descname">readdlm</code><span class="sig-paren">(</span><em>source</em>, <em>delim::Char</em>, <em>T::Type</em>, <em>eol::Char; header=false</em>, <em>skipstart=0</em>, <em>skipblanks=true</em>, <em>use_mmap</em>, <em>ignore_invalid_chars=false</em>, <em>quotes=true</em>, <em>dims</em>, <em>comments=true</em>, <em>comment_char='#'</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readdlm" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a matrix from the source where each line (separated by <code class="docutils literal"><span class="pre">eol</span></code>) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.</p>
+<p>If <code class="docutils literal"><span class="pre">T</span></code> is a numeric type, the result is an array of that type, with any non-numeric elements as <code class="docutils literal"><span class="pre">NaN</span></code> for floating-point types, or zero. Other useful values of <code class="docutils literal"><span class="pre">T</span></code> include <code class="docutils literal"><span class="pre">ASCIIString</span></code>, <code class="docutils literal"><span class="pre">AbstractString</span></code>, and <code class="docutils literal"><span class="pre">Any</span></code>.</p>
+<p>If <code class="docutils literal"><span class="pre">header</span></code> is <code class="docutils literal"><span class="pre">true</span></code>, the first row of data will be read as header and the tuple <code class="docutils literal"><span class="pre">(data_cells,</span> <span class="pre">header_cells)</span></code> is returned instead of only <code class="docutils literal"><span class="pre">data_cells</span></code>.</p>
+<p>Specifying <code class="docutils literal"><span class="pre">skipstart</span></code> will ignore the corresponding number of initial lines from the input.</p>
+<p>If <code class="docutils literal"><span class="pre">skipblanks</span></code> is <code class="docutils literal"><span class="pre">true</span></code>, blank lines in the input will be ignored.</p>
+<p>If <code class="docutils literal"><span class="pre">use_mmap</span></code> is <code class="docutils literal"><span class="pre">true</span></code>, the file specified by <code class="docutils literal"><span class="pre">source</span></code> is memory mapped for potential speedups. Default is <code class="docutils literal"><span class="pre">true</span></code> except on Windows. On Windows, you may want to specify <code class="docutils literal"><span class="pre">true</span></code> if the file is large, and is only read once and not written to.</p>
+<p>If <code class="docutils literal"><span class="pre">ignore_invalid_chars</span></code> is <code class="docutils literal"><span class="pre">true</span></code>, bytes in <code class="docutils literal"><span class="pre">source</span></code> with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.</p>
+<p>If <code class="docutils literal"><span class="pre">quotes</span></code> is <code class="docutils literal"><span class="pre">true</span></code>, column enclosed within double-quote (&#8221;) characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.  Specifying <code class="docutils literal"><span class="pre">dims</span></code> as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.  If <code class="docutils literal"><span class="pre">comments</span></code> is <code class="docutils literal"><span class="pre">true</span></code>, lines beginning with <code class="docutils literal"><span class="pre">comment_char</span></code> and text following <code class="docutils literal"><span class="pre">comment_char</span></code> in any line are ignored.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">readdlm</code><span class="sig-paren">(</span><em>source</em>, <em>delim::Char</em>, <em>eol::Char; options...</em><span class="sig-paren">)</span></dt>
+<dd><p>If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">readdlm</code><span class="sig-paren">(</span><em>source</em>, <em>delim::Char</em>, <em>T::Type; options...</em><span class="sig-paren">)</span></dt>
+<dd><p>The end of line delimiter is taken as <code class="docutils literal"><span class="pre">n</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">readdlm</code><span class="sig-paren">(</span><em>source</em>, <em>delim::Char; options...</em><span class="sig-paren">)</span></dt>
+<dd><p>The end of line delimiter is taken as <code class="docutils literal"><span class="pre">n</span></code>. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">readdlm</code><span class="sig-paren">(</span><em>source</em>, <em>T::Type; options...</em><span class="sig-paren">)</span></dt>
+<dd><p>The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as <code class="docutils literal"><span class="pre">n</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">readdlm</code><span class="sig-paren">(</span><em>source; options...</em><span class="sig-paren">)</span></dt>
+<dd><p>The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as <code class="docutils literal"><span class="pre">n</span></code>. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.writedlm">
+<code class="descname">writedlm</code><span class="sig-paren">(</span><em>f</em>, <em>A</em>, <em>delim='\t'</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.writedlm" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write <code class="docutils literal"><span class="pre">A</span></code> (a vector, matrix or an iterable collection of iterable rows) as text to <code class="docutils literal"><span class="pre">f</span></code> (either a filename string or an <code class="docutils literal"><span class="pre">IO</span></code> stream) using the given delimeter <code class="docutils literal"><span class="pre">delim</span></code> (which defaults to tab, but can be any printable Julia object, typically a <code class="docutils literal"><span class="pre">Char</span></code> or <code class="docutils literal"><span class="pre">AbstractString</span></code>).</p>
+<p>For example, two vectors <code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code> of the same length can be written as two columns of tab-delimited text to <code class="docutils literal"><span class="pre">f</span></code> by either <code class="docutils literal"><span class="pre">writedlm(f,</span> <span class="pre">[x</span> <span class="pre">y])</span></code> or by <code class="docutils literal"><span class="pre">writedlm(f,</span> <span class="pre">zip(x,</span> <span class="pre">y))</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.readcsv">
+<code class="descname">readcsv</code><span class="sig-paren">(</span><em>source, [T::Type]; options...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.readcsv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Equivalent to <code class="docutils literal"><span class="pre">readdlm</span></code> with <code class="docutils literal"><span class="pre">delim</span></code> set to comma.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.writecsv">
+<code class="descname">writecsv</code><span class="sig-paren">(</span><em>filename</em>, <em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.writecsv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Equivalent to <code class="docutils literal"><span class="pre">writedlm</span></code> with <code class="docutils literal"><span class="pre">delim</span></code> set to comma.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.Base64EncodePipe">
+<code class="descname">Base64EncodePipe</code><span class="sig-paren">(</span><em>ostream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Base64EncodePipe" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to <code class="docutils literal"><span class="pre">ostream</span></code>. Calling <code class="docutils literal"><span class="pre">close</span></code> on the <code class="docutils literal"><span class="pre">Base64Pipe</span></code> stream is necessary to complete the encoding (but does not close <code class="docutils literal"><span class="pre">ostream</span></code>).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.Base64DecodePipe">
+<code class="descname">Base64DecodePipe</code><span class="sig-paren">(</span><em>istream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Base64DecodePipe" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a new read-only I/O stream, which decodes base64-encoded data read from <code class="docutils literal"><span class="pre">istream</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.base64encode">
+<code class="descname">base64encode</code><span class="sig-paren">(</span><em>writefunc</em>, <em>args...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.base64encode" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="descname">base64encode</code><span class="sig-paren">(</span><em>args...</em><span class="sig-paren">)</span></dt>
+<dd><p>Given a <code class="docutils literal"><span class="pre">write</span></code>-like function <code class="docutils literal"><span class="pre">writefunc</span></code>, which takes an I/O stream as its first argument, <code class="docutils literal"><span class="pre">base64(writefunc,</span> <span class="pre">args...)</span></code> calls <code class="docutils literal"><span class="pre">writefunc</span></code> to write <code class="docutils literal"><span class="pre">args...</span></code> to a base64-encoded string, and returns the string. <code class="docutils literal"><span class="pre">base64(args...)</span></code> is equivalent to <code class="docutils literal"><span class="pre">base64(write,</span> <span class="pre">args...)</span></code>: it converts its arguments into bytes using the standard <code class="docutils literal"><span class="pre">write</span></code> functions and returns the base64-encoded string.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.base64decode">
+<code class="descname">base64decode</code><span class="sig-paren">(</span><em>string</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.base64decode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Decodes the base64-encoded <code class="docutils literal"><span class="pre">string</span></code> and returns a <code class="docutils literal"><span class="pre">Vector{UInt8}</span></code> of the decoded bytes.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="multimedia-i-o">
+<h2>Multimedia I/O<a class="headerlink" href="#multimedia-i-o" title="Permalink to this headline">¶</a></h2>
+<p>Just as text output is performed by <code class="docutils literal"><span class="pre">print</span></code> and user-defined types
+can indicate their textual representation by overloading <code class="docutils literal"><span class="pre">show</span></code>,
+Julia provides a standardized mechanism for rich multimedia output
+(such as images, formatted text, or even audio and video), consisting
+of three parts:</p>
+<ul class="simple">
+<li>A function <code class="docutils literal"><span class="pre">display(x)</span></code> to request the richest available multimedia
+display of a Julia object <code class="docutils literal"><span class="pre">x</span></code> (with a plain-text fallback).</li>
+<li>Overloading <code class="docutils literal"><span class="pre">writemime</span></code> allows one to indicate arbitrary multimedia
+representations (keyed by standard MIME types) of user-defined types.</li>
+<li>Multimedia-capable display backends may be registered by subclassing
+a generic <code class="docutils literal"><span class="pre">Display</span></code> type and pushing them onto a stack of display
+backends via <code class="docutils literal"><span class="pre">pushdisplay</span></code>.</li>
+</ul>
+<p>The base Julia runtime provides only plain-text display, but richer
+displays may be enabled by loading external modules or by using graphical
+Julia environments (such as the IPython-based IJulia notebook).</p>
+<dl class="function">
+<dt id="Base.display">
+<code class="descname">display</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.display" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="descname">display</code><span class="sig-paren">(</span><em>d::Display</em>, <em>x</em><span class="sig-paren">)</span></dt>
+<dt>
+<code class="descname">display</code><span class="sig-paren">(</span><em>mime</em>, <em>x</em><span class="sig-paren">)</span></dt>
+<dt>
+<code class="descname">display</code><span class="sig-paren">(</span><em>d::Display</em>, <em>mime</em>, <em>x</em><span class="sig-paren">)</span></dt>
+<dd><p>Display <code class="docutils literal"><span class="pre">x</span></code> using the topmost applicable display in the display stack, typically using the richest supported multimedia output for <code class="docutils literal"><span class="pre">x</span></code>, with plain-text <code class="docutils literal"><span class="pre">STDOUT</span></code> output as a fallback. The <code class="docutils literal"><span class="pre">display(d,</span> <span class="pre">x)</span></code> variant attempts to display <code class="docutils literal"><span class="pre">x</span></code> on the given display <code class="docutils literal"><span class="pre">d</span></code> only, throwing a <code class="docutils literal"><span class="pre">MethodError</span></code> if <code class="docutils literal"><span class="pre">d</span></code> cannot display objects of this type.</p>
+<p>There are also two variants with a <code class="docutils literal"><span class="pre">mime</span></code> argument (a MIME type string, such as <code class="docutils literal"><span class="pre">&quot;image/png&quot;</span></code>), which attempt to display <code class="docutils literal"><span class="pre">x</span></code> using the requested MIME type <em>only</em>, throwing a <code class="docutils literal"><span class="pre">MethodError</span></code> if this type is not supported by either the display(s) or by <code class="docutils literal"><span class="pre">x</span></code>. With these variants, one can also supply the &#8220;raw&#8221; data in the requested MIME type by passing <code class="docutils literal"><span class="pre">x::AbstractString</span></code> (for MIME types with text-based storage, such as text/html or application/postscript) or <code class="docutils literal"><span class="pre">x::Vector{UInt8}</span></code> (for binary MIME types).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.redisplay">
+<code class="descname">redisplay</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.redisplay" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="descname">redisplay</code><span class="sig-paren">(</span><em>d::Display</em>, <em>x</em><span class="sig-paren">)</span></dt>
+<dt>
+<code class="descname">redisplay</code><span class="sig-paren">(</span><em>mime</em>, <em>x</em><span class="sig-paren">)</span></dt>
+<dt>
+<code class="descname">redisplay</code><span class="sig-paren">(</span><em>d::Display</em>, <em>mime</em>, <em>x</em><span class="sig-paren">)</span></dt>
+<dd><p>By default, the <code class="docutils literal"><span class="pre">redisplay</span></code> functions simply call <code class="docutils literal"><span class="pre">display</span></code>. However, some display backends may override <code class="docutils literal"><span class="pre">redisplay</span></code> to modify an existing display of <code class="docutils literal"><span class="pre">x</span></code> (if any). Using <code class="docutils literal"><span class="pre">redisplay</span></code> is also a hint to the backend that <code class="docutils literal"><span class="pre">x</span></code> may be redisplayed several times, and the backend may choose to defer the display until (for example) the next interactive prompt.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.displayable">
+<code class="descname">displayable</code><span class="sig-paren">(</span><em>mime</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.displayable" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="descname">displayable</code><span class="sig-paren">(</span><em>d::Display</em>, <em>mime</em><span class="sig-paren">)</span> &rarr; Bool</dt>
+<dd><p>Returns a boolean value indicating whether the given <code class="docutils literal"><span class="pre">mime</span></code> type (string) is displayable by any of the displays in the current display stack, or specifically by the display <code class="docutils literal"><span class="pre">d</span></code> in the second variant.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.writemime">
+<code class="descname">writemime</code><span class="sig-paren">(</span><em>stream</em>, <em>mime</em>, <em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.writemime" title="Permalink to this definition">¶</a></dt>
+<dd><p>The <code class="docutils literal"><span class="pre">display</span></code> functions ultimately call <code class="docutils literal"><span class="pre">writemime</span></code> in order to write an object <code class="docutils literal"><span class="pre">x</span></code> as a given <code class="docutils literal"><span class="pre">mime</span></code> type to a given I/O <code class="docutils literal"><span class="pre">stream</span></code> (usually a memory buffer), if possible. In order to provide a rich multimedia representation of a user-defined type <code class="docutils literal"><span class="pre">T</span></code>, it is only necessary to define a new <code class="docutils literal"><span class="pre">writemime</span></code> method for <code class="docutils literal"><span class="pre">T</span></code>, via: <code class="docutils literal"><span class="pre">writemime(stream,</span> <span class="pre">::MIME&quot;mime&quot;,</span> <span class="pre">x::T)</span> <span class="pre">=</span> <span class="pre">...</span></code>, where <code class="docutils literal"><span class="pre">mime</span></code> is a MIME-type string and the function body calls <code class="docutils literal"><span class="pre">write</span></code> (or similar) to write that representation of <code class="docutils literal"><span class="pre">x</span></code> to <code class="docutils literal"><span class="pre">stream</span></code>. (Note that the <code class="docutils literal"><span class="pre">MIME&quot;&quot;</span></code> notation only supports literal strings; to construct <code class="docutils literal"><span class="pre">MIME</span></code> types in a more flexible manner use <code class="docutils literal"><span class="pre">MIME{symbol(&quot;&quot;)}</span></code>.)</p>
+<p>For example, if you define a <code class="docutils literal"><span class="pre">MyImage</span></code> type and know how to write it to a PNG file, you could define a function <code class="docutils literal"><span class="pre">writemime(stream,</span> <span class="pre">::MIME&quot;image/png&quot;,</span> <span class="pre">x::MyImage)</span> <span class="pre">=</span> <span class="pre">...</span></code> to allow your images to be displayed on any PNG-capable <code class="docutils literal"><span class="pre">Display</span></code> (such as IJulia). As usual, be sure to <code class="docutils literal"><span class="pre">import</span> <span class="pre">Base.writemime</span></code> in order to add new methods to the built-in Julia function <code class="docutils literal"><span class="pre">writemime</span></code>.</p>
+<p>Technically, the <code class="docutils literal"><span class="pre">MIME&quot;mime&quot;</span></code> macro defines a singleton type for the given <code class="docutils literal"><span class="pre">mime</span></code> string, which allows us to exploit Julia&#8217;s dispatch mechanisms in determining how to display objects of any given type.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.mimewritable">
+<code class="descname">mimewritable</code><span class="sig-paren">(</span><em>mime</em>, <em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.mimewritable" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a boolean value indicating whether or not the object <code class="docutils literal"><span class="pre">x</span></code> can be written as the given <code class="docutils literal"><span class="pre">mime</span></code> type. (By default, this is determined automatically by the existence of the corresponding <code class="docutils literal"><span class="pre">writemime</span></code> function for <code class="docutils literal"><span class="pre">typeof(x)</span></code>.)</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.reprmime">
+<code class="descname">reprmime</code><span class="sig-paren">(</span><em>mime</em>, <em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.reprmime" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns an <code class="docutils literal"><span class="pre">AbstractString</span></code> or <code class="docutils literal"><span class="pre">Vector{UInt8}</span></code> containing the representation of <code class="docutils literal"><span class="pre">x</span></code> in the requested <code class="docutils literal"><span class="pre">mime</span></code> type, as written by <code class="docutils literal"><span class="pre">writemime</span></code> (throwing a <code class="docutils literal"><span class="pre">MethodError</span></code> if no appropriate <code class="docutils literal"><span class="pre">writemime</span></code> is available). An <code class="docutils literal"><span class="pre">AbstractString</span></code> is returned for MIME types with textual representations (such as <code class="docutils literal"><span class="pre">&quot;text/html&quot;</span></code> or <code class="docutils literal"><span class="pre">&quot;application/postscript&quot;</span></code>), whereas binary data is returned as <code class="docutils literal"><span class="pre">Vector{UInt8}</span></code>. (The function <code class="docutils literal"><span class="pre">istext(mime)</span></code> returns whether or not Julia treats a given <code class="docutils literal"><span class="pre">mime</span></code> type as text.)</p>
+<p>As a special case, if <code class="docutils literal"><span class="pre">x</span></code> is an <code class="docutils literal"><span class="pre">AbstractString</span></code> (for textual MIME types) or a <code class="docutils literal"><span class="pre">Vector{UInt8}</span></code> (for binary MIME types), the <code class="docutils literal"><span class="pre">reprmime</span></code> function assumes that <code class="docutils literal"><span class="pre">x</span></code> is already in the requested <code class="docutils literal"><span class="pre">mime</span></code> format and simply returns <code class="docutils literal"><span class="pre">x</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.stringmime">
+<code class="descname">stringmime</code><span class="sig-paren">(</span><em>mime</em>, <em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.stringmime" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns an <code class="docutils literal"><span class="pre">AbstractString</span></code> containing the representation of <code class="docutils literal"><span class="pre">x</span></code> in the requested <code class="docutils literal"><span class="pre">mime</span></code> type. This is similar to <code class="docutils literal"><span class="pre">reprmime</span></code> except that binary data is base64-encoded as an ASCII string.</p>
+</dd></dl>
+
+<p>As mentioned above, one can also define new display backends. For
+example, a module that can display PNG images in a window can register
+this capability with Julia, so that calling <code class="docutils literal"><span class="pre">display(x)</span></code> on types
+with PNG representations will automatically display the image using
+the module&#8217;s window.</p>
+<p>In order to define a new display backend, one should first create a
+subtype <code class="docutils literal"><span class="pre">D</span></code> of the abstract class <code class="docutils literal"><span class="pre">Display</span></code>.  Then, for each MIME
+type (<code class="docutils literal"><span class="pre">mime</span></code> string) that can be displayed on <code class="docutils literal"><span class="pre">D</span></code>, one should
+define a function <code class="docutils literal"><span class="pre">display(d::D,</span> <span class="pre">::MIME&quot;mime&quot;,</span> <span class="pre">x)</span> <span class="pre">=</span> <span class="pre">...</span></code> that
+displays <code class="docutils literal"><span class="pre">x</span></code> as that MIME type, usually by calling <code class="docutils literal"><span class="pre">reprmime(mime,</span>
+<span class="pre">x)</span></code>.  A <code class="docutils literal"><span class="pre">MethodError</span></code> should be thrown if <code class="docutils literal"><span class="pre">x</span></code> cannot be displayed
+as that MIME type; this is automatic if one calls <code class="docutils literal"><span class="pre">reprmime</span></code>.
+Finally, one should define a function <code class="docutils literal"><span class="pre">display(d::D,</span> <span class="pre">x)</span></code> that
+queries <code class="docutils literal"><span class="pre">mimewritable(mime,</span> <span class="pre">x)</span></code> for the <code class="docutils literal"><span class="pre">mime</span></code> types supported by
+<code class="docutils literal"><span class="pre">D</span></code> and displays the &#8220;best&#8221; one; a <code class="docutils literal"><span class="pre">MethodError</span></code> should be thrown
+if no supported MIME types are found for <code class="docutils literal"><span class="pre">x</span></code>.  Similarly, some
+subtypes may wish to override <code class="docutils literal"><span class="pre">redisplay(d::D,</span> <span class="pre">...)</span></code>.  (Again, one
+should <code class="docutils literal"><span class="pre">import</span> <span class="pre">Base.display</span></code> to add new methods to <code class="docutils literal"><span class="pre">display</span></code>.)
+The return values of these functions are up to the implementation
+(since in some cases it may be useful to return a display &#8220;handle&#8221; of
+some type).  The display functions for <code class="docutils literal"><span class="pre">D</span></code> can then be called
+directly, but they can also be invoked automatically from
+<code class="docutils literal"><span class="pre">display(x)</span></code> simply by pushing a new display onto the display-backend
+stack with:</p>
+<dl class="function">
+<dt id="Base.pushdisplay">
+<code class="descname">pushdisplay</code><span class="sig-paren">(</span><em>d::Display</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.pushdisplay" title="Permalink to this definition">¶</a></dt>
+<dd><p>Pushes a new display <code class="docutils literal"><span class="pre">d</span></code> on top of the global display-backend stack. Calling <code class="docutils literal"><span class="pre">display(x)</span></code> or <code class="docutils literal"><span class="pre">display(mime,</span> <span class="pre">x)</span></code> will display <code class="docutils literal"><span class="pre">x</span></code> on the topmost compatible backend in the stack (i.e., the topmost backend that does not throw a <code class="docutils literal"><span class="pre">MethodError</span></code>).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.popdisplay">
+<code class="descname">popdisplay</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.popdisplay" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="descname">popdisplay</code><span class="sig-paren">(</span><em>d::Display</em><span class="sig-paren">)</span></dt>
+<dd><p>Pop the topmost backend off of the display-backend stack, or the topmost copy of <code class="docutils literal"><span class="pre">d</span></code> in the second variant.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.TextDisplay">
+<code class="descname">TextDisplay</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.TextDisplay" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a <code class="docutils literal"><span class="pre">TextDisplay</span> <span class="pre">&lt;:</span> <span class="pre">Display</span></code>, which can display any object as the text/plain MIME type (only), writing the text representation to the given I/O stream. (The text representation is the same as the way an object is printed in the Julia REPL.)</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.istext">
+<code class="descname">istext</code><span class="sig-paren">(</span><em>m::MIME</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.istext" title="Permalink to this definition">¶</a></dt>
+<dd><p>Determine whether a MIME type is text data.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="memory-mapped-i-o">
+<h2>Memory-mapped I/O<a class="headerlink" href="#memory-mapped-i-o" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="Base.Mmap.Anonymous">
+<code class="descclassname">Mmap.</code><code class="descname">Anonymous</code><span class="sig-paren">(</span><em>name</em>, <em>readonly</em>, <em>create</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Mmap.Anonymous" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an <code class="docutils literal"><span class="pre">IO</span></code>-like object for creating zeroed-out mmapped-memory that is not tied to a file for use in <code class="docutils literal"><span class="pre">Mmap.mmap</span></code>. Used by <code class="docutils literal"><span class="pre">SharedArray</span></code> for creating shared memory arrays.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.Mmap.mmap">
+<code class="descclassname">Mmap.</code><code class="descname">mmap</code><span class="sig-paren">(</span><em>io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Mmap.mmap" title="Permalink to this definition">¶</a></dt>
+<dt>
+<code class="descclassname">Mmap.</code><code class="descname">mmap</code><span class="sig-paren">(</span><em>type::Type{Array{T</em>, <em>N}}</em>, <em>dims</em><span class="sig-paren">)</span></dt>
+<dd><p>Create an <code class="docutils literal"><span class="pre">Array</span></code> whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer&#8217;s memory.</p>
+<p>The type is an <code class="docutils literal"><span class="pre">Array{T,N}</span></code> with a bits-type element of <code class="docutils literal"><span class="pre">T</span></code> and dimension <code class="docutils literal"><span class="pre">N</span></code> that determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).</p>
+<p><code class="docutils literal"><span class="pre">dims</span></code> is a tuple or single <code class="docutils literal"><span class="pre">Integer</span></code> specifying the size or length of the array.</p>
+<p>The file is passed via the stream argument, either as an open <code class="docutils literal"><span class="pre">IOStream</span></code> or filename string.  When you initialize the stream, use <code class="docutils literal"><span class="pre">&quot;r&quot;</span></code> for a &#8220;read-only&#8221; array, and <code class="docutils literal"><span class="pre">&quot;w+&quot;</span></code> to create a new array used to write values to disk.</p>
+<p>If no <code class="docutils literal"><span class="pre">type</span></code> argument is specified, the default is <code class="docutils literal"><span class="pre">Vector{UInt8}</span></code>.</p>
+<p>Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position for an <code class="docutils literal"><span class="pre">IOStream</span></code>.</p>
+<p>The <code class="docutils literal"><span class="pre">grow</span></code> keyword argument specifies whether the disk file should be grown to accommodate the requested size of array (if the total file size is &lt; requested array size). Write privileges are required to grow the file.</p>
+<p>The <code class="docutils literal"><span class="pre">shared</span></code> keyword argument specifies whether the resulting <code class="docutils literal"><span class="pre">Array</span></code> and changes made to it will be visible to other processes mapping the same file.</p>
+<p>For example, the following code:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># Create a file for mmapping</span>
+<span class="c"># (you could alternatively use mmap to do this step, too)</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">20</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
+<span class="n">s</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;/tmp/mmap.bin&quot;</span><span class="p">,</span> <span class="s">&quot;w+&quot;</span><span class="p">)</span>
+<span class="c"># We&#39;ll write the dimensions of the array as the first two Ints in the file</span>
+<span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
+<span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+<span class="c"># Now write the data</span>
+<span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">A</span><span class="p">)</span>
+<span class="n">close</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+
+<span class="c"># Test by reading it back in</span>
+<span class="n">s</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;/tmp/mmap.bin&quot;</span><span class="p">)</span>   <span class="c"># default is read-only</span>
+<span class="n">m</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
+<span class="n">n</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
+<span class="n">A2</span> <span class="o">=</span> <span class="n">Mmap</span><span class="o">.</span><span class="n">mmap</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="n">n</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>creates a <code class="docutils literal"><span class="pre">m</span></code>-by-<code class="docutils literal"><span class="pre">n</span></code> <code class="docutils literal"><span class="pre">Matrix{Int}</span></code>, linked to the file associated with stream <code class="docutils literal"><span class="pre">s</span></code>.</p>
+<p>A more portable file would need to encode the word size&#8212;32 bit or 64 bit&#8212;and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descclassname">Mmap.</code><code class="descname">mmap</code><span class="sig-paren">(</span><em>io</em>, <em>BitArray</em><span class="optional">[</span>, <em>dims</em>, <em>offset</em><span class="optional">]</span><span class="sig-paren">)</span></dt>
+<dd><p>Create a <code class="docutils literal"><span class="pre">BitArray</span></code> whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as <code class="xref jl jl-func docutils literal"><span class="pre">mmap()</span></code>, but the byte representation is different.</p>
+<p><strong>Example</strong>:  <code class="docutils literal"><span class="pre">B</span> <span class="pre">=</span> <span class="pre">Mmap.mmap(s,</span> <span class="pre">BitArray,</span> <span class="pre">(25,30000))</span></code></p>
+<p>This would create a 25-by-30000 <code class="docutils literal"><span class="pre">BitArray</span></code>, linked to the file associated with stream <code class="docutils literal"><span class="pre">s</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.Mmap.sync!">
+<code class="descclassname">Mmap.</code><code class="descname">sync!</code><span class="sig-paren">(</span><em>array</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Mmap.sync!" title="Permalink to this definition">¶</a></dt>
+<dd><p>Forces synchronization between the in-memory version of a memory-mapped <code class="docutils literal"><span class="pre">Array</span></code> or <code class="docutils literal"><span class="pre">BitArray</span></code> and the on-disk version.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="network-i-o">
+<h2>Network I/O<a class="headerlink" href="#network-i-o" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="Base.connect">
+<code class="descname">connect</code><span class="sig-paren">(</span><span class="optional">[</span><em>host</em>, <span class="optional">]</span><em>port</em><span class="sig-paren">)</span> &rarr; TCPSocket<a class="headerlink" href="#Base.connect" title="Permalink to this definition">¶</a></dt>
+<dd><p>Connect to the host <code class="docutils literal"><span class="pre">host</span></code> on port <code class="docutils literal"><span class="pre">port</span></code></p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">connect</code><span class="sig-paren">(</span><em>path</em><span class="sig-paren">)</span> &rarr; PipeEndpoint</dt>
+<dd><p>Connect to the Named Pipe / Domain Socket at <code class="docutils literal"><span class="pre">path</span></code></p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.listen">
+<code class="descname">listen</code><span class="sig-paren">(</span><span class="optional">[</span><em>addr</em>, <span class="optional">]</span><em>port</em><span class="sig-paren">)</span> &rarr; TCPServer<a class="headerlink" href="#Base.listen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Listen on port on the address specified by <code class="docutils literal"><span class="pre">addr</span></code>. By default this listens on localhost only. To listen on all interfaces pass <code class="docutils literal"><span class="pre">IPv4(0)</span></code> or <code class="docutils literal"><span class="pre">IPv6(0)</span></code> as appropriate.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">listen</code><span class="sig-paren">(</span><em>path</em><span class="sig-paren">)</span> &rarr; PipeServer</dt>
+<dd><p>Create and listen on a Named Pipe / Domain Socket</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.getaddrinfo">
+<code class="descname">getaddrinfo</code><span class="sig-paren">(</span><em>host</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.getaddrinfo" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets the IP address of the <code class="docutils literal"><span class="pre">host</span></code> (may have to do a DNS lookup)</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.parseip">
+<code class="descname">parseip</code><span class="sig-paren">(</span><em>addr</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.parseip" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse a string specifying an IPv4 or IPv6 ip address.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.IPv4">
+<code class="descname">IPv4</code><span class="sig-paren">(</span><em>host::Integer</em><span class="sig-paren">)</span> &rarr; IPv4<a class="headerlink" href="#Base.IPv4" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns IPv4 object from ip address formatted as Integer</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.IPv6">
+<code class="descname">IPv6</code><span class="sig-paren">(</span><em>host::Integer</em><span class="sig-paren">)</span> &rarr; IPv6<a class="headerlink" href="#Base.IPv6" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns IPv6 object from ip address formatted as Integer</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.nb_available">
+<code class="descname">nb_available</code><span class="sig-paren">(</span><em>stream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.nb_available" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the number of bytes available for reading before a read from this stream or buffer will block.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.accept">
+<code class="descname">accept</code><span class="sig-paren">(</span><em>server</em><span class="optional">[</span>, <em>client</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.accept" title="Permalink to this definition">¶</a></dt>
+<dd><p>Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.listenany">
+<code class="descname">listenany</code><span class="sig-paren">(</span><em>port_hint) -&gt; (UInt16</em>, <em>TCPServer</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.listenany" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a <code class="docutils literal"><span class="pre">TCPServer</span></code> on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.poll_fd">
+<code class="descname">poll_fd</code><span class="sig-paren">(</span><em>fd</em>, <em>timeout_s::Real; readable=false</em>, <em>writable=false</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.poll_fd" title="Permalink to this definition">¶</a></dt>
+<dd><p>Monitor a file descriptor <code class="docutils literal"><span class="pre">fd</span></code> for changes in the read or write availability, and with a timeout given by <code class="docutils literal"><span class="pre">timeout_s</span></code> seconds.</p>
+<p>The keyword arguments determine which of read and/or write status should be monitored; at least one of them must be set to <code class="docutils literal"><span class="pre">true</span></code>.</p>
+<p>The returned value is an object with boolean fields <code class="docutils literal"><span class="pre">readable</span></code>, <code class="docutils literal"><span class="pre">writable</span></code>, and <code class="docutils literal"><span class="pre">timedout</span></code>, giving the result of the polling.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.poll_file">
+<code class="descname">poll_file</code><span class="sig-paren">(</span><em>path</em>, <em>interval_s::Real</em>, <em>timeout_s::Real) -&gt; (previous::StatStruct</em>, <em>current::StatStruct</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.poll_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Monitor a file for changes by polling every <code class="docutils literal"><span class="pre">interval_s</span></code> seconds until a change occurs or <code class="docutils literal"><span class="pre">timeout_s</span></code> seconds have elapsed. The <code class="docutils literal"><span class="pre">interval_s</span></code> should be a long period; the default is 5.007 seconds.</p>
+<p>Returns a pair of <code class="docutils literal"><span class="pre">StatStruct</span></code> objects <code class="docutils literal"><span class="pre">(previous,</span> <span class="pre">current)</span></code> when a change is detected.</p>
+<p>To determine when a file was modified, compare <code class="docutils literal"><span class="pre">mtime(prev)</span> <span class="pre">!=</span> <span class="pre">mtime(current)</span></code> to detect notification of changes. However, using <code class="docutils literal"><span class="pre">watch_file</span></code> for this operation is preferred, since it is more reliable and efficient, although in some situations it may not be available.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.watch_file">
+<code class="descname">watch_file</code><span class="sig-paren">(</span><em>path</em>, <em>timeout_s::Real</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.watch_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Watch file or directory <code class="docutils literal"><span class="pre">path</span></code> for changes until a change occurs or <code class="docutils literal"><span class="pre">timeout_s</span></code> seconds have elapsed.</p>
+<p>The returned value is an object with boolean fields <code class="docutils literal"><span class="pre">changed</span></code>, <code class="docutils literal"><span class="pre">renamed</span></code>, and <code class="docutils literal"><span class="pre">timedout</span></code>, giving the result of watching the file.</p>
+<p>This behavior of this function varies slightly across platforms. See &lt;<a class="reference external" href="https://nodejs.org/api/fs.html#fs_caveats">https://nodejs.org/api/fs.html#fs_caveats</a>&gt; for more detailed information.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.bind">
+<code class="descname">bind</code><span class="sig-paren">(</span><em>socket::Union{UDPSocket</em>, <em>TCPSocket}</em>, <em>host::IPv4</em>, <em>port::Integer</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.bind" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bind <code class="docutils literal"><span class="pre">socket</span></code> to the given <code class="docutils literal"><span class="pre">host:port</span></code>. Note that <code class="docutils literal"><span class="pre">0.0.0.0</span></code> will listen on all devices.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.send">
+<code class="descname">send</code><span class="sig-paren">(</span><em>socket::UDPSocket</em>, <em>host::IPv4</em>, <em>port::Integer</em>, <em>msg</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.send" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send <code class="docutils literal"><span class="pre">msg</span></code> over <code class="docutils literal"><span class="pre">socket</span></code> to <code class="docutils literal"><span class="pre">host:port</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.recv">
+<code class="descname">recv</code><span class="sig-paren">(</span><em>socket::UDPSocket</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.recv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a UDP packet from the specified socket, and return the bytes received. This call blocks.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.recvfrom">
+<code class="descname">recvfrom</code><span class="sig-paren">(</span><em>socket::UDPSocket) -&gt; (address</em>, <em>data</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.recvfrom" title="Permalink to this definition">¶</a></dt>
+<dd><p>Read a UDP packet from the specified socket, returning a tuple of (address, data), where address will be either IPv4 or IPv6 as appropriate.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.setopt">
+<code class="descname">setopt</code><span class="sig-paren">(</span><em>sock::UDPSocket; multicast_loop = nothing</em>, <em>multicast_ttl=nothing</em>, <em>enable_broadcast=nothing</em>, <em>ttl=nothing</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.setopt" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set UDP socket options. <code class="docutils literal"><span class="pre">multicast_loop</span></code>: loopback for multicast packets (default: <code class="docutils literal"><span class="pre">true</span></code>). <code class="docutils literal"><span class="pre">multicast_ttl</span></code>: TTL for multicast packets. <code class="docutils literal"><span class="pre">enable_broadcast</span></code>: flag must be set to <code class="docutils literal"><span class="pre">true</span></code> if socket will be used for broadcast messages, or else the UDP system will return an access error (default: <code class="docutils literal"><span class="pre">false</span></code>). <code class="docutils literal"><span class="pre">ttl</span></code>: Time-to-live of packets sent on the socket.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.ntoh">
+<code class="descname">ntoh</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.ntoh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts the endianness of a value from Network byte order (big-endian) to that used by the Host.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.hton">
+<code class="descname">hton</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.hton" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts the endianness of a value from that used by the Host to Network byte order (big-endian).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.ltoh">
+<code class="descname">ltoh</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.ltoh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts the endianness of a value from Little-endian to that used by the Host.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.htol">
+<code class="descname">htol</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.htol" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts the endianness of a value from that used by the Host to Little-endian.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="Base.ENDIAN_BOM">
+<code class="descname">ENDIAN_BOM</code><a class="headerlink" href="#Base.ENDIAN_BOM" title="Permalink to this definition">¶</a></dt>
+<dd><p>The 32-bit byte-order-mark indicates the native byte order of the host machine. Little-endian machines will contain the value 0x04030201. Big-endian machines will contain the value 0x01020304.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../punctuation/" class="btn btn-neutral float-right" title="Punctuation">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../file/" class="btn btn-neutral" title="Filesystem"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.4.8-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

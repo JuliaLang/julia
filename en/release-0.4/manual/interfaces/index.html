@@ -1,0 +1,944 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Interfaces &mdash; Julia Language 0.4.8-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.4.8-pre documentation" href="../../"/>
+        <link rel="next" title="Modules" href="../modules/"/>
+        <link rel="prev" title="Conversion and Promotion" href="../conversion-and-promotion/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#call-overloading-and-function-like-objects">Call overloading and function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#constructors-call-and-conversion">Constructors, Call, and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#markdown-syntax-notes">Markdown Syntax Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#remoterefs-and-abstractchannels">RemoteRefs and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-garbage-collection">Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../dates/">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#period-types">Period Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#handling-operating-system-variation">Handling Operating System Variation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/dates/">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#test-framework">Test Framework</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libc/">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libdl/">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/init/">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/eval/">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/ast/">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/types/">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/object/">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/subarrays/">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/llvm/">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/promote-op/">Operator-sensitive promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Interfaces</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/interfaces.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="interfaces">
+<span id="man-interfaces"></span><h1>Interfaces<a class="headerlink" href="#interfaces" title="Permalink to this headline">¶</a></h1>
+<p>A lot of the power and extensibility in Julia comes from a collection of informal interfaces.  By extending a few specific methods to work for a custom type, objects of that type not only receive those functionalities, but they are also able to be used in other methods that are written to generically build upon those behaviors.</p>
+<div class="section" id="iteration">
+<span id="man-interfaces-iteration"></span><h2>Iteration<a class="headerlink" href="#iteration" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="33%" />
+<col width="24%" />
+<col width="43%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Required methods</th>
+<th class="head">&nbsp;</th>
+<th class="head">Brief description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">start(iter)</span></code></td>
+<td>&nbsp;</td>
+<td>Returns the initial iteration state</td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">next(iter,</span> <span class="pre">state)</span></code></td>
+<td>&nbsp;</td>
+<td>Returns the current item and the next state</td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">done(iter,</span> <span class="pre">state)</span></code></td>
+<td>&nbsp;</td>
+<td>Tests if there are any items remaining</td>
+</tr>
+<tr class="row-odd"><td><strong>Important optional methods</strong></td>
+<td><strong>Default definition</strong></td>
+<td><strong>Brief description</strong></td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">eltype(IterType)</span></code></td>
+<td><code class="docutils literal"><span class="pre">Any</span></code></td>
+<td>The type the items returned by <code class="xref jl jl-func docutils literal"><span class="pre">next()</span></code></td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">length(iter)</span></code></td>
+<td>(<em>undefined</em>)</td>
+<td>The number of items, if known</td>
+</tr>
+</tbody>
+</table>
+<p>Sequential iteration is implemented by the methods <code class="xref jl jl-func docutils literal"><span class="pre">start()</span></code>, <code class="xref jl jl-func docutils literal"><span class="pre">done()</span></code>, and <code class="xref jl jl-func docutils literal"><span class="pre">next()</span></code>. Instead of mutating objects as they are iterated over, Julia provides these three methods to keep track of the iteration state externally from the object. The <code class="xref jl jl-func docutils literal"><span class="pre">start(iter)</span></code> method returns the initial state for the iterable object <code class="docutils literal"><span class="pre">iter</span></code>. That state gets passed along to <code class="xref jl jl-func docutils literal"><span class="pre">done(iter,</span> <span class="pre">state)</span></code>, which tests if there are any elements remaining, and <code class="xref jl jl-func docutils literal"><span class="pre">next(iter,</span> <span class="pre">state)</span></code>, which returns a tuple containing the current element and an updated <code class="docutils literal"><span class="pre">state</span></code>. The <code class="docutils literal"><span class="pre">state</span></code> object can be anything, and is generally considered to be an implementation detail private to the iterable object.</p>
+<p>Any object defines these three methods is iterable and can be used in the <a class="reference internal" href="../../stdlib/collections/#stdlib-collections-iteration"><span class="std std-ref">many functions that rely upon iteration</span></a>. It can also be used directly in a <code class="docutils literal"><span class="pre">for</span></code> loop since the syntax:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="n">iter</span>   <span class="c"># or  &quot;for i = iter&quot;</span>
+    <span class="c"># body</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>is translated into:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">state</span> <span class="o">=</span> <span class="n">start</span><span class="p">(</span><span class="n">iter</span><span class="p">)</span>
+<span class="k">while</span> <span class="o">!</span><span class="n">done</span><span class="p">(</span><span class="n">iter</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="o">=</span> <span class="n">next</span><span class="p">(</span><span class="n">iter</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+    <span class="c"># body</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>A simple example is an iterable sequence of square numbers with a defined length:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">immutable</span> <span class="n">Squares</span>
+           <span class="n">count</span><span class="p">::</span><span class="kt">Int</span>
+       <span class="k">end</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">start</span><span class="p">(::</span><span class="n">Squares</span><span class="p">)</span> <span class="o">=</span> <span class="mi">1</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">next</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">Squares</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">state</span><span class="o">*</span><span class="n">state</span><span class="p">,</span> <span class="n">state</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">done</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">Squares</span><span class="p">,</span> <span class="n">s</span><span class="p">)</span> <span class="o">=</span> <span class="n">s</span> <span class="o">&gt;</span> <span class="n">S</span><span class="o">.</span><span class="n">count</span><span class="p">;</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">eltype</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="n">Squares</span><span class="p">})</span> <span class="o">=</span> <span class="kt">Int</span> <span class="c"># Note that this is defined for the type</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">length</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">Squares</span><span class="p">)</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">count</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>With only <code class="docutils literal"><span class="pre">start</span></code>, <code class="docutils literal"><span class="pre">next</span></code>, and <code class="docutils literal"><span class="pre">done</span></code> definitions, the <code class="docutils literal"><span class="pre">Squares</span></code> type is already pretty powerful. We can iterate over all the elements:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="n">Squares</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+           <span class="n">println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+       <span class="k">end</span>
+<span class="mi">1</span>
+<span class="mi">4</span>
+<span class="mi">9</span>
+<span class="mi">16</span>
+<span class="mi">25</span>
+<span class="mi">36</span>
+<span class="mi">49</span>
+</pre></div>
+</div>
+<p>We can use many of the builtin methods that work with iterables, like <code class="xref jl jl-func docutils literal"><span class="pre">in()</span></code>, <code class="xref jl jl-func docutils literal"><span class="pre">mean()</span></code> and <code class="xref jl jl-func docutils literal"><span class="pre">std()</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">25</span> <span class="k">in</span> <span class="n">Squares</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">mean</span><span class="p">(</span><span class="n">Squares</span><span class="p">(</span><span class="mi">100</span><span class="p">)),</span> <span class="n">std</span><span class="p">(</span><span class="n">Squares</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span>
+<span class="p">(</span><span class="mf">3383.5</span><span class="p">,</span><span class="mf">3024.355854282583</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>There are a few more methods we can extend to give Julia more information about this iterable collection.  We know that the elements in a <code class="docutils literal"><span class="pre">Squares</span></code> sequence will always be <code class="docutils literal"><span class="pre">Int</span></code>. By extending the <code class="xref jl jl-func docutils literal"><span class="pre">eltype()</span></code> method, we can give that information to Julia and help it make more specialized code in the more complicated methods. We also know the number of elements in our sequence, so we can extend <code class="xref jl jl-func docutils literal"><span class="pre">length()</span></code>, too.</p>
+<p>Now, when we ask Julia to <code class="xref jl jl-func docutils literal"><span class="pre">collect()</span></code> all the elements into an array it can preallocate a <code class="docutils literal"><span class="pre">Vector{Int}</span></code> of the right size instead of blindly <code class="docutils literal"><span class="pre">push!</span></code>ing each element into a <code class="docutils literal"><span class="pre">Vector{Any}</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">collect</span><span class="p">(</span><span class="n">Squares</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span><span class="o">&#39;</span> <span class="c"># transposed to save space</span>
+<span class="mi">1</span><span class="n">x100</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+ <span class="mi">1</span>  <span class="mi">4</span>  <span class="mi">9</span>  <span class="mi">16</span>  <span class="mi">25</span>  <span class="mi">36</span>  <span class="mi">49</span>  <span class="mi">64</span>  <span class="mi">81</span>  <span class="mi">100</span>  <span class="n">…</span>  <span class="mi">9025</span>  <span class="mi">9216</span>  <span class="mi">9409</span>  <span class="mi">9604</span>  <span class="mi">9801</span>  <span class="mi">10000</span>
+</pre></div>
+</div>
+<p>While we can rely upon generic implementations, we can also extend specific methods where we know there is a simpler algorithm.  For example, there&#8217;s a formula to compute the sum of squares, so we can override the generic iterative version with a more performant solution:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">Squares</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">n</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">count</span><span class="p">;</span> <span class="k">return</span> <span class="n">n</span><span class="o">*</span><span class="p">(</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="mi">2</span><span class="n">n</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="n">÷6</span><span class="p">)</span>
+       <span class="n">sum</span><span class="p">(</span><span class="n">Squares</span><span class="p">(</span><span class="mi">1803</span><span class="p">))</span>
+<span class="mi">1955361914</span>
+</pre></div>
+</div>
+<p>This is a very common pattern throughout the Julia standard library: a small set of required methods define an informal interface that enable many fancier behaviors.  In some cases, types will want to additionally specialize those extra behaviors when they know a more efficient algorithm can be used in their specific case.</p>
+</div>
+<div class="section" id="indexing">
+<span id="man-interfaces-indexing"></span><h2>Indexing<a class="headerlink" href="#indexing" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="53%" />
+<col width="47%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Methods to implement</th>
+<th class="head">Brief description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">getindex(X,</span> <span class="pre">i)</span></code></td>
+<td><code class="docutils literal"><span class="pre">X[i]</span></code>, indexed element access</td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">setindex!(X,</span> <span class="pre">v,</span> <span class="pre">i)</span></code></td>
+<td><code class="docutils literal"><span class="pre">X[i]</span> <span class="pre">=</span> <span class="pre">v</span></code>, indexed assignment</td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">endof(X)</span></code></td>
+<td>The last index, used in <code class="docutils literal"><span class="pre">X[end]</span></code></td>
+</tr>
+</tbody>
+</table>
+<p>For the <code class="docutils literal"><span class="pre">Squares</span></code> iterable above, we can easily compute the <code class="docutils literal"><span class="pre">i</span></code>th element of the sequence by squaring it.  We can expose this as an indexing expression <code class="docutils literal"><span class="pre">S[i]</span></code>.  To opt into this behavior, <code class="docutils literal"><span class="pre">Squares</span></code> simply needs to define <code class="xref jl jl-func docutils literal"><span class="pre">getindex()</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> Base</span><span class="o">.</span><span class="n">getindex</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">Squares</span><span class="p">,</span> <span class="n">i</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>
+           <span class="mi">1</span> <span class="o">&lt;=</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="n">S</span><span class="o">.</span><span class="n">count</span> <span class="o">||</span> <span class="nb">throw</span><span class="p">(</span><span class="n">BoundsError</span><span class="p">(</span><span class="n">S</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span>
+           <span class="k">return</span> <span class="n">i</span><span class="o">*</span><span class="n">i</span>
+       <span class="k">end</span>
+       <span class="n">Squares</span><span class="p">(</span><span class="mi">100</span><span class="p">)[</span><span class="mi">23</span><span class="p">]</span>
+<span class="mi">529</span>
+</pre></div>
+</div>
+<p>Additionally, to support the syntax <code class="docutils literal"><span class="pre">S[end]</span></code>, we must define <code class="xref jl jl-func docutils literal"><span class="pre">endof()</span></code> to specify the last valid index:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">endof</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">Squares</span><span class="p">)</span> <span class="o">=</span> <span class="n">length</span><span class="p">(</span><span class="n">S</span><span class="p">)</span>
+       <span class="n">Squares</span><span class="p">(</span><span class="mi">23</span><span class="p">)[</span><span class="k">end</span><span class="p">]</span>
+<span class="mi">529</span>
+</pre></div>
+</div>
+<p>Note, though, that the above <em>only</em> defines <code class="xref jl jl-func docutils literal"><span class="pre">getindex()</span></code> with one integer index. Indexing with anything other than an <code class="docutils literal"><span class="pre">Int</span></code> will throw a <code class="docutils literal"><span class="pre">MethodError</span></code> saying that there was no matching method.  In order to support indexing with ranges or vectors of Ints, separate methods must be written:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">getindex</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">Squares</span><span class="p">,</span> <span class="n">i</span><span class="p">::</span><span class="n">Number</span><span class="p">)</span> <span class="o">=</span> <span class="n">S</span><span class="p">[</span><span class="nb">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="n">i</span><span class="p">)]</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">getindex</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">Squares</span><span class="p">,</span> <span class="n">I</span><span class="p">)</span> <span class="o">=</span> <span class="p">[</span><span class="n">S</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="n">I</span><span class="p">]</span>
+       <span class="n">Squares</span><span class="p">(</span><span class="mi">10</span><span class="p">)[[</span><span class="mi">3</span><span class="p">,</span><span class="mf">4.</span><span class="p">,</span><span class="mi">5</span><span class="p">]]</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+  <span class="mi">9</span>
+ <span class="mi">16</span>
+ <span class="mi">25</span>
+</pre></div>
+</div>
+<p>While this is starting to support more of the <a class="reference internal" href="../arrays/#man-array-indexing"><span class="std std-ref">indexing operations supported by some of the builtin types</span></a>, there&#8217;s still quite a number of behaviors missing. This <code class="docutils literal"><span class="pre">Squares</span></code> sequence is starting to look more and more like a vector as we&#8217;ve added behaviors to it. Instead of defining all these behaviors ourselves, we can officially define it as a subtype of an <code class="docutils literal"><span class="pre">AbstractArray</span></code>.</p>
+</div>
+<div class="section" id="abstract-arrays">
+<span id="man-interfaces-abstractarray"></span><h2>Abstract Arrays<a class="headerlink" href="#abstract-arrays" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="docutils">
+<colgroup>
+<col width="30%" />
+<col width="23%" />
+<col width="47%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Methods to implement</th>
+<th class="head">&nbsp;</th>
+<th class="head">Brief description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">size(A)</span></code></td>
+<td>&nbsp;</td>
+<td>Returns a tuple containing the dimensions of A</td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">Base.linearindexing(Type)</span></code></td>
+<td>&nbsp;</td>
+<td>Returns either <code class="docutils literal"><span class="pre">Base.LinearFast()</span></code> or <code class="docutils literal"><span class="pre">Base.LinearSlow()</span></code>. See the description below.</td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">getindex(A,</span> <span class="pre">i::Int)</span></code></td>
+<td>&nbsp;</td>
+<td>(if <code class="docutils literal"><span class="pre">LinearFast</span></code>) Linear scalar indexing</td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">getindex(A,</span> <span class="pre">i1::Int,</span> <span class="pre">...,</span> <span class="pre">iN::Int)</span></code></td>
+<td>&nbsp;</td>
+<td>(if <code class="docutils literal"><span class="pre">LinearSlow</span></code>, where <code class="docutils literal"><span class="pre">N</span> <span class="pre">=</span> <span class="pre">ndims(A)</span></code>) N-dimensional scalar indexing</td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">setindex!(A,</span> <span class="pre">v,</span> <span class="pre">i::Int)</span></code></td>
+<td>&nbsp;</td>
+<td>(if <code class="docutils literal"><span class="pre">LinearFast</span></code>) Scalar indexed assignment</td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">setindex!(A,</span> <span class="pre">v,</span> <span class="pre">i1::Int,</span> <span class="pre">...,</span> <span class="pre">iN::Int)</span></code></td>
+<td>&nbsp;</td>
+<td>(if <code class="docutils literal"><span class="pre">LinearSlow</span></code>, where <code class="docutils literal"><span class="pre">N</span> <span class="pre">=</span> <span class="pre">ndims(A)</span></code>) N-dimensional scalar indexed assignment</td>
+</tr>
+<tr class="row-even"><td><strong>Optional methods</strong></td>
+<td><strong>Default definition</strong></td>
+<td><strong>Brief description</strong></td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">getindex(A,</span> <span class="pre">I...)</span></code></td>
+<td>defined in terms of scalar <code class="xref jl jl-func docutils literal"><span class="pre">getindex()</span></code></td>
+<td><a class="reference internal" href="../arrays/#man-array-indexing"><span class="std std-ref">Multidimensional and nonscalar indexing</span></a></td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">setindex!(A,</span> <span class="pre">I...)</span></code></td>
+<td>defined in terms of scalar <code class="xref jl jl-func docutils literal"><span class="pre">setindex!()</span></code></td>
+<td><a class="reference internal" href="../arrays/#man-array-indexing"><span class="std std-ref">Multidimensional and nonscalar indexed assignment</span></a></td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">start()</span></code>/<code class="xref jl jl-func docutils literal"><span class="pre">next()</span></code>/<code class="xref jl jl-func docutils literal"><span class="pre">done()</span></code></td>
+<td>defined in terms of scalar <code class="xref jl jl-func docutils literal"><span class="pre">getindex()</span></code></td>
+<td>Iteration</td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">length(A)</span></code></td>
+<td><code class="docutils literal"><span class="pre">prod(size(A))</span></code></td>
+<td>Number of elements</td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">similar(A)</span></code></td>
+<td><code class="docutils literal"><span class="pre">similar(A,</span> <span class="pre">eltype(A),</span> <span class="pre">size(A))</span></code></td>
+<td>Return a mutable array with the same shape and element type</td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">similar(A,</span> <span class="pre">::Type{S})</span></code></td>
+<td><code class="docutils literal"><span class="pre">similar(A,</span> <span class="pre">S,</span> <span class="pre">size(A))</span></code></td>
+<td>Return a mutable array with the same shape and the specified element type</td>
+</tr>
+<tr class="row-odd"><td><code class="xref jl jl-func docutils literal"><span class="pre">similar(A,</span> <span class="pre">dims::NTuple{Int})</span></code></td>
+<td><code class="docutils literal"><span class="pre">similar(A,</span> <span class="pre">eltype(A),</span> <span class="pre">dims)</span></code></td>
+<td>Return a mutable array with the same element type and the specified dimensions</td>
+</tr>
+<tr class="row-even"><td><code class="xref jl jl-func docutils literal"><span class="pre">similar(A,</span> <span class="pre">::Type{S},</span> <span class="pre">dims::NTuple{Int})</span></code></td>
+<td><code class="docutils literal"><span class="pre">Array(S,</span> <span class="pre">dims)</span></code></td>
+<td>Return a mutable array with the specified element type and dimensions</td>
+</tr>
+</tbody>
+</table>
+<p>If a type is defined as a subtype of <code class="docutils literal"><span class="pre">AbstractArray</span></code>, it inherits a very large set of rich behaviors including iteration and multidimensional indexing built on top of single-element access.  See the <a class="reference internal" href="../arrays/#man-arrays"><span class="std std-ref">arrays manual page</span></a> and <a class="reference internal" href="../../stdlib/arrays/#stdlib-arrays"><span class="std std-ref">standard library section</span></a> for more supported methods.</p>
+<p>A key part in defining an <code class="docutils literal"><span class="pre">AbstractArray</span></code> subtype is <code class="xref jl jl-func docutils literal"><span class="pre">Base.linearindexing()</span></code>. Since indexing is such an important part of an array and often occurs in hot loops, it&#8217;s important to make both indexing and indexed assignment as efficient as possible.  Array data structures are typically defined in one of two ways: either it most efficiently accesses its elements using just one index (linear indexing) or it intrinsically accesses the elements with indices specified for every dimension.  These two modalities are identified by Julia as <code class="docutils literal"><span class="pre">Base.LinearFast()</span></code> and <code class="docutils literal"><span class="pre">Base.LinearSlow()</span></code>.  Converting a linear index to multiple indexing subscripts is typically very expensive, so this provides a traits-based mechanism to enable efficient generic code for all array types.</p>
+<p>This distinction determines which scalar indexing methods the type must define. <code class="docutils literal"><span class="pre">LinearFast()</span></code> arrays are simple: just define <code class="xref jl jl-func docutils literal"><span class="pre">getindex(A::ArrayType,</span> <span class="pre">i::Int)</span></code>.  When the array is subsequently indexed with a multidimensional set of indices, the fallback <code class="xref jl jl-func docutils literal"><span class="pre">getindex(A::AbstractArray,</span> <span class="pre">I...)()</span></code> efficiently converts the indices into one linear index and then calls the above method. <code class="docutils literal"><span class="pre">LinearSlow()</span></code> arrays, on the other hand, require methods to be defined for each supported dimensionality with <code class="docutils literal"><span class="pre">ndims(A)</span></code> <code class="docutils literal"><span class="pre">Int</span></code> indices.  For example, the builtin <code class="docutils literal"><span class="pre">SparseMatrix</span></code> type only supports two dimensions, so it just defines <code class="xref jl jl-func docutils literal"><span class="pre">getindex(A::SparseMatrix,</span> <span class="pre">i::Int,</span> <span class="pre">j::Int)()</span></code>.  The same holds for <code class="xref jl jl-func docutils literal"><span class="pre">setindex!()</span></code>.</p>
+<p>Returning to the sequence of squares from above, we could instead define it as a subtype of an <code class="docutils literal"><span class="pre">AbstractArray{Int,</span> <span class="pre">1}</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">immutable</span> <span class="n">SquaresVector</span> <span class="o">&lt;:</span> <span class="n">AbstractArray</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span> <span class="mi">1</span><span class="p">}</span>
+           <span class="n">count</span><span class="p">::</span><span class="kt">Int</span>
+       <span class="k">end</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">SquaresVector</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">count</span><span class="p">,)</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">linearindexing</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="n">SquaresVector</span><span class="p">})</span> <span class="o">=</span> <span class="n">Base</span><span class="o">.</span><span class="n">LinearFast</span><span class="p">()</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">getindex</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="n">SquaresVector</span><span class="p">,</span> <span class="n">i</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span> <span class="o">=</span> <span class="n">i</span><span class="o">*</span><span class="n">i</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Note that it&#8217;s very important to specify the two parameters of the <code class="docutils literal"><span class="pre">AbstractArray</span></code>; the first defines the <code class="xref jl jl-func docutils literal"><span class="pre">eltype()</span></code>, and the second defines the <code class="xref jl jl-func docutils literal"><span class="pre">ndims()</span></code>.  That supertype and those three methods are all it takes for <code class="docutils literal"><span class="pre">SquaresVector</span></code> to be an iterable, indexable, and completely functional array:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="n">SquaresVector</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+<span class="mi">7</span><span class="o">-</span><span class="n">element</span> <span class="n">SquaresVector</span><span class="p">:</span>
+  <span class="mi">1</span>
+  <span class="mi">4</span>
+  <span class="mi">9</span>
+ <span class="mi">16</span>
+ <span class="mi">25</span>
+ <span class="mi">36</span>
+ <span class="mi">49</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span><span class="p">[</span><span class="n">s</span> <span class="o">.&gt;</span> <span class="mi">20</span><span class="p">]</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+ <span class="mi">25</span>
+ <span class="mi">36</span>
+ <span class="mi">49</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> \ <span class="n">rand</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span><span class="n">x2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+ <span class="mf">0.0151876</span>  <span class="mf">0.0179393</span>
+</pre></div>
+</div>
+<p>As a more complicated example, let&#8217;s define our own toy N-dimensional sparse-like array type built on top of <code class="docutils literal"><span class="pre">Dict</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">immutable</span> <span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}</span>
+           <span class="n">data</span><span class="p">::</span><span class="n">Dict</span><span class="p">{</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="kt">Int</span><span class="p">},</span> <span class="n">T</span><span class="p">}</span>
+           <span class="n">dims</span><span class="p">::</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="kt">Int</span><span class="p">}</span>
+       <span class="k">end</span>
+       <span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">}(::</span><span class="n">Type</span><span class="p">{</span><span class="n">T</span><span class="p">},</span> <span class="n">dims</span><span class="p">::</span><span class="kt">Int</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span> <span class="n">SparseArray</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">dims</span><span class="p">)</span>
+       <span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(::</span><span class="n">Type</span><span class="p">{</span><span class="n">T</span><span class="p">},</span> <span class="n">dims</span><span class="p">::</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="kt">Int</span><span class="p">})</span> <span class="o">=</span> <span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">Dict</span><span class="p">{</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="kt">Int</span><span class="p">},</span> <span class="n">T</span><span class="p">}(),</span> <span class="n">dims</span><span class="p">)</span>
+<span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseArray</span><span class="p">)</span> <span class="o">=</span> <span class="n">A</span><span class="o">.</span><span class="n">dims</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">similar</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseArray</span><span class="p">,</span> <span class="p">::</span><span class="n">Type</span><span class="p">{</span><span class="n">T</span><span class="p">},</span> <span class="n">dims</span><span class="p">::</span><span class="n">Dims</span><span class="p">)</span> <span class="o">=</span> <span class="n">SparseArray</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">dims</span><span class="p">)</span>
+       <span class="c"># Define scalar indexing and indexed assignment for up to 3 dimensions</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">getindex</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">},</span> <span class="n">i1</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>                   <span class="o">=</span> <span class="n">get</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="n">i1</span><span class="p">,),</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">))</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">getindex</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">2</span><span class="p">},</span> <span class="n">i1</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">i2</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>          <span class="o">=</span> <span class="n">get</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="n">i1</span><span class="p">,</span><span class="n">i2</span><span class="p">),</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">))</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">getindex</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">3</span><span class="p">},</span> <span class="n">i1</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">i2</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">i3</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span> <span class="o">=</span> <span class="n">get</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="n">i1</span><span class="p">,</span><span class="n">i2</span><span class="p">,</span><span class="n">i3</span><span class="p">),</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">))</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">setindex!</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">},</span> <span class="n">v</span><span class="p">,</span> <span class="n">i1</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>                   <span class="o">=</span> <span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">data</span><span class="p">[(</span><span class="n">i1</span><span class="p">,)]</span> <span class="o">=</span> <span class="n">v</span><span class="p">)</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">setindex!</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">2</span><span class="p">},</span> <span class="n">v</span><span class="p">,</span> <span class="n">i1</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">i2</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>          <span class="o">=</span> <span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">data</span><span class="p">[(</span><span class="n">i1</span><span class="p">,</span><span class="n">i2</span><span class="p">)]</span> <span class="o">=</span> <span class="n">v</span><span class="p">)</span>
+       <span class="n">Base</span><span class="o">.</span><span class="n">setindex!</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">3</span><span class="p">},</span> <span class="n">v</span><span class="p">,</span> <span class="n">i1</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">i2</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">i3</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">data</span><span class="p">[(</span><span class="n">i1</span><span class="p">,</span><span class="n">i2</span><span class="p">,</span><span class="n">i3</span><span class="p">)]</span> <span class="o">=</span> <span class="n">v</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Notice that this is a <code class="docutils literal"><span class="pre">LinearSlow</span></code> array, so we must manually define <code class="xref jl jl-func docutils literal"><span class="pre">getindex()</span></code> and <code class="xref jl jl-func docutils literal"><span class="pre">setindex!()</span></code> for each dimensionality we&#8217;d like to support.  Unlike the <code class="docutils literal"><span class="pre">SquaresVector</span></code>, we are able to define <code class="xref jl jl-func docutils literal"><span class="pre">setindex!()</span></code>, and so we can mutate the array:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">SparseArray</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="mi">3</span><span class="n">x3</span> <span class="n">SparseArray</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+ <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>
+ <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>
+ <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">rand!</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="mi">3</span><span class="n">x3</span> <span class="n">SparseArray</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+ <span class="mf">0.28119</span>   <span class="mf">0.0203749</span>  <span class="mf">0.0769509</span>
+ <span class="mf">0.209472</span>  <span class="mf">0.287702</span>   <span class="mf">0.640396</span>
+ <span class="mf">0.251379</span>  <span class="mf">0.859512</span>   <span class="mf">0.873544</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span><span class="p">[:]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">length</span><span class="p">(</span><span class="n">A</span><span class="p">);</span> <span class="n">A</span>
+<span class="mi">3</span><span class="n">x3</span> <span class="n">SparseArray</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+ <span class="mf">1.0</span>  <span class="mf">4.0</span>  <span class="mf">7.0</span>
+ <span class="mf">2.0</span>  <span class="mf">5.0</span>  <span class="mf">8.0</span>
+ <span class="mf">3.0</span>  <span class="mf">6.0</span>  <span class="mf">9.0</span>
+</pre></div>
+</div>
+<p>The result of indexing an <code class="docutils literal"><span class="pre">AbstractArray</span></code> can itself be an array (for instance when indexing by a <code class="docutils literal"><span class="pre">Range</span></code>). The <code class="docutils literal"><span class="pre">AbstractArray</span></code> fallback methods use <code class="xref jl jl-func docutils literal"><span class="pre">similar()</span></code> to allocate an <code class="docutils literal"><span class="pre">Array</span></code> of the appropriate size and element type, which is filled in using the basic indexing method described above. However, when implementing an array wrapper you often want the result to be wrapped as well:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">2</span><span class="p">,:]</span>
+<span class="mi">2</span><span class="n">x3</span> <span class="n">SparseArray</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+ <span class="mf">1.0</span>  <span class="mf">4.0</span>  <span class="mf">7.0</span>
+ <span class="mf">2.0</span>  <span class="mf">5.0</span>  <span class="mf">8.0</span>
+</pre></div>
+</div>
+<p>In this example it is accomplished by defining <code class="docutils literal"><span class="pre">Base.similar{T}(A::SparseArray,</span> <span class="pre">::Type{T},</span> <span class="pre">dims::Dims)</span></code> to create the appropriate wrapped array. For this to work it&#8217;s important that <code class="docutils literal"><span class="pre">SparseArray</span></code> is mutable (supports <code class="docutils literal"><span class="pre">setindex!</span></code>). <code class="xref jl jl-func docutils literal"><span class="pre">similar()</span></code> is also used to allocate result arrays for arithmetic on <code class="docutils literal"><span class="pre">AbstractArrays</span></code>, for instance:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">+</span> <span class="mi">4</span>
+<span class="mi">3</span><span class="n">x3</span> <span class="n">SparseArray</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+ <span class="mf">5.0</span>   <span class="mf">8.0</span>  <span class="mf">11.0</span>
+ <span class="mf">6.0</span>   <span class="mf">9.0</span>  <span class="mf">12.0</span>
+ <span class="mf">7.0</span>  <span class="mf">10.0</span>  <span class="mf">13.0</span>
+</pre></div>
+</div>
+<p>In addition to all the iterable and indexable methods from above, these types can also interact with each other and use all of the methods defined in the standard library for <code class="docutils literal"><span class="pre">AbstractArrays</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span><span class="p">[</span><span class="n">SquaresVector</span><span class="p">(</span><span class="mi">3</span><span class="p">)]</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">SparseArray</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+ <span class="mf">1.0</span>
+ <span class="mf">4.0</span>
+ <span class="mf">9.0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dot</span><span class="p">(</span><span class="n">A</span><span class="p">[:,</span><span class="mi">1</span><span class="p">],</span><span class="n">A</span><span class="p">[:,</span><span class="mi">2</span><span class="p">])</span>
+<span class="mf">32.0</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../modules/" class="btn btn-neutral float-right" title="Modules">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../conversion-and-promotion/" class="btn btn-neutral" title="Conversion and Promotion"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.4.8-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

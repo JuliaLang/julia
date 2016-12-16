@@ -1,0 +1,1145 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Calling C and Fortran Code &mdash; Julia Language 0.3.13-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.3.13-pre documentation" href="../../"/>
+        <link rel="next" title="Interacting With Julia" href="../interacting-with-julia/"/>
+        <link rel="prev" title="Running External Programs" href="../running-external-programs/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#elementary-functions">Elementary Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics"><tt class="docutils literal"><span class="pre">String</span></tt> Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <tt class="docutils literal"><span class="pre">return</span></tt> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#id1">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#for-loops-and-comprehensions">For Loops and Comprehensions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#tuple-types">Tuple Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#case-study-rational">Case Study: Rational</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-arrays">Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#constructing-distributed-arrays">Constructing Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-array-operations">Distributed Array Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays-experimental">Shared Arrays (Experimental)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#passing-pointers-for-modifying-inputs">Passing Pointers for Modifying Inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#passing-julia-callback-functions-to-c">Passing Julia Callback Functions to C</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#handling-platform-variations">Handling Platform Variations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#tagging-package-versions">Tagging Package Versions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <tt class="docutils literal"><span class="pre">&#64;time</span></tt> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <cite>!</cite> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#try-to-avoid-nullable-fields">Try to avoid nullable fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <tt class="docutils literal"><span class="pre">base/</span></tt></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <tt class="docutils literal"><span class="pre">x-&gt;f(x)</span></tt></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#id1">Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#distributed-arrays">Distributed Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays-experimental-unix-only-feature">Shared Arrays (Experimental, UNIX-only feature)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/graphics/">Graphics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/graphics/#geometry">Geometry</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Calling C and Fortran Code</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/calling-c-and-fortran-code.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="calling-c-and-fortran-code">
+<span id="man-calling-c-and-fortran-code"></span><h1>Calling C and Fortran Code<a class="headerlink" href="#calling-c-and-fortran-code" title="Permalink to this headline">¶</a></h1>
+<p>Though most code can be written in Julia, there are many high-quality,
+mature libraries for numerical computing already written in C and
+Fortran. To allow easy use of this existing code, Julia makes it simple
+and efficient to call C and Fortran functions. Julia has a &#8220;no
+boilerplate&#8221; philosophy: functions can be called directly from Julia
+without any &#8220;glue&#8221; code, code generation, or compilation — even from the
+interactive prompt. This is accomplished just by making an appropriate call
+with <tt class="docutils literal"><span class="pre">ccall</span></tt> syntax, which looks like an ordinary function call.</p>
+<p>The code to be called must be available as a shared library. Most C and
+Fortran libraries ship compiled as shared libraries already, but if you
+are compiling the code yourself using GCC (or Clang), you will need to
+use the <tt class="docutils literal"><span class="pre">-shared</span></tt> and <tt class="docutils literal"><span class="pre">-fPIC</span></tt> options. The machine instructions
+generated by Julia&#8217;s JIT are the same as a native C call would be, so
+the resulting overhead is the same as calling a library function from C
+code. (Non-library function calls in both C and Julia can be inlined and
+thus may have even less overhead than calls to shared library functions.
+When both libraries and executables are generated by LLVM, it is
+possible to perform whole-program optimizations that can even optimize
+across this boundary, but Julia does not yet support that. In the
+future, however, it may do so, yielding even greater performance gains.)</p>
+<p>Shared libraries and functions are referenced by a tuple of the
+form <tt class="docutils literal"><span class="pre">(:function,</span> <span class="pre">&quot;library&quot;)</span></tt> or <tt class="docutils literal"><span class="pre">(&quot;function&quot;,</span> <span class="pre">&quot;library&quot;)</span></tt> where <tt class="docutils literal"><span class="pre">function</span></tt>
+is the C-exported function name. <tt class="docutils literal"><span class="pre">library</span></tt> refers to the shared library
+name: shared libraries available in the (platform-specific) load path
+will be resolved by name, and if necessary a direct path may be specified.</p>
+<p>A function name may be used alone in place of the tuple (just
+<tt class="docutils literal"><span class="pre">:function</span></tt> or <tt class="docutils literal"><span class="pre">&quot;function&quot;</span></tt>). In this case the name is resolved within
+the current process. This form can be used to call C library functions,
+functions in the Julia runtime, or functions in an application linked to
+Julia.</p>
+<p>By default, Fortran compilers <a class="reference external" href="http://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran">generate mangled names</a>
+(for example, converting function names to lowercase or uppercase,
+often appending an underscore), and so to call a Fortran function via
+<tt class="docutils literal"><span class="pre">ccall</span></tt> you must pass the mangled identifier corresponding to the rule
+followed by your Fortran compiler.  Also, when calling a Fortran
+function, all inputs must be passed by reference.</p>
+<p>Finally, you can use <tt class="docutils literal"><span class="pre">ccall</span></tt> to actually generate a call to the
+library function. Arguments to <tt class="docutils literal"><span class="pre">ccall</span></tt> are as follows:</p>
+<ol class="arabic simple">
+<li>(:function, &#8220;library&#8221;) pair (must be a constant, but see below).</li>
+<li>Return type, which may be any bits type, including <tt class="docutils literal"><span class="pre">Int32</span></tt>,
+<tt class="docutils literal"><span class="pre">Int64</span></tt>, <tt class="docutils literal"><span class="pre">Float64</span></tt>, or <tt class="docutils literal"><span class="pre">Ptr{T}</span></tt> for any type parameter <tt class="docutils literal"><span class="pre">T</span></tt>,
+indicating a pointer to values of type <tt class="docutils literal"><span class="pre">T</span></tt>, or <tt class="docutils literal"><span class="pre">Ptr{Void}</span></tt> for
+<tt class="docutils literal"><span class="pre">void*</span></tt> &#8220;untyped pointer&#8221; values.</li>
+<li>A tuple of input types, like those allowed for the return type.
+The input types must be written as a literal tuple, not a tuple-valued
+variable or expression.</li>
+<li>The following arguments, if any, are the actual argument values
+passed to the function.</li>
+</ol>
+<p>As a complete but simple example, the following calls the <tt class="docutils literal"><span class="pre">clock</span></tt>
+function from the standard C library:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span> <span class="p">(:</span><span class="n">clock</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">())</span>
+<span class="mi">2292761</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span>
+<span class="mi">2292761</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="kt">Int32</span>
+</pre></div>
+</div>
+<p><tt class="docutils literal"><span class="pre">clock</span></tt> takes no arguments and returns an <tt class="docutils literal"><span class="pre">Int32</span></tt>. One common gotcha
+is that a 1-tuple must be written with a trailing comma. For
+example, to call the <tt class="docutils literal"><span class="pre">getenv</span></tt> function to get a pointer to the value
+of an environment variable, one makes a call like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">path</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span> <span class="p">(:</span><span class="n">getenv</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},),</span> <span class="s">&quot;SHELL&quot;</span><span class="p">)</span>
+<span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">}</span> <span class="p">@</span><span class="mh">0x00007fff5fbffc45</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">bytestring</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<span class="s">&quot;/bin/bash&quot;</span>
+</pre></div>
+</div>
+<p>Note that the argument type tuple must be written as <tt class="docutils literal"><span class="pre">(Ptr{Uint8},)</span></tt>,
+rather than <tt class="docutils literal"><span class="pre">(Ptr{Uint8})</span></tt>. This is because <tt class="docutils literal"><span class="pre">(Ptr{Uint8})</span></tt> is just
+<tt class="docutils literal"><span class="pre">Ptr{Uint8}</span></tt>, rather than a 1-tuple containing <tt class="docutils literal"><span class="pre">Ptr{Uint8}</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">})</span>
+<span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">}</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},)</span>
+<span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},)</span>
+</pre></div>
+</div>
+<p>In practice, especially when providing reusable functionality, one
+generally wraps <tt class="docutils literal"><span class="pre">ccall</span></tt> uses in Julia functions that set up arguments
+and then check for errors in whatever manner the C or Fortran function
+indicates them, propagating to the Julia caller as exceptions. This is
+especially important since C and Fortran APIs are notoriously
+inconsistent about how they indicate error conditions. For example, the
+<tt class="docutils literal"><span class="pre">getenv</span></tt> C library function is wrapped in the following Julia function
+in
+<a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/env.jl">env.jl</a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> getenv</span><span class="p">(</span><span class="n">var</span><span class="p">::</span><span class="n">String</span><span class="p">)</span>
+  <span class="n">val</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span> <span class="p">(:</span><span class="n">getenv</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span>
+              <span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},),</span> <span class="n">var</span><span class="p">)</span>
+  <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="n">C_NULL</span>
+    <span class="nb">error</span><span class="p">(</span><span class="s">&quot;getenv: undefined variable: &quot;</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
+  <span class="k">end</span>
+  <span class="n">bytestring</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>The C <tt class="docutils literal"><span class="pre">getenv</span></tt> function indicates an error by returning <tt class="docutils literal"><span class="pre">NULL</span></tt>, but
+other standard C functions indicate errors in various different ways,
+including by returning -1, 0, 1 and other special values. This wrapper
+throws an exception clearly indicating the problem if the caller tries
+to get a non-existent environment variable:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">getenv</span><span class="p">(</span><span class="s">&quot;SHELL&quot;</span><span class="p">)</span>
+<span class="s">&quot;/bin/bash&quot;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">getenv</span><span class="p">(</span><span class="s">&quot;FOOBAR&quot;</span><span class="p">)</span>
+<span class="n">getenv</span><span class="p">:</span> <span class="n">undefined</span> <span class="n">variable</span><span class="p">:</span> <span class="n">FOOBAR</span>
+</pre></div>
+</div>
+<p>Here is a slightly more complex example that discovers the local
+machine&#8217;s hostname:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> gethostname</span><span class="p">()</span>
+  <span class="n">hostname</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="kt">Uint8</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span>
+  <span class="k">ccall</span><span class="p">(</span> <span class="p">(:</span><span class="n">gethostname</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span> <span class="kt">Int32</span><span class="p">,</span>
+        <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},</span> <span class="kt">Uint</span><span class="p">),</span>
+        <span class="n">hostname</span><span class="p">,</span> <span class="n">length</span><span class="p">(</span><span class="n">hostname</span><span class="p">))</span>
+  <span class="k">return</span> <span class="n">bytestring</span><span class="p">(</span><span class="nb">convert</span><span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},</span> <span class="n">hostname</span><span class="p">))</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>This example first allocates an array of bytes, then calls the C library
+function <tt class="docutils literal"><span class="pre">gethostname</span></tt> to fill the array in with the hostname, takes a
+pointer to the hostname buffer, and converts the pointer to a Julia
+string, assuming that it is a NUL-terminated C string. It is common for
+C libraries to use this pattern of requiring the caller to allocate
+memory to be passed to the callee and filled in. Allocation of memory
+from Julia like this is generally accomplished by creating an
+uninitialized array and passing a pointer to its data to the C function.</p>
+<p>A prefix <tt class="docutils literal"><span class="pre">&amp;</span></tt> is used to indicate that a pointer to a scalar argument
+should be passed instead of the scalar value itself (required for all
+Fortran function arguments, as noted above). The following
+example computes a dot product using a BLAS function.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> compute_dot</span><span class="p">(</span><span class="n">DX</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">DY</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+  <span class="nb">assert</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">DX</span><span class="p">)</span> <span class="o">==</span> <span class="n">length</span><span class="p">(</span><span class="n">DY</span><span class="p">))</span>
+  <span class="n">n</span> <span class="o">=</span> <span class="n">length</span><span class="p">(</span><span class="n">DX</span><span class="p">)</span>
+  <span class="n">incx</span> <span class="o">=</span> <span class="n">incy</span> <span class="o">=</span> <span class="mi">1</span>
+  <span class="n">product</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span> <span class="p">(:</span><span class="n">ddot_</span><span class="p">,</span> <span class="s">&quot;libLAPACK&quot;</span><span class="p">),</span>
+                  <span class="kt">Float64</span><span class="p">,</span>
+                  <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">}),</span>
+                  <span class="o">&amp;</span><span class="n">n</span><span class="p">,</span> <span class="n">DX</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">incx</span><span class="p">,</span> <span class="n">DY</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">incy</span><span class="p">)</span>
+  <span class="k">return</span> <span class="n">product</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>The meaning of prefix <tt class="docutils literal"><span class="pre">&amp;</span></tt> is not quite the same as in C. In
+particular, any changes to the referenced variables will not be
+visible in Julia unless the type is mutable (declared via
+<tt class="docutils literal"><span class="pre">type</span></tt>). However, even for immutable types it will not cause any
+harm for called functions to attempt such modifications (that is,
+writing through the passed pointers). Moreover, <tt class="docutils literal"><span class="pre">&amp;</span></tt> may be used with
+any expression, such as <tt class="docutils literal"><span class="pre">&amp;0</span></tt> or <tt class="docutils literal"><span class="pre">&amp;f(x)</span></tt>.</p>
+<p>Currently, it is not possible to reliably pass structs and other non-primitive
+types by <em>value</em> from Julia to/from C libraries. However, <em>pointers</em>
+to structs can be passed.  The simplest case is that of C functions
+that generate and use <em>opaque</em> pointers to struct types, which can be
+passed to/from Julia as <tt class="docutils literal"><span class="pre">Ptr{Void}</span></tt> (or any other <tt class="docutils literal"><span class="pre">Ptr</span></tt>
+type). Memory allocation and deallocation of such objects must be
+handled by calls to the appropriate cleanup routines in the libraries
+being used, just like in any C program.  A more complicated approach
+is to declare a composite type in Julia that mirrors a C struct, which
+allows the structure fields to be directly accessed in Julia.  Given a
+Julia variable <tt class="docutils literal"><span class="pre">x</span></tt> of that type, a pointer can be passed as <tt class="docutils literal"><span class="pre">&amp;x</span></tt>
+to a C function expecting a pointer to the corresponding struct.  If
+the Julia type <tt class="docutils literal"><span class="pre">T</span></tt> is <tt class="docutils literal"><span class="pre">immutable</span></tt>, then a Julia <tt class="docutils literal"><span class="pre">Array{T}</span></tt> is
+stored in memory identically to a C array of the corresponding struct,
+and can be passed to a C program expecting such an array pointer.</p>
+<p>Note that no C header files are used anywhere in the process: you are
+responsible for making sure that your Julia types and call signatures
+accurately reflect those in the C header file.  (The <cite>Clang package
+&lt;https://github.com/ihnorton/Clang.jl&gt;</cite> can be used to generate Julia
+code from a C header file.)</p>
+<div class="section" id="mapping-c-types-to-julia">
+<h2>Mapping C Types to Julia<a class="headerlink" href="#mapping-c-types-to-julia" title="Permalink to this headline">¶</a></h2>
+<p>Julia automatically inserts calls to the <tt class="docutils literal"><span class="pre">convert</span></tt> function to convert
+each argument to the specified type. For example, the following call:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span> <span class="p">(:</span><span class="n">foo</span><span class="p">,</span> <span class="s">&quot;libfoo&quot;</span><span class="p">),</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="kt">Float64</span><span class="p">),</span>
+      <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>will behave as if the following were written:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span> <span class="p">(:</span><span class="n">foo</span><span class="p">,</span> <span class="s">&quot;libfoo&quot;</span><span class="p">),</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="kt">Float64</span><span class="p">),</span>
+      <span class="nb">convert</span><span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="n">x</span><span class="p">),</span> <span class="nb">convert</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>When a scalar value is passed with <tt class="docutils literal"><span class="pre">&amp;</span></tt> as an argument of type
+<tt class="docutils literal"><span class="pre">Ptr{T}</span></tt>, the value will first be converted to type <tt class="docutils literal"><span class="pre">T</span></tt>.</p>
+<div class="section" id="array-conversions">
+<h3>Array conversions<a class="headerlink" href="#array-conversions" title="Permalink to this headline">¶</a></h3>
+<p>When an array is passed to C as a <tt class="docutils literal"><span class="pre">Ptr{T}</span></tt> argument, it is
+never converted: Julia simply checks that the element type of the
+array matches <tt class="docutils literal"><span class="pre">T</span></tt>, and the address of the first element is passed.
+This is done in order to avoid copying arrays unnecessarily.</p>
+<p>Therefore, if an <tt class="docutils literal"><span class="pre">Array</span></tt> contains data in the wrong format, it will
+have to be explicitly converted using a call such as <tt class="docutils literal"><span class="pre">int32(a)</span></tt>.</p>
+<p>To pass an array <tt class="docutils literal"><span class="pre">A</span></tt> as a pointer of a different type <em>without</em>
+converting the data beforehand (for example, to pass a <tt class="docutils literal"><span class="pre">Float64</span></tt> array
+to a function that operates on uninterpreted bytes), you can either
+declare the argument as <tt class="docutils literal"><span class="pre">Ptr{Void}</span></tt> or you can explicitly call
+<tt class="docutils literal"><span class="pre">convert(Ptr{T},</span> <span class="pre">pointer(A))</span></tt>.</p>
+</div>
+<div class="section" id="type-correspondences">
+<h3>Type correspondences<a class="headerlink" href="#type-correspondences" title="Permalink to this headline">¶</a></h3>
+<p>On all systems we currently support, basic C/C++ value types may be
+translated to Julia types as follows. Every C type also has a corresponding
+Julia type with the same name, prefixed by C. This can help for writing portable code (and remembering that an int in C is not the same as an Int in Julia).</p>
+<p><strong>System-independent:</strong></p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="32%" />
+<col width="25%" />
+<col width="43%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">signed</span> <span class="pre">char</span></tt></td>
+<td>&nbsp;</td>
+<td><tt class="docutils literal"><span class="pre">Int8</span></tt></td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">unsigned</span> <span class="pre">char</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cuchar</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Uint8</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">short</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cshort</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Int16</span></tt></td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">unsigned</span> <span class="pre">short</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cushort</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Uint16</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">int</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cint</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Int32</span></tt></td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">unsigned</span> <span class="pre">int</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cuint</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Uint32</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">long</span> <span class="pre">long</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Clonglong</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Int64</span></tt></td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">unsigned</span> <span class="pre">long</span> <span class="pre">long</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Culonglong</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Uint64</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">float</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cfloat</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Float32</span></tt></td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">double</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cdouble</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Float64</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">ptrdiff_t</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cptrdiff_t</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Int</span></tt></td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">ssize_t</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cssize_t</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Int</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">size_t</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Csize_t</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Uint</span></tt></td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">void</span></tt></td>
+<td>&nbsp;</td>
+<td><tt class="docutils literal"><span class="pre">Void</span></tt></td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">void*</span></tt></td>
+<td>&nbsp;</td>
+<td><tt class="docutils literal"><span class="pre">Ptr{Void}</span></tt></td>
+</tr>
+<tr class="row-even"><td colspan="2"><tt class="docutils literal"><span class="pre">char*</span></tt> (or <tt class="docutils literal"><span class="pre">char[]</span></tt>, e.g. a string)</td>
+<td><tt class="docutils literal"><span class="pre">Ptr{Uint8}</span></tt></td>
+</tr>
+<tr class="row-odd"><td colspan="2"><tt class="docutils literal"><span class="pre">char**</span></tt> (or <tt class="docutils literal"><span class="pre">*char[]</span></tt>)</td>
+<td><tt class="docutils literal"><span class="pre">Ptr{Ptr{Uint8}}</span></tt></td>
+</tr>
+<tr class="row-even"><td colspan="2"><tt class="docutils literal"><span class="pre">struct</span> <span class="pre">T*</span></tt> (where T represents an
+appropriately defined bits type)</td>
+<td><tt class="docutils literal"><span class="pre">Ptr{T}</span></tt> (call using
+&amp;variable_name in the
+parameter list)</td>
+</tr>
+<tr class="row-odd"><td colspan="2"><tt class="docutils literal"><span class="pre">jl_value_t*</span></tt> (any Julia Type)</td>
+<td><tt class="docutils literal"><span class="pre">Ptr{Any}</span></tt></td>
+</tr>
+</tbody>
+</table>
+<p>Julia&#8217;s <tt class="docutils literal"><span class="pre">Char</span></tt> type is 32 bits, which is not the same as the wide
+character type (<tt class="docutils literal"><span class="pre">wchar_t</span></tt> or <tt class="docutils literal"><span class="pre">wint_t</span></tt>) on all platforms.</p>
+<p>A C function declared to return <tt class="docutils literal"><span class="pre">void</span></tt> will give <tt class="docutils literal"><span class="pre">nothing</span></tt> in Julia.</p>
+<p><strong>System-dependent:</strong></p>
+<table border="1" class="docutils">
+<colgroup>
+<col width="37%" />
+<col width="23%" />
+<col width="40%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">char</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cchar</span></tt></td>
+<td><p class="first"><tt class="docutils literal"><span class="pre">Int8</span></tt> (x86, x86_64)</p>
+<p class="last"><tt class="docutils literal"><span class="pre">Uint8</span></tt> (powerpc, arm)</p>
+</td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">long</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Clong</span></tt></td>
+<td><p class="first"><tt class="docutils literal"><span class="pre">Int</span></tt> (UNIX)</p>
+<p class="last"><tt class="docutils literal"><span class="pre">Int32</span></tt> (Windows)</p>
+</td>
+</tr>
+<tr class="row-odd"><td><tt class="docutils literal"><span class="pre">unsigned</span> <span class="pre">long</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Culong</span></tt></td>
+<td><p class="first"><tt class="docutils literal"><span class="pre">Uint</span></tt> (UNIX)</p>
+<p class="last"><tt class="docutils literal"><span class="pre">Uint32</span></tt> (Windows)</p>
+</td>
+</tr>
+<tr class="row-even"><td><tt class="docutils literal"><span class="pre">wchar_t</span></tt></td>
+<td><tt class="docutils literal"><span class="pre">Cwchar_t</span></tt></td>
+<td><p class="first"><tt class="docutils literal"><span class="pre">Int32</span></tt> (UNIX)</p>
+<p class="last"><tt class="docutils literal"><span class="pre">Uint16</span></tt> (Windows)</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p>For string arguments (<tt class="docutils literal"><span class="pre">char*</span></tt>) the Julia type should be <tt class="docutils literal"><span class="pre">Ptr{Uint8}</span></tt>,
+not <tt class="docutils literal"><span class="pre">ASCIIString</span></tt>. C functions that take an argument of the type <tt class="docutils literal"><span class="pre">char**</span></tt>
+can be called by using a <tt class="docutils literal"><span class="pre">Ptr{Ptr{Uint8}}</span></tt> type within Julia. For example,
+C functions of the form:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">int</span> <span class="n">main</span><span class="p">(</span><span class="n">int</span> <span class="n">argc</span><span class="p">,</span> <span class="n">char</span> <span class="o">**</span><span class="n">argv</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>can be called via the following Julia code:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">argv</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&quot;a.out&quot;</span><span class="p">,</span> <span class="s">&quot;arg1&quot;</span><span class="p">,</span> <span class="s">&quot;arg2&quot;</span> <span class="p">]</span>
+<span class="k">ccall</span><span class="p">(:</span><span class="n">main</span><span class="p">,</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">}}),</span> <span class="n">length</span><span class="p">(</span><span class="n">argv</span><span class="p">),</span> <span class="n">argv</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For <tt class="docutils literal"><span class="pre">wchar_t*</span></tt> arguments, the Julia type should be <tt class="docutils literal"><span class="pre">Ptr{Wchar_t}</span></tt>,
+and data can be converted to/from ordinary Julia strings by the
+<tt class="docutils literal"><span class="pre">wstring(s)</span></tt> function (equivalent to either <tt class="docutils literal"><span class="pre">utf16(s)</span></tt> or <tt class="docutils literal"><span class="pre">utf32(s)</span></tt>
+depending upon the width of <tt class="docutils literal"><span class="pre">Cwchar_t</span></tt>.    Note also that ASCII, UTF-8,
+UTF-16, and UTF-32 string data in Julia is internally NUL-terminated, so
+it can be passed to C functions expecting NUL-terminated data without making
+a copy.</p>
+</div>
+</div>
+<div class="section" id="accessing-data-through-a-pointer">
+<h2>Accessing Data through a Pointer<a class="headerlink" href="#accessing-data-through-a-pointer" title="Permalink to this headline">¶</a></h2>
+<p>The following methods are described as &#8220;unsafe&#8221; because they can cause Julia
+to terminate abruptly or corrupt arbitrary process memory due to a bad pointer
+or type declaration.</p>
+<p>Given a <tt class="docutils literal"><span class="pre">Ptr{T}</span></tt>, the contents of type <tt class="docutils literal"><span class="pre">T</span></tt> can generally be copied from
+the referenced memory into a Julia object using <tt class="docutils literal"><span class="pre">unsafe_load(ptr,</span> <span class="pre">[index])</span></tt>. The
+index argument is optional (default is 1), and performs 1-based indexing. This
+function is intentionally similar to the behavior of <tt class="docutils literal"><span class="pre">getindex()</span></tt> and <tt class="docutils literal"><span class="pre">setindex!()</span></tt>
+(e.g. <tt class="docutils literal"><span class="pre">[]</span></tt> access syntax).</p>
+<p>The return value will be a new object initialized
+to contain a copy of the contents of the referenced memory. The referenced
+memory can safely be freed or released.</p>
+<p>If <tt class="docutils literal"><span class="pre">T</span></tt> is <tt class="docutils literal"><span class="pre">Any</span></tt>, then the memory is assumed to contain a reference to
+a Julia object (a <tt class="docutils literal"><span class="pre">jl_value_t*</span></tt>), the result will be a reference to this object,
+and the object will not be copied. You must be careful in this case to ensure
+that the object was always visible to the garbage collector (pointers do not
+count, but the new reference does) to ensure the memory is not prematurely freed.
+Note that if the object was not originally allocated by Julia, the new object
+will never be finalized by Julia&#8217;s garbage collector.  If the <tt class="docutils literal"><span class="pre">Ptr</span></tt> itself
+is actually a <tt class="docutils literal"><span class="pre">jl_value_t*</span></tt>, it can be converted back to a Julia object
+reference by <tt class="docutils literal"><span class="pre">unsafe_pointer_to_objref(ptr)</span></tt>.  (Julia values <tt class="docutils literal"><span class="pre">v</span></tt>
+can be converted to <tt class="docutils literal"><span class="pre">jl_value_t*</span></tt> pointers, as <tt class="docutils literal"><span class="pre">Ptr{Void}</span></tt>, by calling
+<tt class="docutils literal"><span class="pre">pointer_from_objref(v)</span></tt>.)</p>
+<p>The reverse operation (writing data to a Ptr{T}), can be performed using
+<tt class="docutils literal"><span class="pre">unsafe_store!(ptr,</span> <span class="pre">value,</span> <span class="pre">[index])</span></tt>.  Currently, this is only supported
+for bitstypes or other pointer-free (<tt class="docutils literal"><span class="pre">isbits</span></tt>) immutable types.</p>
+<p>Any operation that throws an error is probably currently unimplemented
+and should be posted as a bug so that it can be resolved.</p>
+<p>If the pointer of interest is a plain-data array (bitstype or immutable), the
+function <tt class="docutils literal"><span class="pre">pointer_to_array(ptr,dims,[own])</span></tt> may be more useful. The final
+parameter should be true if Julia should &#8220;take ownership&#8221; of the underlying
+buffer and call <tt class="docutils literal"><span class="pre">free(ptr)</span></tt> when the returned <tt class="docutils literal"><span class="pre">Array</span></tt> object is finalized.
+If the <tt class="docutils literal"><span class="pre">own</span></tt> parameter is omitted or false, the caller must ensure the
+buffer remains in existence until all access is complete.</p>
+<p>Arithmetic on the <tt class="docutils literal"><span class="pre">Ptr</span></tt> type in Julia (e.g. using <tt class="docutils literal"><span class="pre">+</span></tt>) does not behave the
+same as C&#8217;s pointer arithmetic. Adding an integer to a <tt class="docutils literal"><span class="pre">Ptr</span></tt> in Julia always
+moves the pointer by some number of <em>bytes</em>, not elements. This way, the
+address values obtained from pointer arithmetic do not depend on the
+element types of pointers.</p>
+</div>
+<div class="section" id="passing-pointers-for-modifying-inputs">
+<h2>Passing Pointers for Modifying Inputs<a class="headerlink" href="#passing-pointers-for-modifying-inputs" title="Permalink to this headline">¶</a></h2>
+<p>Because C doesn&#8217;t support multiple return values, often C functions will take
+pointers to data that the function will modify. To accomplish this within a
+<tt class="docutils literal"><span class="pre">ccall</span></tt> you need to encapsulate the value inside an array of the appropriate
+type. When you pass the array as an argument with a <tt class="docutils literal"><span class="pre">Ptr</span></tt> type, julia will
+automatically pass a C pointer to the encapsulated data:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">width</span> <span class="o">=</span> <span class="n">Cint</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">range</span> <span class="o">=</span> <span class="n">Cfloat</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="k">ccall</span><span class="p">(:</span><span class="n">foo</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="n">Cint</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">Cfloat</span><span class="p">}),</span> <span class="n">width</span><span class="p">,</span> <span class="n">range</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is used extensively in Julia&#8217;s LAPACK interface, where an integer <tt class="docutils literal"><span class="pre">info</span></tt>
+is passed to LAPACK by reference, and on return, includes the success code.</p>
+</div>
+<div class="section" id="garbage-collection-safety">
+<h2>Garbage Collection Safety<a class="headerlink" href="#garbage-collection-safety" title="Permalink to this headline">¶</a></h2>
+<p>When passing data to a ccall, it is best to avoid using the <tt class="docutils literal"><span class="pre">pointer()</span></tt>
+function. Instead define a convert method and pass the variables directly to
+the ccall. ccall automatically arranges that all of its arguments will be
+preserved from garbage collection until the call returns. If a C API will
+store a reference to memory allocated by Julia, after the ccall returns, you
+must arrange that the object remains visible to the garbage collector. The
+suggested way to handle this is to make a global variable of type
+<tt class="docutils literal"><span class="pre">Array{Any,1}</span></tt> to hold these values, until C interface notifies you that
+it is finished with them.</p>
+<p>Whenever you have created a pointer to Julia data, you must ensure the original data
+exists until you are done with using the pointer. Many methods in Julia such as
+<tt class="docutils literal"><span class="pre">unsafe_load()</span></tt> and <tt class="docutils literal"><span class="pre">bytestring()</span></tt> make copies of data instead of taking ownership
+of the buffer, so that it is safe to free (or alter) the original data without
+affecting Julia. A notable exception is <tt class="docutils literal"><span class="pre">pointer_to_array()</span></tt> which, for performance
+reasons, shares (or can be told to take ownership of) the underlying buffer.</p>
+<p>The garbage collector does not guarantee any order of finalization. That is, if <tt class="docutils literal"><span class="pre">a</span></tt>
+contained a reference to <tt class="docutils literal"><span class="pre">b</span></tt> and both <tt class="docutils literal"><span class="pre">a</span></tt> and <tt class="docutils literal"><span class="pre">b</span></tt> are due for garbage
+collection, there is no guarantee that <tt class="docutils literal"><span class="pre">b</span></tt> would be finalized after <tt class="docutils literal"><span class="pre">a</span></tt>. If
+proper finalization of <tt class="docutils literal"><span class="pre">a</span></tt> depends on <tt class="docutils literal"><span class="pre">b</span></tt> being valid, it must be handled in
+other ways.</p>
+</div>
+<div class="section" id="non-constant-function-specifications">
+<h2>Non-constant Function Specifications<a class="headerlink" href="#non-constant-function-specifications" title="Permalink to this headline">¶</a></h2>
+<p>A <tt class="docutils literal"><span class="pre">(name,</span> <span class="pre">library)</span></tt> function specification must be a constant expression.
+However, it is possible to use computed values as function names by staging
+through <tt class="docutils literal"><span class="pre">eval</span></tt> as follows:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">eval</span> <span class="k">ccall</span><span class="p">((</span><span class="o">$</span><span class="p">(</span><span class="n">string</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">,</span><span class="s">&quot;b&quot;</span><span class="p">)),</span><span class="s">&quot;lib&quot;</span><span class="p">),</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p>This expression constructs a name using <tt class="docutils literal"><span class="pre">string</span></tt>, then substitutes this
+name into a new <tt class="docutils literal"><span class="pre">ccall</span></tt> expression, which is then evaluated. Keep in mind that
+<tt class="docutils literal"><span class="pre">eval</span></tt> only operates at the top level, so within this expression local
+variables will not be available (unless their values are substituted with
+<tt class="docutils literal"><span class="pre">$</span></tt>). For this reason, <tt class="docutils literal"><span class="pre">eval</span></tt> is typically only used to form top-level
+definitions, for example when wrapping libraries that contain many
+similar functions.</p>
+</div>
+<div class="section" id="indirect-calls">
+<h2>Indirect Calls<a class="headerlink" href="#indirect-calls" title="Permalink to this headline">¶</a></h2>
+<p>The first argument to <tt class="docutils literal"><span class="pre">ccall</span></tt> can also be an expression evaluated at
+run time. In this case, the expression must evaluate to a <tt class="docutils literal"><span class="pre">Ptr</span></tt>,
+which will be used as the address of the native function to call. This
+behavior occurs when the first <tt class="docutils literal"><span class="pre">ccall</span></tt> argument contains references
+to non-constants, such as local variables or function arguments.</p>
+</div>
+<div class="section" id="calling-convention">
+<h2>Calling Convention<a class="headerlink" href="#calling-convention" title="Permalink to this headline">¶</a></h2>
+<p>The second argument to <tt class="docutils literal"><span class="pre">ccall</span></tt> can optionally be a calling convention
+specifier (immediately preceding return type). Without any specifier,
+the platform-default C calling convention is used. Other supported
+conventions are: <tt class="docutils literal"><span class="pre">stdcall</span></tt>, <tt class="docutils literal"><span class="pre">cdecl</span></tt>, <tt class="docutils literal"><span class="pre">fastcall</span></tt>, and <tt class="docutils literal"><span class="pre">thiscall</span></tt>.
+For example (from base/libc.jl):</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">hn</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="kt">Uint8</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span>
+<span class="n">err</span><span class="o">=</span><span class="k">ccall</span><span class="p">(:</span><span class="n">gethostname</span><span class="p">,</span> <span class="n">stdcall</span><span class="p">,</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Uint8</span><span class="p">},</span> <span class="kt">Uint32</span><span class="p">),</span> <span class="n">hn</span><span class="p">,</span> <span class="n">length</span><span class="p">(</span><span class="n">hn</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>For more information, please see the <a class="reference external" href="http://llvm.org/docs/LangRef.html#calling-conventions">LLVM Language Reference</a>.</p>
+</div>
+<div class="section" id="accessing-global-variables">
+<h2>Accessing Global Variables<a class="headerlink" href="#accessing-global-variables" title="Permalink to this headline">¶</a></h2>
+<p>Global variables exported by native libraries can be accessed by name using the
+<tt class="docutils literal"><span class="pre">cglobal</span></tt> function. The arguments to <tt class="docutils literal"><span class="pre">cglobal</span></tt> are a symbol specification
+identical to that used by <tt class="docutils literal"><span class="pre">ccall</span></tt>, and a type describing the value stored in
+the variable:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">cglobal</span><span class="p">((:</span><span class="n">errno</span><span class="p">,:</span><span class="n">libc</span><span class="p">),</span> <span class="kt">Int32</span><span class="p">)</span>
+<span class="n">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">}</span> <span class="p">@</span><span class="mh">0x00007f418d0816b8</span>
+</pre></div>
+</div>
+<p>The result is a pointer giving the address of the value. The value can be
+manipulated through this pointer using <tt class="docutils literal"><span class="pre">unsafe_load</span></tt> and <tt class="docutils literal"><span class="pre">unsafe_store</span></tt>.</p>
+</div>
+<div class="section" id="passing-julia-callback-functions-to-c">
+<h2>Passing Julia Callback Functions to C<a class="headerlink" href="#passing-julia-callback-functions-to-c" title="Permalink to this headline">¶</a></h2>
+<p>It is possible to pass Julia functions to native functions that accept function
+pointer arguments. A classic example is the standard C library <tt class="docutils literal"><span class="pre">qsort</span></tt> function,
+declared as:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">void</span> <span class="n">qsort</span><span class="p">(</span><span class="n">void</span> <span class="o">*</span><span class="n">base</span><span class="p">,</span> <span class="n">size_t</span> <span class="n">nmemb</span><span class="p">,</span> <span class="n">size_t</span> <span class="n">size</span><span class="p">,</span>
+           <span class="n">int</span><span class="p">(</span><span class="o">*</span><span class="n">compare</span><span class="p">)(</span><span class="kd">const</span> <span class="n">void</span> <span class="o">*</span><span class="n">a</span><span class="p">,</span> <span class="kd">const</span> <span class="n">void</span> <span class="o">*</span><span class="n">b</span><span class="p">));</span>
+</pre></div>
+</div>
+<p>The <tt class="docutils literal"><span class="pre">base</span></tt> argument is a pointer to an array of length <tt class="docutils literal"><span class="pre">nmemb</span></tt>, with elements of
+<tt class="docutils literal"><span class="pre">size</span></tt> bytes each. <tt class="docutils literal"><span class="pre">compare</span></tt> is a callback function which takes pointers to two
+elements <tt class="docutils literal"><span class="pre">a</span></tt> and <tt class="docutils literal"><span class="pre">b</span></tt> and returns an integer less/greater than zero if <tt class="docutils literal"><span class="pre">a</span></tt> should
+appear before/after <tt class="docutils literal"><span class="pre">b</span></tt> (or zero if any order is permitted). Now, suppose that we
+have a 1d array <tt class="docutils literal"><span class="pre">A</span></tt> of values in Julia that we want to sort using the <tt class="docutils literal"><span class="pre">qsort</span></tt>
+function (rather than Julia’s built-in sort function). Before we worry about calling
+<tt class="docutils literal"><span class="pre">qsort</span></tt> and passing arguments, we need to write a comparison function that works for
+some arbitrary type T:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> mycompare</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">a_</span><span class="p">::</span><span class="n">Ptr</span><span class="p">{</span><span class="n">T</span><span class="p">},</span> <span class="n">b_</span><span class="p">::</span><span class="n">Ptr</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">unsafe_load</span><span class="p">(</span><span class="n">a_</span><span class="p">)</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">unsafe_load</span><span class="p">(</span><span class="n">b_</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">convert</span><span class="p">(</span><span class="n">Cint</span><span class="p">,</span> <span class="n">a</span> <span class="o">&lt;</span> <span class="n">b</span> <span class="o">?</span> <span class="o">-</span><span class="mi">1</span> <span class="p">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="o">?</span> <span class="o">+</span><span class="mi">1</span> <span class="p">:</span> <span class="mi">0</span><span class="p">)</span>
+<span class="k">end</span>
+</pre></div>
+</div>
+<p>Notice that we have to be careful about the return type: <tt class="docutils literal"><span class="pre">qsort</span></tt> expects a function
+returning a C <tt class="docutils literal"><span class="pre">int</span></tt>, so we must be sure to return <tt class="docutils literal"><span class="pre">Cint</span></tt> via a call to <tt class="docutils literal"><span class="pre">convert</span></tt>.</p>
+<p>In order to pass this function to C, we obtain its address using the function
+<tt class="docutils literal"><span class="pre">cfunction</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="n">mycompare_c</span> <span class="o">=</span> <span class="n">cfunction</span><span class="p">(</span><span class="n">mycompare</span><span class="p">,</span> <span class="n">Cint</span><span class="p">,</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="n">Cdouble</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">Cdouble</span><span class="p">}))</span>
+</pre></div>
+</div>
+<p><tt class="docutils literal"><span class="pre">cfunction</span></tt> accepts three arguments: the Julia function (<tt class="docutils literal"><span class="pre">mycompare</span></tt>), the return
+type (<tt class="docutils literal"><span class="pre">Cint</span></tt>), and a tuple of the argument types, in this case to sort an array of
+<tt class="docutils literal"><span class="pre">Cdouble</span></tt> (Float64) elements.</p>
+<p>The final call to <tt class="docutils literal"><span class="pre">qsort</span></tt> looks like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.3</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.7</span><span class="p">,</span> <span class="mf">4.4</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">]</span>
+<span class="k">ccall</span><span class="p">(:</span><span class="n">qsort</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="n">Cdouble</span><span class="p">},</span> <span class="n">Csize_t</span><span class="p">,</span> <span class="n">Csize_t</span><span class="p">,</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">Void</span><span class="p">}),</span>
+      <span class="n">A</span><span class="p">,</span> <span class="n">length</span><span class="p">(</span><span class="n">A</span><span class="p">),</span> <span class="nb">sizeof</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">A</span><span class="p">)),</span> <span class="n">mycompare_c</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>After this executes, <tt class="docutils literal"><span class="pre">A</span></tt> is changed to the sorted array <tt class="docutils literal"><span class="pre">[</span> <span class="pre">-2.7,</span> <span class="pre">1.3,</span> <span class="pre">3.1,</span> <span class="pre">4.4]</span></tt>.
+Note that Julia knows how to convert an array into a <tt class="docutils literal"><span class="pre">Ptr{Cdouble}</span></tt>, how to compute
+the size of a type in bytes (identical to C’s <tt class="docutils literal"><span class="pre">sizeof</span></tt> operator), and so on.
+For fun, try inserting a <tt class="docutils literal"><span class="pre">println(&quot;mycompare($a,$b)&quot;)</span></tt> line into <tt class="docutils literal"><span class="pre">mycompare</span></tt>, which
+will allow you to see the comparisons that <tt class="docutils literal"><span class="pre">qsort</span></tt> is performing (and to verify that
+it is really calling the Julia function that you passed to it).</p>
+<div class="section" id="thread-safety">
+<h3>Thread-safety<a class="headerlink" href="#thread-safety" title="Permalink to this headline">¶</a></h3>
+<p>Some C libraries execute their callbacks from a different thread, and
+since Julia isn&#8217;t thread-safe you&#8217;ll need to take some extra
+precautions. In particular, you&#8217;ll need to set up a two-layered
+system: the C callback should only <em>schedule</em> (via Julia&#8217;s event loop)
+the execution of your &#8220;real&#8221; callback. To do this, you pass a function
+of one argument (the <tt class="docutils literal"><span class="pre">AsyncWork</span></tt> object for which the event was
+triggered, which you&#8217;ll probably just ignore) to <tt class="docutils literal"><span class="pre">SingleAsyncWork</span></tt>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">cb</span> <span class="o">=</span> <span class="n">Base</span><span class="o">.</span><span class="n">SingleAsyncWork</span><span class="p">(</span><span class="n">data</span> <span class="o">-&gt;</span> <span class="n">my_real_callback</span><span class="p">(</span><span class="n">args</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The callback you pass to C should only execute a <tt class="docutils literal"><span class="pre">ccall</span></tt> to
+<tt class="docutils literal"><span class="pre">:uv_async_send</span></tt>, passing <tt class="docutils literal"><span class="pre">cb.handle</span></tt> as the argument.</p>
+</div>
+<div class="section" id="more-about-callbacks">
+<h3>More About Callbacks<a class="headerlink" href="#more-about-callbacks" title="Permalink to this headline">¶</a></h3>
+<p>For more details on how to pass callbacks to C libraries, see this
+<a class="reference external" href="http://julialang.org/blog/2013/05/callback/">blog post</a>.</p>
+</div>
+</div>
+<div class="section" id="c">
+<h2>C++<a class="headerlink" href="#c" title="Permalink to this headline">¶</a></h2>
+<p>Limited support for C++ is provided by the <a class="reference external" href="https://github.com/timholy/Cpp.jl">Cpp</a>
+and <a class="reference external" href="https://github.com/ihnorton/Clang.jl">Clang</a> packages.</p>
+</div>
+<div class="section" id="handling-platform-variations">
+<h2>Handling Platform Variations<a class="headerlink" href="#handling-platform-variations" title="Permalink to this headline">¶</a></h2>
+<p>When dealing with platform libraries, it is often necessary to provide special cases
+for various platforms. The variable <tt class="docutils literal"><span class="pre">OS_NAME</span></tt> can be used to write these special
+cases. Additionally, there are several macros intended to make this easier:
+<tt class="docutils literal"><span class="pre">&#64;windows</span></tt>, <tt class="docutils literal"><span class="pre">&#64;unix</span></tt>, <tt class="docutils literal"><span class="pre">&#64;linux</span></tt>, and <tt class="docutils literal"><span class="pre">&#64;osx</span></tt>. Note that linux and osx are mutually
+exclusive subsets of unix. Their usage takes the form of a ternary conditional
+operator, as demonstrated in the following examples.</p>
+<p>Simple blocks:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span> <span class="p">(@</span><span class="n">windows</span><span class="o">?</span> <span class="p">:</span><span class="n">_fopen</span> <span class="p">:</span> <span class="p">:</span><span class="n">fopen</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Complex blocks:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">linux</span><span class="o">?</span> <span class="p">(</span>
+         <span class="k">begin</span>
+             <span class="n">some_complicated_thing</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+         <span class="k">end</span>
+       <span class="p">:</span> <span class="k">begin</span>
+             <span class="n">some_different_thing</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+         <span class="k">end</span>
+       <span class="p">)</span>
+</pre></div>
+</div>
+<p>Chaining (parentheses optional, but recommended for readability):</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">windows</span><span class="o">?</span> <span class="p">:</span><span class="n">a</span> <span class="p">:</span> <span class="p">(@</span><span class="n">osx</span><span class="o">?</span> <span class="p">:</span><span class="n">b</span> <span class="p">:</span> <span class="p">:</span><span class="n">c</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../interacting-with-julia/" class="btn btn-neutral float-right" title="Interacting With Julia">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../running-external-programs/" class="btn btn-neutral" title="Running External Programs"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.3.13-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

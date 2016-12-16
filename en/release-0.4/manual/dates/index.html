@@ -1,0 +1,951 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Date and DateTime &mdash; Julia Language 0.4.8-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.4.8-pre documentation" href="../../"/>
+        <link rel="next" title="Running External Programs" href="../running-external-programs/"/>
+        <link rel="prev" title="Parallel Computing" href="../parallel-computing/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#call-overloading-and-function-like-objects">Call overloading and function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#constructors-call-and-conversion">Constructors, Call, and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interfaces/">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#markdown-syntax-notes">Markdown Syntax Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#remoterefs-and-abstractchannels">RemoteRefs and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-garbage-collection">Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#period-types">Period Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#handling-operating-system-variation">Handling Operating System Variation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/dates/">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#test-framework">Test Framework</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libc/">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libdl/">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/init/">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/eval/">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/ast/">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/types/">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/object/">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/subarrays/">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/llvm/">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/promote-op/">Operator-sensitive promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Date and DateTime</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/dates.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="date-and-datetime">
+<span id="man-dates"></span><h1>Date and DateTime<a class="headerlink" href="#date-and-datetime" title="Permalink to this headline">¶</a></h1>
+<p>The <a class="reference internal" href="../../stdlib/dates/#module-Dates" title="Dates"><code class="xref jl jl-mod docutils literal"><span class="pre">Dates</span></code></a> module provides two types for working with dates: <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> and <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a>, representing day and millisecond precision, respectively; both are subtypes of the abstract <a class="reference internal" href="../../stdlib/dates/#Dates.TimeType" title="Dates.TimeType"><code class="xref jl jl-class docutils literal"><span class="pre">TimeType</span></code></a>. The motivation for distinct types is simple: some operations are much simpler, both in terms of code and mental reasoning, when the complexities of greater precision don&#8217;t have to be dealt with. For example, since the <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> type only resolves to the precision of a single date (i.e. no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer time, and leap seconds are unnecessary and avoided.</p>
+<p>Both <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> and <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> are basically immutable <code class="docutils literal"><span class="pre">Int64</span></code> wrappers. The single <code class="docutils literal"><span class="pre">instant</span></code> field of either type is actually a <code class="docutils literal"><span class="pre">UTInstant{P}</span></code> type, which represents a continuously increasing machine timeline based on the UT second <a class="footnote-reference" href="#id2" id="id1">[1]</a>. The <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> type is <em>timezone-unaware</em> (in Python parlance) or is analogous to a <em>LocalDateTime</em> in Java 8. Additional time zone functionality can be added through the <a class="reference external" href="https://github.com/JuliaTime/TimeZones.jl/">TimeZones.jl package</a>, which compiles the <a class="reference external" href="http://www.iana.org/time-zones">Olsen Time Zone Database</a>. Both <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> and <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so <code class="docutils literal"><span class="pre">0000-12-31</span></code> is the day before <code class="docutils literal"><span class="pre">0001-01-01</span></code>, and year <code class="docutils literal"><span class="pre">-0001</span></code> (yes, negative one for the year) is 2 BC/BCE, year <code class="docutils literal"><span class="pre">-0002</span></code> is 3 BC/BCE, etc.</p>
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a &#8220;UT second&#8221;, as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> and <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called <a class="reference external" href="https://en.wikipedia.org/wiki/Universal_Time">UT</a> or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates.</td></tr>
+</tbody>
+</table>
+<div class="section" id="constructors">
+<h2>Constructors<a class="headerlink" href="#constructors" title="Permalink to this headline">¶</a></h2>
+<p><a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> and <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> types can be constructed by integer or <a class="reference internal" href="../../stdlib/dates/#Dates.Period" title="Dates.Period"><code class="xref jl jl-class docutils literal"><span class="pre">Period</span></code></a> types, by parsing, or through adjusters (more on those later):</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span><span class="mi">7</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">12</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span><span class="n">T12</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">12</span><span class="p">,</span><span class="mi">30</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span><span class="n">T12</span><span class="p">:</span><span class="mi">30</span><span class="p">:</span><span class="mi">00</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">12</span><span class="p">,</span><span class="mi">30</span><span class="p">,</span><span class="mi">59</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span><span class="n">T12</span><span class="p">:</span><span class="mi">30</span><span class="p">:</span><span class="mi">59</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">12</span><span class="p">,</span><span class="mi">30</span><span class="p">,</span><span class="mi">59</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span><span class="n">T12</span><span class="p">:</span><span class="mi">30</span><span class="p">:</span><span class="mf">59.001</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2013</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span><span class="mi">7</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Date</span><span class="p">(</span><span class="n">Dates</span><span class="o">.</span><span class="n">Year</span><span class="p">(</span><span class="mi">2013</span><span class="p">),</span><span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">(</span><span class="mi">7</span><span class="p">),</span><span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Date</span><span class="p">(</span><span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">(</span><span class="mi">7</span><span class="p">),</span><span class="n">Dates</span><span class="o">.</span><span class="n">Year</span><span class="p">(</span><span class="mi">2013</span><span class="p">))</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">01</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> or <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> parsing is accomplished by the use of format strings. Format strings work by the notion of defining <em>delimited</em> or <em>fixed-width</em> &#8220;slots&#8221; that contain a period to parse and passing the text to parse and format string to a <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> or <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> constructor, of the form <code class="docutils literal"><span class="pre">Date(&quot;2015-01-01&quot;,&quot;y-m-d&quot;)</span></code> or <code class="docutils literal"><span class="pre">DateTime(&quot;20150101&quot;,&quot;yyyymmdd&quot;)</span></code>.</p>
+<p>Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent periods; so <code class="docutils literal"><span class="pre">&quot;y-m-d&quot;</span></code> lets the parser know that between the first and second slots in a date string like <code class="docutils literal"><span class="pre">&quot;2014-07-16&quot;</span></code>, it should find the <code class="docutils literal"><span class="pre">-</span></code> character. The <code class="docutils literal"><span class="pre">y</span></code>, <code class="docutils literal"><span class="pre">m</span></code>, and <code class="docutils literal"><span class="pre">d</span></code> characters let the parser know which periods to parse in each slot.</p>
+<p>Fixed-width slots are specified by repeating the period character the number of times corresponding to the width with no delimiter between characters. So <code class="docutils literal"><span class="pre">&quot;yyyymmdd&quot;</span></code> would correspond to a date string like <code class="docutils literal"><span class="pre">&quot;20140716&quot;</span></code>. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition <code class="docutils literal"><span class="pre">&quot;yyyymm&quot;</span></code> from one period character to the next.</p>
+<p>Support for text-form month parsing is also supported through the <code class="docutils literal"><span class="pre">u</span></code> and <code class="docutils literal"><span class="pre">U</span></code> characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so <code class="docutils literal"><span class="pre">u</span></code> corresponds to &#8220;Jan&#8221;, &#8220;Feb&#8221;, &#8220;Mar&#8221;, etc. And <code class="docutils literal"><span class="pre">U</span></code> corresponds to &#8220;January&#8221;, &#8220;February&#8221;, &#8220;March&#8221;, etc. Similar to other name=&gt;value mapping functions <a class="reference internal" href="../../stdlib/dates/#Dates.dayname" title="Dates.dayname"><code class="xref jl jl-func docutils literal"><span class="pre">dayname()</span></code></a> and <a class="reference internal" href="../../stdlib/dates/#Dates.monthname" title="Dates.monthname"><code class="xref jl jl-func docutils literal"><span class="pre">monthname()</span></code></a>, custom locales can be loaded by passing in the <code class="docutils literal"><span class="pre">locale=&gt;Dict{UTF8String,Int}</span></code> mapping to the <code class="xref jl jl-const docutils literal"><span class="pre">MONTHTOVALUEABBR</span></code> and <code class="xref jl jl-const docutils literal"><span class="pre">MONTHTOVALUE</span></code> dicts for abbreviated and full-name month names, respectively.</p>
+<p>One note on parsing performance: using the <code class="docutils literal"><span class="pre">Date(date_string,format_string)</span></code> function is fine if only called a few times. If there are many similarly formatted date strings to parse however, it is much more efficient to first create a <a class="reference internal" href="../../stdlib/dates/#Dates.DateFormat" title="Dates.DateFormat"><code class="xref jl jl-class docutils literal"><span class="pre">Dates.DateFormat</span></code></a>, and pass it instead of a raw format string.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">df</span> <span class="o">=</span> <span class="n">Dates</span><span class="o">.</span><span class="n">DateFormat</span><span class="p">(</span><span class="s">&quot;y-m-d&quot;</span><span class="p">);</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">=</span> <span class="n">Date</span><span class="p">(</span><span class="s">&quot;2015-01-01&quot;</span><span class="p">,</span><span class="n">df</span><span class="p">)</span>
+<span class="mi">2015</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt2</span> <span class="o">=</span> <span class="n">Date</span><span class="p">(</span><span class="s">&quot;2015-01-02&quot;</span><span class="p">,</span><span class="n">df</span><span class="p">)</span>
+<span class="mi">2015</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">02</span>
+</pre></div>
+</div>
+<p>A full suite of parsing and formatting tests and examples is available in <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl">tests/dates/io.jl</a>.</p>
+</div>
+<div class="section" id="durations-comparisons">
+<h2>Durations/Comparisons<a class="headerlink" href="#durations-comparisons" title="Permalink to this headline">¶</a></h2>
+<p>Finding the length of time between two <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> or <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> is straightforward given their underlying representation as <code class="docutils literal"><span class="pre">UTInstant{Day}</span></code> and <code class="docutils literal"><span class="pre">UTInstant{Millisecond}</span></code>, respectively. The difference between <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> is returned in the number of <a class="reference internal" href="../../stdlib/dates/#Dates.Day" title="Dates.Day"><code class="xref jl jl-class docutils literal"><span class="pre">Day</span></code></a>, and <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> in the number of <a class="reference internal" href="../../stdlib/dates/#Dates.Millisecond" title="Dates.Millisecond"><code class="xref jl jl-class docutils literal"><span class="pre">Millisecond</span></code></a>. Similarly, comparing <a class="reference internal" href="../../stdlib/dates/#Dates.TimeType" title="Dates.TimeType"><code class="xref jl jl-class docutils literal"><span class="pre">TimeType</span></code></a> is a simple matter of comparing the underlying machine instants (which in turn compares the internal <code class="docutils literal"><span class="pre">Int64</span></code> values).</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">=</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2012</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">29</span><span class="p">)</span>
+<span class="mi">2012</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">29</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt2</span> <span class="o">=</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2000</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2000</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">01</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dump</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span>
+<span class="n">Date</span>
+  <span class="n">instant</span><span class="p">:</span> <span class="n">UTInstant</span><span class="p">{</span><span class="n">Day</span><span class="p">}</span>
+    <span class="n">periods</span><span class="p">:</span> <span class="n">Day</span>
+      <span class="n">value</span><span class="p">:</span> <span class="kt">Int64</span> <span class="mi">734562</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dump</span><span class="p">(</span><span class="n">dt2</span><span class="p">)</span>
+<span class="n">Date</span>
+<span class="n">instant</span><span class="p">:</span> <span class="n">UTInstant</span><span class="p">{</span><span class="n">Day</span><span class="p">}</span>
+  <span class="n">periods</span><span class="p">:</span> <span class="n">Day</span>
+    <span class="n">value</span><span class="p">:</span> <span class="kt">Int64</span> <span class="mi">730151</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">&gt;</span> <span class="n">dt2</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">!=</span> <span class="n">dt2</span>
+<span class="n">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">+</span> <span class="n">dt2</span>
+<span class="n">Operation</span> <span class="n">not</span> <span class="n">defined</span> <span class="k">for</span> <span class="n">TimeTypes</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">dt2</span>
+<span class="n">Operation</span> <span class="n">not</span> <span class="n">defined</span> <span class="k">for</span> <span class="n">TimeTypes</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">/</span> <span class="n">dt2</span>
+<span class="n">Operation</span> <span class="n">not</span> <span class="n">defined</span> <span class="k">for</span> <span class="n">TimeTypes</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">-</span> <span class="n">dt2</span>
+<span class="mi">4411</span> <span class="n">days</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt2</span> <span class="o">-</span> <span class="n">dt</span>
+<span class="o">-</span><span class="mi">4411</span> <span class="n">days</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2012</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">29</span><span class="p">)</span>
+<span class="mi">2012</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">29</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt2</span> <span class="o">=</span> <span class="n">DateTime</span><span class="p">(</span><span class="mi">2000</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2000</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">01</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dt</span> <span class="o">-</span> <span class="n">dt2</span>
+<span class="mi">381110402000</span> <span class="n">milliseconds</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="accessor-functions">
+<h2>Accessor Functions<a class="headerlink" href="#accessor-functions" title="Permalink to this headline">¶</a></h2>
+<p>Because the <a class="reference internal" href="../../stdlib/dates/#Dates.Date" title="Dates.Date"><code class="xref jl jl-class docutils literal"><span class="pre">Date</span></code></a> and <a class="reference internal" href="../../stdlib/dates/#Dates.DateTime" title="Dates.DateTime"><code class="xref jl jl-class docutils literal"><span class="pre">DateTime</span></code></a> types are stored as single <code class="docutils literal"><span class="pre">Int64</span></code> values, date parts or fields can be retrieved through accessor functions. The lowercase accessors return the field as an integer:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span> <span class="o">=</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">31</span><span class="p">)</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">31</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">year</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">2014</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">month</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">1</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">week</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">5</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">day</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">31</span>
+</pre></div>
+</div>
+<p>While propercase return the same value in the corresponding <a class="reference internal" href="../../stdlib/dates/#Dates.Period" title="Dates.Period"><code class="xref jl jl-class docutils literal"><span class="pre">Period</span></code></a> type:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Year</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">2014</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">31</span> <span class="n">days</span>
+</pre></div>
+</div>
+<p>Compound methods are provided, as they provide a measure of efficiency if multiple fields are needed at the same time:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">yearmonth</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">monthday</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">31</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">yearmonthday</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">31</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>One may also access the underlying <code class="docutils literal"><span class="pre">UTInstant</span></code> or integer value:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">dump</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="n">Date</span>
+<span class="n">instant</span><span class="p">:</span> <span class="n">UTInstant</span><span class="p">{</span><span class="n">Day</span><span class="p">}</span>
+  <span class="n">periods</span><span class="p">:</span> <span class="n">Day</span>
+    <span class="n">value</span><span class="p">:</span> <span class="kt">Int64</span> <span class="mi">735264</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span><span class="o">.</span><span class="n">instant</span>
+<span class="n">UTInstant</span><span class="p">{</span><span class="n">Day</span><span class="p">}(</span><span class="mi">735264</span> <span class="n">days</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">value</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">735264</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="query-functions">
+<h2>Query Functions<a class="headerlink" href="#query-functions" title="Permalink to this headline">¶</a></h2>
+<p>Query functions provide calendrical information about a <a class="reference internal" href="../../stdlib/dates/#Dates.TimeType" title="Dates.TimeType"><code class="xref jl jl-class docutils literal"><span class="pre">TimeType</span></code></a>. They include information about the day of the week:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span> <span class="o">=</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">31</span><span class="p">)</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">31</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">dayofweek</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">5</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">dayname</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="s">&quot;Friday&quot;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">dayofweekofmonth</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">5</span>  <span class="c"># 5th Friday of January</span>
+</pre></div>
+</div>
+<p>Month of the year:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">monthname</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="s">&quot;January&quot;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">daysinmonth</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">31</span>
+</pre></div>
+</div>
+<p>As well as information about the <a class="reference internal" href="../../stdlib/dates/#Dates.TimeType" title="Dates.TimeType"><code class="xref jl jl-class docutils literal"><span class="pre">TimeType</span></code></a>&#8216;s year and quarter:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">isleapyear</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="n">false</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">dayofyear</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">31</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">quarterofyear</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">1</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">dayofquarter</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<span class="mi">31</span>
+</pre></div>
+</div>
+<p>The <a class="reference internal" href="../../stdlib/dates/#Dates.dayname" title="Dates.dayname"><code class="xref jl jl-func docutils literal"><span class="pre">dayname()</span></code></a> and <a class="reference internal" href="../../stdlib/dates/#Dates.monthname" title="Dates.monthname"><code class="xref jl jl-func docutils literal"><span class="pre">monthname()</span></code></a> methods can also take an optional <code class="docutils literal"><span class="pre">locale</span></code> keyword that can be used to return the name of the day or month of the year for other languages/locales:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kd">const</span> <span class="n">french_daysofweek</span> <span class="o">=</span> <span class="n">Dict</span><span class="p">(</span><span class="mi">1</span><span class="o">=&gt;</span><span class="s">&quot;Lundi&quot;</span><span class="p">,</span><span class="mi">2</span><span class="o">=&gt;</span><span class="s">&quot;Mardi&quot;</span><span class="p">,</span><span class="mi">3</span><span class="o">=&gt;</span><span class="s">&quot;Mercredi&quot;</span><span class="p">,</span><span class="mi">4</span><span class="o">=&gt;</span><span class="s">&quot;Jeudi&quot;</span><span class="p">,</span><span class="mi">5</span><span class="o">=&gt;</span><span class="s">&quot;Vendredi&quot;</span><span class="p">,</span><span class="mi">6</span><span class="o">=&gt;</span><span class="s">&quot;Samedi&quot;</span><span class="p">,</span><span class="mi">7</span><span class="o">=&gt;</span><span class="s">&quot;Dimanche&quot;</span><span class="p">);</span>
+
+<span class="c"># Load the mapping into the Dates module under locale name &quot;french&quot;</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">VALUETODAYOFWEEK</span><span class="p">[</span><span class="s">&quot;french&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">french_daysofweek</span><span class="p">;</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">dayname</span><span class="p">(</span><span class="n">t</span><span class="p">;</span><span class="n">locale</span><span class="o">=</span><span class="s">&quot;french&quot;</span><span class="p">)</span>
+<span class="s">&quot;Vendredi&quot;</span>
+</pre></div>
+</div>
+<p>Similarly for the <a class="reference internal" href="../../stdlib/dates/#Dates.monthname" title="Dates.monthname"><code class="xref jl jl-func docutils literal"><span class="pre">monthname()</span></code></a> function, a mapping of <code class="docutils literal"><span class="pre">locale=&gt;Dict{Int,UTF8String}</span></code> should be loaded in <code class="xref jl jl-const docutils literal"><span class="pre">VALUETOMONTH</span></code>.</p>
+</div>
+<div class="section" id="timetype-period-arithmetic">
+<h2>TimeType-Period Arithmetic<a class="headerlink" href="#timetype-period-arithmetic" title="Permalink to this headline">¶</a></h2>
+<p>It&#8217;s good practice when using any language/date framework to be familiar with how date-period arithmetic is handled as there are some <a class="reference external" href="https://codeblog.jonskeet.uk/2010/12/01/the-joys-of-date-time-arithmetic/">tricky issues</a> to deal with (though much less so for day-precision types).</p>
+<p>The <a class="reference internal" href="../../stdlib/dates/#module-Dates" title="Dates"><code class="xref jl jl-mod docutils literal"><span class="pre">Dates</span></code></a> module approach tries to follow the simple principle of trying to change as little as possible when doing <a class="reference internal" href="../../stdlib/dates/#Dates.Period" title="Dates.Period"><code class="xref jl jl-class docutils literal"><span class="pre">Period</span></code></a> arithmetic. This approach is also often known as <em>calendrical</em> arithmetic or what you would probably guess if someone were to ask you the same calculation in a conversation. Why all the fuss about this? Let&#8217;s take a classic example: add 1 month to January 31st, 2014. What&#8217;s the answer? Javascript will say <a class="reference external" href="http://www.markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/">March 3</a> (assumes 31 days). PHP says <a class="reference external" href="http://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month">March 2</a> (assumes 30 days). The fact is, there is no right answer. In the <a class="reference internal" href="../../stdlib/dates/#module-Dates" title="Dates"><code class="xref jl jl-mod docutils literal"><span class="pre">Dates</span></code></a> module, it gives the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7 gambling game in casinos.</p>
+<p>Now just imagine that instead of 7-7-7, the slots are Year-Month-Day, or in our example, 2014-01-31. When you ask to add 1 month to this date, the month slot is incremented, so now we have 2014-02-31. Then the day number is checked if it is greater than the last valid day of the new month; if it is (as in the case above), the day number is adjusted down to the last valid day (28). What are the ramifications with this approach? Go ahead and add another month to our date, <code class="docutils literal"><span class="pre">2014-02-28</span> <span class="pre">+</span> <span class="pre">Month(1)</span> <span class="pre">==</span> <span class="pre">2014-03-28</span></code>. What? Were you expecting the last day of March? Nope, sorry, remember the 7-7-7 slots. As few slots as possible are going to change, so we first increment the month slot by 1, 2014-03-28, and boom, we&#8217;re done because that&#8217;s a valid date. On the other hand, if we were to add 2 months to our original date, 2014-01-31, then we end up with 2014-03-31, as expected. The other ramification of this approach is a loss in associativity when a specific ordering is forced (i.e. adding things in different orders results in different outcomes). For example:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">29</span><span class="p">)</span><span class="o">+</span><span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span> <span class="o">+</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">28</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">29</span><span class="p">)</span><span class="o">+</span><span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span> <span class="o">+</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">03</span><span class="o">-</span><span class="mi">01</span>
+</pre></div>
+</div>
+<p>What&#8217;s going on there? In the first line, we&#8217;re adding 1 day to January 29th, which results in 2014-01-30; then we add 1 month, so we get 2014-02-30, which then adjusts down to 2014-02-28. In the second example, we add 1 month <em>first</em>, where we get 2014-02-29, which adjusts down to 2014-02-28, and <em>then</em> add 1 day, which results in 2014-03-01. One design principle that helps in this case is that, in the presence of multiple Periods, the operations will be ordered by the Periods&#8217; <em>types</em>, not their value or positional order; this means <code class="docutils literal"><span class="pre">Year</span></code> will always be added first, then <code class="docutils literal"><span class="pre">Month</span></code>, then <code class="docutils literal"><span class="pre">Week</span></code>, etc. Hence the following <em>does</em> result in associativity and Just Works:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">29</span><span class="p">)</span> <span class="o">+</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">03</span><span class="o">-</span><span class="mi">01</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">29</span><span class="p">)</span> <span class="o">+</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">03</span><span class="o">-</span><span class="mi">01</span>
+</pre></div>
+</div>
+<p>Tricky? Perhaps. What is an innocent <a class="reference internal" href="../../stdlib/dates/#module-Dates" title="Dates"><code class="xref jl jl-mod docutils literal"><span class="pre">Dates</span></code></a> user to do? The bottom line is to be aware that explicitly forcing a certain associativity, when dealing with months, may lead to some unexpected results, but otherwise, everything should work as expected. Thankfully, that&#8217;s pretty much the extent of the odd cases in date-period arithmetic when dealing with time in UT (avoiding the &#8220;joys&#8221; of dealing with daylight savings, leap seconds, etc.).</p>
+</div>
+<div class="section" id="adjuster-functions">
+<h2>Adjuster Functions<a class="headerlink" href="#adjuster-functions" title="Permalink to this headline">¶</a></h2>
+<p>As convenient as date-period arithmetics are, often the kinds of calculations needed on dates take on a <em>calendrical</em> or <em>temporal</em> nature rather than a fixed number of periods. Holidays are a perfect example; most follow rules such as &#8220;Memorial Day = Last Monday of May&#8221;, or &#8220;Thanksgiving = 4th Thursday of November&#8221;. These kinds of temporal expressions deal with rules relative to the calendar, like first or last of the month, next Tuesday, or the first and third Wednesdays, etc.</p>
+<p>The <a class="reference internal" href="../../stdlib/dates/#module-Dates" title="Dates"><code class="xref jl jl-mod docutils literal"><span class="pre">Dates</span></code></a> module provides the <em>adjuster</em> API through several convenient methods that aid in simply and succinctly expressing temporal rules. The first group of adjuster methods deal with the first and last of weeks, months, quarters, and years. They each take a single <a class="reference internal" href="../../stdlib/dates/#Dates.TimeType" title="Dates.TimeType"><code class="xref jl jl-class docutils literal"><span class="pre">TimeType</span></code></a> as input and return or <em>adjust to</em> the first or last of the desired period relative to the input.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># Adjusts the input to the Monday of the input&#39;s week</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">firstdayofweek</span><span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">16</span><span class="p">))</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">14</span>
+
+<span class="c"># Adjusts to the last day of the input&#39;s month</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">lastdayofmonth</span><span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">16</span><span class="p">))</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">31</span>
+
+<span class="c"># Adjusts to the last day of the input&#39;s quarter</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">lastdayofquarter</span><span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">16</span><span class="p">))</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">09</span><span class="o">-</span><span class="mi">30</span>
+</pre></div>
+</div>
+<p>The next two higher-order methods, <a class="reference internal" href="../../stdlib/dates/#Dates.tonext" title="Dates.tonext"><code class="xref jl jl-func docutils literal"><span class="pre">tonext()</span></code></a>, and <a class="reference internal" href="../../stdlib/dates/#Dates.toprev" title="Dates.toprev"><code class="xref jl jl-func docutils literal"><span class="pre">toprev()</span></code></a>, generalize working with temporal expressions by taking a <code class="xref jl jl-class docutils literal"><span class="pre">DateFunction</span></code> as first argument, along with a starting <a class="reference internal" href="../../stdlib/dates/#Dates.TimeType" title="Dates.TimeType"><code class="xref jl jl-class docutils literal"><span class="pre">TimeType</span></code></a>. A <code class="xref jl jl-class docutils literal"><span class="pre">DateFunction</span></code> is just a function, usually anonymous, that takes a single <a class="reference internal" href="../../stdlib/dates/#Dates.TimeType" title="Dates.TimeType"><code class="xref jl jl-class docutils literal"><span class="pre">TimeType</span></code></a> as input and returns a <code class="docutils literal"><span class="pre">Bool</span></code>, <code class="docutils literal"><span class="pre">true</span></code> indicating a satisfied adjustment criterion.
+For example:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">istuesday</span> <span class="o">=</span> <span class="n">x</span><span class="o">-&gt;</span><span class="n">Dates</span><span class="o">.</span><span class="n">dayofweek</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Tuesday</span>  <span class="c"># Returns true if the day of the week of x is Tuesday</span>
+<span class="p">(</span><span class="n">anonymous</span> <span class="n">function</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">tonext</span><span class="p">(</span><span class="n">istuesday</span><span class="p">,</span> <span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">13</span><span class="p">))</span> <span class="c"># 2014-07-13 is a Sunday</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">15</span>
+
+<span class="c"># Convenience method provided for day of the week adjustments</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">tonext</span><span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">13</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Tuesday</span><span class="p">)</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">15</span>
+</pre></div>
+</div>
+<p>This is useful with the do-block syntax for more complex temporal expressions:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dates</span><span class="o">.</span><span class="n">tonext</span><span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">,</span><span class="mi">7</span><span class="p">,</span><span class="mi">13</span><span class="p">))</span> <span class="k">do</span> <span class="n">x</span>
+          <span class="c"># Return true on the 4th Thursday of November (Thanksgiving)</span>
+          <span class="n">Dates</span><span class="o">.</span><span class="n">dayofweek</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Thursday</span> <span class="o">&amp;&amp;</span>
+          <span class="n">Dates</span><span class="o">.</span><span class="n">dayofweekofmonth</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span> <span class="o">&amp;&amp;</span>
+          <span class="n">Dates</span><span class="o">.</span><span class="n">month</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="n">Dates</span><span class="o">.</span><span class="n">November</span>
+      <span class="k">end</span>
+<span class="mi">2014</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">27</span>
+</pre></div>
+</div>
+<p>The final method in the adjuster API is the <code class="xref jl jl-func docutils literal"><span class="pre">recur()</span></code> function. <code class="xref jl jl-func docutils literal"><span class="pre">recur()</span></code> vectorizes the adjustment process by taking a start and stop date (optionally specificed by a <code class="xref jl jl-class docutils literal"><span class="pre">StepRange</span></code>), along with a <code class="xref jl jl-class docutils literal"><span class="pre">DateFunction</span></code> to specify all valid dates/moments to be returned in the specified range. In this case, the <code class="xref jl jl-class docutils literal"><span class="pre">DateFunction</span></code> is often referred to as the &#8220;inclusion&#8221; function because it specifies (by returning <code class="docutils literal"><span class="pre">true</span></code>) which dates/moments should be included in the returned vector of dates.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># Pittsburgh street cleaning; Every 2nd Tuesday from April to November</span>
+<span class="c"># Date range from January 1st, 2014 to January 1st, 2015</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dr</span> <span class="o">=</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Date</span><span class="p">(</span><span class="mi">2014</span><span class="p">):</span><span class="n">Dates</span><span class="o">.</span><span class="n">Date</span><span class="p">(</span><span class="mi">2015</span><span class="p">);</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">recur</span><span class="p">(</span><span class="n">dr</span><span class="p">)</span> <span class="k">do</span> <span class="n">x</span>
+           <span class="n">Dates</span><span class="o">.</span><span class="n">dayofweek</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Tue</span> <span class="o">&amp;&amp;</span>
+           <span class="n">Dates</span><span class="o">.</span><span class="n">April</span> <span class="o">&lt;=</span> <span class="n">Dates</span><span class="o">.</span><span class="n">month</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Nov</span> <span class="o">&amp;&amp;</span>
+           <span class="n">Dates</span><span class="o">.</span><span class="n">dayofweekofmonth</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+       <span class="k">end</span>
+ <span class="mi">8</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Date</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+  <span class="mi">2014</span><span class="o">-</span><span class="mi">04</span><span class="o">-</span><span class="mi">08</span>
+  <span class="mi">2014</span><span class="o">-</span><span class="mi">05</span><span class="o">-</span><span class="mi">13</span>
+  <span class="mi">2014</span><span class="o">-</span><span class="mi">06</span><span class="o">-</span><span class="mi">10</span>
+  <span class="mi">2014</span><span class="o">-</span><span class="mi">07</span><span class="o">-</span><span class="mi">08</span>
+  <span class="mi">2014</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">12</span>
+  <span class="mi">2014</span><span class="o">-</span><span class="mi">09</span><span class="o">-</span><span class="mi">09</span>
+  <span class="mi">2014</span><span class="o">-</span><span class="mi">10</span><span class="o">-</span><span class="mi">14</span>
+  <span class="mi">2014</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">11</span>
+</pre></div>
+</div>
+<p>Additional examples and tests are available in <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/test/dates/adjusters.jl">test/dates/adjusters.jl</a>.</p>
+</div>
+<div class="section" id="period-types">
+<h2>Period Types<a class="headerlink" href="#period-types" title="Permalink to this headline">¶</a></h2>
+<p>Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. <a class="reference internal" href="../../stdlib/dates/#Dates.Period" title="Dates.Period"><code class="xref jl jl-class docutils literal"><span class="pre">Period</span></code></a> types are simple <code class="docutils literal"><span class="pre">Int64</span></code> wrappers and are constructed by wrapping any <code class="docutils literal"><span class="pre">Int64</span></code> convertible type, i.e. <code class="docutils literal"><span class="pre">Year(1)</span></code> or <code class="docutils literal"><span class="pre">Month(3.0)</span></code>. Arithmetic between <a class="reference internal" href="../../stdlib/dates/#Dates.Period" title="Dates.Period"><code class="xref jl jl-class docutils literal"><span class="pre">Period</span></code></a> of the same type behave like integers, and limited <code class="docutils literal"><span class="pre">Period-Real</span></code> arithmetic is available.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">y1</span> <span class="o">=</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Year</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="mi">1</span> <span class="n">year</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y2</span> <span class="o">=</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Year</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">2</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y3</span> <span class="o">=</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Year</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+<span class="mi">10</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y1</span> <span class="o">+</span> <span class="n">y2</span>
+<span class="mi">3</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">div</span><span class="p">(</span><span class="n">y3</span><span class="p">,</span><span class="n">y2</span><span class="p">)</span>
+<span class="mi">5</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y3</span> <span class="o">-</span> <span class="n">y2</span>
+<span class="mi">8</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y3</span> <span class="o">*</span> <span class="n">y2</span>
+<span class="mi">20</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y3</span> <span class="o">%</span> <span class="n">y2</span>
+<span class="mi">0</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y1</span> <span class="o">+</span> <span class="mi">20</span>
+<span class="mi">21</span> <span class="n">years</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">div</span><span class="p">(</span><span class="n">y3</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span> <span class="c"># mirrors integer division</span>
+<span class="mi">3</span> <span class="n">years</span>
+</pre></div>
+</div>
+<p>See the <a class="reference external" href="http://docs.julialang.org/en/latest/stdlib/dates/">API reference</a> for additional information on methods exported from the <a class="reference internal" href="../../stdlib/dates/#module-Dates" title="Dates"><code class="xref jl jl-mod docutils literal"><span class="pre">Dates</span></code></a> module.</p>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../running-external-programs/" class="btn btn-neutral float-right" title="Running External Programs">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../parallel-computing/" class="btn btn-neutral" title="Parallel Computing"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.4.8-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

@@ -1,0 +1,818 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Unit and Functional Testing &mdash; Julia Language 0.4.8-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.4.8-pre documentation" href="../../"/>
+        <link rel="next" title="C Interface" href="../c/"/>
+        <link rel="prev" title="Dates and Time" href="../dates/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/mathematical-operations/#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables-and-scoping/#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables-and-scoping/#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#call-overloading-and-function-like-objects">Call overloading and function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/methods/#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#constructors-call-and-conversion">Constructors, Call, and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/constructors/#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/interfaces/">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interfaces/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interfaces/#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interfaces/#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/documentation/">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/documentation/#markdown-syntax-notes">Markdown Syntax Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/metaprogramming/#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#remoterefs-and-abstractchannels">RemoteRefs and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#distributed-garbage-collection">Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/parallel-computing/#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/dates/">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/dates/#period-types">Period Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/calling-c-and-fortran-code/#handling-operating-system-variation">Handling Operating System Variation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/packages/">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/packages/#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/packages/#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/performance-tips/#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/style-guide/#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/noteworthy-differences/#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../manual/unicode-input/">Unicode Input</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel/#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linalg/#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../io-network/#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dates/">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#test-framework">Test Framework</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../c/#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../libc/">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../libdl/">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/init/">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/eval/">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/ast/">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/types/">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/object/">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/subarrays/">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/llvm/">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/promote-op/">Operator-sensitive promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Unit and Functional Testing</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/stdlib/test.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="unit-and-functional-testing">
+<h1>Unit and Functional Testing<a class="headerlink" href="#unit-and-functional-testing" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="testing-base-julia">
+<h2>Testing Base Julia<a class="headerlink" href="#testing-base-julia" title="Permalink to this headline">¶</a></h2>
+<p>Julia is under rapid development and has an extensive test suite to
+verify functionality across multiple platforms. If you build Julia
+from source, you can run this test suite with <code class="docutils literal"><span class="pre">make</span> <span class="pre">test</span></code>. In a
+binary install, you can run the test suite using <code class="docutils literal"><span class="pre">Base.runtests()</span></code>.</p>
+<dl class="function">
+<dt id="Base.runtests">
+<code class="descname">runtests</code><span class="sig-paren">(</span><span class="optional">[</span><em>tests=[&quot;all&quot;]</em><span class="optional">[</span>, <em>numcores=iceil(CPU_CORES/2)</em><span class="optional">]</span><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.runtests" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the Julia unit tests listed in <code class="docutils literal"><span class="pre">tests</span></code>, which can be either a string or an array of strings, using <code class="docutils literal"><span class="pre">numcores</span></code> processors. (not exported)</p>
+</dd></dl>
+
+<span class="target" id="module-Base.Test"></span></div>
+<div class="section" id="test-framework">
+<h2>Test Framework<a class="headerlink" href="#test-framework" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal"><span class="pre">Test</span></code> module contains macros and functions related to testing.
+A default handler is provided to run the tests, and a custom one can be
+provided by the user by using the <code class="xref jl jl-func docutils literal"><span class="pre">registerhandler()</span></code> function.</p>
+<p>To use the default handler, the macro <a class="reference internal" href="#Base.Test.&#64;test" title="Base.Test.&#64;test"><code class="xref jl jl-func docutils literal"><span class="pre">&#64;test()</span></code></a> can be used directly:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="n">failed</span><span class="p">:</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+ <span class="k">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">19</span>
+ <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">39</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;This is what happens when a test fails&quot;</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="nb">error</span> <span class="n">during</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;This is what happens when a test fails&quot;</span><span class="p">)</span>
+<span class="n">This</span> <span class="nb">is</span> <span class="n">what</span> <span class="n">happens</span> <span class="n">when</span> <span class="n">a</span> <span class="n">test</span> <span class="n">fails</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+ <span class="k">in</span> <span class="n">anonymous</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">62</span>
+ <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">37</span>
+</pre></div>
+</div>
+<p>As seen in the examples above, failures or errors will print the abstract
+syntax tree of the expression in question.</p>
+<p>Another macro is provided to check if the given expression throws an exception of type <code class="docutils literal"><span class="pre">extype</span></code>,
+<a class="reference internal" href="#Base.Test.&#64;test_throws" title="Base.Test.&#64;test_throws"><code class="xref jl jl-func docutils literal"><span class="pre">&#64;test_throws()</span></code></a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">ErrorException</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
+<span class="n">ErrorException</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">BoundsError</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="n">failed</span><span class="p">:</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;An error&quot;</span><span class="p">)</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+ <span class="k">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">19</span>
+ <span class="k">in</span> <span class="n">do_test_throws</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">55</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">DomainError</span> <span class="nb">throw</span><span class="p">(</span><span class="n">DomainError</span><span class="p">())</span>
+<span class="n">DomainError</span><span class="p">()</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">DomainError</span> <span class="nb">throw</span><span class="p">(</span><span class="n">EOFError</span><span class="p">())</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="n">failed</span><span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">EOFError</span><span class="p">())</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+ <span class="k">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">19</span>
+ <span class="k">in</span> <span class="n">do_test_throws</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">55</span>
+</pre></div>
+</div>
+<p>As floating-point values can be imprecise, you can perform approximate
+equality checks using either <code class="docutils literal"><span class="pre">&#64;test</span> <span class="pre">a</span> <span class="pre">≈</span> <span class="pre">b</span></code> (where <code class="docutils literal"><span class="pre">≈</span></code>, typed via
+tab completion of <code class="docutils literal"><span class="pre">\approx</span></code>, is the <code class="docutils literal"><span class="pre">isapprox</span></code> function) or use
+the macros <code class="docutils literal"><span class="pre">&#64;test_approx_eq</span></code> macro (which differs from <code class="docutils literal"><span class="pre">isapprox</span></code>
+in that it treats NaN values as equal and has a smaller default
+tolerance) or <code class="docutils literal"><span class="pre">&#64;test_approx_eq_eps</span></code> (which takes an extra argument
+indicating the relative tolerance):</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999999</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="n">failed</span><span class="p">:</span> <span class="mi">1</span> <span class="n">isapprox</span> <span class="mf">0.999999</span>
+ <span class="k">in</span> <span class="n">expression</span><span class="p">:</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+ <span class="k">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">30</span>
+ <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">53</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.999999999</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="p">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999999999</span><span class="o">|</span> <span class="o">&lt;</span> <span class="mf">2.220446049250313e-12</span>
+  <span class="mf">1.0</span> <span class="o">=</span> <span class="mf">1.0</span>
+  <span class="mf">0.999999999</span> <span class="o">=</span> <span class="mf">0.999999999</span>
+ <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">75</span>
+ <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">80</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.9999999999999</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-2</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-3</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="p">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999</span><span class="o">|</span> <span class="o">&lt;=</span> <span class="mf">0.001</span>
+  <span class="mf">1.0</span> <span class="o">=</span> <span class="mf">1.0</span>
+  <span class="mf">0.999</span> <span class="o">=</span> <span class="mf">0.999</span>
+  <span class="n">difference</span> <span class="o">=</span> <span class="mf">0.0010000000000000009</span> <span class="o">&gt;</span> <span class="mf">0.001</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">22</span>
+ <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">68</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="handlers">
+<h2>Handlers<a class="headerlink" href="#handlers" title="Permalink to this headline">¶</a></h2>
+<p>A handler is a function defined for three kinds of arguments: <code class="docutils literal"><span class="pre">Success</span></code>, <code class="docutils literal"><span class="pre">Failure</span></code>, <code class="docutils literal"><span class="pre">Error</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># An example definition of a test handler</span>
+<span class="n">test_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Success</span><span class="p">)</span> <span class="o">=</span> <span class="n">nothing</span>
+<span class="n">test_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Failure</span><span class="p">)</span> <span class="o">=</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;test failed: </span><span class="si">$(r.expr)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="n">test_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Error</span><span class="p">)</span>   <span class="o">=</span> <span class="n">rethrow</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A different handler can be used for a block (with <a class="reference internal" href="#Base.Test.with_handler" title="Base.Test.with_handler"><code class="xref jl jl-func docutils literal"><span class="pre">with_handler()</span></code></a>):</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Success</span><span class="p">)</span> <span class="o">=</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Success on </span><span class="si">$(r.expr)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Failure</span><span class="p">)</span> <span class="o">=</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;Error on custom handler: </span><span class="si">$(r.expr)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">2</span> <span class="n">methods</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">custom_handler</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">Test</span><span class="o">.</span><span class="n">Error</span><span class="p">)</span> <span class="o">=</span> <span class="n">rethrow</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="n">custom_handler</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">3</span> <span class="n">methods</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Test</span><span class="o">.</span><span class="n">with_handler</span><span class="p">(</span><span class="n">custom_handler</span><span class="p">)</span> <span class="k">do</span>
+         <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span>
+         <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="o">!=</span> <span class="mi">1</span>
+       <span class="k">end</span>
+<span class="n">Success</span> <span class="n">on</span> <span class="p">:((</span><span class="mi">1</span><span class="o">==</span><span class="mi">1</span><span class="p">))</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="n">Error</span> <span class="n">on</span> <span class="n">custom</span> <span class="n">handler</span><span class="p">:</span> <span class="p">:((</span><span class="mi">1</span><span class="o">!=</span><span class="mi">1</span><span class="p">))</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+ <span class="k">in</span> <span class="n">custom_handler</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">1</span>
+ <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">39</span>
+ <span class="k">in</span> <span class="n">anonymous</span> <span class="n">at</span> <span class="n">no</span> <span class="n">file</span><span class="p">:</span><span class="mi">3</span>
+ <span class="k">in</span> <span class="n">task_local_storage</span> <span class="n">at</span> <span class="n">task</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">28</span>
+ <span class="k">in</span> <span class="n">with_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">24</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">Success</span></code> and <code class="docutils literal"><span class="pre">Failure</span></code> types include an additonal field, <code class="docutils literal"><span class="pre">resultexpr</span></code>, which is a partially evaluated expression. For example, in a comparison it will contain an expression with the left and right sides evaluated.</p>
+</div>
+<div class="section" id="macros">
+<h2>Macros<a class="headerlink" href="#macros" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="Base.Test.&#64;test">
+<code class="descname">&#64;test</code><span class="sig-paren">(</span><em>ex</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Test.@test" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test the expression <code class="docutils literal"><span class="pre">ex</span></code> and calls the current handler to handle the result.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.Test.&#64;test_throws">
+<code class="descname">&#64;test_throws</code><span class="sig-paren">(</span><em>extype</em>, <em>ex</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Test.@test_throws" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test that the expression <code class="docutils literal"><span class="pre">ex</span></code> throws an exception of type <code class="docutils literal"><span class="pre">extype</span></code> and calls the current handler to handle the result.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.Test.&#64;test_approx_eq">
+<code class="descname">&#64;test_approx_eq</code><span class="sig-paren">(</span><em>a</em>, <em>b</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Test.@test_approx_eq" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test two floating point numbers <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">b</span></code> for equality taking in account small numerical errors.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="Base.Test.&#64;test_approx_eq_eps">
+<code class="descname">&#64;test_approx_eq_eps</code><span class="sig-paren">(</span><em>a</em>, <em>b</em>, <em>tol</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Test.@test_approx_eq_eps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Test two floating point numbers <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">b</span></code> for equality taking in account a margin of tolerance given by <code class="docutils literal"><span class="pre">tol</span></code>.</p>
+</dd></dl>
+
+<dl class="function">
+<dt>
+<code class="descname">&#64;inferred f(x)</code></dt>
+<dd><p>Tests that the call expression <code class="docutils literal"><span class="pre">f(x)</span></code> returns a value of the same type inferred by the compiler. It&#8217;s useful to check for type stability.</p>
+<p><code class="docutils literal"><span class="pre">f(x)</span></code> can be any call expression. Returns the result of <code class="docutils literal"><span class="pre">f(x)</span></code> if the types match, and an <code class="docutils literal"><span class="pre">Error</span></code> <code class="docutils literal"><span class="pre">Result</span></code> if it finds different types.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="o">=</span> <span class="n">b</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="o">?</span> <span class="mi">1</span> <span class="p">:</span> <span class="mf">1.0</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+<span class="kt">Int64</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">code_warntype</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">Variables</span><span class="p">:</span>
+  <span class="n">a</span><span class="p">::</span><span class="kt">Int64</span>
+  <span class="n">b</span><span class="p">::</span><span class="kt">Int64</span>
+  <span class="n">c</span><span class="p">::</span><span class="kt">Int64</span>
+
+<span class="n">Body</span><span class="p">:</span>
+  <span class="k">begin</span>  <span class="c"># none, line 1:</span>
+      <span class="n">unless</span> <span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">slt_int</span><span class="p">)(</span><span class="mi">1</span><span class="p">,</span><span class="n">b</span><span class="p">::</span><span class="kt">Int64</span><span class="p">)::</span><span class="kt">Bool</span> <span class="n">goto</span> <span class="mi">0</span>
+      <span class="k">return</span> <span class="mi">1</span>
+      <span class="mi">0</span><span class="p">:</span>
+      <span class="k">return</span> <span class="mf">1.0</span>
+  <span class="k">end</span><span class="p">::</span><span class="n">UNION</span><span class="p">{</span><span class="n">FLOAT64</span><span class="p">,</span><span class="n">INT64</span><span class="p">}</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">inferred</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="p">:</span> <span class="k">return</span> <span class="k">type</span><span class="nc"> Int64</span> <span class="n">does</span> <span class="n">not</span> <span class="n">match</span> <span class="n">inferred</span> <span class="k">return</span> <span class="k">type</span><span class="nc"> Union</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span>
+ <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="o">./</span><span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">inferred</span> <span class="n">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">2</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+<div class="section" id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Permalink to this headline">¶</a></h2>
+<dl class="function">
+<dt id="Base.Test.with_handler">
+<code class="descname">with_handler</code><span class="sig-paren">(</span><em>f</em>, <em>handler</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Test.with_handler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the function <code class="docutils literal"><span class="pre">f</span></code> using the <code class="docutils literal"><span class="pre">handler</span></code> as the handler.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../c/" class="btn btn-neutral float-right" title="C Interface">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../dates/" class="btn btn-neutral" title="Dates and Time"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.4.8-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

@@ -1,0 +1,1560 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Packages &mdash; Julia Language 0.4.8-pre documentation</title>
+  
+
+  
+  
+
+  
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+
+  
+    <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
+  
+    <link rel="top" title="Julia Language 0.4.8-pre documentation" href="../../"/>
+        <link rel="next" title="Profiling" href="../profile/"/>
+        <link rel="prev" title="Embedding Julia" href="../embedding/"/> 
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-nav-search">
+        <a href="http://julialang.org/"><img src="../../_static/julia-logo.svg" class="logo"></a>
+        <!--
+        <a href="../../" class="fa fa-home"> Julia Language</a>
+        -->
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search/" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+        
+        
+            <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction/">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting-started/">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting-started/#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables/">Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#allowed-variable-names">Allowed Variable Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables/#stylistic-conventions">Stylistic Conventions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../integers-and-floating-point-numbers/">Integers and Floating-Point Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#integers">Integers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#floating-point-numbers">Floating-Point Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#arbitrary-precision-arithmetic">Arbitrary Precision Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#numeric-literal-coefficients">Numeric Literal Coefficients</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../integers-and-floating-point-numbers/#literal-zero-and-one">Literal zero and one</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mathematical-operations/">Mathematical Operations and Elementary Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#arithmetic-operators">Arithmetic Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#bitwise-operators">Bitwise Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#updating-operators">Updating operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numeric-comparisons">Numeric Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numerical-conversions">Numerical Conversions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../complex-and-rational-numbers/">Complex and Rational Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#complex-numbers">Complex Numbers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../complex-and-rational-numbers/#rational-numbers">Rational Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#characters">Characters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#string-basics">String Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#unicode-and-utf-8">Unicode and UTF-8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#triple-quoted-string-literals">Triple-Quoted String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#common-operations">Common Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#id3">Byte Array Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../functions/">Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#argument-passing-behavior">Argument Passing Behavior</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-are-functions">Operators Are Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#operators-with-special-names">Operators With Special Names</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#anonymous-functions">Anonymous Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#multiple-return-values">Multiple Return Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#varargs-functions">Varargs Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#optional-arguments">Optional Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#keyword-arguments">Keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#evaluation-scope-of-default-values">Evaluation Scope of Default Values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#do-block-syntax-for-function-arguments">Do-Block Syntax for Function Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../functions/#further-reading">Further Reading</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../control-flow/">Control Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#compound-expressions">Compound Expressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#conditional-evaluation">Conditional Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#short-circuit-evaluation">Short-Circuit Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#repeated-evaluation-loops">Repeated Evaluation: Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#exception-handling">Exception Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../variables-and-scoping/">Scope of Variables</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#global-scope">Global Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#local-scope">Local Scope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../types/">Types</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-declarations">Type Declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#abstract-types">Abstract Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#bits-types">Bits Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#composite-types">Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#immutable-composite-types">Immutable Composite Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#declared-types">Declared Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-unions">Type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../methods/">Methods</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#defining-methods">Defining Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#method-ambiguities">Method Ambiguities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#parametric-methods">Parametric Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#note-on-optional-and-keyword-arguments">Note on Optional and keyword Arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#call-overloading-and-function-like-objects">Call overloading and function-like objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../methods/#empty-generic-functions">Empty generic functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../constructors/">Constructors</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-constructor-methods">Outer Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#inner-constructor-methods">Inner Constructor Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#incomplete-initialization">Incomplete Initialization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#parametric-constructors">Parametric Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#case-study-rational">Case Study: Rational</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#constructors-call-and-conversion">Constructors, Call, and Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../constructors/#outer-only-constructors">Outer-only constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../conversion-and-promotion/">Conversion and Promotion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#conversion">Conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../conversion-and-promotion/#promotion">Promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interfaces/">Interfaces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#indexing">Indexing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interfaces/#abstract-arrays">Abstract Arrays</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../modules/">Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../modules/#summary-of-module-usage">Summary of module usage</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../documentation/">Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#accessing-documentation">Accessing Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#functions-methods">Functions &amp; Methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#advanced-usage">Advanced Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#syntax-guide">Syntax Guide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../documentation/#markdown-syntax-notes">Markdown Syntax Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../metaprogramming/">Metaprogramming</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#program-representation">Program representation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#expressions-and-evaluation">Expressions and evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#code-generation">Code Generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#non-standard-string-literals">Non-Standard String Literals</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../metaprogramming/#generated-functions">Generated functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../arrays/">Multi-dimensional Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#arrays">Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../linear-algebra/">Linear algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#matrix-factorizations">Matrix factorizations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../linear-algebra/#special-matrices">Special matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../networking-and-streams/">Networking and Streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#basic-stream-i-o">Basic Stream I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#working-with-files">Working with Files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#a-simple-tcp-example">A simple TCP example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../parallel-computing/">Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#data-movement">Data Movement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#parallel-map-and-loops">Parallel Map and Loops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#synchronization-with-remote-references">Synchronization With Remote References</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#scheduling">Scheduling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#channels">Channels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#remoterefs-and-abstractchannels">RemoteRefs and AbstractChannels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#distributed-garbage-collection">Distributed Garbage Collection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#clustermanagers">ClusterManagers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#cluster-managers-with-custom-transports">Cluster Managers with custom transports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../parallel-computing/#specifying-network-topology-experimental">Specifying network topology (Experimental)</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../dates/">Date and DateTime</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#durations-comparisons">Durations/Comparisons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#accessor-functions">Accessor Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#query-functions">Query Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#timetype-period-arithmetic">TimeType-Period Arithmetic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#adjuster-functions">Adjuster Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../dates/#period-types">Period Types</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../running-external-programs/">Running External Programs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#interpolation">Interpolation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#quoting">Quoting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calling-c-and-fortran-code/">Calling C and Fortran Code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#garbage-collection-safety">Garbage Collection Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#non-constant-function-specifications">Non-constant Function Specifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#indirect-calls">Indirect Calls</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#calling-convention">Calling Convention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-global-variables">Accessing Global Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#accessing-data-through-a-pointer">Accessing Data through a Pointer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#thread-safety">Thread-safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#more-about-callbacks">More About Callbacks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#handling-operating-system-variation">Handling Operating System Variation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#tab-completion">Tab completion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../embedding/">Embedding Julia</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#high-level-embedding">High-Level Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#converting-types">Converting Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#calling-julia-functions">Calling Julia Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#memory-management">Memory Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#working-with-arrays">Working with Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../embedding/#exceptions">Exceptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Packages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#package-status">Package Status</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-and-removing-packages">Adding and Removing Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#offline-installation-of-packages">Offline Installation of Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installing-unregistered-packages">Installing Unregistered Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#updating-packages">Updating Packages</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#checkout-pin-and-free">Checkout, Pin and Free</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#custom-metadata-repository">Custom METADATA Repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#package-development">Package Development</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#initial-setup">Initial Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#making-changes-to-an-existing-package">Making changes to an existing package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#creating-a-new-package">Creating a new Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fixing-package-requirements">Fixing Package Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#man-package-requirements">Requirements Specification</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#basic-usage">Basic usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#accumulation-and-clearing">Accumulation and clearing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#options-for-controlling-the-display-of-profile-results">Options for controlling the display of profile results</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../profile/#configuration">Configuration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../profile/#memory-allocation-analysis">Memory allocation analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../performance-tips/">Performance Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-global-variables">Avoid global variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#measure-performance-with-time-and-pay-attention-to-memory-allocation">Measure performance with <code class="docutils literal"><span class="pre">&#64;time</span></code> and pay attention to memory allocation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tools">Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-containers-with-abstract-type-parameters">Avoid containers with abstract type parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#type-declarations">Type declarations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#break-functions-into-multiple-definitions">Break functions into multiple definitions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#write-type-stable-functions">Write &#8220;type-stable&#8221; functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-changing-the-type-of-a-variable">Avoid changing the type of a variable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#separate-kernel-functions">Separate kernel functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#access-arrays-in-memory-order-along-columns">Access arrays in memory order, along columns</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#pre-allocating-outputs">Pre-allocating outputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#avoid-string-interpolation-for-i-o">Avoid string interpolation for I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#optimize-network-i-o-during-parallel-execution">Optimize network I/O during parallel execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#fix-deprecation-warnings">Fix deprecation warnings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#tweaks">Tweaks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#performance-annotations">Performance Annotations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#treat-subnormal-numbers-as-zeros">Treat Subnormal Numbers as Zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../performance-tips/#code-warntype"><code class="docutils literal"><span class="pre">&#64;code_warntype</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../workflow-tips/">Workflow Tips</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#repl-based-workflow">REPL-based workflow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../style-guide/">Style Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#append-to-names-of-functions-that-modify-their-arguments">Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-strange-type-unions">Avoid strange type Unions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-type-unions-in-fields">Avoid type Unions in fields</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-elaborate-container-types">Avoid elaborate container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#use-naming-conventions-consistent-with-julia-s-base">Use naming conventions consistent with Julia&#8217;s <code class="docutils literal"><span class="pre">base/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-try-catch">Don&#8217;t overuse try-catch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-parenthesize-conditions">Don&#8217;t parenthesize conditions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse">Don&#8217;t overuse ...</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-use-unnecessary-static-parameters">Don&#8217;t use unnecessary static parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-confusion-about-whether-something-is-an-instance-or-a-type">Avoid confusion about whether something is an instance or a type</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overuse-macros">Don&#8217;t overuse macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-expose-unsafe-operations-at-the-interface-level">Don&#8217;t expose unsafe operations at the interface level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#don-t-overload-methods-of-base-container-types">Don&#8217;t overload methods of base container types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#be-careful-with-type-equality">Be careful with type equality</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#do-not-write-x-f-x">Do not write <code class="docutils literal"><span class="pre">x-&gt;f(x)</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../style-guide/#avoid-using-floats-for-numeric-literals-in-generic-code-when-possible">Avoid using floats for numeric literals in generic code when possible</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../faq/">Frequently Asked Questions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#sessions-and-the-repl">Sessions and the REPL</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#functions">Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#types-type-declarations-and-constructors">Types, type declarations, and constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#packages-and-modules">Packages and Modules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#nothingness-and-missing-values">Nothingness and missing values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#memory">Memory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#asynchronous-io-and-concurrent-synchronous-writes">Asynchronous IO and concurrent synchronous writes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../noteworthy-differences/">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../noteworthy-differences/#noteworthy-differences-from-c-c">Noteworthy differences from C/C++</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../unicode-input/">Unicode Input</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/base/">Essentials</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#introduction">Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#getting-around">Getting Around</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#all-objects">All Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#types">Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#generic-functions">Generic Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#syntax">Syntax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#nullables">Nullables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#system">System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#errors">Errors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#events">Events</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#reflection">Reflection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/base/#internals">Internals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/collections/">Collections and Data Structures</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iteration">Iteration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#general-collections">General Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#iterable-collections">Iterable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#indexable-collections">Indexable Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#associative-collections">Associative Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#set-like-collections">Set-Like Collections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#dequeues">Dequeues</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#priorityqueue">PriorityQueue</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/collections/#heap-functions">Heap Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/math/">Mathematics</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-operators">Mathematical Operators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#mathematical-functions">Mathematical Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#statistics">Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#signal-processing">Signal Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/math/#numerical-integration">Numerical Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/numbers/">Numbers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#standard-numeric-types">Standard Numeric Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#data-formats">Data Formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#general-number-functions-and-constants">General Number Functions and Constants</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#bigfloats">BigFloats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/numbers/#random-numbers">Random Numbers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/strings/">Strings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/arrays/">Arrays</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#basic-functions">Basic functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#constructors">Constructors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#indexing-assignment-and-concatenation">Indexing, Assignment, and Concatenation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#array-functions">Array functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#combinatorics">Combinatorics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#bitarrays">BitArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/arrays/#sparse-matrices">Sparse Matrices</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/parallel/">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#tasks">Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#general-parallel-computing-support">General Parallel Computing Support</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#shared-arrays">Shared Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/parallel/#cluster-manager-interface">Cluster Manager Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/linalg/">Linear Algebra</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg">Standard Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/linalg/#module-Base.LinAlg.LAPACK">LAPACK Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/constants/">Constants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/file/">Filesystem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/io-network/">I/O and Network</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#general-i-o">General I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#text-i-o">Text I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#multimedia-i-o">Multimedia I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#memory-mapped-i-o">Memory-mapped I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/io-network/#network-i-o">Network I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/punctuation/">Punctuation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/sort/">Sorting and Related Functions</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-functions">Sorting Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#order-related-functions">Order-Related Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/sort/#sorting-algorithms">Sorting Algorithms</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/pkg/">Package Manager Functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/dates/">Dates and Time</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-and-time-types">Dates and Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/dates/#dates-functions">Dates Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/test/">Unit and Functional Testing</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#testing-base-julia">Testing Base Julia</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#test-framework">Test Framework</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#handlers">Handlers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#macros">Macros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../stdlib/test/#functions">Functions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/">C Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/c/#llvm-interface">LLVM Interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libc/">C Standard Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/libdl/">Dynamic Linker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../stdlib/profile/">Profiling</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/julia/">Documentation of Julia&#8217;s Internals</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/init/">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/eval/">Eval of Julia code</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/ast/">Julia ASTs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/types/">More about types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/object/">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/cartesian/">Base.Cartesian</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/subarrays/">SubArrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/sysimg/">System Image Building</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/llvm/">Working with LLVM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/stdio/">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/promote-op/">Operator-sensitive promotion</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../devdocs/C/">Developing/debugging Julia&#8217;s C code</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/debuggingtips/">gdb debugging tips</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../devdocs/valgrind/">Using Valgrind with Julia</a></li>
+</ul>
+</li>
+</ul>
+
+        
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../">Julia Language</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../../">Docs</a> &raquo;</li>
+      
+    <li>Packages</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          <a href="../../_sources/manual/packages.txt" rel="nofollow"> View page source</a>
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document">
+            
+  <div class="section" id="packages">
+<span id="man-packages"></span><h1>Packages<a class="headerlink" href="#packages" title="Permalink to this headline">¶</a></h1>
+<p>Julia has a built-in package manager for installing add-on functionality written in Julia.
+It can also install external libraries using your operating system&#8217;s standard system for doing so, or by compiling from source.
+The list of registered Julia packages can be found at <a class="reference external" href="http://pkg.julialang.org">http://pkg.julialang.org</a>.
+All package manager commands are found in the <a class="reference internal" href="../../stdlib/pkg/#module-Base.Pkg" title="Base.Pkg"><code class="xref jl jl-mod docutils literal"><span class="pre">Pkg</span></code></a> module, included in Julia&#8217;s <code class="xref jl jl-mod docutils literal"><span class="pre">Base</span></code> install.</p>
+<p>First we&#8217;ll go over the mechanics of the <code class="docutils literal"><span class="pre">Pkg</span></code> family of commands and then we&#8217;ll provide some guidance on how
+to get your package registered. Be sure to read the section below on package naming conventions, tagging versions
+and the importance of a <code class="docutils literal"><span class="pre">REQUIRE</span></code> file for when you&#8217;re ready to add your code to the curated METADATA repository.</p>
+<div class="section" id="package-status">
+<h2>Package Status<a class="headerlink" href="#package-status" title="Permalink to this headline">¶</a></h2>
+<p>The <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.status" title="Base.Pkg.status"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.status()</span></code></a> function prints out a summary of the state of packages you have installed.
+Initially, you&#8217;ll have no packages installed:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Initializing</span> <span class="n">package</span> <span class="n">repository</span> <span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">stefan</span><span class="o">/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Cloning</span> <span class="n">METADATA</span> <span class="n">from</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">JuliaLang</span><span class="o">/</span><span class="n">METADATA</span><span class="o">.</span><span class="n">jl</span>
+<span class="n">No</span> <span class="n">packages</span> <span class="n">installed</span><span class="o">.</span>
+</pre></div>
+</div>
+<p>Your package directory is automatically initialized the first time you run a <a class="reference internal" href="../../stdlib/pkg/#module-Base.Pkg" title="Base.Pkg"><code class="xref jl jl-mod docutils literal"><span class="pre">Pkg</span></code></a> command that expects it to exist – which includes  <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.status" title="Base.Pkg.status"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.status()</span></code></a>.
+Here&#8217;s an example non-trivial set of required and additional packages:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">8</span>
+ <span class="o">-</span> <span class="n">UTF16</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">0</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">6</span>
+</pre></div>
+</div>
+<p>These packages are all on registered versions, managed by <a class="reference internal" href="../../stdlib/pkg/#module-Base.Pkg" title="Base.Pkg"><code class="xref jl jl-mod docutils literal"><span class="pre">Pkg</span></code></a>.
+Packages can be in more complicated states, indicated by annotations to the right of the installed package version; we will explain these states and annotations as we encounter them.
+For programmatic usage, <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.installed" title="Base.Pkg.installed"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.installed()</span></code></a> returns a dictionary, mapping installed package names to the version of that package which is installed:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">installed</span><span class="p">()</span>
+<span class="n">Dict</span><span class="p">{</span><span class="n">ASCIIString</span><span class="p">,</span><span class="n">VersionNumber</span><span class="p">}</span> <span class="n">with</span> <span class="mi">4</span> <span class="n">entries</span><span class="p">:</span>
+<span class="s">&quot;Distributions&quot;</span>     <span class="o">=&gt;</span> <span class="n">v</span><span class="s">&quot;0.2.8&quot;</span>
+<span class="s">&quot;Stats&quot;</span>             <span class="o">=&gt;</span> <span class="n">v</span><span class="s">&quot;0.2.6&quot;</span>
+<span class="s">&quot;UTF16&quot;</span>             <span class="o">=&gt;</span> <span class="n">v</span><span class="s">&quot;0.2.0&quot;</span>
+<span class="s">&quot;NumericExtensions&quot;</span> <span class="o">=&gt;</span> <span class="n">v</span><span class="s">&quot;0.2.17&quot;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="adding-and-removing-packages">
+<h2>Adding and Removing Packages<a class="headerlink" href="#adding-and-removing-packages" title="Permalink to this headline">¶</a></h2>
+<p>Julia&#8217;s package manager is a little unusual in that it is declarative rather than imperative.
+This means that you tell it what you want and it figures out what versions to install (or remove) to satisfy those requirements optimally – and minimally.
+So rather than installing a package, you just add it to the list of requirements and then &#8220;resolve&#8221; what needs to be installed.
+In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, and a newer version doesn&#8217;t have that requirement anymore, updating will actually remove that package.</p>
+<p>Your package requirements are in the file <code class="docutils literal"><span class="pre">~/.julia/v0.4/REQUIRE</span></code>.
+You can edit this file by hand and then call <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.resolve" title="Base.Pkg.resolve"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.resolve()</span></code></a> to install, upgrade or remove packages to optimally satisfy the requirements, or you can do <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.edit" title="Base.Pkg.edit"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.edit()</span></code></a>, which will open <code class="docutils literal"><span class="pre">REQUIRE</span></code> in your editor (configured via the <code class="docutils literal"><span class="pre">EDITOR</span></code> or <code class="docutils literal"><span class="pre">VISUAL</span></code> environment variables), and then automatically call <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.resolve" title="Base.Pkg.resolve"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.resolve()</span></code></a> afterwards if necessary.
+If you only want to add or remove the requirement for a single package, you can also use the non-interactive <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a> and <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.rm" title="Base.Pkg.rm"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.rm()</span></code></a> commands, which add or remove a single requirement to <code class="docutils literal"><span class="pre">REQUIRE</span></code> and then call <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.resolve" title="Base.Pkg.resolve"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.resolve()</span></code></a>.</p>
+<p>You can add a package to the list of requirements with the <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a> function, and the package and all the packages that it depends on will be installed:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">No</span> <span class="n">packages</span> <span class="n">installed</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&quot;Distributions&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Cloning</span> <span class="n">cache</span> <span class="n">of</span> <span class="n">Distributions</span> <span class="n">from</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">JuliaStats</span><span class="o">/</span><span class="n">Distributions</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Cloning</span> <span class="n">cache</span> <span class="n">of</span> <span class="n">NumericExtensions</span> <span class="n">from</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">lindahua</span><span class="o">/</span><span class="n">NumericExtensions</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Cloning</span> <span class="n">cache</span> <span class="n">of</span> <span class="n">Stats</span> <span class="n">from</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">JuliaStats</span><span class="o">/</span><span class="n">Stats</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Installing</span> <span class="n">Distributions</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.7</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Installing</span> <span class="n">NumericExtensions</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.17</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Installing</span> <span class="n">Stats</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.6</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">REQUIRE</span> <span class="n">updated</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">7</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">6</span>
+</pre></div>
+</div>
+<p>What this is doing is first adding <code class="docutils literal"><span class="pre">Distributions</span></code> to your <code class="docutils literal"><span class="pre">~/.julia/v0.4/REQUIRE</span></code> file:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">cat</span> <span class="o">~/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">REQUIRE</span>
+<span class="n">Distributions</span>
+</pre></div>
+</div>
+<p>It then runs <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.resolve" title="Base.Pkg.resolve"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.resolve()</span></code></a> using these new requirements, which leads to the conclusion that the <code class="docutils literal"><span class="pre">Distributions</span></code> package should be installed since it is required but not installed.
+As stated before, you can accomplish the same thing by editing your <code class="docutils literal"><span class="pre">~/.julia/v0.4/REQUIRE</span></code> file by hand and then running <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.resolve" title="Base.Pkg.resolve"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.resolve()</span></code></a> yourself:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">echo</span> <span class="n">UTF16</span> <span class="o">&gt;&gt;</span> <span class="o">~/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">REQUIRE</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Cloning</span> <span class="n">cache</span> <span class="n">of</span> <span class="n">UTF16</span> <span class="n">from</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">nolta</span><span class="o">/</span><span class="n">UTF16</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Installing</span> <span class="n">UTF16</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">7</span>
+ <span class="o">-</span> <span class="n">UTF16</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">0</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">6</span>
+</pre></div>
+</div>
+<p>This is functionally equivalent to calling <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add(&quot;UTF16&quot;)</span></code></a>, except that <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a> doesn&#8217;t change <code class="docutils literal"><span class="pre">REQUIRE</span></code> until <em>after</em> installation has completed, so if there are problems, <code class="docutils literal"><span class="pre">REQUIRE</span></code> will be left as it was before calling <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a>.
+The format of the <code class="docutils literal"><span class="pre">REQUIRE</span></code> file is described in <a class="reference external" href="#man-package-requirements">Requirements Specification</a>;
+it allows, among other things, requiring specific ranges of versions of packages.</p>
+<p>When you decide that you don&#8217;t want to have a package around any more, you can use <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.rm" title="Base.Pkg.rm"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.rm()</span></code></a> to remove the requirement for it from the <code class="docutils literal"><span class="pre">REQUIRE</span></code> file:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">rm</span><span class="p">(</span><span class="s">&quot;Distributions&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Removing</span> <span class="n">Distributions</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.7</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Removing</span> <span class="n">Stats</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.6</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Removing</span> <span class="n">NumericExtensions</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.17</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">REQUIRE</span> <span class="n">updated</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">UTF16</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">0</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">rm</span><span class="p">(</span><span class="s">&quot;UTF16&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Removing</span> <span class="n">UTF16</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.0</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">REQUIRE</span> <span class="n">updated</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">No</span> <span class="n">packages</span> <span class="n">installed</span><span class="o">.</span>
+</pre></div>
+</div>
+<p>Once again, this is equivalent to editing the <code class="docutils literal"><span class="pre">REQUIRE</span></code> file to remove the line with each package name on it then running <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.resolve" title="Base.Pkg.resolve"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.resolve()</span></code></a> to update the set of installed packages to match.
+While <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a> and <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.rm" title="Base.Pkg.rm"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.rm()</span></code></a> are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, you can call <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.edit" title="Base.Pkg.edit"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.edit()</span></code></a> to manually change the contents of <code class="docutils literal"><span class="pre">REQUIRE</span></code> and then update your packages accordingly.
+<a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.edit" title="Base.Pkg.edit"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.edit()</span></code></a> does not roll back the contents of <code class="docutils literal"><span class="pre">REQUIRE</span></code> if <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.resolve" title="Base.Pkg.resolve"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.resolve()</span></code></a> fails – rather, you have to run <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.edit" title="Base.Pkg.edit"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.edit()</span></code></a> again to fix the files contents yourself.</p>
+<p>Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a>. The following command can be run from the command line to tell git to use &#8216;https&#8217; instead of the &#8216;git&#8217; protocol when cloning repositories:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">config</span> <span class="o">--</span><span class="kd">global</span> <span class="n">url</span><span class="o">.</span><span class="s">&quot;https://&quot;</span><span class="o">.</span><span class="n">insteadOf</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="offline-installation-of-packages">
+<h2>Offline Installation of Packages<a class="headerlink" href="#offline-installation-of-packages" title="Permalink to this headline">¶</a></h2>
+<p>For machines with no Internet connection, packages may be installed by copying
+the package root directory (given by <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.dir" title="Base.Pkg.dir"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.dir()</span></code></a>) from a machine with the
+same operating system and environment.</p>
+<p><a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a> does the following within the package root directory:</p>
+<ol class="arabic simple">
+<li>Adds the name of the package to <code class="docutils literal"><span class="pre">REQUIRE</span></code>.</li>
+<li>Downloads the package to <code class="docutils literal"><span class="pre">.cache</span></code>, then copies the package to the package root directory.</li>
+<li>Recursively performs step 2 against all the packages listed in the package&#8217;s <code class="docutils literal"><span class="pre">REQUIRE</span></code> file.</li>
+<li>Runs <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.build" title="Base.Pkg.build"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.build()</span></code></a></li>
+</ol>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">Copying installed packages from a different machine is brittle for packages
+requiring binary external dependencies. Such packages may break due to
+differences in operating system versions, build environments, and/or
+absolute path dependencies.</p>
+</div>
+</div>
+<div class="section" id="installing-unregistered-packages">
+<h2>Installing Unregistered Packages<a class="headerlink" href="#installing-unregistered-packages" title="Permalink to this headline">¶</a></h2>
+<p>Julia packages are simply git repositories, clonable via any of the <a class="reference external" href="https://www.kernel.org/pub/software/scm/git/docs/git-clone.html#URLS">protocols</a> that git supports, and containing Julia code that follows certain layout conventions.
+Official Julia packages are registered in the <a class="reference external" href="https://github.com/JuliaLang/METADATA.jl">METADATA.jl</a> repository, available at a well-known location <a class="footnote-reference" href="#id2" id="id1">[1]</a>.
+The <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a> and <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.rm" title="Base.Pkg.rm"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.rm()</span></code></a> commands in the previous section interact with registered packages, but the package manager can install and work with unregistered packages too.
+To install an unregistered package, use <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.clone" title="Base.Pkg.clone"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.clone(url)</span></code></a>, where <code class="docutils literal"><span class="pre">url</span></code> is a git URL from which the package can be cloned:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span>julia&gt; Pkg.clone(&quot;git://example.com/path/to/Package.jl.git&quot;)
+INFO: Cloning Package from git://example.com/path/to/Package.jl.git
+Cloning into &#39;Package&#39;...
+remote: Counting objects: 22, done.
+remote: Compressing objects: 100% (10/10), done.
+remote: Total 22 (delta 8), reused 22 (delta 8)
+Receiving objects: 100% (22/22), 2.64 KiB, done.
+Resolving deltas: 100% (8/8), done.
+</pre></div>
+</div>
+<p>By convention, Julia repository names end with <code class="docutils literal"><span class="pre">.jl</span></code> (the additional <code class="docutils literal"><span class="pre">.git</span></code> indicates a &#8220;bare&#8221; git repository), which keeps them from colliding with repositories for other languages, and also makes Julia packages easy to find in search engines.
+When packages are installed in your <code class="docutils literal"><span class="pre">.julia/v0.4</span></code> directory, however, the extension is redundant so we leave it off.</p>
+<p>If unregistered packages contain a <code class="docutils literal"><span class="pre">REQUIRE</span></code> file at the top of their source tree, that file will be used to determine which registered packages the unregistered package depends on, and they will automatically be installed.
+Unregistered packages participate in the same version resolution logic as registered packages, so installed package versions will be adjusted as necessary to satisfy the requirements of both registered and unregistered packages.</p>
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>The official set of packages is at <a class="reference external" href="https://github.com/JuliaLang/METADATA.jl">https://github.com/JuliaLang/METADATA.jl</a>, but individuals and organizations can easily use a different metadata repository. This allows control which packages are available for automatic installation. One can allow only audited and approved package versions, and make private packages or forks available. See <a class="reference internal" href="#man-custom-metadata"><span class="std std-ref">Custom METADATA</span></a> for details.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="updating-packages">
+<h2>Updating Packages<a class="headerlink" href="#updating-packages" title="Permalink to this headline">¶</a></h2>
+<p>When package developers publish new registered versions of packages that you&#8217;re using, you will, of course, want the new shiny versions.
+To get the latest and greatest versions of all your packages, just do <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.update" title="Base.Pkg.update"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.update()</span></code></a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">update</span><span class="p">()</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Updating</span> <span class="n">METADATA</span><span class="o">...</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Computing</span> <span class="n">changes</span><span class="o">...</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Upgrading</span> <span class="n">Distributions</span><span class="p">:</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.8</span> <span class="o">=&gt;</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.10</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Upgrading</span> <span class="n">Stats</span><span class="p">:</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.7</span> <span class="o">=&gt;</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.8</span>
+</pre></div>
+</div>
+<p>The first step of updating packages is to pull new changes to <code class="docutils literal"><span class="pre">~/.julia/v0.4/METADATA</span></code> and see if any new registered package versions have been published.
+After this, <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.update" title="Base.Pkg.update"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.update()</span></code></a> attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have been made to files tracked by git) by pulling changes from the package&#8217;s upstream repository.
+Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be <a class="reference external" href="https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging">&#8220;fast-forwarded&#8221;</a>.
+If the branch cannot be fast-forwarded, it is assumed that you&#8217;re working on it and will update the repository yourself.</p>
+<p>Finally, the update process recomputes an optimal set of package versions to have installed to satisfy your top-level requirements and the requirements of &#8220;fixed&#8221; packages.
+A package is considered fixed if it is one of the following:</p>
+<ol class="arabic simple">
+<li><strong>Unregistered:</strong> the package is not in <code class="docutils literal"><span class="pre">METADATA</span></code> – you installed it with <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.clone" title="Base.Pkg.clone"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.clone()</span></code></a>.</li>
+<li><strong>Checked out:</strong> the package repo is on a development branch.</li>
+<li><strong>Dirty:</strong> changes have been made to files in the repo.</li>
+</ol>
+<p>If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
+The combination of top-level requirements in <code class="docutils literal"><span class="pre">~/.julia/v0.4/REQUIRE</span></code> and the requirement of fixed packages are used to determine what should be installed.</p>
+</div>
+<div class="section" id="checkout-pin-and-free">
+<h2>Checkout, Pin and Free<a class="headerlink" href="#checkout-pin-and-free" title="Permalink to this headline">¶</a></h2>
+<p>You may want to use the <code class="docutils literal"><span class="pre">master</span></code> version of a package rather than one of its registered versions.
+There might be fixes or functionality on master that you need that aren&#8217;t yet published in any registered versions, or you may be a developer of the package and need to make changes on <code class="docutils literal"><span class="pre">master</span></code> or some other development branch.
+In such cases, you can do <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.checkout" title="Base.Pkg.checkout"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.checkout(pkg)</span></code></a> to checkout the <code class="docutils literal"><span class="pre">master</span></code> branch of <code class="docutils literal"><span class="pre">pkg</span></code> or <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.checkout" title="Base.Pkg.checkout"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.checkout(pkg,branch)</span></code></a> to checkout some other branch:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&quot;Distributions&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Installing</span> <span class="n">Distributions</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.9</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Installing</span> <span class="n">NumericExtensions</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.17</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Installing</span> <span class="n">Stats</span> <span class="n">v0</span><span class="o">.</span><span class="mf">2.7</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">REQUIRE</span> <span class="n">updated</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">9</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">7</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">checkout</span><span class="p">(</span><span class="s">&quot;Distributions&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Checking</span> <span class="n">out</span> <span class="n">Distributions</span> <span class="n">master</span><span class="o">...</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">No</span> <span class="n">packages</span> <span class="n">to</span> <span class="n">install</span><span class="p">,</span> <span class="n">update</span> <span class="n">or</span> <span class="n">remove</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">9</span><span class="o">+</span>             <span class="n">master</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">7</span>
+</pre></div>
+</div>
+<p>Immediately after installing <code class="docutils literal"><span class="pre">Distributions</span></code> with <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add()</span></code></a> it is on the current most recent registered version – <code class="docutils literal"><span class="pre">0.2.9</span></code> at the time of writing this.
+Then after running <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.checkout" title="Base.Pkg.checkout"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.checkout(&quot;Distributions&quot;)</span></code></a>, you can see from the output of <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.status" title="Base.Pkg.status"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.status()</span></code></a> that <code class="docutils literal"><span class="pre">Distributions</span></code> is on an unregistered version greater than <code class="docutils literal"><span class="pre">0.2.9</span></code>, indicated by the &#8220;pseudo-version&#8221; number <code class="docutils literal"><span class="pre">0.2.9+</span></code>.</p>
+<p>When you checkout an unregistered version of a package, the copy of the <code class="docutils literal"><span class="pre">REQUIRE</span></code> file in the package repo takes precedence over any requirements registered in <code class="docutils literal"><span class="pre">METADATA</span></code>, so it is important that developers keep this file accurate and up-to-date, reflecting the actual requirements of the current version of the package.
+If the <code class="docutils literal"><span class="pre">REQUIRE</span></code> file in the package repo is incorrect or missing, dependencies may be removed when the package is checked out.
+This file is also used to populate newly published versions of the package if you use the API that <a class="reference internal" href="../../stdlib/pkg/#module-Base.Pkg" title="Base.Pkg"><code class="xref jl jl-mod docutils literal"><span class="pre">Pkg</span></code></a> provides for this (described below).</p>
+<p>When you decide that you no longer want to have a package checked out on a branch, you can &#8220;free&#8221; it back to the control of the package manager with <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.free" title="Base.Pkg.free"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.free(pkg)</span></code></a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">free</span><span class="p">(</span><span class="s">&quot;Distributions&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Freeing</span> <span class="n">Distributions</span><span class="o">...</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">No</span> <span class="n">packages</span> <span class="n">to</span> <span class="n">install</span><span class="p">,</span> <span class="n">update</span> <span class="n">or</span> <span class="n">remove</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">9</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">7</span>
+</pre></div>
+</div>
+<p>After this, since the package is on a registered version and not on a branch, its version will be updated as new registered versions of the package are published.</p>
+<p>If you want to pin a package at a specific version so that calling <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.update" title="Base.Pkg.update"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.update()</span></code></a> won&#8217;t change the version the package is on, you can use the <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.pin" title="Base.Pkg.pin"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.pin()</span></code></a> function:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s">&quot;Stats&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Creating</span> <span class="n">Stats</span> <span class="n">branch</span> <span class="n">pinned</span><span class="o">.</span><span class="mi">47</span><span class="n">c198b1</span><span class="o">.</span><span class="n">tmp</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">9</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">7</span>              <span class="n">pinned</span><span class="o">.</span><span class="mi">47</span><span class="n">c198b1</span><span class="o">.</span><span class="n">tmp</span>
+</pre></div>
+</div>
+<p>After this, the <code class="docutils literal"><span class="pre">Stats</span></code> package will remain pinned at version <code class="docutils literal"><span class="pre">0.2.7</span></code> – or more specifically, at commit <code class="docutils literal"><span class="pre">47c198b1</span></code>, but since versions are permanently associated a given git hash, this is the same thing.
+<a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.pin" title="Base.Pkg.pin"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.pin()</span></code></a> works by creating a throw-away branch for the commit you want to pin the package at and then checking that branch out.
+By default, it pins a package at the current commit, but you can choose a different version by passing a second argument:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s">&quot;Stats&quot;</span><span class="p">,</span><span class="n">v</span><span class="s">&quot;0.2.5&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Creating</span> <span class="n">Stats</span> <span class="n">branch</span> <span class="n">pinned</span><span class="o">.</span><span class="mi">1</span><span class="n">fd0983b</span><span class="o">.</span><span class="n">tmp</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">No</span> <span class="n">packages</span> <span class="n">to</span> <span class="n">install</span><span class="p">,</span> <span class="n">update</span> <span class="n">or</span> <span class="n">remove</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">9</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">5</span>              <span class="n">pinned</span><span class="o">.</span><span class="mi">1</span><span class="n">fd0983b</span><span class="o">.</span><span class="n">tmp</span>
+</pre></div>
+</div>
+<p>Now the <code class="docutils literal"><span class="pre">Stats</span></code> package is pinned at commit <code class="docutils literal"><span class="pre">1fd0983b</span></code>, which corresponds to version <code class="docutils literal"><span class="pre">0.2.5</span></code>.
+When you decide to &#8220;unpin&#8221; a package and let the package manager update it again, you can use <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.free" title="Base.Pkg.free"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.free()</span></code></a> like you would to move off of any branch:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">free</span><span class="p">(</span><span class="s">&quot;Stats&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Freeing</span> <span class="n">Stats</span><span class="o">...</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">No</span> <span class="n">packages</span> <span class="n">to</span> <span class="n">install</span><span class="p">,</span> <span class="n">update</span> <span class="n">or</span> <span class="n">remove</span><span class="o">.</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+<span class="n">Required</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">Distributions</span>                 <span class="mf">0.2</span><span class="o">.</span><span class="mi">9</span>
+<span class="n">Additional</span> <span class="n">packages</span><span class="p">:</span>
+ <span class="o">-</span> <span class="n">NumericExtensions</span>             <span class="mf">0.2</span><span class="o">.</span><span class="mi">17</span>
+ <span class="o">-</span> <span class="n">Stats</span>                         <span class="mf">0.2</span><span class="o">.</span><span class="mi">7</span>
+</pre></div>
+</div>
+<p>After this, the <code class="docutils literal"><span class="pre">Stats</span></code> package is managed by the package manager again, and future calls to <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.update" title="Base.Pkg.update"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.update()</span></code></a> will upgrade it to newer versions when they are published.
+The throw-away <code class="docutils literal"><span class="pre">pinned.1fd0983b.tmp</span></code> branch remains in your local <code class="docutils literal"><span class="pre">Stats</span></code> repo, but since git branches are extremely lightweight, this doesn&#8217;t really matter;
+if you feel like cleaning them up, you can go into the repo and delete those branches <a class="footnote-reference" href="#id4" id="id3">[2]</a>.</p>
+<table class="docutils footnote" frame="void" id="id4" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[2]</a></td><td>Packages that aren&#8217;t on branches will also be marked as dirty if you make changes in the repo, but that&#8217;s a less common thing to do.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="custom-metadata-repository">
+<span id="man-custom-metadata"></span><h2>Custom METADATA Repository<a class="headerlink" href="#custom-metadata-repository" title="Permalink to this headline">¶</a></h2>
+<p>By default, Julia assumes you will be using the <a class="reference external" href="https://github.com/JuliaLang/METADATA.jl">official METADATA.jl</a> repository for downloading and installing packages.
+You can also provide a different metadata repository location.
+A common approach is to keep your <code class="docutils literal"><span class="pre">metadata-v2</span></code> branch up to date with the Julia official branch and add another branch with your custom packages.
+You can initialize your local metadata repository using that custom location and branch and then periodically rebase your custom branch with the official <code class="docutils literal"><span class="pre">metadata-v2</span></code> branch.
+In order to use a custom repository and branch, issue the following command:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="s">&quot;https://me.example.com/METADATA.jl.git&quot;</span><span class="p">,</span> <span class="s">&quot;branch&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The branch argument is optional and defaults to <code class="docutils literal"><span class="pre">metadata-v2</span></code>.
+Once initialized, a file named <code class="docutils literal"><span class="pre">META_BRANCH</span></code> in your <code class="docutils literal"><span class="pre">~/.julia/vX.Y/</span></code> path will track the branch that your METADATA repository was initialized with.
+If you want to change branches, you will need to either modify the <code class="docutils literal"><span class="pre">META_BRANCH</span></code> file directly (be careful!) or remove the <code class="docutils literal"><span class="pre">vX.Y</span></code> directory and re-initialize your METADATA repository using the <code class="docutils literal"><span class="pre">Pkg.init</span></code> command.</p>
+</div>
+</div>
+<div class="section" id="package-development">
+<h1>Package Development<a class="headerlink" href="#package-development" title="Permalink to this headline">¶</a></h1>
+<p>Julia&#8217;s package manager is designed so that when you have a package installed, you are already in a position to look at its source code and full development history.
+You are also able to make changes to packages, commit them using git, and easily contribute fixes and enhancements upstream.
+Similarly, the system is designed so that if you want to create a new package, the simplest way to do so is within the infrastructure provided by the package manager.</p>
+<div class="section" id="initial-setup">
+<span id="man-pkg-dev-setup"></span><h2>Initial Setup<a class="headerlink" href="#initial-setup" title="Permalink to this headline">¶</a></h2>
+<p>Since packages are git repositories, before doing any package development you should setup the following standard global git configuration settings:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">git</span> <span class="n">config</span> <span class="o">--</span><span class="kd">global</span> <span class="n">user</span><span class="o">.</span><span class="n">name</span> <span class="s">&quot;FULL NAME&quot;</span>
+<span class="o">$</span> <span class="n">git</span> <span class="n">config</span> <span class="o">--</span><span class="kd">global</span> <span class="n">user</span><span class="o">.</span><span class="n">email</span> <span class="s">&quot;EMAIL&quot;</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal"><span class="pre">FULL</span> <span class="pre">NAME</span></code> is your actual full name (spaces are allowed between the double quotes) and <code class="docutils literal"><span class="pre">EMAIL</span></code> is your actual email address.
+Although it isn&#8217;t necessary to use <a class="reference external" href="https://github.com/">GitHub</a> to create or publish Julia packages, most Julia packages as of writing this are hosted on GitHub and the package manager knows how to format origin URLs correctly and otherwise work with the service smoothly.
+We recommend that you create a <a class="reference external" href="https://github.com/join">free account</a> on GitHub and then do:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">git</span> <span class="n">config</span> <span class="o">--</span><span class="kd">global</span> <span class="n">github</span><span class="o">.</span><span class="n">user</span> <span class="s">&quot;USERNAME&quot;</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal"><span class="pre">USERNAME</span></code> is your actual GitHub user name.
+Once you do this, the package manager knows your GitHub user name and can configure things accordingly.
+You should also <a class="reference external" href="https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Fssh">upload</a> your public SSH key to GitHub and set up an <a class="reference external" href="http://linux.die.net/man/1/ssh-agent">SSH agent</a> on your development machine so that you can push changes with minimal hassle.
+In the future, we will make this system extensible and support other common git hosting options like <a class="reference external" href="https://bitbucket.org">BitBucket</a> and allow developers to choose their favorite.</p>
+</div>
+<div class="section" id="making-changes-to-an-existing-package">
+<h2>Making changes to an existing package<a class="headerlink" href="#making-changes-to-an-existing-package" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="documentation-changes">
+<h3>Documentation changes<a class="headerlink" href="#documentation-changes" title="Permalink to this headline">¶</a></h3>
+<p>If you want to improve the online documentation of a package, the
+easiest approach (at least for small changes) is to use GitHub&#8217;s
+online editing functionality. First, navigate to the repository&#8217;s
+GitHub &#8220;home page,&#8221; find the file (e.g., <code class="docutils literal"><span class="pre">README.md</span></code>) within the
+repository&#8217;s folder structure, and click on it. You&#8217;ll see the
+contents displayed, along with a small &#8220;pencil&#8221; icon in the upper
+right hand corner. Clicking that icon opens the file in edit mode.
+Make your changes, write a brief summary describing the changes you
+want to make (this is your <em>commit message</em>), and then hit &#8220;Propose
+file change.&#8221;  Your changes will be submitted for consideration by the
+package owner(s) and collaborators.</p>
+<p>For larger documentation changes&#8212;and especially ones that you expect
+to have to update in response to feedback&#8212;you might find it easier
+to use the procedure for code changes described below.</p>
+</div>
+<div class="section" id="code-changes">
+<h3>Code changes<a class="headerlink" href="#code-changes" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="executive-summary">
+<h4>Executive summary<a class="headerlink" href="#executive-summary" title="Permalink to this headline">¶</a></h4>
+<p>Here we assume you&#8217;ve already set up git on your local machine and
+have a GitHub account (see above).  Let&#8217;s imagine you&#8217;re fixing a bug
+in the Images package:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Pkg</span><span class="o">.</span><span class="n">checkout</span><span class="p">(</span><span class="s">&quot;Images&quot;</span><span class="p">)</span>           <span class="c"># check out the master branch</span>
+<span class="o">&lt;</span><span class="n">here</span><span class="p">,</span> <span class="n">make</span> <span class="n">sure</span> <span class="n">your</span> <span class="n">bug</span> <span class="nb">is</span> <span class="n">still</span> <span class="n">a</span> <span class="n">bug</span> <span class="n">and</span> <span class="n">hasn</span><span class="o">&#39;</span><span class="n">t</span> <span class="n">been</span> <span class="n">fixed</span> <span class="n">already</span><span class="o">&gt;</span>
+<span class="n">cd</span><span class="p">(</span><span class="n">Pkg</span><span class="o">.</span><span class="n">dir</span><span class="p">(</span><span class="s">&quot;Images&quot;</span><span class="p">))</span>
+<span class="p">;</span><span class="n">git</span> <span class="n">checkout</span> <span class="o">-</span><span class="n">b</span> <span class="n">myfixes</span>         <span class="c"># create a branch for your changes</span>
+<span class="o">&lt;</span><span class="nb">edit</span> <span class="n">code</span><span class="o">&gt;</span>                      <span class="c"># be sure to add a test for your bug</span>
+<span class="n">Pkg</span><span class="o">.</span><span class="n">test</span><span class="p">(</span><span class="s">&quot;Images&quot;</span><span class="p">)</span>               <span class="c"># make sure everything works now</span>
+<span class="p">;</span><span class="n">git</span> <span class="n">commit</span> <span class="o">-</span><span class="n">a</span> <span class="o">-</span><span class="n">m</span> <span class="s">&quot;Fix foo by calling bar&quot;</span>   <span class="c"># write a descriptive message</span>
+<span class="n">Pkg</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="s">&quot;Images&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The last line will present you with a link to submit a pull request
+to incorporate your changes.</p>
+</div>
+<div class="section" id="detailed-description">
+<h4>Detailed description<a class="headerlink" href="#detailed-description" title="Permalink to this headline">¶</a></h4>
+<p>If you want to fix a bug or add new functionality, you want to be able
+to test your changes before you submit them for consideration. You
+also need to have an easy way to update your proposal in response to
+the package owner&#8217;s feedback. Consequently, in this case the strategy
+is to work locally on your own machine; once you are satisfied with
+your changes, you submit them for consideration.  This process is
+called a <em>pull request</em> because you are asking to &#8220;pull&#8221; your changes
+into the project&#8217;s main repository. Because the online repository
+can&#8217;t see the code on your private machine, you first <em>push</em> your
+changes to a publicly-visible location, your own online <em>fork</em> of
+the package (hosted on your own personal GitHub account).</p>
+<p>Let&#8217;s assume you already have the <code class="docutils literal"><span class="pre">Foo</span></code> package installed.  In the
+description below, anything starting with <code class="docutils literal"><span class="pre">Pkg.</span></code> is meant to be
+typed at the Julia prompt; anything starting with <code class="docutils literal"><span class="pre">git</span></code> is meant to
+be typed in <a class="reference internal" href="../interacting-with-julia/#man-shell-mode"><span class="std std-ref">julia&#8217;s shell mode</span></a> (or using the
+shell that comes with your operating system).  Within Julia, you can
+combine these two modes:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">cd</span><span class="p">(</span><span class="n">Pkg</span><span class="o">.</span><span class="n">dir</span><span class="p">(</span><span class="s">&quot;Foo&quot;</span><span class="p">))</span>          <span class="c"># go to Foo&#39;s folder</span>
+
+<span class="n">shell</span><span class="o">&gt;</span> <span class="n">git</span> <span class="n">command</span> <span class="n">arguments</span><span class="o">...</span>    <span class="c"># command will apply to Foo</span>
+</pre></div>
+</div>
+<p>Now suppose you&#8217;re ready to make some changes to <code class="docutils literal"><span class="pre">Foo</span></code>.  While there
+are several possible approaches, here is one that is widely used:</p>
+<ul>
+<li><p class="first">From the Julia prompt, type <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.checkout" title="Base.Pkg.checkout"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.checkout(&quot;Foo&quot;)</span></code></a>. This
+ensures you&#8217;re running the latest code (the <code class="docutils literal"><span class="pre">master</span></code> branch), rather than
+just whatever &#8220;official release&#8221; version you have installed. (If you&#8217;re
+planning to fix a bug, at this point it&#8217;s a good idea to check again
+whether the bug has already been fixed by someone else. If it has,
+you can request that a new official release be tagged so that the
+fix gets distributed to the rest of the community.) If you receive
+an error <code class="docutils literal"><span class="pre">Foo</span> <span class="pre">is</span> <span class="pre">dirty,</span> <span class="pre">bailing</span></code>, see <a class="reference internal" href="#man-pkg-dirty"><span class="std std-ref">Dirty packages</span></a> below.</p>
+</li>
+<li><p class="first">Create a branch for your changes: navigate to the package folder
+(the one that Julia reports from <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.dir" title="Base.Pkg.dir"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.dir(&quot;Foo&quot;)</span></code></a>) and (in
+shell mode) create a new branch using <code class="docutils literal"><span class="pre">git</span> <span class="pre">checkout</span> <span class="pre">-b</span> <span class="pre">&lt;newbranch&gt;</span></code>,
+where <code class="docutils literal"><span class="pre">&lt;newbranch&gt;</span></code> might be some descriptive name (e.g.,
+<code class="docutils literal"><span class="pre">fixbar</span></code>). By creating a branch, you ensure that you can easily go
+back and forth between your new work and the current <code class="docutils literal"><span class="pre">master</span></code>
+branch (see
+<a class="reference external" href="https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell">https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell</a>).</p>
+<p>If you forget to do this step until after you&#8217;ve already made some
+changes, don&#8217;t worry: see <a class="reference internal" href="#man-post-hoc-branching"><span class="std std-ref">more detail about branching</span></a> below.</p>
+</li>
+<li><p class="first">Make your changes. Whether it&#8217;s fixing a bug or adding new
+functionality, in most cases your change should include updates to
+both the <code class="docutils literal"><span class="pre">src/</span></code> and <code class="docutils literal"><span class="pre">test/</span></code> folders.  If you&#8217;re fixing a bug,
+add your minimal example demonstrating the bug (on the current code)
+to the test suite; by contributing a test for the bug, you ensure
+that the bug won&#8217;t accidentally reappear at some later time due to
+other changes.  If you&#8217;re adding new functionality, creating tests
+demonstrates to the package owner that you&#8217;ve made sure your code
+works as intended.</p>
+</li>
+<li><p class="first">Run the package&#8217;s tests and make sure they pass. There are several ways to
+run the tests:</p>
+<ul class="simple">
+<li>From Julia, run <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.test" title="Base.Pkg.test"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.test(&quot;Foo&quot;)</span></code></a>: this will run your
+tests in a separate (new) <code class="docutils literal"><span class="pre">julia</span></code> process.</li>
+<li>From Julia, <code class="docutils literal"><span class="pre">include(&quot;runtests.jl&quot;)</span></code> from the package&#8217;s <code class="docutils literal"><span class="pre">test/</span></code> folder
+(it&#8217;s possible the file has a different name, look for one that runs all
+the tests): this allows you to run the tests repeatedly in the same session
+without reloading all the package code; for packages that take a while to
+load, this can be much faster. With this approach, you do have to do some
+extra work to make <a class="reference internal" href="../workflow-tips/#man-workflow-tips"><span class="std std-ref">changes in the package code</span></a>.</li>
+<li>From the shell, run <code class="docutils literal"><span class="pre">julia</span> <span class="pre">../test/runtests.jl</span></code> from within the package&#8217;s
+<code class="docutils literal"><span class="pre">src/</span></code> folder.</li>
+</ul>
+</li>
+<li><p class="first">Commit your changes: see <a class="reference external" href="https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository">https://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository</a>.</p>
+</li>
+<li><p class="first">Submit your changes: From the Julia prompt, type
+<code class="xref jl jl-func docutils literal"><span class="pre">Pkg.submit(&quot;Foo&quot;)</span></code>. This will push your changes to your
+GitHub fork, creating it if it doesn&#8217;t already exist. (If you encounter an
+error, <a class="reference internal" href="#man-pkg-dev-setup"><span class="std std-ref">make sure you&#8217;ve set up your SSH keys</span></a>.)
+Julia will then give you a hyperlink; open that link, edit the message, and
+then click &#8220;submit.&#8221; At that point, the package owner will be notified of
+your changes and may initiate discussion.</p>
+</li>
+<li><p class="first">The package owner may suggest additional improvements. To respond to those
+suggestions, you can easily update the pull request (this only works for
+changes that have not already been merged; for merged pull requests, make new
+changes by starting a new branch):</p>
+<ul class="simple">
+<li>If you&#8217;ve changed branches in the meantime, make sure you go back
+to the same branch with <code class="docutils literal"><span class="pre">git</span> <span class="pre">checkout</span> <span class="pre">fixbar</span></code> (from shell mode)
+or <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.checkout" title="Base.Pkg.checkout"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.checkout(&quot;Foo&quot;,</span> <span class="pre">&quot;fixbar&quot;)</span></code></a> (from the Julia
+prompt).</li>
+<li>As above, make your changes, run the tests, and commit your changes.</li>
+<li>From the shell, type <code class="docutils literal"><span class="pre">git</span> <span class="pre">push</span></code>.  This will add your new
+commit(s) to the same pull request; you should see them appear
+automatically on the page holding the discussion of your pull
+request.</li>
+</ul>
+<p>One potential type of change the owner may request is that you
+squash your commits.  See <a class="reference internal" href="#man-pkg-squash"><span class="std std-ref">Squashing</span></a> below.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="dirty-packages">
+<span id="man-pkg-dirty"></span><h3>Dirty packages<a class="headerlink" href="#dirty-packages" title="Permalink to this headline">¶</a></h3>
+<p>If you can&#8217;t change branches because the package manager complains
+that your package is dirty, it means you have some changes that have
+not been committed. From the shell, use <code class="docutils literal"><span class="pre">git</span> <span class="pre">diff</span></code> to see
+what these changes are; you can either discard them (<code class="docutils literal"><span class="pre">git</span> <span class="pre">checkout</span>
+<span class="pre">changedfile.jl</span></code>) or commit them before switching branches.  If you
+can&#8217;t easily resolve the problems manually, as a last resort you can
+delete the entire <code class="docutils literal"><span class="pre">&quot;Foo&quot;</span></code> folder and reinstall a fresh copy with
+<a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.add" title="Base.Pkg.add"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.add(&quot;Foo&quot;)</span></code></a>. Naturally, this deletes any changes you&#8217;ve
+made.</p>
+</div>
+<div class="section" id="making-a-branch-post-hoc">
+<span id="man-post-hoc-branching"></span><h3>Making a branch <em>post hoc</em><a class="headerlink" href="#making-a-branch-post-hoc" title="Permalink to this headline">¶</a></h3>
+<p>Especially for newcomers to git, one often forgets to create a new
+branch until after some changes have already been made.  If you
+haven&#8217;t yet staged or committed your changes, you can create a new
+branch with <code class="docutils literal"><span class="pre">git</span> <span class="pre">checkout</span> <span class="pre">-b</span> <span class="pre">&lt;newbranch&gt;</span></code> just as usual&#8212;git will
+kindly show you that some files have been modified and create the new
+branch for you.  <em>Your changes have not yet been committed to this new
+branch</em>, so the normal work rules still apply.</p>
+<p>However, if you&#8217;ve already made a commit to <code class="docutils literal"><span class="pre">master</span></code> but wish to go
+back to the official <code class="docutils literal"><span class="pre">master</span></code> (called <code class="docutils literal"><span class="pre">origin/master</span></code>), use the
+following procedure:</p>
+<ul class="simple">
+<li>Create a new branch. This branch will hold your changes.</li>
+<li>Make sure everything is committed to this branch.</li>
+<li><code class="docutils literal"><span class="pre">git</span> <span class="pre">checkout</span> <span class="pre">master</span></code>. If this fails, <em>do not</em> proceed further
+until you have resolved the problems, or you may lose your changes.</li>
+<li><em>Reset</em> <code class="docutils literal"><span class="pre">master</span></code> (your current branch) back to an earlier state
+with <code class="docutils literal"><span class="pre">git</span> <span class="pre">reset</span> <span class="pre">--hard</span> <span class="pre">origin/master</span></code> (see
+<a class="reference external" href="https://git-scm.com/blog/2011/07/11/reset.html">https://git-scm.com/blog/2011/07/11/reset.html</a>).</li>
+</ul>
+<p>This requires a bit more familiarity with git, so it&#8217;s much better to
+get in the habit of creating a branch at the outset.</p>
+</div>
+<div class="section" id="squashing-and-rebasing">
+<span id="man-pkg-squash"></span><h3>Squashing and rebasing<a class="headerlink" href="#squashing-and-rebasing" title="Permalink to this headline">¶</a></h3>
+<p>Depending on the tastes of the package owner (s)he may ask you to
+&#8220;squash&#8221; your commits. This is especially likely if your change is
+quite simple but your commit history looks like this:</p>
+<div class="highlight-none"><div class="highlight"><pre><span></span>WIP: add new 1-line whizbang function (currently breaks package)
+Finish whizbang function
+Fix typo in variable name
+Oops, don&#39;t forget to supply default argument
+Split into two 1-line functions
+Rats, forgot to export the second function
+...
+</pre></div>
+</div>
+<p>This gets into the territory of more advanced git usage, and you&#8217;re
+encouraged to do some reading
+(<a class="reference external" href="https://git-scm.com/book/en/v2/Git-Branching-Rebasing">https://git-scm.com/book/en/v2/Git-Branching-Rebasing</a>).  However,
+a brief summary of the procedure is as follows:</p>
+<ul class="simple">
+<li>To protect yourself from error, start from your <code class="docutils literal"><span class="pre">fixbar</span></code> branch
+and create a new branch with <code class="docutils literal"><span class="pre">git</span> <span class="pre">checkout</span> <span class="pre">-b</span> <span class="pre">fixbar_backup</span></code>.  Since
+you started from <code class="docutils literal"><span class="pre">fixbar</span></code>, this will be a copy. Now go back to
+the one you intend to modify with <code class="docutils literal"><span class="pre">git</span> <span class="pre">checkout</span> <span class="pre">fixbar</span></code>.</li>
+<li>From the shell, type <code class="docutils literal"><span class="pre">git</span> <span class="pre">rebase</span> <span class="pre">-i</span> <span class="pre">origin/master</span></code>.</li>
+<li>To combine commits, change <code class="docutils literal"><span class="pre">pick</span></code> to <code class="docutils literal"><span class="pre">squash</span></code> (for additional
+options, consult other sources). Save the file and close the editor
+window.</li>
+<li>Edit the combined commit message.</li>
+</ul>
+<p>If the rebase goes badly, you can go back to the beginning to try
+again like this:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">checkout</span> <span class="n">fixbar</span>
+<span class="n">git</span> <span class="n">reset</span> <span class="o">--</span><span class="n">hard</span> <span class="n">fixbar_backup</span>
+</pre></div>
+</div>
+<p>Now let&#8217;s assume you&#8217;ve rebased successfully. Since your <code class="docutils literal"><span class="pre">fixbar</span></code>
+repository has now diverged from the one in your GitHub fork, you&#8217;re
+going to have to do a <em>force push</em>:</p>
+<ul class="simple">
+<li>To make it easy to refer to your GitHub fork, create a &#8220;handle&#8221; for
+it with <code class="docutils literal"><span class="pre">git</span> <span class="pre">remote</span> <span class="pre">add</span> <span class="pre">myfork</span>
+<span class="pre">https://github.com/myaccount/Foo.jl.git</span></code>, where the URL comes from
+the &#8220;clone URL&#8221; on your GitHub fork&#8217;s page.</li>
+<li>Force-push to your fork with <code class="docutils literal"><span class="pre">git</span> <span class="pre">push</span> <span class="pre">myfork</span> <span class="pre">+fixbar</span></code>. The <code class="docutils literal"><span class="pre">+</span></code>
+indicates that this should replace the <code class="docutils literal"><span class="pre">fixbar</span></code> branch found at
+<code class="docutils literal"><span class="pre">myfork</span></code>.</li>
+</ul>
+</div>
+</div>
+<div class="section" id="creating-a-new-package">
+<h2>Creating a new Package<a class="headerlink" href="#creating-a-new-package" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="require-speaks-for-itself">
+<h3>REQUIRE speaks for itself<a class="headerlink" href="#require-speaks-for-itself" title="Permalink to this headline">¶</a></h3>
+<p>You should have a <code class="docutils literal"><span class="pre">REQUIRE</span></code> file in your package repository, with a bare minimum directive of what Julia
+version you expect your users to be running for the package to work. Putting a floor on what Julia
+version your package supports is done by simply adding <code class="docutils literal"><span class="pre">julia</span> <span class="pre">0.x</span></code> in this file. While this line is
+partly informational, it also has the consequence of whether <code class="docutils literal"><span class="pre">Pkg.update()</span></code> will update code found
+in <code class="docutils literal"><span class="pre">.julia</span></code> version directories. It will not update code found in version directories beneath the
+floor of what&#8217;s specified in your <code class="docutils literal"><span class="pre">REQUIRE</span></code>.</p>
+<p>As the development version <code class="docutils literal"><span class="pre">0.y</span></code> matures, you may find yourself using it more frequently, and wanting your
+package to support it. Be warned, the development branch of Julia is the land of breakage, and you can expect
+things to break. When you go about fixing whatever broke your package in the development <code class="docutils literal"><span class="pre">0.y</span></code> branch, you
+will likely find that you just broke your package on the stable version.</p>
+<p>There is a mechanism found in the <a class="reference external" href="https://github.com/JuliaLang/Compat.jl">Compat</a> package that will enable
+you to support both the stable version and breaking changes found in the development version. Should you decide
+to use this solution, you will need to add <code class="docutils literal"><span class="pre">Compat</span></code> to your <code class="docutils literal"><span class="pre">REQUIRE</span></code> file. In this case, you will still
+have <code class="docutils literal"><span class="pre">julia</span> <span class="pre">0.x</span></code> in your <code class="docutils literal"><span class="pre">REQUIRE</span></code>. The <code class="docutils literal"><span class="pre">x</span></code> is the floor version of what your package supports.</p>
+<p>You might also have no interest in supporting the development version of Julia. Just as you can add a floor
+to the version you expect your users to be on, you can set an upper bound. In this case, you would put
+<code class="docutils literal"><span class="pre">julia</span> <span class="pre">0.x</span> <span class="pre">0.y-</span></code> in your <code class="docutils literal"><span class="pre">REQUIRE</span></code> file.  The <code class="docutils literal"><span class="pre">-</span></code> at the end of the version number means pre-release
+versions of that specific version from the very first commit. By setting it as the ceiling, you mean the code
+supports everything up to but not including the ceiling version.</p>
+<p>Another scenario is that you are writing the bulk of the code for your package with Julia <code class="docutils literal"><span class="pre">0.y</span></code> and do
+not want to support the current stable version of Julia. If you choose to do this, simply add <code class="docutils literal"><span class="pre">julia</span> <span class="pre">0.y-</span></code>
+to your <code class="docutils literal"><span class="pre">REQUIRE</span></code>. Just remember to change the <code class="docutils literal"><span class="pre">julia</span> <span class="pre">0.y-</span></code> to <code class="docutils literal"><span class="pre">julia</span> <span class="pre">0.y</span></code> in your <code class="docutils literal"><span class="pre">REQUIRE</span></code> file once
+<code class="docutils literal"><span class="pre">0.y</span></code> is officially released. If you don&#8217;t edit the dash cruft you are suggesting that you support both the
+development and stable versions of the same version number! That would be madness.  See the
+<a class="reference external" href="#man-package-requirements">Requirements Specification</a> for the full format of <code class="docutils literal"><span class="pre">REQUIRE</span></code>.</p>
+</div>
+<div class="section" id="guidelines-for-naming-a-package">
+<h3>Guidelines for naming a package<a class="headerlink" href="#guidelines-for-naming-a-package" title="Permalink to this headline">¶</a></h3>
+<p>Package names should be sensible to most Julia users, <em>even to those who are
+not domain experts</em>. When you submit your package to METADATA, you can expect
+a little back and forth about the package name with collaborators, especially if it&#8217;s
+ambiguous or can be confused with something other than what it is. During this
+bike-shedding, it&#8217;s not uncommon to get a range of <em>different</em> name suggestions.
+These are only suggestions though, with the intent being to keep a tidy namespace in
+the curated METADATA repository. Since this repository belongs to the entire
+community, there will likely be a few collaborators who care your package name.
+Here are some guidelines to follow in naming your package:</p>
+<ol class="arabic simple">
+<li>Avoid jargon. In particular, avoid acronyms unless there is minimal
+possibility of confusion.<ul>
+<li>It&#8217;s ok to say <code class="docutils literal"><span class="pre">USA</span></code> if you&#8217;re talking about the USA.</li>
+<li>It&#8217;s not ok to say <code class="docutils literal"><span class="pre">PMA</span></code>, even if you&#8217;re talking about positive mental
+attitude.</li>
+</ul>
+</li>
+<li>Avoid using <code class="docutils literal"><span class="pre">Julia</span></code> in your package name.<ul>
+<li>It is usually clear from context and to your users that the package is a
+Julia package.</li>
+<li>Having Julia in the name can imply that the package is connected to, or
+endorsed by, contributors to the Julia language itself.</li>
+</ul>
+</li>
+<li>Packages that provide most of their functionality in association with a new
+type should have pluralized names.<ul>
+<li><code class="docutils literal"><span class="pre">DataFrames</span></code> provides the <code class="docutils literal"><span class="pre">DataFrame</span></code> type.</li>
+<li><code class="docutils literal"><span class="pre">BloomFilters</span></code> provides the <code class="docutils literal"><span class="pre">BloomFilter</span></code> type.</li>
+<li>In contrast, <code class="docutils literal"><span class="pre">JuliaParser</span></code> provides no new type, but instead new
+functionality in the <code class="docutils literal"><span class="pre">JuliaParser.parse()</span></code> function.</li>
+</ul>
+</li>
+<li>Err on the side of clarity, even if clarity seems long-winded to you.<ul>
+<li><code class="docutils literal"><span class="pre">RandomMatrices</span></code> is a less ambiguous name than <code class="docutils literal"><span class="pre">RndMat</span></code> or <code class="docutils literal"><span class="pre">RMT</span></code>,
+even though the latter are shorter.</li>
+</ul>
+</li>
+<li>A less systematic name may suit a package that implements one of several
+possible approaches to its domain.<ul>
+<li>Julia does not have a single comprehensive plotting package. Instead,
+<code class="docutils literal"><span class="pre">Gadfly</span></code>, <code class="docutils literal"><span class="pre">PyPlot</span></code>, <code class="docutils literal"><span class="pre">Winston</span></code> and other packages each implement a
+unique approach based on a particular design philosophy.</li>
+<li>In contrast, <code class="docutils literal"><span class="pre">SortingAlgorithms</span></code> provides a consistent interface to use
+many well-established sorting algorithms.</li>
+</ul>
+</li>
+<li>Packages that wrap external libraries or programs should be named after
+those libraries or programs.<ul>
+<li><code class="docutils literal"><span class="pre">CPLEX.jl</span></code> wraps the <code class="docutils literal"><span class="pre">CPLEX</span></code> library, which can be identified easily in
+a web search.</li>
+<li><code class="docutils literal"><span class="pre">MATLAB.jl</span></code> provides an interface to call the MATLAB engine from within Julia.</li>
+</ul>
+</li>
+</ol>
+</div>
+<div class="section" id="generating-the-package">
+<h3>Generating the package<a class="headerlink" href="#generating-the-package" title="Permalink to this headline">¶</a></h3>
+<p>Suppose you want to create a new Julia package called <code class="docutils literal"><span class="pre">FooBar</span></code>.  To get started, do
+<a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.generate" title="Base.Pkg.generate"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.generate(pkg,license)</span></code></a> where <code class="docutils literal"><span class="pre">pkg</span></code> is the new package name and <code class="docutils literal"><span class="pre">license</span></code> is the
+name of a license that the package generator knows about:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="s">&quot;FooBar&quot;</span><span class="p">,</span><span class="s">&quot;MIT&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Initializing</span> <span class="n">FooBar</span> <span class="n">repo</span><span class="p">:</span> <span class="o">/</span><span class="n">Users</span><span class="o">/</span><span class="n">stefan</span><span class="o">/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">FooBar</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Origin</span><span class="p">:</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">StefanKarpinski</span><span class="o">/</span><span class="n">FooBar</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Generating</span> <span class="n">LICENSE</span><span class="o">.</span><span class="n">md</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Generating</span> <span class="n">README</span><span class="o">.</span><span class="n">md</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Generating</span> <span class="n">src</span><span class="o">/</span><span class="n">FooBar</span><span class="o">.</span><span class="n">jl</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Generating</span> <span class="n">test</span><span class="o">/</span><span class="n">runtests</span><span class="o">.</span><span class="n">jl</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Generating</span> <span class="n">REQUIRE</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Generating</span> <span class="o">.</span><span class="n">travis</span><span class="o">.</span><span class="n">yml</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Generating</span> <span class="n">appveyor</span><span class="o">.</span><span class="n">yml</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Generating</span> <span class="o">.</span><span class="n">gitignore</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Committing</span> <span class="n">FooBar</span> <span class="n">generated</span> <span class="n">files</span>
+</pre></div>
+</div>
+<p>This creates the directory <code class="docutils literal"><span class="pre">~/.julia/v0.4/FooBar</span></code>, initializes it as a git repository, generates a bunch of files
+that all packages should have, and commits them to the repository:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">cd</span> <span class="o">~/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">FooBar</span> <span class="o">&amp;&amp;</span> <span class="n">git</span> <span class="n">show</span> <span class="o">--</span><span class="n">stat</span>
+
+<span class="n">commit</span> <span class="mi">84</span><span class="n">b8e266dae6de30ab9703150b3bf771ec7b6285</span>
+<span class="n">Author</span><span class="p">:</span> <span class="n">Stefan</span> <span class="n">Karpinski</span> <span class="o">&lt;</span><span class="n">stefan</span><span class="p">@</span><span class="n">karpinski</span><span class="o">.</span><span class="n">org</span><span class="o">&gt;</span>
+<span class="n">Date</span><span class="p">:</span>   <span class="n">Wed</span> <span class="n">Oct</span> <span class="mi">16</span> <span class="mi">17</span><span class="p">:</span><span class="mi">57</span><span class="p">:</span><span class="mi">58</span> <span class="mi">2013</span> <span class="o">-</span><span class="mi">0400</span>
+
+    <span class="n">FooBar</span><span class="o">.</span><span class="n">jl</span> <span class="n">generated</span> <span class="n">files</span><span class="o">.</span>
+
+        <span class="n">license</span><span class="p">:</span> <span class="n">MIT</span>
+        <span class="n">authors</span><span class="p">:</span> <span class="n">Stefan</span> <span class="n">Karpinski</span>
+        <span class="n">years</span><span class="p">:</span>   <span class="mi">2013</span>
+        <span class="n">user</span><span class="p">:</span>    <span class="n">StefanKarpinski</span>
+
+    <span class="n">Julia</span> <span class="n">Version</span> <span class="mf">0.3</span><span class="o">.</span><span class="mi">0</span><span class="o">-</span><span class="n">prerelease</span><span class="o">+</span><span class="mi">3217</span> <span class="p">[</span><span class="mi">5</span><span class="n">fcfb13</span><span class="o">*</span><span class="p">]</span>
+
+ <span class="o">.</span><span class="n">gitignore</span>       <span class="o">|</span>  <span class="mi">2</span> <span class="o">++</span>
+ <span class="o">.</span><span class="n">travis</span><span class="o">.</span><span class="n">yml</span>      <span class="o">|</span> <span class="mi">13</span> <span class="o">+++++++++++++</span>
+ <span class="n">LICENSE</span><span class="o">.</span><span class="n">md</span>       <span class="o">|</span> <span class="mi">22</span> <span class="o">+++++++++++++++++++++++</span>
+ <span class="n">README</span><span class="o">.</span><span class="n">md</span>        <span class="o">|</span>  <span class="mi">3</span> <span class="o">+++</span>
+ <span class="n">REQUIRE</span>          <span class="o">|</span>  <span class="mi">1</span> <span class="o">+</span>
+ <span class="n">appveyor</span><span class="o">.</span><span class="n">yml</span>     <span class="o">|</span> <span class="mi">34</span> <span class="o">++++++++++++++++++++++++++++++++++</span>
+ <span class="n">src</span><span class="o">/</span><span class="n">FooBar</span><span class="o">.</span><span class="n">jl</span>    <span class="o">|</span>  <span class="mi">5</span> <span class="o">+++++</span>
+ <span class="n">test</span><span class="o">/</span><span class="n">runtests</span><span class="o">.</span><span class="n">jl</span> <span class="o">|</span>  <span class="mi">5</span> <span class="o">+++++</span>
+ <span class="mi">8</span> <span class="n">files</span> <span class="n">changed</span><span class="p">,</span> <span class="mi">85</span> <span class="n">insertions</span><span class="p">(</span><span class="o">+</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>At the moment, the package manager knows about the MIT &#8220;Expat&#8221; License, indicated by <code class="docutils literal"><span class="pre">&quot;MIT&quot;</span></code>, the Simplified BSD License,
+indicated by <code class="docutils literal"><span class="pre">&quot;BSD&quot;</span></code>, and version 2.0 of the Apache Software License, indicated by <code class="docutils literal"><span class="pre">&quot;ASL&quot;</span></code>.  If you want to use a
+different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the
+<code class="docutils literal"><span class="pre">~/.julia/v0.4/PACKAGE/LICENSE.md</span></code> file after it has been generated.</p>
+<p>If you created a GitHub account and configured git to know about it, <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.generate" title="Base.Pkg.generate"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.generate()</span></code></a> will set an appropriate origin URL
+for you.  It will also automatically generate a <code class="docutils literal"><span class="pre">.travis.yml</span></code> file for using the <a class="reference external" href="https://travis-ci.org">Travis</a> automated
+testing service, and an <code class="docutils literal"><span class="pre">appveyor.yml</span></code> file for using <a class="reference external" href="https://www.appveyor.com">AppVeyor</a>.  You will have to enable testing on
+the Travis and AppVeyor websites for your package repository, but once you&#8217;ve done that, it will already have working tests.
+Of course, all the default testing does is verify that <code class="docutils literal"><span class="pre">using</span> <span class="pre">FooBar</span></code> in Julia works.</p>
+</div>
+<div class="section" id="making-your-package-available">
+<h3>Making Your Package Available<a class="headerlink" href="#making-your-package-available" title="Permalink to this headline">¶</a></h3>
+<p>Once you&#8217;ve made some commits and you&#8217;re happy with how <code class="docutils literal"><span class="pre">FooBar</span></code> is working, you may want to get some other people to try
+it out.  First you&#8217;ll need to create the remote repository and push your code to it; we don&#8217;t yet automatically do this for you,
+but we will in the future and it&#8217;s not too hard to figure out <a class="footnote-reference" href="#id6" id="id5">[3]</a>.  Once you&#8217;ve done this, letting people try out your code is
+as simple as sending them the URL of the published repo – in this case:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">StefanKarpinski</span><span class="o">/</span><span class="n">FooBar</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+</pre></div>
+</div>
+<p>For your package, it will be your GitHub user name and the name of your package, but you get the idea.
+People you send this URL to can use <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.clone" title="Base.Pkg.clone"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.clone()</span></code></a> to install the package and try it out:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">clone</span><span class="p">(</span><span class="s">&quot;git://github.com/StefanKarpinski/FooBar.jl.git&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Cloning</span> <span class="n">FooBar</span> <span class="n">from</span> <span class="n">git</span><span class="p">@</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="p">:</span><span class="n">StefanKarpinski</span><span class="o">/</span><span class="n">FooBar</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+</pre></div>
+</div>
+<table class="docutils footnote" frame="void" id="id6" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id5">[3]</a></td><td>Installing and using GitHub&#8217;s <a class="reference external" href="https://github.com/github/hub">&#8220;hub&#8221; tool</a> is highly recommended. It allows you to do things like run <code class="docutils literal"><span class="pre">hub</span> <span class="pre">create</span></code> in the package repo and have it automatically created via GitHub&#8217;s API.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="tagging-and-publishing-your-package">
+<h3>Tagging and Publishing Your Package<a class="headerlink" href="#tagging-and-publishing-your-package" title="Permalink to this headline">¶</a></h3>
+<p>Once you&#8217;ve decided that <code class="docutils literal"><span class="pre">FooBar</span></code> is ready to be registered as an official package, you can add it to your local copy
+of <code class="docutils literal"><span class="pre">METADATA</span></code> using <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.register" title="Base.Pkg.register"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.register()</span></code></a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s">&quot;FooBar&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Registering</span> <span class="n">FooBar</span> <span class="n">at</span> <span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">StefanKarpinski</span><span class="o">/</span><span class="n">FooBar</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Committing</span> <span class="n">METADATA</span> <span class="k">for</span> <span class="n">FooBar</span>
+</pre></div>
+</div>
+<p>This creates a commit in the <code class="docutils literal"><span class="pre">~/.julia/v0.4/METADATA</span></code> repo:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">cd</span> <span class="o">~/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">METADATA</span> <span class="o">&amp;&amp;</span> <span class="n">git</span> <span class="n">show</span>
+
+<span class="n">commit</span> <span class="mf">9f71</span><span class="n">f4becb05cadacb983c54a72eed744e5c019d</span>
+<span class="n">Author</span><span class="p">:</span> <span class="n">Stefan</span> <span class="n">Karpinski</span> <span class="o">&lt;</span><span class="n">stefan</span><span class="p">@</span><span class="n">karpinski</span><span class="o">.</span><span class="n">org</span><span class="o">&gt;</span>
+<span class="n">Date</span><span class="p">:</span>   <span class="n">Wed</span> <span class="n">Oct</span> <span class="mi">16</span> <span class="mi">18</span><span class="p">:</span><span class="mi">46</span><span class="p">:</span><span class="mi">02</span> <span class="mi">2013</span> <span class="o">-</span><span class="mi">0400</span>
+
+    <span class="n">Register</span> <span class="n">FooBar</span>
+
+<span class="n">diff</span> <span class="o">--</span><span class="n">git</span> <span class="n">a</span><span class="o">/</span><span class="n">FooBar</span><span class="o">/</span><span class="n">url</span> <span class="n">b</span><span class="o">/</span><span class="n">FooBar</span><span class="o">/</span><span class="n">url</span>
+<span class="nb">new</span> <span class="n">file</span> <span class="n">mode</span> <span class="mi">100644</span>
+<span class="n">index</span> <span class="mf">0000000.</span><span class="o">.</span><span class="mf">30e525</span><span class="n">e</span>
+<span class="o">---</span> <span class="o">/</span><span class="n">dev</span><span class="o">/</span><span class="n">null</span>
+<span class="o">+++</span> <span class="n">b</span><span class="o">/</span><span class="n">FooBar</span><span class="o">/</span><span class="n">url</span>
+<span class="p">@@</span> <span class="o">-</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span> <span class="o">+</span><span class="mi">1</span> <span class="p">@@</span>
+<span class="o">+</span><span class="n">git</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">StefanKarpinski</span><span class="o">/</span><span class="n">FooBar</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+</pre></div>
+</div>
+<p>This commit is only locally visible, however.  To make it visible to the Julia community, you need to merge your
+local <code class="docutils literal"><span class="pre">METADATA</span></code> upstream into the official repo.  The <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.publish" title="Base.Pkg.publish"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.publish()</span></code></a> command will fork the <code class="docutils literal"><span class="pre">METADATA</span></code> repository
+on GitHub, push your changes to your fork, and open a pull request:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">publish</span><span class="p">()</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Validating</span> <span class="n">METADATA</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">No</span> <span class="nb">new</span> <span class="n">package</span> <span class="n">versions</span> <span class="n">to</span> <span class="n">publish</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Submitting</span> <span class="n">METADATA</span> <span class="n">changes</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Forking</span> <span class="n">JuliaLang</span><span class="o">/</span><span class="n">METADATA</span><span class="o">.</span><span class="n">jl</span> <span class="n">to</span> <span class="n">StefanKarpinski</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Pushing</span> <span class="n">changes</span> <span class="n">as</span> <span class="n">branch</span> <span class="n">pull</span><span class="o">-</span><span class="n">request</span><span class="o">/</span><span class="n">ef45f54b</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">To</span> <span class="n">create</span> <span class="n">a</span> <span class="n">pull</span><span class="o">-</span><span class="n">request</span> <span class="n">open</span><span class="p">:</span>
+
+  <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">StefanKarpinski</span><span class="o">/</span><span class="n">METADATA</span><span class="o">.</span><span class="n">jl</span><span class="o">/</span><span class="n">compare</span><span class="o">/</span><span class="n">pull</span><span class="o">-</span><span class="n">request</span><span class="o">/</span><span class="n">ef45f54b</span>
+</pre></div>
+</div>
+<div class="admonition tip">
+<p class="first admonition-title">Tip</p>
+<p>If <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.publish" title="Base.Pkg.publish"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.publish()</span></code></a> fails with error:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">ERROR</span><span class="p">:</span> <span class="n">key</span> <span class="n">not</span> <span class="n">found</span><span class="p">:</span> <span class="s">&quot;token&quot;</span>
+</pre></div>
+</div>
+<p>then you may have encountered an issue from using the GitHub API on
+multiple systems. The solution is to delete the &#8220;Julia Package Manager&#8221;
+personal access token <a class="reference external" href="https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Ftokens">from your Github account</a> and try again.</p>
+<p class="last">Other failures may require you to circumvent <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.publish" title="Base.Pkg.publish"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.publish()</span></code></a> by
+<a class="reference external" href="https://help.github.com/articles/creating-a-pull-request">creating a pull request on GitHub</a>.
+See: <a class="reference internal" href="#man-manual-publish"><span class="std std-ref">Publishing METADATA Manually</span></a> below.</p>
+</div>
+<p>Once the package URL for <code class="docutils literal"><span class="pre">FooBar</span></code> is registered in the official <code class="docutils literal"><span class="pre">METADATA</span></code> repo, people know where
+to clone the package from, but there still aren&#8217;t any registered versions available. You can tag and
+register it with the <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.tag" title="Base.Pkg.tag"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.tag()</span></code></a> command:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">tag</span><span class="p">(</span><span class="s">&quot;FooBar&quot;</span><span class="p">)</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Tagging</span> <span class="n">FooBar</span> <span class="n">v0</span><span class="o">.</span><span class="mf">0.1</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Committing</span> <span class="n">METADATA</span> <span class="k">for</span> <span class="n">FooBar</span>
+</pre></div>
+</div>
+<p>This tags <code class="docutils literal"><span class="pre">v0.0.1</span></code> in the <code class="docutils literal"><span class="pre">FooBar</span></code> repo:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">cd</span> <span class="o">~/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">FooBar</span> <span class="o">&amp;&amp;</span> <span class="n">git</span> <span class="n">tag</span>
+<span class="n">v0</span><span class="o">.</span><span class="mf">0.1</span>
+</pre></div>
+</div>
+<p>It also creates a new version entry in your local <code class="docutils literal"><span class="pre">METADATA</span></code> repo for <code class="docutils literal"><span class="pre">FooBar</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">cd</span> <span class="o">~/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">FooBar</span> <span class="o">&amp;&amp;</span> <span class="n">git</span> <span class="n">show</span>
+<span class="n">commit</span> <span class="n">de77ee4dc0689b12c5e8b574aef7f70e8b311b0e</span>
+<span class="n">Author</span><span class="p">:</span> <span class="n">Stefan</span> <span class="n">Karpinski</span> <span class="o">&lt;</span><span class="n">stefan</span><span class="p">@</span><span class="n">karpinski</span><span class="o">.</span><span class="n">org</span><span class="o">&gt;</span>
+<span class="n">Date</span><span class="p">:</span>   <span class="n">Wed</span> <span class="n">Oct</span> <span class="mi">16</span> <span class="mi">23</span><span class="p">:</span><span class="mi">06</span><span class="p">:</span><span class="mi">18</span> <span class="mi">2013</span> <span class="o">-</span><span class="mi">0400</span>
+
+    <span class="n">Tag</span> <span class="n">FooBar</span> <span class="n">v0</span><span class="o">.</span><span class="mf">0.1</span>
+
+<span class="n">diff</span> <span class="o">--</span><span class="n">git</span> <span class="n">a</span><span class="o">/</span><span class="n">FooBar</span><span class="o">/</span><span class="n">versions</span><span class="o">/</span><span class="mf">0.0</span><span class="o">.</span><span class="mi">1</span><span class="o">/</span><span class="n">sha1</span> <span class="n">b</span><span class="o">/</span><span class="n">FooBar</span><span class="o">/</span><span class="n">versions</span><span class="o">/</span><span class="mf">0.0</span><span class="o">.</span><span class="mi">1</span><span class="o">/</span><span class="n">sha1</span>
+<span class="nb">new</span> <span class="n">file</span> <span class="n">mode</span> <span class="mi">100644</span>
+<span class="n">index</span> <span class="mf">0000000.</span><span class="o">.</span><span class="n">c1cb1c1</span>
+<span class="o">---</span> <span class="o">/</span><span class="n">dev</span><span class="o">/</span><span class="n">null</span>
+<span class="o">+++</span> <span class="n">b</span><span class="o">/</span><span class="n">FooBar</span><span class="o">/</span><span class="n">versions</span><span class="o">/</span><span class="mf">0.0</span><span class="o">.</span><span class="mi">1</span><span class="o">/</span><span class="n">sha1</span>
+<span class="p">@@</span> <span class="o">-</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span> <span class="o">+</span><span class="mi">1</span> <span class="p">@@</span>
+<span class="o">+</span><span class="mi">84</span><span class="n">b8e266dae6de30ab9703150b3bf771ec7b6285</span>
+</pre></div>
+</div>
+<p>The <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.tag" title="Base.Pkg.tag"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.tag()</span></code></a> command takes an optional second argument that is either an explicit version number object
+like <code class="docutils literal"><span class="pre">v&quot;0.0.1&quot;</span></code> or one of the symbols <code class="docutils literal"><span class="pre">:patch</span></code>, <code class="docutils literal"><span class="pre">:minor</span></code> or <code class="docutils literal"><span class="pre">:major</span></code>.  These increment the patch, minor
+or major version number of your package intelligently.</p>
+<p>Adding a tagged version of your package will expedite the official registration into METADATA.jl by collaborators. It is
+strongly recommended that you complete this process, regardless if your package is completely ready for an official release.</p>
+<p>As a general rule, packages should be tagged <code class="docutils literal"><span class="pre">0.0.1</span></code> first. Since Julia itself hasn&#8217;t achieved <code class="docutils literal"><span class="pre">1.0</span></code> status, it&#8217;s best to
+be conservative in your package&#8217;s tagged versions.</p>
+<p>As with <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.register" title="Base.Pkg.register"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.register()</span></code></a>, these changes to <code class="docutils literal"><span class="pre">METADATA</span></code> aren&#8217;t available to anyone else until they&#8217;ve been included upstream.
+Again, use the <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.publish" title="Base.Pkg.publish"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.publish()</span></code></a> command, which first makes sure that individual package repos have been tagged, pushes them
+if they haven&#8217;t already been, and then opens a pull request to <code class="docutils literal"><span class="pre">METADATA</span></code>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">publish</span><span class="p">()</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Validating</span> <span class="n">METADATA</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Pushing</span> <span class="n">FooBar</span> <span class="n">permanent</span> <span class="n">tags</span><span class="p">:</span> <span class="n">v0</span><span class="o">.</span><span class="mf">0.1</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Submitting</span> <span class="n">METADATA</span> <span class="n">changes</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Forking</span> <span class="n">JuliaLang</span><span class="o">/</span><span class="n">METADATA</span><span class="o">.</span><span class="n">jl</span> <span class="n">to</span> <span class="n">StefanKarpinski</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">Pushing</span> <span class="n">changes</span> <span class="n">as</span> <span class="n">branch</span> <span class="n">pull</span><span class="o">-</span><span class="n">request</span><span class="o">/</span><span class="mi">3</span><span class="n">ef4f5c4</span>
+<span class="n">INFO</span><span class="p">:</span> <span class="n">To</span> <span class="n">create</span> <span class="n">a</span> <span class="n">pull</span><span class="o">-</span><span class="n">request</span> <span class="n">open</span><span class="p">:</span>
+
+  <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">StefanKarpinski</span><span class="o">/</span><span class="n">METADATA</span><span class="o">.</span><span class="n">jl</span><span class="o">/</span><span class="n">compare</span><span class="o">/</span><span class="n">pull</span><span class="o">-</span><span class="n">request</span><span class="o">/</span><span class="mi">3</span><span class="n">ef4f5c4</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="publishing-metadata-manually">
+<span id="man-manual-publish"></span><h3>Publishing METADATA Manually<a class="headerlink" href="#publishing-metadata-manually" title="Permalink to this headline">¶</a></h3>
+<p>If <a class="reference internal" href="../../stdlib/pkg/#Base.Pkg.publish" title="Base.Pkg.publish"><code class="xref jl jl-func docutils literal"><span class="pre">Pkg.publish()</span></code></a> fails you can follow these instructions to
+manually publish your package.</p>
+<p>By &#8220;forking&#8221; the main METADATA repository, you can create a
+personal copy (of METADATA.jl) under your GitHub account. Once
+that copy exists, you can push your local changes to your copy
+(just like any other GitHub project).</p>
+<p>1. go to <a class="reference external" href="https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2FJuliaLang%2FMETADATA.jl%2Ffork">https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2FJuliaLang%2FMETADATA.jl%2Ffork</a> and create your own
+fork.</p>
+<p>2. add your fork as a remote repository for the METADATA
+repository on your local computer (in the terminal where USERNAME is
+your github username):</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">~/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">METADATA</span>
+<span class="n">git</span> <span class="n">remote</span> <span class="n">add</span> <span class="n">USERNAME</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">USERNAME</span><span class="o">/</span><span class="n">METADATA</span><span class="o">.</span><span class="n">jl</span><span class="o">.</span><span class="n">git</span>
+</pre></div>
+</div>
+<ol class="arabic" start="3">
+<li><p class="first">push your changes to your fork:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">push</span> <span class="n">USERNAME</span> <span class="n">metadata</span><span class="o">-</span><span class="n">v2</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<p>4. If all of that works, then go back to the GitHub page for your
+fork, and click the &#8220;pull request&#8221; link.</p>
+</div>
+</div>
+<div class="section" id="fixing-package-requirements">
+<h2>Fixing Package Requirements<a class="headerlink" href="#fixing-package-requirements" title="Permalink to this headline">¶</a></h2>
+<p>If you need to fix the registered requirements of an already-published package version, you can do so just by editing the metadata for that version, which will still have the same commit hash – the hash associated with a version is permanent:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">cd</span> <span class="o">~/.</span><span class="n">julia</span><span class="o">/</span><span class="n">v0</span><span class="o">.</span><span class="mi">4</span><span class="o">/</span><span class="n">METADATA</span><span class="o">/</span><span class="n">FooBar</span><span class="o">/</span><span class="n">versions</span><span class="o">/</span><span class="mf">0.0</span><span class="o">.</span><span class="mi">1</span> <span class="o">&amp;&amp;</span> <span class="n">cat</span> <span class="n">requires</span>
+<span class="n">julia</span> <span class="mf">0.3</span><span class="o">-</span>
+<span class="o">$</span> <span class="n">vi</span> <span class="n">requires</span>
+</pre></div>
+</div>
+<p>Since the commit hash stays the same, the contents of the <code class="docutils literal"><span class="pre">REQUIRE</span></code> file that will be checked out in the repo will <strong>not</strong> match the requirements in <code class="docutils literal"><span class="pre">METADATA</span></code> after such a change;
+this is unavoidable.
+When you fix the requirements in <code class="docutils literal"><span class="pre">METADATA</span></code> for a previous version of a package, however, you should also fix the <code class="docutils literal"><span class="pre">REQUIRE</span></code> file in the current version of the package.</p>
+</div>
+<div class="section" id="man-package-requirements">
+<span id="id7"></span><h2>Requirements Specification<a class="headerlink" href="#man-package-requirements" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal"><span class="pre">~/.julia/v0.4/REQUIRE</span></code> file, the <code class="docutils literal"><span class="pre">REQUIRE</span></code> file inside packages, and the <code class="docutils literal"><span class="pre">METADATA</span></code> package <code class="docutils literal"><span class="pre">requires</span></code> files use a simple line-based format to express the ranges of package versions which need to be installed.  Package <code class="docutils literal"><span class="pre">REQUIRE</span></code> and <code class="docutils literal"><span class="pre">METADATA</span> <span class="pre">requires</span></code> files should also include the range of versions of <code class="docutils literal"><span class="pre">julia</span></code> the package is expected to work with.</p>
+<p>Here&#8217;s how these files are parsed and interpreted.</p>
+<ul class="simple">
+<li>Everything after a <code class="docutils literal"><span class="pre">#</span></code> mark is stripped from each line as a comment.</li>
+<li>If nothing but whitespace is left, the line is ignored.</li>
+<li>If there are non-whitespace characters remaining, the line is a requirement and the is split on whitespace into words.</li>
+</ul>
+<p>The simplest possible requirement is just the name of a package name on a line by itself:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Distributions</span>
+</pre></div>
+</div>
+<p>This requirement is satisfied by any version of the <code class="docutils literal"><span class="pre">Distributions</span></code> package.
+The package name can be followed by zero or more version numbers in ascending order, indicating acceptable intervals of versions of that package.
+One version opens an interval, while the next closes it, and the next opens a new interval, and so on;
+if an odd number of version numbers are given, then arbitrarily large versions will satisfy;
+if an even number of version numbers are given, the last one is an upper limit on acceptable version numbers.
+For example, the line:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Distributions</span> <span class="mf">0.1</span>
+</pre></div>
+</div>
+<p>is satisfied by any version of <code class="docutils literal"><span class="pre">Distributions</span></code> greater than or equal to <code class="docutils literal"><span class="pre">0.1.0</span></code>.
+Suffixing a version with <code class="docutils literal"><span class="pre">-</span></code> allows any pre-release versions as well. For example:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Distributions</span> <span class="mf">0.1</span><span class="o">-</span>
+</pre></div>
+</div>
+<p>is satisfied by pre-release versions such as <code class="docutils literal"><span class="pre">0.1-dev</span></code> or <code class="docutils literal"><span class="pre">0.1-rc1</span></code>, or by any version greater than or equal to <code class="docutils literal"><span class="pre">0.1.0</span></code>.</p>
+<p>This requirement entry:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Distributions</span> <span class="mf">0.1</span> <span class="mf">0.2</span><span class="o">.</span><span class="mi">5</span>
+</pre></div>
+</div>
+<p>is satisfied by versions from <code class="docutils literal"><span class="pre">0.1.0</span></code> up to, but not including <code class="docutils literal"><span class="pre">0.2.5</span></code>.
+If you want to indicate that any <code class="docutils literal"><span class="pre">0.1.x</span></code> version will do, you will want to write:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Distributions</span> <span class="mf">0.1</span> <span class="mf">0.2</span><span class="o">-</span>
+</pre></div>
+</div>
+<p>If you want to start accepting versions after <code class="docutils literal"><span class="pre">0.2.7</span></code>, you can write:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Distributions</span> <span class="mf">0.1</span> <span class="mf">0.2</span><span class="o">-</span> <span class="mf">0.2</span><span class="o">.</span><span class="mi">7</span>
+</pre></div>
+</div>
+<p>If a requirement line has leading words that begin with <code class="docutils literal"><span class="pre">&#64;</span></code>, it is a system-dependent requirement.
+If your system matches these system conditionals, the requirement is included, if not, the requirement is ignored.
+For example:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">osx</span> <span class="n">Homebrew</span>
+</pre></div>
+</div>
+<p>will require the <code class="docutils literal"><span class="pre">Homebrew</span></code> package only on systems where the operating system is OS X.
+The system conditions that are currently supported are:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">windows</span>
+<span class="p">@</span><span class="n">unix</span>
+<span class="p">@</span><span class="n">osx</span>
+<span class="p">@</span><span class="n">linux</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal"><span class="pre">&#64;unix</span></code> condition is satisfied on all UNIX systems, including OS X, Linux and FreeBSD.
+Negated system conditionals are also supported by adding a <code class="docutils literal"><span class="pre">!</span></code> after the leading <code class="docutils literal"><span class="pre">&#64;</span></code>.
+Examples:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="o">!</span><span class="n">windows</span>
+<span class="p">@</span><span class="n">unix</span> <span class="p">@</span><span class="o">!</span><span class="n">osx</span>
+</pre></div>
+</div>
+<p>The first condition applies to any system but Windows and the second condition applies to any UNIX system besides OS X.</p>
+<p>Runtime checks for the current version of Julia can be made using the built-in
+<code class="docutils literal"><span class="pre">VERSION</span></code> variable, which is of type <code class="xref jl jl-class docutils literal"><span class="pre">VersionNumber</span></code>. Such code is
+occasionally necessary to keep track of new or deprecated functionality between
+various releases of Julia. Examples of runtime checks:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">VERSION</span> <span class="o">&lt;</span> <span class="n">v</span><span class="s">&quot;0.3-&quot;</span> <span class="c">#exclude all pre-release versions of 0.3</span>
+
+<span class="n">v</span><span class="s">&quot;0.2-&quot;</span> <span class="o">&lt;=</span> <span class="n">VERSION</span> <span class="o">&lt;</span> <span class="n">v</span><span class="s">&quot;0.3-&quot;</span> <span class="c">#get all 0.2 versions, including pre-releases, up to the above</span>
+
+<span class="n">v</span><span class="s">&quot;0.2&quot;</span> <span class="o">&lt;=</span> <span class="n">VERSION</span> <span class="o">&lt;</span> <span class="n">v</span><span class="s">&quot;0.3-&quot;</span> <span class="c">#To get only stable 0.2 versions (Note v&quot;0.2&quot; == v&quot;0.2.0&quot;)</span>
+
+<span class="n">VERSION</span> <span class="o">&gt;=</span> <span class="n">v</span><span class="s">&quot;0.2.1&quot;</span> <span class="c">#get at least version 0.2.1</span>
+</pre></div>
+</div>
+<p>See the section on <a class="reference internal" href="../strings/#man-version-number-literals"><span class="std std-ref">version number literals</span></a> for a more complete description.</p>
+</div>
+</div>
+
+
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../profile/" class="btn btn-neutral float-right" title="Profiling">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../embedding/" class="btn btn-neutral" title="Embedding Julia"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+    </p>
+  </div>
+
+  <a href="https://github.com/snide/sphinx_rtd_theme">Sphinx theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'../../',
+            VERSION:'0.4.8-pre',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="../../_static/jquery.js"></script>
+      <script type="text/javascript" src="../../_static/underscore.js"></script>
+      <script type="text/javascript" src="../../_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
