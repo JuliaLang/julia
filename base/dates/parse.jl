@@ -1,7 +1,7 @@
 ### Parsing utilities
 
-@generated function tryparse_internal{T<:TimeType, N}(::Type{T}, str::AbstractString, df::DateFormat{NTuple{N}}, raise::Bool=false)
-    token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in df.parameters[1].parameters]
+@generated function tryparse_internal{T<:TimeType, S, N}(::Type{T}, str::AbstractString, df::DateFormat{S, NTuple{N}}, raise::Bool=false)
+    token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in df.parameters[2].parameters]
 
     types = slot_order(T)
     num_types = length(types)
@@ -115,3 +115,70 @@ function rfixwidth(num, n)
     length(s) < n ? lpad(s, n, 0) : s[end - n + 1:end]
 end
 
+function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("yyyy-mm-dd\\THH:MM:SS.s")})
+    i, end_pos = start(s), endof(s)
+
+    dm = dd = Int64(1)
+    th = tm = ts = tms = Int64(0)
+
+    nv, i = tryparsenext_base10(s,i,end_pos,1)
+    dy = isnull(nv) ? (@goto error) : get(nv)
+    i > end_pos && @goto error
+
+    c, i = next(s,i)
+    c != '-' && @goto error
+    i > end_pos && @goto done
+
+    nv, i = tryparsenext_base10(s,i,end_pos,1,2)
+    dm = isnull(nv) ? (@goto error) : get(nv)
+    i > end_pos && @goto done
+
+    c, i = next(s,i)
+    c != '-' && @goto error
+    i > end_pos && @goto done
+
+    nv, i = tryparsenext_base10(s,i,end_pos,1,2)
+    dd = isnull(nv) ? (@goto error) : get(nv)
+    i > end_pos && @goto done
+
+    c, i = next(s,i)
+    c != 'T' && @goto error
+    i > end_pos && @goto done
+
+    nv, i = tryparsenext_base10(s,i,end_pos,1,2)
+    th = isnull(nv) ? (@goto error) : get(nv)
+    i > end_pos && @goto done
+
+    c, i = next(s,i)
+    c != ':' && @goto error
+    i > end_pos && @goto done
+
+    nv, i = tryparsenext_base10(s,i,end_pos,1,2)
+    tm = isnull(nv) ? (@goto error) : get(nv)
+    i > end_pos && @goto done
+
+    c, i = next(s,i)
+    c != ':' && @goto error
+    i > end_pos && @goto done
+
+    nv, i = tryparsenext_base10(s,i,end_pos,1,2)
+    ts = isnull(nv) ? (@goto error) : get(nv)
+    i > end_pos && @goto done
+
+    c, i = next(s,i)
+    c != '.' && @goto error
+    i > end_pos && @goto done
+
+    nv, j = tryparsenext_base10(s,i,end_pos,1,3)
+    tms = isnull(nv) ? (@goto error) : get(nv)
+    tms *= 10 ^ (3 - (j - i))
+    i = j
+
+    i > end_pos || @goto error
+
+    @label done
+    return DateTime(dy,dm,dd,th,tm,ts,tms)
+
+    @label error
+    throw(ArgumentError("Invalid DateTime string"))
+end
