@@ -1828,3 +1828,16 @@ let
     @test_throws DimensionMismatch broadcast(+, A, B, speye(N))
     @test_throws DimensionMismatch broadcast!(+, X, A, B, speye(N))
 end
+
+# Issue #19595 - broadcasting over sparse matrices with abstract eltype
+let x = sparse(eye(Real,3,3))
+    @test eltype(x) === Real
+    @test eltype(x + x) <: Real
+    @test eltype(x .+ x) <: Real
+    @test eltype(map(+, x, x)) <: Real
+    @test eltype(broadcast(+, x, x)) <: Real
+    @test eltype(x + x + x) <: Real
+    @test eltype(x .+ x .+ x) <: Real
+    @test eltype(map(+, map(+, x, x), x)) <: Real
+    @test eltype(broadcast(+, broadcast(+, x, x), x)) <: Real
+end
