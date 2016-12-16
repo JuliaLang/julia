@@ -102,7 +102,7 @@ Base.findmin(::Any)
 Base.findmin(::AbstractArray, ::Any)
 Base.findmax!
 Base.findmin!
-Base.sum(::Any)
+Base.sum
 Base.sum!
 Base.prod
 Base.prod!
