@@ -25,7 +25,7 @@ end
 """
 Information for parsing and formatting date time values.
 """
-immutable DateFormat{T<:Tuple}
+immutable DateFormat{S,T<:Tuple}
     tokens::T
     locale::DateLocale
 end
@@ -279,7 +279,8 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
         push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
     end
 
-    return DateFormat((tokens...), locale)
+    tokens_tuple = (tokens...)
+    return DateFormat{Symbol(f),typeof(tokens_tuple)}(tokens_tuple, locale)
 end
 
 function DateFormat(f::AbstractString, locale::AbstractString)
