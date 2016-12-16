@@ -19,14 +19,19 @@ help:
 	@echo "  check     to run linkcheck and doctests"
 
 clean:
-	-rm -rf _build/* deps/*
+	-rm -rf _build/* deps/* docbuild.log
 
 cleanall: clean
 
 html:
 	@echo "Building HTML documentation."
-# pipe to cat to work around issue #11727, redirection breaking on windows buildbot
-	$(JULIA_EXECUTABLE) make.jl -- deploy | cat 2>&1
+ifneq ($(OS),WINNT)
+	$(JULIA_EXECUTABLE) make.jl -- deploy
+else
+# work around issue #11727, windows output redirection breaking on buildbot
+	$(JULIA_EXECUTABLE) make.jl -- deploy > docbuild.log 2>&1
+	@cat docbuild.log
+endif
 	@echo "Build finished. The HTML pages are in _build/html."
 
 pdf:
