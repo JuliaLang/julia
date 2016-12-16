@@ -430,7 +430,7 @@ end
 if is_unix()
     let ps = Pipe[]
         try
-            for i = 1:100_000
+            for i = 1 : 100 * parse(Int, readchomp(`sh -c 'ulimit -n'`))
                 p = Pipe()
                 Base.link_pipe(p)
                 push!(ps, p)
