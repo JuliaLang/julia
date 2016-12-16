@@ -192,11 +192,13 @@ const SLOT_RULE = Dict{Char, Type}(
     's' => Millisecond,
 )
 
-slot_types(::Type{Date}) = (Year, Month, Day)
-slot_types(::Type{DateTime}) = (Year, Month, Day, Hour, Minute, Second, Millisecond)
+slot_order(::Type{Date}) = (Year, Month, Day)
+slot_order(::Type{DateTime}) = (Year, Month, Day, Hour, Minute, Second, Millisecond)
 
 slot_defaults(::Type{Date}) = (1, 1, 1)
 slot_defaults(::Type{DateTime}) = (1, 1, 1, 0, 0, 0, 0)
+
+slot_types{T<:TimeType}(::Type{T}) = typeof(slot_defaults(T))
 
 """
     DateFormat(format::AbstractString, locale="english", default_fields=(1,1,1,0,0,0,0)) -> DateFormat
