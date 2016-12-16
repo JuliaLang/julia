@@ -37,12 +37,12 @@ end
 
 # Customizing locale
 Dates.LOCALES["french"] = Dates.DateLocale(
-    ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
-     "août", "septembre", "octobre", "novembre", "décembre"],
-    ["janv","févr","mars","avril","mai","juin","juil","août",
-     "sept","oct","nov","déc"],
-    ["Lundi","Mardi","Mercredi","Jeudi",
-     "Vendredi","Samedi","Dimanche"],[""]
+    ["janvier", "février", "mars", "avril", "mai", "juin",
+     "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+    ["janv","févr","mars","avril","mai","juin",
+     "juil","août","sept","oct","nov","déc"],
+    ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"],
+    [""],
 )
 @test Dates.dayname(Nov;locale="french") == "Lundi"
 @test Dates.dayname(Jan;locale="french") == "Mardi"
