@@ -5,13 +5,22 @@ A type of token in a date time string
 
 each subtype must define
 
-    tryparsenext(t::TokenType, str, i, [locale])
+    tryparsenext(t::DatePart, str, i, len, [locale])
 
 and
 
-    format(io, t::TokenType, [locale])
+    format(io, t::TokenType, dt, [locale])
 """
 abstract AbstractDateToken
+
+# fallback to tryparsenext/format methods that don't care about locale
+@inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
+    tryparsenext(d, str, i, len)
+end
+
+@inline function format(io, d::AbstractDateToken, dt, locale)
+    format(io, d, dt)
+end
 
 """
 Information for parsing and formatting date time values.
@@ -31,13 +40,33 @@ end
 @inline min_width(d::DatePart) = d.fixed ? d.width : 1
 @inline max_width(d::DatePart) = d.fixed ? d.width : 0
 
-### Numeric tokens
+function _show_content{c}(io::IO, d::DatePart{c})
+    for i = 1:d.width
+        write(io, c)
+    end
+end
+
+function Base.show{c}(io::IO, d::DatePart{c})
+    write(io, "DatePart(")
+    _show_content(io, d)
+    write(io, ")")
+end
+
+### Parse tokens
 
 for c in "yYmdHMS"
     @eval begin
         @inline function tryparsenext(d::DatePart{$c}, str, i, len)
             tryparsenext_base10(str, i, len, min_width(d), max_width(d))
         end
+    end
+end
+
+for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
+    @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
+        word, i = tryparsenext_word(str, i, len, locale, max_width(d))
+        val = isnull(word) ? 0 : $fn(get(word), locale)
+        return Nullable{Int}(val == 0 ? nothing : val), i
     end
 end
 
@@ -49,46 +78,18 @@ end
     return ms, ii
 end
 
+
+### Format tokens
+
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
-    @eval function format(io, d::DatePart{$c}, dt, locale)
+    @eval function format(io, d::DatePart{$c}, dt)
         write(io, minwidth($fn(dt), d.width))
     end
 end
 
-# special cases
-
-function format(io, d::DatePart{'y'}, dt, locale)
-    write(io, rfixwidth(year(dt), d.width))
-end
-
-function format(io, d::DatePart{'s'}, dt, locale)
-    write(io, string(millisecond(dt)/1000)[3:end])
-end
-
-function _show_content{c}(io::IO, d::DatePart{c})
-    for i=1:d.width
-        write(io, c)
-    end
-end
-
-function Base.show{c}(io::IO, d::DatePart{c})
-    write(io, "DatePart(")
-    _show_content(io, d)
-    write(io, ")")
-end
-
-
-# fallback to tryparsenext methods that don't care about locale
-@inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
-    tryparsenext(d, str, i, len)
-end
-
-for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
-    @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
-        R = Nullable{Int}
-        word, i = tryparsenext_word(str, i, len, locale, max_width(d))
-        val = isnull(word) ? 0 : $fn(get(word), locale)
-        return Nullable{Int}(val == 0 ? nothing : val), i
+for (tok, fn) in zip("uU", [monthabbr, monthname])
+    @eval function format(io, d::DatePart{$tok}, dt, locale)
+        write(io, $fn(month(dt), locale))
     end
 end
 
@@ -98,16 +99,20 @@ for (tok, fn) in zip("eE", [dayabbr, dayname])
     end
 end
 
-for (tok, fn) in zip("uU", [monthabbr, monthname])
-    @eval function format(io, d::DatePart{$tok}, dt, locale::DateLocale)
-        write(io, $fn(month(dt), locale))
-    end
+function format(io, d::DatePart{'y'}, dt)
+    write(io, rfixwidth(year(dt), d.width))
+end
+
+function format(io, d::DatePart{'s'}, dt)
+    write(io, string(millisecond(dt)/1000)[3:end])
 end
 
 
 ### Delimiters
 
-immutable Delim{T, length} <: AbstractDateToken d::T end
+immutable Delim{T, length} <: AbstractDateToken
+    d::T
+end
 
 Delim(c::Char, n) = Delim{Char, n}(c)
 Delim(c::Char) = Delim(c,1)
@@ -140,15 +145,14 @@ end
     return R(0), i1
 end
 
-function format(io, d::Delim, str, i)
+function format(io, d::Delim, dt, locale)
     write(io, d.d)
 end
 
 function _show_content{N}(io::IO, d::Delim{Char, N})
     if d.d in keys(SLOT_RULE)
         for i=1:N
-            write(io, '\\')
-            write(io, d.d)
+            write(io, '\\', d.d)
         end
     else
         for i=1:N
@@ -350,16 +354,14 @@ Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
 Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(Date,dt,df)
 
-format(io, t, dt, locale) = format(io, t, dt)
-
-function format(io, dt::TimeType, fmt::DateFormat)
+function format(io::IO, dt::TimeType, fmt::DateFormat)
     for t in fmt.tokens
         format(io, t, dt, fmt.locale)
     end
 end
 
 function format(dt::TimeType, fmt::DateFormat)
-    sprint(io->format(io, dt, fmt))
+    sprint(io -> format(io, dt, fmt))
 end
 
 
@@ -401,20 +403,20 @@ format(dt::TimeType,f::AbstractString;locale=ENGLISH) = format(dt,DateFormat(f,l
 # show
 
 function Base.show(io::IO, dt::DateTime)
-    if millisecond(dt) == 0
-        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS")
+    df = if millisecond(dt) == 0
+        dateformat"YYYY-mm-dd\THH:MM:SS"
     else
-        format(io, dt, dateformat"YYYY-mm-dd\THH:MM:SS.s")
+        dateformat"YYYY-mm-dd\THH:MM:SS.s"
     end
+    format(io, dt, df)
 end
 
-const simple_date = DateFormat("YYYY-mm-dd")
 function Base.show(io::IO, dt::Date)
-    format(io, dt, simple_date)
+    format(io, dt, dateformat"YYYY-mm-dd")
 end
 
 function Base.string(dt::TimeType)
-    sprint(io->show(io, dt))
+    sprint(io -> show(io, dt))
 end
 
 # vectorized
