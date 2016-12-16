@@ -105,12 +105,13 @@ end
 
 function minwidth(num, n)
     s = string(abs(num))
-    s = length(s) < n ?  lpad(s, n, 0) : s
+    s = length(s) < n ? lpad(s, n, 0) : s
     num < 0 ? string('-', s) : s
 end
 
 function rfixwidth(num, n)
+    assert(num >= 0)
     s = string(num)
-    length(s) > n ? s[end-(n-1):end] : lpad(s, n, 0)
+    length(s) < n ? lpad(s, n, 0) : s[end - n + 1:end]
 end
 
