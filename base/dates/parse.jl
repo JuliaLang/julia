@@ -71,10 +71,10 @@ function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
 end
 
 @inline function tryparsenext_base10(str::AbstractString, i::Int, len::Int, min_width::Int=1, max_width::Int=0)
-    i > len && (return Nullable{Int}(), i)
+    i > len && (return Nullable{Int64}(), i)
     min_pos = min_width <= 0 ? i : i + min_width - 1
     max_pos = max_width <= 0 ? len : min(i + max_width - 1, len)
-    d::Int = 0
+    d::Int64 = 0
     @inbounds while i <= max_pos
         c, ii = next(str, i)
         if '0' <= c <= '9'
@@ -84,8 +84,8 @@ end
         end
         i = ii
     end
-    i > min_pos || (return Nullable{Int}(), i)
-    return Nullable{Int}(d), i
+    i > min_pos || (return Nullable{Int64}(), i)
+    return Nullable{Int64}(d), i
 end
 
 @inline function tryparsenext_word(str::AbstractString, i, len, locale, maxchars=0)
