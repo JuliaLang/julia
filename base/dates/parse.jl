@@ -1,8 +1,20 @@
 ### Parsing utilities
 
-@generated function tryparse_internal{N}(df::DateFormat{NTuple{N}}, str::AbstractString, raise::Bool=false)
+@generated function tryparse_internal{T<:TimeType, N}(::Type{T}, df::DateFormat{NTuple{N}}, str::AbstractString, raise::Bool=false)
+    token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in df.parameters[1].parameters]
+
+    types = slot_types(T)
+    num_types = length(types)
+    order = Vector{Int}(num_types)
+    for i = 1:num_types
+        order[i] = findfirst(token_types, types[i])
+    end
+
+    field_defaults = slot_defaults(T)
+    field_order = tuple(order...)
+
     quote
-        R = Nullable{NTuple{7,Int64}}
+        R = Nullable{NTuple{$num_types,Int64}}
         t = df.tokens
         l = df.locale
         pos, len = start(str), endof(str)
@@ -20,7 +32,7 @@
 
         @label done
         parts = Base.@ntuple $N val
-        return R(reorder_args(parts, df.field_order, df.field_defaults, err_idx)::NTuple{7,Int64})
+        return R(reorder_args(parts, $field_order, $field_defaults, err_idx)::NTuple{$num_types,Int64})
 
         @label error
         # Note: Keeping exception generation in separate function helps with performance
@@ -37,20 +49,6 @@ function gen_exception(tokens, err_idx, pos)
     end
 end
 
-@inline _create_timeobj(tup, T::Type{DateTime}) = T(tup...)
-@inline _create_timeobj(tup, T::Type{Date}) = T(tup[1:3]...)
-
-function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
-    R = Nullable{T}
-    nt = tryparse_internal(df, str, false)
-    Nullable{T}(isnull(nt) ? nothing : _create_timeobj(nt.value, T))
-end
-
-function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
-    nt = tryparse_internal(df, str, true)
-    _create_timeobj(nt.value, T)
-end
-
 function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{Ni}, valid_till)
     ntuple(Val{Ni}) do i
         if idx[i] == 0 || idx[i] > valid_till
@@ -59,6 +57,17 @@ function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{
             val[idx[i]]
         end
     end
+end
+
+function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
+    R = Nullable{T}
+    nt = tryparse_internal(T, df, str, false)
+    Nullable{T}(isnull(nt) ? nothing : T(nt.value...))
+end
+
+function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
+    nt = tryparse_internal(T, df, str, true)
+    T(nt.value...)
 end
 
 @inline function tryparsenext_base10(str::AbstractString, i::Int, len::Int, min_width::Int=1, max_width::Int=0)
