@@ -760,6 +760,102 @@ end
     @test quadgk(cos, 0,0.7,1, norm=abs)[1] ≈ sin(1)
 end
 
+module Test19626
+    using Base.Test
+    # Begin tests for 19626: Unitful compatibility.
+    # Define a mock physical quantity type
+    immutable MockQuantity{T} <: Number
+        val::T
+    end
+    Base.promote_rule{T,S}(::Type{MockQuantity{T}}, ::Type{MockQuantity{S}}) =
+        MockQuantity{promote_type(T,S)}
+    Base.convert{T}(::Type{MockQuantity{T}}, x::MockQuantity) = MockQuantity(T(x.val))
+
+    # Following definitions needed for quadgk to work with MockQuantity
+    import Base: +, -, *, abs, isnan, isinf, isless, <=
+    import Base.QuadGK: quadgk, do_quadgk
+    +(a::MockQuantity) = a
+    +(a::MockQuantity, b::MockQuantity) = MockQuantity(a.val+b.val)
+    -(a::MockQuantity) = MockQuantity(-a.val)
+    -(a::MockQuantity, b::MockQuantity) = MockQuantity(a.val-b.val)
+    *(a::MockQuantity, b::Number) = MockQuantity(a.val*b)
+    *(b::Number, a::MockQuantity) = MockQuantity(b*a.val)
+    abs(a::MockQuantity) = MockQuantity(abs(a.val))
+    isnan(a::MockQuantity) = isnan(a.val)
+    isinf(a::MockQuantity) = isinf(a.val)
+    isless(a::MockQuantity, b::MockQuantity) = isless(a.val, b.val)
+
+    # isless defn. necessary so that default abstol plays nicely with MockQuantity
+    isless(y::Number, x::MockQuantity) = y == 0 ? isless(MockQuantity(0), x) :
+        error("Dimensions issue")
+    isless(x::MockQuantity, y::Number) = y == 0 ? isless(x, MockQuantity(0)) :
+        error("Dimensions issue")
+
+    function quadgk{T}(f, a::MockQuantity{T}, b::MockQuantity{T},
+        c::MockQuantity{T}...; abstol=zero(T), reltol=sqrt(eps(T)),
+        maxevals=10^7, order=7, norm=vecnorm)
+
+        _do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals, norm)
+    end
+
+    # Necessary with infinite or semi-infinite intervals since !(MockQuantity <: Real)
+    # and do_quadgk tests if eltype(s) <: Real.
+    function _do_quadgk{Tw,T<:Real}(f, s::Array{MockQuantity{T},1}, n, ::Type{Tw},
+        abstol, reltol, maxevals, nrm)
+
+        s_no_u = reinterpret(T, s)
+        s1 = s_no_u[1]; s2 = s_no_u[end]; inf1 = isinf(s1); inf2 = isinf(s2)
+        if inf1 || inf2
+            if inf1 && inf2 # x = t/(1-t^2) coordinate transformation
+                return do_quadgk(t -> begin t2 = t*t; den = 1 / (1 - t2);
+            # following line: f expects units; result should be multiplied by
+            # units of s (which we have stripped off)
+                                    MockQuantity(f(MockQuantity(t*den))) *
+                                    (1+t2)*den*den; end,
+                                 map(x -> isinf(x) ? copysign(one(x), x) :
+                                     2x / (1+hypot(1,2x)), s_no_u),
+                                 n, T, abstol, reltol, maxevals, nrm)
+            end
+            s0,si = inf1 ? (s2,s1) : (s1,s2)
+            if si < 0 # x = s0 - t/(1-t)
+                return do_quadgk(t -> begin den = 1 / (1 - t);
+                                    MockQuantity(f(MockQuantity(s0 - t*den))) *
+                                    den*den; end,
+                                 reverse!(map(x -> 1 / (1 + 1 / (s0 - x)), s_no_u)),
+                                 n, T, abstol, reltol, maxevals, nrm)
+            else # x = s0 + t/(1-t)
+                return do_quadgk(t -> begin den = 1 / (1 - t);
+                                    MockQuantity(f(MockQuantity(s0 + t*den))) *
+                                    den*den; end,
+                                 map(x -> 1 / (1 + 1 / (x - s0)), s_no_u),
+                                 n, T, abstol, reltol, maxevals, nrm)
+            end
+        end
+        do_quadgk(f, s, n, Tw, abstol, reltol, maxevals, nrm)
+    end
+
+    _do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm) =
+        do_quadgk(f, s, n, Tw, abstol, reltol, maxevals, nrm)
+
+    # isapprox only needed for test purposes
+    Base.isapprox(a::MockQuantity, b::MockQuantity) = isapprox(a.val, b.val)
+
+    # Test physical quantity-valued functions
+    @test quadgk(x->MockQuantity(x), 0.0, 1.0)[1] ≈ MockQuantity(0.5)
+
+    # Test integration over an axis with units
+    @test quadgk(x->x.val, MockQuantity(0.0), MockQuantity(1.0))[1] ≈
+        MockQuantity(0.5)
+
+    # Test integration where the domain is infinite or semi-infinite
+    @test quadgk(x->exp(-x.val), MockQuantity(0.0), MockQuantity(Inf))[1] ≈
+        MockQuantity(1.0)
+    @test quadgk(x->exp(x.val), MockQuantity(-Inf), MockQuantity(0.0))[1] ≈
+        MockQuantity(1.0)
+    @test quadgk(x->exp(-abs(x.val)), MockQuantity(-Inf), MockQuantity(Inf))[1] ≈
+        MockQuantity(2.0)
+end
+
 @testset "subnormal flags" begin
     # Ensure subnormal flags functions don't segfault
     @test any(set_zero_subnormals(true) .== [false,true])
