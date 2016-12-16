@@ -3,7 +3,7 @@
 @generated function tryparse_internal{T<:TimeType, N}(::Type{T}, df::DateFormat{NTuple{N}}, str::AbstractString, raise::Bool=false)
     token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in df.parameters[1].parameters]
 
-    types = slot_types(T)
+    types = slot_order(T)
     num_types = length(types)
     order = Vector{Int}(num_types)
     for i = 1:num_types
@@ -12,9 +12,10 @@
 
     field_defaults = slot_defaults(T)
     field_order = tuple(order...)
+    tuple_type = slot_types(T)
 
     quote
-        R = Nullable{NTuple{$num_types,Int64}}
+        R = Nullable{$tuple_type}
         t = df.tokens
         l = df.locale
         pos, len = start(str), endof(str)
@@ -32,7 +33,7 @@
 
         @label done
         parts = Base.@ntuple $N val
-        return R(reorder_args(parts, $field_order, $field_defaults, err_idx)::NTuple{$num_types,Int64})
+        return R(reorder_args(parts, $field_order, $field_defaults, err_idx)::$tuple_type)
 
         @label error
         # Note: Keeping exception generation in separate function helps with performance
