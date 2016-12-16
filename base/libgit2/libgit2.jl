@@ -13,8 +13,6 @@ include("utils.jl")
 include("consts.jl")
 include("types.jl")
 include("error.jl")
-using .Error
-
 include("signature.jl")
 include("oid.jl")
 include("reference.jl")
@@ -34,6 +32,7 @@ include("status.jl")
 include("tree.jl")
 include("callbacks.jl")
 
+using .Error
 
 immutable State
     head::Oid

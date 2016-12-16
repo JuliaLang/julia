@@ -2,7 +2,7 @@
 
 module Error
 
-export GitError, @check
+export GitError
 
 @enum(Code, GIT_OK          = Cint(0),   # no error
             ERROR           = Cint(-01), # generic error
@@ -60,7 +60,7 @@ export GitError, @check
 
 immutable ErrorStruct
     message::Ptr{UInt8}
-    class::Class
+    class::Cint
 end
 
 immutable GitError <: Exception
@@ -74,30 +74,30 @@ function last_error()
     err = ccall((:giterr_last, :libgit2), Ptr{ErrorStruct}, ())
     if err != C_NULL
         err_obj   = unsafe_load(err)
-        err_class = err_obj.class
+        err_class = Class[err_obj.class][]
         err_msg   = unsafe_string(err_obj.message)
     else
-        err_class = Class(0)
+        err_class = Class[0][]
         err_msg = "No errors"
     end
     return (err_class, err_msg)
 end
 
-GitError(err::Integer) = GitError(Code(err))
-function GitError(err_code::Code)
+function GitError(code::Integer)
+    err_code = Code[code][]
     err_class, err_msg = last_error()
     return GitError(err_class, err_code, err_msg)
 end
 
+end # Error module
+
 macro check(git_func)
     quote
-        local err::Code
+        local err::Cint
         err = $(esc(git_func::Expr))
-        if err != GIT_OK
-            throw(GitError(err))
+        if err < 0
+            throw(Error.GitError(err))
         end
         err
     end
 end
-
-end # Error module
