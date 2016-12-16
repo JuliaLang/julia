@@ -107,7 +107,7 @@ stat(path...) = stat(joinpath(path...))
 """
     lstat(file)
 
-Like [`stat`](:func:`stat`), but for symbolic links gets the info for the link
+Like [`stat`](@ref), but for symbolic links gets the info for the link
 itself rather than the file it refers to.
 This function must be called on a file path rather than a file object or a file
 descriptor.
@@ -236,21 +236,21 @@ Gets the permissions of the owner of the file as a bitfield of
 | 02    | Write Permission   |
 | 04    | Read Permission    |
 
-For allowed arguments, see [`stat`](:func:`stat`).
+For allowed arguments, see [`stat`](@ref).
 """
 uperm(st::StatStruct) = UInt8((filemode(st) >> 6) & 0x7)
 
 """
     gperm(file)
 
-Like [`uperm`](:func:`uperm`) but gets the permissions of the group owning the file.
+Like [`uperm`](@ref) but gets the permissions of the group owning the file.
 """
 gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
 
 """
     operm(file)
 
-Like [`uperm`](:func:`uperm`) but gets the permissions for people who neither own the file nor are a member of
+Like [`uperm`](@ref) but gets the permissions for people who neither own the file nor are a member of
 the group owning the file
 """
 operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)

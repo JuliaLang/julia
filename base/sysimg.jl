@@ -4,7 +4,19 @@ baremodule Base
 
 using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), true)
-include = Core.include
+function include(path::AbstractString)
+    local result
+    if INCLUDE_STATE === 1
+        result = Core.include(path)
+    elseif INCLUDE_STATE === 2
+        result = _include(path)
+    elseif INCLUDE_STATE === 3
+        result = include_from_node1(path)
+    end
+    result
+end
+INCLUDE_STATE = 1 # include = Core.include
+
 include("coreio.jl")
 
 eval(x) = Core.eval(Base,x)
@@ -30,6 +42,7 @@ if false
 end
 
 ## Load essential files and libraries
+include("ctypes.jl")
 include("essentials.jl")
 include("base.jl")
 include("generator.jl")
@@ -67,9 +80,9 @@ end
 Symbol(x...) = Symbol(string(x...))
 
 # array structures
+include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
-include("array.jl")
 
 # Array convenience converting constructors
 (::Type{Array{T}}){T}(m::Integer) = Array{T,1}(Int(m))
@@ -101,7 +114,6 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
-include("float16.jl")
 
 # SIMD loops
 include("simdloop.jl")
@@ -114,9 +126,12 @@ include("reduce.jl")
 include("reshapedarray.jl")
 include("bitarray.jl")
 include("intset.jl")
+include("associative.jl")
 include("dict.jl")
 include("set.jl")
-include("iterator.jl")
+include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
 typealias StridedReshapedArray{T,N,A<:DenseArray} ReshapedArray{T,N,A}
@@ -201,7 +216,7 @@ include("permuteddimsarray.jl")
 using .PermutedDimsArrays
 
 let SOURCE_PATH = ""
-    global include = function(path)
+    global function _include(path)
         prev = SOURCE_PATH
         path = joinpath(dirname(prev),path)
         SOURCE_PATH = path
@@ -209,6 +224,7 @@ let SOURCE_PATH = ""
         SOURCE_PATH = prev
     end
 end
+INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
@@ -231,7 +247,7 @@ include("mpfr.jl")
 importall .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
-big(q::Rational) = big(num(q))//big(den(q))
+big(q::Rational) = big(numerator(q))//big(denominator(q))
 
 include("combinatorics.jl")
 
@@ -261,9 +277,7 @@ include("channels.jl")
 include("clusterserialize.jl")
 include("multi.jl")
 include("workerpool.jl")
-include("pmap.jl")
 include("managers.jl")
-include("asyncmap.jl")
 
 # code loading
 include("loading.jl")
@@ -345,6 +359,10 @@ import .Dates: Date, DateTime, now
 include("sparse/sparse.jl")
 importall .SparseArrays
 
+# parallel map
+include("asyncmap.jl")
+include("pmap.jl")
+
 # worker threads
 include("threadcall.jl")
 
@@ -371,7 +389,7 @@ function __init__()
     init_threadcall()
 end
 
-include = include_from_node1
+INCLUDE_STATE = 3 # include = include_from_node1
 include("precompile.jl")
 
 end # baremodule Base

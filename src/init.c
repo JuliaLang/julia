@@ -172,8 +172,7 @@ static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue 
 
 static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 {
-    if (handle != (uv_handle_t*)JL_STDOUT && handle != (uv_handle_t*)JL_STDERR)
-        jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
+    jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
 void jl_write_coverage_data(void);
@@ -213,6 +212,11 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         }
     }
 
+    // replace standard output streams with something that we can still print to
+    // after the finalizers from base/stream.jl close the TTY
+    JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
+    JL_STDERR = (uv_stream_t*) STDERR_FILENO;
+
     jl_gc_run_all_finalizers(ptls);
 
     uv_loop_t *loop = jl_global_event_loop();
@@ -223,16 +227,6 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
-    // close stdout and stderr last, since we like being
-    // able to show stuff (incl. printf's)
-    if (JL_STDOUT != (void*) STDOUT_FILENO &&
-        ((uv_handle_t*)JL_STDOUT)->type < UV_HANDLE_TYPE_MAX)
-        jl_uv_exitcleanup_add((uv_handle_t*)JL_STDOUT, &queue);
-    if (JL_STDERR != (void*) STDERR_FILENO &&
-        ((uv_handle_t*)JL_STDERR)->type < UV_HANDLE_TYPE_MAX)
-        jl_uv_exitcleanup_add((uv_handle_t*)JL_STDERR, &queue);
-    //uv_unref((uv_handle_t*)JL_STDOUT);
-    //uv_unref((uv_handle_t*)JL_STDERR);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         JL_TRY {
@@ -849,7 +843,7 @@ JL_DLLEXPORT void jl_get_system_hooks(void)
 
 void jl_get_builtins(void)
 {
-    jl_builtin_throw = core("throw");           jl_builtin_is = core("is");
+    jl_builtin_throw = core("throw");           jl_builtin_is = core("===");
     jl_builtin_typeof = core("typeof");         jl_builtin_sizeof = core("sizeof");
     jl_builtin_issubtype = core("issubtype");   jl_builtin_isa = core("isa");
     jl_builtin_typeassert = core("typeassert"); jl_builtin__apply = core("_apply");

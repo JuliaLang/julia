@@ -53,8 +53,24 @@ end
 """
     @task
 
-Wrap an expression in a [`Task`](:class:`Task`) without executing it, and return the [`Task`](:class:`Task`). This only
+Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
+
+```jldoctest
+julia> a1() = det(rand(1000, 1000));
+
+julia> b = @task a1();
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskdone(b)
+true
+```
 """
 macro task(ex)
     :(Task(()->$(esc(ex))))
@@ -63,27 +79,52 @@ end
 """
     current_task()
 
-Get the currently running [`Task`](:class:`Task`).
+Get the currently running [`Task`](@ref).
 """
 current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 
 """
-    istaskdone(task) -> Bool
+    istaskdone(t::Task) -> Bool
 
 Determine whether a task has exited.
+
+```jldoctest
+julia> a2() = det(rand(1000, 1000));
+
+julia> b = Task(a2);
+
+julia> istaskdone(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskdone(b)
+true
+```
 """
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
 
 """
-    istaskstarted(task) -> Bool
+    istaskstarted(t::Task) -> Bool
 
 Determine whether a task has started executing.
+
+```jldoctest
+julia> a3() = det(rand(1000, 1000));
+
+julia> b = Task(a3);
+
+julia> istaskstarted(b)
+false
+```
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
-    if is(t.storage, nothing)
+    if t.storage === nothing
         t.storage = ObjectIdDict()
     end
     (t.storage)::ObjectIdDict
@@ -124,7 +165,7 @@ end
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
     if !istaskdone(t)
-        if is(t.donenotify, nothing)
+        if t.donenotify === nothing
             t.donenotify = Condition()
         end
     end
@@ -181,7 +222,7 @@ function task_done_hook(t::Task)
         if !suppress_excp_printing(t)
             let bt = t.backtrace
                 # run a new task to print the error for us
-                @schedule with_output_color(:red, STDERR) do io
+                @schedule with_output_color(Base.error_color(), STDERR) do io
                     print(io, "ERROR (unhandled task failure): ")
                     showerror(io, result, bt)
                     println(io)
@@ -289,7 +330,7 @@ sync_begin() = task_local_storage(:SPAWNS, ([], get(task_local_storage(), :SPAWN
 
 function sync_end()
     spawns = get(task_local_storage(), :SPAWNS, ())
-    if is(spawns,())
+    if spawns === ()
         error("sync_end() without sync_begin()")
     end
     refs = spawns[1]
@@ -334,7 +375,7 @@ end
 
 function sync_add(r)
     spawns = get(task_local_storage(), :SPAWNS, ())
-    if !is(spawns,())
+    if spawns !== ()
         push!(spawns[1], r)
         if isa(r, Task)
             tls_r = get_task_tls(r)

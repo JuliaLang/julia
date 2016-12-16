@@ -21,13 +21,13 @@ LQPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQPackedQ{T,typeof(fac
     lqfact!(A) -> LQ
 
 Compute the LQ factorization of `A`, using the input
-matrix as a workspace. See also [`lq`](:func:`lq`).
+matrix as a workspace. See also [`lq`](@ref).
 """
 lqfact!{T<:BlasFloat}(A::StridedMatrix{T}) = LQ(LAPACK.gelqf!(A)...)
 """
     lqfact(A) -> LQ
 
-Compute the LQ factorization of `A`. See also [`lq`](:func:`lq`).
+Compute the LQ factorization of `A`. See also [`lq`](@ref).
 """
 lqfact{T<:BlasFloat}(A::StridedMatrix{T})  = lqfact!(copy(A))
 lqfact(x::Number) = lqfact(fill(x,1,1))
@@ -53,7 +53,7 @@ convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
 convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
 convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
 convert(::Type{Array}, A::LQ) = convert(Matrix, A)
-full(A::LQ) = convert(Array, A)
+full(A::LQ) = convert(AbstractArray, A)
 
 ctranspose{T}(A::LQ{T}) = QR{T,typeof(A.factors)}(A.factors', A.τ)
 

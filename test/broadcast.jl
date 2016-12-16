@@ -2,7 +2,8 @@
 
 module TestBroadcastInternals
 
-using Base.Broadcast: broadcast_shape, check_broadcast_shape, newindex, _bcs, _bcsm
+using Base.Broadcast: broadcast_indices, check_broadcast_indices,
+                      check_broadcast_shape, newindex, _bcs, _bcsm
 using Base: Test, OneTo
 
 @test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
@@ -18,28 +19,28 @@ using Base: Test, OneTo
 @test_throws DimensionMismatch _bcs((), (-1:1, 2:6), (-1:1, 2:5))
 @test_throws DimensionMismatch _bcs((), (-1:1, 2:5), (2, 2:5))
 
-@test @inferred(broadcast_shape(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(broadcast_shape(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
-@test @inferred(broadcast_shape(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
-@test @inferred(broadcast_shape(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
+@test @inferred(broadcast_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
+@test @inferred(broadcast_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
+@test @inferred(broadcast_indices(zeros(3),   zeros(3,4))) == (OneTo(3),OneTo(4))
+@test @inferred(broadcast_indices(zeros(3), zeros(1,4), zeros(1))) == (OneTo(3),OneTo(4))
 
-check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,5))
-check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,1))
-check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3))
-check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
-check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,5), 1)
-check_broadcast_shape((OneTo(3),OneTo(5)), 5, 2)
-@test_throws DimensionMismatch check_broadcast_shape((OneTo(3),OneTo(5)), zeros(2,5))
-@test_throws DimensionMismatch check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,4))
-@test_throws DimensionMismatch check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,4,2))
-@test_throws DimensionMismatch check_broadcast_shape((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
+check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5))
+check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,1))
+check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3))
+check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(3))
+check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), 1)
+check_broadcast_indices((OneTo(3),OneTo(5)), 5, 2)
+@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(2,5))
+@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4))
+@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,4,2))
+@test_throws DimensionMismatch check_broadcast_indices((OneTo(3),OneTo(5)), zeros(3,5), zeros(2))
+check_broadcast_indices((-1:1, 6:9), 1)
 
 check_broadcast_shape((-1:1, 6:9), (-1:1, 6:9))
 check_broadcast_shape((-1:1, 6:9), (-1:1, 1))
 check_broadcast_shape((-1:1, 6:9), (1, 6:9))
 @test_throws DimensionMismatch check_broadcast_shape((-1:1, 6:9), (-1, 6:9))
 @test_throws DimensionMismatch check_broadcast_shape((-1:1, 6:9), (-1:1, 6))
-check_broadcast_shape((-1:1, 6:9), 1)
 
 ci(x) = CartesianIndex(x)
 @test @inferred(newindex(ci((2,2)), (true, true), (-1,-1)))   == ci((2,2))
@@ -299,7 +300,6 @@ import Base.Meta: isexpr
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
 @test isa(broadcast(+, [true]), Array{Int,1})
-@test Base.promote_op(Float64, Bool) === Float64
 
 # issue #17304
 let foo = [[1,2,3],[4,5,6],[7,8,9]]
@@ -311,11 +311,11 @@ end
 let f17314 = x -> x < 0 ? false : x
     @test eltype(broadcast(f17314, 1:3)) === Int
     @test eltype(broadcast(f17314, -1:1)) === Integer
-    @test eltype(broadcast(f17314, Int[])) === Any
+    @test eltype(broadcast(f17314, Int[])) === Union{Bool,Int}
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects
-    @test takebuf_array(io) == [0x31,0x32,0x33,0x34,0x35]
+    @test take!(io) == [0x31,0x32,0x33,0x34,0x35]
 end
 
 # Issue 18176
@@ -327,3 +327,31 @@ end
 let A17984 = []
     @test isa(abs.(A17984), Array{Any,1})
 end
+
+# Issue #16966
+@test parse.(Int, "1") == 1
+@test parse.(Int, ["1", "2"]) == [1, 2]
+@test trunc.((Int,), [1.2, 3.4]) == [1, 3]
+@test abs.((1, -2)) == (1, 2)
+@test broadcast(+, 1.0, (0, -2.0)) == (1.0,-1.0)
+@test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
+@test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]
+
+# Ensure that even strange constructors that break `T(x)::T` work with broadcast
+immutable StrangeType18623 end
+StrangeType18623(x) = x
+StrangeType18623(x,y) = (x,y)
+@test @inferred(broadcast(StrangeType18623, 1:3)) == [1,2,3]
+@test @inferred(broadcast(StrangeType18623, 1:3, 4:6)) == [(1,4),(2,5),(3,6)]
+
+@test typeof(Int.(Number[1, 2, 3])) === typeof((x->Int(x)).(Number[1, 2, 3]))
+
+@test @inferred(broadcast(CartesianIndex, 1:2)) == [CartesianIndex(1), CartesianIndex(2)]
+@test @inferred(broadcast(CartesianIndex, 1:2, 3:4)) == [CartesianIndex(1,3), CartesianIndex(2,4)]
+
+# Issue 18622
+@test @inferred(broadcast(muladd, [1.0], [2.0], [3.0])) == [5.0]
+@test @inferred(broadcast(tuple, 1:3, 4:6, 7:9)) == [(1,4,7), (2,5,8), (3,6,9)]
+
+# 19419
+@test @inferred(broadcast(round, Int, [1])) == [1]

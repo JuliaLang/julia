@@ -4,7 +4,7 @@ module GMP
 
 export BigInt
 
-import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
+import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
@@ -194,7 +194,7 @@ function convert{T<:Signed}(::Type{T}, x::BigInt)
     else
         0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
         y = x % T
-        (x.size > 0) $ (y > 0) && throw(InexactError()) # catch overflow
+        (x.size > 0) ⊻ (y > 0) && throw(InexactError()) # catch overflow
         y
     end
 end
@@ -249,7 +249,7 @@ promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
                  (:gcd, :gcd), (:lcm, :lcm),
-                 (:&, :and), (:|, :ior), (:$, :xor))
+                 (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         function ($fJ)(x::BigInt, y::BigInt)
             z = BigInt()
@@ -279,7 +279,7 @@ function invmod(x::BigInt, y::BigInt)
 end
 
 # More efficient commutative operations
-for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
+for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:xor, :xor))
     @eval begin
         function ($fJ)(a::BigInt, b::BigInt, c::BigInt)
             z = BigInt()
@@ -518,10 +518,29 @@ oct(n::BigInt) = base( 8, n)
 dec(n::BigInt) = base(10, n)
 hex(n::BigInt) = base(16, n)
 
+bin(n::BigInt, pad::Int) = base( 2, n, pad)
+oct(n::BigInt, pad::Int) = base( 8, n, pad)
+dec(n::BigInt, pad::Int) = base(10, n, pad)
+hex(n::BigInt, pad::Int) = base(16, n, pad)
+
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
     unsafe_wrap(String, p, true)
+end
+
+function base(b::Integer, n::BigInt, pad::Integer)
+    s = base(b, n)
+    buf = IOBuffer()
+    if n < 0
+        s = s[2:end]
+        write(buf, '-')
+    end
+    for i in 1:pad-sizeof(s) # `s` is known to be ASCII, and `length` is slower
+        write(buf, '0')
+    end
+    write(buf, s)
+    String(buf)
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)

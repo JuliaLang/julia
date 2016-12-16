@@ -33,6 +33,8 @@
     julia_type_to_llvm;
     _IO_stdin_used;
     __ZN4llvm23createLowerSimdLoopPassEv;
+    LLVMAddLowerGCFramePass;
+    LLVMAddLowerPTLSPass;
 
     /* freebsd */
     environ;

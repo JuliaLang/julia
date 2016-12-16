@@ -19,7 +19,7 @@ types = [
 # Nullable{T}() = new(true)
 for T in types
     x = Nullable{T}()
-    @test x.isnull === true
+    @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
     @test eltype(x) === T
@@ -28,28 +28,28 @@ end
 # Nullable{T}(value::T) = new(false, value)
 for T in types
     x = Nullable{T}(zero(T))
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
     x = Nullable{T}(one(T))
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === one(T)
     @test eltype(x) === T
 end
 
-# Nullable{T}(value::T, isnull::Bool) = new(isnull, value)
+# Nullable{T}(value::T, hasvalue::Bool) = new(hasvalue, value)
 for T in types
-    x = Nullable{T}(zero(T),false)
-    @test x.isnull === false
+    x = Nullable{T}(zero(T), true)
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === zero(T)
     @test eltype(x) === T
 
-    x = Nullable{T}(zero(T),true)
-    @test x.isnull === true
+    x = Nullable{T}(zero(T), false)
+    @test x.hasvalue === false
     @test isa(x.value, T)
     @test eltype(Nullable{T}) === T
     @test eltype(x) === T
@@ -64,13 +64,13 @@ end
 for T in types
     v = zero(T)
     x = Nullable(v)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === v
 
     v = one(T)
     x = Nullable(v)
-    @test x.isnull === false
+    @test x.hasvalue === true
     @test isa(x.value, T)
     @test x.value === v
 end
@@ -83,31 +83,34 @@ for (i, T) in enumerate(types)
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
     show(io1, x1)
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}()", T)
+    @test String(take!(io1)) == @sprintf("Nullable{%s}()", T)
     show(io1, x2)
     showcompact(io2, get(x2))
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}(%s)", T, takebuf_string(io2))
+    @test String(take!(io1)) == @sprintf("Nullable{%s}(%s)", T, String(take!(io2)))
     show(io1, x3)
     showcompact(io2, get(x3))
-    @test takebuf_string(io1) == @sprintf("Nullable{%s}(%s)", T, takebuf_string(io2))
+    @test String(take!(io1)) == @sprintf("Nullable{%s}(%s)", T, String(take!(io2)))
 
     a1 = [x2]
     show(IOContext(io1, compact=false), a1)
     show(IOContext(io2, compact=false), x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 
     show(io1, a1)
     show(IOContext(io2, compact=true), x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 end
 
 module NullableTestEnum
-    io = IOBuffer()
-    @enum TestEnum a b
-    show(io, Nullable(a))
-    Base.Test.@test takebuf_string(io) == "Nullable{NullableTestEnum.TestEnum}(a)"
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+io = IOBuffer()
+@enum TestEnum a b
+show(io, Nullable(a))
+Base.Test.@test String(take!(io)) == "Nullable{$(curmod_prefix)TestEnum}(a)"
 end
 
 # showcompact(io::IO, x::Nullable)
@@ -118,19 +121,19 @@ for (i, T) in enumerate(types)
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
     showcompact(io1, x1)
-    @test takebuf_string(io1) == "#NULL"
+    @test String(take!(io1)) == "#NULL"
     showcompact(io1, x2)
     showcompact(io2, get(x2))
-    @test takebuf_string(io1) == takebuf_string(io2)
+    @test String(take!(io1)) == String(take!(io2))
     showcompact(io1, x3)
     showcompact(io2, get(x3))
-    @test takebuf_string(io1) == takebuf_string(io2)
+    @test String(take!(io1)) == String(take!(io2))
 
     a1 = [x2]
     showcompact(io1, a1)
     showcompact(io2, x2)
-    @test takebuf_string(io1) ==
-        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+    @test String(take!(io1)) ==
+        @sprintf("Nullable{%s}[%s]", string(T), String(take!(io2)))
 end
 
 # get(x::Nullable)
@@ -161,8 +164,35 @@ for T in types
     @test get(x3, zero(T)) === one(T)
 end
 
-# isnull(x::Nullable)
 for T in types
+    # unsafe_get(x::Nullable)
+    x1 = Nullable{T}()
+    x2 = Nullable(zero(T))
+    x3 = Nullable(one(T))
+    a = rand(T)
+    x4 = Nullable(a)
+
+    @test isa(unsafe_get(x1), T)
+    @test unsafe_get(x2) === zero(T)
+    @test unsafe_get(x3) === one(T)
+    @test unsafe_get(x4) === a
+
+    # unsafe_get(x)
+    x2 = zero(T)
+    x3 = one(T)
+    x4 = rand(T)
+
+    @test unsafe_get(x2) === zero(T)
+    @test unsafe_get(x3) === one(T)
+    @test unsafe_get(x4) === x4
+end
+
+@test_throws UndefRefError unsafe_get(Nullable())
+@test_throws UndefRefError unsafe_get(Nullable{String}())
+@test_throws UndefRefError unsafe_get(Nullable{Array}())
+
+for T in types
+    # isnull(x::Nullable)
     x1 = Nullable{T}()
     x2 = Nullable(zero(T))
     x3 = Nullable(one(T))
@@ -170,43 +200,18 @@ for T in types
     @test isnull(x1) === true
     @test isnull(x2) === false
     @test isnull(x3) === false
+
+    # isnull(x)
+    x1 = zero(T)
+    x2 = one(T)
+    x3 = rand(T)
+
+    @test isnull(x1) === false
+    @test isnull(x2) === false
+    @test isnull(x3) === false
 end
 
 @test isnull(Nullable())
-
-# function isequal{S, T}(x::Nullable{S}, y::Nullable{T})
-for T in types
-    x0 = Nullable()
-    x1 = Nullable{T}()
-    x2 = Nullable{T}()
-    x3 = Nullable(zero(T))
-    x4 = Nullable(one(T))
-
-    @test isequal(x0, x1) === true
-    @test isequal(x0, x2) === true
-    @test isequal(x0, x3) === false
-    @test isequal(x0, x4) === false
-
-    @test isequal(x1, x1) === true
-    @test isequal(x1, x2) === true
-    @test isequal(x1, x3) === false
-    @test isequal(x1, x4) === false
-
-    @test isequal(x2, x1) === true
-    @test isequal(x2, x2) === true
-    @test isequal(x2, x3) === false
-    @test isequal(x2, x4) === false
-
-    @test isequal(x3, x1) === false
-    @test isequal(x3, x2) === false
-    @test isequal(x3, x3) === true
-    @test isequal(x3, x4) === false
-
-    @test isequal(x4, x1) === false
-    @test isequal(x4, x2) === false
-    @test isequal(x4, x3) === false
-    @test isequal(x4, x4) === true
-end
 
 # function =={S, T}(x::Nullable{S}, y::Nullable{T})
 for T in types
@@ -279,6 +284,74 @@ for T in types
     @test get(x1.v, one(T)) === one(T)
 end
 
+# Operators
+TestTypes = Union{Base.NullSafeTypes, BigInt, BigFloat,
+                  Complex{Int}, Complex{Float64}, Complex{BigFloat},
+                  Rational{Int}, Rational{BigInt}}.types
+for S in TestTypes, T in TestTypes
+    u0 = zero(S)
+    u1 = one(S)
+    if S <: AbstractFloat
+        u2 = S(NaN)
+    elseif S <: Complex && S.parameters[1] <: AbstractFloat
+        u2 = S(NaN, NaN)
+    else
+        u2 = u1
+    end
+
+    v0 = zero(T)
+    v1 = one(T)
+    if T <: AbstractFloat
+        v2 = T(NaN)
+    elseif T <: Complex && T.parameters[1] <: AbstractFloat
+        v2 = T(NaN, NaN)
+    else
+        v2 = v1
+    end
+
+    for u in (u0, u1, u2), v in (v0, v1, v2)
+        # function isequal(x::Nullable, y::Nullable)
+        @test isequal(Nullable(u), Nullable(v)) === isequal(u, v)
+        @test isequal(Nullable(u), Nullable(u)) === true
+        @test isequal(Nullable(v), Nullable(v)) === true
+
+        @test isequal(Nullable(u), Nullable(v, false)) === false
+        @test isequal(Nullable(u, false), Nullable(v)) === false
+        @test isequal(Nullable(u, false), Nullable(v, false)) === true
+
+        @test isequal(Nullable(u), Nullable{T}()) === false
+        @test isequal(Nullable{S}(), Nullable(v)) === false
+        @test isequal(Nullable{S}(), Nullable{T}()) === true
+
+        @test isequal(Nullable(u), Nullable()) === false
+        @test isequal(Nullable(), Nullable(v)) === false
+        @test isequal(Nullable{S}(), Nullable()) === true
+        @test isequal(Nullable(), Nullable{T}()) === true
+        @test isequal(Nullable(), Nullable()) === true
+
+        # function isless(x::Nullable, y::Nullable)
+        if S <: Real && T <: Real
+            @test isless(Nullable(u), Nullable(v)) === isless(u, v)
+            @test isless(Nullable(u), Nullable(u)) === false
+            @test isless(Nullable(v), Nullable(v)) === false
+
+            @test isless(Nullable(u), Nullable(v, false)) === true
+            @test isless(Nullable(u, false), Nullable(v)) === false
+            @test isless(Nullable(u, false), Nullable(v, false)) === false
+
+            @test isless(Nullable(u), Nullable{T}()) === true
+            @test isless(Nullable{S}(), Nullable(v)) === false
+            @test isless(Nullable{S}(), Nullable{T}()) === false
+
+            @test isless(Nullable(u), Nullable()) === true
+            @test isless(Nullable(), Nullable(v)) === false
+            @test isless(Nullable{S}(), Nullable()) === false
+            @test isless(Nullable(), Nullable{T}()) === false
+            @test isless(Nullable(), Nullable()) === false
+        end
+    end
+end
+
 # issue #9462
 for T in types
     @test isa(convert(Nullable{Number}, Nullable(one(T))), Nullable{Number})
@@ -317,3 +390,8 @@ end
 
 # issue #11675
 @test repr(Nullable()) == "Nullable{Union{}}()"
+
+# issue #19270
+let f19270{S,T}(x::S, y::T) = Base.promote_op(^, S, T)
+    @test f19270(Nullable(0.0f0), Nullable(BigInt(0))) == Nullable{Float32}
+end

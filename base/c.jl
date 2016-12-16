@@ -6,28 +6,6 @@ import Core.Intrinsics: cglobal, box
 
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
-"""
-    Ptr{T}
-
-A memory address referring to data of type `T`.  However, there is no guarantee that the
-memory is actually valid, or that it actually represents data of the specified type.
-"""
-Ptr
-
-"""
-    Ref{T}
-
-An object that safely references data of type `T`. This type is guaranteed to point to
-valid, Julia-allocated memory of the correct type. The underlying data is protected from
-freeing by the garbage collector as long as the `Ref` itself is referenced.
-
-When passed as a `ccall` argument (either as a `Ptr` or `Ref` type), a `Ref` object will be
-converted to a native pointer to the data it references.
-
-There is no invalid (NULL) `Ref`.
-"""
-Ref
-
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
     typealias Cchar Int8
 else
@@ -40,36 +18,6 @@ Equivalent to the native `char` c-type.
 """
 Cchar
 
-"""
-    Cuchar
-
-Equivalent to the native `unsigned char` c-type (`UInt8`).
-"""
-typealias Cuchar UInt8
-"""
-    Cshort
-
-Equivalent to the native `signed short` c-type (`Int16`).
-"""
-typealias Cshort Int16
-"""
-    Cushort
-
-Equivalent to the native `unsigned short` c-type (`UInt16`).
-"""
-typealias Cushort UInt16
-"""
-    Cint
-
-Equivalent to the native `signed int` c-type (`Int32`).
-"""
-typealias Cint Int32
-"""
-    Cuint
-
-Equivalent to the native `unsigned int` c-type (`UInt32`).
-"""
-typealias Cuint UInt32
 if is_windows()
     typealias Clong Int32
     typealias Culong UInt32
@@ -97,61 +45,6 @@ Culong
 Equivalent to the native `wchar_t` c-type (`Int32`).
 """
 Cwchar_t
-
-"""
-    Cptrdiff_t
-
-Equivalent to the native `ptrdiff_t` c-type (`Int`).
-"""
-typealias Cptrdiff_t Int
-"""
-    Csize_t
-
-Equivalent to the native `size_t` c-type (`UInt`).
-"""
-typealias Csize_t UInt
-"""
-    Cssize_t
-
-Equivalent to the native `ssize_t` c-type.
-"""
-typealias Cssize_t Int
-"""
-    Cintmax_t
-
-Equivalent to the native `intmax_t` c-type (`Int64`).
-"""
-typealias Cintmax_t Int64
-"""
-    Cuintmax_t
-
-Equivalent to the native `uintmax_t` c-type (`UInt64`).
-"""
-typealias Cuintmax_t UInt64
-"""
-    Clonglong
-
-Equivalent to the native `signed long long` c-type (`Int64`).
-"""
-typealias Clonglong Int64
-"""
-    Culonglong
-
-Equivalent to the native `unsigned long long` c-type (`UInt64`).
-"""
-typealias Culonglong UInt64
-"""
-    Cfloat
-
-Equivalent to the native `float` c-type (`Float32`).
-"""
-typealias Cfloat Float32
-"""
-    Cdouble
-
-Equivalent to the native `double` c-type (`Float64`).
-"""
-typealias Cdouble Float64
 
 if !is_windows()
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
@@ -274,7 +167,7 @@ transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, 
 function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
-    takebuf_array(buf)
+    take!(buf)
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, src.data)
@@ -294,24 +187,24 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
                 push!(dst, a)
                 a = b; continue
             elseif a < 0xe0 # 2-byte UTF-8
-                push!(dst, 0x3080 $ (UInt16(a) << 6) $ b)
+                push!(dst, xor(0x3080, UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
                 c = src[i += 1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
-                    push!(dst, 0x2080 $ (UInt16(a) << 12) $ (UInt16(b) << 6) $ c)
+                    push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
                 elseif i < n
                     d = src[i += 1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
-                        push!(dst, 0x2080 $ (UInt16(b) << 12) $ (UInt16(c) << 6) $ d)
+                        push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
                         push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   0xdc80 $ (UInt16(c & 0xf) << 6) $ d)
+                                   xor(0xdc80, UInt16(c & 0xf) << 6, d))
                     end
                 else # too short
                     push!(dst, a, b, c)
@@ -380,7 +273,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
                 a += 0x2840
                 dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
                 dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
-                dst[j += 1] = 0xf0 $ ((((a % UInt8) << 4) & 0x3f) $ (b >> 6) % UInt8)
+                dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
                 dst[j += 1] = 0x80 | ((b % UInt8) & 0x3f)
             else
                 dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)

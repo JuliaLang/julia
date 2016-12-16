@@ -23,12 +23,12 @@ function deepcopy_internal(x::SimpleVector, stackdict::ObjectIdDict)
 end
 
 function deepcopy_internal(x::ANY, stackdict::ObjectIdDict)
-    if haskey(stackdict, x)
-        return stackdict[x]
-    end
     T = typeof(x)::DataType
     nf = nfields(T)
     (isbits(T) || nf == 0) && return x
+    if haskey(stackdict, x)
+        return stackdict[x]
+    end
     y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
     if T.mutable
         stackdict[x] = y
@@ -55,9 +55,13 @@ function _deepcopy_array_t(x::ANY, T, stackdict::ObjectIdDict)
     end
     dest = similar(x)
     stackdict[x] = dest
-    for i=1:length(x)
-        if isassigned(x,i)
-            arrayset(dest, deepcopy_internal(x[i], stackdict), i)
+    for i = 1:(length(x)::Int)
+        if ccall(:jl_array_isassigned, Cint, (Any, Csize_t), x, i-1) != 0
+            xi = ccall(:jl_arrayref, Any, (Any, Csize_t), x, i-1)
+            if !isbits(typeof(xi))
+                xi = deepcopy_internal(xi, stackdict)
+            end
+            ccall(:jl_arrayset, Void, (Any, Any, Csize_t), dest, xi, i-1)
         end
     end
     return dest

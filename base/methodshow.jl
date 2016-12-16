@@ -87,7 +87,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
                 # TODO: more accurate test? (tn.name === "#" name)
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -110,7 +110,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
             join(io, kwargs, ", ", ", ")
         end
     end
-    print(io, ")")
+    print(io, ") in ", m.module)
     if line > 0
         print(io, " at ", file, ":", line)
     end
@@ -208,7 +208,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)

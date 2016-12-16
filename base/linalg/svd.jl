@@ -31,6 +31,26 @@ The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`
 If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
 ``M \\times \\min(M, N)`` for a thin SVD.
+
+# Example
+```jldoctest
+julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> F = svdfact(A)
+Base.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],[3.0,2.23607,2.0,0.0],[-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
+
+julia> F[:U] * diagm(F[:S]) * F[:Vt]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+```
 """
 function svdfact{T}(A::StridedVecOrMat{T}; thin::Bool = true)
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
@@ -49,9 +69,34 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
 ``M \\times \\min(M, N)`` for a thin SVD.
 
-`svd` is a wrapper around [`svdfact`](:func:`svdfact(A)`), extracting all parts
+`svd` is a wrapper around [`svdfact`](@ref), extracting all parts
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
 efficient.
+
+# Example
+
+```jldoctest
+julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> U, S, V = svd(A)
+(
+[0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],
+
+[3.0,2.23607,2.0,0.0],
+[-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
+
+julia> U*diagm(S)*V'
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+```
 """
 function svd(A::Union{Number, AbstractArray}; thin::Bool=true)
     F = svdfact(A, thin=thin)
@@ -84,6 +129,24 @@ svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
     svdvals(A)
 
 Returns the singular values of `A`.
+
+# Example
+
+```jldoctest
+julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
+4×5 Array{Float64,2}:
+ 1.0  0.0  0.0  0.0  2.0
+ 0.0  0.0  3.0  0.0  0.0
+ 0.0  0.0  0.0  0.0  0.0
+ 0.0  2.0  0.0  0.0  0.0
+
+julia> svdvals(A)
+4-element Array{Float64,1}:
+ 3.0
+ 2.23607
+ 2.0
+ 0.0
+```
 """
 function svdvals{T}(A::AbstractMatrix{T})
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
@@ -115,7 +178,7 @@ GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{
 """
     svdfact!(A, [thin=true]) -> SVD
 
-`svdfact!` is the same as [`svdfact`](:func:`svdfact`), but saves space by
+`svdfact!` is the same as [`svdfact`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy.
 
 If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
@@ -165,7 +228,7 @@ end
 """
     svd(A, B) -> U, V, Q, D1, D2, R0
 
-Wrapper around [`svdfact`](:func:`svdfact(A, B)`) extracting all parts of the
+Wrapper around [`svdfact`](@ref) extracting all parts of the
 factorization to a tuple. Direct use of
 `svdfact` is therefore generally more efficient. The function returns the generalized SVD of
 `A` and `B`, returning `U`, `V`, `Q`, `D1`, `D2`, and `R0` such that `A = U*D1*R0*Q'` and `B =
@@ -241,4 +304,4 @@ convert(::Type{AbstractMatrix}, F::SVD) = (F.U * Diagonal(F.S)) * F.Vt
 convert(::Type{AbstractArray}, F::SVD) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::SVD) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::SVD) = convert(Matrix, F)
-full(F::SVD) = convert(Array, F)
+full(F::SVD) = convert(AbstractArray, F)

@@ -4,13 +4,6 @@ Julia v0.6.0 Release Notes
 New language features
 ---------------------
 
-  * The REPL now supports something called *prompt pasting*.
-    This activates when pasting text that starts with `julia> ` into the REPL.
-    In that case, only expressions starting with `julia> ` are parsed, the rest are removed.
-    This makes it possible to paste a chunk of code that has been copied from a REPL session
-    without having to scrub away prompts and outputs.
-    This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
-
 Language changes
 ----------------
 
@@ -18,6 +11,16 @@ Language changes
     This can be changed back to the original colors by setting the environment variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
     One way of doing this is by adding for example `ENV["JULIA_INFO_COLOR"] = :blue` and `ENV["JULIA_WARN_COLOR"] = :red` to the `.juliarc.jl` file.
     For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
+
+  * Multiline and singleline nonstandard command literals have been added. A
+    nonstandard command literal is like a nonstandard string literal, but the
+    syntax uses backquotes (``` ` ```) instead of double quotes, and the
+    resulting macro called is suffixed with `_cmd`. For instance, the syntax
+    ``` q`xyz` ``` is equivalent to `@q_cmd "xyz"`. ([#18644])
+
+  * Nonstandard string and command literals can now be qualified with their
+    module. For instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`.
+    Previously, this syntax parsed as an implicit multiplication. ([#18690])
 
 Breaking changes
 ----------------
@@ -33,10 +36,54 @@ This section lists changes that do not have deprecation warnings.
     for `real(z) < 0`, which differs from `log(gamma(z))` by multiples of 2π
     in the imaginary part ([#18330]).
 
+  * `broadcast` now handles tuples, and treats any argument that is not a tuple
+    or an array as a "scalar" ([#16986]).
+
 Library improvements
 --------------------
 
   * `max`, `min`, and related functions (`minmax`, `maximum`, `minimum`, `extrema`) now return `NaN` for `NaN` arguments ([#12563]).
+
+  * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
+
+  * The REPL now supports something called *prompt pasting* ([#17599]).
+    This activates when pasting text that starts with `julia> ` into the REPL.
+    In that case, only expressions starting with `julia> ` are parsed, the rest are removed.
+    This makes it possible to paste a chunk of code that has been copied from a REPL session
+    without having to scrub away prompts and outputs.
+    This can be disabled or enabled at will with `Base.REPL.enable_promptpaste(::Bool)`.
+
+  * The function `print_with_color` can now take a color represented by an integer between 0 and 255 inclusive as its first argument ([#18473]).
+    For a number to color mapping please refer to [this chart](https://upload.wikimedia.org/wikipedia/en/1/15/Xterm_256color_chart.svg).
+    It is also possible to use numbers as colors in environment variables that customizes colors in the REPL.
+    For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
+    Please note that not all terminals support 256 colors.
+
+  * The function `print_with_color` no longer prints text in bold by default ([#18628]).
+    Instead, the function now take a keyword argument `bold::Bool` which determines whether to print in bold or not.
+    On some terminals, printing a color in non bold results in slightly darker colors being printed than when printing in bold.
+    Therefore, light versions of the colors are now supported.
+    For the available colors see the help entry on `print_with_color`.
+
+  * The default color for info messages has been changed from blue to cyan ([#18442]).
+    This can be changed back to the original color by setting the environment variable `JULIA_INFO_COLOR` to `"blue"`.
+    One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
+    For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
+
+  * Iteration utilities that wrap iterators and return other iterators (`enumerate`, `zip`, `rest`,
+    `countfrom`, `take`, `drop`, `cycle`, `repeated`, `product`, `flatten`, `partition`) have been
+    moved to the module `Base.Iterators` ([#18839]).
+
+  * BitArrays can now be constructed from arbitrary iterables, in particular from generator expressions,
+    e.g. `BitArray(isodd(x) for x = 1:100)` ([#19018]).
+
+  * `hcat`, `vcat`, and `hvcat` now work with `UniformScaling` objects, so
+    you can now do e.g. `[A I]` and it will concatenate an appropriately sized
+    identity matrix ([#19305]).
+
+  * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
+
+  * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -45,6 +92,16 @@ Deprecated or removed
 ---------------------
 
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).
+
+  * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).
+
+  * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
+
+  * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
+
+  * `Dates.recur` has been deprecated in favor of `filter` ([#19288])
+
+  * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
 
 Julia v0.5.0 Release Notes
 ==========================
@@ -488,8 +545,9 @@ Deprecated or removed
   * Sparse matrix functions `etree`, `ereach`, `csc_permute`, and `symperm` have been moved
     to the [SuiteSparse.jl package](https://github.com/JuliaSparse/SuiteSparse.jl) ([#12231], [#17033]).
 
-  * The no-op `transpose` fallback has been deprecated. Consider introducing suitable
-    `transpose` methods or calling `permutedims(x, [2,1])` ([#13171], [#17075], [#17374]).
+  * The no-op `transpose` fallback for non-numeric arrays has been deprecated. Consider introducing suitable
+    `transpose` methods or calling `permutedims(x, (2, 1))` for matrices and `reshape(x, 1, length(x))` for
+    vectors.  ([#13171], [#17075], [#17374]).
 
   * The following macros have been deprecated ([#16219]):
     * `@windows` is deprecated in favor of `is_windows()`
@@ -646,6 +704,7 @@ Language tooling improvements
 [#16854]: https://github.com/JuliaLang/julia/issues/16854
 [#16953]: https://github.com/JuliaLang/julia/issues/16953
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
+[#16986]: https://github.com/JuliaLang/julia/issues/16986
 [#17033]: https://github.com/JuliaLang/julia/issues/17033
 [#17037]: https://github.com/JuliaLang/julia/issues/17037
 [#17075]: https://github.com/JuliaLang/julia/issues/17075
@@ -660,7 +719,23 @@ Language tooling improvements
 [#17404]: https://github.com/JuliaLang/julia/issues/17404
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
 [#17546]: https://github.com/JuliaLang/julia/issues/17546
+[#17599]: https://github.com/JuliaLang/julia/issues/17599
 [#17668]: https://github.com/JuliaLang/julia/issues/17668
+[#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
+[#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
+[#18442]: https://github.com/JuliaLang/julia/issues/18442
+[#18473]: https://github.com/JuliaLang/julia/issues/18473
+[#18644]: https://github.com/JuliaLang/julia/issues/18644
+[#18690]: https://github.com/JuliaLang/julia/issues/18690
+[#18628]: https://github.com/JuliaLang/julia/issues/18628
+[#18839]: https://github.com/JuliaLang/julia/issues/18839
+[#18931]: https://github.com/JuliaLang/julia/issues/18931
+[#18977]: https://github.com/JuliaLang/julia/issues/18977
+[#19018]: https://github.com/JuliaLang/julia/issues/19018
+[#19233]: https://github.com/JuliaLang/julia/issues/19233
+[#19288]: https://github.com/JuliaLang/julia/issues/19288
+[#19305]: https://github.com/JuliaLang/julia/issues/19305
+[#19469]: https://github.com/JuliaLang/julia/issues/19469

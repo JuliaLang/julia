@@ -19,7 +19,32 @@ end
 
 Construct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal,
 respectively. The result is of type `SymTridiagonal` and provides efficient specialized
-eigensolvers, but may be converted into a regular matrix with [`full`](:func:`full`).
+eigensolvers, but may be converted into a regular matrix with
+[`convert(Array, _)`](@ref) (or `Array(_)` for short).
+
+# Example
+
+```jldoctest
+julia> dv = [1; 2; 3; 4]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> ev = [7; 8; 9]
+3-element Array{Int64,1}:
+ 7
+ 8
+ 9
+
+julia> SymTridiagonal(dv, ev)
+4×4 SymTridiagonal{Int64}:
+ 1  7  ⋅  ⋅
+ 7  2  8  ⋅
+ ⋅  8  3  9
+ ⋅  ⋅  9  4
+```
 """
 SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(dv, ev)
 
@@ -71,7 +96,8 @@ end
 similar{T}(S::SymTridiagonal, ::Type{T}) = SymTridiagonal{T}(similar(S.dv, T), similar(S.ev, T))
 
 #Elementary operations
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :real, :imag)
+broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
 for func in (:round, :trunc, :floor, :ceil)
@@ -327,8 +353,39 @@ end
 
 Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal,
 respectively.  The result is of type `Tridiagonal` and provides efficient specialized linear
-solvers, but may be converted into a regular matrix with [`full`](:func:`full`).
+solvers, but may be converted into a regular matrix with
+[`convert(Array, _)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
+
+# Example
+
+```jldoctest
+julia> dl = [1; 2; 3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> du = [4; 5; 6]
+3-element Array{Int64,1}:
+ 4
+ 5
+ 6
+
+julia> d = [7; 8; 9; 0]
+4-element Array{Int64,1}:
+ 7
+ 8
+ 9
+ 0
+
+julia> Tridiagonal(dl, d, du)
+4×4 Tridiagonal{Int64}:
+ 7  4  ⋅  ⋅
+ 1  8  5  ⋅
+ ⋅  2  9  6
+ ⋅  ⋅  3  0
+```
 """
 # Basic constructor takes in three dense vectors of same type
 function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
@@ -350,6 +407,24 @@ end
 
 returns a `Tridiagonal` array based on (abstract) matrix `A`, using its first lower diagonal,
 main diagonal, and first upper diagonal.
+
+# Example
+
+```jldoctest
+julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]
+4×4 Array{Int64,2}:
+ 1  2  3  4
+ 1  2  3  4
+ 1  2  3  4
+ 1  2  3  4
+
+julia> Tridiagonal(A)
+4×4 Tridiagonal{Int64}:
+ 1  2  ⋅  ⋅
+ 1  2  3  ⋅
+ ⋅  2  3  4
+ ⋅  ⋅  3  4
+```
 """
 function Tridiagonal(A::AbstractMatrix)
     return Tridiagonal(diag(A,-1), diag(A), diag(A,+1))
@@ -388,7 +463,8 @@ end
 copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du), copy!(dest.du2, src.du2))
 
 #Elementary operations
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :abs, :real, :imag)
+broadcast(::typeof(abs), M::Tridiagonal) = Tridiagonal(abs.(M.dl), abs.(M.d), abs.(M.du), abs.(M.du2))
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du), ($func)(M.du2))
     end

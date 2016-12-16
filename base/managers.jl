@@ -346,7 +346,7 @@ end
 Implemented by cluster managers. For every Julia worker launched by this function, it should
 append a `WorkerConfig` entry to `launched` and notify `launch_ntfy`. The function MUST exit
 once all workers, requested by `manager` have been launched. `params` is a dictionary of all
-keyword arguments `addprocs` was called with.
+keyword arguments [`addprocs`](@ref) was called with.
 """
 launch
 
@@ -357,7 +357,7 @@ Implemented by cluster managers. It is called on the master process, during a wo
 lifetime, with appropriate `op` values:
 
 - with `:register`/`:deregister` when a worker is added / removed from the Julia worker pool.
-- with `:interrupt` when `interrupt(workers)` is called. The [`ClusterManager`](:class:`ClusterManager`)
+- with `:interrupt` when `interrupt(workers)` is called. The `ClusterManager`
   should signal the appropriate worker with an interrupt signal.
 - with `:finalize` for cleanup purposes.
 """
@@ -510,9 +510,11 @@ end
 """
     kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
-Implemented by cluster managers. It is called on the master process, by `rmprocs`. It should
-cause the remote worker specified by `pid` to exit. `Base.kill(manager::ClusterManager.....)`
-executes a remote `exit()` on `pid`
+Implemented by cluster managers.
+It is called on the master process, by [`rmprocs`](@ref).
+It should cause the remote worker specified by `pid` to exit.
+`Base.kill(manager::ClusterManager.....)` executes a remote `exit()`
+on `pid`.
 """
 function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
     remote_do(exit, pid) # For TCP based transports this will result in a close of the socket

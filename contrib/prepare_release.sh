@@ -43,6 +43,9 @@ cp julia-$version-linux-i686.tar.gz julia-$majmin-latest-linux-i686.tar.gz
 curl -L -o julia-$version-linux-arm.tar.gz \
   $julianightlies/linux/arm/$majmin/julia-$majminpatch-$shashort-linuxarm.tar.gz
 cp julia-$version-linux-arm.tar.gz julia-$majmin-latest-linux-arm.tar.gz
+curl -L -o julia-$version-linux-ppc64le.tar.gz \
+  $julianightlies/linux/ppc64le/$majmin/julia-$majminpatch-$shashort-linuxppc64.tar.gz
+cp julia-$version-linux-ppc64le.tar.gz julia-$majmin-latest-linux-ppc64le.tar.gz
 curl -L -o "julia-$version-osx10.7 .dmg" \
   $julianightlies/osx/x64/$majmin/julia-$majminpatch-$shashort-osx.dmg
 cp "julia-$version-osx10.7 .dmg" "julia-$majmin-latest-osx10.7 .dmg"
@@ -64,6 +67,7 @@ gpg -u julia --armor --detach-sig julia-$version.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-x86_64.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-i686.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-arm.tar.gz
+gpg -u julia --armor --detach-sig julia-$version-linux-ppc64le.tar.gz
 
 echo "All files prepared. Attach julia-$version.tar.gz and julia-$version-full.tar.gz"
 echo "to github releases, upload all binaries and checksums to julialang S3. Be sure"

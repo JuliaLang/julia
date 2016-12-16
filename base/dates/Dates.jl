@@ -4,6 +4,8 @@ module Dates
 
 importall ..Base.Operators
 
+using Base.Iterators
+
 include("types.jl")
 include("periods.jl")
 include("accessors.jl")
@@ -38,7 +40,7 @@ export Period, DatePeriod, TimePeriod,
        firstdayofmonth, lastdayofmonth,
        firstdayofyear, lastdayofyear,
        firstdayofquarter, lastdayofquarter,
-       adjust, tonext, toprev, tofirst, tolast, recur,
+       adjust, tonext, toprev, tofirst, tolast,
        # io.jl
        ISODateTimeFormat, ISODateFormat, DateFormat, RFC1123Format
 

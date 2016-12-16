@@ -60,7 +60,9 @@
 #endif
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
+#if JL_LLVM_VERSION < 30600
 #include <llvm/Support/MemoryObject.h>
+#endif
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/Host.h>
@@ -362,10 +364,11 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                           const object::ObjectFile *object,
                           DIContext *di_ctx,
 #if JL_LLVM_VERSION >= 30700
-                          raw_ostream &rstream
+                          raw_ostream &rstream,
 #else
-                          formatted_raw_ostream &stream
+                          formatted_raw_ostream &stream,
 #endif
+                          const char* asm_variant="att"
                           )
 {
     // GC safe
@@ -444,8 +447,11 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                   TripleName.c_str());
         return;
     }
-
     unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
+
+    if (strcmp(asm_variant, "intel")==0) {
+        OutputAsmVariant = 1;
+    }
     bool ShowEncoding = false;
 
 #if JL_LLVM_VERSION >= 30500

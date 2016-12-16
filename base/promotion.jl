@@ -71,7 +71,7 @@ function typejoin(a::ANY, b::ANY)
     elseif b <: Tuple
         return Any
     end
-    while !is(b,Any)
+    while b !== Any
         if a <: b.name.primary
             while a.name !== b.name
                 a = supertype(a)
@@ -198,7 +198,7 @@ muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 
 (&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
 (|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
-($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
+xor(x::Integer, y::Integer) = xor(promote(x,y)...)
 
 ==(x::Number, y::Number) = (==)(promote(x,y)...)
 <( x::Real, y::Real)     = (< )(promote(x,y)...)
@@ -217,34 +217,27 @@ max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
-# "Promotion" that takes a function into account. These are meant to be
-# used mainly by broadcast methods, so it is advised against overriding them
-if isdefined(Core, :Inference)
-    function _promote_op(op, T::ANY)
-        G = Tuple{Generator{Tuple{T},typeof(op)}}
-        return Core.Inference.return_type(first, G)
-    end
-    function _promote_op(op, R::ANY, S::ANY)
-        F = typeof(a -> op(a...))
-        G = Tuple{Generator{Zip2{Tuple{R},Tuple{S}},F}}
-        return Core.Inference.return_type(first, G)
-    end
-else
-    _promote_op(::ANY...) = (@_pure_meta; Any)
-end
+# "Promotion" that takes a function into account and tries to preserve
+# non-concrete types. These are meant to be used mainly by elementwise
+# operations, so it is advised against overriding them
 _default_type(T::Type) = (@_pure_meta; T)
 
+if isdefined(Core, :Inference)
+    _promote_op(f::ANY, t::ANY) = Core.Inference.return_type(f, t)
+else
+    _promote_op(f::ANY, t::ANY) = Any
+end
+
 promote_op(::Any...) = (@_pure_meta; Any)
-promote_op(T::Type, ::Any) = (@_pure_meta; T)
-promote_op(T::Type, ::Type) = (@_pure_meta; T) # To handle ambiguities
-# Promotion that tries to preserve non-concrete types
 function promote_op{S}(f, ::Type{S})
-    T = _promote_op(f, _default_type(S))
+    @_inline_meta
+    T = _promote_op(f, Tuple{_default_type(S)})
     isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(S, T)
 end
 function promote_op{R,S}(f, ::Type{R}, ::Type{S})
-    T = _promote_op(f, _default_type(R), _default_type(S))
+    @_inline_meta
+    T = _promote_op(f, Tuple{_default_type(R), _default_type(S)})
     isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(R, S, T)
 end
@@ -264,7 +257,7 @@ muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
 
 (&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
-($){T<:Integer}(x::T, y::T) = no_op_err("\$", T)
+xor{T<:Integer}(x::T, y::T) = no_op_err("xor", T)
 
 =={T<:Number}(x::T, y::T) = x === y
  <{T<:Real}(x::T, y::T) = no_op_err("<" , T)

@@ -117,10 +117,10 @@ end
 
 let x = ["\"hello\"", "world\""], io = IOBuffer()
     writedlm(io, x, quotes=false)
-    @test takebuf_string(io) == "\"hello\"\nworld\"\n"
+    @test String(take!(io)) == "\"hello\"\nworld\"\n"
 
     writedlm(io, x)
-    @test takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
+    @test String(take!(io)) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
 end
 
 # test comments
@@ -261,4 +261,14 @@ for writefunc in ((io,x) -> show(io, "text/csv", x),
         seek(io, 0)
         @test vec(readcsv(io)) == x
     end
+end
+
+# Test that we can read a write protected file
+let fn = tempname()
+    open(fn, "w") do f
+        write(f, "Julia")
+    end
+    chmod(fn, 0o444)
+    readdlm(fn)[] == "Julia"
+    rm(fn)
 end

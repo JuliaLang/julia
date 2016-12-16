@@ -10,7 +10,7 @@ LastMain.f(2)
 # PR #12990
 io = IOBuffer()
 show(io, Pair)
-@assert takebuf_string(io) == "Pair{A,B}"
+@assert String(take!(io)) == "Pair{A,B}"
 @assert !Base.inbase(LastMain)
 """
 exename = Base.julia_cmd()

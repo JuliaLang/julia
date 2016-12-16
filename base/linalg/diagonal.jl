@@ -9,12 +9,42 @@ end
     Diagonal(A::AbstractMatrix)
 
 Constructs a matrix from the diagonal of `A`.
+
+# Example
+
+```jldoctest
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
+
+julia> Diagonal(A)
+3×3 Diagonal{Int64}:
+ 1  ⋅  ⋅
+ ⋅  5  ⋅
+ ⋅  ⋅  9
+```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
 """
     Diagonal(V::AbstractVector)
 
 Constructs a matrix with `V` as its diagonal.
+
+# Example
+
+```jldoctest
+julia> V = [1; 2]
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> Diagonal(V)
+2×2 Diagonal{Int64}:
+ 1  ⋅
+ ⋅  2
+```
 """
 Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
@@ -77,7 +107,7 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 
 factorize(D::Diagonal) = D
 
-abs(D::Diagonal) = Diagonal(abs(D.diag))
+broadcast(::typeof(abs), D::Diagonal) = Diagonal(abs.(D.diag))
 real(D::Diagonal) = Diagonal(real(D.diag))
 imag(D::Diagonal) = Diagonal(imag(D.diag))
 
@@ -308,7 +338,7 @@ svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
 function svd{T<:Number}(D::Diagonal{T})
     S   = abs.(D.diag)
     piv = sortperm(S, rev = true)
-    U   = full(Diagonal(D.diag ./ S))
+    U   = Array(Diagonal(D.diag ./ S))
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
     V   = eye(D)
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)

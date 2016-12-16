@@ -29,7 +29,7 @@ end
 """
     @enum EnumName EnumValue1[=x] EnumValue2[=y]
 
-Create an [`Enum`](:obj:`Enum`) type with name `EnumName` and enum member values of
+Create an `Enum` type with name `EnumName` and enum member values of
 `EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
 `EnumName` can be used just like other types and enum member values as regular values, such as
 

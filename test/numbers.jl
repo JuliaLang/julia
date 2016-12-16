@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+const ≣ = isequal # convenient for comparing NaNs
+
 # basic booleans
 @test true
 @test !false
@@ -24,10 +26,14 @@
 @test false | true  == true
 @test true  | true  == true
 
-@test false $ false == false
-@test true  $ false == true
-@test false $ true  == true
-@test true  $ true  == false
+@test false ⊻ false == false
+@test true  ⊻ false == true
+@test false ⊻ true  == true
+@test true  ⊻ true  == false
+@test xor(false, false) == false
+@test xor(true,  false) == true
+@test xor(false, true)  == true
+@test xor(true,  true)  == false
 
 # the bool operator
 @test Bool(false) == false
@@ -54,8 +60,6 @@
 @test 2.0 * 3.0 == 6.
 @test min(1.0,1) == 1
 
-const ≅ = isequal # convenient for comparing NaNs
-
 # min, max and minmax
 @test min(1) === 1
 @test max(1) === 1
@@ -63,32 +67,32 @@ const ≅ = isequal # convenient for comparing NaNs
 @test minmax(5, 3) == (3, 5)
 @test minmax(3., 5.) == (3., 5.)
 @test minmax(5., 3.) == (3., 5.)
-@test minmax(3., NaN) ≅ (NaN, NaN)
-@test minmax(NaN, 3) ≅ (NaN, NaN)
-@test minmax(Inf, NaN) ≅ (NaN, NaN)
-@test minmax(NaN, Inf) ≅ (NaN, NaN)
-@test minmax(-Inf, NaN) ≅ (NaN, NaN)
-@test minmax(NaN, -Inf) ≅ (NaN, NaN)
-@test minmax(NaN, NaN) ≅ (NaN, NaN)
+@test minmax(3., NaN) ≣ (NaN, NaN)
+@test minmax(NaN, 3) ≣ (NaN, NaN)
+@test minmax(Inf, NaN) ≣ (NaN, NaN)
+@test minmax(NaN, Inf) ≣ (NaN, NaN)
+@test minmax(-Inf, NaN) ≣ (NaN, NaN)
+@test minmax(NaN, -Inf) ≣ (NaN, NaN)
+@test minmax(NaN, NaN) ≣ (NaN, NaN)
 @test min(-0.0,0.0) === min(0.0,-0.0)
 @test max(-0.0,0.0) === max(0.0,-0.0)
 @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
 @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
 @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2
 @test max(-3.2, Inf) == max(Inf, -3.2) == Inf
-@test max(-3.2, NaN) ≅ max(NaN, -3.2) ≅ NaN
+@test max(-3.2, NaN) ≣ max(NaN, -3.2) ≣ NaN
 @test min(5.1, Inf) == min(Inf, 5.1) == 5.1
 @test min(5.1, -Inf) == min(-Inf, 5.1) == -Inf
-@test min(5.1, NaN) ≅ min(NaN, 5.1) ≅ NaN
-@test min(5.1, -NaN) ≅ min(-NaN, 5.1) ≅ NaN
+@test min(5.1, NaN) ≣ min(NaN, 5.1) ≣ NaN
+@test min(5.1, -NaN) ≣ min(-NaN, 5.1) ≣ NaN
 @test minmax(-3.2, 5.1) == (min(-3.2, 5.1), max(-3.2, 5.1))
 @test minmax(-3.2, Inf) == (min(-3.2, Inf), max(-3.2, Inf))
-@test minmax(-3.2, NaN) ≅ (min(-3.2, NaN), max(-3.2, NaN))
-@test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≅ (NaN,NaN,NaN,NaN)
-@test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≅ (NaN,NaN,NaN,NaN)
-@test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≅ (NaN,NaN,NaN,NaN)
-@test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≅ (NaN,NaN,NaN,NaN)
-@test minmax(-Inf,NaN) ≅ (min(-Inf,NaN), max(-Inf,NaN))
+@test minmax(-3.2, NaN) ≣ (min(-3.2, NaN), max(-3.2, NaN))
+@test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+@test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+@test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+@test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+@test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
 
 # fma
 let x = Int64(7)^7
@@ -1020,6 +1024,7 @@ f9085() = typemax(UInt64) != 2.0^64
 
 @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
 @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+@test_throws ArgumentError rationalize(Int, big(3.0), -1.)
 
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
@@ -1125,7 +1130,7 @@ end
 @test 1+1.5 == 2.5
 @test 1.5+1 == 2.5
 @test 1+1.5+2 == 4.5
-@test is(typeof(convert(Complex{Int16},1)),Complex{Int16})
+@test isa(convert(Complex{Int16},1), Complex{Int16})
 @test Complex(1,2)+1 == Complex(2,2)
 @test Complex(1,2)+1.5 == Complex(2.5,2.0)
 @test 1/Complex(2,2) == Complex(.25,-.25)
@@ -1298,9 +1303,9 @@ for yr = Any[
         f2, m2 = fldmod(x,y)
 
         t1 = isa(x,Rational) && isa(y,Rational) ?
-                               promote_type(typeof(num(x)),typeof(num(y))) :
-             isa(x,Rational) ? promote_type(typeof(num(x)),typeof(y)) :
-             isa(y,Rational) ? promote_type(typeof(x),typeof(num(y))) :
+                               promote_type(typeof(numerator(x)),typeof(numerator(y))) :
+             isa(x,Rational) ? promote_type(typeof(numerator(x)),typeof(y)) :
+             isa(y,Rational) ? promote_type(typeof(x),typeof(numerator(y))) :
                                promote_type(typeof(x),typeof(y))
 
         t2 = promote_type(typeof(x),typeof(y))
@@ -2375,6 +2380,7 @@ end
 @test widen(1.5f0) === 1.5
 @test widen(Int32(42)) === Int64(42)
 @test widen(Int8) === Int32
+@test widen(Int64) === Int128
 @test widen(Float32) === Float64
 @test widen(Float16) === Float32
 ## Note: this should change to e.g. Float128 at some point
@@ -2456,6 +2462,13 @@ end
 @test_throws InexactError convert(Int16, typemax(UInt64))
 @test_throws InexactError convert(Int, typemax(UInt64))
 
+# issue #14549
+for T in (Int8, Int16, UInt8, UInt16)
+    for F in (Float32,Float64)
+        @test_throws InexactError convert(T, F(200000.0))
+    end
+end
+
 let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end
@@ -2518,6 +2531,7 @@ end
 #getindex(x::Number) = x
 for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test getindex(x) == x
+    @test getindex(x, 1, 1) == x
 end
 
 #getindex(x::Number,-1) throws BoundsError
@@ -2533,6 +2547,7 @@ for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test_throws BoundsError getindex([x x],-1)
     @test_throws BoundsError getindex([x x],0)
     @test_throws BoundsError getindex([x x],length([x,x])+1)
+    @test_throws BoundsError getindex(x, 1, 0)
 end
 
 # copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
@@ -2621,8 +2636,8 @@ end
 rand_int = rand(Int8)
 
 for T in [Int8, Int16, Int32, Int128, BigInt]
-    @test num(convert(T, rand_int)) == rand_int
-    @test den(convert(T, rand_int)) == 1
+    @test numerator(convert(T, rand_int)) == rand_int
+    @test denominator(convert(T, rand_int)) == 1
 
     @test typemin(Rational{T}) == -one(T)//zero(T)
     @test typemax(Rational{T}) == one(T)//zero(T)
@@ -2805,21 +2820,21 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
     for S in types
         for op in (+, -)
-            T = @inferred Base._promote_op(op, S)
+            T = @inferred Base.promote_op(op, S)
             t = @inferred op(one(S))
             @test T === typeof(t)
         end
 
         for R in types
             for op in (+, -, *, /, ^)
-                T = @inferred Base._promote_op(op, S, R)
+                T = @inferred Base.promote_op(op, S, R)
                 t = @inferred op(one(S), one(R))
                 @test T === typeof(t)
             end
         end
     end
 
-    @test @inferred(Base._promote_op(!, Bool)) === Bool
+    @test @inferred(Base.promote_op(!, Bool)) === Bool
 end
 
 let types = (Base.BitInteger_types..., BigInt, Bool,
@@ -2827,23 +2842,25 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Float16, Float32, Float64, BigFloat)
     for S in types, T in types
         for op in (<, >, <=, >=, (==))
-            @test @inferred(Base._promote_op(op, S, T)) === Bool
+            @test @inferred(Base.promote_op(op, S, T)) === Bool
         end
     end
 end
 
 let types = (Base.BitInteger_types..., BigInt, Bool)
     for S in types
-        T = @inferred Base._promote_op(~, S)
+        T = @inferred Base.promote_op(~, S)
         t = @inferred ~one(S)
         @test T === typeof(t)
 
         for R in types
             for op in (&, |, <<, >>, (>>>), %, ÷)
-                T = @inferred Base._promote_op(op, S, R)
+                T = @inferred Base.promote_op(op, S, R)
                 t = @inferred op(one(S), one(R))
                 @test T === typeof(t)
             end
         end
     end
 end
+
+@test !isempty(complex(1,2))

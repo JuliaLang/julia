@@ -73,10 +73,10 @@ function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
     while true
         s = t.storage
-        if !is(s, nothing) && haskey(s, :SOURCE_PATH)
+        if s !== nothing && haskey(s, :SOURCE_PATH)
             return s[:SOURCE_PATH]
         end
-        if is(t, t.parent)
+        if t === t.parent
             return default
         end
         t = t.parent

@@ -33,7 +33,7 @@ in(x::Char, y::Char) = x == y
 isless(x::Char, y::Char) = UInt32(x) < UInt32(y)
 
 const hashchar_seed = 0xd4d64234
-hash(x::Char, h::UInt) = hash_uint64(((UInt64(x)+hashchar_seed)<<32) $ UInt64(h))
+hash(x::Char, h::UInt) = hash_uint64(((UInt64(x)+hashchar_seed)<<32) ⊻ UInt64(h))
 
 -(x::Char, y::Char) = Int(x) - Int(y)
 -(x::Char, y::Integer) = Char(Int32(x) - Int32(y))

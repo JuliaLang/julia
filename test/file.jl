@@ -22,7 +22,7 @@ let err = nothing
     catch err
         io = IOBuffer()
         showerror(io, err)
-        @test startswith(takebuf_string(io), "SystemError (with $file): mkdir:")
+        @test startswith(String(take!(io)), "SystemError (with $file): mkdir:")
     end
 end
 
@@ -108,12 +108,12 @@ if is_windows()
 else
     @test filesize(dir) > 0
 end
-now = time()
+nowtime = time()
 # Allow 10s skew in addition to the time it took us to actually execute this code
-let skew = 10 + (now - starttime)
+let skew = 10 + (nowtime - starttime)
     mfile = mtime(file)
     mdir  = mtime(dir)
-    @test abs(now - mfile) <= skew && abs(now - mdir) <= skew && abs(mfile - mdir) <= skew
+    @test abs(nowtime - mfile) <= skew && abs(nowtime - mdir) <= skew && abs(mfile - mdir) <= skew
 end
 #@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 

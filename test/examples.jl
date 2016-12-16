@@ -45,16 +45,18 @@ if is_unix()
 end
 
 dc_path = joinpath(dir, "dictchannel.jl")
-myid() == 1 || include(dc_path)
-
 # Run the remote on pid 1, since runtests may terminate workers
 # at any time depending on memory usage
-remotecall_fetch(1, dc_path) do f
-    include(f)
-    nothing
+main_ex = quote
+    myid() == 1 || include($dc_path)
+    remotecall_fetch(1, $dc_path) do f
+        include(f)
+        nothing
+    end
+    RemoteChannel(()->DictChannel(), 1)
 end
-dc=RemoteChannel(()->DictChannel(), 1)
-@test typeof(dc) == RemoteChannel{DictChannel}
+dc = eval(Main, main_ex)
+@test typeof(dc) == RemoteChannel{Main.DictChannel}
 
 @test isready(dc) == false
 put!(dc, 1, 2)
@@ -82,8 +84,7 @@ catch
 end
 
 if !zmq_found
-    eval(parse("module ZMQ end"))
+    eval(Main, parse("module ZMQ end"))
 end
 
 include(joinpath(dir, "clustermanager/0mq/ZMQCM.jl"))
-

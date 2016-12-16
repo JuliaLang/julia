@@ -382,7 +382,7 @@ value_t stream_to_string(fl_context_t *fl_ctx, value_t *ps)
         ios_trunc(st, 0);
     }
     else {
-        char *b = ios_takebuf(st, &n); n--;
+        char *b = ios_take_buffer(st, &n); n--;
         b[n] = '\0';
         str = cvalue_from_ref(fl_ctx, fl_ctx->stringtype, b, n, fl_ctx->NIL);
         cv_autorelease(fl_ctx, (cvalue_t*)ptr(str));

@@ -192,6 +192,17 @@ typedef struct {
 } struct16;
 
 typedef struct {
+    int8_t a;
+    int16_t b;
+} struct17;
+
+typedef struct {
+    int8_t a;
+    int8_t b;
+    int8_t c;
+} struct18;
+
+typedef struct {
     jint x;
     jint y;
     char z;
@@ -323,6 +334,30 @@ JL_DLLEXPORT struct1 test_1(struct1 a, float b) {
     //Unpack a "small" struct { float, double }
     if (verbose) fprintf(stderr,"%g + %g i & %g\n", a.x, a.y, b);
     a.x += b * 1;
+    a.y -= b * 2;
+    return a;
+}
+
+JL_DLLEXPORT struct1 test_1long_a(jint x1, jint x2, jint x3, struct1 a, float b) {
+    //Unpack a "small" struct { float, double }
+    if (verbose) fprintf(stderr,"(%" PRIjint ", %" PRIjint ", %" PRIjint ") & %g + %g i & %g\n", x1, x2, x3, a.x, a.y, b);
+    a.x += b + x1 + x2 + x3;
+    a.y -= b * 2;
+    return a;
+}
+
+JL_DLLEXPORT struct1 test_1long_b(jint x1, double x2, jint x3, struct1 a, float b) {
+    //Unpack a "small" struct { float, double }
+    if (verbose) fprintf(stderr,"(%" PRIjint ", %g, %" PRIjint ") & %g + %g i & %g\n", x1, x2, x3, a.x, a.y, b);
+    a.x += b + x1 + x2 + x3;
+    a.y -= b * 2;
+    return a;
+}
+
+JL_DLLEXPORT struct1 test_1long_c(jint x1, double x2, jint x3, jint x4, struct1 a, float b) {
+    //Unpack a "small" struct { float, double }
+    if (verbose) fprintf(stderr,"(%" PRIjint ", %g, %" PRIjint ", %" PRIjint ") & %g + %g i & %g\n", x1, x2, x3, x4, a.x, a.y, b);
+    a.x += b + x1 + x2 + x3 + x4;
     a.y -= b * 2;
     return a;
 }
@@ -467,6 +502,24 @@ JL_DLLEXPORT struct16 test_16(struct16 a, float b) {
     return a;
 }
 
+JL_DLLEXPORT struct17 test_17(struct17 a, int8_t b) {
+    //Unpack a struct with non-obvious packing requirements
+    if (verbose) fprintf(stderr,"%d %d & %d\n", (int)a.a, (int)a.b, (int)b);
+    a.a += b*1;
+    a.b -= b*2;
+    return a;
+}
+
+JL_DLLEXPORT struct18 test_18(struct18 a, int8_t b) {
+    //Unpack a struct with non-obvious packing requirements
+    if (verbose) fprintf(stderr,"%d %d %d & %d\n",
+                         (int)a.a, (int)a.b, (int)a.c, (int)b);
+    a.a += b*1;
+    a.b -= b*2;
+    a.c += b*3;
+    return a;
+}
+
 // Note for AArch64:
 // `i128` is a native type on aarch64 so the type here is wrong.
 // However, it happens to have the same calling convention with `[2 x i64]`
@@ -485,6 +538,15 @@ JL_DLLEXPORT struct_big test_big(struct_big a) {
     //Unpack a "big" struct { int, int, char }
     if (verbose) fprintf(stderr,"%" PRIjint " %" PRIjint " %c\n", a.x, a.y, a.z);
     a.x += 1;
+    a.y -= 2;
+    a.z -= 'A';
+    return a;
+}
+
+JL_DLLEXPORT struct_big test_big_long(jint x1, jint x2, jint x3, struct_big a) {
+    //Unpack a "big" struct { int, int, char }
+    if (verbose) fprintf(stderr,"(%" PRIjint ", %" PRIjint ", %" PRIjint ") %" PRIjint " %" PRIjint " %c\n", x1, x2, x3, a.x, a.y, a.z);
+    a.x += 1 + x1 + x2 + x3;
     a.y -= 2;
     a.z -= 'A';
     return a;

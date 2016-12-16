@@ -11,10 +11,11 @@
 extern "C" {
 #endif
 
-jl_module_t *jl_main_module=NULL;
-jl_module_t *jl_core_module=NULL;
-jl_module_t *jl_base_module=NULL;
-jl_module_t *jl_top_module=NULL;
+jl_module_t *jl_main_module = NULL;
+jl_module_t *jl_core_module = NULL;
+jl_module_t *jl_base_module = NULL;
+jl_module_t *jl_top_module = NULL;
+extern jl_function_t *jl_append_any_func;
 
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
@@ -62,8 +63,10 @@ JL_DLLEXPORT void jl_set_istopmod(uint8_t isprimary)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     ptls->current_module->istopmod = 1;
-    if (isprimary)
+    if (isprimary) {
         jl_top_module = ptls->current_module;
+        jl_append_any_func = NULL;
+    }
 }
 
 JL_DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
@@ -197,8 +200,10 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                     (void)jl_get_binding_wr(m, var);
                     return NULL;
                 }
-                owner = imp;
-                b = tempb;
+                if (owner == NULL || !tempb->deprecated) {
+                    owner = imp;
+                    b = tempb;
+                }
             }
         }
         if (owner != NULL) {
@@ -569,7 +574,9 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             int hidden = jl_symbol_name(b->name)[0]=='#';
-            if ((b->exportp || ((imported || b->owner == m) && (all || m == jl_main_module))) &&
+            if ((b->exportp ||
+                 (imported && b->imported) ||
+                 ((b->owner == m) && (all || m == jl_main_module))) &&
                 (all || (!b->deprecated && !hidden))) {
                 jl_array_grow_end(a, 1);
                 //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:

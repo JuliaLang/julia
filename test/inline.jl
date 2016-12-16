@@ -73,3 +73,9 @@ end
 @inline f16165(x) = (x = UInt(x) + 1)
 g16165(x) = f16165(x)
 @test g16165(1) === (UInt(1) + 1)
+
+# issue #18948
+f18948() = (local bar::Int64; bar=1.5)
+g18948() = (local bar::Int32; bar=0x80000000)
+@test_throws InexactError f18948()
+@test_throws InexactError g18948()

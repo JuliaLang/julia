@@ -73,13 +73,16 @@ LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_TAR_EXT)
 endif
 endif # LLVM_VER != svn
 
-LLVM_CXXFLAGS := $(CXXFLAGS)
-LLVM_CPPFLAGS := $(CPPFLAGS)
-LLVM_LDFLAGS := $(LDFLAGS)
+# Allow adding LLVM specific flags
+LLVM_CFLAGS += $(CFLAGS)
+LLVM_CXXFLAGS += $(CXXFLAGS)
+LLVM_CPPFLAGS += $(CPPFLAGS)
+LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_TARGETS := host
 LLVM_TARGET_FLAGS := --enable-targets=$(LLVM_TARGETS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
+LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 LLVM_FLAGS += --disable-profiling --enable-static $(LLVM_TARGET_FLAGS)
 LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
@@ -96,6 +99,9 @@ LLVM_FLAGS += --disable-assertions
 endif # LLVM_ASSERTIONS
 ifeq ($(LLVM_DEBUG), 1)
 LLVM_FLAGS += --disable-optimized --enable-debug-symbols --enable-keep-symbols
+ifeq ($(OS), WINNT)
+LLVM_CXXFLAGS += -Wa,-mbig-obj
+endif # OS == WINNT
 else
 LLVM_FLAGS += --enable-optimized
 endif # LLVM_DEBUG
@@ -165,27 +171,33 @@ $(error LLVM_SANITIZE=1 with USE_LLVM_SHLIB=1 requires LLVM_USE_CMAKE=1)
 endif
 endif
 ifeq ($(SANITIZE_MEMORY),1)
-LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=memory -fsanitize-memory-track-origins"
+LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
 LLVM_FLAGS += --disable-terminfo
 else
-LLVM_CC := CFLAGS="$(CFLAGS) -fsanitize=address"
+LLVM_CFLAGS += -fsanitize=address
 LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="Address"
 endif
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
-else
-LLVM_CC :=
 endif # LLVM_SANITIZE
+
+ifeq ($(LLVM_LTO),1)
+LLVM_CPPFLAGS += -flto
+LLVM_LDFLAGS += -flto
+endif # LLVM_LTO
 
 ifneq ($(LLVM_CXXFLAGS),)
 LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 endif # LLVM_CXXFLAGS
-LLVM_MFLAGS += $(LLVM_CC)
+ifneq ($(LLVM_CFLAGS),)
+LLVM_FLAGS += CFLAGS="$(LLVM_CFLAGS)"
+LLVM_MFLAGS += CFLAGS="$(LLVM_CFLAGS)"
+endif # LLVM_CFLAGS
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LDFLAGS += -Wl,-R$(build_libdir) -lc++ -lc++abi
@@ -202,6 +214,10 @@ ifneq ($(LLVM_LDFLAGS),)
 LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
 LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
 endif
+LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
+	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)" \
+	-DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
+	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
 
 ifeq ($(BUILD_LLVM_CLANG),1)
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
@@ -289,11 +305,11 @@ $(LLVM_SRC_DIR)/projects/libcxxabi/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxxa
 $(LLVM_BUILD_DIR)/libcxx-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxx $(LLVM_SRC_DIR)/projects/libcxxabi
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LLVM_SRC_DIR)/projects/libcxxabi/include" $(LLVM_SRC_DIR)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LLVM_SRC_DIR)/projects/libcxxabi/include" $(LLVM_SRC_DIR)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="$(LDFLAGS) -L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)"
 $(LLVM_BUILD_DIR)/libcxxabi-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_SRC_DIR)/projects/libcxx
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-        $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LLVM_SRC_DIR)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LLVM_SRC_DIR)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS) -std=c++11"
 $(LLVM_BUILD_DIR)/libcxxabi-build/lib/libc++abi.so.1.0: $(LLVM_BUILD_DIR)/libcxxabi-build/Makefile $(LLVM_SRC_DIR)/projects/libcxxabi/.git/HEAD
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxxabi-build
 	touch -c $@
@@ -433,6 +449,7 @@ $(eval $(call LLVM_PATCH,llvm-nodllalias))
 $(eval $(call LLVM_PATCH,llvm-D21271-instcombine-tbaa-3.7))
 $(eval $(call LLVM_PATCH,llvm-win64-reloc-dwarf))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_destsharedlibdir))
+$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
 else ifeq ($(LLVM_VER_SHORT),3.8)
 ifeq ($(LLVM_VER),3.8.0)
 $(eval $(call LLVM_PATCH,llvm-D17326_unpack_load))
@@ -444,6 +461,7 @@ $(eval $(call LLVM_PATCH,llvm-3.7.1_3)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib)) # Remove for 3.9
+$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
 $(eval $(call LLVM_PATCH,llvm-nodllalias)) # Remove for 3.9
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
@@ -456,6 +474,19 @@ $(eval $(call LLVM_PATCH,llvm-PR27046)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-3.8.0_ppc64_SUBFC8)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-D21271-instcombine-tbaa-3.8)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-win64-reloc-dwarf))
+$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
+else ifeq ($(LLVM_VER_SHORT),3.9)
+# fix lowering for atomics on ppc
+$(eval $(call LLVM_PATCH,llvm-rL279933-ppc-atomicrmw-lowering)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-r282182)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
+$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
+# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
+$(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
+$(eval $(call LLVM_PATCH,llvm-3.9.0_cygwin)) # R283427, Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf))
+$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
@@ -491,7 +522,7 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(LLVM_SRC_DIR)/configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS)
+		$(LLVM_SRC_DIR)/configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)

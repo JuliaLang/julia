@@ -138,7 +138,7 @@ end
 @test first(Dict(:f=>2)) == (:f=>2)
 
 # constructing Dicts from iterators
-let d = Dict(i=>i for i=1:3)
+let d = @inferred Dict(i=>i for i=1:3)
     @test isa(d, Dict{Int,Int})
     @test d == Dict(1=>1, 2=>2, 3=>3)
 end
@@ -146,6 +146,8 @@ let d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
     @test isa(d, Dict{Real,Real})
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
 end
+
+@test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
 
 # issue #1821
 let
@@ -270,7 +272,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
         s = IOBuffer()
         io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
         Base.show(io, MIME("text/plain"), d)
-        out = split(takebuf_string(s),'\n')
+        out = split(String(take!(s)),'\n')
         for line in out[2:end]
             @test strwidth(line) <= cols
         end
@@ -280,7 +282,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
             s = IOBuffer()
             io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
             Base.show(io, MIME("text/plain"), f(d))
-            out = split(takebuf_string(s),'\n')
+            out = split(String(take!(s)),'\n')
             for line in out[2:end]
                 @test strwidth(line) <= cols
             end
@@ -342,18 +344,18 @@ end
 let
     a = Dict("foo"  => 0.0, "bar" => 42.0)
     b = Dict("フー" => 17, "バー" => 4711)
-    @test is(typeof(merge(a, b)), Dict{String,Float64})
+    @test typeof(merge(a, b)) === Dict{String,Float64}
 end
 
 # issue 9295
 let
     d = Dict()
-    @test is(push!(d, 'a' => 1), d)
+    @test push!(d, 'a' => 1) === d
     @test d['a'] == 1
-    @test is(push!(d, 'b' => 2, 'c' => 3), d)
+    @test push!(d, 'b' => 2, 'c' => 3) === d
     @test d['b'] == 2
     @test d['c'] == 3
-    @test is(push!(d, 'd' => 4, 'e' => 5, 'f' => 6), d)
+    @test push!(d, 'd' => 4, 'e' => 5, 'f' => 6) === d
     @test d['d'] == 4
     @test d['e'] == 5
     @test d['f'] == 6
@@ -374,6 +376,44 @@ let
     Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
+let
+    a = ObjectIdDict()
+    a[1] = a
+    a[a] = 2
+
+    sa = similar(a)
+    @test isempty(sa)
+    @test isa(sa, ObjectIdDict)
+
+    @test length(a) == 2
+    @test 1 in keys(a)
+    @test a in keys(a)
+    @test a[1] === a
+    @test a[a] === 2
+
+    ca = copy(a)
+    @test length(ca) == length(a)
+    @test ca == a
+    @test ca !== a # make sure they are different objects
+
+    ca = empty!(ca)
+    @test length(ca) == 0
+    @test length(a) == 2
+end
+
+@test length(ObjectIdDict(1=>2, 1.0=>3)) == 2
+@test length(Dict(1=>2, 1.0=>3)) == 1
+
+let d = @inferred ObjectIdDict(i=>i for i=1:3)
+    @test isa(d, ObjectIdDict)
+    @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+end
+
+let d = @inferred ObjectIdDict(Pair(1,1), Pair(2,2), Pair(3,3))
+    @test isa(d, ObjectIdDict)
+    @test d == ObjectIdDict(1=>1, 2=>2, 3=>3)
+    @test eltype(d) == Pair{Any,Any}
+end
 
 # Issue #7944
 let d = Dict{Int,Int}()
@@ -444,13 +484,13 @@ let d = ImmutableDict{String, String}(),
     @test (k1 => v2) in d3
     @test (k1 => v1) in d4
     @test (k1 => v2) in d4
-    @test !in(k2 => "value2", d4, is)
-    @test in(k2 => v2, d4, is)
+    @test !in(k2 => "value2", d4, ===)
+    @test in(k2 => v2, d4, ===)
     @test in(k2 => NaN, dnan, isequal)
-    @test in(k2 => NaN, dnan, is)
+    @test in(k2 => NaN, dnan, ===)
     @test !in(k2 => NaN, dnan, ==)
-    @test !in(k2 => 1, dnum, is)
-    @test in(k2 => 1.0, dnum, is)
+    @test !in(k2 => 1, dnum, ===)
+    @test in(k2 => 1.0, dnum, ===)
     @test !in(k2 => 1, dnum, <)
     @test in(k2 => 0, dnum, <)
     @test get(d1, "key1", :default) === v1
@@ -558,3 +598,37 @@ end
 
 # #18213
 Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a deprecation
+
+@testset "WeakKeyDict" begin
+    A = [1]
+    B = [2]
+    C = [3]
+    local x = 0
+    local y = 0
+    local z = 0
+    finalizer(A, a->(x+=1))
+    finalizer(B, b->(y+=1))
+    finalizer(C, c->(z+=1))
+    wkd = WeakKeyDict()
+    wkd[A] = 2
+    wkd[B] = 3
+    wkd[C] = 4
+    @test length(wkd) == 3
+    @test !isempty(wkd)
+    res = pop!(wkd, C)
+    @test res == 4
+    @test C ∉ keys(wkd)
+    @test 4 ∉ values(wkd)
+    @test length(wkd) == 2
+    @test !isempty(wkd)
+    wkd = filter!( (k,v) -> k != B, wkd)
+    @test B ∉ keys(wkd)
+    @test 3 ∉ values(wkd)
+    @test length(wkd) == 1
+    @test !isempty(wkd)
+
+    wkd = empty!(wkd)
+    @test length(wkd) == 0
+    @test isempty(wkd)
+    @test isa(wkd, WeakKeyDict)
+end

@@ -12,14 +12,13 @@ eval(m,x) = Core.eval(m,x)
 include = Core.include
 
 ## Load essential files and libraries
+include("ctypes.jl")
 include("essentials.jl")
 include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
 # core operations & types
-typealias Cint Int32
-typealias Csize_t UInt
 include("promotion.jl")
 include("tuple.jl")
 include("range.jl")
@@ -45,10 +44,9 @@ Symbol(a::Array{UInt8,1}) =
     ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
 
 # core array operations
-include("abstractarray.jl")
 include("array.jl")
+include("abstractarray.jl")
 
-#TODO: eliminate Dict from inference
 include("hashing.jl")
 include("nofloat_hashing.jl")
 
@@ -60,8 +58,7 @@ include("reduce.jl")
 
 ## core structures
 include("intset.jl")
-include("dict.jl")
-include("iterator.jl")
+include("associative.jl")
 
 # core docsystem
 include("docs/core.jl")

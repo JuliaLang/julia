@@ -235,7 +235,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces != 1 && return 0:-1, -1
     method_name_end = reverseind(r, i)
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
-    return startind:endof(s), method_name_end
+    return (startind:endof(s), method_name_end)
 end
 
 # Returns the value in a expression if sym is defined in current namespace fn.
@@ -249,18 +249,18 @@ function get_value(sym::Expr, fn)
         fn, found = get_value(ex, fn)
         !found && return (nothing, false)
     end
-    fn, true
+    return (fn, true)
 end
 get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (getfield(fn, sym), true) : (nothing, false)
 get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.value), true) : (nothing, false)
-get_value(sym, fn) = sym, true
+get_value(sym, fn) = (sym, true)
 
 # Return the value of a getfield call expression
 function get_value_getfield(ex::Expr, fn)
     # Example :((top(getfield))(Base,:max))
     val, found = get_value_getfield(ex.args[2],fn) #Look up Base in Main and returns the module
     found || return (nothing, false)
-    get_value_getfield(ex.args[3],val) #Look up max in Base and returns the function if found.
+    return get_value_getfield(ex.args[3], val) #Look up max in Base and returns the function if found.
 end
 get_value_getfield(sym, fn) = get_value(sym, fn)
 
@@ -285,9 +285,10 @@ function get_type_call(expr::Expr)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    linfo = Base.func_for_method_checked(m[3], Tuple{args...})
-    (tree, return_type) = Core.Inference.typeinf(linfo, m[1], m[2])
-    return return_type, true
+    params = Core.Inference.InferenceParams()
+    return_type = Core.Inference.typeinf_type(m[3], m[1], m[2], true, params)
+    return_type === nothing && return (Any, false)
+    return (return_type, true)
 end
 # Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (String,true)
 function get_type(sym::Expr, fn)
@@ -305,7 +306,7 @@ function get_type(sym::Expr, fn)
         end
         return get_type_call(sym)
     end
-    (Any, false)
+    return (Any, false)
 end
 function get_type(sym, fn)
     val, found = get_value(sym, fn)
@@ -330,7 +331,7 @@ function complete_methods(ex_org::Expr)
         # Check if the method's type signature intersects the input types
         if typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{}
             show(io, method, kwtype=kwtype)
-            push!(out, takebuf_string(io))
+            push!(out, String(take!(io)))
         end
     end
     return out
@@ -376,10 +377,10 @@ function bslash_completions(string, pos)
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
         if startswith(s, "\\:") # emoji
-            emoji_names = filter(k -> startswith(k, s), keys(emoji_symbols))
+            emoji_names = Iterators.filter(k -> startswith(k, s), keys(emoji_symbols))
             return (true, (sort!(collect(emoji_names)), slashpos:pos, true))
         else # latex
-            latex_names = filter(k -> startswith(k, s), keys(latex_symbols))
+            latex_names = Iterators.filter(k -> startswith(k, s), keys(latex_symbols))
             return (true, (sort!(collect(latex_names)), slashpos:pos, true))
         end
     end
@@ -413,6 +414,16 @@ function dict_identifier_key(str,tag)
     return (obj, partial_key, begin_of_key)
 end
 
+# This needs to be a separate non-inlined function, see #19441
+@noinline function find_dict_matches(identifier, partial_key)
+    matches = []
+    for key in keys(identifier)
+        rkey = repr(key)
+        startswith(rkey,partial_key) && push!(matches,rkey)
+    end
+    return matches
+end
+
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
@@ -424,11 +435,7 @@ function completions(string, pos)
     identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
     if identifier !== nothing
         if partial_key !== nothing
-            matches = []
-            for key in keys(identifier)
-                rkey = repr(key)
-                startswith(rkey,partial_key) && push!(matches,rkey)
-            end
+            matches = find_dict_matches(identifier, partial_key)
             length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
             length(matches)>0 && return sort(matches), loc:pos, true
         else

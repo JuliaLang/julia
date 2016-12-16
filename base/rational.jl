@@ -44,9 +44,9 @@ end
 .//(y::Number, X::AbstractArray) = reshape([ y // x for x in X ], size(X))
 
 function show(io::IO, x::Rational)
-    show(io, num(x))
+    show(io, numerator(x))
     print(io, "//")
-    show(io, den(x))
+    show(io, denominator(x))
 end
 
 function read{T<:Integer}(s::IO, ::Type{Rational{T}})
@@ -55,7 +55,7 @@ function read{T<:Integer}(s::IO, ::Type{Rational{T}})
     r//i
 end
 function write(s::IO, z::Rational)
-    write(s,num(z),den(z))
+    write(s,numerator(z),denominator(z))
 end
 
 convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational{T}(convert(T,x.num),convert(T,x.den))
@@ -104,7 +104,7 @@ julia> rationalize(5.6)
 julia> a = rationalize(BigInt, 10.3)
 103//10
 
-julia> typeof(num(a))
+julia> typeof(numerator(a))
 BigInt
 ```
 """
@@ -170,10 +170,21 @@ end
 rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x)) = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
 
-num(x::Integer) = x
-den(x::Integer) = one(x)
-num(x::Rational) = x.num
-den(x::Rational) = x.den
+"""
+    numerator(x)
+
+Numerator of the rational representation of `x`.
+"""
+numerator(x::Integer) = x
+numerator(x::Rational) = x.num
+
+"""
+    denominator(x)
+
+Denominator of the rational representation of `x`.
+"""
+denominator(x::Integer) = one(x)
+denominator(x::Rational) = x.den
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
@@ -313,15 +324,15 @@ ceil{ T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
 
 
 function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:Nearest})
-    if den(x) == zero(Tr) && T <: Integer
+    if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
-    elseif den(x) == zero(Tr)
-        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
     end
-    q,r = divrem(num(x), den(x))
+    q,r = divrem(numerator(x), denominator(x))
     s = q
-    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+iseven(q))>>1 + copysign(Tr(2), num(x)))
-        s += copysign(one(Tr),num(x))
+    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr)+iseven(q))>>1 + copysign(Tr(2), numerator(x)))
+        s += copysign(one(Tr),numerator(x))
     end
     convert(T, s)
 end
@@ -329,35 +340,35 @@ end
 round{T}(::Type{T}, x::Rational) = round(T, x, RoundNearest)
 
 function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesAway})
-    if den(x) == zero(Tr) && T <: Integer
+    if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
-    elseif den(x) == zero(Tr)
-        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
     end
-    q,r = divrem(num(x), den(x))
+    q,r = divrem(numerator(x), denominator(x))
     s = q
-    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr))>>1 + copysign(Tr(2), num(x)))
-        s += copysign(one(Tr),num(x))
+    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr))>>1 + copysign(Tr(2), numerator(x)))
+        s += copysign(one(Tr),numerator(x))
     end
     convert(T, s)
 end
 
 function round{T, Tr}(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp})
-    if den(x) == zero(Tr) && T <: Integer
+    if denominator(x) == zero(Tr) && T <: Integer
         throw(DivideError())
-    elseif den(x) == zero(Tr)
-        return convert(T, copysign(one(Tr)//zero(Tr), num(x)))
+    elseif denominator(x) == zero(Tr)
+        return convert(T, copysign(one(Tr)//zero(Tr), numerator(x)))
     end
-    q,r = divrem(num(x), den(x))
+    q,r = divrem(numerator(x), denominator(x))
     s = q
-    if abs(r) >= abs((den(x)-copysign(Tr(4), num(x))+one(Tr)+(num(x)<0))>>1 + copysign(Tr(2), num(x)))
-        s += copysign(one(Tr),num(x))
+    if abs(r) >= abs((denominator(x)-copysign(Tr(4), numerator(x))+one(Tr)+(numerator(x)<0))>>1 + copysign(Tr(2), numerator(x)))
+        s += copysign(one(Tr),numerator(x))
     end
     convert(T, s)
 end
 
 function round{T}(::Type{T}, x::Rational{Bool})
-    if den(x) == false && issubtype(T, Union{Integer, Bool})
+    if denominator(x) == false && issubtype(T, Union{Integer, Bool})
         throw(DivideError())
     end
     convert(T, x)

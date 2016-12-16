@@ -347,9 +347,9 @@
          ;; pick up only function name
          (let ((fname (cond ((eq? (car e) '=) (cadr (cadr e)))
                             ((eq? (car e) 'function)
-                             (if (eq? (car (cadr e)) 'tuple)
-                                 #f
-                                 (cadr (cadr e))))
+                             (cond ((atom? (cadr e))             (cadr e))
+                                   ((eq? (car (cadr e)) 'tuple)  #f)
+                                   (else                         (cadr (cadr e)))))
                             (else #f))))
            (if (symbol? fname)
                (list fname)
@@ -423,7 +423,7 @@
                (error (cadr form)))
            (let ((form (car form))
                  (m    (cdr form)))
-             ;; m is the macro's def module, or #f if def env === use env
+             ;; m is the macro's def module
              (rename-symbolic-labels
               (julia-expand-macros
                (resolve-expansion-vars form m))))))

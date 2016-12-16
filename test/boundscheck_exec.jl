@@ -174,4 +174,24 @@ if bc_opt != bc_off
     @test_throws BoundsError k1(Int[])
 end
 
+# Ensure that broadcast doesn't use @inbounds when calling the function
+if bc_opt != bc_off
+    let A = zeros(3,3)
+        @test_throws BoundsError broadcast(getindex, A, 1:3, 1:3)
+    end
+end
+
+# issue #19554
+function f19554(a)
+    a[][3]
+end
+function f19554_2(a, b)
+    a[][3] = b
+    return a
+end
+a19554 = Ref{Array{Float64}}([1 2; 3 4])
+@test f19554(a19554) === 2.0
+@test f19554_2(a19554, 1) === a19554
+@test a19554[][3] === f19554(a19554) === 1.0
+
 end

@@ -43,8 +43,10 @@ immutable Pass <: Result
     value
 end
 function Base.show(io::IO, t::Pass)
-    print_with_color(:green, io, "Test Passed\n")
-    print(io, "  Expression: ", t.orig_expr)
+    print_with_color(:green, io, "Test Passed\n"; bold = true)
+    if !(t.orig_expr === nothing)
+        print(io, "  Expression: ", t.orig_expr)
+    end
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
@@ -68,7 +70,7 @@ type Fail <: Result
     value
 end
 function Base.show(io::IO, t::Fail)
-    print_with_color(:red, io, "Test Failed\n")
+    print_with_color(Base.error_color(), io, "Test Failed\n"; bold = true)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -100,7 +102,7 @@ type Error <: Result
     backtrace
 end
 function Base.show(io::IO, t::Error)
-    print_with_color(:red, io, "Error During Test\n")
+    print_with_color(Base.error_color(), io, "Error During Test\n"; bold = true)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -138,10 +140,10 @@ type Broken <: Result
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(:yellow, io, "Test Broken\n")
-    if t.test_type == :skipped
+    print_with_color(:yellow, io, "Test Broken\n"; bold = true)
+    if t.test_type == :skipped && !(t.orig_expr === nothing)
         println(io, "  Skipped: ", t.orig_expr)
-    else
+    elseif !(t.orig_expr === nothing)
         println(io, "Expression: ", t.orig_expr)
     end
 end
@@ -266,7 +268,7 @@ function do_test(result::ExecutionResult, orig_expr)
         value = result.value
         testres = if isa(value, Bool)
             # a true value Passes
-            value ? Pass(:test, orig_expr, result.data, value) :
+            value ? Pass(:test, nothing, nothing, value) :
                     Fail(:test, orig_expr, result.data, value)
         else
             # If the result is non-Boolean, this counts as an Error
@@ -319,7 +321,7 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
     if isa(result, Threw)
         # Check that the right type of exception was thrown
         if isa(result.exception, extype)
-            testres = Pass(:test_throws, orig_expr, extype, result.exception)
+            testres = Pass(:test_throws, nothing, nothing, result.exception)
         else
             testres = Fail(:test_throws_wrong, orig_expr, extype, result.exception)
         end
@@ -368,6 +370,7 @@ type TestSetException <: Exception
     fail::Int
     error::Int
     broken::Int
+    errors_and_fails::Vector{Union{Fail, Error}}
 end
 
 function Base.show(io::IO, ex::TestSetException)
@@ -421,14 +424,16 @@ record(ts::DefaultTestSet, t::Union{Pass,Broken}) = (push!(ts.results, t); t)
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
-    print_with_color(:white, ts.description, ": ")
-    print(t)
-    # don't print the backtrace for Errors because it gets printed in the show
-    # method
-    isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
-    println()
+    if myid() == 1
+        print_with_color(:white, ts.description, ": ")
+        print(t)
+        # don't print the backtrace for Errors because it gets printed in the show
+        # method
+        isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
+        println()
+    end
     push!(ts.results, t)
-    t
+    t, isa(t, Error) || backtrace()
 end
 
 # When a DefaultTestSet finishes, it records itself to its parent
@@ -436,17 +441,19 @@ end
 # the results at the end of the tests
 record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 
-# Called at the end of a @testset, behaviour depends on whether
-# this is a child of another testset, or the "root" testset
-function finish(ts::DefaultTestSet)
-    # If we are a nested test set, do not print a full summary
-    # now - let the parent test set do the printing
-    if get_testset_depth() != 0
-        # Attach this test set to the parent test set
-        parent_ts = get_testset()
-        record(parent_ts, ts)
-        return
+function print_test_errors(ts::DefaultTestSet)
+    for t in ts.results
+        if (isa(t, Error) || isa(t, Fail)) && myid() == 1
+            println("Error in testset $(ts.description):")
+            Base.show(STDOUT,t)
+            println()
+        elseif isa(t, DefaultTestSet)
+            print_test_errors(t)
+        end
     end
+end
+
+function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
     passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
@@ -471,28 +478,49 @@ function finish(ts::DefaultTestSet)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
-    print_with_color(:white, rpad("Test Summary:",align," "), " | ")
+    print_with_color(:white, rpad("Test Summary:",align," "), " | "; bold = true)
     if pass_width > 0
-        print_with_color(:green, lpad("Pass",pass_width," "), "  ")
+        print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
     end
     if fail_width > 0
-        print_with_color(:red, lpad("Fail",fail_width," "), "  ")
+        print_with_color(Base.error_color(), lpad("Fail",fail_width," "), "  "; bold = true)
     end
     if error_width > 0
-        print_with_color(:red, lpad("Error",error_width," "), "  ")
+        print_with_color(Base.error_color(), lpad("Error",error_width," "), "  "; bold = true)
     end
     if broken_width > 0
-        print_with_color(:yellow, lpad("Broken",broken_width," "), "  ")
+        print_with_color(:yellow, lpad("Broken",broken_width," "), "  "; bold = true)
     end
     if total_width > 0
-        print_with_color(:blue, lpad("Total",total_width, " "))
+        print_with_color(Base.info_color(), lpad("Total",total_width, " "); bold = true)
     end
     println()
     # Recursively print a summary at every level
-    print_counts(ts, 0, align, pass_width, fail_width, error_width, broken_width, total_width)
+    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width)
+end
+
+# Called at the end of a @testset, behaviour depends on whether
+# this is a child of another testset, or the "root" testset
+function finish(ts::DefaultTestSet)
+    # If we are a nested test set, do not print a full summary
+    # now - let the parent test set do the printing
+    if get_testset_depth() != 0
+        # Attach this test set to the parent test set
+        parent_ts = get_testset()
+        record(parent_ts, ts)
+        return ts
+    end
+    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
+    total_pass   = passes + c_passes
+    total_fail   = fails  + c_fails
+    total_error  = errors + c_errors
+    total_broken = broken + c_broken
+    total = total_pass + total_fail + total_error + total_broken
     # Finally throw an error as we are the outermost test set
-    if total != total_pass
-        throw(TestSetException(total_pass,total_fail,total_error, total_broken))
+    if total != total_pass + total_broken
+        # Get all the error/failures and bring them along for the ride
+        efs = filter_errors(ts)
+        throw(TestSetException(total_pass,total_fail,total_error, total_broken, efs))
     end
 
     # return the testset so it is returned from the @testset macro
@@ -516,6 +544,20 @@ function get_alignment(ts::DefaultTestSet, depth::Int)
     return max(ts_width, maximum(child_widths))
 end
 get_alignment(ts, depth::Int) = 0
+
+# Recursive function that fetches backtraces for any and all errors
+# or failures the testset and its children encountered
+function filter_errors(ts::DefaultTestSet)
+    efs = []
+    for t in ts.results
+        if isa(t, DefaultTestSet)
+            append!(efs, filter_errors(t))
+        elseif isa(t, Union{Fail, Error})
+            append!(efs, [t])
+        end
+    end
+    efs
+end
 
 # Recursive function that counts the number of test results of each
 # type directly in the testset, and totals across the child testsets
@@ -547,7 +589,6 @@ function print_counts(ts::DefaultTestSet, depth, align,
     # through any child test sets
     passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
     subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
-
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
     print(rpad(string(lpad("  ",depth), ts.description), align, " "), " | ")
@@ -562,7 +603,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nf = fails + c_fails
     if nf > 0
-        print_with_color(:red, lpad(string(nf), fail_width, " "), "  ")
+        print_with_color(Base.error_color(), lpad(string(nf), fail_width, " "), "  ")
     elseif fail_width > 0
         # No fails at this level, but some at another level
         print(lpad(" ", fail_width), "  ")
@@ -570,7 +611,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     ne = errors + c_errors
     if ne > 0
-        print_with_color(:red, lpad(string(ne), error_width, " "), "  ")
+        print_with_color(Base.error_color(), lpad(string(ne), error_width, " "), "  ")
     elseif error_width > 0
         # No errors at this level, but some at another level
         print(lpad(" ", error_width), "  ")
@@ -585,9 +626,9 @@ function print_counts(ts::DefaultTestSet, depth, align,
     end
 
     if np == 0 && nf == 0 && ne == 0 && nb == 0
-        print_with_color(:blue, "No tests")
+        print_with_color(Base.info_color(), "No tests")
     else
-        print_with_color(:blue, lpad(string(subtotal), total_width, " "))
+        print_with_color(Base.info_color(), lpad(string(subtotal), total_width, " "))
     end
     println()
 
@@ -726,9 +767,9 @@ function testset_forloop(args, testloop)
             pop_testset()
             push!(arr, finish(ts))
         end
-        first_iteration = false
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
+        first_iteration = false
         try
             $(esc(tests))
         catch err
@@ -914,7 +955,12 @@ julia> typeof(f(1,2,3))
 Int64
 
 julia> @code_warntype f(1,2,3)
-...
+Variables:
+  #self#::#f
+  a::Int64
+  b::Int64
+  c::Int64
+
 Body:
   begin
       unless (Base.slt_int)(1,b::Int64)::Bool goto 3
@@ -926,7 +972,6 @@ Body:
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
  in error(::String) at ./error.jl:21
- ...
 
 julia> @inferred max(1,2)
 2
@@ -939,26 +984,28 @@ macro inferred(ex)
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
 
     Base.remove_linenums!(quote
-        $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
-            # Has keywords
-            args = gensym()
-            kwargs = gensym()
-            quote
-                $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
-            end
-        else
-            # No keywords
-            quote
-                args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
-                result = $(esc(ex.args[1]))(args...)
-                inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
-            end
-        end)
-        @assert length(inftypes) == 1
-        rettype = isa(result, Type) ? Type{result} : typeof(result)
-        rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
-        result
+        let
+            $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+                # Has keywords
+                args = gensym()
+                kwargs = gensym()
+                quote
+                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                    inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                end
+            else
+                # No keywords
+                quote
+                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
+                    result = $(esc(ex.args[1]))(args...)
+                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+                end
+            end)
+            @assert length(inftypes) == 1
+            rettype = isa(result, Type) ? Type{result} : typeof(result)
+            rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            result
+        end
     end)
 end
 

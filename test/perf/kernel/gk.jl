@@ -123,7 +123,7 @@ function gk(n, myeps)
 
         AX=A*X
         Ax = A*x
-        error=abs(AX)-abs(U)
+        error=abs.(AX)-abs.(U)
         #print(Ax)
 
         Axepse=0

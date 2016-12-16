@@ -10,11 +10,11 @@
 @test Base.mapfoldl(abs2, /, 2:5) ≈ 1/900
 @test Base.mapfoldl(abs2, /, 10, 2:5) ≈ 1/1440
 
-@test Base.mapfoldl((x)-> x $ true, &, true, [true false true false false]) == false
-@test Base.mapfoldl((x)-> x $ true, &, [true false true false false]) == false
+@test Base.mapfoldl((x)-> x ⊻ true, &, true, [true false true false false]) == false
+@test Base.mapfoldl((x)-> x ⊻ true, &, [true false true false false]) == false
 
-@test Base.mapfoldl((x)-> x $ true, |, [true false true false false]) == true
-@test Base.mapfoldl((x)-> x $ true, |, false, [true false true false false]) == true
+@test Base.mapfoldl((x)-> x ⊻ true, |, [true false true false false]) == true
+@test Base.mapfoldl((x)-> x ⊻ true, |, false, [true false true false false]) == true
 
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
@@ -268,13 +268,6 @@ let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
 
-@test isequal(cummin([1, 2, 5, -1, 3, -2]), [1, 1, 1, -1, -1, -2])
-@test isequal(cummax([1, 2, 5, -1, 3, -2]), [1, 2, 5, 5, 5, 5])
-
-@test isequal(cummax([1 0; 0 1], 1), [1 0; 1 1])
-@test isequal(cummax([1 0; 0 1], 2), [1 1; 0 1])
-@test isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
-@test isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
 
 @test sum(collect(map(UInt8,0:255))) == 32640
 @test sum(collect(map(UInt8,254:255))) == 509
@@ -298,3 +291,8 @@ let A = collect(1:10)
     @test A ∌ 11
     @test contains(==,A,6)
 end
+
+# issue #18695
+test18695(r) = sum( t^2 for t in r )
+@test @inferred(test18695([1.0,2.0,3.0,4.0])) == 30.0
+@test_throws ArgumentError test18695(Any[])

@@ -298,7 +298,7 @@ for (name, f) in l
     verbose && println("$name write(::IOBuffer, ...)")
     to = IOBuffer(copy(text.data), false, true)
     write(to, io())
-    @test takebuf_string(to) == text
+    @test String(take!(to)) == text
 
     cleanup()
 end

@@ -10,13 +10,12 @@ end
 
 Apply `f` to each element of `c` in parallel using available workers and tasks.
 
-For multiple collection arguments, apply f elementwise.
+For multiple collection arguments, apply `f` elementwise.
 
 Results are returned in order as they become available.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](:ref:`Code Availability
-and Loading Packages <man-parallel-computing-code-availability>`)
+[Code Availability and Loading Packages](@ref)
 for details.
 """
 function pgenerate(p::WorkerPool, f, c)
@@ -24,7 +23,7 @@ function pgenerate(p::WorkerPool, f, c)
         return AsyncGenerator(f, c; ntasks=()->nworkers(p))
     end
     batches = batchsplit(c, min_batch_count = length(p) * 3)
-    return flatten(AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
+    return Iterators.flatten(AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
 end
 pgenerate(p::WorkerPool, f, c1, c...) = pgenerate(p, a->f(a...), zip(c1, c...))
 pgenerate(f, c) = pgenerate(default_worker_pool(), f, c)
@@ -36,18 +35,18 @@ pgenerate(f, c1, c...) = pgenerate(a->f(a...), zip(c1, c...))
 Transform collection `c` by applying `f` to each element using available
 workers and tasks.
 
-For multiple collection arguments, apply f elementwise.
+For multiple collection arguments, apply `f` elementwise.
 
 Note that `f` must be made available to all worker processes; see
-[Code Availability and Loading Packages](:ref:`Code Availability
-and Loading Packages <man-parallel-computing-code-availability>`)
+[Code Availability and Loading Packages](@ref)
 for details.
 
 If a worker pool is not specified, all available workers, i.e., the default worker pool
 is used.
 
 By default, `pmap` distributes the computation over all specified workers. To use only the
-local process and distribute over tasks, specify `distributed=false`. This is equivalent to `asyncmap`.
+local process and distribute over tasks, specify `distributed=false`.
+This is equivalent to [`asyncmap`](@ref).
 
 `pmap` can also use a mix of processes and tasks via the `batch_size` argument. For batch sizes
 greater than 1, the collection is split into multiple batches, which are distributed across
@@ -118,11 +117,8 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
             f = wrap_on_error(f, on_error)
         end
 
-        return collect(AsyncGenerator(f, c; ntasks=()->nworkers(p)))
+        return asyncmap(f, c; ntasks=()->nworkers(p))
     else
-        batches = batchsplit(c, min_batch_count = length(p) * 3,
-                                max_batch_size = batch_size)
-
         # During batch processing, We need to ensure that if on_error is set, it is called
         # for each element in error, and that we return as many elements as the original list.
         # retry, if set, has to be called element wise and we will do a best-effort
@@ -133,7 +129,9 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
             f = wrap_on_error(f, (x,e)->BatchProcessingError(x,e); capture_data=true)
         end
         f = wrap_batch(f, p, on_error)
-        results = collect(flatten(AsyncGenerator(f, batches; ntasks=()->nworkers(p))))
+        results = asyncmap(f, c; ntasks=()->nworkers(p), batch_size=batch_size)
+
+        # handle error processing....
         if (on_error !== nothing) || (retry_n > 0)
             process_batch_errors!(p, f_orig, results, on_error, retry_on, retry_n, retry_max_delay)
         end
@@ -177,7 +175,7 @@ function wrap_batch(f, p, on_error)
     end
 end
 
-asyncmap_batch(f) = batch -> asyncmap(f, batch)
+asyncmap_batch(f) = batch -> asyncmap(x->f(x...), batch)
 
 function process_batch_errors!(p, f, results, on_error, retry_on, retry_n, retry_max_delay)
     # Handle all the ones in error in another pmap, with batch size set to 1
@@ -213,6 +211,40 @@ function process_batch_errors!(p, f, results, on_error, retry_on, retry_n, retry
     nothing
 end
 
+"""
+    head_and_tail(c, n) -> head, tail
+
+Returns `head`: the first `n` elements of `c`;
+and `tail`: an iterator over the remaining elements.
+
+```jldoctest
+julia> a = 1:10
+1:10
+
+julia> b, c = Base.head_and_tail(a, 3)
+([1,2,3],Base.Iterators.Rest{UnitRange{Int64},Int64}(1:10,4))
+
+julia> collect(c)
+7-element Array{Any,1}:
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+```
+"""
+function head_and_tail(c, n)
+    head = Vector{eltype(c)}(n)
+    s = start(c)
+    i = 0
+    while i < n && !done(c, s)
+        i += 1
+        head[i], s = next(c, s)
+    end
+    return resize!(head, i), Iterators.rest(c, s)
+end
 
 """
     batchsplit(c; min_batch_count=1, max_batch_size=100) -> iterator
@@ -231,14 +263,14 @@ function batchsplit(c; min_batch_count=1, max_batch_size=100)
     end
 
     # Split collection into batches, then peek at the first few batches
-    batches = partition(c, max_batch_size)
+    batches = Iterators.partition(c, max_batch_size)
     head, tail = head_and_tail(batches, min_batch_count)
 
     # If there are not enough batches, use a smaller batch size
     if length(head) < min_batch_count
         batch_size = max(1, div(sum(length, head), min_batch_count))
-        return partition(collect(flatten(head)), batch_size)
+        return Iterators.partition(collect(Iterators.flatten(head)), batch_size)
     end
 
-    return flatten((head, tail))
+    return Iterators.flatten((head, tail))
 end

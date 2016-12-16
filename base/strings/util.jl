@@ -58,21 +58,20 @@ startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
 
 # TODO: fast endswith
 
-
 """
     chop(s::AbstractString)
 
 Remove the last character from `s`.
 
 ```jldoctest
-julia> a = string("March")
+julia> a = "March"
 "March"
 
 julia> chop(a)
 "Marc"
 ```
 """
-chop(s::AbstractString) = s[1:end-1]
+chop(s::AbstractString) = SubString(s, 1, endof(s)-1)
 
 """
     chomp(s::AbstractString)
@@ -81,14 +80,21 @@ Remove a single trailing newline from a string.
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    if (i < 1 || s[i] != '\n') return s end
+    if (i < 1 || s[i] != '\n') return SubString(s, 1, i) end
     j = prevind(s,i)
-    if (j < 1 || s[j] != '\r') return s[1:i-1] end
-    return s[1:j-1]
+    if (j < 1 || s[j] != '\r') return SubString(s, 1, i-1) end
+    return SubString(s, 1, j-1)
 end
-chomp(s::String) =
-    (endof(s) < 1 || s.data[end]   != 0x0a) ? s :
-    (endof(s) < 2 || s.data[end-1] != 0x0d) ? s[1:end-1] : s[1:end-2]
+function chomp(s::String)
+    i = endof(s)
+    if i < 1 || s.data[i] != 0x0a
+        SubString(s, 1, i)
+    elseif i < 2 || s.data[i-1] != 0x0d
+        SubString(s, 1, i-1)
+    else
+        SubString(s, 1, i-2)
+    end
+end
 
 # NOTE: use with caution -- breaks the immutable string convention!
 function chomp!(s::String)
@@ -274,7 +280,7 @@ rsplit{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _rsp
 """
     rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
-Similar to [`split`](:func:`split`), but starting from the end of the string.
+Similar to [`split`](@ref), but starting from the end of the string.
 
 ```jldoctest
 julia> a = "M.a.r.c.h"
@@ -352,7 +358,7 @@ function replace(str::String, pattern, repl, limit::Integer)
         n += 1
     end
     write(out, SubString(str,i))
-    takebuf_string(out)
+    String(take!(out))
 end
 
 """

@@ -15,7 +15,7 @@ end
 function test_bin_reflection(freflect, f, types)
     iob = IOBuffer()
     freflect(iob, f, types)
-    str = takebuf_string(iob)
+    str = String(take!(iob))
     @test !isempty(str)
     nothing
 end
@@ -60,14 +60,14 @@ using Base.Test
 function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)
-    str = takebuf_string(iob)
+    str = String(take!(iob))
     return !isempty(search(str, tag))
 end
 
 pos_stable(x) = x > 0 ? x : zero(x)
 pos_unstable(x) = x > 0 ? x : 0
 
-tag = Base.have_color ? Base.text_colors[:red] : "UNION"
+tag = Base.have_color ? Base.error_color() : "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
@@ -80,16 +80,16 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = Base.have_color ? Base.text_colors[:red] : "ARRAY{FLOAT64,N}"
+tag = Base.have_color ? Base.error_color() : "ARRAY{FLOAT64,N}"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
 
 # Make sure emphasis is not used for other functions
-tag = Base.have_color ? Base.text_colors[:red] : "ANY"
+tag = Base.have_color ? Base.error_color() : "ANY"
 iob = IOBuffer()
 show(iob, expand(:(x->x^2)))
-str = takebuf_string(iob)
+str = String(take!(iob))
 @test isempty(search(str, tag))
 
 module ImportIntrinsics15819
@@ -165,8 +165,13 @@ not_const = 1
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
 
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+
 module TestMod7648
 using Base.Test
+import Base.convert
+import ..curmod_name, ..curmod
 export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
 
 const c7648 = 8
@@ -179,6 +184,7 @@ type Foo7648 end
     module TestModSub9475
     using Base.Test
     using ..TestMod7648
+    import ..curmod_name
     export a9475, foo9475
     a9475 = 5
     b9475 = 7
@@ -187,7 +193,8 @@ type Foo7648 end
         @test Base.binding_module(:a9475) == current_module()
         @test Base.binding_module(:c7648) == TestMod7648
         @test Base.module_name(current_module()) == :TestModSub9475
-        @test Base.fullname(current_module()) == (:TestMod7648, :TestModSub9475)
+        @test Base.fullname(current_module()) == (curmod_name..., :TestMod7648,
+                                                  :TestModSub9475)
         @test Base.module_parent(current_module()) == TestMod7648
     end
     end # module TestModSub9475
@@ -198,7 +205,7 @@ let
     @test Base.binding_module(:d7648) == current_module()
     @test Base.binding_module(:a9475) == TestModSub9475
     @test Base.module_name(current_module()) == :TestMod7648
-    @test Base.module_parent(current_module()) == Main
+    @test Base.module_parent(current_module()) == curmod
 end
 end # module TestMod7648
 
@@ -210,12 +217,15 @@ let
     @test Set(names(TestMod7648, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                 :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
                                                 :Foo7648, :eval, Symbol("#eval")])
+    @test Set(names(TestMod7648, true, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
+                                                      :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
+                                                      :Foo7648, :eval, Symbol("#eval"), :convert, :curmod_name, :curmod])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
 
 let
-    using TestMod7648
+    using .TestMod7648
     @test Base.binding_module(:a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(:c7648) == TestMod7648
     @test Base.function_name(foo7648) == :foo7648
@@ -232,11 +242,11 @@ let
     @test TestMod7648.TestModSub9475 == @which a9475
 end
 
-@test_throws ArgumentError which(is, Tuple{Int, Int})
-@test_throws ArgumentError code_typed(is, Tuple{Int, Int})
-@test_throws ArgumentError code_llvm(is, Tuple{Int, Int})
-@test_throws ArgumentError code_native(is, Tuple{Int, Int})
-@test_throws ArgumentError Base.return_types(is, Tuple{Int, Int})
+@test_throws ArgumentError which(===, Tuple{Int, Int})
+@test_throws ArgumentError code_typed(===, Tuple{Int, Int})
+@test_throws ArgumentError code_llvm(===, Tuple{Int, Int})
+@test_throws ArgumentError code_native(===, Tuple{Int, Int})
+@test_throws ArgumentError Base.return_types(===, Tuple{Int, Int})
 
 module TestingExported
 using Base.Test
@@ -346,7 +356,7 @@ end
 end
 
 let
-    using MacroTest
+    using .MacroTest
     a = 1
     m = getfield(current_module(), Symbol("@macrotest"))
     @test which(m, Tuple{Int,Symbol})==@which @macrotest 1 a
@@ -438,7 +448,7 @@ let li = typeof(getfield).name.mt.cache.func::Core.MethodInstance,
     mmime = stringmime("text/plain", li.def)
 
     @test lrepr == lmime == "MethodInstance for getfield(...)"
-    @test mrepr == mmime == "getfield(...)"
+    @test mrepr == mmime == "getfield(...) in Core"
 end
 
 
@@ -573,3 +583,25 @@ end
 @test counter18434 == 1
 @which get_A18434()(1, y=2)
 @test counter18434 == 2
+
+# PR #18888: code_typed shouldn't cache if not optimizing
+let
+    f18888() = return nothing
+    m = first(methods(f18888, Tuple{}))
+    @test m.specializations === nothing
+    ft = typeof(f18888)
+
+    code_typed(f18888, Tuple{}; optimize=false)
+    @test m.specializations !== nothing  # uncached, but creates the specializations entry
+    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
+    @test !isdefined(code, :inferred)
+
+    code_typed(f18888, Tuple{}; optimize=true)
+    code = Core.Inference.code_for_method(m, Tuple{ft}, Core.svec(), true)
+    @test isdefined(code, :inferred)
+end
+
+# Issue #18883, code_llvm/code_native for generated functions
+@generated f18883() = nothing
+@test !isempty(sprint(io->code_llvm(io, f18883, Tuple{})))
+@test !isempty(sprint(io->code_native(io, f18883, Tuple{})))

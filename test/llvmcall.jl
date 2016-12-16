@@ -85,6 +85,8 @@ function declared_floor(x::Float64)
     Float64, Tuple{Float64}, x)
 end
 @test declared_floor(4.2) ≈ 4.
+ir = sprint(io->code_llvm(io, declared_floor, Tuple{Float64}))
+@test contains(ir, "call double @llvm.floor.f64") # should be inlined
 
 function doubly_declared_floor(x::Float64)
     llvmcall(
@@ -141,6 +143,16 @@ function confuse_declname_parsing()
 end
 confuse_declname_parsing()
 
+# Test for proper mangling of external (C) functions
+function call_jl_errno()
+    llvmcall(
+    (""" declare i32 @jl_errno()""",
+    """
+    %r = call i32 @jl_errno()
+    ret i32 %r
+    """),Int32,Tuple{})
+end
+call_jl_errno()
 
 module ObjLoadTest
     using Base: Test, llvmcall, @ccallable
