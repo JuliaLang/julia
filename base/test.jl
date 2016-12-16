@@ -140,7 +140,7 @@ type Broken <: Result
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(:Base.warn_color(), io, "Test Broken\n"; bold = true)
+    print_with_color(Base.warn_color(), io, "Test Broken\n"; bold = true)
     if t.test_type == :skipped && !(t.orig_expr === nothing)
         println(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
