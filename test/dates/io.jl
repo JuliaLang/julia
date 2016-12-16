@@ -66,11 +66,17 @@ b2 = "96/Feb/1"
 # Here we've specifed a text month name, but given a number
 b3 = "96/2/15"
 @test_throws ArgumentError Dates.DateTime(b3,f)
-let err = try DateTime("2012-02-20T09:09:3.43i9") catch err; err end
+try
+    Dates.tryparse_internal(DateTime, "2012-02-20T09:09:3.43i9", Dates.ISODateTimeFormat, true)
+    @test false
+catch err
     @test isa(err, ArgumentError)
     @test err.msg == "Found extra characters at the end of date time string"
 end
-let err = try DateTime("2012-02-20T09:09:3i439") catch err; err end
+try
+    Dates.tryparse_internal(DateTime, "2012-02-20T09:09:3i439", Dates.ISODateTimeFormat, true)
+    @test false
+catch err
     @test isa(err, ArgumentError)
     @test err.msg == "Unable to parse date time. Expected token Delim(.) at char 19"
 end
