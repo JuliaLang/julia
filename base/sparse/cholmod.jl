@@ -418,6 +418,13 @@ function copy_dense{Tv<:VTypes}(A::Dense{Tv})
     d
 end
 
+function sort!{Tv<:VTypes}(S::Sparse{Tv})
+    @isok ccall((:cholmod_l_sort, :libcholmod), SuiteSparse_long,
+        (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
+         get(S.p), common())
+    return S
+end
+
 ### cholmod_matrixops.h ###
 function norm_dense{Tv<:VTypes}(D::Dense{Tv}, p::Integer)
     s = unsafe_load(get(D.p))
@@ -851,6 +858,9 @@ end
 function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv})
     o = Sparse(m, n, colptr, rowval, nzval, 0)
 
+    # sort indices
+    sort!(o)
+
     # check if array is symmetric and change stype if it is
     if ishermitian(o)
         change_stype!(o, -1)
@@ -993,21 +1003,51 @@ function convert{Tv}(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv}
     if s.stype != 0
         throw(ArgumentError("matrix has stype != 0. Convert to matrix with stype == 0 before converting to SparseMatrixCSC"))
     end
-    return SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)), increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)), copy(unsafe_wrap(Array, s.x, (s.nzmax,), false)))
+
+    B = SparseMatrixCSC(s.nrow, s.ncol,
+        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)),
+        increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)),
+        copy(unsafe_wrap(Array, s.x, (s.nzmax,), false)))
+
+    if s.sorted == 0
+        return SparseArrays.sortSparseMatrixCSC!(B)
+    else
+        return B
+    end
 end
 function convert(::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}}, A::Sparse{Float64})
     s = unsafe_load(A.p)
     if !issymmetric(A)
         throw(ArgumentError("matrix is not symmetric"))
     end
-    return Symmetric(SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)), increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)), copy(unsafe_wrap(Array, s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
+
+    B = Symmetric(SparseMatrixCSC(s.nrow, s.ncol,
+        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)),
+        increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)),
+        copy(unsafe_wrap(Array, s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
+
+    if s.sorted == 0
+        return SparseArrays.sortSparseMatrixCSC!(B.data)
+    else
+        return B
+    end
 end
 function convert{Tv<:VTypes}(::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv})
     s = unsafe_load(A.p)
     if !ishermitian(A)
         throw(ArgumentError("matrix is not Hermitian"))
     end
-    return Hermitian(SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)), increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)), copy(unsafe_wrap(Array, s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
+
+    B = Hermitian(SparseMatrixCSC(s.nrow, s.ncol,
+        increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)),
+        increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)),
+        copy(unsafe_wrap(Array, s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
+
+    if s.sorted == 0
+        return SparseArrays.sortSparseMatrixCSC!(B.data)
+    else
+        return B
+    end
 end
 function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(A.p)
@@ -1571,21 +1611,16 @@ function isposdef{Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long})
     true
 end
 
-function issymmetric(A::Sparse)
-    s = unsafe_load(A.p)
-    if s.stype != 0
-        return isreal(A)
-    end
-    i = symmetry(A, 1)[1]
-    return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
-end
-
 function ishermitian(A::Sparse{Float64})
     s = unsafe_load(A.p)
     if s.stype != 0
         return true
     else
         i = symmetry(A, 1)[1]
+        if i < 0
+            throw(CHOLMODException("negative value returned from CHOLMOD's symmetry function. This
+                is either because the indices are not sorted or because of a memory error"))
+        end
         return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
     end
 end
@@ -1595,6 +1630,10 @@ function ishermitian(A::Sparse{Complex{Float64}})
         return true
     else
         i = symmetry(A, 1)[1]
+        if i < 0
+            throw(CHOLMODException("negative value returned from CHOLMOD's symmetry function. This
+                is either because the indices are not sorted or because of a memory error"))
+        end
         return i == MM_HERMITIAN || i == MM_HERMITIAN_POSDIAG
     end
 end
