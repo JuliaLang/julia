@@ -66,14 +66,14 @@ for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         word, i = tryparsenext_word(str, i, len, locale, max_width(d))
         val = isnull(word) ? 0 : $fn(get(word), locale)
-        return Nullable{Int}(val == 0 ? nothing : val), i
+        return Nullable{Int64}(val == 0 ? nothing : val), i
     end
 end
 
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
     ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
     if !isnull(ms)
-        ms = Nullable{Int}(get(ms) * 10 ^ (3 - (ii - i)))
+        ms = Nullable{Int64}(get(ms) * 10 ^ (3 - (ii - i)))
     end
     return ms, ii
 end
@@ -118,7 +118,7 @@ Delim(d::Char) = Delim{Char,1}(d)
 Delim(d::String) = Delim{String,length(d)}(d)
 
 @inline function tryparsenext{N}(d::Delim{Char,N}, str, i::Int, len)
-    R = Nullable{Int}
+    R = Nullable{Int64}
     for j=1:N
         i > len && return (R(), i)
         c, i = next(str, i)
@@ -128,7 +128,7 @@ Delim(d::String) = Delim{String,length(d)}(d)
 end
 
 @inline function tryparsenext{N}(d::Delim{String,N}, str, i::Int, len)
-    R = Nullable{Int}
+    R = Nullable{Int64}
     i1=i
     i2=start(d.d)
     for j=1:N
@@ -199,8 +199,8 @@ const SLOT_RULE = Dict{Char, Type}(
 slot_order(::Type{Date}) = (Year, Month, Day)
 slot_order(::Type{DateTime}) = (Year, Month, Day, Hour, Minute, Second, Millisecond)
 
-slot_defaults(::Type{Date}) = (1, 1, 1)
-slot_defaults(::Type{DateTime}) = (1, 1, 1, 0, 0, 0, 0)
+slot_defaults(::Type{Date}) = map(Int64, (1, 1, 1))
+slot_defaults(::Type{DateTime}) = map(Int64, (1, 1, 1, 0, 0, 0, 0))
 
 slot_types{T<:TimeType}(::Type{T}) = typeof(slot_defaults(T))
 
