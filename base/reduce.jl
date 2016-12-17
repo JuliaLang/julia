@@ -350,20 +350,6 @@ Returns the sum of all elements in a collection.
 sum(a) = mapreduce(identity, +, a)
 sum(a::AbstractArray{Bool}) = countnz(a)
 
-"""
-    sumabs(itr)
-
-Sum absolute values of all elements in a collection. This is equivalent to `sum(abs(itr))` but faster.
-"""
-sumabs(a) = mapreduce(abs, +, a)
-
-"""
-    sumabs2(itr)
-
-Sum squared absolute values of all elements in a collection.
-This is equivalent to `sum(abs2(itr))` but faster.
-"""
-sumabs2(a) = mapreduce(abs2, +, a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
@@ -462,30 +448,6 @@ julia> minimum([1,2,3])
 ```
 """
 minimum(a) = mapreduce(identity, scalarmin, a)
-
-"""
-    maxabs(itr)
-
-Compute the maximum absolute value of a collection of values.
-
-```jldoctest
-julia> maxabs([-1, 3, 4*im])
-4.0
-```
-"""
-maxabs(a) = mapreduce(abs, scalarmax, a)
-
-"""
-    minabs(itr)
-
-Compute the minimum absolute value of a collection of values.
-
-```jldoctest
-julia> minabs([-1, 3, 4*im])
-1.0
-```
-"""
-minabs(a) = mapreduce(abs, scalarmin, a)
 
 ## extrema
 

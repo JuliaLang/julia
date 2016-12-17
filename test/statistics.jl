@@ -337,12 +337,12 @@ y = [0.40003674665581906,0.4085630862624367,0.41662034698690303,0.41662034698690
 
 # variance of complex arrays (#13309)
 let z = rand(Complex128, 10)
-    @test var(z) ≈ invoke(var, (Any,), z) ≈ cov(z) ≈ var(z,1)[1] ≈ sumabs2(z - mean(z))/9
+    @test var(z) ≈ invoke(var, (Any,), z) ≈ cov(z) ≈ var(z,1)[1] ≈ sum(abs2, z - mean(z))/9
     @test isa(var(z), Float64)
     @test isa(invoke(var, (Any,), z), Float64)
     @test isa(cov(z), Float64)
     @test isa(var(z,1), Vector{Float64})
-    @test varm(z, 0.0) ≈ invoke(varm, (Any,Float64), z, 0.0) ≈ sumabs2(z)/9
+    @test varm(z, 0.0) ≈ invoke(varm, (Any,Float64), z, 0.0) ≈ sum(abs2, z)/9
     @test isa(varm(z, 0.0), Float64)
     @test isa(invoke(varm, (Any,Float64), z, 0.0), Float64)
     @test cor(z) === 1.0
