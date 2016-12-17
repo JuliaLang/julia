@@ -56,7 +56,7 @@ will print text with all text properties (like boldness) reset.
 text_colors
 
 have_color = false
-default_color_warn = :light_red
+default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
 if is_windows()

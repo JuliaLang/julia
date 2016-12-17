@@ -179,7 +179,7 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
             finalize(prepo)
         end
     else
-        print_with_color(:yellow, io, "non-repo (unregistered)")
+        print_with_color(Base.warn_color(), io, "non-repo (unregistered)")
     end
     println(io)
 end
