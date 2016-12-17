@@ -3635,8 +3635,16 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
                                          PointerType::get(T_psize, 0));
 }
 
+static void emit_last_age_field(jl_codectx_t *ctx)
+{
+    ctx->world_age_field = builder.CreateGEP(
+            builder.CreateBitCast(ctx->ptlsStates, T_psize),
+            ConstantInt::get(T_size, offsetof(jl_tls_states_t, world_age) / sizeof(size_t)));
+}
+
 static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt,
-                                  jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt)
+                                  jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt,
+                                  size_t world)
 {
     // Generate a c-callable wrapper
     bool toboxed;
@@ -3663,7 +3671,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     const char *name = "cfunction";
     // try to look up this function for direct invoking
-    size_t world = jl_world_counter/*FIXME*/;
     jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world);
     jl_value_t *astrt = (jl_value_t*)jl_any_type;
     // infer it first, if necessary
@@ -3721,6 +3728,14 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     ctx.spvals_ptr = NULL;
     ctx.params = &jl_default_cgparams;
     allocate_gc_frame(b0, &ctx);
+    emit_last_age_field(&ctx);
+    Value *dummy_world = builder.CreateAlloca(T_size);
+    Value *have_tls = builder.CreateICmpNE(ctx.ptlsStates, Constant::getNullValue(ctx.ptlsStates->getType()));
+    // TODO: in the future, try to initialize a full TLS context here
+    // for now, just use a dummy field to avoid a branch in this function
+    ctx.world_age_field = builder.CreateSelect(have_tls, ctx.world_age_field, dummy_world);
+    Value *last_age = tbaa_decorate(tbaa_gcframe, builder.CreateLoad(ctx.world_age_field));
+    builder.CreateStore(ConstantInt::get(T_size, world), ctx.world_age_field);
 
     // Save the Function object reference
     sf->func.value = jl_box_voidpointer((void*)cw_proto);
@@ -3948,6 +3963,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         sret = true;
     }
 
+    builder.CreateStore(last_age, ctx.world_age_field);
     if (sret)
         builder.CreateRetVoid();
     else
@@ -4019,7 +4035,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     cfunc_sig = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)cfunc_sig);
 
     // check the cache
-    size_t world = 1;
+    size_t world = jl_world_counter;
     if (jl_cfunction_list.unknown != jl_nothing) {
         jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(jl_cfunction_list, (jl_tupletype_t*)cfunc_sig, NULL, 1, 0, /*offs*/0, world);
         if (sf) {
@@ -4031,7 +4047,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
         }
     }
     jl_typemap_entry_t *sf = jl_typemap_insert(&jl_cfunction_list, (jl_value_t*)jl_cfunction_list.unknown, (jl_tupletype_t*)cfunc_sig,
-            jl_emptysvec, NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, 1, ~(size_t)0, NULL);
+            jl_emptysvec, NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, world, world, NULL);
 
     // Backup the info for the nested compile
     JL_LOCK(&codegen_lock);
@@ -4039,7 +4055,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
-    Function *f = gen_cfun_wrapper(ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt);
+    Function *f = gen_cfun_wrapper(ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt, world);
     // Restore the previous compile context
     builder.restoreIP(old);
     builder.SetCurrentDebugLocation(olddl);
@@ -4584,12 +4600,9 @@ static std::unique_ptr<Module> emit_function(
 
     // step 7. set up GC frame
     allocate_gc_frame(b0, &ctx);
-
     Value *last_age = NULL;
     if (toplevel) {
-        ctx.world_age_field = builder.CreateGEP(
-                builder.CreateBitCast(ctx.ptlsStates, T_psize),
-                ConstantInt::get(T_size, offsetof(jl_tls_states_t, world_age) / sizeof(size_t)));
+        emit_last_age_field(&ctx);
         last_age = tbaa_decorate(tbaa_gcframe, builder.CreateLoad(ctx.world_age_field));
     }
 
