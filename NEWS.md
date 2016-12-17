@@ -98,6 +98,10 @@ Deprecated or removed
 
   * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
 
+  * `sumabs` and `sumabs2` have been deprecated in favor of `sum(abs, x)` and `sum(abs2, x)`, respectively.
+    `maxabs` and `minabs` have similarly been deprecated in favor of `maximum(abs, x)` and `minimum(abs, x)`.
+    Likewise for the in-place counterparts of these functions ([#19598]).
+
 Julia v0.5.0 Release Notes
 ==========================
 
