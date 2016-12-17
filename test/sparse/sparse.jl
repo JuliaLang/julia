@@ -1757,7 +1757,7 @@ end
 
 # Test that broadcast[!](f, [C::SparseMatrixCSC], A::SparseMatrixCSC, B::SparseMatrixCSC)
 # returns the correct (densely populated) result when f(zero(eltype(A)), zero(eltype(B))) != 0
-@testset "test broadcast[!] returns the correct (densely populated) result" begin
+@testset "check that broadcast[!](f, ... yields the correct (densely populated) result when f does not preserve zeros" begin
     N = 5
     sparsesqrmat = sprand(N, N, 0.5)
     sparsesqrmat2 = sprand(N, N, 0.5)
