@@ -764,8 +764,8 @@ module Test19626
     using Base.Test
 
     # Define a mock physical quantity type
-    immutable MockQuantity{T} <: Number
-        val::T
+    immutable MockQuantity <: Number
+        val::Float64
     end
 
     # Following definitions needed for quadgk to work with MockQuantity
@@ -778,15 +778,12 @@ module Test19626
     isinf(a::MockQuantity) = isinf(a.val)
     isless(a::MockQuantity, b::MockQuantity) = isless(a.val, b.val)
 
-    # isless defn. necessary so that default abstol plays nicely with MockQuantity
-    isless(y::Number, x::MockQuantity) = y == 0 ? isless(MockQuantity(0), x) :
-        error("Dimensions issue")
-
     # isapprox only needed for test purposes
     Base.isapprox(a::MockQuantity, b::MockQuantity) = isapprox(a.val, b.val)
 
     # Test physical quantity-valued functions
-    @test quadgk(x->MockQuantity(x), 0.0, 1.0)[1] ≈ MockQuantity(0.5)
+    @test quadgk(x->MockQuantity(x), 0.0, 1.0, abstol=MockQuantity(0.0))[1] ≈
+        MockQuantity(0.5)
 end
 
 @testset "subnormal flags" begin
