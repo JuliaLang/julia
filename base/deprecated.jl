@@ -1131,8 +1131,8 @@ eval(Base.Dates, quote
 end)
 
 # #18931
-@deprecate cummin(A, dim=1) accumulate(min, A, dim=1)
-@deprecate cummax(A, dim=1) accumulate(max, A, dim=1)
+@deprecate cummin(A, dim=1) accumulate(min, A, dim)
+@deprecate cummax(A, dim=1) accumulate(max, A, dim)
 
 # #19598
 @deprecate sumabs(x)          sum(abs, x)
