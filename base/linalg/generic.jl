@@ -1165,8 +1165,46 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
+"""
+    promote_leaf_eltypes(itr)
+
+For an (possibly nested) iterable object `itr`, promote the types of leaf
+elements.  Equivalent to `promote_type(typeof(leaf1), typeof(leaf2), ...)`.
+
+# Example
+
+```jldoctest
+julia> a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
+3-element Array{Any,1}:
+  Any[1,2,[3,4]]
+ 5.0
+  Any[0+6im,[7.0,8.0]]
+
+julia> promote_leaf_eltypes(a)
+Complex{Float64}
+```
+"""
+function promote_leaf_eltypes(itr)
+    if !isa(itr, AbstractArray) && !isa(itr, Tuple)  # handles arrays, tuples, ranges
+        return typeof(itr)
+    else
+        s = start(itr)
+        (i, s) = next(itr, s)
+        t = promote_leaf_eltypes(i)
+        while !done(itr, s)
+            (i, s) = next(itr, s)
+            ti = promote_leaf_eltypes(i)
+            t = promote_type(t, ti)
+        end
+
+        return t
+    end
+end
+
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
-function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
+# Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
+# `a ≈ a` is `true`.
+function isapprox(x::AbstractArray, y::AbstractArray; rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y)), atol::Real=0, norm::Function=vecnorm)
     d = norm(x - y)
     if isfinite(d)
         return d <= atol + rtol*max(norm(x), norm(y))
