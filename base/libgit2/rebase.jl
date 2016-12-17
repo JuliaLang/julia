@@ -55,6 +55,7 @@ function commit(rb::GitRebase, sig::GitSignature)
                      (Ptr{Oid}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
                       oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
     catch err
+        # TODO: return current HEAD instead
         err.code == Error.EAPPLIED && return nothing
         rethrow(err)
     end
