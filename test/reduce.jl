@@ -212,6 +212,23 @@ let c = Int[], d = Int[], A = 1:9
     @test d == collect(1:5)
 end
 
+# any/all with non-boolean collections
+
+let f(x) = x == 1 ? true : x == 2 ? false : 1
+    @test any(Any[false,true,false])
+    @test any(map(f, [2,1,2]))
+    @test any([f(x) for x in [2,1,2]])
+
+    @test all(Any[true,true,true])
+    @test all(map(f, [1,1,1]))
+    @test all([f(x) for x in [1,1,1]])
+
+    @test_throws TypeError any([1,true])
+    @test_throws TypeError all([true,1])
+    @test_throws TypeError any(map(f,[3,1]))
+    @test_throws TypeError all(map(f,[1,3]))
+end
+
 # any and all with functors
 
 immutable SomeFunctor end
