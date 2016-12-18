@@ -296,6 +296,8 @@ end
 @test [0.01311489462160816, Inf] ≈ [0.013114894621608135, Inf]
 
 # Issue 19035
+@test Base.LinAlg.promote_leaf_eltypes([1, 2, [3.0, 4.0]]) == Float64
+@test Base.LinAlg.promote_leaf_eltypes([[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]) == Complex128
 @test [1, 2, 3] ≈ [1, 2, 3]
 @test [[1, 2], [3, 4]] ≈ [[1, 2], [3, 4]]
 @test [[1, 2], [3, 4]] ≈ [[1.0-eps(), 2.0+eps()], [3.0+2eps(), 4.0-1e8eps()]]
