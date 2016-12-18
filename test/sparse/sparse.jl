@@ -1828,3 +1828,8 @@ let
     @test_throws DimensionMismatch broadcast(+, A, B, speye(N))
     @test_throws DimensionMismatch broadcast!(+, X, A, B, speye(N))
 end
+
+let A = sparse(Real[1 1])
+    @test (A + A)::SparseMatrixCSC{Int,Int} == [2 2] #19595
+    @test_throws DimensionMismatch A + A'
+end
