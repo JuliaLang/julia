@@ -45,6 +45,11 @@ str = """
 function foo!{T<:Bar}(x::{T}=12)
     @time (x+x, x+x);
 end
+try
+    foo
+catch
+    bar
+end
 @time x+x
 y[[1 2 3]]
 [1*2,2;3,4]
@@ -78,6 +83,12 @@ kinds = [T.KEYWORD,T.WHITESPACE,T.IDENTIFIER,T.LBRACE,T.IDENTIFIER,
          T.IDENTIFIER,T.OP,T.IDENTIFIER,T.COMMA,T.WHITESPACE,
          T.IDENTIFIER,T.OP,T.IDENTIFIER,T.RPAREN,T.SEMICOLON,
 
+         T.WHITESPACE,T.KEYWORD,
+
+         T.WHITESPACE,T.KEYWORD,
+         T.WHITESPACE,T.IDENTIFIER,
+         T.WHITESPACE,T.KEYWORD,
+         T.WHITESPACE,T.IDENTIFIER,
          T.WHITESPACE,T.KEYWORD,
 
          T.WHITESPACE,T.AT_SIGN,T.IDENTIFIER,T.WHITESPACE,T.IDENTIFIER,
