@@ -47,10 +47,10 @@ Returns an `Iterable` containing the tokenized input. Can be reverted by e.g.
 tokenize(x) = Lexer(x)
 
 # Iterator interface
-Base.iteratorsize(::Lexer) = Base.SizeUnknown()
-Base.iteratoreltype(::Lexer) = Base.HasEltype()
+Base.iteratorsize{IO_t}(::Type{Lexer{IO_t}}) = Base.SizeUnknown()
+Base.iteratoreltype{IO_t}(::Type{Lexer{IO_t}}) = Base.HasEltype()
 
-Base.eltype(::Lexer) = Token
+Base.eltype{IO_t}(::Type{Lexer{IO_t}}) = Token
 
 function Base.start(l::Lexer)
     seekstart(l)
