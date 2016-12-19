@@ -489,6 +489,8 @@ $(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
 $(eval $(call LLVM_PATCH,llvm-3.9.0_threads))
 $(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf))
 $(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
+$(eval $(call LLVM_PATCH,llvm-D27609-AArch64-UABS_G3))
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
