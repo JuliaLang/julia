@@ -43,9 +43,12 @@ function convert(::Type{Diagonal}, A::Tridiagonal)
 end
 
 function convert(::Type{Bidiagonal}, A::Tridiagonal)
-    if iszero(A.dl) return Bidiagonal(A.d, A.du, true)
-    elseif iszero(A.du) return Bidiagonal(A.d, A.dl, false)
-    else throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
+    if iszero(A.dl)
+        return Bidiagonal(A.d, A.du, true)
+    elseif iszero(A.du)
+        return Bidiagonal(A.d, A.dl, false)
+    else
+        throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
 end
 
