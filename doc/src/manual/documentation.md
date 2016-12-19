@@ -11,7 +11,7 @@ The basic syntax is very simple: any string appearing at the top-level right bef
 (function, macro, type or instance) will be interpreted as documenting it (these are called *docstrings*).
 Here is a very simple example:
 
-```
+```julia
 "Tell whether there are too foo items in the array."
 foo(xs::Array) = ...
 ```
@@ -138,7 +138,7 @@ As in the example above, we recommend following some simple conventions when wri
 
    That is, write:
 
-   ```
+   ```julia
    """
    ...
 
@@ -149,7 +149,7 @@ As in the example above, we recommend following some simple conventions when wri
 
    rather than:
 
-   ```
+   ```julia
    """...
 
    ..."""
@@ -185,25 +185,37 @@ itself (i.e. the object created without any methods by `function bar end`). Spec
 only be documented if their behaviour differs from the more generic ones. In any case, they should
 not repeat the information provided elsewhere. For example:
 
-```
+```julia
 """
+    *(x, y, z...)
+
 Multiplication operator. `x*y*z*...` calls this function with multiple
 arguments, i.e. `*(x,y,z...)`.
 """
-function *(x, y)
-  # ... [implementation sold separately] ...
+function *(x, y, z...)
+    # ... [implementation sold separately] ...
 end
 
-"When applied to strings, concatenates them."
-function *(x::AbstractString, y::AbstractString)
-  # ... [insert secret sauce here] ...
-end
-
-help?>*
-Multiplication operator. `x*y*z*...` calls this function with multiple
-arguments, i.e. `*(x,y,z...)`.
+"""
+    *(x::AbstractString, y::AbstractString, z::AbstractString...)
 
 When applied to strings, concatenates them.
+"""
+function *(x::AbstractString, y::AbstractString, z::AbstractString...)
+    # ... [insert secret sauce here] ...
+end
+
+help?> *
+search: * .*
+
+  *(x, y, z...)
+
+  Multiplication operator. x*y*z*... calls this function with multiple
+  arguments, i.e. *(x,y,z...).
+
+  *(x::AbstractString, y::AbstractString, z::AbstractString...)
+
+  When applied to strings, concatenates them.
 ```
 
 When retrieving documentation for a generic function, the metadata for each method is concatenated
