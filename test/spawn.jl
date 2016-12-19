@@ -429,8 +429,9 @@ end
 # test for proper handling of FD exhaustion
 if is_unix()
     let ps = Pipe[]
+        ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
         try
-            for i = 1:100_000
+            for i = 1 : 100 * get(ulimit_n, 1000)
                 p = Pipe()
                 Base.link_pipe(p)
                 push!(ps, p)
@@ -440,7 +441,12 @@ if is_unix()
             for p in ps
                 close(p)
             end
-            @test (ex::Base.UVError).code == Base.UV_EMFILE
+            if isnull(ulimit_n)
+                warn("`ulimit -n` is set to unlimited, fd exhaustion cannot be tested")
+                @test_broken (ex::Base.UVError).code == Base.UV_EMFILE
+            else
+                @test (ex::Base.UVError).code == Base.UV_EMFILE
+            end
         end
     end
 end
