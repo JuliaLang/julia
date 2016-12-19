@@ -30,6 +30,18 @@ do33 = ones(3)
 
     @test all(Array(se33 + convert(SparseMatrixCSC{Float32,Int32}, se33)) == 2*eye(3))
     @test all(Array(se33 * convert(SparseMatrixCSC{Float32,Int32}, se33)) == eye(3))
+
+    @testset "shape checks for sparse elementwise binary operations equivalent to map" begin
+        sqrfloatmat, colfloatmat = sprand(4, 4, 0.5), sprand(4, 1, 0.5)
+        @test_throws DimensionMismatch (+)(sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch (-)(sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch min(sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch max(sqrfloatmat, colfloatmat)
+        sqrboolmat, colboolmat = sprand(Bool, 4, 4, 0.5), sprand(Bool, 4, 1, 0.5)
+        @test_throws DimensionMismatch (&)(sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch (|)(sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch xor(sqrboolmat, colboolmat)
+    end
 end
 
 @testset "concatenation tests" begin

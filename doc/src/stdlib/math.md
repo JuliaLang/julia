@@ -36,8 +36,7 @@ Base.denominator
 Base.:(<<)
 Base.:(>>)
 Base.:(>>>)
-Base.colon(::Real, ::Real, ::Real)
-Base.colon(::Real, ::Any, ::Real)
+Base.colon
 Base.range
 Base.OneTo
 Base.:(==)

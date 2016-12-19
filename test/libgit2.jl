@@ -586,6 +586,50 @@ mktempdir() do dir
         end
     end
 
+    @testset "rebase" begin
+        repo = LibGit2.GitRepo(test_repo)
+        try
+            LibGit2.branch!(repo, "branch/a")
+
+            oldhead = LibGit2.head_oid(repo)
+            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(repo, "file1")
+            LibGit2.commit(repo, "add file1")
+
+            open(joinpath(LibGit2.path(repo),"file2"),"w") do f
+                write(f, "222\n")
+            end
+            LibGit2.add!(repo, "file2")
+            LibGit2.commit(repo, "add file2")
+
+            LibGit2.branch!(repo, "branch/b")
+
+            # squash last 2 commits
+            LibGit2.reset!(repo, oldhead, LibGit2.Consts.RESET_SOFT)
+            LibGit2.commit(repo, "squash file1 and file2")
+
+            # add another file
+            open(joinpath(LibGit2.path(repo),"file3"),"w") do f
+                write(f, "333\n")
+            end
+            LibGit2.add!(repo, "file3")
+            LibGit2.commit(repo, "add file3")
+
+            newhead = LibGit2.head_oid(repo)
+
+            # switch back and rebase
+            LibGit2.branch!(repo, "branch/a")
+            LibGit2.rebase!(repo, "branch/b")
+
+            # issue #19624
+            @test LibGit2.head_oid(repo) == newhead
+        finally
+            finalize(repo)
+        end
+    end
+
     @testset "Transact test repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
