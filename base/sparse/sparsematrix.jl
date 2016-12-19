@@ -1413,7 +1413,7 @@ function map{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N})
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = fofzeros == zero(fofzeros)
     maxnnzC = fpreszeros ? min(length(A), _sumnnzs(A, Bs...)) : length(A)
-    entrytypeC = _broadcast_type(f, A, Bs...)
+    entrytypeC = typeof(fofzeros)
     indextypeC = _promote_indtype(A, Bs...)
     Ccolptr = Vector{indextypeC}(A.n + 1)
     Crowval = Vector{indextypeC}(maxnnzC)
@@ -1438,7 +1438,7 @@ function broadcast{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = fofzeros == zero(fofzeros)
     indextypeC = _promote_indtype(A, Bs...)
-    entrytypeC = _broadcast_type(f, A, Bs...)
+    entrytypeC = typeof(fofzeros)
     Cm, Cn = Base.to_shape(Base.Broadcast.broadcast_indices(A, Bs...))
     maxnnzC = fpreszeros ? _checked_maxnnzbcres(Cm, Cn, A, Bs...) : (Cm * Cn)
     Ccolptr = Vector{indextypeC}(Cn + 1)
@@ -1464,13 +1464,19 @@ _maxnnzfrom(Cm, Cn, A) = nnz(A) * div(Cm, A.m) * div(Cn, A.n)
 @inline _maxnnzfrom_each(Cm, Cn, As) = (_maxnnzfrom(Cm, Cn, first(As)), _maxnnzfrom_each(Cm, Cn, tail(As))...)
 @inline _unchecked_maxnnzbcres(Cm, Cn, As) = min(Cm * Cn, sum(_maxnnzfrom_each(Cm, Cn, As)))
 @inline _checked_maxnnzbcres(Cm, Cn, As...) = Cm != 0 && Cn != 0 ? _unchecked_maxnnzbcres(Cm, Cn, As) : 0
-_broadcast_type(f, As...) = Base._promote_op(f, Base.Broadcast.typestuple(As...))
+@inline _update_nzval!{T}(nzval::Vector{T}, k, x::T) = (nzval[k] = x; nzval)
+@inline function _update_nzval!{T,Tx}(nzval::Vector{T}, k, x::Tx)
+    newnzval = convert(Vector{typejoin(Tx, T)}, nzval)
+    newnzval[k] = x
+    return newnzval
+end
 
 # _map_zeropres!/_map_notzeropres! specialized for a single sparse matrix
 "Stores only the nonzero entries of `map(f, Matrix(A))` in `C`."
 function _map_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC)
     spaceC = min(length(C.rowval), length(C.nzval))
     Ck = 1
+    nzval = C.nzval
     @inbounds for j in 1:C.n
         C.colptr[j] = Ck
         for Ak in nzrange(A, j)
@@ -1478,12 +1484,13 @@ function _map_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC)
             if Cx != zero(eltype(C))
                 Ck > spaceC && (spaceC = _expandstorage!(C, Ck + nnz(A) - (Ak - 1)))
                 C.rowval[Ck] = A.rowval[Ak]
-                C.nzval[Ck] = Cx
+                nzval = _update_nzval!(nzval, Ck, Cx)
                 Ck += 1
             end
         end
     end
     @inbounds C.colptr[C.n + 1] = Ck
+    nzval === C.nzval || (C = SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval))
     _trimstorage!(C, Ck - 1)
     return C
 end
@@ -1496,13 +1503,14 @@ function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMa
     _densestructure!(C)
     # Populate values
     fill!(C.nzval, fillvalue)
+    nzval = C.nzval
     @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1)), Ak in nzrange(A, j)
         Cx = f(A.nzval[Ak])
-        Cx != fillvalue && (C.nzval[jo + A.rowval[Ak]] = Cx)
+        Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + A.rowval[Ak], Cx))
     end
     # NOTE: Combining the fill! above into the loop above to avoid multiple sweeps over /
     # nonsequential access of C.nzval does not appear to improve performance.
-    return C
+    return nzval === C.nzval ? C : SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval)
 end
 # helper functions for these methods and some of those below
 function _expandstorage!(X::SparseMatrixCSC, maxstored)
@@ -1533,6 +1541,7 @@ function _map_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::Sp
     spaceC = min(length(C.rowval), length(C.nzval))
     rowsentinelA = convert(eltype(A.rowval), C.m + 1)
     rowsentinelB = convert(eltype(B.rowval), C.m + 1)
+    nzval = C.nzval
     Ck = 1
     @inbounds for j in 1:C.n
         C.colptr[j] = Ck
@@ -1562,12 +1571,13 @@ function _map_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::Sp
             if Cx != zero(eltype(C))
                 Ck > spaceC && (spaceC = _expandstorage!(C, Ck + (nnz(A) - (Ak - 1)) + (nnz(B) - (Bk - 1))))
                 C.rowval[Ck] = Ci
-                C.nzval[Ck] = Cx
+                nzval = _update_nzval!(nzval, Ck, Cx)
                 Ck += 1
             end
         end
     end
     @inbounds C.colptr[C.n + 1] = Ck
+    nzval === C.nzval || (C = SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval))
     _trimstorage!(C, Ck - 1)
     return C
 end
@@ -1578,6 +1588,7 @@ function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMa
     fill!(C.nzval, fillvalue)
     # NOTE: Combining this fill! into the loop below to avoid multiple sweeps over /
     # nonsequential access of C.nzval does not appear to improve performance.
+    nzval = C.nzval
     rowsentinelA = convert(eltype(A.rowval), C.m + 1)
     rowsentinelB = convert(eltype(B.rowval), C.m + 1)
     @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
@@ -1598,10 +1609,10 @@ function _map_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::SparseMa
                 Cx, Ci = f(zero(eltype(A)), B.nzval[Bk]), Bi
                 Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
             end
-            Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+            Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + Ci, Cx))
         end
     end
-    return C
+    return nzval === C.nzval ? C : SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval)
 end
 # _broadcast_zeropres!/_broadcast_notzeropres! specialized for a pair of (input) sparse matrices
 function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, B::SparseMatrixCSC)
@@ -1609,6 +1620,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC,
     spaceC = min(length(C.rowval), length(C.nzval))
     rowsentinelA = convert(eltype(A.rowval), C.m + 1)
     rowsentinelB = convert(eltype(B.rowval), C.m + 1)
+    nzval = C.nzval
     # A and B cannot have the same shape, as we directed that case to map in broadcast's
     # entry point; here we need efficiently handle only heterogeneous combinations of matrices
     # with no singleton dimensions ("matrices" hereafter), one singleton dimension ("columns"
@@ -1663,7 +1675,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC,
                 if Cx != zero(eltype(C))
                     Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
                     C.rowval[Ck] = Ci
-                    C.nzval[Ck] = Cx
+                    nzval = _update_nzval!(nzval, Ck, Cx)
                     Ck += 1
                 end
             end
@@ -1685,7 +1697,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC,
                     if Cx != zero(eltype(C))
                         Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
                         C.rowval[Ck] = B.rowval[Bk]
-                        C.nzval[Ck] = Cx
+                        nzval = _update_nzval!(nzval, Ck, Cx)
                         Ck += 1
                     end
                     Bk += one(Bk)
@@ -1704,7 +1716,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC,
                     if Cx != zero(eltype(C))
                         Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
                         C.rowval[Ck] = Ci
-                        C.nzval[Ck] = Cx
+                        nzval = _update_nzval!(nzval, Ck, Cx)
                         Ck += 1
                     end
                 end
@@ -1726,7 +1738,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC,
                     if Cx != zero(eltype(C))
                         Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
                         C.rowval[Ck] = A.rowval[Ak]
-                        C.nzval[Ck] = Cx
+                        nzval = _update_nzval!(nzval, Ck, Cx)
                         Ck += 1
                     end
                     Ak += one(Ak)
@@ -1745,7 +1757,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC,
                     if Cx != zero(eltype(C))
                         Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, A, B)))
                         C.rowval[Ck] = Ci
-                        C.nzval[Ck] = Cx
+                        nzval = _update_nzval!(nzval, Ck, Cx)
                         Ck += 1
                     end
                 end
@@ -1753,6 +1765,7 @@ function _broadcast_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC,
         end
     end
     @inbounds C.colptr[C.n + 1] = Ck
+    nzval === C.nzval || (C = SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval))
     _trimstorage!(C, Ck - 1)
     return C
 end
@@ -1764,6 +1777,7 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::Sp
     fill!(C.nzval, fillvalue)
     rowsentinelA = convert(eltype(A.rowval), C.m + 1)
     rowsentinelB = convert(eltype(B.rowval), C.m + 1)
+    nzval = C.nzval
     # Cases without vertical expansion
     if A.m == B.m
         @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
@@ -1785,7 +1799,7 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::Sp
                     Ak += one(Ak); Ai = Ak < stopAk ? A.rowval[Ak] : rowsentinelA
                     Bk += one(Bk); Bi = Bk < stopBk ? B.rowval[Bk] : rowsentinelB
                 end
-                Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+                Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + Ci, Cx))
             end
         end
     # Cases with vertical expansion
@@ -1798,7 +1812,7 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::Sp
             if fvAzB == zero(eltype(C))
                 while Bk < stopBk
                     Cx = f(Ax, B.nzval[Bk])
-                    Cx != fillvalue && (C.nzval[jo + B.rowval[Bk]] = Cx)
+                    Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + B.rowval[Bk], Cx))
                     Bk += one(Bk)
                 end
             else
@@ -1810,7 +1824,7 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::Sp
                     else
                         Cx = fvAzB
                     end
-                    Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+                    Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + Ci, Cx))
                 end
             end
         end
@@ -1823,7 +1837,7 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::Sp
             if fzAvB == zero(eltype(C))
                 while Ak < stopAk
                     Cx = f(A.nzval[Ak], Bx)
-                    Cx != fillvalue && (C.nzval[jo + A.rowval[Ak]] = Cx)
+                    Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + A.rowval[Ak], Cx))
                     Ak += one(Ak)
                 end
             else
@@ -1835,12 +1849,12 @@ function _broadcast_notzeropres!{Tf}(f::Tf, fillvalue, C::SparseMatrixCSC, A::Sp
                     else
                         Cx = fzAvB
                     end
-                    Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+                    Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + Ci, Cx))
                 end
             end
         end
     end
-    return C
+    return nzval === C.nzval ? C : SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval)
 end
 
 # _map_zeropres!/_map_notzeropres! for more than two sparse matrices
@@ -1849,6 +1863,7 @@ function _map_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{SparseMatrix
     rowsentinel = C.m + 1
     Ck = 1
     stopks = _indforcol_all(1, As)
+    nzval = C.nzval
     @inbounds for j in 1:C.n
         C.colptr[j] = Ck
         ks = stopks
@@ -1865,13 +1880,14 @@ function _map_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{SparseMatrix
             if Cx != zero(eltype(C))
                 Ck > spaceC && (spaceC = _expandstorage!(C, Ck + min(length(C), _sumnnzs(As...)) - (sum(ks) - N)))
                 C.rowval[Ck] = activerow
-                C.nzval[Ck] = Cx
+                _update_nzval!(nzval, Ck, Cx)
                 Ck += 1
             end
             activerow = min(rows...)
         end
     end
     @inbounds C.colptr[C.n + 1] = Ck
+    nzval === C.nzval || (C = SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval))
     _trimstorage!(C, Ck - 1)
     return C
 end
@@ -1884,6 +1900,7 @@ function _map_notzeropres!{Tf,N}(f::Tf, fillvalue, C::SparseMatrixCSC, As::Varar
     # nonsequential access of C.nzval does not appear to improve performance.
     rowsentinel = C.m + 1
     stopks = _indforcol_all(1, As)
+    nzval = C.nzval
     @inbounds for (j, jo) in zip(1:C.n, 0:C.m:(C.m*C.n - 1))
         ks = stopks
         stopks = _indforcol_all(j + 1, As)
@@ -1896,7 +1913,7 @@ function _map_notzeropres!{Tf,N}(f::Tf, fillvalue, C::SparseMatrixCSC, As::Varar
             # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
             vals, ks, rows = _fusedupdate_all(rowsentinel, activerow, rows, ks, stopks, As)
             Cx = f(vals...)
-            Cx != fillvalue && (C.nzval[jo + activerow] = Cx)
+            Cx != fillvalue && (_update_nzval!(nzval, jo + activerow, Cx))
             activerow = min(rows...)
         end
     end
@@ -1962,6 +1979,7 @@ function _broadcast_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{Sparse
     expandsverts = _expandsvert_all(C, As)
     expandshorzs = _expandshorz_all(C, As)
     rowsentinel = C.m + 1
+    nzval = C.nzval
     Ck = 1
     @inbounds for j in 1:C.n
         C.colptr[j] = Ck
@@ -1985,7 +2003,7 @@ function _broadcast_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{Sparse
                 if Cx != zero(eltype(C))
                     Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, As)))
                     C.rowval[Ck] = activerow
-                    C.nzval[Ck] = Cx
+                    nzval = _update_nzval!(nzval, Ck, Cx)
                     Ck += 1
                 end
                 activerow = min(rows...)
@@ -2006,13 +2024,14 @@ function _broadcast_zeropres!{Tf,N}(f::Tf, C::SparseMatrixCSC, As::Vararg{Sparse
                 if Cx != zero(eltype(C))
                     Ck > spaceC && (spaceC = _expandstorage!(C, _unchecked_maxnnzbcres(C.m, C.n, As)))
                     C.rowval[Ck] = Ci
-                    C.nzval[Ck] = Cx
+                    nzval = _update_nzval!(nzval, Ck, Cx)
                     Ck += 1
                 end
             end
         end
     end
     @inbounds C.colptr[C.n + 1] = Ck
+    nzval === C.nzval || (C = SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval))
     _trimstorage!(C, Ck - 1)
     return C
 end
@@ -2022,6 +2041,7 @@ function _broadcast_notzeropres!{Tf,N}(f::Tf, fillvalue, C::SparseMatrixCSC, As:
     _densestructure!(C)
     # Populate values
     fill!(C.nzval, fillvalue)
+    nzval = C.nzval
     expandsverts = _expandsvert_all(C, As)
     expandshorzs = _expandshorz_all(C, As)
     rowsentinel = C.m + 1
@@ -2043,7 +2063,7 @@ function _broadcast_notzeropres!{Tf,N}(f::Tf, fillvalue, C::SparseMatrixCSC, As:
                 # rows = _updaterow_all(rowsentinel, activerows, rows, ks, stopks, As)
                 args, ks, rows = _fusedupdatebc_all(rowsentinel, activerow, rows, defargs, ks, stopks, As)
                 Cx = f(args...)
-                Cx != fillvalue && (C.nzval[jo + activerow] = Cx)
+                Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + activerow, Cx))
                 activerow = min(rows...)
             end
         else # fillvalue-non-preserving column scan
@@ -2059,11 +2079,11 @@ function _broadcast_notzeropres!{Tf,N}(f::Tf, fillvalue, C::SparseMatrixCSC, As:
                 else
                     Cx = defaultCx
                 end
-                Cx != fillvalue && (C.nzval[jo + Ci] = Cx)
+                Cx != fillvalue && (nzval = _update_nzval!(nzval, jo + Ci, Cx))
             end
         end
     end
-    return C
+    return nzval === C.nzval ? C : SparseMatrixCSC(C.m, C.n, C.colptr, C.rowval, nzval)
 end
 # helper method for broadcast/broadcast! methods just above
 @inline _expandsvert(C, A) = A.m != C.m
