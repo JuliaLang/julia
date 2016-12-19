@@ -422,14 +422,11 @@ DefaultTestSet(desc) = DefaultTestSet(desc, [], false)
 record(ts::DefaultTestSet, t::Union{Pass,Broken}) = (push!(ts.results, t); t)
 
 # For the other result types, immediately print the error message
-# but do not terminate. Print a backtrace.
+# but do not terminate.
 function record(ts::DefaultTestSet, t::Union{Fail, Error})
     if myid() == 1
         print_with_color(:white, ts.description, ": ")
         print(t)
-        # don't print the backtrace for Errors because it gets printed in the show
-        # method
-        isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
         println()
     end
     push!(ts.results, t)
