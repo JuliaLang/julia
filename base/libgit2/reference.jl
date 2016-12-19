@@ -18,6 +18,12 @@ function GitReference(repo::GitRepo, obj_oid::Oid, refname::AbstractString = Con
     return GitReference(ref_ptr_ptr[])
 end
 
+function isunborn(repo::GitRepo)
+    r = @check ccall((:git_repository_head_unborn, :libgit2), Cint,
+                     (Ptr{Void},), repo.ptr)
+    r != 0
+end
+
 function head(repo::GitRepo)
     head_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_head, :libgit2), Cint,
