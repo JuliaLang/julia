@@ -632,34 +632,6 @@ function workspace()
     nothing
 end
 
-# testing
-
-"""
-    runtests([tests=["all"] [, numcores=ceil(Int, Sys.CPU_CORES / 2) ]])
-
-Run the Julia unit tests listed in `tests`, which can be either a string or an array of
-strings, using `numcores` processors. (not exported)
-"""
-function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
-    if isa(tests,AbstractString)
-        tests = split(tests)
-    end
-    ENV2 = copy(ENV)
-    ENV2["JULIA_CPU_CORES"] = "$numcores"
-    try
-        run(setenv(`$(julia_cmd()) $(joinpath(JULIA_HOME,
-            Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
-    catch
-        buf = PipeBuffer()
-        versioninfo(buf)
-        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
-              "including error messages above and the output of versioninfo():\n$(readstring(buf))")
-    end
-end
-
-# testing
-
-
 """
     whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
 

@@ -1154,4 +1154,7 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
     end
 end
 
+# #19567
+@deprecate runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2)) Base.Test.runtests(["all"], test_dir=joinpath(JULIA_HOME, "../../test"), numcores=numcores)
+
 # End deprecations scheduled for 0.6

@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@doc """
+"""
+    choosetests(choices = []) -> tests, node1_tests, bigmemtests, net_on
 
-`tests, net_on = choosetests(choices)` selects a set of tests to be
+`choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
 
@@ -12,7 +13,7 @@ directories.
 
 Upon return, `tests` is a vector of fully-expanded test names, and
 `net_on` is true if networking is available (required for some tests).
-""" ->
+"""
 function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "keywordargs", "numbers",
@@ -162,5 +163,7 @@ function choosetests(choices = [])
 
     filter!(x -> !(x in skip_tests), tests)
 
-    tests, net_on
+    node1_tests = ["compile"]
+    bigmemtests = ["parallel"]
+    tests, node1_tests, bigmemtests, net_on
 end
