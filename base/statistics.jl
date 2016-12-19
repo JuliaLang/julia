@@ -675,7 +675,6 @@ end
     f0 = (lv-1)*p # 0-based interpolated index
     t0 = trunc(f0)
     h = f0 - t0
-
     i = trunc(Int,t0) + 1
 
     if h == 0
