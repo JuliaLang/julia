@@ -683,7 +683,11 @@ end
     else
         a = T(v[i])
         b = T(v[i+1])
-        return a + ifelse(a == b, zero(a), h*(b-a))
+	if isfinite(a) && isfinite(b)
+        	return a + h*(b-a)
+	else
+		return (1-h)*a + h*b
+	end
     end
 end
 
