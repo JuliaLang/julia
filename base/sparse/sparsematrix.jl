@@ -2278,17 +2278,14 @@ round{To}(::Type{To}, A::SparseMatrixCSC) = round.(To, A)
 
 ## Binary arithmetic and boolean operators
 
-# TODO: These seven functions should probably be reimplemented in terms of sparse map
-# when a better sparse map exists. (And vectorized min, max, &, |, and xor should be
-# deprecated in favor of compact-broadcast syntax.)
-_checksameshape(A, B) = size(A) == size(B) || throw(DimensionMismatch("size(A) must match size(B)"))
-(+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (_checksameshape(A, B); broadcast(+, A, B))
-(-)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (_checksameshape(A, B); broadcast(-, A, B))
-min(A::SparseMatrixCSC, B::SparseMatrixCSC) = (_checksameshape(A, B); broadcast(min, A, B))
-max(A::SparseMatrixCSC, B::SparseMatrixCSC) = (_checksameshape(A, B); broadcast(max, A, B))
-(&)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (_checksameshape(A, B); broadcast(&, A, B))
-(|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (_checksameshape(A, B); broadcast(|, A, B))
-xor(A::SparseMatrixCSC, B::SparseMatrixCSC) = (_checksameshape(A, B); broadcast(xor, A, B))
+(+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
+(-)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(-, A, B)
+# TODO: Vectorized min, max, |, and xor should be deprecated in favor of compact-broadcast syntax.
+min(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(min, A, B)
+max(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(max, A, B)
+(&)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(&, A, B)
+(|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(|, A, B)
+xor(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(xor, A, B)
 
 (.+)(A::SparseMatrixCSC, B::Number) = Array(A) .+ B
 ( +)(A::SparseMatrixCSC, B::Array ) = Array(A)  + B
