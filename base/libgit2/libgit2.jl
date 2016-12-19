@@ -455,6 +455,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
                     finish(rbs, sig)
                 catch err
                     abort(rbs)
+                    rethrow(err)
                 finally
                     finalize(rbs)
                 end
