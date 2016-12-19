@@ -69,7 +69,7 @@ cd(dirname(@__FILE__)) do
                     push!(results, (test, resp))
                     if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
-                            rmprocs(p, waitfor=0.5)
+                            rmprocs(p, waitfor=5.0)
                             p = addprocs(1; exename=test_exename, exeflags=test_exeflags)[1]
                             remotecall_fetch(()->include("testdefs.jl"), p)
                         else
