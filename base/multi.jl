@@ -1933,12 +1933,10 @@ spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
 macro spawn(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
     :(spawn_somewhere($expr))
 end
 
 macro spawnat(p, expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
     :(spawnat($(esc(p)), $expr))
 end
 
@@ -1949,7 +1947,6 @@ Equivalent to `fetch(@spawn expr)`.
 See [`fetch`](@ref) and [`@spawn`](@ref).
 """
 macro fetch(expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
     quote
         thunk = $expr
         remotecall_fetch(thunk, chooseproc(thunk))
@@ -1963,7 +1960,6 @@ Equivalent to `fetch(@spawnat p expr)`.
 See [`fetch`](@ref) and [`@spawnat`](@ref).
 """
 macro fetchfrom(p, expr)
-    expr = localize_vars(esc(:(()->($expr))), false)
     :(remotecall_fetch($expr, $(esc(p))))
 end
 
@@ -2120,7 +2116,7 @@ macro parallel(args...)
     else
         thecall = :(preduce($(esc(reducer)), $(make_preduce_body(var, body)), $(esc(r))))
     end
-    localize_vars(thecall)
+    thecall
 end
 
 

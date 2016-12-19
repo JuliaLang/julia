@@ -34,6 +34,9 @@ This section lists changes that do not have deprecation warnings.
   * `broadcast` now handles tuples, and treats any argument that is not a tuple
     or an array as a "scalar" ([#16986]).
 
+  * `spawn`, `spawnat`, `fetch`, `fetchfrom`, and `async` no longer create closures
+    around the expression.
+
 Library improvements
 --------------------
 

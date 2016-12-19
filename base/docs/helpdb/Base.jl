@@ -765,7 +765,7 @@ display
 """
     @spawnat
 
-Accepts two arguments, `p` and an expression. A closure is created around the expression and
+Accepts two arguments, `p` and an expression. The expression is
 run asynchronously on process `p`. Returns a [`Future`](@ref) to the result.
 """
 :@spawnat
@@ -2531,7 +2531,7 @@ intersect
 """
     @spawn
 
-Creates a closure around an expression and runs it on an automatically-chosen process,
+Runs an expression on an automatically-chosen process,
 returning a [`Future`](@ref) to the result.
 """
 :@spawn
