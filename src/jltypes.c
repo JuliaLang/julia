@@ -68,7 +68,7 @@ JL_DLLEXPORT jl_value_t *jl_emptytuple=NULL;
 jl_svec_t *jl_emptysvec;
 jl_value_t *jl_nothing;
 
-const jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 1, 1, 1};
+jl_cgparams_t jl_default_cgparams = {1, 1, 1, 1, 1, 1, 1, {NULL, NULL, NULL}};
 
 // --- type properties and predicates ---
 
@@ -3522,6 +3522,10 @@ void jl_init_types(void)
     jl_simplevector_type = jl_new_uninitialized_datatype();
     jl_methtable_type = jl_new_uninitialized_datatype();
     jl_nothing = jl_gc_alloc(ptls, 0, NULL);
+
+    jl_default_cgparams.hooks.module_setup = jl_nothing;
+    jl_default_cgparams.hooks.module_activation = jl_nothing;
+    jl_default_cgparams.hooks.raise_exception = jl_nothing;
 
     jl_emptysvec = (jl_svec_t*)jl_gc_alloc(ptls, sizeof(void*),
                                            jl_simplevector_type);
