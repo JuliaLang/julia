@@ -112,8 +112,22 @@ DEP_LIBS += gmp
 endif
 
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-DEP_LIBS += libgit2
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+DEP_LIBS += mbedtls
 endif
+
+ifeq ($(USE_SYSTEM_LIBSSH2), 0)
+DEP_LIBS += libssh2
+endif
+
+ifneq ($(OS), WINNT)
+ifeq ($(USE_SYSTEM_CURL), 0)
+DEP_LIBS += curl
+endif
+endif
+
+DEP_LIBS += libgit2
+endif # USE_SYSTEM_LIBGIT2
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr

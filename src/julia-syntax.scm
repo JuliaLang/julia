@@ -156,15 +156,7 @@
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
 (define (method-lambda-expr argl body rett)
-  (let ((argl (map (lambda (x)
-                     (if (vararg? x)
-                         (make-decl (arg-name x) (arg-type x))
-                         (if (varargexpr? x)
-                             (if (pair? (caddr x))
-                                 x
-                                 `(|::| ,(arg-name x) (curly Vararg Any)))
-                             (arg-name x))))
-                   argl))
+  (let ((argl (map arg-name argl))
         (body (if (and (pair? body) (eq? (car body) 'block))
                   (if (null? (cdr body))
                       `(block (null))

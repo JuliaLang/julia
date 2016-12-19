@@ -294,19 +294,6 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
     end
 end
 
-for (fname, fbase, fun) in [(:sumabs, :sum, :abs),
-                            (:sumabs2, :sum, :abs2),
-                            (:maxabs, :maximum, :abs),
-                            (:minabs, :minimum, :abs)]
-    fname! = Symbol(fname, '!')
-    fbase! = Symbol(fbase, '!')
-    @eval begin
-        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) =
-            $(fbase!)($(fun), r, A; init=init)
-        $(fname)(A::AbstractArray, region) = $(fbase)($(fun), A, region)
-    end
-end
-
 
 ##### findmin & findmax #####
 

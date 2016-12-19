@@ -102,22 +102,9 @@ Base.findmin(::Any)
 Base.findmin(::AbstractArray, ::Any)
 Base.findmax!
 Base.findmin!
-Base.maxabs(::Any)
-Base.maxabs(::Any, ::Any)
-Base.maxabs!
-Base.minabs(::Any)
-Base.minabs(::Any, ::Any)
-Base.minabs!
-Base.sum(::Any)
+Base.sum
 Base.sum!
-Base.sumabs(::Any)
-Base.sumabs(::Any, ::Any)
-Base.sumabs!
-Base.sumabs2(::Any)
-Base.sumabs2(::Any, ::Any)
-Base.sumabs2!
-Base.prod(::Any)
-Base.prod(::Any, ::Any)
+Base.prod
 Base.prod!
 Base.any(::Any)
 Base.any(::AbstractArray, ::Any)

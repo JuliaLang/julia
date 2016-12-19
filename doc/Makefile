@@ -5,7 +5,8 @@ default: html
 # You can set these variables from the command line.
 SRCDIR           := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME        := $(abspath $(SRCDIR)/..)
-JULIA_EXECUTABLE := $(JULIAHOME)/usr/bin/julia
+include $(JULIAHOME)/Make.inc
+JULIA_EXECUTABLE := $(build_bindir)/julia
 
 .PHONY: help clean cleanall html pdf linkcheck doctest check
 
@@ -18,13 +19,19 @@ help:
 	@echo "  check     to run linkcheck and doctests"
 
 clean:
-	-rm -rf _build/* deps/*
+	-rm -rf _build/* deps/* docbuild.log
 
 cleanall: clean
 
 html:
 	@echo "Building HTML documentation."
+ifneq ($(OS),WINNT)
 	$(JULIA_EXECUTABLE) make.jl -- deploy
+else
+# work around issue #11727, windows output redirection breaking on buildbot
+	$(JULIA_EXECUTABLE) make.jl -- deploy > docbuild.log 2>&1
+	@cat docbuild.log
+endif
 	@echo "Build finished. The HTML pages are in _build/html."
 
 pdf:

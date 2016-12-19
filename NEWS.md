@@ -54,9 +54,15 @@ Library improvements
     For example, to get orange warning messages, simply set `ENV["JULIA_WARN_COLOR"] = 208`.
     Please note that not all terminals support 256 colors.
 
-  * The default color for info messages has been changed from blue to cyan ([#18442]).
-    This can be changed back to the original color by setting the environment variable `JULIA_INFO_COLOR` to `"blue"`.
-    One way of doing this is by adding `ENV["JULIA_INFO_COLOR"] = :blue` to the `.juliarc.jl` file.
+  * The function `print_with_color` no longer prints text in bold by default ([#18628]).
+    Instead, the function now take a keyword argument `bold::Bool` which determines whether to print in bold or not.
+    On some terminals, printing a color in non bold results in slightly darker colors being printed than when printing in bold.
+    Therefore, light versions of the colors are now supported.
+    For the available colors see the help entry on `print_with_color`.
+
+  * The default color for info messages has been changed from blue to cyan and for warning messages from red to yellow.
+    This can be changed back to the original colors by setting the environment variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
+    One way of doing this is by adding for example `ENV["JULIA_INFO_COLOR"] = :blue` and `ENV["JULIA_WARN_COLOR"] = :red` to the `.juliarc.jl` file.
     For more information regarding customizing colors in the REPL, see this [manual section]( http://docs.julialang.org/en/latest/manual/interacting-with-julia/#customizing-colors).
 
   * Iteration utilities that wrap iterators and return other iterators (`enumerate`, `zip`, `rest`,
@@ -73,6 +79,10 @@ Library improvements
   * New `accumulate` and `accumulate!` functions, which generalize `cumsum` and `cumprod`. Also known as a [scan](https://en.wikipedia.org/wiki/Prefix_sum) operation ([#18931]).
 
   * New `titlecase` function, which capitalizes the first character of each word within a string ([#19469]).
+
+  * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
+    That is, not every member of the input iterable will be visited if a `true` (in the case of `any`) or
+    `false` (in the case of `all`) value is found, and `mapreduce` will visit all members of the iterable.
 
 Compiler/Runtime improvements
 -----------------------------
@@ -91,6 +101,10 @@ Deprecated or removed
   * `Dates.recur` has been deprecated in favor of `filter` ([#19288])
 
   * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
+
+  * `sumabs` and `sumabs2` have been deprecated in favor of `sum(abs, x)` and `sum(abs2, x)`, respectively.
+    `maxabs` and `minabs` have similarly been deprecated in favor of `maximum(abs, x)` and `minimum(abs, x)`.
+    Likewise for the in-place counterparts of these functions ([#19598]).
 
 Julia v0.5.0 Release Notes
 ==========================
@@ -719,6 +733,7 @@ Language tooling improvements
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
+[#18628]: https://github.com/JuliaLang/julia/issues/18628
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18977]: https://github.com/JuliaLang/julia/issues/18977

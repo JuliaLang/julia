@@ -283,54 +283,6 @@ determine the neutral element of `op`.
 reduce(op, itr) = mapreduce(identity, op, itr)
 reduce(op, a::Number) = a
 
-### short-circuiting specializations of mapreduce
-
-## conditions and results of short-circuiting
-
-immutable Predicate{F}
-    f::F
-end
-(pred::Predicate)(x) = pred.f(x)::Bool
-
-const ShortCircuiting = Union{typeof(&), typeof(|)}
-
-## short-circuiting (sc) mapreduce definitions
-
-function mapreduce_sc_impl(f, op::typeof(&), itr)
-    for x in itr
-        f(x) || return false
-    end
-    return true
-end
-
-function mapreduce_sc_impl(f, op::typeof(|), itr)
-    for x in itr
-        f(x) && return true
-    end
-    return false
-end
-
-# mapreduce_sc tests if short-circuiting is safe;
-# if so, mapreduce_sc_impl is called. If it's not
-# safe, call mapreduce_no_sc, which redirects to
-# non-short-circuiting definitions.
-
-mapreduce_no_sc(f, op, itr::Any)           =  mapfoldl(f, op, itr)
-mapreduce_no_sc(f, op, itr::AbstractArray) = _mapreduce(f, op, itr)
-
-mapreduce_sc(f::Function,  op, itr) = mapreduce_no_sc(f, op, itr)
-mapreduce_sc(f::Predicate, op, itr) = mapreduce_sc_impl(f, op, itr)
-
-mapreduce_sc(f::typeof(identity), op, itr) =
-    eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, op, itr) :
-        mapreduce_no_sc(f, op, itr)
-
-mapreduce(f, op::ShortCircuiting, n::Number) = n
-mapreduce(f, op::ShortCircuiting, itr::AbstractArray) = mapreduce_sc(f,op,itr)
-mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
-
-
 ###### Specific reduction functions ######
 
 ## sum
@@ -350,20 +302,6 @@ Returns the sum of all elements in a collection.
 sum(a) = mapreduce(identity, +, a)
 sum(a::AbstractArray{Bool}) = countnz(a)
 
-"""
-    sumabs(itr)
-
-Sum absolute values of all elements in a collection. This is equivalent to `sum(abs(itr))` but faster.
-"""
-sumabs(a) = mapreduce(abs, +, a)
-
-"""
-    sumabs2(itr)
-
-Sum squared absolute values of all elements in a collection.
-This is equivalent to `sum(abs2(itr))` but faster.
-"""
-sumabs2(a) = mapreduce(abs2, +, a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
@@ -396,7 +334,11 @@ end
 
 
 ## prod
+"""
+    prod(f, itr)
 
+Returns the product of `f` applied to each element of `itr`.
+"""
 prod(f::Callable, a) = mapreduce(f, *, a)
 
 """
@@ -463,30 +405,6 @@ julia> minimum([1,2,3])
 """
 minimum(a) = mapreduce(identity, scalarmin, a)
 
-"""
-    maxabs(itr)
-
-Compute the maximum absolute value of a collection of values.
-
-```jldoctest
-julia> maxabs([-1, 3, 4*im])
-4.0
-```
-"""
-maxabs(a) = mapreduce(abs, scalarmax, a)
-
-"""
-    minabs(itr)
-
-Compute the minimum absolute value of a collection of values.
-
-```jldoctest
-julia> minabs([-1, 3, 4*im])
-1.0
-```
-"""
-minabs(a) = mapreduce(abs, scalarmin, a)
-
 ## extrema
 
 extrema(r::Range) = (minimum(r), maximum(r))
@@ -523,7 +441,8 @@ end
 """
     any(itr) -> Bool
 
-Test whether any elements of a boolean collection are `true`.
+Test whether any elements of a boolean collection are `true`, returning `true` as
+soon as the first `true` value in `itr` is encountered (short-circuiting).
 
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -535,6 +454,10 @@ julia> a = [true,false,false,true]
 
 julia> any(a)
 true
+
+julia> any((println(i); v) for (i, v) in enumerate(a))
+1
+true
 ```
 """
 any(itr) = any(identity, itr)
@@ -542,7 +465,8 @@ any(itr) = any(identity, itr)
 """
     all(itr) -> Bool
 
-Test whether all elements of a boolean collection are `true`.
+Test whether all elements of a boolean collection are `true`, returning `false` as
+soon as the first `false` value in `itr` is encountered (short-circuiting).
 
 ```jldoctest
 julia> a = [true,false,false,true]
@@ -554,53 +478,65 @@ julia> a = [true,false,false,true]
 
 julia> all(a)
 false
+
+julia> all((println(i); v) for (i, v) in enumerate(a))
+1
+2
+false
 ```
 """
 all(itr) = all(identity, itr)
 
-nonboolean_error(f, op) = throw(ArgumentError("""
-    Using non-boolean collections with $f(itr) is not allowed, use
-    reduce($op, itr) instead. If you are using $f(map(f, itr)) or
-    $f([f(x) for x in itr]), use $f(f, itr) instead.
-"""))
-or_bool_only(a, b) = nonboolean_error(:any, :|)
-or_bool_only(a::Bool, b::Bool) = a|b
-and_bool_only(a, b) = nonboolean_error(:all, :&)
-and_bool_only(a::Bool, b::Bool) = a&b
-
 """
     any(p, itr) -> Bool
 
-Determine whether predicate `p` returns `true` for any elements of `itr`.
+Determine whether predicate `p` returns `true` for any elements of `itr`, returning
+`true` as soon as the first item in `itr` for which `p` returns `true` is encountered
+(short-circuiting).
 
 ```jldoctest
 julia> any(i->(4<=i<=6), [3,5,7])
 true
+
+julia> any(i -> (println(i); i > 3), 1:10)
+1
+2
+3
+4
+true
 ```
 """
-any(f::Any, itr) = any(Predicate(f), itr)
-any(f::Predicate, itr) = mapreduce_sc_impl(f, |, itr)
-any(f::typeof(identity), itr) =
-    eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, |, itr) :
-        reduce(or_bool_only, false, itr)
+function any(f, itr)
+    for x in itr
+        f(x) && return true
+    end
+    return false
+end
 
 """
     all(p, itr) -> Bool
 
-Determine whether predicate `p` returns `true` for all elements of `itr`.
+Determine whether predicate `p` returns `true` for all elements of `itr`, returning
+`false` as soon as the first item in `itr` for which `p` returns `false` is encountered
+(short-circuiting).
 
 ```jldoctest
 julia> all(i->(4<=i<=6), [4,5,6])
 true
+
+julia> all(i -> (println(i); i < 3), 1:10)
+1
+2
+3
+false
 ```
 """
-all(f::Any, itr) = all(Predicate(f), itr)
-all(f::Predicate, itr) = mapreduce_sc_impl(f, &, itr)
-all(f::typeof(identity), itr) =
-    eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, &, itr) :
-        reduce(and_bool_only, true, itr)
+function all(f, itr)
+    for x in itr
+        f(x) || return false
+    end
+    return true
+end
 
 ## in & contains
 
@@ -629,7 +565,7 @@ julia> 5 in a
 false
 ```
 """
-in(x, itr) = any(Predicate(y -> y == x), itr)
+in(x, itr) = any(y -> y == x, itr)
 
 const ∈ = in
 ∉(x, itr)=!∈(x, itr)

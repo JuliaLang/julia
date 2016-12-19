@@ -1131,7 +1131,27 @@ eval(Base.Dates, quote
 end)
 
 # #18931
-@deprecate cummin(A, dim=1) accumulate(min, A, dim=1)
-@deprecate cummax(A, dim=1) accumulate(max, A, dim=1)
+@deprecate cummin(A, dim=1) accumulate(min, A, dim)
+@deprecate cummax(A, dim=1) accumulate(max, A, dim)
+
+# #19598
+@deprecate sumabs(x)          sum(abs, x)
+@deprecate sumabs(A, region)  sum(abs, A, region)
+@deprecate sumabs2(x)         sum(abs2, x)
+@deprecate sumabs2(A, region) sum(abs2, A, region)
+@deprecate minabs(x)          minimum(abs, x)
+@deprecate minabs(A, region)  minimum(abs, A, region)
+@deprecate maxabs(x)          maximum(abs, x)
+@deprecate maxabs(A, region)  maximum(abs, A, region)
+
+for (dep, f, op) in [(:sumabs!, :sum!, :abs),
+                     (:sumabs2!, :sum!, :abs2),
+                     (:minabs!, :minimum!, :abs),
+                     (:maxabs!, :maximum!, :abs)]
+    @eval function ($dep)(r, A; init=true)
+        Base.depwarn("$dep(r, A; init=$init) is deprecated, use $f($op, r, A; init=$init) instead.", Symbol($dep))
+        ($f)($op, r, A; init=init)
+    end
+end
 
 # End deprecations scheduled for 0.6
