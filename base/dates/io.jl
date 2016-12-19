@@ -252,11 +252,7 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
             letter, width = prev
             typ = SLOT_RULE[letter]
 
-            if isempty(tran)
-                push!(tokens, DatePart{letter}(width, true))
-            else
-                push!(tokens, DatePart{letter}(width, false))
-            end
+            push!(tokens, DatePart{letter}(width, isempty(tran)))
         end
 
         if !isempty(tran)
