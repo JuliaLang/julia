@@ -322,7 +322,7 @@ primarily for working with external data and libraries.
 
 One of the most common and useful string operations is concatenation:
 
-```julia
+```jldoctest stringconcat
 julia> greet = "Hello"
 "Hello"
 
@@ -335,7 +335,7 @@ julia> string(greet, ", ", whom, ".\n")
 
 Julia also provides `*` for string concatenation:
 
-```julia
+```jldoctest stringconcat
 julia> greet * ", " * whom * ".\n"
 "Hello, world.\n"
 ```
@@ -363,7 +363,7 @@ Constructing strings using concatenation can become a bit cumbersome, however. T
 verbose calls to [`string()`](@ref) or repeated multiplications, Julia allows interpolation into string literals
 using `$`, as in Perl:
 
-```julia
+```jldoctest stringconcat
 julia> "$greet, $whom.\n"
 "Hello, world.\n"
 ```
