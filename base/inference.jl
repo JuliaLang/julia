@@ -366,9 +366,16 @@ add_tfunc(===, 2, 2,
     end)
 add_tfunc(isdefined, 1, IInf, (args...)->Bool)
 add_tfunc(Core.sizeof, 1, 1, x->Int)
-add_tfunc(nfields, 1, 1, (x::ANY)->(isa(x,Const) ? Const(nfields(x.val)) :
-                             isType(x) && isleaftype(x.parameters[1]) ? Const(nfields(x.parameters[1])) :
-                             Int))
+add_tfunc(nfields, 1, 1,
+    function (x::ANY)
+        isa(x,Const) && return Const(nfields(x.val))
+        if isType(x)
+            isleaftype(x.parameters[1]) && return Const(nfields(x.parameters[1]))
+        elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x))
+            return Const(length(x.types))
+        end
+        return Int
+    end)
 add_tfunc(Core._expr, 1, IInf, (args...)->Expr)
 add_tfunc(applicable, 1, IInf, (f::ANY, args...)->Bool)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, x->Int)
