@@ -12,20 +12,12 @@ CMAKE_VERSION_PATCH=1
 CMAKE_VERSION_MAJMIN=$CMAKE_VERSION_MAJOR.$CMAKE_VERSION_MINOR
 CMAKE_VERSION=$CMAKE_VERSION_MAJMIN.$CMAKE_VERSION_PATCH
 
-# listed at https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/cmake-$CMAKE_VERSION-SHA-256.txt
-# for the files cmake-$CMAKE_VERSION-Darwin-x86_64.tar.gz
-# and cmake-$CMAKE_VERSION-Linux-x86_64.tar.gz
-CMAKE_SHA256_DARWIN=1851d1448964893fdc5a8c05863326119f397a3790e0c84c40b83499c7960267
-CMAKE_SHA256_LINUX=7b4b7a1d9f314f45722899c0521c261e4bfab4a6b532609e37fef391da6bade2
-
 PLATFORM="$(uname)-$(uname -m)"
 FULLNAME=cmake-$CMAKE_VERSION-$PLATFORM
 case $PLATFORM in
   Darwin-x86_64)
-    CMAKE_SHA256=$CMAKE_SHA256_DARWIN
     CMAKE_EXTRACTED_PATH=$FULLNAME/CMake.app/Contents/bin/cmake;;
   Linux-x86_64)
-    CMAKE_SHA256=$CMAKE_SHA256_LINUX
     CMAKE_EXTRACTED_PATH=$FULLNAME/bin/cmake;;
   *)
     echo "This script only supports x86_64 Mac and Linux. For other platforms," >&2
@@ -34,6 +26,6 @@ case $PLATFORM in
 esac
 
 deps/tools/jldownload https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/$FULLNAME.tar.gz
-echo "$CMAKE_SHA256 $FULLNAME.tar.gz" | sha256sum -c -
+deps/tools/jlchecksum "$FULLNAME.tar.gz"
 tar -xzf $FULLNAME.tar.gz
 echo "CMAKE = $PWD/$CMAKE_EXTRACTED_PATH" >> Make.user
