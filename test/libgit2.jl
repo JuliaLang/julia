@@ -460,8 +460,6 @@ mktempdir() do dir
             LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
 
             # Try rebasing on master instead
-            # this currently throws an error (wanting a manual merge)
-            # however CLI git can do this automatically without any problems
             LibGit2.rebase!(repo, master_branch)
             @test LibGit2.head_oid(repo) == head_oid
 
