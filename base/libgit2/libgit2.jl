@@ -416,7 +416,7 @@ function merge!(repo::GitRepo;
                 m = with(GitReference(repo, Consts.HEAD_FILE)) do head_sym_ref
                     match(r"refs/heads/(.*)", fullname(head_sym_ref))
                 end
-                if m == nothing
+                if m === nothing
                     throw(GitError(Error.Merge, Error.ERROR,
                                    "Unable to determine name of unborn branch."))
                 end
