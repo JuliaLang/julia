@@ -424,9 +424,11 @@ function merge!(repo::GitRepo;
                 remotename = with(GitConfig, repo) do cfg
                     LibGit2.get(String, cfg, "branch.$branchname.remote")
                 end
-                with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
-                    obj = LibGit2.Oid(ref)
-                    LibGit2.create_branch(repo, branchname, get(GitCommit, repo, obj))
+                obj = with(GitReference(repo, "refs/remotes/$remotename/$branchname")) do ref
+                    LibGit2.Oid(ref)
+                end
+                with(get(GitCommit, repo, obj)) do cmt
+                    LibGit2.create_branch(repo, branchname, cmt)
                 end
                 return true
             else
