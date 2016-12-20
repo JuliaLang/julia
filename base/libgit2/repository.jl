@@ -115,15 +115,45 @@ function get{T <: GitObject}(::Type{T}, repo::GitRepo, oid::AbstractString)
     return get(T, repo, GitHash(oid), length(oid))
 end
 
+"""
+    LibGit2.gitdir(repo::GitRepo)
+
+Returns the location of the "git" files of `repo`:
+ - for normal repositories, this is the location of the `.git` folder.
+ - for bare repositories, this is the location of the repository itself.
+
+See also `workdir`, `path`
+"""
 function gitdir(repo::GitRepo)
     return unsafe_string(ccall((:git_repository_path, :libgit2), Cstring,
                         (Ptr{Void},), repo.ptr))
 end
 
-function path(repo::GitRepo)
-    rpath = gitdir(repo)
-    return isbare(repo) ? rpath : splitdir(rpath[1:end-1])[1]*"/" # remove '.git' part
+"""
+    LibGit2.workdir(repo::GitRepo)
+
+The location of the working directory of `repo`. This will throw an error
+for bare repositories.
+
+See also `gitdir`, `path`
+"""
+function workdir(repo::GitRepo)
+    sptr = ccall((:git_repository_workdir, :libgit2), Cstring,
+                (Ptr{Void},), repo.ptr)
+    sptr == C_NULL && throw(GitError(Error.Object, Error.ERROR, "No working directory found."))
+    return unsafe_string(sptr)
 end
+
+"""
+    LibGit2.path(repo::GitRepo)
+
+The location of `repo`
+ - for normal repositories, this is the location of the working tree.
+ - for bare repositories, this is the location of the "git" files.
+
+See also `gitdir`, `workdir`
+"""
+path(repo::GitRepo) = isbare(repo) ? gitdir(repo) : workdir(repo)
 
 function peel(obj::GitObject, obj_type::Cint)
     peeled_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -208,4 +238,10 @@ function remotes(repo::GitRepo)
     @check ccall((:git_remote_list, :libgit2), Cint,
                   (Ptr{Void}, Ptr{Void}), out, repo.ptr)
     return convert(Vector{AbstractString}, out[])
+end
+
+function Base.show(io::IO, repo::GitRepo)
+    print(io, "LibGit2.GitRepo(")
+    show(io, path(repo))
+    print(io, ")")
 end
