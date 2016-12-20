@@ -13,11 +13,11 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: sparsevec(I, V, [m, combine])
 
-   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``. Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
+   Create a sparse vector ``S`` of length ``m`` such that ``S[I[k]] = V[k]``. Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided. In julia, sparse vectors are a distinct type from sparse matrices.
 
 .. function:: sparsevec(D::Dict, [m])
 
-   Create a sparse matrix of size ``m x 1`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
+   Create a sparse vector of length ``m`` where the row values are keys from the dictionary, and the nonzero values are the values from the dictionary.
 
 .. function:: issparse(S)
 
@@ -29,7 +29,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: sparsevec(A)
 
-   Convert a dense vector ``A`` into a sparse matrix of size ``m x 1``. In julia, sparse vectors are really just sparse matrices with one column.
+   Convert a dense vector ``A`` into a sparse vector of length ``m``. In julia, sparse vectors are a distinct type from sparse matrices.
 
 .. function:: full(S)
 
