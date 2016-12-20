@@ -247,7 +247,7 @@ mktempdir() do dir
                 @test isdir(test_repo)
                 @test isdir(joinpath(test_repo, ".git"))
                 @test LibGit2.isattached(repo)
-                @test LibGit2.isunborn(repo)
+                @test LibGit2.isorphan(repo)
             finally
                 finalize(repo)
             end

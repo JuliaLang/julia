@@ -408,17 +408,17 @@ function merge!(repo::GitRepo;
                 throw(GitError(Error.Merge, Error.ERROR,
                                "Repository HEAD is detached. Remote tracking branch cannot be used."))
             end
-            if isunborn(repo)
+            if isorphan(repo)
                 # this isn't really a merge, but really moving HEAD
                 # https://github.com/libgit2/libgit2/issues/2135#issuecomment-35997764
-                # try to figure out remote tracking of unborn head
+                # try to figure out remote tracking of orphan head
 
                 m = with(GitReference(repo, Consts.HEAD_FILE)) do head_sym_ref
                     match(r"refs/heads/(.*)", fullname(head_sym_ref))
                 end
                 if m === nothing
                     throw(GitError(Error.Merge, Error.ERROR,
-                                   "Unable to determine name of unborn branch."))
+                                   "Unable to determine name of orphan branch."))
                 end
                 branchname = m.captures[1]
                 remotename = with(GitConfig, repo) do cfg
@@ -451,8 +451,23 @@ function merge!(repo::GitRepo;
     end
 end
 
-""" git rebase --merge [--onto <newbase>] [<upstream>] """
-function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractString="")
+"""
+    LibGit2.rebase!(repo::GitRepo[, upstream::AbstractString])
+
+Attempt an automatic merge rebase of the current branch, from `upstream` if provided, or
+otherwise from the upstream tracking branch.
+
+If any conflicts arise which cannot be automatically resolved, the rebase will abort,
+leaving the repository and working tree in its original state, and the function will throw
+a `GitError`. This is roughly equivalent to the following command line statement:
+
+    git rebase --merge [<upstream>]
+    if [ -d ".git/rebase-merge" ]; then
+        git rebase --abort
+    fi
+
+"""
+function rebase!(repo::GitRepo, upstream::AbstractString="")
     with(head(repo)) do head_ref
         head_ann = GitAnnotated(repo, head_ref)
         upst_ann  = if isempty(upstream)
