@@ -379,7 +379,7 @@ temp_pkg_dir() do
         # create a bare repo (isbare = true)
         repo = LibGit2.init(pth, true)
         @test repo.ptr != C_NULL
-        finalize(repo)
+        close(repo)
         Pkg.update()
     end
 
