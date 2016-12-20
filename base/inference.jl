@@ -3127,7 +3127,13 @@ function inlining_pass(e::Expr, sv::InferenceState)
     end
     has_stmts = false # needed to preserve order-of-execution
     for _i=length(eargs):-1:i0
-        i = (isccall && _i == 4) ? 2 : _i
+        if isccall && _i == 4
+            i = 2
+            isccallee = true
+        else
+            i = _i
+            isccallee = false
+        end
         ei = eargs[i]
         if isa(ei,Expr)
             ei = ei::Expr
@@ -3144,6 +3150,22 @@ function inlining_pass(e::Expr, sv::InferenceState)
             end
             res = inlining_pass(ei, sv)
             res1 = res[1]
+            res2 = res[2]
+            has_new_stmts = isa(res2, Array) && !isempty(res2::Array{Any,1})
+            if isccallee
+                restype = exprtype(res1, sv.src, sv.mod)
+                if isa(restype, Const)
+                    argloc[i] = restype.val
+                    if !effect_free(res1, sv.src, sv.mod, false)
+                        insert!(stmts, 1, res1)
+                    end
+                    if has_new_stmts
+                        prepend!(stmts, res2::Array{Any,1})
+                    end
+                    # Assume this is the last argument to process
+                    break
+                end
+            end
             if has_stmts && !effect_free(res1, sv.src, sv.mod, false)
                 restype = exprtype(res1, sv.src, sv.mod)
                 vnew = newvar!(sv, restype)
@@ -3152,15 +3174,13 @@ function inlining_pass(e::Expr, sv::InferenceState)
             else
                 argloc[i] = res1
             end
-            if isa(res[2],Array)
-                res2 = res[2]::Array{Any,1}
-                if !isempty(res2)
-                    prepend!(stmts,res2)
-                    if !has_stmts
-                        for stmt in res2
-                            if !effect_free(stmt, sv.src, sv.mod, true)
-                                has_stmts = true
-                            end
+            if has_new_stmts
+                res2 = res2::Array{Any,1}
+                prepend!(stmts, res2)
+                if !has_stmts && !(_i == i0)
+                    for stmt in res2
+                        if !effect_free(stmt, sv.src, sv.mod, true)
+                            has_stmts = true
                         end
                     end
                 end
