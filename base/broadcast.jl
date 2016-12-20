@@ -5,22 +5,19 @@ module Broadcast
 using Base.Cartesian
 using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
-import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
-import Base: broadcast
-export broadcast!, bitbroadcast, dotview
+import Base: broadcast, broadcast!
+export bitbroadcast, dotview
 export broadcast_getindex, broadcast_setindex!
 
 ## Broadcasting utilities ##
 
-# fallback for broadcasting with zero arguments and some special cases
-broadcast(f) = f()
+# fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
 @inline broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
 @inline broadcast(f, As::AbstractArray...) = broadcast_c(f, Array, As...)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
-broadcast!(f, X::AbstractArray) = fill!(X, f())
 broadcast!(f, X::AbstractArray, x::Number...) = fill!(X, f(x...))
 function broadcast!{T,S,N}(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N})
     check_broadcast_shape(broadcast_indices(x), broadcast_indices(y))
@@ -252,6 +249,18 @@ end
     return B
 end
 
+# default to BitArray for broadcast operations producing Bool, to save 8x space
+# in the common case where this is used for logical array indexing; in
+# performance-critical cases where Array{Bool} is desired, one can always
+# use broadcast! instead.
+function broadcast_t(f, ::Type{Bool}, shape, iter, As...)
+    B = similar(BitArray, shape)
+    nargs = length(As)
+    keeps, Idefaults = map_newindexer(shape, As)
+    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
+    return B
+end
+
 # broadcast method that uses inference to find the type, but preserves abstract
 # container types when possible (used by binary elementwise operators)
 @inline broadcast_elwise_op(f, As...) =
@@ -465,147 +474,6 @@ position in `X` at the indices in `A` given by the same positions in `inds`.
             end
         end
         A
-    end
-end
-
-## elementwise operators ##
-
-for op in (:÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
-    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast_elwise_op($op, A, B)
-end
-.+(As::AbstractArray...) = broadcast_elwise_op(+, As...)
-.*(As::AbstractArray...) = broadcast_elwise_op(*, As...)
-
-# ## element-wise comparison operators returning BitArray ##
-
-.==(A::AbstractArray, B::AbstractArray) = bitbroadcast(==, A, B)
- .<(A::AbstractArray, B::AbstractArray) = bitbroadcast(<,  A, B)
-.!=(A::AbstractArray, B::AbstractArray) = bitbroadcast(!=, A, B)
-.<=(A::AbstractArray, B::AbstractArray) = bitbroadcast(<=, A, B)
-
-function broadcast_bitarrays(scalarf, bitf, A::AbstractArray{Bool}, B::AbstractArray{Bool})
-    local shape
-    try
-        shape = promote_shape(indices(A), indices(B))
-    catch
-        return bitbroadcast(scalarf, A, B)
-    end
-    F = BitArray(to_shape(shape))
-    Fc = F.chunks
-    Ac = BitArray(A).chunks
-    Bc = BitArray(B).chunks
-    if !isempty(Ac) && !isempty(Bc)
-        for i = 1:length(Fc) - 1
-            Fc[i] = (bitf)(Ac[i], Bc[i])
-        end
-        Fc[end] = (bitf)(Ac[end], Bc[end]) & _msk_end(F)
-    end
-    return F
-end
-
-biteq(a::UInt64, b::UInt64) = ~a ⊻ b
-bitlt(a::UInt64, b::UInt64) = ~a & b
-bitneq(a::UInt64, b::UInt64) = a ⊻ b
-bitle(a::UInt64, b::UInt64) = ~a | b
-
-.==(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(==, biteq, A, B)
- .<(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(<,  bitlt, A, B)
-.!=(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(!=, bitneq, A, B)
-.<=(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(<=, bitle, A, B)
-
-function bitcache(op, A, B, refA, refB, l::Int, ind::Int, C::Vector{Bool})
-    left = l - ind + 1
-    @inbounds begin
-        for j = 1:min(bitcache_size, left)
-            C[j] = (op)(refA(A, ind), refB(B, ind))
-            ind += 1
-        end
-        C[left+1:bitcache_size] = false
-    end
-    return ind
-end
-
-# note: the following are not broadcasting, but need to be defined here to avoid
-# ambiguity warnings
-
-for (f, scalarf) in ((:.==, :(==)),
-                     (:.< , :<   ),
-                     (:.!=, :!=  ),
-                     (:.<=, :<=  ))
-    for (sigA, sigB, active, refA, refB) in ((:Any, :AbstractArray, :B,
-                                              :((A,ind)->A), :((B,ind)->B[ind])),
-                                             (:AbstractArray, :Any, :A,
-                                              :((A,ind)->A[ind]), :((B,ind)->B)))
-        shape = :(indices($active))
-        @eval begin
-            function ($f)(A::$sigA, B::$sigB)
-                P = similar(BitArray, $shape)
-                F = parent(P)
-                l = length(F)
-                l == 0 && return F
-                Fc = F.chunks
-                C = Array{Bool}(bitcache_size)
-                ind = first(linearindices($active))
-                cind = 1
-                for i = 1:div(l + bitcache_size - 1, bitcache_size)
-                    ind = bitcache($scalarf, A, B, $refA, $refB, l, ind, C)
-                    dumpbitcache(Fc, cind, C)
-                    cind += bitcache_chunks
-                end
-                return P
-            end
-        end
-    end
-end
-
-## specialized element-wise operators for BitArray
-
-(.^)(A::BitArray, B::AbstractArray{Bool}) = (B .<= A)
-(.^)(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = (B .<= A)
-
-function bitcache_pow{T}(Ac::Vector{UInt64}, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
-    left = l - ind + 1
-    @inbounds begin
-        for j = 1:min(bitcache_size, left)
-            C[j] = unsafe_bitgetindex(Ac, ind) ^ B[ind]
-            ind += 1
-        end
-        C[left+1:bitcache_size] = false
-    end
-    return ind
-end
-function (.^){T<:Integer}(A::BitArray, B::Array{T})
-    local shape
-    try
-        shape = promote_shape(indices(A), indices(B))
-    catch
-        return bitbroadcast(^, A, B)
-    end
-    F = BitArray(to_shape(shape))
-    l = length(F)
-    l == 0 && return F
-    Ac = A.chunks
-    Fc = F.chunks
-    C = Array{Bool}(bitcache_size)
-    ind = 1
-    cind = 1
-    for i = 1:div(l + bitcache_size - 1, bitcache_size)
-        ind = bitcache_pow(Ac, B, l, ind, C)
-        dumpbitcache(Fc, cind, C)
-        cind += bitcache_chunks
-    end
-    return F
-end
-
-for (sigA, sigB) in ((BitArray, BitArray),
-                     (AbstractArray{Bool}, BitArray),
-                     (BitArray, AbstractArray{Bool}))
-    @eval function (.*)(A::$sigA, B::$sigB)
-        try
-            return BitArray(A) & BitArray(B)
-        catch
-            return bitbroadcast(&, A, B)
-        end
     end
 end
 

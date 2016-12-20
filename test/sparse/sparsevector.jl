@@ -589,7 +589,9 @@ let x = spv_x1, x2 = x2 = spv_x2
 
     # multiplies
     xm = SparseVector(8, [2, 6], [5.0, -19.25])
-    @test exact_equal(x .* x, abs2(x))
+    let y=x # workaround for broadcast not preserving sparsity in general
+        @test exact_equal(x .* y, abs2(x))
+    end
     @test exact_equal(x .* x2, xm)
     @test exact_equal(x2 .* x, xm)
 
@@ -732,28 +734,28 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
     end
 
     # scale
-    let sx = SparseVector(x.n, x.nzind, x.nzval * 2.5)
-        @test exact_equal(x * 2.5, sx)
-        @test exact_equal(x * (2.5 + 0.0*im), complex(sx))
-        @test exact_equal(2.5 * x, sx)
-        @test exact_equal((2.5 + 0.0*im) * x, complex(sx))
-        @test exact_equal(x * 2.5, sx)
-        @test exact_equal(2.5 * x, sx)
-        @test exact_equal(x .* 2.5, sx)
-        @test exact_equal(2.5 .* x, sx)
-        @test exact_equal(x / 2.5, SparseVector(x.n, x.nzind, x.nzval / 2.5))
+    let α = 2.5, sx = SparseVector(x.n, x.nzind, x.nzval * α)
+        @test exact_equal(x * α, sx)
+        @test exact_equal(x * (α + 0.0*im), complex(sx))
+        @test exact_equal(α * x, sx)
+        @test exact_equal((α + 0.0*im) * x, complex(sx))
+        @test exact_equal(x * α, sx)
+        @test exact_equal(α * x, sx)
+        @test exact_equal(x .* α, sx)
+        @test exact_equal(α .* x, sx)
+        @test exact_equal(x / α, SparseVector(x.n, x.nzind, x.nzval / α))
 
         xc = copy(x)
-        @test scale!(xc, 2.5) === xc
+        @test scale!(xc, α) === xc
         @test exact_equal(xc, sx)
         xc = copy(x)
-        @test scale!(2.5, xc) === xc
+        @test scale!(α, xc) === xc
         @test exact_equal(xc, sx)
         xc = copy(x)
-        @test scale!(xc, complex(2.5, 0.0)) === xc
+        @test scale!(xc, complex(α, 0.0)) === xc
         @test exact_equal(xc, sx)
         xc = copy(x)
-        @test scale!(complex(2.5, 0.0), xc) === xc
+        @test scale!(complex(α, 0.0), xc) === xc
         @test exact_equal(xc, sx)
     end
 

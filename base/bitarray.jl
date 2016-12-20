@@ -1136,9 +1136,6 @@ function empty!(B::BitVector)
     return B
 end
 
-## Misc functions
-broadcast(::typeof(abs), B::BitArray) = copy(B)
-
 ## Unary operators ##
 
 function (-)(B::BitArray)
@@ -1229,35 +1226,6 @@ for f in (:+, :-)
             ri += 1
         end
         return r
-    end
-end
-
-for (f) in (:.+, :.-)
-    for (arg1, arg2, T, t) in ((:(B::BitArray), :(x::Bool)    , Int               , (:b, :x)),
-                               (:(B::BitArray), :(x::Number)  , :(Bool, typeof(x)), (:b, :x)),
-                               (:(x::Bool)    , :(B::BitArray), Int               , (:x, :b)),
-                               (:(x::Number)  , :(B::BitArray), :(typeof(x), Bool), (:x, :b)))
-        @eval function ($f)($arg1, $arg2)
-            $(if T === Int
-                quote
-                    r = Array{Int}(size(B))
-                end
-            else
-                quote
-                    T = promote_op($f, $(T.args[1]), $(T.args[2]))
-                    T === Any && return [($f)($(t[1]), $(t[2])) for b in B]
-                    r = Array{T}(size(B))
-                end
-            end)
-            bi = start(B)
-            ri = 1
-            while !done(B, bi)
-                b, bi = next(B, bi)
-                @inbounds r[ri] = ($f)($(t[1]), $(t[2]))
-                ri += 1
-            end
-            return r
-        end
     end
 end
 
@@ -1358,71 +1326,6 @@ for f in (:&, :|, :xor)
         ($f)(B::BitArray, x::Number) = ($f)(Array(B), x)
     end
 end
-
-function (.^)(B::BitArray, x::Bool)
-    x ? copy(B) : trues(size(B))
-end
-function (.^)(x::Bool, B::BitArray)
-    x ? trues(size(B)) : ~B
-end
-function (.^)(x::Number, B::BitArray)
-    z = x ^ false
-    u = x ^ true
-    reshape([ B[i] ? u : z for i = 1:length(B) ], size(B))
-end
-function (.^)(B::BitArray, x::Integer)
-    x == 0 && return trues(size(B))
-    x < 0 && throw(DomainError())
-    return copy(B)
-end
-function (.^){T<:Number}(B::BitArray, x::T)
-    x == 0 && return ones(typeof(true ^ x), size(B))
-    T <: Real && x > 0 && return convert(Array{T}, B)
-
-    z = nothing
-    u = nothing
-    zerr = nothing
-    uerr = nothing
-    try
-        z = false^x
-    catch err
-        zerr = err
-    end
-    try
-        u = true^x
-    catch err
-        uerr = err
-    end
-    if zerr === nothing && uerr === nothing
-        t = promote_type(typeof(z), typeof(u))
-    elseif zerr === nothing
-        t = typeof(z)
-    else
-        t = typeof(u)
-    end
-    F = Array{t}(size(B))
-    for i = 1:length(B)
-        if B[i]
-            if uerr === nothing
-                F[i] = u
-            else
-                throw(uerr)
-            end
-        else
-            if zerr === nothing
-                F[i] = z
-            else
-                throw(zerr)
-            end
-        end
-    end
-    return F
-end
-
-(.*)(x::Bool, B::BitArray) = x & B
-(.*)(B::BitArray, x::Bool) = B & x
-(.*)(x::Number, B::BitArray) = x .* Array(B)
-(.*)(B::BitArray, x::Number) = Array(B) .* x
 
 ## promotion to complex ##
 

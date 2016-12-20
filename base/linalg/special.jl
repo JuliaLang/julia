@@ -8,14 +8,14 @@ convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(
 convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
-    if !all(A.ev .== 0)
+    if !iszero(A.ev)
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
     end
     Diagonal(A.dv)
 end
 
 function convert(::Type{SymTridiagonal}, A::Bidiagonal)
-    if !all(A.ev .== 0)
+    if !iszero(A.ev)
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
     end
     SymTridiagonal(A.dv, A.ev)
@@ -24,28 +24,28 @@ end
 convert{T}(::Type{Tridiagonal}, A::Bidiagonal{T})=Tridiagonal(A.isupper?zeros(T, size(A.dv,1)-1):A.ev, A.dv, A.isupper?A.ev:zeros(T, size(A.dv,1)-1))
 
 function convert(::Type{Bidiagonal}, A::SymTridiagonal)
-    if !all(A.ev .== 0)
+    if !iszero(A.ev)
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
     Bidiagonal(A.dv, A.ev, true)
 end
 
 function convert(::Type{Diagonal}, A::Tridiagonal)
-    if !(all(A.dl .== 0) && all(A.du .== 0))
+    if !(iszero(A.dl) && iszero(A.du))
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
     end
     Diagonal(A.d)
 end
 
 function convert(::Type{Bidiagonal}, A::Tridiagonal)
-    if all(A.dl .== 0) return Bidiagonal(A.d, A.du, true)
-    elseif all(A.du .== 0) return Bidiagonal(A.d, A.dl, false)
+    if iszero(A.dl) return Bidiagonal(A.d, A.du, true)
+    elseif iszero(A.du) return Bidiagonal(A.d, A.dl, false)
     else throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
 end
 
 function convert(::Type{SymTridiagonal}, A::Tridiagonal)
-    if !all(A.dl .== A.du)
+    if A.dl != A.du
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
     end
     SymTridiagonal(A.d, A.dl)
