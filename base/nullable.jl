@@ -186,21 +186,11 @@ typealias EqualOrLess Union{typeof(isequal), typeof(isless)}
 
 null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
 
-@pure null_safe_eltype_op(op, a) = null_safe_op(op, eltype(a))
-@pure null_safe_eltype_op(op, a, b) = null_safe_op(op, eltype(a), eltype(b))
-@pure null_safe_eltype_op(op, a, b, c) =
-    null_safe_op(op, eltype(a), eltype(b), eltype(c))
-@generated function null_safe_eltype_op(op, xs...)
-    ops = []
-    for i in 1:length(xs)
-        push!(ops, :(eltype(xs[$i])))
-    end
-    Expr(:call, :null_safe_op, :op, ops...)
-end
+eltypes() = Tuple{}
+eltypes(x, xs...) = Tuple{eltype(x), eltypes(xs...).parameters...}
 
-@pure _null_safe_eltype_op(op, ::Tuple, Ts...) = true
 @pure null_safe_eltype_op(op, xs...) =
-    _null_safe_eltype_op(op, xs)
+    null_safe_op(op, eltypes(xs...).parameters...)
 
 null_safe_op(f::EqualOrLess, ::NullSafeTypes, ::NullSafeTypes) = true
 null_safe_op{S,T}(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) =
@@ -271,10 +261,8 @@ function filter{T}(p, x::Nullable{T})
     if isbits(T)
         val = unsafe_get(x)
         Nullable{T}(val, !isnull(x) && p(val))
-    elseif isnull(x) || p(unsafe_get(x))
-        x
     else
-        Nullable{T}()
+        isnull(x) || p(unsafe_get(x)) ? x : Nullable{T}()
     end
 end
 
@@ -296,7 +284,7 @@ type `Nullable{typeof(f(x))}`.
 function map{T}(f, x::Nullable{T})
     S = promote_op(f, T)
     if isleaftype(S) && null_safe_op(f, T)
-        Nullable{S}(f(unsafe_get(x)), !isnull(x))
+        Nullable(f(unsafe_get(x)), !isnull(x))
     else
         if isnull(x)
             Nullable{nullable_returntype(S)}()
@@ -310,10 +298,12 @@ end
 # optimize !any(isnull, t) without further guidance.
 hasvalue(x::Nullable) = x.hasvalue
 hasvalue(x) = true
-all{N}(f::typeof(hasvalue), t::NTuple{N}) = f(t[1]) & all(f, tail(t))
+all(f::typeof(hasvalue), t::Tuple) = f(t[1]) & all(f, tail(t))
 all(f::typeof(hasvalue), t::Tuple{}) = true
 
-# optimizations for common cases TODO
+is_nullable_array(::Any) = false
+is_nullable_array{T}(::Type{T}) = eltype(T) <: Nullable
+is_nullable_array(A::AbstractArray) = eltype(A) <: Nullable
 
 # Overloads of null_safe_op
 # Unary operators

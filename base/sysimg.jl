@@ -173,15 +173,16 @@ using .Cartesian
 include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
+
+# nullable types
+include("nullable.jl")
+
 include("broadcast.jl")
 importall .Broadcast
 
 # base64 conversions (need broadcast)
 include("base64.jl")
 importall .Base64
-
-# nullable types
-include("nullable.jl")
 
 # version
 include("version.jl")

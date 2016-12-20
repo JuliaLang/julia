@@ -2,7 +2,7 @@
 
 # "is a null with type T", curried on 2nd argument
 isnull_oftype(x::Nullable, T::Type) = eltype(x) == T && isnull(x)
-isnull_oftype(t::Type) = x -> isnull_oftype(x, t)
+isnull_oftype(T::Type) = x -> isnull_oftype(x, T)
 
 types = [
     Bool,
@@ -412,6 +412,7 @@ sqr(x) = x^2
 @test @inferred(map(sqr, Nullable{Int}()))   |> isnull_oftype(Int)
 @test @inferred(map(sqr, Nullable(2)))       === Nullable(4)
 @test @inferred(map(+, Nullable(0.0)))       === Nullable(0.0)
+@test @inferred(map(+, Nullable(3.0, false)))=== Nullable(3.0, false)
 @test @inferred(map(-, Nullable(1.0)))       === Nullable(-1.0)
 @test @inferred(map(-, Nullable{Float64}())) |> isnull_oftype(Float64)
 @test @inferred(map(sin, Nullable(1)))       === Nullable(sin(1))
@@ -424,19 +425,24 @@ sqr(x) = x^2
 @test map(x -> x ? 0 : 0.0, Nullable{Bool}()) |> isnull_oftype(Union{})
 
 # broadcast and elementwise
-# @inferred cannot be used on these because sin.() is not a call expression
 @test sin.(Nullable(0.0))            === Nullable(0.0)
 @test sin.(Nullable{Float64}())      |> isnull_oftype(Float64)
+@test @inferred(broadcast(sin, Nullable(0.0)))       === Nullable(0.0)
+@test @inferred(broadcast(sin, Nullable{Float64}())) |> isnull_oftype(Float64)
 
 @test Nullable(8) .+ Nullable(10)     === Nullable(18)
 @test Nullable(8) .- Nullable(10)     === Nullable(-2)
 @test Nullable(8) .+ Nullable{Int}()  |> isnull_oftype(Int)
 @test Nullable{Int}() .- Nullable(10) |> isnull_oftype(Int)
 
-@test log.(10, Nullable(1.0))                 === Nullable(0.0)
-@test log.(10, Nullable{Float64}())           |> isnull_oftype(Float64)
-@test log.(Nullable(10), Nullable(1.0))       === Nullable(0.0)
-@test log.(Nullable(10), Nullable{Float64}()) |> isnull_oftype(Float64)
+@test @inferred(broadcast(log, 10, Nullable(1.0))) ===
+      Nullable(0.0)
+@test @inferred(broadcast(log, 10, Nullable{Float64}())) |>
+      isnull_oftype(Float64)
+@test @inferred(broadcast(log, Nullable(10), Nullable(1.0))) ===
+      Nullable(0.0)
+@test @inferred(broadcast(log, Nullable(10), Nullable{Float64}())) |>
+      isnull_oftype(Float64)
 
 @test Nullable(2) .^ Nullable(4)      === Nullable(16)
 @test Nullable(2) .^ Nullable{Int}()  |> isnull_oftype(Int)
@@ -453,17 +459,22 @@ us = map(Nullable, 1:20)
 @test isnull(broadcast(max, us..., Nullable{Int}()))
 
 # test all elementwise operations
-for (eop, op) in ((.+, +), (.-, -), (.*, *), (./, /), (.\, \), (.//, //),
-                  (.==, ==), (.<, <), (.!=, !=), (.<=, <=), (.÷, ÷), (.%, %),
-                  (.<<, <<), (.>>, >>), (.^, ^))
+# note that elementwise operations are the same as broadcast
+for op in (+, -, *, /, \, //, ==, <, !=, <=, ÷, %, <<, >>, ^)
     # op(1, 1) chosen because it works for all operations
     res = op(1, 1)
-    @test eop(Nullable(1), Nullable(1))         === Nullable(res)
-    @test eop(Nullable{Int}(), Nullable(1))     |> isnull_oftype(typeof(res))
-    @test eop(Nullable(1), Nullable{Int}())     |> isnull_oftype(typeof(res))
-    @test eop(Nullable{Int}(), Nullable{Int}()) |> isnull_oftype(typeof(res))
-    @test eop(Nullable(1), 1)                   === Nullable(res)
-    @test eop(1, Nullable(1))                   === Nullable(res)
+    @test @inferred(broadcast(op, Nullable(1), Nullable(1)))         ===
+          Nullable(res)
+    @test @inferred(broadcast(op, Nullable{Int}(), Nullable(1)))     |>
+          isnull_oftype(typeof(res))
+    @test @inferred(broadcast(op, Nullable(1), Nullable{Int}()))     |>
+          isnull_oftype(typeof(res))
+    @test @inferred(broadcast(op, Nullable{Int}(), Nullable{Int}())) |>
+          isnull_oftype(typeof(res))
+    @test @inferred(broadcast(op, Nullable(1), 1))                   ===
+          Nullable(res)
+    @test @inferred(broadcast(op, 1, Nullable(1)))                   ===
+          Nullable(res)
 end
 
 # test reasonable results for Union{}
@@ -476,6 +487,64 @@ end
 # test that things don't pessimize because of non-homogenous types
 @test Nullable(10.5) ===
     @inferred(broadcast(+, 1, 2, Nullable(3), Nullable(4.0), Nullable(1//2)))
+
+# broadcasting for arrays
+@test isequal(@inferred(broadcast(+, [1, 2, 3], Nullable{Int}(1))),
+              Nullable{Int}[2, 3, 4])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[1, 2, 3], 1)),
+              Nullable{Int}[2, 3, 4])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[1, 2, 3], Nullable(1))),
+              Nullable{Int}[2, 3, 4])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[1, Nullable()], Nullable(1))),
+              Nullable{Int}[2, Nullable()])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
+                                     Nullable{Int}())),
+              Nullable{Int}[Nullable(), Nullable()])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
+                                     Nullable{Int}[1, Nullable()])),
+              Nullable{Int}[Nullable(), Nullable()])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
+                                     Nullable{Int}[Nullable(), 1])),
+              Nullable{Int}[Nullable(), 2])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), Nullable()],
+                                     Nullable{Int}[1, 2])),
+              Nullable{Int}[Nullable(), Nullable()])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
+                                     Nullable{Int}[1])),
+              Nullable{Int}[Nullable(), 2])
+@test isequal(@inferred(broadcast(+, Nullable{Float64}[1.0, 2.0],
+                                     Nullable{Float64}[1.0 2.0; 3.0 4.0])),
+              Nullable{Float64}[2.0 3.0; 5.0 6.0])
+@test isequal(@inferred(broadcast(+, Nullable{Int}[1, 2], [1, 2], 1)),
+              Nullable{Int}[3, 5])
+
+@test isequal(@inferred(broadcast(/, 1, Nullable{Int}[1, 2, 4])),
+              Nullable{Float64}[1.0, 0.5, 0.25])
+@test isequal(@inferred(broadcast(muladd, Nullable(2), 42,
+                                  [Nullable(1337), Nullable{Int}()])),
+              Nullable{Int}[1421, Nullable()])
+
+# heterogenous types (not inferrable)
+@test isequal(broadcast(+, Any[1, 1.0], Nullable(1//2)),
+              [Nullable(3//2), 1.5])
+@test isequal(broadcast(+, Any[Nullable(1) Nullable(1.0)], Nullable(big"1")),
+              [Nullable(big"2") Nullable(big"2.0")])
+
+# test fast path taken
+for op in (+, *, -)
+    for b1 in (false, true)
+        for b2 in (false, true)
+            @test Nullable{Int}(op(1, 2), b1 & b2) ===
+                @inferred(broadcast(op, Nullable{Int}(1, b1),
+                                        Nullable{Int}(2, b2)))
+        end
+        A = [1, 2, 3]
+        res = @inferred(broadcast(op, A, Nullable{Int}(1, b1)))
+        @test res[1] === Nullable{Int}(op(1, 1), b1)
+        @test res[2] === Nullable{Int}(op(2, 1), b1)
+        @test res[3] === Nullable{Int}(op(3, 1), b1)
+    end
+end
 
 # issue #11675
 @test repr(Nullable()) == "Nullable{Union{}}()"
