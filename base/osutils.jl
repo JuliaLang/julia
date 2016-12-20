@@ -57,20 +57,29 @@ For example, `@static is_windows() ? foo : bar` will evaluate `is_windows()` and
 This is useful in cases where a construct would be invalid on other platforms,
 such as a `ccall` to a non-existent function.
 """
-macro static(ex)
-    if isa(ex, Expr)
-        if ex.head === :if
-            cond = eval(current_module(), ex.args[1])
-            if cond
-                return esc(ex.args[2])
-            elseif length(ex.args) == 3
-                return esc(ex.args[3])
+macro static(ex::Expr)
+    nextex = ex
+    while true
+        if isa(nextex, Expr)
+            if nextex.head === :if
+                cond = eval(current_module(), nextex.args[1])
+                if cond
+                    return esc(nextex.args[2])
+                elseif length(nextex.args) != 3
+                    return nothing
+                else
+                    nextex = nextex.args[3]
+                end
+            elseif nextex.head === :block
+                # Ignore the line
+                nextex = nextex.args[2]
             else
-                return nothing
+                return esc(nextex)
             end
+        else
+            return esc(nextex)
         end
     end
-    throw(ArgumentError("invalid @static macro"))
 end
 
 let KERNEL = ccall(:jl_get_UNAME, Any, ())
