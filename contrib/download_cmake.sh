@@ -4,7 +4,8 @@
 # Script to download newest version of cmake on linux (or mac)
 # saves you the trouble of compiling it if you don't have root
 set -e # stop on failure
-cd "$(dirname "$0")"/.. # run in top-level directory
+mkdir -p "$(dirname "$0")"/../deps/scratch
+cd "$(dirname "$0")"/../deps/scratch
 
 CMAKE_VERSION_MAJOR=3
 CMAKE_VERSION_MINOR=7
@@ -22,10 +23,12 @@ PLATFORM="$(uname)-$(uname -m)"
 FULLNAME=cmake-$CMAKE_VERSION-$PLATFORM
 case $PLATFORM in
   Darwin-x86_64)
-    CMAKE_SHA256=$CMAKE_SHA256_DARWIN
+    ../tools/jldownload https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/$FULLNAME.tar.gz
+    echo "$CMAKE_SHA256_DARWIN $FULLNAME.tar.gz" | shasum -a 256 -c -
     CMAKE_EXTRACTED_PATH=$FULLNAME/CMake.app/Contents/bin/cmake;;
   Linux-x86_64)
-    CMAKE_SHA256=$CMAKE_SHA256_LINUX
+    ../tools/jldownload https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/$FULLNAME.tar.gz
+    echo "$CMAKE_SHA256_LINUX $FULLNAME.tar.gz" | sha256sum -c -
     CMAKE_EXTRACTED_PATH=$FULLNAME/bin/cmake;;
   *)
     echo "This script only supports x86_64 Mac and Linux. For other platforms," >&2
@@ -33,7 +36,5 @@ case $PLATFORM in
     exit 1;;
 esac
 
-deps/tools/jldownload https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/$FULLNAME.tar.gz
-echo "$CMAKE_SHA256 $FULLNAME.tar.gz" | sha256sum -c -
 tar -xzf $FULLNAME.tar.gz
-echo "CMAKE = $PWD/$CMAKE_EXTRACTED_PATH" >> Make.user
+echo "CMAKE = $PWD/$CMAKE_EXTRACTED_PATH" >> ../../Make.user
