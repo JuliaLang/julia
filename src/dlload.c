@@ -40,7 +40,14 @@ static int endswith_extension(const char *path)
     for (size_t i = 1;i < N_EXTENSIONS;i++) {
         const char *ext = extensions[i];
         size_t extlen = strlen(ext);
-        if (len >= extlen && memcmp(ext, path + len - extlen, extlen) == 0) {
+        if (len < extlen) return 0;
+        // Skip version extensions if present
+        size_t j = len-1;
+        while (j > 0) {
+            if (path[j] == '.' || (path[j] >= '0' && path[j] <= '9')) j--;
+            else break;
+        }
+        if ((j == len-1 || path[j+1] == '.') && memcmp(ext, path + j - extlen + 1, extlen) == 0) {
             return 1;
         }
     }
