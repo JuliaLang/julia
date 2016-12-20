@@ -953,6 +953,17 @@ end
         @test lexless(asc[:,1],asc[:,2])
         @test lexless(asc[:,2],asc[:,3])
 
+        # mutating functions
+        o = ones(3, 4)
+        m = mapslices(x->fill!(x, 0), o, 2)
+        @test m == zeros(3, 4)
+        @test o == ones(3, 4)
+
+        # issue #18524
+        m = mapslices(x->tuple(x), [1 2; 3 4], 1)
+        @test m[1,1] == ([1,3],)
+        @test m[1,2] == ([2,4],)
+
         asr = sortrows(a, rev=true)
         @test lexless(asr[2,:],asr[1,:])
         @test lexless(asr[3,:],asr[2,:])
