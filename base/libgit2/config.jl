@@ -10,8 +10,8 @@ function GitConfig(path::AbstractString,
     try
         addfile(cfg, path, level, force)
     catch ex
-        finalize(cfg)
-        throw(ex)
+        close(cfg)
+        rethrow(ex)
     end
     return cfg
 end
@@ -37,7 +37,7 @@ function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
                           glb_cfg_ptr_ptr, cfg.ptr, Cint(level))
             cfg = GitConfig(glb_cfg_ptr_ptr[])
         finally
-            finalize(tmpcfg)
+            close(tmpcfg)
         end
     end
     return cfg

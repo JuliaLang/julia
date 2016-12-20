@@ -18,7 +18,7 @@ function diff_tree(repo::GitRepo, tree::GitTree, pathspecs::AbstractString=""; c
                            diff_ptr_ptr, repo.ptr, tree.ptr, emptypathspec ? C_NULL : Ref(diff_opts))
         end
     finally
-        !emptypathspec && finalize(sa)
+        !emptypathspec && close(sa)
     end
     return GitDiff(diff_ptr_ptr[])
 end

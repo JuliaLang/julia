@@ -6,7 +6,7 @@ function GitRepo(path::AbstractString)
                 (Ptr{Ptr{Void}}, Cstring), repo_ptr_ptr, path)
     if err != Int(Error.GIT_OK)
         if repo_ptr_ptr[] != C_NULL
-            finalize(GitRepo(repo_ptr_ptr[]))
+            close(GitRepo(repo_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
@@ -21,7 +21,7 @@ function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY
                  repo_ptr_ptr, path, flags, separator)
     if err != Int(Error.GIT_OK)
         if repo_ptr_ptr[] != C_NULL
-            finalize(GitRepo(repo_ptr_ptr[]))
+            close(GitRepo(repo_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
@@ -46,7 +46,7 @@ function head_oid(repo::GitRepo)
     try
         return Oid(head_ref)
     finally
-        finalize(head_ref)
+        close(head_ref)
     end
 end
 
@@ -82,7 +82,7 @@ function revparseid(repo::GitRepo, objname::AbstractString)
     obj = revparse(repo, objname)
     obj === nothing && return Oid()
     oid = Oid(obj.ptr)
-    finalize(obj)
+    close(obj)
     return oid
 end
 
@@ -104,7 +104,7 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::Oid, oid_size::Int=OID_
         return nothing
     elseif err != Int(Error.GIT_OK)
         if obj_ptr_ptr[] != C_NULL
-            finalize(GitAnyObject(obj_ptr_ptr[]))
+            close(GitAnyObject(obj_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
@@ -134,7 +134,7 @@ function peel(obj::GitObject, obj_type::Cint)
         return Oid()
     elseif err != Int(Error.GIT_OK)
         if peeled_ptr_ptr[] != C_NULL
-            finalize(GitAnyObject(peeled_ptr_ptr[]))
+            close(GitAnyObject(peeled_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end

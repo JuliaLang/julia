@@ -45,7 +45,7 @@ function fetch_refspecs(rmt::GitRemote)
                       (Ptr{LibGit2.StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
         convert(Vector{AbstractString}, sa_ref[])
     finally
-        finalize(sa_ref[])
+        close(sa_ref[])
     end
 end
 
@@ -56,7 +56,7 @@ function push_refspecs(rmt::GitRemote)
                       (Ptr{LibGit2.StrArrayStruct}, Ptr{Void}), sa_ref, rmt.ptr)
         convert(Vector{AbstractString}, sa_ref[])
     finally
-        finalize(sa_ref[])
+        close(sa_ref[])
     end
 end
 
@@ -71,7 +71,7 @@ function fetch{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
             (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{FetchOptions}, Cstring),
             rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(options), msg)
     finally
-        !no_refs && finalize(sa)
+        !no_refs && close(sa)
     end
 end
 
@@ -85,6 +85,6 @@ function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
                       (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
                        rmt.ptr, no_refs ? C_NULL : Ref(sa), Ref(options))
     finally
-        !no_refs && finalize(sa)
+        !no_refs && close(sa)
     end
 end

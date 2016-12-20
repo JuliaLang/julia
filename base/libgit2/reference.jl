@@ -108,7 +108,7 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
         return Oid()
     elseif err != Int(Error.GIT_OK)
         if obj_ptr_ptr[] != C_NULL
-            finalize(GitAnyObject(obj_ptr_ptr[]))
+            close(GitAnyObject(obj_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
@@ -158,7 +158,7 @@ function lookup_branch(repo::GitRepo,
         return nothing
     elseif err != Int(Error.GIT_OK)
         if ref_ptr_ptr[] != C_NULL
-            finalize(GitReference(ref_ptr_ptr[]))
+            close(GitReference(ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end
@@ -174,7 +174,7 @@ function upstream(ref::GitReference)
         return nothing
     elseif err != Int(Error.GIT_OK)
         if ref_ptr_ptr[] != C_NULL
-            finalize(GitReference(ref_ptr_ptr[]))
+            close(GitReference(ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
     end

@@ -31,7 +31,7 @@ function GitAnnotated(repo::GitRepo, comittish::AbstractString)
         cmt === nothing && return nothing
         return GitAnnotated(repo, Oid(cmt))
     finally
-        finalize(obj)
+        close(obj)
     end
 end
 
@@ -65,10 +65,10 @@ function ffmerge!(repo::GitRepo, ann::GitAnnotated)
             else
                 GitReference(repo, cmt_oid, fullname(head_ref), msg=msg)
             end
-            finalize(new_head_ref)
+            close(new_head_ref)
         end
     finally
-        finalize(cmt)
+        close(cmt)
     end
     return true
 end

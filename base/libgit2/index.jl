@@ -37,7 +37,7 @@ function read_tree!(idx::GitIndex, tree_id::Oid)
         @check ccall((:git_index_read_tree, :libgit2), Cint,
                      (Ptr{Void}, Ptr{Void}), idx.ptr, tree.ptr)
     finally
-        finalize(tree)
+        close(tree)
     end
 end
 
@@ -49,7 +49,7 @@ function add!{T<:AbstractString}(idx::GitIndex, files::T...;
                      (Ptr{Void}, Ptr{StrArrayStruct}, Cuint, Ptr{Void}, Ptr{Void}),
                       idx.ptr, Ref(sa), flags, C_NULL, C_NULL)
     finally
-        finalize(sa)
+        close(sa)
     end
 end
 
@@ -60,7 +60,7 @@ function update!{T<:AbstractString}(idx::GitIndex, files::T...)
                      (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                       idx.ptr, Ref(sa), C_NULL, C_NULL)
     finally
-        finalize(sa)
+        close(sa)
     end
 end
 
@@ -71,7 +71,7 @@ function remove!{T<:AbstractString}(idx::GitIndex, files::T...)
                      (Ptr{Void}, Ptr{StrArrayStruct}, Ptr{Void}, Ptr{Void}),
                       idx.ptr, Ref(sa), C_NULL, C_NULL)
     finally
-        finalize(sa)
+        close(sa)
     end
 end
 

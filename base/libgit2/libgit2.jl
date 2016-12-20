@@ -63,7 +63,7 @@ function iscommit(id::AbstractString, repo::GitRepo)
         if c === nothing
             res = false
         else
-            finalize(c)
+            close(c)
         end
     catch
         res = false
@@ -84,11 +84,11 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
     try
         diff = diff_tree(repo, tree, paths)
         result = count(diff) > 0
-        finalize(diff)
+        close(diff)
     catch err
         result = true
     finally
-        finalize(tree)
+        close(tree)
     end
     return result
 end
@@ -110,10 +110,10 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
                 push!(files, unsafe_string(delta.new_file.path))
             end
         end
-        finalize(diff)
+        close(diff)
     finally
-        finalize(tree1)
-        finalize(tree2)
+        close(tree1)
+        close(tree2)
     end
     return files
 end
@@ -163,7 +163,7 @@ function fetch{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
         fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
     finally
-        finalize(rmt)
+        close(rmt)
     end
 end
 
@@ -184,7 +184,7 @@ function push{T<:AbstractString, P<:AbstractCredentials}(repo::GitRepo;
         push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         push(rmt, refspecs, force=force, options=push_opts)
     finally
-        finalize(rmt)
+        close(rmt)
     end
 end
 
@@ -194,7 +194,7 @@ function branch(repo::GitRepo)
     try
         branch(head_ref)
     finally
-        finalize(head_ref)
+        close(head_ref)
     end
 end
 
@@ -220,7 +220,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
                 tmpcmt = with(peel(GitCommit, branch_rmt_ref)) do hrc
                     Oid(hrc)
                 end
-                finalize(branch_rmt_ref)
+                close(branch_rmt_ref)
                 tmpcmt
             end
         else
@@ -232,7 +232,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         try
             new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
-            finalize(cmt)
+            close(cmt)
             new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
             branch_ref = new_branch_ref
         end
@@ -260,7 +260,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             head!(repo, branch_ref)
         end
     finally
-        finalize(branch_ref)
+        close(branch_ref)
     end
     return
 end
@@ -296,15 +296,15 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
             obj_oid = Oid(peeled)
             ref = GitReference(repo, obj_oid, force=force,
                 msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
-            finalize(ref)
+            close(ref)
 
             # checkout commit
             checkout_tree(repo, peeled, options = opts)
         finally
-            finalize(peeled)
+            close(peeled)
         end
     finally
-        finalize(obj)
+        close(obj)
     end
 end
 
@@ -335,7 +335,7 @@ function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractSt
     try
         reset!(repo, Nullable(obj), pathspecs...)
     finally
-        finalize(obj)
+        close(obj)
     end
 end
 
@@ -347,7 +347,7 @@ function reset!(repo::GitRepo, commit::Oid, mode::Cint = Consts.RESET_MIXED)
     try
         reset!(repo, obj, mode)
     finally
-        finalize(obj)
+        close(obj)
     end
 end
 
@@ -432,25 +432,25 @@ function merge!(repo::GitRepo;
                 end
                 return true
             else
-                with(head(repo)) do head_ref
-                    with(upstream(head_ref)) do tr_brn_ref
-                        if tr_brn_ref === nothing
-                            throw(GitError(Error.Merge, Error.ERROR,
-                                           "There is no tracking information for the current branch."))
-                        end
-                        [GitAnnotated(repo, tr_brn_ref)]
-                    end
+                tr_brn_ref = upstream(head_ref)
+                if tr_brn_ref === nothing
+                    throw(GitError(Error.Merge, Error.ERROR,
+                                   "There is no tracking information for the current branch."))
+                end
+                try
+                    [GitAnnotated(repo, tr_brn_ref)]
+                finally
+                    close(tr_brn_ref)
                 end
             end
         end
     end
-
     try
         merge!(repo, upst_anns, fastforward,
                merge_opts=merge_opts,
                checkout_opts=checkout_opts)
     finally
-        map(finalize, upst_anns)
+        map(close, upst_anns)
     end
 end
 
@@ -474,12 +474,15 @@ function rebase!(repo::GitRepo, upstream::AbstractString="")
     with(head(repo)) do head_ref
         head_ann = GitAnnotated(repo, head_ref)
         upst_ann  = if isempty(upstream)
-            with(LibGit2.upstream(head_ref)) do brn_ref
-                if brn_ref === nothing
-                    throw(GitError(Error.Rebase, Error.ERROR,
-                                   "There is no tracking information for the current branch."))
-                end
+            brn_ref = LibGit2.upstream(head_ref)
+            if brn_ref === nothing
+                throw(GitError(Error.Rebase, Error.ERROR,
+                               "There is no tracking information for the current branch."))
+            end
+            try
                 GitAnnotated(repo, brn_ref)
+            finally
+                close(brn_ref)
             end
         else
             GitAnnotated(repo, upstream)
@@ -497,15 +500,15 @@ function rebase!(repo::GitRepo, upstream::AbstractString="")
                     abort(rbs)
                     rethrow(err)
                 finally
-                    finalize(rbs)
+                    close(rbs)
                 end
             finally
-                #!isnull(onto_ann) && finalize(get(onto_ann))
-                finalize(sig)
+                #!isnull(onto_ann) && close(get(onto_ann))
+                close(sig)
             end
         finally
-            finalize(upst_ann)
-            finalize(head_ann)
+            close(upst_ann)
+            close(head_ann)
         end
     end
     return nothing
@@ -563,7 +566,7 @@ function transact(f::Function, repo::GitRepo)
         restore(state, repo)
         rethrow()
     finally
-        finalize(repo)
+        close(repo)
     end
 end
 
