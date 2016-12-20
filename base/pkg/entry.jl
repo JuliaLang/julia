@@ -3,7 +3,7 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
-import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir
+import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir, ..isdevmetadata
 import ...LibGit2
 importall ...LibGit2
 import ...Pkg.PkgError
@@ -170,7 +170,11 @@ function status(io::IO, pkg::AbstractString, ver::VersionNumber, fix::Bool)
                 end
             end
             attrs = AbstractString[]
-            isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
+            isdevmeta = isdevmetadata()
+            if (isdevmeta  && !isfile("METADATA", Read.devmetapkgpath(pkg))) ||
+                    (!isdevmeta && !isfile("METADATA", pkg, "url"))
+                push!(attrs,"unregistered")
+            end
             LibGit2.isdirty(prepo) && push!(attrs,"dirty")
             isempty(attrs) || print(io, " (",join(attrs,", "),")")
         catch err
@@ -244,6 +248,7 @@ function free(pkg::AbstractString)
     Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
     avail = Read.available(pkg)
     isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
+    devmetadata = isdevmetadata()
     with(GitRepo, pkg) do repo
         LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
         info("Freeing $pkg")
@@ -258,7 +263,7 @@ function free(pkg::AbstractString)
                     resolve()
                 end
             end
-            isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
+            isempty(Cache.prefetch(pkg, Read.url(pkg, devmetadata), [a.sha1 for (v,a)=avail])) && continue
             throw(PkgError("can't find any registered versions of $pkg to checkout"))
         end
     end
@@ -266,6 +271,7 @@ end
 
 function free(pkgs)
     try
+        devmetadata = isdevmetadata()
         for pkg in pkgs
             ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
             Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
@@ -282,7 +288,7 @@ function free(pkgs)
                     break
                 end
             end
-            isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
+            isempty(Cache.prefetch(pkg, Read.url(pkg, devmetadata), [a.sha1 for (v,a)=avail])) && continue
             throw(PkgError("Can't find any registered versions of $pkg to checkout"))
         end
     finally
@@ -380,10 +386,11 @@ function update(branch::AbstractString, upkgs::Set{String})
     end
     deferred_errors = CompositeException()
     avail = Read.available()
+    devmetadata = isdevmetadata()
     # this has to happen before computing free/fixed
     for pkg in filter(Read.isinstalled, collect(keys(avail)))
         try
-            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            Cache.prefetch(pkg, Read.url(pkg, devmetadata), [a.sha1 for (v,a)=avail[pkg]])
         catch err
             cex = CapturedException(err, catch_backtrace())
             push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
@@ -400,7 +407,7 @@ function update(branch::AbstractString, upkgs::Set{String})
     free  = Read.free(instd,dont_update)
     for (pkg,ver) in free
         try
-            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            Cache.prefetch(pkg, Read.url(pkg, devmetadata), [a.sha1 for (v,a)=avail[pkg]])
         catch err
             cex = CapturedException(err, catch_backtrace())
             push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
@@ -444,7 +451,7 @@ function update(branch::AbstractString, upkgs::Set{String})
             stopupdate && break
             if haskey(avail,pkg)
                 try
-                    Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+                    Cache.prefetch(pkg, Read.url(pkg, devmetadata), [a.sha1 for (v,a)=avail[pkg]])
                 catch err
                     cex = CapturedException(err, catch_backtrace())
                     push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
@@ -502,7 +509,7 @@ function resolve(
     # compare what is installed with what should be
     changes = Query.diff(have, want, avail, fixed)
     isempty(changes) && return info("No packages to install, update or remove")
-
+    devmetadata = isdevmetadata()
     # prefetch phase isolates network activity, nothing to roll back
     missing = []
     for (pkg,(ver1,ver2)) in changes
@@ -511,7 +518,7 @@ function resolve(
         ver2 !== nothing && push!(vers,Read.sha1(pkg,ver2))
         append!(missing,
             map(sha1->(pkg,(ver1,ver2),sha1),
-                Cache.prefetch(pkg, Read.url(pkg), vers)))
+                Cache.prefetch(pkg, Read.url(pkg, devmetadata), vers)))
     end
     if !isempty(missing)
         msg = "Missing package versions (possible metadata misconfiguration):"
