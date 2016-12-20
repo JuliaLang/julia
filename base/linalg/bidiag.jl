@@ -559,23 +559,30 @@ function eigvecs{T}(M::Bidiagonal{T})
     n = length(M.dv)
     Q = Array{T}(n, n)
     blks = [0; find(x -> x == 0, M.ev); n]
+    v = zeros(T, n)
     if M.isupper
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector
-            v=zeros(T, n)
+            fill!(v, zero(T))
             v[blks[idx_block] + 1] = one(T)
             for j = blks[idx_block] + 1:i - 1 #Starting from j=i, eigenvector elements will be 0
                 v[j+1] = (M.dv[i] - M.dv[j])/M.ev[j] * v[j]
             end
-            Q[:, i] = v/norm(v)
+            c = norm(v)
+            for j = 1:n
+                Q[j, i] = v[j] / c
+            end
         end
     else
         for idx_block = 1:length(blks) - 1, i = blks[idx_block + 1]:-1:blks[idx_block] + 1 #index of eigenvector
-            v = zeros(T, n)
+            fill!(v, zero(T))
             v[blks[idx_block+1]] = one(T)
             for j = (blks[idx_block+1] - 1):-1:max(1, (i - 1)) #Starting from j=i, eigenvector elements will be 0
                 v[j] = (M.dv[i] - M.dv[j+1])/M.ev[j] * v[j+1]
             end
-            Q[:,i] = v/norm(v)
+            c = norm(v)
+            for j = 1:n
+                Q[j, i] = v[j] / c
+            end
         end
     end
     Q #Actually Triangular
