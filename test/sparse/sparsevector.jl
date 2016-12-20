@@ -177,11 +177,31 @@ end
 # generic array index
 let x = sprand(100, 0.5)
     I = rand(1:length(x), 20)
-    @which x[I]
     r = x[I]
     @test isa(r, SparseVector{Float64,Int})
     @test all(nonzeros(r) .!= 0.0)
     @test Array(r) == Array(x)[I]
+end
+
+# boolean array index
+let x = sprand(10, 10, 0.5)
+    I = rand(1:size(x, 2), 10)
+    bI = falses(size(x, 2))
+    bI[I] = true
+    r = x[1,bI]
+    @test isa(r, SparseVector{Float64,Int})
+    @test all(nonzeros(r) .!= 0.0)
+    @test Array(r) == Array(x)[1,bI]
+end
+
+let x = sprand(10, 0.5)
+    I = rand(1:length(x), 5)
+    bI = falses(length(x))
+    bI[I] = true
+    r = x[bI]
+    @test isa(r, SparseVector{Float64,Int})
+    @test all(nonzeros(r) .!= 0.0)
+    @test Array(r) == Array(x)[bI]
 end
 
 # setindex
