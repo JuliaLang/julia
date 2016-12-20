@@ -126,7 +126,7 @@ Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 # of keeps). The first two type parameters are to ensure specialization.
 @generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
     quote
-        $(Expr(:meta, :noinline))
+        $(Expr(:meta, :inline))
         # destructure the keeps and As tuples
         @nexprs $nargs i->(A_i = As[i])
         @nexprs $nargs i->(keep_i = keeps[i])
@@ -147,7 +147,7 @@ end
 # and then copy in chunks into the output
 @generated function _broadcast!{K,ID,AT,nargs}(f, B::BitArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
     quote
-        $(Expr(:meta, :noinline))
+        $(Expr(:meta, :inline))
         # destructure the keeps and As tuples
         @nexprs $nargs i->(A_i = As[i])
         @nexprs $nargs i->(keep_i = keeps[i])
@@ -241,9 +241,8 @@ function broadcast_t(f, ::Type{Any}, shape, iter, As...)
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
-@inline function broadcast_t(f, T, shape, iter, As...)
+@inline function broadcast_t{nargs}(f, T, shape, iter, As::Vararg{Any,nargs})
     B = similar(Array{T}, shape)
-    nargs = length(As)
     keeps, Idefaults = map_newindexer(shape, As)
     _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
     return B
