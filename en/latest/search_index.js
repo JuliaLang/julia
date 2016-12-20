@@ -273,6 +273,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "manual/mathematical-operations.html#man-dot-operators-1",
+    "page": "Mathematical Operations and Elementary Functions",
+    "title": "Vectorized \"dot\" operators",
+    "category": "section",
+    "text": "For every binary operation like ^, there is a corresponding \"dot\" operation .^ that is automatically defined to perform ^ element-by-element on arrays.   For example, [1,2,3] ^ 3 is not defined, since there is no standard mathematical meaning to \"cubing\" an array, but [1,2,3] .^ 3 is defined as computing the elementwise (or \"vectorized\") result [1^3, 2^3, 3^3].More specifically, a .^ b is parsed as the \"dot\" call (^).(a,b), which performs a broadcast operation: it can combine arrays and scalars, arrays of the same size (performing the operation elementwise), and even arrays of different shapes (e.g. combining row and column vectors to produce a matrix).   Moreover, like all vectorized \"dot calls,\" these \"dot operators\" are fusing.  For example, if you compute 2 .* A.^2 .+ sin.(A) for an array A, it performs a single loop over A, computing 2a^2 + sin(a) for each element of A.  In particular, nested dot calls like f.(g.(x)) are fused, and \"adjacent\" binary operators like x .+ 3 .* x.^2 are equivalent to nested dot calls (+).(x, (*).(3, (^).(x, 2))).Furthermore, \"dotted\" updating operators like a .+= b are parsed as a .= a .+ b, where .= is a fused in-place assignment operation (see the dot syntax documentation).Note the dot syntax is also applicable to user-defined operators. For example, if you define ⊗(A,B) = kron(A,B) to give a convenient infix syntax A ⊗ B for Kronecker products (kron), then [A,B] .⊗ [C,D] will compute [A⊗C, B⊗D] with no additional coding."
+},
+
+{
     "location": "manual/mathematical-operations.html#Numeric-Comparisons-1",
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Numeric Comparisons",
@@ -285,7 +293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Chaining comparisons",
     "category": "section",
-    "text": "Unlike most languages, with the notable exception of Python, comparisons can be arbitrarily chained:julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5\ntrueChaining comparisons is often quite convenient in numerical code. Chained comparisons use the && operator for scalar comparisons, and the & operator for elementwise comparisons, which allows them to work on arrays. For example, 0 .< A .< 1 gives a boolean array whose entries are true where the corresponding elements of A are between 0 and 1.The operator .< is intended for array objects; the operation A .< B is valid only if A and B have the same dimensions.  The operator returns an array with boolean entries and with the same dimensions as A and B.  Such operators are called elementwise; Julia offers a suite of elementwise operators: .*, .+, etc.  Some of the elementwise operators can take a scalar operand such as the example 0 .< A .< 1 in the preceding paragraph. This notation means that the scalar operand should be replicated for each entry of the array.Note the evaluation behavior of chained comparisons:julia> v(x) = (println(x); x)\nv (generic function with 1 method)\n\njulia> v(1) < v(2) <= v(3)\n2\n1\n3\ntrue\n\njulia> v(1) > v(2) <= v(3)\n2\n1\nfalseThe middle expression is only evaluated once, rather than twice as it would be if the expression were written as v(1) < v(2) && v(2) <= v(3). However, the order of evaluations in a chained comparison is undefined. It is strongly recommended not to use expressions with side effects (such as printing) in chained comparisons. If side effects are required, the short-circuit && operator should be used explicitly (see Short-Circuit Evaluation)."
+    "text": "Unlike most languages, with the notable exception of Python, comparisons can be arbitrarily chained:julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5\ntrueChaining comparisons is often quite convenient in numerical code. Chained comparisons use the && operator for scalar comparisons, and the & operator for elementwise comparisons, which allows them to work on arrays. For example, 0 .< A .< 1 gives a boolean array whose entries are true where the corresponding elements of A are between 0 and 1.Note the evaluation behavior of chained comparisons:julia> v(x) = (println(x); x)\nv (generic function with 1 method)\n\njulia> v(1) < v(2) <= v(3)\n2\n1\n3\ntrue\n\njulia> v(1) > v(2) <= v(3)\n2\n1\nfalseThe middle expression is only evaluated once, rather than twice as it would be if the expression were written as v(1) < v(2) && v(2) <= v(3). However, the order of evaluations in a chained comparison is undefined. It is strongly recommended not to use expressions with side effects (such as printing) in chained comparisons. If side effects are required, the short-circuit && operator should be used explicitly (see Short-Circuit Evaluation)."
 },
 
 {
@@ -293,7 +301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Operator Precedence",
     "category": "section",
-    "text": "Julia applies the following order of operations, from highest precedence to lowest:Category Operators\nSyntax . followed by ::\nExponentiation ^ and its elementwise equivalent .^\nFractions // and .//\nMultiplication * / % & \\ and  .* ./ .% .\\\nBitshifts << >> >>> and .<< .>> .>>>\nAddition + - | ⊻ and .+ .-\nSyntax : .. followed by |>\nComparisons > < >= <= == === != !== <: and .> .< .>= .<= .== .!=\nControl flow && followed by || followed by ?\nAssignments = += -= *= /= //= \\= ^= ÷= %= |= &= ⊻= <<= >>= >>>= and .+= .-= .*= ./= .//= .\\= .^= .÷= .%="
+    "text": "Julia applies the following order of operations, from highest precedence to lowest:Category Operators\nSyntax . followed by ::\nExponentiation ^\nFractions //\nMultiplication * / % & \\\nBitshifts << >> >>>\nAddition + - | ⊻\nSyntax : .. followed by |>\nComparisons > < >= <= == === != !== <:\nControl flow && followed by || followed by ?\nAssignments = += -= *= /= //= \\= ^= ÷= %= |= &= ⊻= <<= >>= >>>="
 },
 
 {
@@ -301,7 +309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Elementary Functions",
     "category": "section",
-    "text": "Julia provides a comprehensive collection of mathematical functions and operators. These mathematical operations are defined over as broad a class of numerical values as permit sensible definitions, including integers, floating-point numbers, rationals, and complexes, wherever such definitions make sense.Moreover, these functions (like any Julia function) can be applied in \"vectorized\" fashion to arrays and other collections with the syntax f.(A), e.g. sin.(A) will compute the elementwise sine of each element of an array A.  See Dot Syntax for Vectorizing Functions."
+    "text": "Julia provides a comprehensive collection of mathematical functions and operators. These mathematical operations are defined over as broad a class of numerical values as permit sensible definitions, including integers, floating-point numbers, rationals, and complexes, wherever such definitions make sense.Moreover, these functions (like any Julia function) can be applied in \"vectorized\" fashion to arrays and other collections with the dot syntax f.(A), e.g. sin.(A) will compute the elementwise sine of each element of an array A."
 },
 
 {
@@ -601,11 +609,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/functions.html#Dot-Syntax-for-Vectorizing-Functions-1",
+    "location": "manual/functions.html#man-vectorized-1",
     "page": "Functions",
     "title": "Dot Syntax for Vectorizing Functions",
     "category": "section",
-    "text": "In technical-computing languages, it is common to have \"vectorized\" versions of functions, which simply apply a given function f(x) to each element of an array A to yield a new array via f(A).   This kind of syntax is convenient for data processing, but in other languages vectorization is also often required for performance: if loops are slow, the \"vectorized\" version of a function can call fast library code written in a low-level language.   In Julia, vectorized functions are not required for performance, and indeed it is often beneficial to write your own loops (see Performance Tips), but they can still be convenient.  Therefore, any Julia function f can be applied elementwise to any array (or other collection) with the syntax f.(A).Of course, you can omit the dot if you write a specialized \"vector\" method of f, e.g. via f(A::AbstractArray) = map(f, A), and this is just as efficient as f.(A).   But that approach requires you to decide in advance which functions you want to vectorize.More generally, f.(args...) is actually equivalent to broadcast(f, args...), which allows you to operate on multiple arrays (even of different shapes), or a mix of arrays and scalars (see Broadcasting).  For example, if you have f(x,y) = 3x + 4y, then f.(pi,A) will return a new array consisting of f(pi,a) for each a in A, and f.(vector1,vector2) will return a new vector consisting of f(vector1[i],vector2[i]) for each index i (throwing an exception if the vectors have different length).Moreover, nestedf.(args...) calls are fused into a single broadcast loop.  For example, sin.(cos.(X)) is equivalent to broadcast(x -> sin(cos(x)), X), similar to [sin(cos(x)) for x in X]: there is only a single loop over X, and a single array is allocated for the result.   [In contrast, sin(cos(X)) in a typical \"vectorized\" language would first allocate one temporary array for tmp=cos(X), and then compute sin(tmp) in a separate loop, allocating a second array.] This loop fusion is not a compiler optimization that may or may not occur, it is a syntactic guarantee whenever nested f.(args...) calls are encountered.  Technically, the fusion stops as soon as a \"non-dot\" function is encountered; for example, in sin.(sort(cos.(X))) the sin and cos loops cannot be merged because of the intervening sort function.Finally, the maximum efficiency is typically achieved when the output array of a vectorized operation is pre-allocated, so that repeated calls do not allocate new arrays over and over again for the results (Pre-allocating outputs:).   A convenient syntax for this is X .= ..., which is equivalent to broadcast!(identity, X, ...) except that, as above, the broadcast! loop is fused with any nested \"dot\" calls.  For example, X .= sin.(Y) is equivalent to broadcast!(sin, X, Y), overwriting X with sin.(Y) in-place. If the left-hand side is an array-indexing expression, e.g. X[2:end] .= sin.(Y), then it translates to broadcast! on a view, e.g. broadcast!(sin, view(X, 2:endof(X)), Y), so that the left-hand side is updated in-place.(In future versions of Julia, operators like .* will also be handled with the same mechanism: they will be equivalent to broadcast calls and will be fused with other nested \"dot\" calls.  X .+= Y is equivalent to X .= X .+ Y and will eventually result in a fused in-place assignment. Similarly for .*= etcetera.)"
+    "text": "In technical-computing languages, it is common to have \"vectorized\" versions of functions, which simply apply a given function f(x) to each element of an array A to yield a new array via f(A).   This kind of syntax is convenient for data processing, but in other languages vectorization is also often required for performance: if loops are slow, the \"vectorized\" version of a function can call fast library code written in a low-level language.   In Julia, vectorized functions are not required for performance, and indeed it is often beneficial to write your own loops (see Performance Tips), but they can still be convenient.  Therefore, any Julia function f can be applied elementwise to any array (or other collection) with the syntax f.(A).Of course, you can omit the dot if you write a specialized \"vector\" method of f, e.g. via f(A::AbstractArray) = map(f, A), and this is just as efficient as f.(A).   But that approach requires you to decide in advance which functions you want to vectorize.More generally, f.(args...) is actually equivalent to broadcast(f, args...), which allows you to operate on multiple arrays (even of different shapes), or a mix of arrays and scalars (see Broadcasting).  For example, if you have f(x,y) = 3x + 4y, then f.(pi,A) will return a new array consisting of f(pi,a) for each a in A, and f.(vector1,vector2) will return a new vector consisting of f(vector1[i],vector2[i]) for each index i (throwing an exception if the vectors have different length).Moreover, nestedf.(args...) calls are fused into a single broadcast loop.  For example, sin.(cos.(X)) is equivalent to broadcast(x -> sin(cos(x)), X), similar to [sin(cos(x)) for x in X]: there is only a single loop over X, and a single array is allocated for the result.   [In contrast, sin(cos(X)) in a typical \"vectorized\" language would first allocate one temporary array for tmp=cos(X), and then compute sin(tmp) in a separate loop, allocating a second array.] This loop fusion is not a compiler optimization that may or may not occur, it is a syntactic guarantee whenever nested f.(args...) calls are encountered.  Technically, the fusion stops as soon as a \"non-dot\" function call is encountered; for example, in sin.(sort(cos.(X))) the sin and cos loops cannot be merged because of the intervening sort function.Finally, the maximum efficiency is typically achieved when the output array of a vectorized operation is pre-allocated, so that repeated calls do not allocate new arrays over and over again for the results (Pre-allocating outputs:).   A convenient syntax for this is X .= ..., which is equivalent to broadcast!(identity, X, ...) except that, as above, the broadcast! loop is fused with any nested \"dot\" calls.  For example, X .= sin.(Y) is equivalent to broadcast!(sin, X, Y), overwriting X with sin.(Y) in-place. If the left-hand side is an array-indexing expression, e.g. X[2:end] .= sin.(Y), then it translates to broadcast! on a view, e.g. broadcast!(sin, view(X, 2:endof(X)), Y), so that the left-hand side is updated in-place.Operators like .* are handled with the same mechanism: they are equivalent to broadcast calls and are fused with other nested \"dot\" calls.  X .+= Y etcetera is equivalent to X .= X .+ Y and results in a fused in-place assignment;  see also dot operators."
 },
 
 {
@@ -1893,7 +1901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-dimensional Arrays",
     "title": "Vectorized Operators and Functions",
     "category": "section",
-    "text": "The following operators are supported for arrays. The dot version of a binary operator should be used for elementwise operations.Unary arithmetic – -, +, !\nBinary arithmetic – +, -, *, .*, /, ./, \\, .\\, ^, .^, div, mod\nComparison – .==, .!=, .<, .<=, .>, .>=\nUnary Boolean or bitwise – ~\nBinary Boolean or bitwise – &, |, $Some operators without dots operate elementwise anyway when one argument is a scalar. These operators are *, +, -, and the bitwise operators. The operators / and \\ operate elementwise when the denominator is a scalar.Note that comparisons such as == operate on whole arrays, giving a single boolean answer. Use dot operators for elementwise comparisons.To enable convenient vectorization of mathematical and other operations, Julia provides the compact syntax f.(args...), e.g. sin.(x) or min.(x,y), for elementwise operations over arrays or mixtures of arrays and scalars (a broadcast() operation). See Dot Syntax for Vectorizing Functions.Note that there is a difference between max.(a,b), which broadcasts max() elementwise over a and b, and maximum(a), which finds the largest value within a. The same statements hold for min.(a,b) and minimum(a)."
+    "text": "The following operators are supported for arrays.  Also, every binary operator supports a dot version that can be applied to arrays (and combinations of arrays and scalars) as a fused broadcasting operation.  (For comparison operations like <, only the .< version is applicable to arrays.)Unary arithmetic – -, +, !\nBinary arithmetic – +, -, *, /, \\, ^, .^, div, mod\nComparison – ==, !=, ≈ (isapprox), ≉\nUnary Boolean or bitwise – ~\nBinary Boolean or bitwise – &, |, ⊻ (xor)Some operators without dots operate elementwise anyway when one argument is a scalar: *, +, -, and the bitwise operators. The operators / and \\ operate elementwise when the denominator is a scalar.Note that comparisons such as == operate on whole arrays, giving a single boolean answer. Use dot operators like .== for elementwise comparisons.To enable convenient vectorization of mathematical and other operations, Julia provides the compact syntax f.(args...), e.g. sin.(x) or min.(x,y), for elementwise operations over arrays or mixtures of arrays and scalars (a Broadcasting operation); these have the additional advantage of \"fusing\" into a single loop when combined with dot operators and other dot calls.Note that there is a difference between max.(a,b), which broadcasts max() elementwise over a and b, and maximum(a), which finds the largest value within a. The same relationship holds for min.(a,b) and minimum(a)."
 },
 
 {
@@ -1901,7 +1909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Multi-dimensional Arrays",
     "title": "Broadcasting",
     "category": "section",
-    "text": "It is sometimes useful to perform element-by-element binary operations on arrays of different sizes, such as adding a vector to each column of a matrix.  An inefficient way to do this would be to replicate the vector to the size of the matrix:julia> a = rand(2,1); A = rand(2,3);\n\njulia> repmat(a,1,3)+A\n2×3 Array{Float64,2}:\n 1.20813  1.82068  1.25387\n 1.56851  1.86401  1.67846This is wasteful when dimensions get large, so Julia offers broadcast(), which expands singleton dimensions in array arguments to match the corresponding dimension in the other array without using extra memory, and applies the given function elementwise:julia> broadcast(+, a, A)\n2×3 Array{Float64,2}:\n 1.20813  1.82068  1.25387\n 1.56851  1.86401  1.67846\n\njulia> b = rand(1,2)\n1×2 Array{Float64,2}:\n 0.867535  0.00457906\n\njulia> broadcast(+, a, b)\n2×2 Array{Float64,2}:\n 1.71056  0.847604\n 1.73659  0.873631Elementwise operators such as .+ and .* perform broadcasting if necessary. There is also a broadcast!() function to specify an explicit destination, and broadcast_getindex() and broadcast_setindex!() that broadcast the indices before indexing.   Moreover, f.(args...) is equivalent to broadcast(f, args...), providing a convenient syntax to broadcast any function (Dot Syntax for Vectorizing Functions).Additionally, broadcast() is not limited to arrays (see the function documentation), it also handles tuples and treats any argument that is not an array or a tuple as a \"scalar\".julia> convert.(Float32, [1, 2])\n2-element Array{Float32,1}:\n 1.0\n 2.0\n\njulia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])\n2×2 Array{UInt8,2}:\n 0x02  0x04\n 0x06  0x07\n\njulia> string.(1:3, \". \", [\"First\", \"Second\", \"Third\"])\n3-element Array{String,1}:\n \"1. First\"\n \"2. Second\"\n \"3. Third\""
+    "text": "It is sometimes useful to perform element-by-element binary operations on arrays of different sizes, such as adding a vector to each column of a matrix.  An inefficient way to do this would be to replicate the vector to the size of the matrix:julia> a = rand(2,1); A = rand(2,3);\n\njulia> repmat(a,1,3)+A\n2×3 Array{Float64,2}:\n 1.20813  1.82068  1.25387\n 1.56851  1.86401  1.67846This is wasteful when dimensions get large, so Julia offers broadcast(), which expands singleton dimensions in array arguments to match the corresponding dimension in the other array without using extra memory, and applies the given function elementwise:julia> broadcast(+, a, A)\n2×3 Array{Float64,2}:\n 1.20813  1.82068  1.25387\n 1.56851  1.86401  1.67846\n\njulia> b = rand(1,2)\n1×2 Array{Float64,2}:\n 0.867535  0.00457906\n\njulia> broadcast(+, a, b)\n2×2 Array{Float64,2}:\n 1.71056  0.847604\n 1.73659  0.873631Dotted operators such as .+ and .* are equivalent to broadcast calls (except that they fuse, as described below). There is also a broadcast!() function to specify an explicit destination (which can also be accessed in a fusing fashion by .= assignment), and functions broadcast_getindex() and broadcast_setindex!() that broadcast the indices before indexing.   Moreover, f.(args...) is equivalent to broadcast(f, args...), providing a convenient syntax to broadcast any function (dot syntax).  Nested \"dot calls\" f.(...) (including calls to .+ etcetera) automatically fuse into a single broadcast call.Additionally, broadcast() is not limited to arrays (see the function documentation), it also handles tuples and treats any argument that is not an array or a tuple as a \"scalar\".julia> convert.(Float32, [1, 2])\n2-element Array{Float32,1}:\n 1.0\n 2.0\n\njulia> ceil.((UInt8,), [1.2 3.4; 5.6 6.7])\n2×2 Array{UInt8,2}:\n 0x02  0x04\n 0x06  0x07\n\njulia> string.(1:3, \". \", [\"First\", \"Second\", \"Third\"])\n3-element Array{String,1}:\n \"1. First\"\n \"2. Second\"\n \"3. Third\""
 },
 
 {
@@ -3405,7 +3413,15 @@ var documenterSearchIndex = {"docs": [
     "page": "Performance Tips",
     "title": "Pre-allocating outputs",
     "category": "section",
-    "text": "If your function returns an Array or some other complex type, it may have to allocate memory.  Unfortunately, oftentimes allocation and its converse, garbage collection, are substantial bottlenecks.Sometimes you can circumvent the need to allocate memory on each function call by preallocating the output.  As a trivial example, comparefunction xinc(x)\n    return [x, x+1, x+2]\nend\n\nfunction loopinc()\n    y = 0\n    for i = 1:10^7\n        ret = xinc(i)\n        y += ret[2]\n    end\n    y\nendwithfunction xinc!{T}(ret::AbstractVector{T}, x::T)\n    ret[1] = x\n    ret[2] = x+1\n    ret[3] = x+2\n    nothing\nend\n\nfunction loopinc_prealloc()\n    ret = Array{Int}(3)\n    y = 0\n    for i = 1:10^7\n        xinc!(ret, i)\n        y += ret[2]\n    end\n    y\nendTiming results:julia> @time loopinc()\nelapsed time: 1.955026528 seconds (1279975584 bytes allocated)\n50000015000000\n\njulia> @time loopinc_prealloc()\nelapsed time: 0.078639163 seconds (144 bytes allocated)\n50000015000000Preallocation has other advantages, for example by allowing the caller to control the \"output\" type from an algorithm.  In the example above, we could have passed a SubArray rather than an Array, had we so desired.Taken to its extreme, pre-allocation can make your code uglier, so performance measurements and some judgment may be required.   However, for \"vectorized\" (element-wise) functions, the convenient syntax x .= f.(y) can be used for in-place operations with fused loops and no temporary arrays (Dot Syntax for Vectorizing Functions)."
+    "text": "If your function returns an Array or some other complex type, it may have to allocate memory.  Unfortunately, oftentimes allocation and its converse, garbage collection, are substantial bottlenecks.Sometimes you can circumvent the need to allocate memory on each function call by preallocating the output.  As a trivial example, comparefunction xinc(x)\n    return [x, x+1, x+2]\nend\n\nfunction loopinc()\n    y = 0\n    for i = 1:10^7\n        ret = xinc(i)\n        y += ret[2]\n    end\n    y\nendwithfunction xinc!{T}(ret::AbstractVector{T}, x::T)\n    ret[1] = x\n    ret[2] = x+1\n    ret[3] = x+2\n    nothing\nend\n\nfunction loopinc_prealloc()\n    ret = Array{Int}(3)\n    y = 0\n    for i = 1:10^7\n        xinc!(ret, i)\n        y += ret[2]\n    end\n    y\nendTiming results:julia> @time loopinc()\nelapsed time: 1.955026528 seconds (1279975584 bytes allocated)\n50000015000000\n\njulia> @time loopinc_prealloc()\nelapsed time: 0.078639163 seconds (144 bytes allocated)\n50000015000000Preallocation has other advantages, for example by allowing the caller to control the \"output\" type from an algorithm.  In the example above, we could have passed a SubArray rather than an Array, had we so desired.Taken to its extreme, pre-allocation can make your code uglier, so performance measurements and some judgment may be required.   However, for \"vectorized\" (element-wise) functions, the convenient syntax x .= f.(y) can be used for in-place operations with fused loops and no temporary arrays (see the dot syntax for vectorizing functions)."
+},
+
+{
+    "location": "manual/performance-tips.html#More-dots:-Fuse-vectorized-operations-1",
+    "page": "Performance Tips",
+    "title": "More dots: Fuse vectorized operations",
+    "category": "section",
+    "text": "Julia has a special dot syntax that converts any scalar function into a \"vectorized\" function call, and any operator into a \"vectorized\" operator, with the special property that nested \"dot calls\" are fusing: they are combined at the syntax level into a single loop, without allocating temporary arrays.  If you use .= and similar assignment operators, the result can also be stored in-place in a pre-allocated array (see above).In a linear-algebra context, this means that even though operations like vector + vector and vector * scalar are defined, it can be advantageous to instead use vector .+ vector and vector .* scalar because the resulting loops can be fused with surrounding computations.  For example, consider the two functions:f(x) = 3 * x.^2 + 4 * x + 7 * x.^3\nfdot(x) = 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3Both f and fdot compute the same thing.  However, fdot is significantly faster when applied to an array:julia> x = rand(10^6);\n\njulia> @time f(x);\n  0.020244 seconds (26 allocations: 53.407 MB, 35.88% gc time)\n\njulia> @time fdot(x);\n  0.004579 seconds (10 allocations: 7.630 MB)\n\njulia> @time f.(x);\n  0.004391 seconds (35 allocations: 7.631 MB)That is, fdot(x) is more than four times faster and allocates 1/7 the memory of f(x), because each * and + operation in f(x) allocates a new temporary array and executes in a separate loop.   (Of course, if you just do f.(x) then it is as fast as fdot(x) in this example, but in many contexts it is more convenient to just sprinkle some dots in your expressions rather than defining a separate function for each vectorized operation.)"
 },
 
 {
@@ -6445,7 +6461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
@@ -6841,54 +6857,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math.html#Base.:.+",
-    "page": "Mathematics",
-    "title": "Base.:.+",
-    "category": "Function",
-    "text": ".+(x, y)\n\nElement-wise addition operator.\n\njulia> A = [1 2; 3 4];\n\njulia> B = [5 6; 7 8];\n\njulia> C = [A, B]\n2-element Array{Array{Int64,2},1}:\n [1 2; 3 4]\n [5 6; 7 8]\n\njulia> C .+ [[1; 2] [3; 4]]\n2×2 Array{Array{Int64,2},2}:\n [2 3; 4 5]   [4 5; 6 7]\n [7 8; 9 10]  [9 10; 11 12]\n\nSee also broadcast.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.-",
-    "page": "Mathematics",
-    "title": "Base.:.-",
-    "category": "Function",
-    "text": ".-(x, y)\n\nElement-wise subtraction operator.\n\njulia> [4; 5; 6] .- [1; 2; 4]\n3-element Array{Int64,1}:\n 3\n 3\n 2\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.*",
-    "page": "Mathematics",
-    "title": "Base.:.*",
-    "category": "Function",
-    "text": ".*(x, y)\n\nElement-wise multiplication operator.\n\njulia> [1 2 3] .* [1 2 3]\n1×3 Array{Int64,2}:\n 1  4  9\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:./",
-    "page": "Mathematics",
-    "title": "Base.:./",
-    "category": "Function",
-    "text": "./(x, y)\n\nElement-wise right division operator.\n\njulia> [1 2 3] ./ [1 2 3]\n1×3 Array{Float64,2}:\n 1.0  1.0  1.0\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.\\",
-    "page": "Mathematics",
-    "title": "Base.:.\\",
-    "category": "Function",
-    "text": ".\\(x, y)\n\nElement-wise left division operator.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> A .\\ [1 2]\n2×2 Array{Float64,2}:\n 1.0       1.0\n 0.333333  0.5\n\njulia> A = [1 0; 0 -1];\n\njulia> B = [0 1; 1 0];\n\njulia> C = [A, B]\n2-element Array{Array{Int64,2},1}:\n [1 0; 0 -1]\n [0 1; 1 0]\n\njulia> x = [1; 0];\n\njulia> y = [0; 1];\n\njulia> D = [x, y]\n2-element Array{Array{Int64,1},1}:\n [1,0]\n [0,1]\n\njulia> C .\\ D\n2-element Array{Array{Float64,1},1}:\n [1.0,-0.0]\n [1.0,0.0]\n\nSee also broadcast.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.^",
-    "page": "Mathematics",
-    "title": "Base.:.^",
-    "category": "Function",
-    "text": ".^(x, y)\n\nElement-wise exponentiation operator.\n\njulia> [1 2 3] .^ [1 2 3]\n1×3 Array{Int64,2}:\n 1  4  27\n\n\n\n"
-},
-
-{
     "location": "stdlib/math.html#Base.fma",
     "page": "Mathematics",
     "title": "Base.fma",
@@ -7129,54 +7097,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/math.html#Base.:.==",
-    "page": "Mathematics",
-    "title": "Base.:.==",
-    "category": "Function",
-    "text": ".==(x, y)\n\nElement-wise equality comparison operator.\n\njulia> [1 2 3] .== [1 2 4]\n1×3 BitArray{2}:\n true  true  false\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.!=",
-    "page": "Mathematics",
-    "title": "Base.:.!=",
-    "category": "Function",
-    "text": ".!=(x, y)\n.≠(x,y)\n\nElement-wise not-equals comparison operator.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.<",
-    "page": "Mathematics",
-    "title": "Base.:.<",
-    "category": "Function",
-    "text": ".<(x, y)\n\nElement-wise less-than comparison operator.\n\njulia> [1; 2; 3] .< [2; 1; 4]\n3-element BitArray{1}:\n  true\n false\n  true\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.<=",
-    "page": "Mathematics",
-    "title": "Base.:.<=",
-    "category": "Function",
-    "text": ".<=(x, y)\n.≤(x,y)\n\nElement-wise less-than-or-equals comparison operator.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.>",
-    "page": "Mathematics",
-    "title": "Base.:.>",
-    "category": "Function",
-    "text": ".>(x, y)\n\nElement-wise greater-than comparison operator.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math.html#Base.:.>=",
-    "page": "Mathematics",
-    "title": "Base.:.>=",
-    "category": "Function",
-    "text": ".>=(x, y)\n.≥(x,y)\n\nElement-wise greater-than-or-equals comparison operator.\n\n\n\n"
-},
-
-{
     "location": "stdlib/math.html#Base.cmp",
     "page": "Mathematics",
     "title": "Base.cmp",
@@ -7245,7 +7165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Mathematical Operators",
     "category": "section",
-    "text": "Base.:-(::Any)\nBase.:(+)\nBase.:-(::Any, ::Any)\nBase.:*(::Any, ::Any...)\nBase.:(/)\nBase.:\\(::Any, ::Any)\nBase.:^(::Any, ::Any)\nBase.:(.+)\nBase.:(.-)\nBase.:(.*)\nBase.:(./)\nBase.:(.\\)\nBase.:(.^)\nBase.fma\nBase.muladd\nBase.div\nBase.fld\nBase.cld\nBase.mod\nBase.Math.mod2pi\nBase.rem\nBase.divrem\nBase.fldmod\nBase.fld1\nBase.mod1\nBase.fldmod1\nBase.:(//)\nBase.rationalize\nBase.numerator\nBase.denominator\nBase.:(<<)\nBase.:(>>)\nBase.:(>>>)\nBase.colon\nBase.range\nBase.OneTo\nBase.:(==)\nBase.:(!=)\nBase.:(!==)\nBase.:(<)\nBase.:(<=)\nBase.:(>)\nBase.:(>=)\nBase.:(.==)\nBase.:(.!=)\nBase.:(.<)\nBase.:(.<=)\nBase.:(.>)\nBase.:(.>=)\nBase.cmp\nBase.:(~)\nBase.:(&)\nBase.:(|)\nBase.xor\nBase.:(!)\n&&\n||"
+    "text": "Base.:-(::Any)\nBase.:(+)\nBase.:-(::Any, ::Any)\nBase.:*(::Any, ::Any...)\nBase.:(/)\nBase.:\\(::Any, ::Any)\nBase.:^(::Any, ::Any)\nBase.fma\nBase.muladd\nBase.div\nBase.fld\nBase.cld\nBase.mod\nBase.Math.mod2pi\nBase.rem\nBase.divrem\nBase.fldmod\nBase.fld1\nBase.mod1\nBase.fldmod1\nBase.:(//)\nBase.rationalize\nBase.numerator\nBase.denominator\nBase.:(<<)\nBase.:(>>)\nBase.:(>>>)\nBase.colon\nBase.range\nBase.OneTo\nBase.:(==)\nBase.:(!=)\nBase.:(!==)\nBase.:(<)\nBase.:(<=)\nBase.:(>)\nBase.:(>=)\nBase.cmp\nBase.:(~)\nBase.:(&)\nBase.:(|)\nBase.xor\nBase.:(!)\n&&\n||"
 },
 
 {
@@ -10577,9 +10497,9 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.Broadcast.broadcast!",
+    "location": "stdlib/arrays.html#Base.broadcast!",
     "page": "Arrays",
-    "title": "Base.Broadcast.broadcast!",
+    "title": "Base.broadcast!",
     "category": "Function",
     "text": "broadcast!(f, dest, As...)\n\nLike broadcast, but store the result of broadcast(f, As...) in the dest array. Note that dest is only used to store the result, and does not supply arguments to f unless it is also listed in the As, as in broadcast!(f, A, A, B) to perform A[:] = broadcast(f, A, B).\n\n\n\n"
 },
@@ -16077,7 +15997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Punctuation",
     "title": "Punctuation",
     "category": "section",
-    "text": "Extended documentation for mathematical symbols & functions is here.symbol meaning\n@m invoke macro m; followed by space-separated expressions\n! prefix \"not\" operator\na!( ) at the end of a function name, ! indicates that a function modifies its argument(s)\n# begin single line comment\n#= begin multi-line comment (these are nestable)\n=# end multi-line comment\n$ string and expression interpolation\n% remainder operator\n^ exponent operator\n& bitwise and\n&& short-circuiting boolean and\n| bitwise or\n|| short-circuiting boolean or\n⊻ bitwise xor operator\n* multiply, or matrix multiply\n() the empty tuple\n~ bitwise not operator\n\\ backslash operator\n' complex transpose operator Aᴴ\na[] array indexing\n[,] vertical concatenation\n[;] also vertical concatenation\n[    ] with space-separated expressions, horizontal concatenation\nT{ } parametric type instantiation\n; statement separator\n, separate function arguments or tuple components\n? 3-argument conditional operator (conditional ? if_true : if_false)\n\"\" delimit string literals\n'' delimit character literals\n` ` delimit external process (command) specifications\n... splice arguments into a function call or declare a varargs function or type\n. access named fields in objects or names inside modules, also prefixes elementwise operators\na:b range a, a+1, a+2, ..., b\na:s:b range a, a+s, a+2s, ..., b\n: index an entire dimension (1:end)\n:: type annotation, depending on context\n:( ) quoted expression\n:a symbol a"
+    "text": "Extended documentation for mathematical symbols & functions is here.symbol meaning\n@m invoke macro m; followed by space-separated expressions\n! prefix \"not\" operator\na!( ) at the end of a function name, ! indicates that a function modifies its argument(s)\n# begin single line comment\n#= begin multi-line comment (these are nestable)\n=# end multi-line comment\n$ string and expression interpolation\n% remainder operator\n^ exponent operator\n& bitwise and\n&& short-circuiting boolean and\n| bitwise or\n|| short-circuiting boolean or\n⊻ bitwise xor operator\n* multiply, or matrix multiply\n() the empty tuple\n~ bitwise not operator\n\\ backslash operator\n' complex transpose operator Aᴴ\na[] array indexing\n[,] vertical concatenation\n[;] also vertical concatenation\n[    ] with space-separated expressions, horizontal concatenation\nT{ } parametric type instantiation\n; statement separator\n, separate function arguments or tuple components\n? 3-argument conditional operator (conditional ? if_true : if_false)\n\"\" delimit string literals\n'' delimit character literals\n` ` delimit external process (command) specifications\n... splice arguments into a function call or declare a varargs function or type\n. access named fields in objects/modules, also prefixes elementwise operator/function calls\na:b range a, a+1, a+2, ..., b\na:s:b range a, a+s, a+2s, ..., b\n: index an entire dimension (1:end)\n:: type annotation, depending on context\n:( ) quoted expression\n:a symbol a"
 },
 
 {
