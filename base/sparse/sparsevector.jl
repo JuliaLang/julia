@@ -402,7 +402,7 @@ function getindex(x::SparseMatrixCSC, I::UnitRange, j::Integer)
     # Restrict to the selected rows
     r1 = searchsortedfirst(x.rowval, first(I), c1, c2, Forward)
     r2 = searchsortedlast(x.rowval, last(I), c1, c2, Forward)
-    SparseVector(length(I), x.rowval[r1:r2] - first(I) + 1, x.nzval[r1:r2])
+    SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
@@ -1251,18 +1251,21 @@ for (vop, fun, mode) in [(:_vadd, :+, 1),
 end
 
 # to workaround the ambiguities with BitVector
-.*(x::BitVector, y::AbstractSparseVector{Bool}) = _vmul(x, y)
-.*(x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y)
+broadcast(::typeof(*), x::BitVector, y::AbstractSparseVector{Bool}) = _vmul(x, y)
+broadcast(::typeof(*), x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y)
 
 # definition of operators
 
-for (op, vop) in [(:+, :_vadd), (:(.+), :_vadd),
-                  (:-, :_vsub), (:(.-), :_vsub),
-                  (:.*, :_vmul)]
-    @eval begin
+for (op, vop) in [(:+, :_vadd), (:-, :_vsub), (:*, :_vmul)]
+    op != :* && @eval begin
         $(op)(x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
         $(op)(x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
         $(op)(x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
+    end
+    @eval begin
+        broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
     end
 end
 
@@ -1372,10 +1375,12 @@ scale!(a::Real, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 scale!(a::Complex, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 
 
-.*(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
-.*(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
-./(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
-
+*(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
+*(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
+/(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
+broadcast(::typeof(*), x::AbstractSparseVector, a::Number) = x * a
+broadcast(::typeof(*), a::Number, x::AbstractSparseVector) = a * x
+broadcast(::typeof(/), x::AbstractSparseVector, a::Number) = x / a
 
 # dot
 

@@ -1433,6 +1433,11 @@ function broadcast!{Tf,N}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC, Bs::Var
     return fpreszeros ? _broadcast_zeropres!(f, C, A, Bs...) :
                         _broadcast_notzeropres!(f, fofzeros, C, A, Bs...)
 end
+# needed to eliminate method ambiguity:
+function broadcast!(::typeof(identity), C::SparseMatrixCSC, A::SparseMatrixCSC)
+    _checksameshape(C, A)
+    return copy!(C, A)
+end
 function broadcast{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N})
     _aresameshape(A, Bs...) && return map(f, A, Bs...) # could avoid a second dims check in map
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
@@ -2276,7 +2281,6 @@ round{To}(::Type{To}, A::SparseMatrixCSC) = round.(To, A)
 
 
 ## Binary arithmetic and boolean operators
-
 (+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
 (-)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(-, A, B)
 # TODO: Vectorized min, max, |, and xor should be deprecated in favor of compact-broadcast syntax.
@@ -2286,50 +2290,10 @@ max(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(max, A, B)
 (|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(|, A, B)
 xor(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(xor, A, B)
 
-(.+)(A::SparseMatrixCSC, B::Number) = Array(A) .+ B
 ( +)(A::SparseMatrixCSC, B::Array ) = Array(A)  + B
-(.+)(A::Number, B::SparseMatrixCSC) = A .+ Array(B)
 ( +)(A::Array , B::SparseMatrixCSC) = A  + Array(B)
-
-(.-)(A::SparseMatrixCSC, B::Number) = Array(A) .- B
 ( -)(A::SparseMatrixCSC, B::Array ) = Array(A)  - B
-(.-)(A::Number, B::SparseMatrixCSC) = A .- Array(B)
 ( -)(A::Array , B::SparseMatrixCSC) = A  - Array(B)
-
-(.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(*, A, B)
-(.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
-(.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
-
-(./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
-(./)(A::Number, B::SparseMatrixCSC) = (./)(A, Array(B))
-(./)(A::SparseMatrixCSC, B::Array) = (./)(Array(A), B)
-(./)(A::Array, B::SparseMatrixCSC) = (./)(A, Array(B))
-(./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(Array(A), Array(B))
-
-(.\)(A::SparseMatrixCSC, B::Number) = (.\)(Array(A), B)
-(.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .\ B.nzval )
-(.\)(A::SparseMatrixCSC, B::Array) = (.\)(Array(A), B)
-(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, Array(B))
-(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(Array(A), Array(B))
-
-(.^)(A::SparseMatrixCSC, B::Number) =
-    B==0 ? sparse(ones(typeof(one(eltype(A)).^B), A.m, A.n)) :
-           SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
-(.^)(::Irrational{:e}, B::SparseMatrixCSC) = exp.(B)
-(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, Array(B))
-(.^)(A::SparseMatrixCSC, B::Array) = (.^)(Array(A), B)
-(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, Array(B))
-
-.+{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
-    broadcast!(+, spzeros(promote_op(+, Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
-
-function .-{Tva,Tia,Tvb,Tib}(A::SparseMatrixCSC{Tva,Tia}, B::SparseMatrixCSC{Tvb,Tib})
-    broadcast!(-, spzeros(promote_op(-, Tva, Tvb), promote_type(Tia, Tib), to_shape(broadcast_indices(A, B))), A, B)
-end
-
-## element-wise comparison operators returning SparseMatrixCSC ##
-.<{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(<, spzeros( Bool, promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
-.!={Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(!=, spzeros( Bool, promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2))), A_1, A_2)
 
 ## full equality
 function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)

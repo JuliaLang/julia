@@ -307,26 +307,26 @@ for (Fun, func) in [(:IdFun, :identity),
                     (:OrFun, :|),
                     (:XorFun, :xor),
                     (:AddFun, :+),
-                    (:DotAddFun, :.+),
+                    # (:DotAddFun, :.+),
                     (:SubFun, :-),
-                    (:DotSubFun, :.-),
+                    # (:DotSubFun, :.-),
                     (:MulFun, :*),
-                    (:DotMulFun, :.*),
+                    # (:DotMulFun, :.*),
                     (:RDivFun, :/),
-                    (:DotRDivFun, :./),
+                    # (:DotRDivFun, :./),
                     (:LDivFun, :\),
                     (:IDivFun, :div),
-                    (:DotIDivFun, :.÷),
+                    # (:DotIDivFun, :.÷),
                     (:ModFun, :mod),
                     (:RemFun, :rem),
-                    (:DotRemFun, :.%),
+                    # (:DotRemFun, :.%),
                     (:PowFun, :^),
                     (:MaxFun, :scalarmax),
                     (:MinFun, :scalarmin),
                     (:LessFun, :<),
                     (:MoreFun, :>),
-                    (:DotLSFun, :.<<),
-                    (:DotRSFun, :.>>),
+                    # (:DotLSFun, :.<<),
+                    # (:DotRSFun, :.>>),
                     (:ElementwiseMaxFun, :max),
                     (:ElementwiseMinFun, :min),
                     (:ComplexFun, :complex),
@@ -815,7 +815,7 @@ function convert(::Type{Base.LinAlg.UnitUpperTriangular}, A::Diagonal)
         "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
         "Consider calling the `UnitUpperTriangular` constructor directly ",
         "(`Base.LinAlg.UnitUpperTriangular(A)`) instead."), :convert)
-    if !all(A.diag .== one(eltype(A)))
+    if !all(x -> x == one(x), A.diag)
         throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
     end
     Base.LinAlg.UnitUpperTriangular(Array(A))
@@ -825,7 +825,7 @@ function convert(::Type{Base.LinAlg.UnitLowerTriangular}, A::Diagonal)
         "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
         "Consider calling the `UnitLowerTriangular` constructor directly ",
         "(`Base.LinAlg.UnitLowerTriangular(A)`) instead."), :convert)
-    if !all(A.diag .== one(eltype(A)))
+    if !all(x -> x == one(x), A.diag)
         throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
     end
     Base.LinAlg.UnitLowerTriangular(Array(A))
@@ -1002,6 +1002,20 @@ macro vectorize_2arg(S,f)
     end
 end
 export @vectorize_1arg, @vectorize_2arg
+
+# deprecations for uses of old dot operators (.* etc) as objects, rather than
+# just calling them infix.
+for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=, :≥, :\, :^)
+    dotop = Symbol('.', op)
+    # define as const dotop = (a,b) -> ...
+    # to work around syntax deprecation for dotop(a,b) = ...
+    @eval const $dotop = (a,b) -> begin
+        depwarn(string($(string(dotop)), " is no longer a function object; use broadcast(",$op,", ...) instead"),
+                $(QuoteNode(dotop)))
+        broadcast($op, a, b)
+    end
+    @eval export $dotop
+end
 
 # Devectorize manually vectorized abs methods in favor of compact broadcast syntax
 @deprecate abs(f::Base.Pkg.Resolve.MaxSum.Field) abs.(f)

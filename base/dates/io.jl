@@ -81,7 +81,14 @@ SLOT_RULE['M'] = Minute
 SLOT_RULE['S'] = Second
 SLOT_RULE['s'] = Millisecond
 
-duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
+function anyduplicates(slots)
+    for i = 1:length(slots), j = i+1:length(slots)
+        if slots[i].parser == slots[j].parser
+            return true
+        end
+    end
+    return false
+end
 
 """
     DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
@@ -130,7 +137,7 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
         push!(slots,slot)
     end
 
-    duplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
+    anyduplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
     return DateFormat(slots,prefix,locale)
 end
 
