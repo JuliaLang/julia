@@ -5,11 +5,11 @@ module LinAlg
 import Base: \, /, *, ^, +, -, ==
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
     Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
-import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, copy_transpose!,
-    ctranspose, ctranspose!, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
-    imag, inv, isapprox, kron, ndims, parent, power_by_squaring, print_matrix,
-    promote_rule, real, round, setindex!, show, similar, size, transpose, transpose!,
-    trunc, broadcast
+import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, ctranspose,
+    eltype, eye, findmax, findmin, fill!, floor, full, getindex, imag, inv,
+    isapprox, kron, ndims, parent, power_by_squaring, print_matrix,
+    promote_rule, real, round, setindex!, show, similar, size, transpose, trunc,
+    broadcast
 using Base: promote_op, _length, iszero
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
@@ -56,8 +56,10 @@ export
     cond,
     condskeel,
     copy!,
+    copy_transpose!,
     cross,
     ctranspose,
+    ctranspose!,
     det,
     diag,
     diagind,
@@ -127,6 +129,7 @@ export
     sylvester,
     trace,
     transpose,
+    transpose!,
     tril,
     triu,
     tril!,
@@ -230,6 +233,8 @@ end
 
 copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
 copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
+
+include("transpose.jl")
 
 include("exceptions.jl")
 include("generic.jl")
