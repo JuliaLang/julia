@@ -564,7 +564,7 @@ julia> ones(Complex128, 2, 3)
 ones(t,dims)
 
 """
-    ones(A::AbstractArray, T=eltype(A)::Type, dims=size(A)::DimOrInd)
+    ones(A::AbstractArray, T=eltype(A)::Type, dims=size(A)::Tuple)
 
 Create an array of all ones with the same layout as `A`. Element type and size
 can optionally be adjusted.
@@ -2716,7 +2716,7 @@ julia> zeros(Int8, 2, 3)
 zeros(t,dims)
 
 """
-    zeros(A::AbstractArray, T=eltype(A)::Type, dims=size(A)::DimOrInd)
+    zeros(A::AbstractArray, T=eltype(A)::Type, dims=size(A)::Tuple)
 
 Create an array of all zeros with the same layout as `A`. Element type and size
 can optionally be adjusted.
