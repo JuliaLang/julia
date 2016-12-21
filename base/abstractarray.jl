@@ -1847,8 +1847,8 @@ end
 
 ## N argument
 
-ith_all(i, ::Tuple{}) = ()
-ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
+@inline ith_all(i, ::Tuple{}) = ()
+@inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
 
 function map_n!{F}(f::F, dest::AbstractArray, As)
     for i = linearindices(As[1])
