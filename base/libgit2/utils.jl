@@ -44,3 +44,15 @@ function features()
     end
     return res
 end
+
+"""
+    LibGit2.posixpath(path)
+
+Standardise the path string `path` to use POSIX separators.
+"""
+function posixpath end
+if is_windows()
+    posixpath(path) = replace(path,'\\','/')
+else is_unix()
+    posixpath(path) = path
+end

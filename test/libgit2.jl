@@ -168,7 +168,7 @@ mktempdir() do dir
             repo = LibGit2.init(cache_repo)
             try
                 @test isdir(cache_repo)
-                @test LibGit2.path(repo) == realpath(cache_repo)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(cache_repo))
                 @test isdir(joinpath(cache_repo, ".git"))
 
                 # set a remote branch
@@ -193,7 +193,7 @@ mktempdir() do dir
             repo = LibGit2.init(path, true)
             try
                 @test isdir(path)
-                @test LibGit2.path(repo) == realpath(path)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(path))
                 @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
                 @test LibGit2.isattached(repo)
             finally
@@ -218,7 +218,7 @@ mktempdir() do dir
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true)
             try
                 @test isdir(repo_path)
-                @test LibGit2.path(repo) == realpath(repo_path)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
                 @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
                 @test LibGit2.isattached(repo)
                 @test LibGit2.remotes(repo) == ["origin"]
@@ -231,7 +231,7 @@ mktempdir() do dir
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true, remote_cb = LibGit2.mirror_cb())
             try
                 @test isdir(repo_path)
-                @test LibGit2.path(repo) == realpath(repo_path)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(repo_path))
                 @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
                 rmt = LibGit2.get(LibGit2.GitRemote, repo, "origin")
                 try
@@ -249,7 +249,7 @@ mktempdir() do dir
             repo = LibGit2.clone(cache_repo, test_repo)
             try
                 @test isdir(test_repo)
-                @test LibGit2.path(repo) == realpath(test_repo)
+                @test LibGit2.path(repo) == LibGit2.posixpath(realpath(test_repo))
                 @test isdir(joinpath(test_repo, ".git"))
                 @test LibGit2.isattached(repo)
                 @test LibGit2.isorphan(repo)
