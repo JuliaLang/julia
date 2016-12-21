@@ -552,6 +552,8 @@ fd
 """
     ones(type, dims)
 
+    ones(type, dims...)
+
 Create an array of all ones of specified type. The type defaults to `Float64` if not specified.
 
 ```jldoctest
@@ -565,6 +567,8 @@ ones(t,dims)
 
 """
     ones(A::AbstractArray, T=eltype(A)::Type, dims=size(A)::Tuple)
+
+    ones(A::AbstractArray, T::Type, dims...)
 
 Create an array of all ones with the same layout as `A`. Element type and size
 can optionally be adjusted.
@@ -2703,6 +2707,8 @@ any(::AbstractArray,dims)
 """
     zeros(type, dims)
 
+    zeros(type, dims...)
+
 Create an array of all zeros of specified type.
 The type defaults to `Float64` if not specified.
 
@@ -2717,6 +2723,8 @@ zeros(t,dims)
 
 """
     zeros(A::AbstractArray, T=eltype(A)::Type, dims=size(A)::Tuple)
+
+    zeros(A::AbstractArray, T::Type, dims...)
 
 Create an array of all zeros with the same layout as `A`. Element type and size
 can optionally be adjusted.

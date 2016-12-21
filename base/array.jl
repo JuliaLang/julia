@@ -212,7 +212,7 @@ for (fname, felt) in ((:zeros,:zero), (:ones,:one))
         $fname(a::AbstractArray, T::Type, dims...) = fill!(similar(a,T,dims...), $felt(T))
         $fname(a::AbstractArray, T::Type=eltype(a)) = fill!(similar(a,T), $felt(T))
 
-        $fname(T::Type, dims::Tuple) = fill!(Array{T}(Dims(dims)...), $felt(T))
+        $fname(T::Type, dims::Tuple) = fill!(Array{T}(Dims(dims)), $felt(T))
         $fname(dims::Tuple) = ($fname)(Float64, dims)
         $fname(T::Type, dims...) = $fname(T, dims)
         $fname(dims...) = $fname(dims)
