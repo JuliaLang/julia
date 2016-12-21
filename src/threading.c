@@ -693,10 +693,8 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
     user_ns[ptls->tid] += (trun - tfork);
 #endif
 
-    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
     // wait for completion (TODO: nowait?)
     ti_threadgroup_join(tgworld, ptls->tid);
-    jl_gc_state_set(ptls, 0, JL_GC_STATE_SAFE);
 
 #if PROFILE_JL_THREADING
     uint64_t tjoin = uv_hrtime();
