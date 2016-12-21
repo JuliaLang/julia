@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    LibGit2.GitRepo(path::AbstractString)
+
+Opens a git repository at `path`.
+"""
 function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open, :libgit2), Cint,
@@ -119,6 +124,7 @@ end
     LibGit2.gitdir(repo::GitRepo)
 
 Returns the location of the "git" files of `repo`:
+
  - for normal repositories, this is the location of the `.git` folder.
  - for bare repositories, this is the location of the repository itself.
 
@@ -132,8 +138,14 @@ end
 """
     LibGit2.workdir(repo::GitRepo)
 
-The location of the working directory of `repo`. This will throw an error
-for bare repositories.
+The location of the working directory of `repo`. This will throw an error for bare
+repositories.
+
+!!! note
+
+    This will typically be the parent directory of `gitdir(repo)`, but can be different in
+    some cases: e.g. if either the `core.worktree` configuration variable or the
+    `GIT_WORK_TREE` environmental variable is set.
 
 See also `gitdir`, `path`
 """
@@ -147,13 +159,27 @@ end
 """
     LibGit2.path(repo::GitRepo)
 
-The location of `repo`
- - for normal repositories, this is the location of the working tree.
+The base file path of the repository `repo`.
+
+ - for normal repositories, this will typically be the parent directory of the ".git"
+   directory (note: this may be different than the working directory, see `workdir` for
+   more details).
  - for bare repositories, this is the location of the "git" files.
 
-See also `gitdir`, `workdir`
+See also `gitdir`, `workdir`.
 """
-path(repo::GitRepo) = isbare(repo) ? gitdir(repo) : workdir(repo)
+function path(repo::GitRepo)
+    d = gitdir(repo)
+    if isdirpath(d)
+        d = dirname(d) # strip trailing separator
+    end
+    if isbare(repo)
+        return d
+    else
+        parent, base = splitdir(d)
+        return base == ".git" ? parent : d
+    end
+end
 
 function peel(obj::GitObject, obj_type::Cint)
     peeled_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
