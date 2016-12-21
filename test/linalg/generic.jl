@@ -25,6 +25,7 @@ Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) &
                                                q.s*w.v2 - q.v1*w.v3 + q.v2*w.s + q.v3*w.v1,
                                                q.s*w.v3 + q.v1*w.v2 - q.v2*w.v1 + q.v3*w.s)
 (*)(q::Quaternion, r::Real) = Quaternion(q.s*r, q.v1*r, q.v2*r, q.v3*r)
+(*)(q::Quaternion, b::Bool) = b * q # remove method ambiguity
 (/)(q::Quaternion, w::Quaternion) = q * conj(w) * (1.0 / abs2(w))
 (\)(q::Quaternion, w::Quaternion) = conj(q) * w * (1.0 / abs2(q))
 
