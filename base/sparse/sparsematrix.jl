@@ -1466,7 +1466,7 @@ _maxnnzfrom(Cm, Cn, A) = nnz(A) * div(Cm, A.m) * div(Cn, A.n)
 @inline _checked_maxnnzbcres(Cm, Cn, As...) = Cm != 0 && Cn != 0 ? _unchecked_maxnnzbcres(Cm, Cn, As) : 0
 
 # _map_zeropres!/_map_notzeropres! specialized for a single sparse matrix
-"Stores only the stored entries of `map(f, Matrix(A))` in `C`."
+"Stores only the nonzero entries of `map(f, Matrix(A))` in `C`."
 function _map_zeropres!{Tf}(f::Tf, C::SparseMatrixCSC, A::SparseMatrixCSC)
     spaceC = min(length(C.rowval), length(C.nzval))
     Ck = 1
