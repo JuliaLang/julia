@@ -97,6 +97,8 @@ Library improvements
     That is, not every member of the input iterable will be visited if a `true` (in the case of `any`) or
     `false` (in the case of `all`) value is found, and `mapreduce` will visit all members of the iterable.
 
+  * Additional methods for `ones` and `zeros` functions. These have the same signature as the `similar` function.
+
 Compiler/Runtime improvements
 -----------------------------
 
