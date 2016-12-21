@@ -545,6 +545,20 @@ end
 
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
+@inline norm{T}(tv::RowVector{T}) = norm(transpose(tv))
+
+"""
+    norm(rowvector, [q = 2])
+
+Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+value `p = q/(q-1)`. They coincide at `p = q = 2`.
+
+The difference in norm between a vector space and its dual arises to preserve
+the relationship between duality and the inner product, and the result is
+consistent with the p-norm of `1 × n` matrix.
+"""
+@inline norm{T}(tv::RowVector{T}, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
+
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
     if lx != _length(y)

@@ -128,9 +128,6 @@ end
 
 @inline ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
 
-transpose(x::AbstractVector) = [ transpose(v) for i=Base.of_indices(x, Base.OneTo(1)), v in x ]
-ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(v) for i=Base.of_indices(x, Base.OneTo(1)), v in x ]
-
 function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{Int},
                               A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(jr_src)

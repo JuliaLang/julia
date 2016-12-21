@@ -212,10 +212,6 @@ function findmin(a::BitArray)
     return m, mi
 end
 
-## transpose ##
-
-transpose(B::BitVector) = reshape(copy(B), 1, length(B))
-
 # fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
 # http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
 function transpose8x8(x::UInt64)

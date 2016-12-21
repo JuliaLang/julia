@@ -99,6 +99,10 @@ This section lists changes that do not have deprecation warnings.
     `n` and `max_delay`.  The previous functionality can be achieved setting
     `delays` to `ExponentialBackOff`. ([#19331])
 
+  * `transpose(::AbstractVector)` now always returns a `RowVector` view of the input (which is a
+     special 1×n-sized `AbstractMatrix`), not a `Matrix`, etc. In particular, for
+     `v::AbstractVector` we now have `(v.').' === v` and `v.' * v` is a scalar. ([#19670])
+
 Library improvements
 --------------------
 

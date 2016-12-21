@@ -291,7 +291,7 @@ julia> kron(A, B)
 ```
 """
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
-    R = Array{promote_type(T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
+    R = Array{promote_op(*,T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]

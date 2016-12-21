@@ -99,6 +99,7 @@ Base.LinAlg.istril
 Base.LinAlg.istriu
 Base.LinAlg.isdiag
 Base.LinAlg.ishermitian
+Base.LinAlg.RowVector
 Base.transpose
 Base.transpose!
 Base.ctranspose

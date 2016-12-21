@@ -5,12 +5,13 @@ module LinAlg
 import Base: \, /, *, ^, +, -, ==
 import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
     Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
-import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, ctranspose,
-    eltype, eye, findmax, findmin, fill!, floor, full, getindex, imag, inv,
-    isapprox, kron, ndims, parent, power_by_squaring, print_matrix,
-    promote_rule, real, round, setindex!, show, similar, size, transpose, trunc,
-    broadcast
-using Base: promote_op, _length, iszero
+import Base: USE_BLAS64, abs, big, broadcast, ceil, conj, convert, copy, copy!,
+    ctranspose, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
+    hcat, imag, indices, inv, isapprox, kron, length, linearindexing, map,
+    ndims, parent, power_by_squaring, print_matrix, promote_rule, real, round,
+    setindex!, show, similar, size, transpose, trunc, typed_hcat
+using Base: promote_op, _length, iszero, @pure, @propagate_inbounds, LinearFast,
+    reduce, hvcat_fill, typed_vcat, promote_typeof
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
 
@@ -20,6 +21,7 @@ export
     BLAS,
 
 # Types
+    RowVector,
     SymTridiagonal,
     Tridiagonal,
     Bidiagonal,
@@ -130,6 +132,7 @@ export
     trace,
     transpose,
     transpose!,
+    transpose_type,
     tril,
     triu,
     tril!,
@@ -235,6 +238,7 @@ copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
 copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
 
 include("transpose.jl")
+include("rowvector.jl")
 
 include("exceptions.jl")
 include("generic.jl")
