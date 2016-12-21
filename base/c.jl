@@ -255,7 +255,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
         a = src[i += 1]
     end
 
-    dst = Array{UInt8}(m)
+    dst = StringVector(m)
     a = src[1]
     i, j = 1, 0
     while true

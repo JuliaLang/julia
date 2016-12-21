@@ -18,8 +18,7 @@ as long as the string exists.
 If you need to subsequently modify `v`, use `String(copy(v))` instead.
 """
 function String(v::Array{UInt8,1})
-    # TODO share data
-    unsafe_string(pointer(v), length(v))
+    ccall(:jl_array_to_string, Ref{String}, (Any,), v)
 end
 
 """
@@ -44,8 +43,9 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
-# TODO share data
-convert(::Type{Vector{UInt8}}, s::String) = UInt8[ unsafe_codeunit(s,i) for i=1:s.len ]
+_string_n(n::Integer) = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
+
+convert(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 convert(::Type{String}, s::String) = s
 convert(::Type{String}, v::Vector{UInt8}) = String(v)
 
@@ -326,7 +326,7 @@ function string(a::String...)
     for str in a
         n += str.len
     end
-    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
+    out = _string_n(n)
     offs = 1
     for str in a
         unsafe_copy!(pointer(out,offs), pointer(str), str.len)
@@ -359,7 +359,7 @@ function string(a::Union{String,Char}...)
             n += (d::String).len
         end
     end
-    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
+    out = _string_n(n)
     offs = 1
     p = pointer(out)
     for d in a
@@ -398,7 +398,7 @@ function reverse(s::String)
     dat = convert(Vector{UInt8},s)
     n = length(dat)
     n <= 1 && return s
-    buf = Vector{UInt8}(n)
+    buf = StringVector(n)
     out = n
     pos = 1
     @inbounds while out > 0
@@ -429,7 +429,7 @@ end
 function repeat(s::String, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     n = s.len
-    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n*r)
+    out = _string_n(n*r)
     for i=1:r
         unsafe_copy!(pointer(out, 1+(i-1)*n), pointer(s), n)
     end

@@ -130,7 +130,7 @@ typedef struct {
       0 = data is inlined, or a foreign pointer we don't manage
       1 = julia-allocated buffer that needs to be marked
       2 = malloc-allocated pointer this array object manages
-      3 = has a pointer to the Array that owns the data
+      3 = has a pointer to the object that owns the data
     */
     uint16_t how:2;
     uint16_t ndims:10;
@@ -1601,7 +1601,6 @@ JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, uint32_t host,
 JL_DLLEXPORT int jl_sizeof_ios_t(void);
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s);
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 typedef struct {
     void *data;
