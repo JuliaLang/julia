@@ -636,10 +636,6 @@ let
     @test !isdefined(a, :foo)
     @test !isdefined(2, :a)
 
-    @test  isdefined("a",:data)
-    @test  isdefined("a", 1)
-    @test !isdefined("a", 2)
-
     @test_throws TypeError isdefined(2)
 end
 
@@ -4007,7 +4003,7 @@ b = "aaa"
 c = [0x2, 0x1, 0x3]
 
 @test check_nul(a)
-@test check_nul(b.data)
+@test check_nul(Vector{UInt8}(b))
 @test check_nul(c)
 d = [0x2, 0x1, 0x3]
 @test check_nul(d)
