@@ -207,15 +207,14 @@ fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
-        function ($fname)(a::AbstractArray, T::Type=eltype(a), dims::Tuple=size(a))
-            fill!(similar(a,T,dims), $felt(T))
-        end
-        ($fname)(T::Type, dims::Tuple) = fill!(Array{T}(dims...), $felt(T))
-        ($fname)(dims::Tuple) = ($fname)(Float64, dims)
+        $fname(a::AbstractArray, T::Type, dims::Tuple) = fill!(similar(a, T, dims), $felt(T))
+        $fname(a::AbstractArray, T::Type=eltype(a)) = fill!(similar(a,T), $felt(T))
+        $fname(T::Type, dims::Tuple) = fill!(Array{T}(Dims(dims)...), $felt(T))
+        $fname(dims::Tuple) = ($fname)(Float64, dims)
 
-        ($fname)(a::AbstractArray,T::Type,dims::DimOrInd...) = ($fname)(a,T,dims)
-        ($fname)(T::Type,dims::DimOrInd...) = ($fname)(T,dims)
-        ($fname)(dims::DimOrInd...) = ($fname)(dims)
+        $fname(a::AbstractArray, T::Type, dims...) = fill!(similar(a,T,dims...), $felt(T))
+        $fname(T::Type, dims...) = $fname(T, dims)
+        $fname(dims...) = $fname(dims)
     end
 end
 
