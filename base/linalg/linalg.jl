@@ -13,7 +13,6 @@ import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, copy_transp
 using Base: promote_op, _length, iszero
 # We use `_length` because of non-1 indices; releases after julia 0.5
 # can go back to `length`. `_length(A)` is equivalent to `length(linearindices(A))`.
-using Base.Broadcast: broadcast_elwise_op
 
 export
 # Modules
