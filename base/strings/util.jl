@@ -338,8 +338,9 @@ function replace(str::String, pattern, repl, limit::Integer)
     i = a = start(str)
     r = search(str,pattern,i)
     j, k = first(r), last(r)
-    out = IOBuffer()
-    ensureroom(out, floor(Int, 1.2sizeof(str)))
+    out = IOBuffer(StringVector(floor(Int, 1.2sizeof(str))), true, true)
+    out.size = 0
+    out.ptr = 1
     while j != 0
         if i == a || i <= k
             unsafe_write(out, pointer(str, i), UInt(j-i))

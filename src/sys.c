@@ -250,13 +250,18 @@ JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
     return a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
+JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str)
 {
     jl_array_t *a;
     // manually inlined common case
     char *pd = (char*)memchr(s->buf+s->bpos, delim, (size_t)(s->size - s->bpos));
     if (pd) {
         size_t n = pd-(s->buf+s->bpos)+1;
+        if (str) {
+            jl_value_t *str = jl_pchar_to_string(s->buf + s->bpos, n);
+            s->bpos += n;
+            return str;
+        }
         a = jl_alloc_array_1d(jl_array_uint8_type, n);
         memcpy(jl_array_data(a), s->buf + s->bpos, n);
         s->bpos += n;
@@ -276,6 +281,12 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 #endif
             a->nrows = n;
             ((char*)a->data)[n] = '\0';
+        }
+        if (str) {
+            JL_GC_PUSH1(&a);
+            jl_value_t *st = jl_array_to_string(a);
+            JL_GC_POP();
+            return st;
         }
     }
     return (jl_value_t*)a;
