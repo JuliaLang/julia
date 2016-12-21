@@ -1939,9 +1939,10 @@ end
         @test isa(arr, T)
         @test size(arr) == s
     end
-    test_zeros(zeros(2),     Vector{Float64}, (2,))
-    test_zeros(zeros(2,3),   Matrix{Float64}, (2,3))
-    test_zeros(zeros((2,3)), Matrix{Float64}, (2,3))
+    test_zeros(zeros(),      Array{Float64, 0}, ())
+    test_zeros(zeros(2),     Vector{Float64},   (2,))
+    test_zeros(zeros(2,3),   Matrix{Float64},   (2,3))
+    test_zeros(zeros((2,3)), Matrix{Float64},   (2,3))
 
     test_zeros(zeros(Int, 6),      Vector{Int}, (6,))
     test_zeros(zeros(Int, 2, 3),   Matrix{Int}, (2,3))
