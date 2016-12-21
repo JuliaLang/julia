@@ -41,7 +41,7 @@ int ti_threadgroup_create(uint8_t num_sockets, uint8_t num_cores,
         jl_malloc_aligned(num_threads * sizeof(ti_thread_sense_t*), 64);
     for (i = 0;  i < num_threads;  i++)
         tg->thread_sense[i] = NULL;
-    tg->group_sense = 0;
+    jl_atomic_store_release(&tg->group_sense, 0);
 
     uv_mutex_init(&tg->alarm_lock);
     uv_cond_init(&tg->alarm);
@@ -118,10 +118,13 @@ int ti_threadgroup_size(ti_threadgroup_t *tg, int16_t *tgsize)
 
 int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
 {
-    if (tg->tid_map[ext_tid] == 0) {
+    uint8_t *group_sense = &tg->group_sense;
+    int16_t tid = tg->tid_map[ext_tid];
+    int thread_sense = tg->thread_sense[tid]->sense;
+    if (tid == 0) {
         tg->envelope = bcast_val ? *bcast_val : NULL;
         // synchronize `tg->envelope` and `tg->group_sense`
-        jl_atomic_store_release(&tg->group_sense, tg->thread_sense[0]->sense);
+        jl_atomic_store_release(group_sense, thread_sense);
 
         // if it's possible that threads are sleeping, signal them
         if (tg->sleep_threshold) {
@@ -135,8 +138,7 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
         uint64_t spin_ns;
         uint64_t spin_start = 0;
         // synchronize `tg->envelope` and `tg->group_sense`
-        while (jl_atomic_load_acquire(&tg->group_sense) !=
-               tg->thread_sense[tg->tid_map[ext_tid]]->sense) {
+        while (jl_atomic_load_acquire(group_sense) != thread_sense) {
             if (tg->sleep_threshold) {
                 if (!spin_start) {
                     // Lazily initialize spin_start since uv_hrtime is expensive
@@ -147,8 +149,7 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
                 // In case uv_hrtime is not monotonic, we'll sleep earlier
                 if (spin_ns >= tg->sleep_threshold) {
                     uv_mutex_lock(&tg->alarm_lock);
-                    if (tg->group_sense !=
-                        tg->thread_sense[tg->tid_map[ext_tid]]->sense) {
+                    if (jl_atomic_load_acquire(group_sense) != thread_sense) {
                         uv_cond_wait(&tg->alarm, &tg->alarm_lock);
                     }
                     uv_mutex_unlock(&tg->alarm_lock);
@@ -167,14 +168,16 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
 
 int ti_threadgroup_join(ti_threadgroup_t *tg, int16_t ext_tid)
 {
-    int i;
-
-    tg->thread_sense[tg->tid_map[ext_tid]]->sense
-        = !tg->thread_sense[tg->tid_map[ext_tid]]->sense;
+    int *p_thread_sense = &tg->thread_sense[tg->tid_map[ext_tid]]->sense;
+    jl_atomic_store_release(p_thread_sense, !*p_thread_sense);
     if (tg->tid_map[ext_tid] == 0) {
-        for (i = 1;  i < tg->num_threads;  ++i) {
-            while (tg->thread_sense[i]->sense == tg->group_sense)
+        jl_ptls_t ptls = jl_get_ptls_states();
+        int8_t group_sense = tg->group_sense;
+        for (int i = 1; i < tg->num_threads; ++i) {
+            while (jl_atomic_load_acquire(&tg->thread_sense[i]->sense) == group_sense) {
+                jl_gc_safepoint_(ptls);
                 jl_cpu_pause();
+            }
         }
     }
 

@@ -458,29 +458,30 @@ static inline uint16_t gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
     assert(find_region(o) == NULL);
     bigval_t *hdr = bigval_header(o);
     if (mark_reset_age) {
-        // Reset the object as if it was just allocated
-        hdr->age = 0;
-        gc_big_object_unlink(hdr);
-        gc_big_object_link(hdr, &ptls->heap.big_objects);
         mark_mode = GC_MARKED;
     }
-    else {
-        if (gc_old(tag))
-            mark_mode = GC_OLD_MARKED;
-        if (mark_mode == GC_OLD_MARKED) {
-            // Move hdr from big_objects list to big_objects_marked list
-            gc_big_object_unlink(hdr);
-            gc_big_object_link(hdr, &big_objects_marked);
-        }
+    else if (gc_old(tag)) {
+        mark_mode = GC_OLD_MARKED;
     }
     tag = gc_set_bits(tag, mark_mode);
     tag = jl_atomic_exchange_relaxed(&o->header, tag);
     uint16_t tag_changed = !gc_marked(tag);
     if (tag_changed) {
-        if (mark_mode == GC_OLD_MARKED)
+        if (mark_mode == GC_OLD_MARKED) {
             perm_scanned_bytes += hdr->sz & ~3;
-        else
+            // Move hdr from big_objects list to big_objects_marked list
+            gc_big_object_unlink(hdr);
+            gc_big_object_link(hdr, &big_objects_marked);
+        }
+        else {
             scanned_bytes += hdr->sz & ~3;
+            if (mark_reset_age) {
+                // Reset the object as if it was just allocated
+                hdr->age = 0;
+                gc_big_object_unlink(hdr);
+                gc_big_object_link(hdr, &ptls->heap.big_objects);
+            }
+        }
         objprofile_count(jl_typeof(jl_valueof(o)),
                          mark_mode == GC_OLD_MARKED, hdr->sz&~3);
     }
@@ -505,11 +506,6 @@ static inline uint16_t gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     if (mark_reset_age) {
         // Reset the object as if it was just allocated
         mark_mode = GC_MARKED;
-        page->has_young = 1;
-        char *page_begin = gc_page_data(o) + GC_PAGE_OFFSET;
-        int obj_id = (((char*)o) - page_begin) / page->osize;
-        uint8_t *ages = page->ages + obj_id / 8;
-        *ages &= ~(1 << (obj_id % 8));
     }
     else if (gc_old(tag)) {
         mark_mode = GC_OLD_MARKED;
@@ -524,12 +520,19 @@ static inline uint16_t gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
         }
         else {
             scanned_bytes += page->osize;
+            if (mark_reset_age) {
+                page->has_young = 1;
+                char *page_begin = gc_page_data(o) + GC_PAGE_OFFSET;
+                int obj_id = (((char*)o) - page_begin) / page->osize;
+                uint8_t *ages = page->ages + obj_id / 8;
+                *ages &= ~(1 << (obj_id % 8));
+            }
         }
         objprofile_count(jl_typeof(jl_valueof(o)),
                          mark_mode == GC_OLD_MARKED, page->osize);
+        page->has_marked = 1;
     }
     assert(gc_marked(mark_mode));
-    page->has_marked = 1;
     verify_val(jl_valueof(o));
     return (tag_changed << 8) | mark_mode;
 }
@@ -1786,7 +1789,7 @@ static void jl_gc_mark_ptrfree(jl_ptls_t ptls)
 }
 
 // Only one thread should be running in this function
-static void _jl_gc_collect(jl_ptls_t ptls, int full)
+static int _jl_gc_collect(jl_ptls_t ptls, int full)
 {
     uint64_t t0 = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
@@ -1935,9 +1938,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full)
     gc_num.since_sweep = 0;
     gc_num.freed = 0;
 
-    if (recollect) {
-        _jl_gc_collect(ptls, 0);
-    }
+    return recollect;
 }
 
 JL_DLLEXPORT void jl_gc_collect(int full)
@@ -1965,7 +1966,11 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
-        _jl_gc_collect(ptls, full);
+        if (_jl_gc_collect(ptls, full)) {
+            int ret = _jl_gc_collect(ptls, 0);
+            (void)ret;
+            assert(!ret);
+        }
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 
@@ -2152,11 +2157,11 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     return b;
 }
 
-static void *gc_managed_realloc_(void *d, size_t sz, size_t oldsz,
+static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t oldsz,
                                  int isaligned, jl_value_t *owner, int8_t can_collect)
 {
     if (can_collect)
-        maybe_collect(jl_get_ptls_states());
+        maybe_collect(ptls);
 
     size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
@@ -2186,7 +2191,8 @@ static void *gc_managed_realloc_(void *d, size_t sz, size_t oldsz,
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner)
 {
-    return gc_managed_realloc_(d, sz, oldsz, isaligned, owner, 1);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return gc_managed_realloc_(ptls, d, sz, oldsz, isaligned, owner, 1);
 }
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
@@ -2217,7 +2223,7 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
     // for now it's up to the caller to make sure there are no references to the
     // old pointer.
     bigval_t *newbig =
-        (bigval_t*)gc_managed_realloc_(hdr, allocsz, LLT_ALIGN(strsz+offs, JL_CACHE_BYTE_ALIGNMENT),
+        (bigval_t*)gc_managed_realloc_(ptls, hdr, allocsz, LLT_ALIGN(strsz+offs, JL_CACHE_BYTE_ALIGNMENT),
                                        1, s, 0);
     newbig->sz = allocsz;
     newbig->age = 0;
