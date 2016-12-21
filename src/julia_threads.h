@@ -175,6 +175,14 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
 #  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
 #  define jl_atomic_fetch_add(obj, arg)                 \
     __atomic_fetch_add(obj, arg, __ATOMIC_SEQ_CST)
+#  define jl_atomic_fetch_and_relaxed(obj, arg)         \
+    __atomic_fetch_and(obj, arg, __ATOMIC_RELAXED)
+#  define jl_atomic_fetch_and(obj, arg)                 \
+    __atomic_fetch_and(obj, arg, __ATOMIC_SEQ_CST)
+#  define jl_atomic_fetch_or_relaxed(obj, arg)          \
+    __atomic_fetch_or(obj, arg, __ATOMIC_RELAXED)
+#  define jl_atomic_fetch_or(obj, arg)                  \
+    __atomic_fetch_or(obj, arg, __ATOMIC_SEQ_CST)
 // Returns the original value of `obj`
 // Use the legacy __sync builtins for now, this can also be written using
 // the __atomic builtins or c11 atomics with GNU extension or c11 _Generic
@@ -207,6 +215,8 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
     __atomic_load_n(obj, __ATOMIC_ACQUIRE)
 #elif defined(_COMPILER_MICROSOFT_)
 #  define jl_signal_fence() _ReadWriteBarrier()
+
+// add
 template<typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
 jl_atomic_fetch_add(T *obj, T2 arg)
@@ -231,6 +241,61 @@ jl_atomic_fetch_add(T *obj, T2 arg)
 {
     return (T)_InterlockedExchangeAdd64((volatile __int64*)obj, (__int64)arg);
 }
+
+// and
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 1, T>::type
+jl_atomic_fetch_and(T *obj, T2 arg)
+{
+    return (T)_InterlockedAnd8((volatile char*)obj, (char)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 2, T>::type
+jl_atomic_fetch_and(T *obj, T2 arg)
+{
+    return (T)_InterlockedAnd16((volatile short*)obj, (short)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 4, T>::type
+jl_atomic_fetch_and(T *obj, T2 arg)
+{
+    return (T)_InterlockedAnd((volatile LONG*)obj, (LONG)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 8, T>::type
+jl_atomic_fetch_and(T *obj, T2 arg)
+{
+    return (T)_InterlockedAnd64((volatile __int64*)obj, (__int64)arg);
+}
+#define jl_atomic_fetch_and_relaxed(obj, arg) jl_atomic_fetch_and(obj, arg)
+
+// or
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 1, T>::type
+jl_atomic_fetch_or(T *obj, T2 arg)
+{
+    return (T)_InterlockedOr8((volatile char*)obj, (char)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 2, T>::type
+jl_atomic_fetch_or(T *obj, T2 arg)
+{
+    return (T)_InterlockedOr16((volatile short*)obj, (short)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 4, T>::type
+jl_atomic_fetch_or(T *obj, T2 arg)
+{
+    return (T)_InterlockedOr((volatile LONG*)obj, (LONG)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 8, T>::type
+jl_atomic_fetch_or(T *obj, T2 arg)
+{
+    return (T)_InterlockedOr64((volatile __int64*)obj, (__int64)arg);
+}
+#define jl_atomic_fetch_or_relaxed(obj, arg) jl_atomic_fetch_or(obj, arg)
+
 // Returns the original value of `obj`
 template<typename T, typename T2, typename T3>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
