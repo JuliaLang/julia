@@ -47,6 +47,9 @@ This section lists changes that do not have deprecation warnings.
     `broadcast` calls (see above) and produce an `Array`.  If you want
     a `Range` result, use `+` and `*`, etcetera ([#17623]).
 
+  * `broadcast` now treats `Ref` (except for `Ptr`) arguments as 0-dimensional
+    arrays ([#18965]).
+
 Library improvements
 --------------------
 
@@ -749,6 +752,7 @@ Language tooling improvements
 [#18628]: https://github.com/JuliaLang/julia/issues/18628
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
+[#18965]: https://github.com/JuliaLang/julia/issues/18965
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
 [#19233]: https://github.com/JuliaLang/julia/issues/19233

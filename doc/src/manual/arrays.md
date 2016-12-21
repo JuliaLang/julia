@@ -475,7 +475,7 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
 Additionally, [`broadcast()`](@ref) is not limited to arrays (see the function documentation),
-it also handles tuples and treats any argument that is not an array or a tuple as a "scalar".
+it also handles tuples and treats any argument that is not an array, tuple or `Ref` (except for `Ptr`) as a "scalar".
 
 ```julia
 julia> convert.(Float32, [1, 2])
