@@ -292,7 +292,7 @@ function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
     return B
 end
 (\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
-(\)(D::Diagonal, b::AbstractVector) = D.diag, .\ b
+(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
 function inv{T}(D::Diagonal{T})
