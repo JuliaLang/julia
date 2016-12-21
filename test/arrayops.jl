@@ -1959,6 +1959,11 @@ end
         test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
         @test x == [1.]
     end
+
+    # exotic indexing
+    oarr = zeros(randn(3), UInt16, 1:3, -1:0)
+    @test indices(oarr) == (1:3, -1:0)
+    test_zeros(oarr.parent, Matrix{UInt16}, (3, 2))
 end
 
 # issue #11053
