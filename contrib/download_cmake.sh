@@ -24,11 +24,11 @@ FULLNAME=cmake-$CMAKE_VERSION-$PLATFORM
 case $PLATFORM in
   Darwin-x86_64)
     ../tools/jldownload https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/$FULLNAME.tar.gz
-    echo "$CMAKE_SHA256_DARWIN $FULLNAME.tar.gz" | shasum -a 256 -c -
+    echo "$CMAKE_SHA256_DARWIN  $FULLNAME.tar.gz" | shasum -a 256 -c -
     CMAKE_EXTRACTED_PATH=$FULLNAME/CMake.app/Contents/bin/cmake;;
   Linux-x86_64)
     ../tools/jldownload https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/$FULLNAME.tar.gz
-    echo "$CMAKE_SHA256_LINUX $FULLNAME.tar.gz" | sha256sum -c -
+    echo "$CMAKE_SHA256_LINUX  $FULLNAME.tar.gz" | sha256sum -c -
     CMAKE_EXTRACTED_PATH=$FULLNAME/bin/cmake;;
   *)
     echo "This script only supports x86_64 Mac and Linux. For other platforms," >&2
