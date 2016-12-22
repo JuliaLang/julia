@@ -2457,7 +2457,8 @@ readavailable
 """
     isa(x, type) -> Bool
 
-Determine whether `x` is of the given `type`.
+Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
+`x isa type`.
 """
 isa
 
