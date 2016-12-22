@@ -194,7 +194,7 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        with_output_color(get(io, :hascolor, false) ? error_color() : :nothing, io) do io
+        with_output_color(have_color ? error_color() : :nothing, io) do io
             showerror(io, ex)
         end
     finally

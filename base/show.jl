@@ -1032,7 +1032,7 @@ function show_lambda_types(io::IO, li::Core.MethodInstance)
     # print a method signature tuple for a lambda definition
     local sig
     returned_from_do = false
-    Base.with_output_color(get(io, :hascolor, false) ? stackframe_function_color() : :nothing, io) do io
+    Base.with_output_color(have_color ? stackframe_function_color() : :nothing, io) do io
         if li.specTypes === Tuple
             print(io, li.def.name, "(...)")
             returned_from_do = true
@@ -1053,7 +1053,7 @@ function show_lambda_types(io::IO, li::Core.MethodInstance)
     end
     returned_from_do && return
     first = true
-    print_style = get(io, :hascolor, false) ? :bold : :nothing
+    print_style = have_color ? :bold : :nothing
     print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
