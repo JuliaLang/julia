@@ -509,7 +509,8 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE)
+		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE) \
+		|| { echo '*** To install a newer version of cmake, run contrib/download_cmake.sh ***' && false; }
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
