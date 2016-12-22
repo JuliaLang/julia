@@ -244,7 +244,7 @@ LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 endif
 
-LLVM_SRC_URL := http://llvm.org/releases/$(LLVM_VER)
+LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR): | $(SRCDIR)/srccache
