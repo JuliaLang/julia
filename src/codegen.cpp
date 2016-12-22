@@ -752,11 +752,9 @@ static bool store_unboxed_p(jl_value_t *jt)
 static bool store_unboxed_p(int s, jl_codectx_t *ctx)
 {
     jl_varinfo_t &vi = ctx->slots[s];
-    // only store a variable unboxed if type inference has run, which
-    // checks that the variable is not referenced undefined.
-    return (ctx->source->inferred &&
-            // don't unbox vararg tuples
-            s != ctx->vaSlot && store_unboxed_p(vi.value.typ));
+    if (s == ctx->vaSlot) // don't unbox vararg tuples
+        return false;
+    return store_unboxed_p(vi.value.typ);
 }
 
 static jl_sym_t *slot_symbol(int s, jl_codectx_t *ctx)
