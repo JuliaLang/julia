@@ -265,7 +265,7 @@ export fieldoffsets
 # 14766
 @deprecate write(io::IO, p::Ptr, nb::Integer) unsafe_write(io, p, nb)
 
-@deprecate isgeneric(f) isa(f,Function)
+@deprecate(isgeneric(f), isa(f, Function))
 
 # need to do this manually since the front end deprecates method defs of `call`
 const call = @eval function(f, args...; kw...)
