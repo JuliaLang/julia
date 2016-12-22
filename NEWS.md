@@ -17,7 +17,7 @@ Language changes
     module. For instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`.
     Previously, this syntax parsed as an implicit multiplication. ([#18690])
 
-  * For every binary operator (`⨳` is a placeholder for, not an operator), `a .⨳ b` is now automatically equivalent to
+  * For every binary operator `⨳` (`⨳` is only a placeholder; isn't a new operator), `a .⨳ b` is now automatically equivalent to
     the `broadcast` call `(⨳).(a, b)`.  Hence, one no longer defines methods
     for `.*` etcetera.  This also means that "dot operations" automatically
     fuse into a single loop, along with other dot calls `f.(x)`. ([#17623])
