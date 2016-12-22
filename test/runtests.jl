@@ -1397,7 +1397,7 @@ let filename = tempname()
     @test chomp(readstring(filename)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
-            warn("hello")
+            println(STDERR, "WARNING: hello")
             [2]
         end
     end
