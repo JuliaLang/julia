@@ -103,7 +103,7 @@ function choosetests(choices = [])
     end
 
 
-    sparsetests = ["sparse/sparse", "sparse/sparsevector"]
+    sparsetests = ["sparse/sparse", "sparse/sparsevector", "sparse/higherorderfns"]
     if Base.USE_GPL_LIBS
         append!(sparsetests, ["sparse/umfpack", "sparse/cholmod", "sparse/spqr"])
     end
