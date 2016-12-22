@@ -274,7 +274,7 @@ Building Julia requires that the following software be installed:
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
-- **[LLVM]** (3.7)           — compiler infrastructure.
+- **[LLVM]** (3.9)           — compiler infrastructure.
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**                — portable, high-performance event-based I/O library
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
