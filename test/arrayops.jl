@@ -1938,6 +1938,46 @@ using TestHelpers.OAs
     @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 end
 
+@testset "zeros and ones" begin
+    @test ones([1,2], Float64, (2,3)) == ones(2,3)
+    @test ones(2) == ones(Int, 2) == ones([2,3], Float32, 2) ==  [1,1]
+    @test isa(ones(2), Vector{Float64})
+    @test isa(ones(Int, 2), Vector{Int})
+    @test isa(ones([2,3], Float32, 2), Vector{Float32})
+
+    function test_zeros(arr, T, s)
+        @test all(arr .== 0)
+        @test isa(arr, T)
+        @test size(arr) == s
+    end
+    test_zeros(zeros(),      Array{Float64, 0}, ())
+    test_zeros(zeros(2),     Vector{Float64},   (2,))
+    test_zeros(zeros(2,3),   Matrix{Float64},   (2,3))
+    test_zeros(zeros((2,3)), Matrix{Float64},   (2,3))
+
+    test_zeros(zeros(Int, 6),      Vector{Int}, (6,))
+    test_zeros(zeros(Int, 2, 3),   Matrix{Int}, (2,3))
+    test_zeros(zeros(Int, (2, 3)), Matrix{Int}, (2,3))
+
+    test_zeros(zeros([1 2; 3 4]), Matrix{Int}, (2, 2))
+    test_zeros(zeros([1 2; 3 4], Float64), Matrix{Float64}, (2, 2))
+
+    zs = zeros(SparseMatrixCSC([1 2; 3 4]), Complex{Float64}, (2,3))
+    test_zeros(zs, SparseMatrixCSC{Complex{Float64}}, (2, 3))
+
+    @testset "#19265" begin
+        @test_throws MethodError zeros(Float64, [1.])
+        x = [1.]
+        test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
+        @test x == [1.]
+    end
+
+    # exotic indexing
+    oarr = zeros(randn(3), UInt16, 1:3, -1:0)
+    @test indices(oarr) == (1:3, -1:0)
+    test_zeros(oarr.parent, Matrix{UInt16}, (3, 2))
+end
+
 # issue #11053
 type T11053
     a::Float64

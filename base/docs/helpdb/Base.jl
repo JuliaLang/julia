@@ -549,26 +549,24 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
 fd
 
-"""
-    ones(type, dims)
 
-Create an array of all ones of specified type. The type defaults to `Float64` if not specified.
+"""
+    ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+
+Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
 
 ```jldoctest
 julia> ones(Complex128, 2, 3)
 2×3 Array{Complex{Float64},2}:
  1.0+0.0im  1.0+0.0im  1.0+0.0im
  1.0+0.0im  1.0+0.0im  1.0+0.0im
-```
-"""
-ones(t,dims)
 
-"""
-    ones(A)
+julia> ones(1,2)
+1×2 Array{Float64,2}:
+ 1.0  1.0
 
-Create an array of all ones with the same element type and shape as `A`.
-
-```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
@@ -578,9 +576,21 @@ julia> ones(A)
 2×2 Array{Int64,2}:
  1  1
  1  1
+
+ julia> ones(A, Float64)
+2×2 Array{Float64,2}:
+ 1.  1.
+ 1.  1.
+
+ julia> ones(A, Bool, (3,))
+ 3-element Array{Bool,1}:
+  true
+  true
+  true
 ```
+See also [`zeros`](@ref), [`similar`](@ref).
 """
-ones(A)
+ones
 
 """
     reshape(A, dims)
@@ -2689,26 +2699,23 @@ Test whether any values along the given dimensions of an array are `true`.
 any(::AbstractArray,dims)
 
 """
-    zeros(type, dims)
+    zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
-Create an array of all zeros of specified type.
-The type defaults to `Float64` if not specified.
+Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
+
 
 ```jldoctest
+julia> zeros(1)
+1-element Array{Float64,1}:
+ 0.0
+
 julia> zeros(Int8, 2, 3)
 2×3 Array{Int8,2}:
  0  0  0
  0  0  0
-```
-"""
-zeros(t,dims)
 
-"""
-    zeros(A)
-
-Create an array of all zeros with the same element type and shape as `A`.
-
-```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
@@ -2718,9 +2725,21 @@ julia> zeros(A)
 2×2 Array{Int64,2}:
  0  0
  0  0
+
+ julia> zeros(A, Float64)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+ julia> zeros(A, Bool, (3,))
+ 3-element Array{Bool,1}:
+  false
+  false
+  false
 ```
+See also [`ones`](@ref), [`similar`](@ref).
 """
-zeros(A)
+zeros
 
 """
     Symbol(x...) -> Symbol
