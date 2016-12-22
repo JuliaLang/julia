@@ -73,17 +73,22 @@ LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_TAR_EXT)
 endif
 endif # LLVM_VER != svn
 
+# Figure out which targets to build
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
+LLVM_TARGETS := host
+else
+LLVM_TARGETS := host;NVPTX
+endif
+
 # Allow adding LLVM specific flags
 LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
-LLVM_TARGETS := host
-LLVM_TARGET_FLAGS := --enable-targets=$(LLVM_TARGETS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
-LLVM_FLAGS += --disable-profiling --enable-static $(LLVM_TARGET_FLAGS)
+LLVM_FLAGS += --disable-profiling --enable-static --enable-targets=$(LLVM_TARGETS)
 LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
@@ -491,6 +496,10 @@ $(eval $(call LLVM_PATCH,llvm-3.9.0_win64-reloc-dwarf))
 $(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
 $(eval $(call LLVM_PATCH,llvm-D27609-AArch64-UABS_G3))
 $(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model))
+# patches for NVPTX
+$(eval $(call LLVM_PATCH,llvm-D9168_argument_alignment)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D23597_sdag_names)) # Dep for D24300, remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D24300_ptx_intrinsics)) # Remove for 4.0
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
