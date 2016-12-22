@@ -5157,7 +5157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@static",
     "category": "Macro",
-    "text": "@static\n\nPartially evaluates an expression at parse time.\n\nFor example, @static is_windows() ? foo : bar will evaluate is_windows() and insert either foo or bar into the expression. This is useful in cases where a construct would be invalid on other platforms, such as a ccall to a non-existent function. @static if is_apple() foo end and @static foo <&&,||> bar are also valid syntax.\n\n\n\n"
+    "text": "@static\n\nPartially evaluates an expression at parse time.\n\nFor example, @static is_windows() ? foo : bar will evaluate is_windows() and insert either foo or bar into the expression. This is useful in cases where a construct would be invalid on other platforms, such as a ccall to a non-existent function.\n\n\n\n"
 },
 
 {
@@ -6461,7 +6461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
