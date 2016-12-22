@@ -585,14 +585,21 @@ function show_trace_entry(io, frame, n; prefix = " in ")
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
+# Contains file name and file number. Gets set when a backtrace
+# is showed. Used by the REPL to make it possible to open
+# the location of a stackframe in the edítor.
+global LAST_BACKTRACE_LINE_INFOS = Tuple{String, Int}[]
+
 function show_backtrace(io::IO, t::Vector)
     n_frames = 0
     frame_counter = 0
+    resize!(LAST_BACKTRACE_LINE_INFOS, 0)
     process_backtrace((a,b) -> n_frames += 1, t)
     n_frames != 0 && print(io, "\nStacktrace:")
     process_entry = (last_frame, n) -> begin
         frame_counter += 1
         show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter, "] "))
+        push!(LAST_BACKTRACE_LINE_INFOS, (string(last_frame.file), last_frame.line))
     end
     process_backtrace(process_entry, t)
 end

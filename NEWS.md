@@ -83,6 +83,8 @@ Library improvements
 
   * The `chop` and `chomp` functions now return a `SubString` ([#18339]).
 
+  * Numbered stackframes printed in stacktraces can be opened in an editor by entering the corresponding number in the REPL and pressing `^Q`.
+
   * The REPL now supports something called *prompt pasting* ([#17599]).
     This activates when pasting text that starts with `julia> ` into the REPL.
     In that case, only expressions starting with `julia> ` are parsed, the rest are removed.
