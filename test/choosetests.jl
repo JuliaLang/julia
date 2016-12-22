@@ -34,7 +34,7 @@ function choosetests(choices = [])
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant",
-        "channels"
+        "channels", "polly"
     ]
     profile_skipped = false
     if startswith(string(Sys.ARCH), "arm")
