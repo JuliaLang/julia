@@ -22,6 +22,9 @@ Language changes
     for `.*` etcetera.  This also means that "dot operations" automatically
     fuse into a single loop, along with other dot calls `f.(x)`. ([#17623])
 
+  * Newly defined methods are no longer callable from the same dynamic runtime
+    scope they were defined in ([#17057]).
+
 Breaking changes
 ----------------
 
@@ -49,6 +52,10 @@ This section lists changes that do not have deprecation warnings.
 
   * `broadcast` now treats `Ref` (except for `Ptr`) arguments as 0-dimensional
     arrays ([#18965]).
+
+  * The runtime now enforces when new method definitions can take effect ([#17057]).
+    The flip-side of this is that new method definitions should now reliably actually
+    take effect, and be called when evaluating new code ([#265]).
 
 Library improvements
 --------------------

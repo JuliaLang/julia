@@ -66,7 +66,7 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 value = eval(Main, ast)
                 backend.in_eval = false
                 # note: value wrapped in a closure to ensure it doesn't get passed through expand
-                eval(Main, Expr(:(=), :ans, Expr(:call, ()->value)))
+                eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 put!(backend.response_channel, (value, nothing))
             end
             break
@@ -153,9 +153,9 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
                 if val !== nothing && show_value
                     try
                         if specialdisplay === nothing
-                            display(val)
+                            eval(Main, Expr(:body, Expr(:return, Expr(:call, display, QuoteNode(val)))))
                         else
-                            display(specialdisplay,val)
+                            eval(Main, Expr(:body, Expr(:return, Expr(:call, specialdisplay, QuoteNode(val)))))
                         end
                     catch err
                         println(errio, "Error showing value of type ", typeof(val), ":")

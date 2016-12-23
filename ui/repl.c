@@ -121,7 +121,10 @@ static NOINLINE int true_main(int argc, char *argv[])
 
     if (start_client) {
         JL_TRY {
+            size_t last_age = jl_get_ptls_states()->world_age;
+            jl_get_ptls_states()->world_age = jl_get_world_counter();
             jl_apply(&start_client, 1);
+            jl_get_ptls_states()->world_age = last_age;
         }
         JL_CATCH {
             jl_no_exc_handler(jl_exception_in_transit);

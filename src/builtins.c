@@ -219,6 +219,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 #endif
     eh->defer_signal = ptls->defer_signal;
     eh->finalizers_inhibited = ptls->finalizers_inhibited;
+    eh->world_age = ptls->world_age;
     current_task->eh = eh;
 #ifdef ENABLE_TIMINGS
     eh->timing_stack = current_task->timing_stack;
@@ -549,6 +550,32 @@ JL_CALLABLE(jl_f__apply)
     return result;
 }
 
+// this is like `_apply`, but with quasi-exact checks to make sure it is pure
+JL_CALLABLE(jl_f__apply_pure)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    int last_in = ptls->in_pure_callback;
+    jl_value_t *ret = NULL;
+    JL_TRY {
+        ptls->in_pure_callback = 1;
+        // because this function was declared pure,
+        // we should be allowed to run it in any world
+        // so we run it in the newest world;
+        // because, why not :)
+        // and `promote` works better this way
+        size_t last_age = ptls->world_age;
+        ptls->world_age = jl_world_counter;
+        ret = jl_f__apply(NULL, args, nargs);
+        ptls->world_age = last_age;
+        ptls->in_pure_callback = last_in;
+    }
+    JL_CATCH {
+        ptls->in_pure_callback = last_in;
+        jl_rethrow();
+    }
+    return ret;
+}
+
 // eval -----------------------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
@@ -562,6 +589,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
         jl_error("eval cannot be used in a generated function");
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
+    size_t last_age = ptls->world_age;
     jl_module_t *last_m = ptls->current_module;
     jl_module_t *task_last_m = ptls->current_task->current_module;
     if (jl_options.incremental && jl_generating_output()) {
@@ -574,6 +602,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     }
     JL_TRY {
         ptls->current_task->current_module = ptls->current_module = m;
+        ptls->world_age = jl_world_counter;
         v = jl_toplevel_eval(ex);
     }
     JL_CATCH {
@@ -583,6 +612,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
         jl_rethrow();
     }
     jl_lineno = last_lineno;
+    ptls->world_age = last_age;
     ptls->current_module = last_m;
     ptls->current_task->current_module = task_last_m;
     assert(v);
@@ -980,7 +1010,8 @@ static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1) != NULL ?
+    size_t world = jl_get_ptls_states()->world_age;
+    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1, world) != NULL ?
         jl_true : jl_false;
 }
 
@@ -1142,6 +1173,7 @@ void jl_init_primitives(void)
     // internal functions
     add_builtin_func("apply_type", jl_f_apply_type);
     add_builtin_func("_apply", jl_f__apply);
+    add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_expr", jl_f__expr);
     add_builtin_func("svec", jl_f_svec);
 

@@ -38,7 +38,9 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
 assert(x) = x ? nothing : throw(Main.Base.AssertionError())
 macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
-    if !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
+    if isa(msg, AbstractString)
+        msg = msg # pass-through
+    elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
         msg = :(Main.Base.string($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string)
@@ -47,7 +49,7 @@ macro assert(ex, msgs...)
         # string() might not be defined during bootstrap
         msg = :(Main.Base.string($(Expr(:quote,msg))))
     end
-    :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
+    return :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
 end
 
 # NOTE: Please keep the constant values specified below in sync with the doc string

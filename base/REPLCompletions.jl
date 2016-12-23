@@ -281,11 +281,12 @@ function get_type_call(expr::Expr)
         found ? push!(args, typ) : push!(args, Any)
     end
     # use _methods_by_ftype as the function is supplied as a type
-    mt = Base._methods_by_ftype(Tuple{ft, args...}, -1)
+    world = typemax(UInt)
+    mt = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    params = Core.Inference.InferenceParams()
+    params = Core.Inference.InferenceParams(world)
     return_type = Core.Inference.typeinf_type(m[3], m[1], m[2], true, params)
     return_type === nothing && return (Any, false)
     return (return_type, true)
