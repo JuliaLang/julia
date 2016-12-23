@@ -230,8 +230,11 @@ typedef struct _jl_method_t {
 
     // method's type signature. redundant with TypeMapEntry->specTypes
     jl_tupletype_t *sig;
-    // bound type variables (static parameters). redundant with TypeMapEntry->tvars
+    // bound type variables (static parameters)
     jl_svec_t *tvars;
+    size_t min_world;
+    size_t max_world;
+
     // list of potentially-ambiguous methods (nothing = none, Vector{Any} of Methods otherwise)
     jl_value_t *ambig;
 
@@ -272,9 +275,12 @@ typedef struct _jl_method_instance_t {
     jl_tupletype_t *specTypes;  // argument types this was specialized for
     jl_value_t *rettype; // return type for fptr
     jl_svec_t *sparam_vals; // the values for the tvars, indexed by def->sparam_syms
+    jl_array_t *backedges;
     jl_value_t *inferred;  // inferred jl_code_info_t, or value of the function if jlcall_api == 2, or null
     jl_value_t *inferred_const; // inferred constant return value, or null
     jl_method_t *def; // method this is specialized from, null if this is a toplevel thunk
+    size_t min_world;
+    size_t max_world;
     uint8_t inInference; // flags to tell if inference is running on this function
     uint8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
     uint8_t compile_traced; // if set will notify callback if this linfo is compiled
@@ -423,6 +429,8 @@ typedef struct _jl_typemap_entry_t {
     jl_svec_t *tvars; // the bound type variables for sig
     jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
+    size_t min_world;
+    size_t max_world;
     union {
         jl_value_t *value;
         jl_method_instance_t *linfo; // [nullable] for guard entries
@@ -458,6 +466,7 @@ typedef struct _jl_methtable_t {
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
+    jl_array_t *backedges;
     jl_mutex_t writelock;
 } jl_methtable_t;
 
@@ -1016,7 +1025,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x);
 JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v);
 JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str);
-JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
+JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, size_t len);
 JL_DLLEXPORT jl_sym_t *jl_gensym(void);
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
@@ -1026,6 +1035,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_code_info_t *f, jl_value_t *isstaged);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
+JL_DLLEXPORT size_t jl_get_world_counter(void);
 JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_typename_t *tn);
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x);
@@ -1409,6 +1419,7 @@ typedef struct _jl_handler_t {
     sig_atomic_t defer_signal;
     int finalizers_inhibited;
     jl_timing_block_t *timing_stack;
+    size_t world_age;
 } jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -1426,6 +1437,7 @@ typedef struct _jl_task_t {
     size_t bufsz;
     void *stkbuf;
 
+// hidden fields:
     size_t ssize;
     size_t started:1;
 
@@ -1435,6 +1447,8 @@ typedef struct _jl_task_t {
     jl_gcframe_t *gcstack;
     // current module, or NULL if this task has not set one
     jl_module_t *current_module;
+    // current world age
+    size_t world_age;
 
     // id of owning thread
     // does not need to be defined until the task runs
@@ -1506,6 +1520,7 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
         locks->len = eh->locks_len;
     }
 #endif
+    ptls->world_age = eh->world_age;
     ptls->defer_signal = eh->defer_signal;
     ptls->gc_state = eh->gc_state;
     ptls->finalizers_inhibited = eh->finalizers_inhibited;

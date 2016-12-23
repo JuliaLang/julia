@@ -121,8 +121,8 @@ try
               let some_method = @which Base.include("string")
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
-                      ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any),
-                          some_method, Tuple{typeof(Base.include), String}, Core.svec())
+                      ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt),
+                          some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
               end
           end
           """)
@@ -146,6 +146,14 @@ try
     wait(t)
 
     let Foo = getfield(Main, Foo_module)
+        @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
+    end
+    @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
+              FooBase_module = $(QuoteNode(FooBase_module)),
+              Foo = getfield(Main, Foo_module),
+              dir = $(QuoteNode(dir)),
+              cachefile = $(QuoteNode(cachefile)),
+              Foo_file = $(QuoteNode(Foo_file))
         @test Foo.foo(17) == 18
         @test Foo.Bar.bar(17) == 19
 
@@ -187,8 +195,8 @@ try
             0:25)
         some_method = @which Base.include("string")
         some_linfo =
-                ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any),
-                    some_method, Tuple{typeof(Base.include), String}, Core.svec())
+                ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt),
+                    some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         PV = Foo.Value18343{Nullable}.types[1]
