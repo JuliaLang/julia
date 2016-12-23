@@ -76,7 +76,7 @@ julia> Hlower = Hermitian(A, :L)
  2+2im  0+0im  3-3im  0+0im  4+0im
 
 julia> eigfact(Hupper)
-Base.LinAlg.Eigen{Complex{Float64},Float64,Array{Complex{Float64},2},Array{Float64,1}}([-8.32069,-2.72015,3.1496,7.72015,17.1711],Complex{Float64}[-0.231509+0.392692im -4.16334e-17+5.55112e-17im … -2.77556e-17-1.11022e-16im -0.129023-0.00628656im; 0.0+0.0im -0.532524+0.269711im … -0.521035+0.610079im 0.0+0.0im; … ; 0.0-1.38778e-17im 0.715729-0.362501im … -0.387666+0.453917im 0.0-6.93889e-18im; 0.67898-0.0im 0.0+0.0im … 0.0+0.0im -0.661651-0.0im])
+Base.LinAlg.Eigen{Complex{Float64},Float64,Array{Complex{Float64},2},Array{Float64,1}}([-8.32069,-2.72015,3.1496,7.72015,17.1711],Complex{Float64}[-0.231509+0.392692im -2.77556e-17+1.11022e-16im … -4.16334e-17-4.16334e-17im -0.129023-0.00628656im; 0.0+0.0im -0.523844+0.286205im … -0.521629+0.609571im 0.0+0.0im; … ; 0.0-6.93889e-18im 0.704063-0.384669im … -0.388108+0.45354im 0.0-1.38778e-17im; 0.67898+0.0im 0.0+0.0im … 0.0+0.0im -0.661651-0.0im])
 ```
 
 `eigfact` will use a method specialized for matrices known to be Hermitian.
