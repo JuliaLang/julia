@@ -189,15 +189,15 @@ Note that relative-import qualifiers are only valid in `using` and `import` stat
 
 ### Module file paths
 
-The global variable LOAD_PATH contains the directories Julia searches for modules when calling
-`require`. It can be extended using `push!`:
+The global variable [`LOAD_PATH`](@ref) contains the directories Julia searches for modules when calling
+`require`. It can be extended using [`push!`](@ref):
 
 ```julia
 push!(LOAD_PATH, "/Path/To/My/Module/")
 ```
 
-Putting this statement in the file `~/.juliarc.jl` will extend LOAD_PATH on every Julia startup.
-Alternatively, the module load path can be extended by defining the environment variable JULIA_LOAD_PATH.
+Putting this statement in the file `~/.juliarc.jl` will extend [`LOAD_PATH`](@ref) on every Julia startup.
+Alternatively, the module load path can be extended by defining the environment variable `JULIA_LOAD_PATH`.
 
 ### Namespace miscellanea
 
@@ -334,9 +334,9 @@ Other known potential failure scenarios include:
    from that same counter value.
 
    Note that `object_id` (which works by hashing the memory pointer) has similar issues (see notes
-   on Dict usage below).
+   on `Dict` usage below).
 
-   One alternative is to store both `current_module()` and the current `counter` value, however,
+   One alternative is to store both [`current_module()`](@ref) and the current `counter` value, however,
    it may be better to redesign the code to not depend on this global state.
 2. Associative collections (such as `Dict` and `Set`) need to be re-hashed in `__init__`. (In the
    future, a mechanism may be provided to register an initializer function.)
@@ -357,26 +357,26 @@ Other known potential failure scenarios include:
 Several additional restrictions are placed on the operations that can be done while precompiling
 code to help the user avoid other wrong-behavior situations:
 
-1. Calling `eval` to cause a side-effect in another module. This will also cause a warning to be
+1. Calling [`eval`](@ref) to cause a side-effect in another module. This will also cause a warning to be
    emitted when the incremental precompile flag is set.
 2. `global const` statements from local scope after `__init__()` has been started (see issue #12010
    for plans to add an error for this)
-3. Replacing a module (or calling `workspace()`) is a runtime error while doing an incremental precompile.
+3. Replacing a module (or calling [`workspace()`](@ref)) is a runtime error while doing an incremental precompile.
 
 A few other points to be aware of:
 
 1. No code reload / cache invalidation is performed after changes are made to the source files themselves,
-   (including by `Pkg.update`), and no cleanup is done after `Pkg.rm`
+   (including by [`Pkg.update`](@ref)), and no cleanup is done after [`Pkg.rm`](@ref)
 2. The memory sharing behavior of a reshaped array is disregarded by precompilation (each view gets
    its own copy)
-3. Expecting the filesystem to be unchanged between compile-time and runtime e.g. `@__FILE__`/`source_path()`
+3. Expecting the filesystem to be unchanged between compile-time and runtime e.g. [`@__FILE__`](@ref)/`source_path()`
    to find resources at runtime, or the BinDeps `@checked_lib` macro. Sometimes this is unavoidable.
    However, when possible, it can be good practice to copy resources into the module at compile-time
    so they won't need to be found at runtime.
-4. WeakRef objects and finalizers are not currently handled properly by the serializer (this will
+4. `WeakRef` objects and finalizers are not currently handled properly by the serializer (this will
    be fixed in an upcoming release).
 5. It is usually best to avoid capturing references to instances of internal metadata objects such
-   as Method, MethodInstance, MethodTable, TypeMapLevel, TypeMapEntry and fields of those objects,
+   as `Method`, `MethodInstance`, `MethodTable`, `TypeMapLevel`, `TypeMapEntry` and fields of those objects,
    as this can confuse the serializer and may not lead to the outcome you desire. It is not necessarily
    an error to do this, but you simply need to be prepared that the system will try to copy some
    of these and to create a single unique instance of others.
@@ -386,5 +386,5 @@ command line flag `--compilecache={yes|no}` enables you to toggle module precomp
 off. When Julia is started with `--compilecache=no` the serialized modules in the compile cache
 are ignored when loading modules and module dependencies. `Base.compilecache()` can still be called
 manually and it will respect `__precompile__()` directives for the module. The state of this command
-line flag is passed to `Pkg.build()` to disable automatic precompilation triggering when installing,
+line flag is passed to [`Pkg.build()`](@ref) to disable automatic precompilation triggering when installing,
 updating, and explicitly building packages.
