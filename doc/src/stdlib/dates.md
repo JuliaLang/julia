@@ -21,7 +21,7 @@ function call with an explicit `Dates.`, e.g. `Dates.dayofweek(dt)`. Alternative
 prefix.
 
 ```@docs
-Base.Dates.DateTime(::Int, ::Int, ::Int, ::Int, ::Int, ::Int, ::Int)
+Base.Dates.DateTime(::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
 Base.Dates.DateTime(::Base.Dates.Period...)
 Base.Dates.DateTime(::Function, ::Any...)
 Base.Dates.DateTime(::Base.Dates.TimeType)
@@ -29,7 +29,7 @@ Base.Dates.DateTime(::AbstractString, ::AbstractString)
 Base.Dates.format
 Base.Dates.DateFormat
 Base.Dates.DateTime(::AbstractString, ::Base.Dates.DateFormat)
-Base.Dates.Date(::Int, ::Int, ::Int)
+Base.Dates.Date(::Int64, ::Int64, ::Int64)
 Base.Dates.Date(::Base.Dates.Period...)
 Base.Dates.Date(::Function, ::Any, ::Any, ::Any)
 Base.Dates.Date(::Base.Dates.TimeType)
