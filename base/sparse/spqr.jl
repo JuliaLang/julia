@@ -143,7 +143,7 @@ qrfact(A::SparseMatrixCSC, ::Type{Val{true}}) = factorize(ORDERING_DEFAULT, DEFA
     qrfact(A) -> SPQR.Factorization
 
 Compute the `QR` factorization of a sparse matrix `A`. A fill-reducing permutation is used.
-The main application of this type is to solve least squares problems with `\\`. The function
+The main application of this type is to solve least squares problems with [`\\`](@ref). The function
 calls the C library SPQR and a few additional functions from the library are wrapped but not
 exported.
 """
