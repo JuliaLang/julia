@@ -36,7 +36,7 @@ type Lexer{IO_t <: Union{IO, AbstractString}}
     last_token::Tokens.Kind
 end
 
-Lexer(io) = Lexer(io, 1, 1, -1, 0, 1, 1, 1, Tokens.ERROR)
+Lexer(io) = Lexer(io, 1, 1, Int64(-1), Int64(0), 1, 1, Int64(1), Tokens.ERROR)
 
 """
     tokenize(x)
@@ -83,11 +83,11 @@ Return the latest `Token`'s starting position.
 startpos(l::Lexer) = l.token_startpos
 
 """
-    startpos!(l::Lexer, i::Int64)
+    startpos!(l::Lexer, i::Integer)
 
 Set a new starting position.
 """
-startpos!(l::Lexer, i::Int64) = l.token_startpos = i
+startpos!(l::Lexer, i::Integer) = l.token_startpos = i
 
 """
     prevpos(l::Lexer)
@@ -97,11 +97,11 @@ Return the lexer's previous position.
 prevpos(l::Lexer) = l.prevpos
 
 """
-    prevpos!(l::Lexer, i::Int64)
+    prevpos!(l::Lexer, i::Integer)
 
 Set the lexer's previous position.
 """
-prevpos!(l::Lexer, i::Int64) = l.prevpos = i
+prevpos!(l::Lexer, i::Integer) = l.prevpos = i
 
 Base.seekstart{I <: IO}(l::Lexer{I}) = seekstart(l.io)
 Base.seekstart{I <: String}(l::Lexer{I}) = seek(l, 1)

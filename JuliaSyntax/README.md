@@ -1,6 +1,6 @@
 # Tokenize
 
-[![Build Status](https://travis-ci.org/KristofferC/Tokenize.jl.svg?branch=master)](https://travis-ci.org/KristofferC/Tokenize.jl)
+[![Build Status](https://travis-ci.org/KristofferC/Tokenize.jl.svg?branch=master)](https://travis-ci.org/KristofferC/Tokenize.jl) [![Build status](https://ci.appveyor.com/api/projects/status/h9d9webkxyhpx790?svg=true)](https://ci.appveyor.com/project/KristofferC/tokenize-jl)
 
 `Tokenize` is a Julia package that serves a similar purpose and API as the [tokenize module](https://docs.python.org/3/library/tokenize.html) in Python but for Julia. This is to take a string or buffer containing Julia code, perform lexical analysis and return a stream of tokens.
 
