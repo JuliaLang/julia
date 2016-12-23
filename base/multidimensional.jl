@@ -932,7 +932,7 @@ end
         ind = 0
         Xc, Bc = X.chunks, B.chunks
         idxlens = @ncall $N index_lengths B d->I[d]
-        @nloops $N i d->(1:idxlens[d]) d->(@inbounds offset_{d-1} = offset_d + (I[d][i_d]-1)*stride_d) begin
+        @nloops $N i d->(1:idxlens[d]) d->(@inbounds offset_{d-1} = offset_d + ((let Id = I[d]; isa(Id,Number)?Id:Id[i_d];end)-1)*stride_d) begin
             ind += 1
             unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, offset_0), ind)
         end
