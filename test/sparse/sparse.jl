@@ -899,7 +899,9 @@ end
 @testset "issue #7650" begin
     S = spzeros(3, 3)
     @test size(reshape(S, 9, 1)) == (9,1)
+end
 
+@testset "sparsevec from matrices" begin
     X = eye(5)
     M = rand(5,4)
     C = spzeros(3,3)
@@ -1344,17 +1346,17 @@ end
             @test length(dropzeros!(copy(Awithzeros), false).nzval) == length(Awithzeros.nzval)
             @test length(dropzeros!(copy(Awithzeros), false).rowval) == length(Awithzeros.rowval)
         end
-        # original lone dropzeros test
-        A = sparse([1 2 3; 4 5 6; 7 8 9])
-        A.nzval[2] = A.nzval[6] = A.nzval[7] = 0
-        @test dropzeros!(A).colptr == [1, 3, 5, 7]
-        # test for issue #5169, modified for new behavior following #15242/#14798
-        @test nnz(sparse([1, 1], [1, 2], [0.0, -0.0])) == 2
-        @test nnz(dropzeros!(sparse([1, 1], [1, 2], [0.0, -0.0]))) == 0
-        # test for issue #5437, modified for new behavior following #15242/#14798
-        @test nnz(sparse([1, 2, 3], [1, 2, 3], [0.0, 1.0, 2.0])) == 3
-        @test nnz(dropzeros!(sparse([1, 2, 3],[1, 2, 3],[0.0, 1.0, 2.0]))) == 2
     end
+    # original lone dropzeros test
+    A = sparse([1 2 3; 4 5 6; 7 8 9])
+    A.nzval[2] = A.nzval[6] = A.nzval[7] = 0
+    @test dropzeros!(A).colptr == [1, 3, 5, 7]
+    # test for issue #5169, modified for new behavior following #15242/#14798
+    @test nnz(sparse([1, 1], [1, 2], [0.0, -0.0])) == 2
+    @test nnz(dropzeros!(sparse([1, 1], [1, 2], [0.0, -0.0]))) == 0
+    # test for issue #5437, modified for new behavior following #15242/#14798
+    @test nnz(sparse([1, 2, 3], [1, 2, 3], [0.0, 1.0, 2.0])) == 3
+    @test nnz(dropzeros!(sparse([1, 2, 3],[1, 2, 3],[0.0, 1.0, 2.0]))) == 2
 end
 
 @testset "trace" begin
@@ -1671,7 +1673,9 @@ end
     @test issparse(LinAlg.UnitLowerTriangular(Array(m))) == false
     @test issparse(UpperTriangular(Array(m))) == false
     @test issparse(LinAlg.UnitUpperTriangular(Array(m))) == false
+end
 
+@testset "test created type of sprand{T}(::Type{T}, m::Integer, n::Integer, density::AbstractFloat)" begin
     m = sprand(Float32, 10, 10, 0.1)
     @test eltype(m) == Float32
     m = sprand(Float64, 10, 10, 0.1)
