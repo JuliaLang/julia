@@ -633,15 +633,19 @@ function getaddrinfo(host::String)
         notify(c,IP)
     end
     r = wait(c)
-    if isa(r,UVError)
-        if r.code in [UV_EAI_NONAME, UV_EAI_AGAIN, UV_EAI_FAIL, UV_EAI_NODATA]
-            throw(DNSError(host, r.code))
-        elseif r.code == UV_EAI_SYSTEM
-            throw(SystemError("uv_getaddrinfocb"))
-        elseif r.code == UV_EAI_MEMORY
+    if isa(r, UVError)
+        r = r::UVError
+        code = r.code
+        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
+                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
+                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
+                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
+                    UV_EAI_SOCKTYPE)
+            throw(DNSError(host, code))
+        elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(r)
+            throw(SystemError("uv_getaddrinfocb", -code))
         end
     end
     return r::IPAddr
