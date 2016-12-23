@@ -118,7 +118,7 @@ makedocs(
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
-    strict    = "strict" in ARGS,
+    strict    = true,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
     sitename  = "The Julia Language",
