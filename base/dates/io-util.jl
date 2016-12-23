@@ -78,17 +78,6 @@ end
     return Nullable{Int}(d), i
 end
 
-# fast version for English
-@inline function tryparsenext_word(str, i, len, locale::DateLocale{:english}, maxchars=0)
-    max_pos = maxchars <= 0 ? len : min(i + maxchars - 1, len)
-    while i <= max_pos
-        c, ii = next(str, i)
-        !('A' <= c <= 'Z' || 'a' <= c <= 'z') && break
-        i = ii
-    end
-    return Nullable{Int}(0), i
-end
-
 @inline function tryparsenext_word(str, i, len, locale, maxchars=0)
     max_pos = maxchars <= 0 ? len : min(chr2ind(str, ind2chr(str,i) + maxchars - 1), len)
     while i <= max_pos
