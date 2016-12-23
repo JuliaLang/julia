@@ -16,12 +16,9 @@ abstract AbstractDateToken
 """
 Information for parsing and formatting date time values.
 """
-immutable DateFormat{D, T<:Tuple, N}
+immutable DateFormat{T<:Tuple}
     tokens::T
     locale::DateLocale
-    field_defaults::NTuple{N,Int64}
-    field_order::NTuple{N,Int64}
-    result_type::Type{D}
 end
 
 ### Token types ###
@@ -199,6 +196,12 @@ const SLOT_RULE = Dict{Char, Type}(
     's' => Millisecond,
 )
 
+slot_types(::Type{Date}) = (Year, Month, Day)
+slot_types(::Type{DateTime}) = (Year, Month, Day, Hour, Minute, Second, Millisecond)
+
+slot_defaults(::Type{Date}) = (1, 1, 1)
+slot_defaults(::Type{DateTime}) = (1, 1, 1, 0, 0, 0, 0)
+
 """
     DateFormat(format::AbstractString, locale="english", default_fields=(1,1,1,0,0,0,0)) -> DateFormat
 
@@ -234,15 +237,10 @@ macro expansion time and reuses it later. see [`@dateformat_str`](@ref).
 See [`DateTime`](@ref) and [`format`](@ref) for how to use a DateFormat object to parse and write Date strings
 respectively.
 """
-function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH, default_fields=(1,1,1,0,0,0,0))
+function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     tokens = AbstractDateToken[]
     prev = ()
     prev_offset = 1
-
-    # we store the indices of the token -> order in arguments to DateTime during
-    # construction of the DateFormat. This saves a lot of time while parsing
-    dateorder = (Year, Month, Day, Hour, Minute, Second, Millisecond)
-    order = zeros(Int, length(default_fields))
 
     letters = String(collect(keys(Base.Dates.SLOT_RULE)))
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
@@ -256,11 +254,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH, default_field
                 push!(tokens, DatePart{letter}(width, true))
             else
                 push!(tokens, DatePart{letter}(width, false))
-            end
-
-            idx = findfirst(dateorder, typ)
-            if idx != 0
-                order[idx] = length(tokens)
             end
         end
 
@@ -282,22 +275,17 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH, default_field
         typ = SLOT_RULE[letter]
 
         push!(tokens, DatePart{letter}(width, false))
-
-        idx = findfirst(dateorder, typ)
-        if idx != 0
-            order[idx] = length(tokens)
-        end
     end
 
     if !isempty(tran)
         push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
     end
 
-    return DateFormat((tokens...), locale, default_fields, (order...))
+    return DateFormat((tokens...), locale)
 end
 
-function DateFormat(f::AbstractString, locale::AbstractString, default_fields=(1,1,1,0,0,0,0))
-    DateFormat(f, LOCALES[locale], default_fields)
+function DateFormat(f::AbstractString, locale::AbstractString)
+    DateFormat(f, LOCALES[locale])
 end
 
 function Base.show(io::IO, df::DateFormat)
