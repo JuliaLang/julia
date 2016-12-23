@@ -68,6 +68,11 @@ for S in (String, GenericString)
     @test joinpath(splitdir(S(homedir()))...) == homedir()
     @test string(splitdrive(S(homedir()))...) == homedir()
 
+    if is_windows()
+        @test splitdrive("\\\\servername\\hello.world\\filename.ext") == ("\\\\servername\\hello.world","\\filename.ext")
+        @test splitdrive("\\\\servername.com\\hello.world\\filename.ext") == ("\\\\servername.com\\hello.world","\\filename.ext")
+    end
+
     @test splitext(S("")) == ("", "")
     @test splitext(S(".")) == (".", "")
     @test_broken splitext(S("..")) == ("..", "")
