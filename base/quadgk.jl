@@ -36,18 +36,21 @@ const rulecache = AnyDict( (Float64,7) => # precomputed in 100-bit arith.
      4.1795918367346938775510204081658e-01]) )
 
 # integration segment (a,b), estimated integral I, and estimated error E
-immutable Segment
-    a::Number
-    b::Number
-    I
-    E::Real
+immutable Segment{Ts<:Number, Tf, Te<:Real}
+    a::Ts
+    b::Ts
+    I::Tf
+    E::Te
 end
 isless(i::Segment, j::Segment) = isless(i.E, j.E)
 
+segment_type{Ts, Tf<:Number, Te<:Real}(::Type{Ts}, ::Type{Tf}, ::Type{Te}) = Segment{Ts, Tf, Te}
+segment_type{Ts, Tx<:Number, N, Te<:Real}(::Type{Ts}, ::Type{Array{Tx, N}}, ::Type{Te}) = Segment{Ts, Array{Tx, N}, Te}
+segment_type(::Type, ::Type, ::Type) = Segment
 
 # Internal routine: approximately integrate f(x) over the interval (a,b)
 # by evaluating the integration rule (x,w,gw). Return a Segment.
-function evalrule(f, a,b, x,w,gw, nrm)
+function evalrule{F}(f::F, a,b, x,w,gw, nrm)
     # Ik and Ig are integrals via Kronrod and Gauss rules, respectively
     s = convert(eltype(x), 0.5) * (b-a)
     n1 = 1 - (length(x) & 1) # 0 if even order, 1 if odd order
@@ -87,36 +90,47 @@ rulekey(T,n) = (T,n)
 # integration with the order-n Kronrod rule and weights of type Tw,
 # with absolute tolerance abstol and relative tolerance reltol,
 # with maxevals an approximate maximum number of f evaluations.
-function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
-    if eltype(s) <: Real # check for infinite or semi-infinite intervals
+function do_quadgk{F, Ts, Tw}(f::F, s::Vector{Ts}, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
+    if Ts <: Real # check for infinite or semi-infinite intervals
         s1 = s[1]; s2 = s[end]; inf1 = isinf(s1); inf2 = isinf(s2)
         if inf1 || inf2
             if inf1 && inf2 # x = t/(1-t^2) coordinate transformation
-                return do_quadgk(t -> begin t2 = t*t; den = 1 / (1 - t2);
+                return do_quadgk_no_inf(t -> begin t2 = t*t; den = 1 / (1 - t2);
                                             f(t*den) * (1+t2)*den*den; end,
                                  map(x -> isinf(x) ? copysign(one(x), x) : 2x / (1+hypot(1,2x)), s),
                                  n, Tw, abstol, reltol, maxevals, nrm)
             end
-            s0,si = inf1 ? (s2,s1) : (s1,s2)
+            s0::Ts,si::Ts = inf1 ? (s2,s1) : (s1,s2)
             if si < 0 # x = s0 - t/(1-t)
-                return do_quadgk(t -> begin den = 1 / (1 - t);
+                return do_quadgk_no_inf(t -> begin den = 1 / (1 - t);
                                             f(s0 - t*den) * den*den; end,
                                  reverse!(map(x -> 1 / (1 + 1 / (s0 - x)), s)),
                                  n, Tw, abstol, reltol, maxevals, nrm)
             else # x = s0 + t/(1-t)
-                return do_quadgk(t -> begin den = 1 / (1 - t);
+                return do_quadgk_no_inf(t -> begin den = 1 / (1 - t);
                                             f(s0 + t*den) * den*den; end,
                                  map(x -> 1 / (1 + 1 / (x - s0)), s),
                                  n, Tw, abstol, reltol, maxevals, nrm)
             end
         end
     end
+    return do_quadgk_no_inf(f,s, n, Tw, abstol, reltol, maxevals, nrm)
 
+end
+
+
+function do_quadgk_no_inf{F, Ts, Tw, Fn}(f::F, s::Vector{Ts}, n, ::Type{Tw}, abstol, reltol, maxevals, nrm::Fn)
+    Tf = Base.promote_op(f, Ts)
+    _do_quadgk_no_inf(f, s, n, Tw, segment_type(Ts, Tf, Base.promote_op(nrm, Tf)), abstol, reltol, maxevals, nrm)
+end
+
+
+function _do_quadgk_no_inf{F, Tw, Tsegs}(f::F, s, n, ::Type{Tw}, ::Type{Tsegs}, abstol, reltol, maxevals, nrm)
     key = rulekey(Tw,n)
-    x,w,gw = haskey(rulecache, key) ? rulecache[key] :
+    x::Vector{Tw},w::Vector{Tw},gw::Vector{Tw} = haskey(rulecache, key) ? rulecache[key] :
        (rulecache[key] = kronrod(Tw, n))
-    segs = Segment[]
-    for i in 1:length(s) - 1
+    segs = Tsegs[Segment(evalrule(f, s[1],s[2], x,w,gw, nrm))]
+    for i in 2:length(s) - 1
         heappush!(segs, evalrule(f, s[i],s[i+1], x,w,gw, nrm), Reverse)
     end
     numevals = (2n+1) * length(segs)
@@ -129,14 +143,14 @@ function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
     # Pop the biggest-error segment and subdivide (h-adaptation)
     # until convergence is achieved or maxevals is exceeded.
     while E > abstol && E > reltol * nrm(I) && numevals < maxevals
-        s = heappop!(segs, Reverse)
-        mid = (s.a + s.b) * 0.5
-        s1 = evalrule(f, s.a, mid, x,w,gw, nrm)
-        s2 = evalrule(f, mid, s.b, x,w,gw, nrm)
-        heappush!(segs, s1, Reverse)
-        heappush!(segs, s2, Reverse)
-        I = (I - s.I) + s1.I + s2.I
-        E = (E - s.E) + s1.E + s2.E
+        seg = heappop!(segs, Reverse)
+        mid = (seg.a + seg.b) * 0.5
+        seg1 = evalrule(f, seg.a, mid, x,w,gw, nrm)
+        seg2 = evalrule(f, mid, seg.b, x,w,gw, nrm)
+        heappush!(segs, seg1, Reverse)
+        heappush!(segs, seg2, Reverse)
+        I = (I - seg.I) + seg1.I + seg2.I
+        E = (E - seg.E) + seg1.E + seg2.E
         numevals += 4n+2
     end
     # re-sum (paranoia about accumulated roundoff)
@@ -151,13 +165,13 @@ end
 
 # Gauss-Kronrod quadrature of f from a to b to c...
 
-function quadgk{T<:AbstractFloat}(f, a::T,b::T,c::T...;
+function quadgk{F, T<:AbstractFloat}(f::F, a::T,b::T,c::T...;
                                   abstol=zero(T), reltol=sqrt(eps(T)),
                                   maxevals=10^7, order=7, norm=vecnorm)
     do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals, norm)
 end
 
-function quadgk{T<:AbstractFloat}(f, a::Complex{T},
+function quadgk{F, T<:AbstractFloat}(f::F, a::Complex{T},
                                   b::Complex{T},c::Complex{T}...;
                                   abstol=zero(T), reltol=sqrt(eps(T)),
                                   maxevals=10^7, order=7, norm=vecnorm)
@@ -221,14 +235,7 @@ transformation is performed internally to map the infinite interval to a finite 
 """
 # generic version: determine precision from a combination of
 # all the integration-segment endpoints
-function quadgk(f, a, b, c...; kws...)
-    T = promote_type(typeof(float(a)), typeof(b))
-    for x in c
-        T = promote_type(T, typeof(x))
-    end
-    cT = map(T, c)
-    quadgk(f, convert(T, a), convert(T, b), cT...; kws...)
-end
+quadgk{F}(f::F, a, b, c...; kws...) = quadgk(f, promote(float(a),float(b),c...)...; kws...)
 
 ###########################################################################
 # Gauss-Kronrod integration-weight computation for arbitrary floating-point
