@@ -1005,7 +1005,7 @@ export @vectorize_1arg, @vectorize_2arg
 
 # deprecations for uses of old dot operators (.* etc) as objects, rather than
 # just calling them infix.
-for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=, :≥, :\, :^)
+for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=, :≥, :\, :^, ://, :>>, :<<)
     dotop = Symbol('.', op)
     # define as const dotop = (a,b) -> ...
     # to work around syntax deprecation for dotop(a,b) = ...
