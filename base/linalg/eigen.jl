@@ -170,6 +170,21 @@ function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale
     ishermitian(A) && return eigvals(Hermitian(A))
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
+
+"""
+    eigvals(A,[irange,][vl,][vu]) -> values
+
+Returns the eigenvalues of `A`. If `A` is [`Symmetric`](@ref), [`Hermitian`](@ref) or [`SymTridiagonal`](@ref),
+it is possible to calculate only a subset of the eigenvalues by specifying either a
+`UnitRange` `irange` covering indices of the sorted eigenvalues, or a pair `vl` and `vu`
+for the lower and upper boundaries of the eigenvalues.
+
+For general non-symmetric matrices it is possible to specify how the matrix is balanced
+before the eigenvector calculation. The option `permute=true` permutes the matrix to
+become closer to upper triangular, and `scale=true` scales the matrix by its diagonal
+elements to make rows and columns more equal in norm. The default is `true` for both
+options.
+"""
 function eigvals{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     return eigvals!(copy_oftype(A, S), permute = permute, scale = scale)
@@ -209,8 +224,8 @@ julia> A = [0 im; -1 0]
 julia> eigmax(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:219
- [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:217
+ [1] #eigmax#36(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:234
+ [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:232
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -251,8 +266,8 @@ julia> A = [0 im; -1 0]
 julia> eigmin(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:261
- [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:259
+ [1] #eigmin#37(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:275
+ [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:273
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
