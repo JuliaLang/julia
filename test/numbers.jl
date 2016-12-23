@@ -2521,33 +2521,15 @@ let number_types = Set()
     for T in number_types
         @test eltype(T) == T
     end
-
-    #ndims{T<:Number}(::Type{T}) = 0
-    for x in number_types
-        @test ndims(x) == 0
-    end
 end
 
-#getindex(x::Number) = x
-for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
-    @test getindex(x) == x
-    @test getindex(x, 1, 1) == x
-end
-
-#getindex(x::Number,-1) throws BoundsError
-#getindex(x::Number,0) throws BoundsError
-#getindex(x::Number,2) throws BoundsError
 #getindex(x::Array,-1) throws BoundsError
 #getindex(x::Array,0 throws BoundsError
 #getindex(x::Array,length(x::Array)+1) throws BoundsError
 for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
-    @test_throws BoundsError getindex(x,-1)
-    @test_throws BoundsError getindex(x,0)
-    @test_throws BoundsError getindex(x,2)
     @test_throws BoundsError getindex([x x],-1)
     @test_throws BoundsError getindex([x x],0)
     @test_throws BoundsError getindex([x x],length([x,x])+1)
-    @test_throws BoundsError getindex(x, 1, 0)
 end
 
 # copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
@@ -2794,17 +2776,7 @@ testmi(typemin(Int)+1:typemin(Int)+1000, -100:100)
 testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
 testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 
-@test ndims(1) == 0
-@test ndims(Integer) == 0
-@test size(1,1) == 1
-@test_throws BoundsError size(1,-1)
-@test indices(1) == ()
-@test indices(1,1) == 1:1
-@test_throws BoundsError indices(1,-1)
-@test isinteger(Integer(2)) == true
-@test size(1) == ()
 @test length(1) == 1
-@test endof(1) == 1
 @test eltype(Integer) == Integer
 
 # issue #15920

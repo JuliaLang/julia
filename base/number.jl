@@ -12,32 +12,19 @@ all of the elements of `x` are zero.
 """
 iszero(x) = x == zero(x) # fallback method
 
-size(x::Number) = ()
-size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
-indices(x::Number) = ()
-indices(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1)
-eltype{T<:Number}(::Type{T}) = T
-ndims(x::Number) = 0
-ndims{T<:Number}(::Type{T}) = 0
-length(x::Number) = 1
-endof(x::Number) = 1
-iteratorsize{T<:Number}(::Type{T}) = HasShape()
-
-getindex(x::Number) = x
-function getindex(x::Number, i::Integer)
-    @_inline_meta
-    @boundscheck i == 1 || throw(BoundsError())
-    x
-end
-function getindex(x::Number, I::Integer...)
-    @_inline_meta
-    @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
-    x
-end
-getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
+# it is sometimes convenient, when writing generic code,
+# to be able to iterate over numbers as 1-element collections (#7903)
 first(x::Number) = x
 last(x::Number) = x
-copy(x::Number) = x  # some code treats numbers as collection-like
+start(::Number) = false
+next(x::Number, state) = (x, true)
+done(::Number, state) = state
+isempty(::Number) = false
+in(x::Number, y::Number) = x == y
+length(::Number) = 1
+eltype{T<:Number}(::Type{T}) = T
+iteratorsize{T<:Number}(::Type{T}) = HasLength()
+copy(x::Number) = x
 
 """
     divrem(x, y)
@@ -93,12 +80,6 @@ julia> widemul(Float32(3.), 4.)
 ```
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
-
-start(x::Number) = false
-next(x::Number, state) = (x, true)
-done(x::Number, state) = state
-isempty(x::Number) = false
-in(x::Number, y::Number) = x == y
 
 map(f, x::Number, ys::Number...) = f(x, ys...)
 

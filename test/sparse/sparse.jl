@@ -488,7 +488,7 @@ end
     for i=1:5
         sprb45 = sprand(Bool, 4, 5, 0.5)
         @test length(sprb45) == 20
-        sprb45nnzs[i] = sum(sprb45)[1]
+        sprb45nnzs[i] = sum(sprb45)
     end
     @test 4 <= mean(sprb45nnzs) <= 16
 end

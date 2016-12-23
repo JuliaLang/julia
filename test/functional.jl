@@ -43,7 +43,7 @@ end
 @test isequal(filter((ss)->length(ss)==3, ["abcd", "efg", "hij", "klmn", "opq"]), ["efg", "hij", "opq"])
 
 # numbers
-@test size(collect(1)) == size(1)
+@test size(collect(1)) == (1,)
 
 @test isa(collect(Any, [1,2]), Vector{Any})
 

@@ -32,7 +32,7 @@ function filt!{T,S,N}(out::AbstractArray, b::Union{AbstractVector, Number}, a::U
                       x::AbstractArray{T}, si::AbstractArray{S,N}=_zerosi(b,a,T))
     isempty(b) && throw(ArgumentError("filter vector b must be non-empty"))
     isempty(a) && throw(ArgumentError("filter vector a must be non-empty"))
-    a[1] == 0  && throw(ArgumentError("filter vector a[1] must be nonzero"))
+    first(a) == 0  && throw(ArgumentError("filter vector first(a) must be nonzero"))
     if size(x) != size(out)
         throw(ArgumentError("output size $(size(out)) must match input size $(size(x))"))
     end
@@ -51,11 +51,11 @@ function filt!{T,S,N}(out::AbstractArray, b::Union{AbstractVector, Number}, a::U
     end
 
     size(x,1) == 0 && return out
-    sz == 1 && return scale!(out, x, b[1]/a[1]) # Simple scaling without memory
+    sz == 1 && return scale!(out, x, first(b)/first(a)) # Simple scaling without memory
 
     # Filter coefficient normalization
-    if a[1] != 1
-        norml = a[1]
+    if first(a) != 1
+        norml = first(a)
         a ./= norml
         b ./= norml
     end
@@ -66,11 +66,11 @@ function filt!{T,S,N}(out::AbstractArray, b::Union{AbstractVector, Number}, a::U
     initial_si = si
     for col = 1:ncols
         # Reset the filter state
-        si = initial_si[:, N > 1 ? col : 1]
+        si_col = initial_si[:, N > 1 ? col : 1]
         if as > 1
-            _filt_iir!(out, b, a, x, si, col)
+            _filt_iir!(out, b, a, x, si_col, col)
         else
-            _filt_fir!(out, b, x, si, col)
+            _filt_fir!(out, b, x, si_col, col)
         end
     end
     return out
