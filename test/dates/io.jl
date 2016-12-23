@@ -17,49 +17,22 @@
 @test string(Dates.DateTime(2000,1,1,0,0,0,998)) == "2000-01-01T00:00:00.998"
 @test string(Dates.DateTime(2000,1,1,0,0,0,999)) == "2000-01-01T00:00:00.999"
 
-
-# 0.4/0.5 parsing behaviour
-@test_throws ArgumentError Date("2010")
-@test Date("2010-")      == Date(2010)
-@test Date("2010-2")     == Date(2010,2)
-@test Date("2010-02-")   == Date(2010,2)
-@test Date("2010-02-5")  == Date(2010,2,5)
-@test Date("2010-02-05") == Date(2010,2,5)
-
-@test_throws ArgumentError DateTime("2010")
-@test DateTime("2010-")                     == DateTime(2010)
-@test DateTime("2010-2")                    == DateTime(2010,2)
-@test DateTime("2010-02-")                  == DateTime(2010,2)
-@test DateTime("2010-02-5")                 == DateTime(2010,2,5)
-@test DateTime("2010-02-05")                == DateTime(2010,2,5)
-@test DateTime("2010-02-05T")               == DateTime(2010,2,5)
-@test DateTime("2010-02-05T7")              == DateTime(2010,2,5,7)
-@test DateTime("2010-02-05T07")             == DateTime(2010,2,5,7)
-@test DateTime("2010-02-05T07:")            == DateTime(2010,2,5,7)
-@test DateTime("2010-02-05T07:8")           == DateTime(2010,2,5,7,8)
-@test DateTime("2010-02-05T07:08")          == DateTime(2010,2,5,7,8)
-@test DateTime("2010-02-05T07:08:")         == DateTime(2010,2,5,7,8)
-@test DateTime("2010-02-05T07:08:3")        == DateTime(2010,2,5,7,8,3)
-@test DateTime("2010-02-05T07:08:03")       == DateTime(2010,2,5,7,8,3)
-@test DateTime("2010-02-05T07:08:03.")      == DateTime(2010,2,5,7,8,3)
-@test DateTime("2010-02-05T07:08:03.1")     == DateTime(2010,2,5,7,8,3,100)
-@test DateTime("2010-02-05T07:08:03.12")    == DateTime(2010,2,5,7,8,3,120)
-@test DateTime("2010-02-05T07:08:03.123")   == DateTime(2010,2,5,7,8,3,123)
-@test_throws ArgumentError DateTime("2010-02-05T07:08:03.1234") # was InexactError
-
-
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
-# Using parse directly allows for more flexibility.
 let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
-    expected = [Dates.Year(1996), Dates.Month(2), Dates.Day(15), Dates.Hour(24), Dates.Minute(0)]
-    @test Dates.parse(str, Dates.DateFormat(format)) == expected
+    expected = (1996, 2, 15, 24, 0, 0, 0)
+    @test get(Dates._tryparse(Dates.DateFormat(format), str)) == expected
     @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
 end
 
-# Issue #13644: Ensure that Dates.parse returns a Period array when no custom slots are used.
-@test eltype(Dates.parse("1942-12-25T01:23:45", Dates.DateFormat("yyyy-mm-ddTHH:MM:SS", "english"))) == Dates.Period
+# DateFormat printing
+
+@test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SSP\""
+@test sprint(show, DateFormat("yyy").tokens[1]) == "DatePart(yyy)"
+@test sprint(show, DateFormat("mmzzdd").tokens[2]) == "Delim(zz)"
+@test sprint(show, DateFormat("ddxmm").tokens[2]) == "Delim(x)"
+@test sprint(show, DateFormat("xxmmxx").tokens[2]) == "DatePart(mm)"
 
 # Common Parsing Patterns
 #'1996-January-15'
@@ -92,8 +65,15 @@ b2 = "96/Feb/1"
 @test Dates.format(dt+Dates.Month(1)-Dates.Day(14),"yy/uuu/d") == b2
 # Here we've specifed a text month name, but given a number
 b3 = "96/2/15"
-@test_throws KeyError Dates.DateTime(b3,f)
-
+@test_throws ArgumentError Dates.DateTime(b3,f)
+let err = try DateTime("2012-02-20T09:09:3.43i9") catch err; err end
+    @test isa(err, ArgumentError)
+    @test err.msg == "Found extra characters at the end of date time string"
+end
+let err = try DateTime("2012-02-20T09:09:3i439") catch err; err end
+    @test isa(err, ArgumentError)
+    @test err.msg == "Unable to parse date time. Expected token Delim(.) at char 19"
+end
 f = "yy:dd:mm"
 c = "96:15:01"
 @test Dates.DateTime(c,f) + Dates.Year(1900) == dt
@@ -108,7 +88,7 @@ c3 = "96:1:01"
 @test Dates.DateTime(c3,f) + Dates.Year(1900) + Dates.Day(14) == dt
 @test Dates.format(dt-Dates.Day(14),"yy:m:dd") == c3
 c4 = "1996:15:01 # random comment"
-@test Dates.DateTime(c4,f) == dt
+@test_throws ArgumentError Dates.DateTime(c4,f)
 
 f = "yyyy,uuu,dd"
 d = "1996,Jan,15"
@@ -121,7 +101,7 @@ d2 = "1996,Jan,1"
 @test Dates.DateTime(d2,f) + Dates.Day(14) == dt
 @test Dates.format(dt-Dates.Day(14),"yyyy,uuu,d") == d2
 d3 = "1996,2,15"
-@test_throws KeyError Dates.DateTime(d3,f)
+@test_throws ArgumentError Dates.DateTime(d3,f)
 
 f = "yyyy.U.dd"
 e = "1996.January.15"
@@ -229,7 +209,7 @@ s = "/1996/1/15"
 f = "/yyyy/m/d"
 @test Dates.DateTime(s,f) == dt
 @test Dates.format(dt,f) == s
-@test Dates.DateTime("1996/1/15",f) == dt
+@test_throws ArgumentError Dates.DateTime("1996/1/15",f)
 
 # from Jiahao
 @test Dates.Date("2009年12月01日","yyyy年mm月dd日") == Dates.Date(2009,12,1)
@@ -258,9 +238,12 @@ f = "dd uuuuu yyyy"
 
 f = "dd u yyyy"
 @test Dates.Date("28 avril 2014",f;locale="french") == Dates.Date(2014,4,28)
-f = "dduuuuuyyyy"
-@test Dates.Date("28avril2014",f;locale="french") == Dates.Date(2014,4,28)
-@test_throws KeyError Dates.Date("28mai2014",f;locale="french")
+f = "dduuuuyyyy"
+# parses 3 and 4 character month names
+@test Dates.Date("28mai2014",f;locale="french") == Dates.Date(2014,5,28)
+@test Dates.Date("28août2014",f;locale="french") == Dates.Date(2014,8,28)
+# doesn't parse month name greater than 4 chars
+@test_throws ArgumentError Dates.Date("28avril2014",f;locale="french")
 
 # From Tony Fong
 f = "dduuuyy"
@@ -298,8 +281,7 @@ f = "y m d"
 @test_throws ArgumentError Dates.Date("1 1 32",f)
 @test_throws ArgumentError Dates.Date(" 1 1 32",f)
 @test_throws ArgumentError Dates.Date("# 1 1 32",f)
-# can't find 1st space delimiter,s o fails
-@test_throws ArgumentError Dates.Date("1",f)
+@test Dates.Date("1",f) == Dates.Date(1)
 @test Dates.Date("1 2",f) == Dates.Date(1,2)
 # can't find space delimiter (finds '/'), so fails
 @test_throws ArgumentError Dates.Date("2000/1",f)
@@ -363,11 +345,10 @@ let f = "YY"
 end
 
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
-let
-    ds = "2015-07-24T05:38:19.591Z"
-    dt = Dates.DateTime(2015,7,24,5,38,19,591)
+let ds = "2015-07-24T05:38:19.591Z",
+    dt = Dates.DateTime(2015,7,24,5,38,19,591),
 
-    format = "yyyy-mm-ddTHH:MM:SS.sssZ"
+    format = "yyyy-mm-ddTHH:MM:SS.sssZ",
     escaped_format = "yyyy-mm-dd\\THH:MM:SS.sss\\Z"
 
     # Typically 'Z' isn't treated as a slot so it doesn't have to be escaped
@@ -377,13 +358,11 @@ let
     try
         # Make 'Z' into a slot
         Dates.SLOT_RULE['Z'] = Dates.TimeZone
-        slotparse(slot::Dates.Slot{Dates.TimeZone},x,locale) = throw(ArgumentError("Invalid slot"))
 
-        @test_throws ArgumentError DateTime(ds, format)
+        @test_throws MethodError DateTime(ds, format)
         @test DateTime(ds, escaped_format) == dt
     finally
-        # Ideally we would be able to set SLOT_RULE['Z'] back to being undefined
-        Dates.SLOT_RULE['Z'] = Void
+        delete!(Dates.SLOT_RULE, 'Z')
     end
 
     # Ensure that the default behaviour has been restored
