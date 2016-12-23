@@ -252,6 +252,7 @@ static void NOINLINE NORETURN start_task(void)
             jl_gc_wb(t, res);
         }
     }
+    t = jl_current_task; // copy_task may change jl_current_task.
     finish_task(t, res);
     abort();
 }
@@ -881,6 +882,40 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 
     return t;
 }
+
+DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t)
+    {
+        jl_task_t *newt = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
+        jl_set_typeof(newt, jl_task_type);
+        
+        newt->current_module = t->current_module;
+        newt->state = t->state;
+        newt->start = t->start;
+        newt->tls = jl_nothing; // does this point to newt.storate?
+        newt->exception = jl_nothing;
+        newt->backtrace = jl_nothing;
+        newt->eh = NULL;
+        newt->gcstack = t->gcstack;
+        
+        memcpy((void*)newt->ctx, (void*)t->ctx, sizeof(jl_jmp_buf));
+#ifdef COPY_STACKS
+        if (t->stkbuf){
+            newt->ssize = t->ssize;  // size of saved piece
+            newt->bufsz = t->bufsz;
+            newt->stkbuf = allocb(t->bufsz);
+            memcpy(newt->stkbuf, t->stkbuf, t->bufsz);
+        }else{
+            newt->ssize = 0;
+            newt->bufsz = 0;
+            newt->stkbuf = NULL;
+        }
+#else // task copying for other stack switching methanism not implemented yet.
+#error not supported yet.
+#endif
+        jl_gc_wb_back(newt); // gc write back for new task.
+        return newt;
+    }
+
 
 JL_CALLABLE(jl_unprotect_stack)
 {

@@ -1405,6 +1405,7 @@ extern DLLEXPORT JL_THREAD jl_task_t *jl_root_task;
 extern DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
 
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
+DLLEXPORT jl_task_t *jl_copy_task(jl_task_t *t, size_t ssize);
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
 DLLEXPORT void NORETURN jl_rethrow(void);
