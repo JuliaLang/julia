@@ -931,8 +931,10 @@ end
         $(Symbol(:offset_, N)) = 1
         ind = 0
         Xc, Bc = X.chunks, B.chunks
-        idxlens = @ncall $N index_lengths B d->I[d]
-        @nloops $N i d->(1:idxlens[d]) d->(@inbounds offset_{d-1} = offset_d + ((let Id = I[d]; isa(Id,Number)?Id:Id[i_d];end)-1)*stride_d) begin
+        @nexprs $N d->(I_d = I[d])
+        J = @ncall $N decolon B I
+        @nexprs $N d->(J_d = J[d])
+        @nloops $N j d->J_d d->(@inbounds offset_{d-1} = offset_d + (j_d-1)*stride_d) begin
             ind += 1
             unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, offset_0), ind)
         end
