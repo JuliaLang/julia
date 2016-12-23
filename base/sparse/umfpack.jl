@@ -131,7 +131,7 @@ The relation between `F` and `A` is
 - [`cond`](@ref)
 - [`det`](@ref)
 
-** Implementation note **
+!!! note
 
 `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
 SuiteSparse. As this library only supports sparse matrices with `Float64` or
