@@ -1425,4 +1425,11 @@ end
 @deprecate mod{T}(x::Number, A::AbstractArray{T}) mod.(x, A)
 @deprecate mod{T}(A::AbstractArray{T}, x::Number) mod.(A, x)
 
+# Deprecate vectorized & in favor of dot syntax
+@deprecate (&)(a::Bool, B::BitArray)                a .& B
+@deprecate (&)(A::BitArray, b::Bool)                A .& b
+@deprecate (&)(a::Number, B::AbstractArray)         a .& B
+@deprecate (&)(A::AbstractArray, b::Number)         A .& b
+@deprecate (&)(A::AbstractArray, B::AbstractArray)  A .& B
+
 # End deprecations scheduled for 0.6

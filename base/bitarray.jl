@@ -1237,17 +1237,12 @@ end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)
 (/)(x::Number, B::BitArray) = (/)(x, Array(B))
 
-function (&)(B::BitArray, x::Bool)
-    x ? copy(B) : falses(size(B))
-end
-(&)(x::Bool, B::BitArray) = B & x
-
 function (|)(B::BitArray, x::Bool)
     x ? trues(size(B)) : copy(B)
 end
 (|)(x::Bool, B::BitArray) = B | x
 
-for f in (:&, :|)
+for f in (:|,)
     @eval begin
         function ($f)(A::BitArray, B::BitArray)
             F = BitArray(promote_shape(size(A),size(B))...)

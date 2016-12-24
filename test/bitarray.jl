@@ -780,7 +780,7 @@ timesofar("unary arithmetic")
 
 let b1 = bitrand(n1, n2)
     b2 = bitrand(n1, n2)
-    @check_bit_operation (&)(b1, b2)  BitMatrix
+    @check_bit_operation broadcast(&, b1, b2)  BitMatrix
     @check_bit_operation (|)(b1, b2)  BitMatrix
     @check_bit_operation broadcast(xor, b1, b2)  BitMatrix
     @check_bit_operation (+)(b1, b2)  Matrix{Int}
@@ -811,7 +811,7 @@ let b1 = bitrand(n1, n1)
 end
 
 let b0 = falses(0)
-    @check_bit_operation (&)(b0, b0)  BitVector
+    @check_bit_operation broadcast(&, b0, b0)  BitVector
     @check_bit_operation (|)(b0, b0)  BitVector
     @check_bit_operation broadcast(xor, b0, b0)  BitVector
     @check_bit_operation broadcast(*, b0, b0) BitVector
@@ -822,7 +822,7 @@ end
 
 let b1 = bitrand(n1, n2)
     i2 = rand(1:10, n1, n2)
-    @check_bit_operation (&)(b1, i2)  Matrix{Int}
+    @check_bit_operation broadcast(&, b1, i2)  Matrix{Int}
     @check_bit_operation (|)(b1, i2)  Matrix{Int}
     @check_bit_operation broadcast(xor, b1, i2)  Matrix{Int}
     @check_bit_operation (+)(b1, i2)  Matrix{Int}
@@ -855,14 +855,14 @@ let b2 = bitrand(n1, n2)
     cu1 = complex(u1)
     cf1 = complex(f1)
 
-    @check_bit_operation (&)(i1, b2)  Matrix{Int}
+    @check_bit_operation broadcast(&, i1, b2)  Matrix{Int}
     @check_bit_operation (|)(i1, b2)  Matrix{Int}
     @check_bit_operation broadcast(xor, i1, b2)  Matrix{Int}
     @check_bit_operation broadcast(+, i1, b2)  Matrix{Int}
     @check_bit_operation broadcast(-, i1, b2)  Matrix{Int}
     @check_bit_operation broadcast(*, i1, b2) Matrix{Int}
 
-    @check_bit_operation (&)(u1, b2)  Matrix{UInt8}
+    @check_bit_operation broadcast(&, u1, b2)  Matrix{UInt8}
     @check_bit_operation (|)(u1, b2)  Matrix{UInt8}
     @check_bit_operation broadcast(xor, u1, b2)  Matrix{UInt8}
     @check_bit_operation broadcast(+, u1, b2)  Matrix{UInt8}
@@ -931,10 +931,10 @@ let b1 = bitrand(n1, n2)
     cf2 = complex(f2)
     b2 = Array(bitrand(n1,n2))
 
-    @check_bit_operation (&)(b1, true)   BitMatrix
-    @check_bit_operation (&)(b1, false)  BitMatrix
-    @check_bit_operation (&)(true, b1)   BitMatrix
-    @check_bit_operation (&)(false, b1)  BitMatrix
+    @check_bit_operation broadcast(&, b1, true)   BitMatrix
+    @check_bit_operation broadcast(&, b1, false)  BitMatrix
+    @check_bit_operation broadcast(&, true, b1)   BitMatrix
+    @check_bit_operation broadcast(&, false, b1)  BitMatrix
     @check_bit_operation (|)(b1, true)   BitMatrix
     @check_bit_operation (|)(b1, false)  BitMatrix
     @check_bit_operation (|)(true, b1)   BitMatrix
@@ -956,13 +956,13 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation broadcast(div, b1, true)   BitMatrix
     @check_bit_operation broadcast(mod,b1, true)    BitMatrix
 
-    @check_bit_operation (&)(b1, b2)  BitMatrix
+    @check_bit_operation broadcast(&, b1, b2)  BitMatrix
     @check_bit_operation (|)(b1, b2)  BitMatrix
     @check_bit_operation broadcast(xor, b1, b2)  BitMatrix
-    @check_bit_operation (&)(b2, b1)  BitMatrix
+    @check_bit_operation broadcast(&, b2, b1)  BitMatrix
     @check_bit_operation (|)(b2, b1)  BitMatrix
     @check_bit_operation broadcast(xor, b2, b1)  BitMatrix
-    @check_bit_operation (&)(b1, i2)  Matrix{Int}
+    @check_bit_operation broadcast(&, b1, i2)  Matrix{Int}
     @check_bit_operation (|)(b1, i2)  Matrix{Int}
     @check_bit_operation broadcast(xor, b1, i2)  Matrix{Int}
     @check_bit_operation broadcast(+, b1, i2)  Matrix{Int}
@@ -972,7 +972,7 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation broadcast(div, b1, i2)  Matrix{Int}
     @check_bit_operation broadcast(mod, b1, i2)  Matrix{Int}
 
-    @check_bit_operation (&)(b1, u2)  Matrix{UInt8}
+    @check_bit_operation broadcast(&, b1, u2)  Matrix{UInt8}
     @check_bit_operation (|)(b1, u2)  Matrix{UInt8}
     @check_bit_operation broadcast(xor, b1, u2)  Matrix{UInt8}
     @check_bit_operation broadcast(+, b1, u2)  Matrix{UInt8}
@@ -1272,7 +1272,7 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
     @test map(~, b1) == map(x->~x, b1) == ~b1
     @test map(identity, b1) == map(x->x, b1) == b1
 
-    @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == b1 & b2
+    @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == broadcast(&, b1, b2)
     @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == b1 | b2
     @test map(⊻, b1, b2) == map((x,y)->x⊻y, b1, b2) == broadcast(⊻, b1, b2) == broadcast(xor, b1, b2)
 
@@ -1297,7 +1297,7 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
     @test map!(zero, b, b1) == map!(x->false, b, b1) == falses(l) == b
     @test map!(one, b, b1) == map!(x->true, b, b1) == trues(l) == b
 
-    @test map!(&, b, b1, b2) == map!((x,y)->x&y, b, b1, b2) == b1 & b2 == b
+    @test map!(&, b, b1, b2) == map!((x,y)->x&y, b, b1, b2) == broadcast(&, b1, b2) == b
     @test map!(|, b, b1, b2) == map!((x,y)->x|y, b, b1, b2) == b1 | b2 == b
     @test map!(⊻, b, b1, b2) == map!((x,y)->x⊻y, b, b1, b2) == broadcast(⊻, b1, b2) == broadcast(xor, b1, b2) == b
 
