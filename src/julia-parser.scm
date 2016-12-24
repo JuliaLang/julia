@@ -137,6 +137,8 @@
 (define end-symbol #f)
 ; treat newline like ordinary whitespace instead of as a potential separator
 (define whitespace-newline #f)
+; after the keywords `global` or `local`, the LHS of assignments can be typed.
+(define allow-typed-assignments #f)
 
 (define current-filename 'none)
 
@@ -170,6 +172,10 @@
 
 (define-macro (without-whitespace-newline . body)
   `(with-bindings ((whitespace-newline #f))
+                  ,@body))
+
+(define-macro (with-typed-assignments . body)
+  `(with-bindings ((allow-typed-assignments #f))
                   ,@body))
 
 ;; --- lexer ---
@@ -932,7 +938,14 @@
     (let ((t (peek-token s)))
       (case t
         ((|::|) (take-token s)
-         (loop (list t ex (parse-call s))))
+        ; (loop (list t ex (parse-call s))))
+         (let ((exx (list t ex (parse-call s))))
+            (if (and (not allow-typed-assignments)
+                      (is-prec-assignment? (peek-token s)))
+              (syntax-deprecation s
+                (string "Type statement on left hand side of assignment.")
+                (string "Use with `local` or `global` first.")))
+            (loop exx)))
         ((->)   (take-token s)
          ;; -> is unusual: it binds tightly on the left and
          ;; loosely on the right.
@@ -1174,7 +1187,7 @@
                (const (and (eq? (peek-token s) 'const)
                            (take-token s)))
                (expr  (cons word
-			    (parse-comma-separated-assignments s))))
+			    (parse-comma-separated-typed-assignments s))))
           (if const
               `(const ,expr)
               expr)))
@@ -1409,8 +1422,14 @@
         ((#\,)  (take-token s) (loop (cons r exprs)))
         (else   (reverse! (cons r exprs)))))))
 
+
 (define (parse-comma-separated-assignments s)
   (parse-comma-separated s parse-eq*))
+
+
+(define (parse-comma-separated-typed-assignments s)
+  (with-typed-assignments
+    (parse-comma-separated-assignments s)))
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
