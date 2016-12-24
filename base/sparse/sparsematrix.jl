@@ -2288,7 +2288,6 @@ round{To}(::Type{To}, A::SparseMatrixCSC) = round.(To, A)
 # TODO: Vectorized min, max, |, and xor should be deprecated in favor of compact-broadcast syntax.
 min(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(min, A, B)
 max(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(max, A, B)
-(&)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(&, A, B)
 (|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(|, A, B)
 xor(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(xor, A, B)
 
