@@ -1408,7 +1408,6 @@ conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
 (+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
 (-)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(-, A, B)
 # TODO: Vectorized min, max, |, and xor should be deprecated in favor of compact-broadcast syntax.
-(&)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(&, A, B)
 (|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(|, A, B)
 
 ( +)(A::SparseMatrixCSC, B::Array ) = Array(A)  + B
