@@ -25,6 +25,12 @@ end
 
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
+"""
+    eigfact!(A, [B])
+
+Same as [`eigfact`](@ref), but saves space by overwriting the input `A` (and
+`B`), instead of creating a copy.
+"""
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))

@@ -19,6 +19,11 @@ function divgcd(x::Integer,y::Integer)
     div(x,g), div(y,g)
 end
 
+"""
+    //(num, den)
+
+Divide two integers or rational numbers, giving a `Rational` result.
+"""
 //(n::Integer,  d::Integer ) = Rational(n,d)
 
 function //(x::Rational, y::Integer )

@@ -561,6 +561,11 @@ julia> middle(a)
 """
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
+"""
+    median!(v)
+
+Like [`median`](@ref), but may overwrite the input vector.
+"""
 function median!{T}(v::AbstractVector{T})
     isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
     if T<:AbstractFloat

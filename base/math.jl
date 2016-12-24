@@ -193,6 +193,69 @@ const libm = Base.libm_name
 const openspecfun = "libopenspecfun"
 
 # functions with no domain error
+"""
+    sinh(x)
+
+Compute hyperbolic sine of `x`.
+"""
+sinh(x)
+
+"""
+    cosh(x)
+
+Compute hyperbolic cosine of `x`.
+"""
+cosh(x)
+
+"""
+    tanh(x)
+
+Compute hyperbolic tangent of `x`.
+"""
+tanh(x)
+
+"""
+    atan(x)
+
+Compute the inverse tangent of `x`, where the output is in radians.
+"""
+atan(x)
+
+"""
+    asinh(x)
+
+Compute the inverse hyperbolic sine of `x`.
+"""
+asinh(x)
+
+"""
+    exp(x)
+
+Compute ``e^x``.
+"""
+exp(x)
+
+"""
+    erf(x)
+
+Compute the error function of `x`, defined by ``\\frac{2}{\\sqrt{\\pi}} \\int_0^x e^{-t^2} dt``
+for arbitrary complex `x`.
+"""
+erf(x)
+
+"""
+    erfc(x)
+
+Compute the complementary error function of `x`, defined by ``1 - \\operatorname{erf}(x)``.
+"""
+erfc(x)
+
+"""
+    expm1(x)
+
+Accurately compute ``e^x-1``.
+"""
+expm1(x)
 for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
@@ -257,6 +320,106 @@ exp10(x::Integer) = exp10(float(x))
 @inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
 
 # functions that return NaN on non-NaN argument for domain error
+"""
+    sin(x)
+
+Compute sine of `x`, where `x` is in radians.
+"""
+sin(x)
+
+"""
+    cos(x)
+
+Compute cosine of `x`, where `x` is in radians.
+"""
+cos(x)
+
+"""
+    tan(x)
+
+Compute tangent of `x`, where `x` is in radians.
+"""
+tan(x)
+
+"""
+    asin(x)
+
+Compute the inverse sine of `x`, where the output is in radians.
+"""
+asin(x)
+
+"""
+    acos(x)
+
+Compute the inverse cosine of `x`, where the output is in radians
+"""
+acos(x)
+
+"""
+    acosh(x)
+
+Compute the inverse hyperbolic cosine of `x`.
+"""
+acosh(x)
+
+"""
+    atanh(x)
+
+Compute the inverse hyperbolic tangent of `x`.
+"""
+atanh(x)
+
+"""
+    log(x)
+
+Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Use complex negative arguments to obtain complex results.
+
+There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
+faster and more accurate.
+"""
+log(x)
+
+"""
+    log2(x)
+
+Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative `Real` arguments.
+
+```jldoctest
+julia> log2(4)
+2.0
+
+julia> log2(10)
+3.321928094887362
+```
+"""
+log2(x)
+
+"""
+    log10(x)
+
+Compute the logarithm of `x` to base 10.
+Throws [`DomainError`](@ref) for negative `Real` arguments.
+
+```jldoctest
+julia> log10(100)
+2.0
+
+julia> log10(2)
+0.3010299956639812
+```
+"""
+log10(x)
+
+"""
+    log1p(x)
+
+Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for `Real` arguments less than -1.
+
+There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
+faster and more accurate.
+"""
+log1p(x)
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
           :lgamma, :log1p)
     @eval begin

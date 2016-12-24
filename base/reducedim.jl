@@ -277,6 +277,158 @@ reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
 
 
 ##### Specific reduction functions #####
+"""
+    sum(A, dims)
+
+Sum elements of an array over the given dimensions.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> sum(A, 1)
+1×2 Array{Int64,2}:
+ 4  6
+
+julia> sum(A, 2)
+2×1 Array{Int64,2}:
+ 3
+ 7
+```
+"""
+sum(A, dims)
+
+"""
+    sum!(r, A)
+
+Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+"""
+sum!(r, A)
+
+"""
+    prod(A, dims)
+
+Multiply elements of an array over the given dimensions.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> prod(A, 1)
+1×2 Array{Int64,2}:
+ 3  8
+
+julia> prod(A, 2)
+2×1 Array{Int64,2}:
+  2
+ 12
+```
+"""
+prod(A, dims)
+
+"""
+    prod!(r, A)
+
+Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+"""
+prod!(r, A)
+
+"""
+    maximum(A, dims)
+
+Compute the maximum value of an array over the given dimensions. See also the
+[`max(a,b)`](@ref) function to take the maximum of two or more arguments,
+which can be applied elementwise to arrays via `max.(a,b)`.
+"""
+maximum(A, dims)
+
+"""
+    maximum!(r, A)
+
+Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+"""
+maximum!(r, A)
+
+"""
+    minimum(A, dims)
+
+Compute the minimum value of an array over the given dimensions. See also the
+[`min(a,b)`](@ref) function to take the minimum of two or more arguments,
+which can be applied elementwise to arrays via `min.(a,b)`.
+
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> minimum(A, 1)
+1×2 Array{Int64,2}:
+ 1  2
+
+julia> minimum(A, 2)
+2×1 Array{Int64,2}:
+ 1
+ 3
+```
+"""
+minimum(A, dims)
+
+"""
+    minimum!(r, A)
+
+Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+"""
+minimum!(r, A)
+
+"""
+    all(A, dims)
+
+Test whether all values along the given dimensions of an array are `true`.
+
+```jldoctest
+julia> A = [true false; true true]
+2×2 Array{Bool,2}:
+ true  false
+ true   true
+
+julia> all(A, 1)
+1×2 Array{Bool,2}:
+ true  false
+
+julia> all(A, 2)
+2×1 Array{Bool,2}:
+ false
+  true
+```
+"""
+all(A::AbstractArray, dims)
+
+"""
+    all!(r, A)
+
+Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
+"""
+all!(r, A)
+
+"""
+    any(A, dims)
+
+Test whether any values along the given dimensions of an array are `true`.
+"""
+any(::AbstractArray,dims)
+
+"""
+    any!(r, A)
+
+Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
+results to `r`.
+"""
+any!(r, A)
 
 for (fname, op) in [(:sum, :+), (:prod, :*),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),

@@ -517,11 +517,29 @@ isnan(x::AbstractFloat) = x != x
 isnan(x::Float16)    = reinterpret(UInt16,x)&0x7fff  > 0x7c00
 isnan(x::Real) = false
 
+"""
+    isfinite(f) -> Bool
+
+Test whether a number is finite.
+
+```jldoctest
+julia> isfinite(5)
+true
+
+julia> isfinite(NaN32)
+false
+```
+"""
 isfinite(x::AbstractFloat) = x - x == 0
 isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
+"""
+    isinf(f) -> Bool
+
+Test whether a number is infinite.
+"""
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## hashing small, built-in numeric types ##
