@@ -1407,8 +1407,6 @@ conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
 ## Binary arithmetic and boolean operators
 (+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
 (-)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(-, A, B)
-# TODO: Vectorized min, max, |, and xor should be deprecated in favor of compact-broadcast syntax.
-(|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(|, A, B)
 
 ( +)(A::SparseMatrixCSC, B::Array ) = Array(A)  + B
 ( +)(A::Array , B::SparseMatrixCSC) = A  + Array(B)

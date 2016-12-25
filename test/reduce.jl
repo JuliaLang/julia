@@ -186,8 +186,8 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test all(x->x>0, [4]) == true
 @test all(x->x>0, [-3, 4, 5]) == false
 
-@test reduce(|, fill(trues(5), 24))  == trues(5)
-@test reduce(|, fill(falses(5), 24)) == falses(5)
+@test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
+@test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
 @test reduce((a, b) -> a .& b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .& b, fill(falses(5), 24)) == falses(5)
 

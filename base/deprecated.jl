@@ -1432,4 +1432,11 @@ end
 @deprecate (&)(A::AbstractArray, b::Number)         A .& b
 @deprecate (&)(A::AbstractArray, B::AbstractArray)  A .& B
 
+# Deprecate vectorized | in favor of compact broadcast syntax
+@deprecate (|)(a::Bool, B::BitArray)                a .| B
+@deprecate (|)(A::BitArray, b::Bool)                A .| b
+@deprecate (|)(a::Number, B::AbstractArray)         a .| B
+@deprecate (|)(A::AbstractArray, b::Number)         A .| b
+@deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
+
 # End deprecations scheduled for 0.6

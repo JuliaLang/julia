@@ -1237,31 +1237,6 @@ end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)
 (/)(x::Number, B::BitArray) = (/)(x, Array(B))
 
-function (|)(B::BitArray, x::Bool)
-    x ? trues(size(B)) : copy(B)
-end
-(|)(x::Bool, B::BitArray) = B | x
-
-for f in (:|,)
-    @eval begin
-        function ($f)(A::BitArray, B::BitArray)
-            F = BitArray(promote_shape(size(A),size(B))...)
-            Fc = F.chunks
-            Ac = A.chunks
-            Bc = B.chunks
-            (isempty(Ac) || isempty(Bc)) && return F
-            for i = 1:length(Fc)
-                Fc[i] = ($f)(Ac[i], Bc[i])
-            end
-            Fc[end] &= _msk_end(F)
-            return F
-        end
-        ($f)(A::DenseArray{Bool}, B::BitArray) = ($f)(BitArray(A), B)
-        ($f)(B::BitArray, A::DenseArray{Bool}) = ($f)(B, BitArray(A))
-        ($f)(x::Number, B::BitArray) = ($f)(x, Array(B))
-        ($f)(B::BitArray, x::Number) = ($f)(Array(B), x)
-    end
-end
 
 ## promotion to complex ##
 
