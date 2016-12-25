@@ -813,8 +813,8 @@ end
 @test_throws DomainError complex(2,2)^(-2)
 @test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 
-@test complex(1.0,[1.0,1.0]) == [complex(1.0,1.0), complex(1.0,1.0)]
-@test complex([1.0,1.0],1.0) == [complex(1.0,1.0), complex(1.0,1.0)]
+@test complex.(1.0, [1.0, 1.0]) == [complex(1.0, 1.0), complex(1.0, 1.0)]
+@test complex.([1.0, 1.0], 1.0) == [complex(1.0, 1.0), complex(1.0, 1.0)]
 # robust division of Float64
 # hard complex divisions from Fig 6 of arxiv.1210.4539
 z7 = Complex{Float64}(3.898125604559113300e289, 8.174961907852353577e295)

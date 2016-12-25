@@ -629,11 +629,11 @@ end
 
 let x = spv_x1, x2 = spv_x2
     # complex
-    @test exact_equal(complex(x, x),
+    @test exact_equal(complex.(x, x),
         SparseVector(8, [2,5,6], [1.25+1.25im, -0.75-0.75im, 3.5+3.5im]))
-    @test exact_equal(complex(x, x2),
+    @test exact_equal(complex.(x, x2),
         SparseVector(8, [1,2,5,6,7], [3.25im, 1.25+4.0im, -0.75+0.0im, 3.5-5.5im, -6.0im]))
-    @test exact_equal(complex(x2, x),
+    @test exact_equal(complex.(x2, x),
         SparseVector(8, [1,2,5,6,7], [3.25+0.0im, 4.0+1.25im, -0.75im, -5.5+3.5im, -6.0+0.0im]))
 
     # real & imag
@@ -641,7 +641,7 @@ let x = spv_x1, x2 = spv_x2
     @test real(x) === x
     @test exact_equal(imag(x), spzeros(Float64, length(x)))
 
-    xcp = complex(x, x2)
+    xcp = complex.(x, x2)
     @test exact_equal(real(xcp), x)
     @test exact_equal(imag(xcp), x2)
 end
@@ -788,8 +788,8 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
     end
 end
 
-let x = complex(sprand(32, 0.6), sprand(32, 0.6)),
-    y = complex(sprand(32, 0.6), sprand(32, 0.6))
+let x = complex.(sprand(32, 0.6), sprand(32, 0.6)),
+    y = complex.(sprand(32, 0.6), sprand(32, 0.6))
     xf = Array(x)::Vector{Complex128}
     yf = Array(y)::Vector{Complex128}
     @test dot(x, x) ≈ dot(xf, xf)
@@ -857,9 +857,9 @@ let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
     @test y ≈ At_mul_B(Af, xf)
 end
 
-let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
-    x = complex(sprandn(8, 0.6), sprandn(8, 0.6)),
-    x2 = complex(sprandn(7, 0.75), sprandn(7, 0.75))
+let A = complex.(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
+    x = complex.(sprandn(8, 0.6), sprandn(8, 0.6)),
+    x2 = complex.(sprandn(7, 0.75), sprandn(7, 0.75))
     Af = Array(A)
     xf = Array(x)
     x2f = Array(x2)
@@ -887,9 +887,9 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
     @test Array(y) ≈ Af'x2f
 end
 
-let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
-    x = complex(sprandn(8, 0.6), sprandn(8, 0.6)),
-    x2 = complex(sprandn(7, 0.75), sprandn(7, 0.75))
+let A = complex.(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
+    x = complex.(sprandn(8, 0.6), sprandn(8, 0.6)),
+    x2 = complex.(sprandn(7, 0.75), sprandn(7, 0.75))
     Af = Array(A)
     xf = Array(x)
     x2f = Array(x2)
@@ -911,16 +911,16 @@ end
 let m = 10
     sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]
     sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round.(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
-    sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
+    sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex.(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
 
     sprmat = sprand(m, m, 0.2)
     sparsefloatmat = speye(m) + sprmat/(2m)
-    sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex(sprmat.nzval, sprmat.nzval)/(4m))
+    sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex.(sprmat.nzval, sprmat.nzval)/(4m))
     sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
 
     denseintmat = eye(Int, m)*10m + rand(1:m, m, m)
     densefloatmat = eye(m) + randn(m, m)/(2m)
-    densecomplexmat = eye(m) + complex(randn(m, m), randn(m, m))/(4m)
+    densecomplexmat = eye(m) + complex.(randn(m, m), randn(m, m))/(4m)
 
     inttypes = (Int32, Int64, BigInt)
     floattypes = (Float32, Float64, BigFloat)

@@ -15,7 +15,7 @@ import Base.LinAlg.BlasInt
         Ainit = randn(5,5)
         @testset for elty in (Float32, Float64, Complex64, Complex128)
             if elty == Complex64 || elty == Complex128
-                A = complex(Ainit, Ainit)
+                A = complex.(Ainit, Ainit)
             else
                 A = Ainit
             end
@@ -590,7 +590,7 @@ end
             if elty <: Real
                 A = convert(Matrix{elty}, randn(10,nn))
             else
-                A = convert(Matrix{elty}, complex(randn(10,nn),randn(10,nn)))
+                A = convert(Matrix{elty}, complex.(randn(10,nn),randn(10,nn)))
             end    ## LU (only equal for real because LAPACK uses different absolute value when choosing permutations)
             if elty <: Real
                 FJulia  = Base.LinAlg.generic_lufact!(copy(A))

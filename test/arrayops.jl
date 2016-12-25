@@ -1183,7 +1183,7 @@ end
 # Handle block matrices
 A = [randn(2,2) for i = 1:2, j = 1:2]
 @test issymmetric(A.'A)
-A = [complex(randn(2,2), randn(2,2)) for i = 1:2, j = 1:2]
+A = [complex.(randn(2,2), randn(2,2)) for i = 1:2, j = 1:2]
 @test ishermitian(A'A)
 
 # issue #7197

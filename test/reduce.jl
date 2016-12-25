@@ -60,7 +60,7 @@ a = sum(sin, z)
 z = [-4, -3, 2, 5]
 fz = float(z)
 a = randn(32) # need >16 elements to trigger BLAS code path
-b = complex(randn(32), randn(32))
+b = complex.(randn(32), randn(32))
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, Tuple{Any}, itr)

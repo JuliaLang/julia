@@ -8,8 +8,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
     U = randn(5,2)
     V = randn(5,2)
     if elty == Complex64 || elty == Complex128
-        U = complex(U, U)
-        V = complex(V, V)
+        U = complex.(U, U)
+        V = complex.(V, V)
     end
     U = convert(Array{elty, 2}, U)
     V = convert(Array{elty, 2}, V)
@@ -23,8 +23,8 @@ for elty in (Complex64, Complex128)
     U = randn(5,2)
     V = randn(5,2)
     if elty == Complex64 || elty == Complex128
-        U = complex(U, U)
-        V = complex(V, V)
+        U = complex.(U, U)
+        V = complex.(V, V)
     end
     U = convert(Array{elty, 2}, U)
     V = convert(Array{elty, 2}, V)
@@ -58,8 +58,8 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test BLAS.dot(x1,x2) ≈ sum(x1.*x2)
             @test_throws DimensionMismatch BLAS.dot(x1,rand(elty, n + 1))
         else
-            z1 = convert(Vector{elty}, complex(randn(n),randn(n)))
-            z2 = convert(Vector{elty}, complex(randn(n),randn(n)))
+            z1 = convert(Vector{elty}, complex.(randn(n),randn(n)))
+            z2 = convert(Vector{elty}, complex.(randn(n),randn(n)))
             @test BLAS.dotc(z1,z2) ≈ sum(conj(z1).*z2)
             @test BLAS.dotu(z1,z2) ≈ sum(z1.*z2)
             @test_throws DimensionMismatch BLAS.dotc(z1,rand(elty, n + 1))
@@ -71,7 +71,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
             x = convert(Vector{elty}, randn(n))
             @test BLAS.iamax(x) == indmax(abs.(x))
         else
-            z = convert(Vector{elty}, complex(randn(n),randn(n)))
+            z = convert(Vector{elty}, complex.(randn(n),randn(n)))
             @test BLAS.iamax(z) == indmax(map(x -> abs(real(x)) + abs(imag(x)), z))
         end
 
@@ -87,8 +87,8 @@ for elty in [Float32, Float64, Complex64, Complex128]
             @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 0:(div(n, 2) - 1))
             @test BLAS.axpy!(α,copy(x1),1:n,copy(x2),1:n) ≈ x2 + α*x1
         else
-            z1 = convert(Vector{elty}, complex(randn(n), randn(n)))
-            z2 = convert(Vector{elty}, complex(randn(n), randn(n)))
+            z1 = convert(Vector{elty}, complex.(randn(n), randn(n)))
+            z2 = convert(Vector{elty}, complex.(randn(n), randn(n)))
             α  = rand(elty)
             @test BLAS.axpy!(α, copy(z1), copy(z2)) ≈ z2 + α * z1
             @test_throws DimensionMismatch BLAS.axpy!(α, copy(z1), rand(elty, n + 1))

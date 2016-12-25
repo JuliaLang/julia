@@ -272,8 +272,8 @@ for elty in (Float64, Complex{Float64})
         A = randn(5, 5)
         b = randn(5)
     else
-        A = complex(randn(5, 5), randn(5, 5))
-        b = complex(randn(5), randn(5))
+        A = complex.(randn(5, 5), randn(5, 5))
+        b = complex.(randn(5), randn(5))
     end
     ADense = CHOLMOD.Dense(A)
     bDense = CHOLMOD.Dense(b)
@@ -312,8 +312,8 @@ p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float6
 @test CHOLMOD.free_sparse!(p)
 
 for elty in (Float64, Complex{Float64})
-    A1 = sparse([1:5, 1;], [1:5, 2;], elty == Float64 ? randn(6) : complex(randn(6), randn(6)))
-    A2 = sparse([1:5, 1;], [1:5, 2;], elty == Float64 ? randn(6) : complex(randn(6), randn(6)))
+    A1 = sparse([1:5, 1;], [1:5, 2;], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
+    A2 = sparse([1:5, 1;], [1:5, 2;], elty == Float64 ? randn(6) : complex.(randn(6), randn(6)))
     A1pd = A1'A1
     A1Sparse = CHOLMOD.Sparse(A1)
     A2Sparse = CHOLMOD.Sparse(A2)
@@ -654,7 +654,7 @@ end
 
 # Real factorization and complex rhs
 A = sprandn(5,5,0.4) |> t -> t't + I
-B = complex(randn(5,2), randn(5,2))
+B = complex.(randn(5,2), randn(5,2))
 @test cholfact(A)\B ≈ A\B
 
 # Make sure that ldltfact performs an LDLt (Issue #19032)
