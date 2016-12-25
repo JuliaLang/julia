@@ -288,7 +288,9 @@ else # !windows
 function realpath(path::AbstractString)
     p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
-    return unsafe_wrap(String, p, true)
+    str = unsafe_string(p)
+    Libc.free(p)
+    return str
 end
 end # os-test
 

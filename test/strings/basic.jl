@@ -245,7 +245,7 @@ end
 
 cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
-    @test unsafe_string(p) == "hello" == unsafe_wrap(String, cstrdup(p), true)
+    @test unsafe_string(p) == "hello"
     Libc.free(p)
 end
 
