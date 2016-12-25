@@ -60,6 +60,10 @@ This section lists changes that do not have deprecation warnings.
   * The array-scalar operations `div`, `mod`, `rem`, `&`, `|`, `xor`, `/`, `\`, `*`, `+`, and `-`
     now follow broadcast promotion rules ([#19692]).
 
+  * `rmprocs` now throws an exception if requested workers have not been completely
+    removed before `waitfor` seconds. With a `waitfor=0`, `rmprocs` returns immediately
+    without waiting for worker exits.
+
 Library improvements
 --------------------
 
