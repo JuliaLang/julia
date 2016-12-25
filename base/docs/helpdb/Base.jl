@@ -577,16 +577,16 @@ julia> ones(A)
  1  1
  1  1
 
- julia> ones(A, Float64)
+julia> ones(A, Float64)
 2×2 Array{Float64,2}:
- 1.  1.
- 1.  1.
+ 1.0  1.0
+ 1.0  1.0
 
- julia> ones(A, Bool, (3,))
- 3-element Array{Bool,1}:
-  true
-  true
-  true
+julia> ones(A, Bool, (3,))
+3-element Array{Bool,1}:
+ true
+ true
+ true
 ```
 See also [`zeros`](@ref), [`similar`](@ref).
 """
@@ -2726,16 +2726,16 @@ julia> zeros(A)
  0  0
  0  0
 
- julia> zeros(A, Float64)
+julia> zeros(A, Float64)
 2×2 Array{Float64,2}:
  0.0  0.0
  0.0  0.0
 
- julia> zeros(A, Bool, (3,))
- 3-element Array{Bool,1}:
-  false
-  false
-  false
+julia> zeros(A, Bool, (3,))
+3-element Array{Bool,1}:
+ false
+ false
+ false
 ```
 See also [`ones`](@ref), [`similar`](@ref).
 """

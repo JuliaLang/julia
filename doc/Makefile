@@ -41,15 +41,15 @@ pdf:
 
 linkcheck:
 	@echo "Checking external documentation links."
-	$(JULIA_EXECUTABLE) make.jl -- linkcheck strict
+	$(JULIA_EXECUTABLE) make.jl -- linkcheck
 	@echo "Checks finished."
 
 doctest:
 	@echo "Running all embedded 'doctests'."
-	$(JULIA_EXECUTABLE) make.jl -- doctest strict
+	$(JULIA_EXECUTABLE) make.jl -- doctest
 	@echo "Checks finished."
 
 check:
 	@echo "Running all embedded 'doctests' and checking external links."
-	$(JULIA_EXECUTABLE) make.jl -- doctest linkcheck strict
+	$(JULIA_EXECUTABLE) make.jl -- doctest linkcheck
 	@echo "Checks finished."
