@@ -1330,9 +1330,9 @@ end
         Aposzeros = setindex!(copy(A), 2, poszerosinds)
         Anegzeros = setindex!(copy(A), -2, negzerosinds)
         Abothsigns = setindex!(copy(Aposzeros), -2, negzerosinds)
-        map!(x -> x == 2 ? 0.0 : x, Aposzeros.nzval)
-        map!(x -> x == -2 ? -0.0 : x, Anegzeros.nzval)
-        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, Abothsigns.nzval)
+        map!(x -> x == 2 ? 0.0 : x, Aposzeros.nzval, Aposzeros.nzval)
+        map!(x -> x == -2 ? -0.0 : x, Anegzeros.nzval, Anegzeros.nzval)
+        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, Abothsigns.nzval, Abothsigns.nzval)
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(Awithzeros)) == A

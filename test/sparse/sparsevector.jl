@@ -1017,9 +1017,9 @@ let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegze
         vposzeros = setindex!(copy(v), 2, poszerosinds)
         vnegzeros = setindex!(copy(v), -2, negzerosinds)
         vbothsigns = setindex!(copy(vposzeros), -2, negzerosinds)
-        map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval)
-        map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval)
-        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval)
+        map!(x -> x == 2 ? 0.0 : x, vposzeros.nzval, vposzeros.nzval)
+        map!(x -> x == -2 ? -0.0 : x, vnegzeros.nzval, vnegzeros.nzval)
+        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, vbothsigns.nzval, vbothsigns.nzval)
         for vwithzeros in (vposzeros, vnegzeros, vbothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(vwithzeros)) == v

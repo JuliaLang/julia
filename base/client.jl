@@ -317,7 +317,8 @@ end
 function load_machine_file(path::AbstractString)
     machines = []
     for line in split(readstring(path),'\n'; keep=false)
-        s = map!(strip, split(line,'*'; keep=false))
+        s = split(line, '*'; keep = false)
+        map!(strip, s, s)
         if length(s) > 1
             cnt = isnumber(s[1]) ? parse(Int,s[1]) : Symbol(s[1])
             push!(machines,(s[2], cnt))
