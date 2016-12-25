@@ -35,12 +35,6 @@ do33 = ones(3)
         sqrfloatmat, colfloatmat = sprand(4, 4, 0.5), sprand(4, 1, 0.5)
         @test_throws DimensionMismatch (+)(sqrfloatmat, colfloatmat)
         @test_throws DimensionMismatch (-)(sqrfloatmat, colfloatmat)
-        # @test_throws DimensionMismatch min(sqrfloatmat, colfloatmat) # vectorized min no longer exists
-        # @test_throws DimensionMismatch max(sqrfloatmat, colfloatmat) # vectorized max no longer exists
-        sqrboolmat, colboolmat = sprand(Bool, 4, 4, 0.5), sprand(Bool, 4, 1, 0.5)
-        # @test_throws DimensionMismatch (&)(sqrboolmat, colboolmat) # vectorized & no longer exists
-        @test_throws DimensionMismatch (|)(sqrboolmat, colboolmat)
-        # @test_throws DimensionMismatch xor(sqrboolmat, colboolmat) # vectorized xor no longer exists
     end
 end
 
@@ -1509,8 +1503,8 @@ end
     @test broadcast(&, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
     @test typeof(broadcast(&, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test A13024 | B13024 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-    @test typeof(A13024 | B13024) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(|, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(broadcast(|, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
     @test broadcast(⊻, A13024, B13024) == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
     @test typeof(broadcast(⊻, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
@@ -1521,10 +1515,10 @@ end
     @test broadcast(min, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
     @test typeof(broadcast(min, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    for op in (+, -, |)
+    for op in (+, -)
         @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
     end
-    for op in (max, min, &, xor)
+    for op in (max, min, &, |, xor)
         @test op.(A13024, B13024) == op.(Array(A13024), Array(B13024))
     end
 end
