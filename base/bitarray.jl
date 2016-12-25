@@ -1296,17 +1296,12 @@ function (&)(B::BitArray, x::Bool)
 end
 (&)(x::Bool, B::BitArray) = B & x
 
-function (|)(B::BitArray, x::Bool)
-    x ? trues(size(B)) : copy(B)
-end
-(|)(x::Bool, B::BitArray) = B | x
-
 function xor(B::BitArray, x::Bool)
     x ? ~B : copy(B)
 end
 xor(x::Bool, B::BitArray) = xor(B, x)
 
-for f in (:&, :|, :xor)
+for f in (:&, :xor)
     @eval begin
         function ($f)(A::BitArray, B::BitArray)
             F = BitArray(promote_shape(size(A),size(B))...)
