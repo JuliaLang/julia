@@ -5,9 +5,10 @@ module HigherOrderFns
 # This module provides higher order functions specialized for sparse arrays,
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
 import Base: map, map!, broadcast, broadcast!
+import Base.Broadcast: containertype, promote_containertype, broadcast_indices, broadcast_c
 
-using Base: tail, to_shape
-using ..SparseArrays: SparseVector, SparseMatrixCSC, indtype
+using Base: front, tail, to_shape
+using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray, indtype
 
 # This module is organized as follows:
 # (1) Define a common interface to SparseVectors and SparseMatrixCSCs sufficient for
@@ -837,15 +838,48 @@ end
 
 
 # (9) broadcast[!] over combinations of broadcast scalars and sparse vectors/matrices
-#
-# TODO: The minimal snippet below is not satisfying: A better solution would achieve
-# the same for (1) all broadcast scalar types (Base.Broadcast.containertype(x) == Any?) and
-# (2) any combination (number, order, type mixture) of broadcast scalars.
-#
-broadcast{Tf}(f::Tf, x::Union{Number,Bool}, A::SparseMatrixCSC) = broadcast(y -> f(x, y), A)
-broadcast{Tf}(f::Tf, A::SparseMatrixCSC, y::Union{Number,Bool}) = broadcast(x -> f(x, y), A)
-# NOTE: The following two method definitions work around #19096. These definitions should
-# be folded into the two preceding definitions on resolution of #19096.
+
+# broadcast shape promotion for combinations of sparse arrays and other types
+broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
+# broadcast container type promotion for combinations of sparse arrays and other types
+containertype{T<:SparseVecOrMat}(::Type{T}) = AbstractSparseArray
+# combinations of sparse arrays with broadcast scalars should yield sparse arrays
+promote_containertype(::Type{Any}, ::Type{AbstractSparseArray}) = AbstractSparseArray
+promote_containertype(::Type{AbstractSparseArray}, ::Type{Any}) = AbstractSparseArray
+# combinations of sparse arrays with anything else should fall back to generic dense broadcast
+promote_containertype(::Type{Array}, ::Type{AbstractSparseArray}) = Array
+promote_containertype(::Type{Tuple}, ::Type{AbstractSparseArray}) = Array
+promote_containertype(::Type{AbstractSparseArray}, ::Type{Array}) = Array
+promote_containertype(::Type{AbstractSparseArray}, ::Type{Tuple}) = Array
+
+# broadcast entry point for combinations of sparse arrays and other types
+function broadcast_c(f, ::Type{AbstractSparseArray}, mixedargs...)
+    parevalf, passedargstup = capturescalars(f, mixedargs)
+    return broadcast(parevalf, passedargstup...)
+end
+# capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
+# broadcast scalar arguments (mixedargs), and returns a function (parevalf) and a reduced
+# argument tuple (passedargstup) containing only the sparse vectors/matrices in mixedargs
+# in their orginal order, and such that the result of broadcast(g, passedargstup...) is
+# broadcast(f, mixedargs...)
+capturescalars(f, mixedargs) =
+    capturescalars((passed, tofill) -> f(tofill...), (), mixedargs...)
+# Recursion cases for capturescalars
+capturescalars(f, passedargstup, scalararg, mixedargs...) =
+    capturescalars(capturescalar(f, scalararg), passedargstup, mixedargs...)
+capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat, mixedargs...) =
+    capturescalars(passnonscalar(f), (passedargstup..., nonscalararg), mixedargs...)
+passnonscalar(f) = (passed, tofill) -> f(Base.front(passed), (last(passed), tofill...))
+capturescalar(f, scalararg) = (passed, tofill) -> f(passed, (scalararg, tofill...))
+# Base cases for capturescalars
+capturescalars(f, passedargstup, scalararg) =
+    (capturelastscalar(f, scalararg), passedargstup)
+capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat) =
+    (passlastnonscalar(f), (passedargstup..., nonscalararg))
+passlastnonscalar(f) = (passed...) -> f(Base.front(passed), (last(passed),))
+capturelastscalar(f, scalararg) = (passed...) -> f(passed, (scalararg,))
+
+# NOTE: The following two method definitions work around #19096.
 broadcast{Tf,T}(f::Tf, ::Type{T}, A::SparseMatrixCSC) = broadcast(y -> f(T, y), A)
 broadcast{Tf,T}(f::Tf, A::SparseMatrixCSC, ::Type{T}) = broadcast(x -> f(x, T), A)
 
