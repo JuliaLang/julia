@@ -5,7 +5,8 @@ module HigherOrderFns
 # This module provides higher order functions specialized for sparse arrays,
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
 import Base: map, map!, broadcast, broadcast!
-import Base.Broadcast: containertype, promote_containertype, broadcast_indices, broadcast_c
+import Base.Broadcast: containertype, promote_containertype,
+    broadcast_indices, broadcast_c, broadcast_c!
 
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseArray, indtype
@@ -852,10 +853,14 @@ promote_containertype(::Type{Tuple}, ::Type{AbstractSparseArray}) = Array
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Array}) = Array
 promote_containertype(::Type{AbstractSparseArray}, ::Type{Tuple}) = Array
 
-# broadcast entry point for combinations of sparse arrays and other types
-function broadcast_c(f, ::Type{AbstractSparseArray}, mixedargs...)
+# broadcast[!] entry points for combinations of sparse arrays and other types
+@inline function broadcast_c{N}(f, ::Type{AbstractSparseArray}, mixedargs::Vararg{Any,N})
     parevalf, passedargstup = capturescalars(f, mixedargs)
     return broadcast(parevalf, passedargstup...)
+end
+@inline function broadcast_c!{N}(f, ::Type{AbstractSparseArray}, dest::SparseVecOrMat, mixedsrcargs::Vararg{Any,N})
+    parevalf, passedsrcargstup = capturescalars(f, mixedsrcargs)
+    return broadcast!(parevalf, dest, passedsrcargstup...)
 end
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
 # broadcast scalar arguments (mixedargs), and returns a function (parevalf) and a reduced
