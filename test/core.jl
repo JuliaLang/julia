@@ -3364,25 +3364,6 @@ typealias PossiblyInvalidUnion{T} Union{T,Int}
 @test Symbol("x") === Symbol("x")
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
-# normalization of Unicode symbols (#19464)
-let ε=1, μ=2, x=3, î=4
-    # issue #5434 (mu vs micro):
-    @test parse("\u00b5") === parse("\u03bc")
-    @test µ == μ == 2
-    # NFC normalization of identifiers:
-    @test parse("\u0069\u0302") === parse("\u00ee")
-    @test î == 4
-    # fullwidth punctuation and symbols (#5903):
-    @test parse("\uff58") === parse("\u0078")
-    @test parse("\uff1d\uff1d") === parse("\u003d\u003d")
-    @test ｘ ＝＝ x == 3
-    @test UInt16('ｘ') == 0xff58
-    @test （１１．５ｅ０） === 11.5
-    # latin vs greek ε (#14751)
-    @test parse("\u025B") === parse("\u03B5")
-    @test ɛ == ε == 1
-end
-
 # issue #13007
 call13007{T,N}(::Type{Array{T,N}}) = 0
 call13007(::Type{Array}) = 1
