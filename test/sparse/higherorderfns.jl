@@ -202,6 +202,57 @@ end
     @test broadcast(stringorfloatzero, speye(4)) == sparse(broadcast(stringorfloatzero, eye(4)))
 end
 
+@testset "broadcast over combinations of scalars and sparse vectors/matrices" begin
+    N, M, p = 10, 12, 0.3
+    elT = Float64
+    s = elT(2.0)
+    V = sprand(elT, N, p)
+    A = sprand(elT, N, M, p)
+    fV, fA = Array(V), Array(A)
+    # test combinations involving one to three scalars and one to five sparse vectors/matrices
+    spargseq, dargseq = Iterators.cycle((A, V)), Iterators.cycle((fA, fV))
+    for nargs in 1:5 # number of tensor arguments
+        nargsl = cld(nargs, 2) # number in "left half" of tensor arguments
+        nargsr = fld(nargs, 2) # number in "right half" of tensor arguments
+        spargsl = tuple(Iterators.take(spargseq, nargsl)...) # "left half" of tensor args
+        spargsr = tuple(Iterators.take(spargseq, nargsr)...) # "right half" of tensor args
+        dargsl = tuple(Iterators.take(dargseq, nargsl)...) # "left half" of tensor args, densified
+        dargsr = tuple(Iterators.take(dargseq, nargsr)...) # "right half" of tensor args, densified
+        for (sparseargs, denseargs) in ( # argument combinations including scalars
+                # a few combinations involving one scalar
+                ((s, spargsl..., spargsr...), (s, dargsl..., dargsr...)),
+                ((spargsl..., s, spargsr...), (dargsl..., s, dargsr...)),
+                ((spargsl..., spargsr..., s), (dargsl..., dargsr..., s)),
+                # a few combinations involving two scalars
+                ((s, spargsl..., s, spargsr...), (s, dargsl..., s, dargsr...)),
+                ((s, spargsl..., spargsr..., s), (s, dargsl..., dargsr..., s)),
+                ((spargsl..., s, spargsr..., s), (dargsl..., s, dargsr..., s)),
+                ((s, s, spargsl..., spargsr...), (s, s, dargsl..., dargsr...)),
+                ((spargsl..., s, s, spargsr...), (dargsl..., s, s, dargsr...)),
+                ((spargsl..., spargsr..., s, s), (dargsl..., dargsr..., s, s)),
+                # a few combinations involving three scalars
+                ((s, spargsl..., s, spargsr..., s), (s, dargsl..., s, dargsr..., s)),
+                ((s, spargsl..., s, s, spargsr...), (s, dargsl..., s, s, dargsr...)),
+                ((spargsl..., s, s, spargsr..., s), (dargsl..., s, s, dargsr..., s)),
+                ((spargsl..., s, s, s, spargsr...), (dargsl..., s, s, s, dargsr...)), )
+            @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
+            @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+        end
+    end
+    # test combinations at the limit of inference (eight arguments net)
+    for (sparseargs, denseargs) in (
+            ((s, s, s, A, s, s, s, s), (s, s, s, fA, s, s, s, s)), # seven scalars, one sparse matrix
+            ((s, s, V, s, s, A, s, s), (s, s, fV, s, s, fA, s, s)), # six scalars, two sparse vectors/matrices
+            ((s, s, V, s, A, s, V, s), (s, s, fV, s, fA, s, fV, s)), # five scalars, three sparse vectors/matrices
+            ((s, V, s, A, s, V, s, A), (s, fV, s, fA, s, fV, s, fA)), # four scalars, four sparse vectors/matrices
+            ((s, V, A, s, V, A, s, A), (s, fV, fA, s, fV, fA, s, fA)), # three scalars, five sparse vectors/matrices
+            ((V, A, V, s, A, V, A, s), (fV, fA, fV, s, fA, fV, fA, s)), # two scalars, six sparse vectors/matrices
+            ((V, A, V, A, s, V, A, V), (fV, fA, fV, fA, s, fV, fA, fV)) ) # one scalar, seven sparse vectors/matrices
+        @test broadcast(*, sparseargs...) == sparse(broadcast(*, denseargs...))
+        @test isa(@inferred(broadcast(*, sparseargs...)), SparseMatrixCSC{elT})
+    end
+end
+
 # Older tests of sparse broadcast, now largely covered by the tests above
 @testset "assorted tests of sparse broadcast over two input arguments" begin
     N, p = 10, 0.3
