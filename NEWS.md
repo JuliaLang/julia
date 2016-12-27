@@ -54,7 +54,11 @@ This section lists changes that do not have deprecation warnings.
     arrays ([#18965]).
   * `broadcast` now handles missing data (`Nullable`s) allowing operations to
     be lifted over `Nullable`s, as if the `Nullable` were like an array with
-    zero or one element. ([#16961]).
+    zero or one element. ([#16961]). Note that many situations where `Nullable`
+    types had been treated like scalars before will no longer work. For
+    example, `get.(xs)` on `xs::Array{T <: Nullable}` will now treat the
+    nullables as a container, and attempt to operate on the data contained.
+    This use case will need to be migrated to `map(get, xs)`.
 
   * The runtime now enforces when new method definitions can take effect ([#17057]).
     The flip-side of this is that new method definitions should now reliably actually
