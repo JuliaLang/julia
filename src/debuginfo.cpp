@@ -1138,6 +1138,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #elif defined(_OS_WINDOWS_)
     iswindows = 1;
 #endif
+    (void)iswindows;
 
 #if JL_LLVM_VERSION < 30500
     if (iswindows) {

@@ -1334,7 +1334,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     else {
         oldvalue = check_ambiguous_matches(mt->defs, newentry);
         if (mt->backedges) {
-            jl_value_t **backedges = jl_array_data(mt->backedges);
+            jl_value_t **backedges = (jl_value_t**)jl_array_data(mt->backedges);
             size_t i, na = jl_array_len(mt->backedges);
             size_t ins = 0;
             for (i = 1; i < na; i += 2) {
@@ -1393,7 +1393,7 @@ void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args, size_t
             jl_value_t *f;
             jl_value_t *args;
             size_t world;
-        } *pe = (void*)e,
+        } *pe = (struct jl_method_error*)e,
            ee = {f, args, world};
         *pe = ee;
         jl_throw(e);
