@@ -4,6 +4,13 @@
 isnull_oftype(x::Nullable, T::Type) = eltype(x) == T && isnull(x)
 isnull_oftype(T::Type) = x -> isnull_oftype(x, T)
 
+# return true if nullables (or arrays of nullables) have the same type,
+# nullity, and value (if they are non-null)
+istypeequal(x::Nullable, y::Nullable) =
+    typeof(x) == typeof(y) && isnull(filter(!, x .== y))
+istypeequal(x::AbstractArray, y::AbstractArray) =
+    length(x) == length(y) && all(xy -> istypeequal(xy...), zip(x, y))
+
 types = [
     Bool,
     Float16,
@@ -393,6 +400,18 @@ end
 @test Base.promote_op(-, Nullable{Float64}, Nullable{Int}) == Nullable{Float64}
 @test Base.promote_op(-, Nullable{DateTime}, Nullable{DateTime}) == Nullable{Base.Dates.Millisecond}
 
+# tests for istypeequal (which uses filter, broadcast)
+@test istypeequal(Nullable(0), Nullable(0))
+@test !istypeequal(Nullable(0), Nullable(0.0))
+@test !istypeequal(Nullable(0), Nullable(1))
+@test !istypeequal(Nullable(0), Nullable(1.0))
+@test istypeequal([Nullable(0), Nullable(1)], [Nullable(0), Nullable(1)])
+@test istypeequal([Nullable(0), Nullable(1)], Any[Nullable(0), Nullable(1)])
+@test !istypeequal([Nullable(0), Nullable(1)], Any[Nullable(0.0), Nullable(1)])
+@test !istypeequal([Nullable(0), Nullable(1)], [Nullable(0), Nullable(2)])
+@test !istypeequal([Nullable(0), Nullable(1)],
+                   [Nullable(0), Nullable(1), Nullable(2)])
+
 # filter
 for p in (_ -> true, _ -> false)
     @test @inferred(filter(p, Nullable()))      |> isnull_oftype(Union{})
@@ -489,46 +508,46 @@ end
     @inferred(broadcast(+, 1, 2, Nullable(3), Nullable(4.0), Nullable(1//2)))
 
 # broadcasting for arrays
-@test isequal(@inferred(broadcast(+, [1, 2, 3], Nullable{Int}(1))),
-              Nullable{Int}[2, 3, 4])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[1, 2, 3], 1)),
-              Nullable{Int}[2, 3, 4])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[1, 2, 3], Nullable(1))),
-              Nullable{Int}[2, 3, 4])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[1, Nullable()], Nullable(1))),
-              Nullable{Int}[2, Nullable()])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
-                                     Nullable{Int}())),
-              Nullable{Int}[Nullable(), Nullable()])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
-                                     Nullable{Int}[1, Nullable()])),
-              Nullable{Int}[Nullable(), Nullable()])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
-                                     Nullable{Int}[Nullable(), 1])),
-              Nullable{Int}[Nullable(), 2])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), Nullable()],
-                                     Nullable{Int}[1, 2])),
-              Nullable{Int}[Nullable(), Nullable()])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
-                                     Nullable{Int}[1])),
-              Nullable{Int}[Nullable(), 2])
-@test isequal(@inferred(broadcast(+, Nullable{Float64}[1.0, 2.0],
-                                     Nullable{Float64}[1.0 2.0; 3.0 4.0])),
-              Nullable{Float64}[2.0 3.0; 5.0 6.0])
-@test isequal(@inferred(broadcast(+, Nullable{Int}[1, 2], [1, 2], 1)),
-              Nullable{Int}[3, 5])
+@test istypeequal(@inferred(broadcast(+, [1, 2, 3], Nullable{Int}(1))),
+                  Nullable{Int}[2, 3, 4])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[1, 2, 3], 1)),
+                  Nullable{Int}[2, 3, 4])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[1, 2, 3], Nullable(1))),
+                  Nullable{Int}[2, 3, 4])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[1, Nullable()], Nullable(1))),
+                  Nullable{Int}[2, Nullable()])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
+                                         Nullable{Int}())),
+                  Nullable{Int}[Nullable(), Nullable()])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
+                                         Nullable{Int}[1, Nullable()])),
+                  Nullable{Int}[Nullable(), Nullable()])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
+                                         Nullable{Int}[Nullable(), 1])),
+                  Nullable{Int}[Nullable(), 2])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), Nullable()],
+                                         Nullable{Int}[1, 2])),
+                  Nullable{Int}[Nullable(), Nullable()])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
+                                         Nullable{Int}[1])),
+                  Nullable{Int}[Nullable(), 2])
+@test istypeequal(@inferred(broadcast(+, Nullable{Float64}[1.0, 2.0],
+                                         Nullable{Float64}[1.0 2.0; 3.0 4.0])),
+                  Nullable{Float64}[2.0 3.0; 5.0 6.0])
+@test istypeequal(@inferred(broadcast(+, Nullable{Int}[1, 2], [1, 2], 1)),
+                  Nullable{Int}[3, 5])
 
-@test isequal(@inferred(broadcast(/, 1, Nullable{Int}[1, 2, 4])),
-              Nullable{Float64}[1.0, 0.5, 0.25])
-@test isequal(@inferred(broadcast(muladd, Nullable(2), 42,
-                                  [Nullable(1337), Nullable{Int}()])),
-              Nullable{Int}[1421, Nullable()])
+@test istypeequal(@inferred(broadcast(/, 1, Nullable{Int}[1, 2, 4])),
+                  Nullable{Float64}[1.0, 0.5, 0.25])
+@test istypeequal(@inferred(broadcast(muladd, Nullable(2), 42,
+                                      [Nullable(1337), Nullable{Int}()])),
+                  Nullable{Int}[1421, Nullable()])
 
 # heterogenous types (not inferrable)
-@test isequal(broadcast(+, Any[1, 1.0], Nullable(1//2)),
-              [Nullable(3//2), 1.5])
-@test isequal(broadcast(+, Any[Nullable(1) Nullable(1.0)], Nullable(big"1")),
-              [Nullable(big"2") Nullable(big"2.0")])
+@test istypeequal(broadcast(+, Any[1, 1.0], Nullable(1//2)),
+                  Any[Nullable(3//2), Nullable(1.5)])
+@test istypeequal(broadcast(+, Any[Nullable(1) Nullable(1.0)], Nullable(big"1")),
+                  Any[Nullable(big"2") Nullable(big"2.0")])
 
 # test fast path taken
 for op in (+, *, -)
