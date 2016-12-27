@@ -70,9 +70,8 @@ broadcast_indices() = ()
 broadcast_indices(A) = broadcast_indices(containertype(A), A)
 broadcast_indices(::Union{Type{Any}, Type{Nullable}}, A) = ()
 broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
-broadcast_indices(::Type{Array}, A) = indices(A)
 broadcast_indices(::Type{Array}, A::Ref) = ()
-broadcast_indices(::Union{Type{Array}, Type{Array{Nullable}}}, A) = indices(A)
+broadcast_indices{T<:Array}(::Type{T}, A) = indices(A)
 @inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
