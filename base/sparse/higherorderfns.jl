@@ -863,26 +863,26 @@ end
     return broadcast!(parevalf, dest, passedsrcargstup...)
 end
 # capturescalars takes a function (f) and a tuple of mixed sparse vectors/matrices and
-# broadcast scalar arguments (mixedargs), and returns a function (parevalf) and a reduced
-# argument tuple (passedargstup) containing only the sparse vectors/matrices in mixedargs
-# in their orginal order, and such that the result of broadcast(g, passedargstup...) is
-# broadcast(f, mixedargs...)
-capturescalars(f, mixedargs) =
+# broadcast scalar arguments (mixedargs), and returns a function (parevalf, i.e. partially
+# evaluated f) and a reduced argument tuple (passedargstup) containing only the sparse
+# vectors/matrices in mixedargs in their orginal order, and such that the result of
+# broadcast(parevalf, passedargstup...) is broadcast(f, mixedargs...)
+@inline capturescalars(f, mixedargs) =
     capturescalars((passed, tofill) -> f(tofill...), (), mixedargs...)
 # Recursion cases for capturescalars
-capturescalars(f, passedargstup, scalararg, mixedargs...) =
+@inline capturescalars(f, passedargstup, scalararg, mixedargs...) =
     capturescalars(capturescalar(f, scalararg), passedargstup, mixedargs...)
-capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat, mixedargs...) =
+@inline capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat, mixedargs...) =
     capturescalars(passnonscalar(f), (passedargstup..., nonscalararg), mixedargs...)
-passnonscalar(f) = (passed, tofill) -> f(Base.front(passed), (last(passed), tofill...))
-capturescalar(f, scalararg) = (passed, tofill) -> f(passed, (scalararg, tofill...))
+@inline passnonscalar(f) = (passed, tofill) -> f(Base.front(passed), (last(passed), tofill...))
+@inline capturescalar(f, scalararg) = (passed, tofill) -> f(passed, (scalararg, tofill...))
 # Base cases for capturescalars
-capturescalars(f, passedargstup, scalararg) =
+@inline capturescalars(f, passedargstup, scalararg) =
     (capturelastscalar(f, scalararg), passedargstup)
-capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat) =
+@inline capturescalars(f, passedargstup, nonscalararg::SparseVecOrMat) =
     (passlastnonscalar(f), (passedargstup..., nonscalararg))
-passlastnonscalar(f) = (passed...) -> f(Base.front(passed), (last(passed),))
-capturelastscalar(f, scalararg) = (passed...) -> f(passed, (scalararg,))
+@inline passlastnonscalar(f) = (passed...) -> f(Base.front(passed), (last(passed),))
+@inline capturelastscalar(f, scalararg) = (passed...) -> f(passed, (scalararg,))
 
 # NOTE: The following two method definitions work around #19096.
 broadcast{Tf,T}(f::Tf, ::Type{T}, A::SparseMatrixCSC) = broadcast(y -> f(T, y), A)
