@@ -46,7 +46,6 @@ function getindex(x::Number, I::Integer...)
     @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
     x
 end
-getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
 first(x::Number) = x
 last(x::Number) = x
 copy(x::Number) = x  # some code treats numbers as collection-like

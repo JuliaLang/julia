@@ -320,7 +320,7 @@ A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
-@test parentindexes(sA) == (2:2, 1:5, :)
+@test parentindexes(sA) == (2:2, 1:5, Base.Slice(1:8))
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test indices(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))
@@ -376,7 +376,7 @@ sB = view(B, 2:3, 2:3)
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
-@test parentindexes(sA) == (2, :, 1:8)
+@test parentindexes(sA) == (2, Base.Slice(1:5), 1:8)
 @test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test indices(sA) === (Base.OneTo(5), Base.OneTo(8))
