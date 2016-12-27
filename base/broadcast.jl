@@ -359,16 +359,28 @@ end
 """
     broadcast(f, As...)
 
-Broadcasts the arrays, tuples, `Ref` and/or scalars `As` to a container of the
-appropriate type and dimensions. In this context, anything that is not a
-subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple` is considered
-a scalar. The resulting container is established by the following rules:
+Broadcasts the arrays, tuples, `Ref`, nullables, and/or scalars `As` to a
+container of the appropriate type and dimensions. In this context, anything
+that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple`,
+or `Nullable` is considered a scalar. The resulting container is established by
+the following rules:
 
  - If all the arguments are scalars, it returns a scalar.
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
  - If there is at least an array or a `Ref` in the arguments, it returns an array
    (and treats any `Ref` as a 0-dimensional array of its contents and any tuple
    as a 1-dimensional array) expanding singleton dimensions.
+
+The following additional rules apply to `Nullable` arguments:
+
+ - If there is at least a `Nullable`, and all the arguments are scalars or
+   `Nullable`, it returns a `Nullable`.
+ - If there is at least an array or a `Ref` with `Nullable` entries, or there
+   is at least an array or a `Ref` (perhaps with scalar entries instead of
+   `Nullable` entries) and a nullable, then the result is an array of
+   `Nullable` entries.
+ - If there is a tuple and a nullable, the result is an error, as this case is
+   not currently supported.
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
@@ -426,6 +438,28 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
  "two: 2"
  "three: 3"
  "four: 4"
+
+julia> Nullable("X") .* "Y"
+Nullable{String}("XY")
+
+julia> broadcast(/, 1.0, Nullable(2.0))
+Nullable{Float64}(0.5)
+
+julia> [Nullable(1), Nullable(2), Nullable()] .* 3
+3-element Array{Nullable{Int64},1}:
+ 3
+ 6
+ #NULL
+
+julia> [1+im, 2+2im, 3+3im] ./ Nullable{Int}()
+3-element Array{Nullable{Complex{Float64}},1}:
+ #NULL
+ #NULL
+ #NULL
+
+julia> Ref(7) .+ Nullable(3)
+0-dimensional Array{Nullable{Int64},0}:
+10
 ```
 """
 @inline broadcast(f, A, Bs...) = broadcast_c(f, containertype(A, Bs...), A, Bs...)
