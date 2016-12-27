@@ -1125,6 +1125,39 @@ eval(Base.Dates, quote
      recur{T<:TimeType}(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000) = recur(fun, start:step:stop; negate=negate)
 end)
 
+# Index conversions revamp; #19730
+function getindex(A::LogicalIndex, i::Int)
+    depwarn("indexing into logical indices is deprecated; use iteration or collect the indices into an array instead.", :getindex)
+    checkbounds(A, i)
+    first(Iterators.drop(A, i-1))
+end
+function to_indexes(I...)
+    depwarn("to_indexes is deprecated; pass both the source array and tuple of indices to `to_indices(A, I)` instead.", :to_indexes)
+    map(_to_index, I)
+end
+_to_index(i) = to_index(I)
+_to_index(c::Colon) = c
+function getindex(::Colon, i)
+    depwarn("indexing into Colons is deprecated; convert Colons to Slices with to_indices", :getindex)
+    to_index(i)
+end
+function unsafe_getindex(::Colon, i::Integer)
+    depwarn("indexing into Colons is deprecated; convert Colons to Slices with to_indices", :unsafe_getindex)
+    to_index(i)
+end
+function step(::Colon)
+    depwarn("step(::Colon) is deprecated; convert Colons to Slices with to_indices", :step)
+    1
+end
+function isempty(::Colon)
+    depwarn("isempty(::Colon) is deprecated; convert Colons to Slices with to_indices", :isempty)
+    false
+end
+function in(::Integer, ::Colon)
+    depwarn("in(::Integer, ::Colon) is deprecated; convert Colons to Slices with to_indices", :in)
+    true
+end
+
 # #18931
 @deprecate cummin(A, dim=1) accumulate(min, A, dim)
 @deprecate cummax(A, dim=1) accumulate(max, A, dim)
