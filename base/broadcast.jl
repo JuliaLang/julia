@@ -21,7 +21,6 @@ broadcast_array_type(A, As...) =
     end
 
 # fallbacks for some special cases
-broadcast(f) = f()
 @inline broadcast(f, x::Number...) = f(x...)
 @inline broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
 @inline broadcast(f, As::AbstractArray...) =
@@ -300,25 +299,26 @@ ftype(T::Type, A...) = Type{T}
 
 # nullables need to be treated like scalars sometimes and like containers
 # other times, so there are two variants of typestuple.
-immutable NullableIsScalar end
-immutable NullableIsContainer end
 
-typestuple(::Any, a) = (Base.@_pure_meta; Tuple{eltype(a)})
-typestuple(::NullableIsScalar, a::Nullable) = (Base.@_pure_meta; Tuple{typeof(a)})
-typestuple(::Any, T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
-typestuple(g, a, b...) = (Base.@_pure_meta; Tuple{typestuple(g, a).types..., typestuple(g, b...).types...})
+# if the first argument is Any, then Nullable should be treated like a
+# scalar; if the first argument is Array, then Nullable should be treated
+# like a container.
+typestuple(::Type, a) = (Base.@_pure_meta; Tuple{eltype(a)})
+typestuple(::Type{Any}, a::Nullable) = (Base.@_pure_meta; Tuple{typeof(a)})
+typestuple(::Type, T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
+typestuple{T}(::Type{T}, a, b...) = (Base.@_pure_meta; Tuple{typestuple(T, a).types..., typestuple(T, b...).types...})
 
 # these functions take the variant of typestuple to be used as first argument
-ziptype(g, A) = typestuple(g, A)
-ziptype(g, A, B) = (Base.@_pure_meta; Iterators.Zip2{typestuple(g, A), typestuple(g, B)})
-@inline ziptype(g, A, B, C, D...) = Iterators.Zip{typestuple(g, A), ziptype(g, B, C, D...)}
+ziptype{T}(::Type{T}, A) = typestuple(T, A)
+ziptype{T}(::Type{T}, A, B) = (Base.@_pure_meta; Iterators.Zip2{typestuple(T, A), typestuple(T, B)})
+@inline ziptype{T}(::Type{T}, A, B, C, D...) = Iterators.Zip{typestuple(T, A), ziptype(T, B, C, D...)}
 
-_broadcast_type(g, f, T::Type, As...) = Base._return_type(f, typestuple(g, T, As...))
-_broadcast_type(g, f, A, Bs...) = Base._default_eltype(Base.Generator{ziptype(g, A, Bs...), ftype(f, A, Bs...)})
+_broadcast_type{S}(::Type{S}, f, T::Type, As...) = Base._return_type(S, typestuple(S, T, As...))
+_broadcast_type{T}(::Type{T}, f, A, Bs...) = Base._default_eltype(Base.Generator{ziptype(T, A, Bs...), ftype(f, A, Bs...)})
 
 # broadcast methods that dispatch on the type of the final container
 @inline function broadcast_c(f, ::Type{Array}, A, Bs...)
-    T = _broadcast_type(NullableIsScalar(), f, A, Bs...)
+    T = _broadcast_type(Any, f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
     if isleaftype(T)
@@ -343,7 +343,7 @@ function broadcast_c(f, ::Type{Tuple}, As...)
 end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
-    S = _broadcast_type(NullableIsContainer(), f, a...)
+    S = _broadcast_type(Array, f, a...)
     if isleaftype(S) && null_safe_eltype_op(f, a...)
         Nullable{S}(f(map(unsafe_get, a)...), nonnull)
     else
