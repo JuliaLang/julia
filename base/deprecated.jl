@@ -1168,6 +1168,29 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
     end
 end
 
+# #19700:
+function depnumberindex(x)
+    depwarn("treating numbers as 0-dimensional arrays is deprecated", :depnumberindex)
+    return x
+end
+size(x::Number) = depnumberindex(())
+size(x::Number,d) = depnumberindex(convert(Int,d)<1 ? throw(BoundsError()) : 1)
+indices(x::Number) = depnumberindex(())
+indices(x::Number,d) = depnumberindex(convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1))
+ndims(x::Number) = depnumberindex(0)
+ndims{T<:Number}(::Type{T}) = depnumberindex(0)
+endof(x::Number) = depnumberindex(1)
+getindex(x::Number) = depnumberindex(x)
+function getindex(x::Number, i::Integer)
+    @boundscheck i == 1 || throw(BoundsError())
+    depnumberindex(x)
+end
+function getindex(x::Number, I::Integer...)
+    @boundscheck all([i == 1 for i in I]) || throw(BoundsError())
+    depnumberindex(x)
+end
+getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
+
 # Deprecate vectorized xor in favor of compact broadcast syntax
 @deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
 @deprecate xor(A::BitArray, b::Bool)                xor.(A, b)
