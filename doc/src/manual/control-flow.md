@@ -883,7 +883,7 @@ julia> consume(p)
 One way to think of this behavior is that `producer` was able to return multiple times. Between
 calls to [`produce()`](@ref), the producer's execution is suspended and the consumer has control.
 
-A Task can be used as an iterable object in a `for` loop, in which case the loop variable takes
+A [`Task`](@ref) can be used as an iterable object in a `for` loop, in which case the loop variable takes
 on all the produced values:
 
 ```julia
@@ -967,7 +967,7 @@ or [`@async`](@ref) macros (see [Parallel Computing](@ref) for more details).
 
 ### Task states
 
-Tasks have a `state` field that describes their execution status. A task state is one of the following
+Tasks have a `state` field that describes their execution status. A [`Task`](@ref) `state` is one of the following
 symbols:
 
 | Symbol      | Meaning                                            |
