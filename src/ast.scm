@@ -195,7 +195,9 @@
       (cadr (caddr e))
       e))
 
-(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)))
+(define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)
+                        (not (eq? o '|.|))
+                        (not (eqv? (string.char (string o) 1) #\.))))
 
 ; convert '.xx to 'xx
 (define (undotop op)
@@ -207,7 +209,9 @@
 (define (maybe-undotop e)
   (if (symbol? e)
       (let ((str (string e)))
-        (if (eqv? (string.char str 0) #\.)
+        (if (and (eqv? (string.char str 0) #\.)
+                 (not (eq? e '|.|))
+                 (not (eqv? (string.char str 1) #\.)))
             (symbol (string.sub str 1 (length str)))
             #f))
       (if (pair? e)

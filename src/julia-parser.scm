@@ -108,8 +108,7 @@
 (define dot-opchar? (Set
                      (delete-duplicates
                       (map (lambda (op) (string.char (string op) 1))
-                           (filter (lambda (op) (and (dotop? op) (not (eq? op '|.|))))
-                                   operators)))))
+                           (cons `|..| (filter dotop? operators))))))
 (define operator? (Set operators))
 
 (define initial-reserved-words '(begin while if for try return break continue
