@@ -565,6 +565,19 @@ end
 For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
 any element type for which `dot` is defined), compute the Euclidean dot product (the sum of
 `dot(x[i],y[i])`) as if they were vectors.
+
+# Examples
+```jldoctest
+julia> vecdot(1:5, 2:6)
+70
+
+julia> x = fill(2., (5,5));
+
+julia> y = fill(3., (5,5));
+
+julia> vecdot(x, y)
+150.0
+```
 """
 function vecdot(x, y) # arbitrary iterables
     ix = start(x)
