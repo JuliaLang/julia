@@ -1525,6 +1525,16 @@ let io = IOBuffer()
     @test String(take!(io)) == "bbb"
 end
 
+# julia#17510
+let x = [1,2,3]
+    @compat x .= [3,4,5]
+    @test x == [3,4,5]
+    @compat x .= x .== 4
+    @test x == [0,1,0]
+    @compat x .= 7
+    @test x == [7,7,7]
+end
+
 let s = "Koala test: 🐨"
     @test transcode(UInt16, s) == UInt16[75,111,97,108,97,32,116,101,115,116,58,32,55357,56360]
     @test transcode(UInt32, s) == UInt32[75,111,97,108,97,32,116,101,115,116,58,32,128040]

@@ -62,6 +62,11 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat Nullable(value, hasvalue)` to handle the switch from the `Nullable` `:isnull` field to `:hasvalue` field. [#18510](https://github.com/JuliaLang/julia/pull/18510)
 
+* `@compat x .= y` converts to an in-place assignment to `x` (via `broadcast!`) [#17510](https://github.com/JuliaLang/julia/pull/17510).
+  However, beware that `.=` in Julia 0.4 has the precedence of `==`, not of assignment `=`, so if the right-hand-side `y`
+  includes expressions with lower precedence than `==` you should enclose it in parentheses `x .= (y)` to ensure the
+  correct order of evaluation.
+
 ## Type Aliases
 
 * `String` has undergone multiple changes: in Julia 0.3 it was an abstract type and then got renamed to `AbstractString` in 0.4; in 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.

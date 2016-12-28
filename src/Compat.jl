@@ -708,6 +708,12 @@ function _compat(ex::Expr)
                 import Base.writemime
             end
         end
+    elseif VERSION < v"0.5.0-dev+5575" && isexpr(ex, :comparison) #17510
+        if length(ex.args) == 3 && ex.args[2] == :.=
+            return :(Base.broadcast!(Base.identity, $(_compat(ex.args[1])), $(_compat(ex.args[3]))))
+        elseif length(ex.args) > 3 && ex.args[2] == :.=
+            return :(Base.broadcast!(Base.identity, $(_compat(ex.args[1])), $(_compat(Expr(:comparison, ex.args[3:end]...)))))
+        end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
 end
