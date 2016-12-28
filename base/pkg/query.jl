@@ -79,7 +79,8 @@ function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed
     avail, conflicts
 end
 
-function partial_update_mask(instd::Dict{String,Tuple{VersionNumber,Bool}}, avail::Dict{String,Dict{VersionNumber,Available}}, upkgs::Set{String})
+function partial_update_mask(instd::Dict{String,Tuple{VersionNumber,Bool}},
+        avail::Dict{String,Dict{VersionNumber,Available}}, upkgs::Set{String})
     dont_update = Set{String}()
     isempty(upkgs) && return dont_update
     avail_new = deepcopy(avail)

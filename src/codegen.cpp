@@ -1307,7 +1307,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     jl_llvm_functions_t declarations;
     std::unique_ptr<Module> m;
     JL_TRY {
-         m = emit_function(linfo, src, world, &declarations, &params);
+        m = emit_function(linfo, src, world, &declarations, &params);
     }
     JL_CATCH {
         // something failed!
@@ -3862,7 +3862,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
         // figure out how to repack this type
         if (!specsig) {
-            Value *arg = boxed(inputarg, &ctx, false); // don't want a gcroot, since it's about to be but into the jlcall frame anyways
+            Value *arg = boxed(inputarg, &ctx, false); // don't want a gcroot, since it's about to be put into the jlcall frame anyways
             GetElementPtrInst *slot = GetElementPtrInst::Create(LLVM37_param(NULL) myargs,
                     ArrayRef<Value*>(ConstantInt::get(T_int32, FParamIndex)));
             slot->insertAfter(ctx.ptlsStates);
@@ -6034,7 +6034,7 @@ static inline std::string getNativeTarget()
 {
     std::string cpu = sys::getHostCPUName();
 #if defined(_CPU_ARM_)
-    // Try slightly harder than LLVM at determine the CPU architecture.
+    // Try slightly harder than LLVM at determining the CPU architecture.
     if (cpu == "generic") {
         // This is the most reliable way I can find
         // `/proc/cpuinfo` changes between kernel versions

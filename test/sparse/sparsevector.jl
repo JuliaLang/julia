@@ -582,7 +582,7 @@ spv_x2 = SparseVector(8, [1, 2, 6, 7], [3.25, 4.0, -5.5, -6.0])
 
 ### Arithmetic operations
 
-let x = spv_x1, x2 = x2 = spv_x2
+let x = spv_x1, x2 = spv_x2
     # negate
     @test exact_equal(-x, SparseVector(8, [2, 5, 6], [-1.25, 0.75, -3.5]))
 
@@ -1041,7 +1041,7 @@ let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegze
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
 end
 
-# It's tempting to share data between a SparseVector and a SparseArrays,
+# It's tempting to share data between a SparseVector and a SparseMatrix,
 # but if that's done, then modifications to one or the other will cause
 # an inconsistent state:
 sv = sparse(1:10)

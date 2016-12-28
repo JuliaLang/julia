@@ -115,7 +115,7 @@ The keyword arguments can be any combination of:
    sorts in order of number of collected samples.
 
  - `noisefloor` only shows frames that exceed the heuristic noise floor of the sample (only applies to format `:tree`).
-   A suggested value to try for this is 2.0 (the default is 0). This parameters hides samples for which `n <= noisefloor * √N`,
+   A suggested value to try for this is 2.0 (the default is 0). This parameter hides samples for which `n <= noisefloor * √N`,
    where `n` is the number of samples on this line, and `N` is the number of samples for the callee.
 
  - `mincount` can also be used to limit the printout to only those
@@ -158,7 +158,8 @@ a dictionary `lidict` of line information.
 
 See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
 """
-print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
+print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::LineInfoDict = getdict(data); kwargs...) =
+    print(STDOUT, data, lidict; kwargs...)
 
 """
     retrieve() -> data, lidict
@@ -242,12 +243,14 @@ function callers(funcname::String, bt::Vector, lidict::LineInfoDict; filename = 
     if linerange === nothing
         return callersf(li -> li.func == funcname && li.file == filename, bt, lidict)
     else
-        return callersf(li -> li.func == funcname && li.file == filename && in(li.line, linerange), bt, lidict)
+        return callersf(li -> li.func == funcname && li.file == filename &&
+            in(li.line, linerange), bt, lidict)
     end
 end
 
 callers(funcname::String; kwargs...) = callers(funcname, retrieve()...; kwargs...)
-callers(func::Function, bt::Vector, lidict::LineInfoDict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
+callers(func::Function, bt::Vector, lidict::LineInfoDict; kwargs...) =
+    callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
 
 ##
@@ -369,7 +372,8 @@ function flat(io::IO, data::Vector, lidict::LineInfoDict, cols::Int, fmt::Profil
     nothing
 end
 
-function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, cols::Int, fmt::ProfileFormat)
+function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int},
+        cols::Int, fmt::ProfileFormat)
     p = liperm(lilist)
     lilist = lilist[p]
     n = n[p]
@@ -411,7 +415,8 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, cols::In
         wfile = floor(Integer, 2*ntext/5)
         wfunc = floor(Integer, 3*ntext/5)
     end
-    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
+    println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ",
+        lpad("Line", wline, " "), " ", rpad("Function", wfunc, " "))
     for i = 1:length(n)
         n[i] < fmt.mincount && continue
         li = lilist[i]
@@ -475,24 +480,24 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
             end
             if li.line == li.pointer
                 strs[i] = string(base,
-                          rpad(string(counts[i]), ndigcounts, " "),
-                          " ",
-                          "unknown function (pointer: 0x",
-                          hex(li.pointer,2*sizeof(Ptr{Void})),
-                          ")")
+                    rpad(string(counts[i]), ndigcounts, " "),
+                    " ",
+                    "unknown function (pointer: 0x",
+                    hex(li.pointer,2*sizeof(Ptr{Void})),
+                    ")")
             else
                 fname = string(li.func)
                 if !li.from_c && !isnull(li.linfo)
                     fname = sprint(show_spec_linfo, li)
                 end
                 strs[i] = string(base,
-                              rpad(string(counts[i]), ndigcounts, " "),
-                              " ",
-                              rtruncto(string(li.file), widthfile),
-                              ":",
-                              li.line == -1 ? "?" : string(li.line),
-                              "; ",
-                              ltruncto(fname, widthfunc))
+                    rpad(string(counts[i]), ndigcounts, " "),
+                    " ",
+                    rtruncto(string(li.file), widthfile),
+                    ":",
+                    li.line == -1 ? "?" : string(li.line),
+                    "; ",
+                    ltruncto(fname, widthfunc))
             end
         else
             strs[i] = ""
@@ -502,7 +507,8 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
 end
 
 # Print a "branch" starting at a particular level. This gets called recursively.
-function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int}, lidict::LineInfoFlatDict, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
+function tree(io::IO, bt::Vector{Vector{UInt64}}, counts::Vector{Int},
+        lidict::LineInfoFlatDict, level::Int, cols::Int, fmt::ProfileFormat, noisefloor::Int)
     if level > fmt.maxdepth
         return
     end
