@@ -363,7 +363,7 @@ StrangeType18623(x,y) = (x,y)
 let
     f(A, n) = broadcast(x -> +(x, n), A)
     @test @inferred(f([1.0], 1)) == [2.0]
-    g() = (a = 1; Base.Broadcast._broadcast_type(x -> x + a, 1.0))
+    g() = (a = 1; Base.Broadcast._broadcast_type(Any, x -> x + a, 1.0))
     @test @inferred(g()) === Float64
 end
 
@@ -376,3 +376,36 @@ end
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722).
 @test let z = 1; A = broadcast!(() -> z += 1, zeros(2)); A[1] != A[2]; end
+
+# broadcasting for custom AbstractArray
+immutable Array19745{T,N} <: AbstractArray{T,N}
+    data::Array{T,N}
+end
+Base.getindex(A::Array19745, i::Integer...) = A.data[i...]
+Base.size(A::Array19745) = size(A.data)
+
+Base.Broadcast.containertype{T<:Array19745}(::Type{T}) = Array19745
+
+Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array19745}) = Array19745
+Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array})      = Array19745
+Base.Broadcast.promote_containertype(::Type{Array19745}, ct)                 = Array19745
+Base.Broadcast.promote_containertype(::Type{Array}, ::Type{Array19745})      = Array19745
+Base.Broadcast.promote_containertype(ct, ::Type{Array19745})                 = Array19745
+
+Base.Broadcast.broadcast_indices(::Type{Array19745}, A)      = indices(A)
+Base.Broadcast.broadcast_indices(::Type{Array19745}, A::Ref) = ()
+
+getfield19745(x::Array19745) = x.data
+getfield19745(x)             = x
+
+Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...) =
+    Array19745(Base.Broadcast.broadcast_c(f, Array, getfield19745(A), map(getfield19745, Bs)...))
+
+@testset "broadcasting for custom AbstractArray" begin
+    a  = randn(10)
+    aa = Array19745(a)
+    @test a .+ 1  == @inferred(aa .+ 1)
+    @test a .* a' == @inferred(aa .* aa')
+    @test isa(aa .+ 1, Array19745)
+    @test isa(aa .* aa', Array19745)
+end
