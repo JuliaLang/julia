@@ -1237,26 +1237,6 @@ end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)
 (/)(x::Number, B::BitArray) = (/)(x, Array(B))
 
-function div(A::BitArray, B::BitArray)
-    shp = promote_shape(size(A), size(B))
-    all(B) || throw(DivideError())
-    return reshape(copy(A), shp)
-end
-div(A::BitArray, B::Array{Bool}) = div(A, BitArray(B))
-div(A::Array{Bool}, B::BitArray) = div(BitArray(A), B)
-function div(B::BitArray, x::Bool)
-    return x ? copy(B) : throw(DivideError())
-end
-function div(x::Bool, B::BitArray)
-    all(B) || throw(DivideError())
-    return x ? trues(size(B)) : falses(size(B))
-end
-function div(x::Number, B::BitArray)
-    all(B) || throw(DivideError())
-    y = div(x, true)
-    return fill(y, size(B))
-end
-
 function mod(A::BitArray, B::BitArray)
     shp = promote_shape(size(A), size(B))
     all(B) || throw(DivideError())
@@ -1277,7 +1257,7 @@ function mod(x::Number, B::BitArray)
     return fill(y, size(B))
 end
 
-for f in (:div, :mod)
+for f in (:mod,)
     @eval begin
         function ($f)(B::BitArray, x::Number)
             T = promote_op($f, Bool, typeof(x))

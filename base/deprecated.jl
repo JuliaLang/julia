@@ -1168,4 +1168,9 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
     end
 end
 
+# Deprecate manually vectorized div methods in favor of compact broadcast syntax
+@deprecate div(A::Number, B::AbstractArray) div.(A, B)
+@deprecate div(A::AbstractArray, B::Number) div.(A, B)
+@deprecate div(A::AbstractArray, B::AbstractArray) div.(A, B)
+
 # End deprecations scheduled for 0.6
