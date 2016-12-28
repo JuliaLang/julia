@@ -863,3 +863,7 @@ end
 
 @test QualifiedStringMacro.SubModule.x"" === 1
 @test QualifiedStringMacro.SubModule.y`` === 2
+
+let ..(x,y) = x + y
+    @test 3 .. 4 === 7
+end
