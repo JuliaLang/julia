@@ -58,7 +58,7 @@ Printing with the color `:nothing` will print the string without modifications.
 text_colors
 
 have_color = false
-default_color_warn = :light_red
+default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
 if is_windows()
@@ -147,12 +147,13 @@ function eval_user_input(ast::ANY, show_value)
             else
                 ast = expand(ast)
                 value = eval(Main, ast)
-                eval(Main, Expr(:(=), :ans, Expr(:call, ()->value)))
-                if value!==nothing && show_value
+                eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
+                if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
                     end
-                    try display(value)
+                    try
+                        eval(Main, Expr(:body, Expr(:return, Expr(:call, display, QuoteNode(value)))))
                     catch err
                         println(STDERR, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
                         rethrow(err)

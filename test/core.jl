@@ -3367,7 +3367,7 @@ typealias PossiblyInvalidUnion{T} Union{T,Int}
 # issue #13007
 call13007{T,N}(::Type{Array{T,N}}) = 0
 call13007(::Type{Array}) = 1
-@test length(Base._methods(call13007, Tuple{Type{TypeVar(:_,Array)}}, 4)) == 2
+@test length(Base._methods(call13007, Tuple{Type{TypeVar(:_,Array)}}, 4, typemax(UInt))) == 2
 
 # detecting cycles during type intersection, e.g. #1631
 cycle_in_solve_tvar_constraints{S}(::Type{Nullable{S}}, x::S) = 0
@@ -4821,3 +4821,8 @@ end
 
 @test f14893() == 14893
 @test M14893.f14893() == 14893
+
+# issue #19599
+f19599{T}(x::((S)->Vector{S})(T)...) = 1
+@test f19599([1],[1]) == 1
+@test_throws MethodError f19599([1],[1.0])

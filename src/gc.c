@@ -105,7 +105,10 @@ static void run_finalizer(jl_ptls_t ptls, jl_value_t *o, jl_value_t *ff)
     assert(!jl_typeis(ff, jl_voidpointer_type));
     jl_value_t *args[2] = {ff,o};
     JL_TRY {
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_world_counter;
         jl_apply(args, 2);
+        jl_get_ptls_states()->world_age = last_age;
     }
     JL_CATCH {
         jl_printf(JL_STDERR, "error in running finalizer: ");
@@ -1540,6 +1543,7 @@ void visit_mark_stack(jl_ptls_t ptls)
 
 extern jl_array_t *jl_module_init_order;
 extern jl_typemap_entry_t *call_cache[N_CALL_CACHE];
+extern jl_array_t *jl_all_methods;
 
 // mark the initial root set
 void pre_mark(jl_ptls_t ptls)
@@ -1572,6 +1576,8 @@ void pre_mark(jl_ptls_t ptls)
     for (i = 0; i < N_CALL_CACHE; i++)
         if (call_cache[i])
             gc_push_root(ptls, call_cache[i], 0);
+    if (jl_all_methods != NULL)
+        gc_push_root(ptls, jl_all_methods, 0);
 
     jl_mark_box_caches(ptls);
     //gc_push_root(ptls, jl_unprotect_stack_func, 0);

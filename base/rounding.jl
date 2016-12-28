@@ -164,8 +164,8 @@ See [`RoundingMode`](@ref) for available rounding modes.
     known problem is the interaction with compiler optimisations, e.g.
 
         julia> setrounding(Float64,RoundDown) do
-            1.1 + 0.1
-        end
+                   1.1 + 0.1
+               end
         1.2000000000000002
 
     Here the compiler is *constant folding*, that is evaluating a known constant
@@ -176,8 +176,8 @@ See [`RoundingMode`](@ref) for available rounding modes.
         julia> x = 1.1; y = 0.1;
 
         julia> setrounding(Float64,RoundDown) do
-            x + y
-        end
+                   x + y
+               end
         1.2
 """
 function setrounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)

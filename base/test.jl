@@ -140,7 +140,7 @@ type Broken <: Result
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(:yellow, io, "Test Broken\n"; bold = true)
+    print_with_color(Base.warn_color(), io, "Test Broken\n"; bold = true)
     if t.test_type == :skipped && !(t.orig_expr === nothing)
         println(io, "  Skipped: ", t.orig_expr)
     elseif !(t.orig_expr === nothing)
@@ -228,8 +228,9 @@ end
 # can be displayed nicely.
 function get_test_result(ex)
     orig_ex = Expr(:inert, ex)
-    # Normalize comparison operator calls to :comparison expressions
+    # Normalize non-dot comparison operator calls to :comparison expressions
     if isa(ex, Expr) && ex.head == :call && length(ex.args)==3 &&
+        first(string(ex.args[1])) != '.' &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         testret = :(eval_comparison(Expr(:comparison,
                                          $(esc(ex.args[2])), $(esc(ex.args[1])), $(esc(ex.args[3])))))
@@ -489,7 +490,7 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
         print_with_color(Base.error_color(), lpad("Error",error_width," "), "  "; bold = true)
     end
     if broken_width > 0
-        print_with_color(:yellow, lpad("Broken",broken_width," "), "  "; bold = true)
+        print_with_color(Base.warn_color(), lpad("Broken",broken_width," "), "  "; bold = true)
     end
     if total_width > 0
         print_with_color(Base.info_color(), lpad("Total",total_width, " "); bold = true)
@@ -619,7 +620,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nb = broken + c_broken
     if nb > 0
-        print_with_color(:yellow, lpad(string(nb), broken_width, " "), "  ")
+        print_with_color(Base.warn_color(), lpad(string(nb), broken_width, " "), "  ")
     elseif broken_width > 0
         # None broken at this level, but some at another level
         print(lpad(" ", broken_width), "  ")

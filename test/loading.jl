@@ -6,7 +6,8 @@ using Base.Test
 
 include("test_sourcepath.jl")
 thefname = "the fname!//\\&\1*"
-@test include_string("include_string_test() = @__FILE__", thefname)() == Base.source_path()
+include_string_test_func = include_string("include_string_test() = @__FILE__", thefname)
+@test include_string_test_func() == Base.source_path()
 @test include_string("Base.source_path()", thefname) == Base.source_path()
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)

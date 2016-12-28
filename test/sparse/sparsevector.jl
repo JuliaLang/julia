@@ -177,11 +177,31 @@ end
 # generic array index
 let x = sprand(100, 0.5)
     I = rand(1:length(x), 20)
-    @which x[I]
     r = x[I]
     @test isa(r, SparseVector{Float64,Int})
     @test all(nonzeros(r) .!= 0.0)
     @test Array(r) == Array(x)[I]
+end
+
+# boolean array index
+let x = sprand(10, 10, 0.5)
+    I = rand(1:size(x, 2), 10)
+    bI = falses(size(x, 2))
+    bI[I] = true
+    r = x[1,bI]
+    @test isa(r, SparseVector{Float64,Int})
+    @test all(nonzeros(r) .!= 0.0)
+    @test Array(r) == Array(x)[1,bI]
+end
+
+let x = sprand(10, 0.5)
+    I = rand(1:length(x), 5)
+    bI = falses(length(x))
+    bI[I] = true
+    r = x[bI]
+    @test isa(r, SparseVector{Float64,Int})
+    @test all(nonzeros(r) .!= 0.0)
+    @test Array(r) == Array(x)[bI]
 end
 
 # setindex
@@ -562,7 +582,7 @@ spv_x2 = SparseVector(8, [1, 2, 6, 7], [3.25, 4.0, -5.5, -6.0])
 
 ### Arithmetic operations
 
-let x = spv_x1, x2 = x2 = spv_x2
+let x = spv_x1, x2 = spv_x2
     # negate
     @test exact_equal(-x, SparseVector(8, [2, 5, 6], [-1.25, 0.75, -3.5]))
 
@@ -589,7 +609,9 @@ let x = spv_x1, x2 = x2 = spv_x2
 
     # multiplies
     xm = SparseVector(8, [2, 6], [5.0, -19.25])
-    @test exact_equal(x .* x, abs2(x))
+    let y=x # workaround for broadcast not preserving sparsity in general
+        @test exact_equal(x .* y, abs2(x))
+    end
     @test exact_equal(x .* x2, xm)
     @test exact_equal(x2 .* x, xm)
 
@@ -669,12 +691,12 @@ end
 
 ### Reduction
 
-# sum, sumabs, sumabs2, vecnorm
+# sum, vecnorm
 
 let x = spv_x1
     @test sum(x) == 4.0
-    @test sumabs(x) == 5.5
-    @test sumabs2(x) == 14.375
+    @test sum(abs, x) == 5.5
+    @test sum(abs2, x) == 14.375
 
     @test vecnorm(x) == sqrt(14.375)
     @test vecnorm(x, 1) == 5.5
@@ -682,13 +704,13 @@ let x = spv_x1
     @test vecnorm(x, Inf) == 3.5
 end
 
-# maximum, minimum, maxabs, minabs
+# maximum, minimum
 
 let x = spv_x1
     @test maximum(x) == 3.5
     @test minimum(x) == -0.75
-    @test maxabs(x) == 3.5
-    @test minabs(x) == 0.0
+    @test maximum(abs, x) == 3.5
+    @test minimum(abs, x) == 0.0
 end
 
 let x = abs.(spv_x1)
@@ -704,15 +726,15 @@ end
 let x = SparseVector(3, [1, 2, 3], [-4.5, 2.5, 3.5])
     @test maximum(x) == 3.5
     @test minimum(x) == -4.5
-    @test maxabs(x) == 4.5
-    @test minabs(x) == 2.5
+    @test maximum(abs, x) == 4.5
+    @test minimum(abs, x) == 2.5
 end
 
 let x = spzeros(Float64, 8)
     @test maximum(x) == 0.0
     @test minimum(x) == 0.0
-    @test maxabs(x) == 0.0
-    @test minabs(x) == 0.0
+    @test maximum(abs, x) == 0.0
+    @test minimum(abs, x) == 0.0
 end
 
 
@@ -732,35 +754,35 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
     end
 
     # scale
-    let sx = SparseVector(x.n, x.nzind, x.nzval * 2.5)
-        @test exact_equal(x * 2.5, sx)
-        @test exact_equal(x * (2.5 + 0.0*im), complex(sx))
-        @test exact_equal(2.5 * x, sx)
-        @test exact_equal((2.5 + 0.0*im) * x, complex(sx))
-        @test exact_equal(x * 2.5, sx)
-        @test exact_equal(2.5 * x, sx)
-        @test exact_equal(x .* 2.5, sx)
-        @test exact_equal(2.5 .* x, sx)
-        @test exact_equal(x / 2.5, SparseVector(x.n, x.nzind, x.nzval / 2.5))
+    let α = 2.5, sx = SparseVector(x.n, x.nzind, x.nzval * α)
+        @test exact_equal(x * α, sx)
+        @test exact_equal(x * (α + 0.0*im), complex(sx))
+        @test exact_equal(α * x, sx)
+        @test exact_equal((α + 0.0*im) * x, complex(sx))
+        @test exact_equal(x * α, sx)
+        @test exact_equal(α * x, sx)
+        @test exact_equal(x .* α, sx)
+        @test exact_equal(α .* x, sx)
+        @test exact_equal(x / α, SparseVector(x.n, x.nzind, x.nzval / α))
 
         xc = copy(x)
-        @test scale!(xc, 2.5) === xc
+        @test scale!(xc, α) === xc
         @test exact_equal(xc, sx)
         xc = copy(x)
-        @test scale!(2.5, xc) === xc
+        @test scale!(α, xc) === xc
         @test exact_equal(xc, sx)
         xc = copy(x)
-        @test scale!(xc, complex(2.5, 0.0)) === xc
+        @test scale!(xc, complex(α, 0.0)) === xc
         @test exact_equal(xc, sx)
         xc = copy(x)
-        @test scale!(complex(2.5, 0.0), xc) === xc
+        @test scale!(complex(α, 0.0), xc) === xc
         @test exact_equal(xc, sx)
     end
 
     # dot
     let dv = dot(xf, xf2)
-        @test dot(x, x) == sumabs2(x)
-        @test dot(x2, x2) == sumabs2(x2)
+        @test dot(x, x) == sum(abs2, x)
+        @test dot(x2, x2) == sum(abs2, x2)
         @test dot(x, x2) ≈ dv
         @test dot(x2, x) ≈ dv
         @test dot(Array(x), x2) ≈ dv
@@ -1019,7 +1041,7 @@ let testdims = (10, 20, 30), nzprob = 0.4, targetnumposzeros = 5, targetnumnegze
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
 end
 
-# It's tempting to share data between a SparseVector and a SparseArrays,
+# It's tempting to share data between a SparseVector and a SparseMatrix,
 # but if that's done, then modifications to one or the other will cause
 # an inconsistent state:
 sv = sparse(1:10)

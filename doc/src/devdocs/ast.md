@@ -64,6 +64,7 @@ The following data types exist in lowered form:
 
     Marks a point where a variable is created. This has the effect of resetting a variable to undefined.
 
+
 ### Expr types
 
 These symbols appear in the `head` field of `Expr`s in lowered form.
@@ -192,9 +193,10 @@ These symbols appear in the `head` field of `Expr`s in lowered form.
 
       * `:pop_loc`: returns to the source location before the matching `:push_loc`.
 
+
 ### Method
 
-A unique'd container describing the shared metadata for a single (unspecialized) method.
+A unique'd container describing the shared metadata for a single method.
 
   * `name`, `module`, `file`, `line`, `sig`
 
@@ -222,6 +224,11 @@ A unique'd container describing the shared metadata for a single (unspecialized)
   * `nargs`, `isva`, `called`, `isstaged`
 
     Descriptive bit-fields for the source code of this Method.
+
+  * `min_world` / `max_world`
+
+    The range of world ages for which this method is visible to dispatch.
+
 
 ### MethodInstance
 
@@ -264,9 +271,16 @@ for important details on how to modify these fields safely.
 
     The ABI to use when calling `fptr`. Some significant ones include:
 
-      * 0 - not compiled yet
+      * 0 - Not compiled yet.
       * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
-      * 2 - constant (stored in `inferred`)
+      * 2 - Constant (value stored in `inferred`)
+      * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+      * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+
+  * `min_world` / `max_world`
+
+    The range of world ages for which this method instance is valid to be called.
+
 
 ### CodeInfo
 
@@ -319,6 +333,7 @@ Boolean properties:
 
     Whether this is known to be a pure function of its arguments, without respect to the
     state of the method caches or other mutable global state.
+
 
 ## Surface syntax AST
 

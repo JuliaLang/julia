@@ -206,8 +206,8 @@ eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eig
 
 #tril and triu
 
-istriu(M::SymTridiagonal) = all(M.ev .== 0)
-istril(M::SymTridiagonal) = all(M.ev .== 0)
+istriu(M::SymTridiagonal) = iszero(M.ev)
+istril(M::SymTridiagonal) = iszero(M.ev)
 
 function tril!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
@@ -526,8 +526,8 @@ end
 
 #tril and triu
 
-istriu(M::Tridiagonal) = all(M.dl .== 0)
-istril(M::Tridiagonal) = all(M.du .== 0)
+istriu(M::Tridiagonal) = iszero(M.dl)
+istril(M::Tridiagonal) = iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)

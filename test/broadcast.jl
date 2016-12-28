@@ -83,7 +83,7 @@ function as_sub{T}(x::AbstractArray{T,3})
     y
 end
 
-bittest(f::Function, ewf::Function, a...) = (@test ewf(a...) == BitArray(broadcast(f, a...)))
+bittest(f::Function, a...) = (@test f.(a...) == BitArray(broadcast(f, a...)))
 n1 = 21
 n2 = 32
 n3 = 17
@@ -97,7 +97,7 @@ for arr in (identity, as_sub)
     @test broadcast(+, arr([1, 0]), arr([1, 4])) == [2, 4]
     @test broadcast(+, arr([1, 0]), 2) == [3, 2]
 
-    @test @inferred(arr(eye(2)) .+ arr([1, 4])) == arr([2 1; 4 5])
+    @test @inferred(broadcast(+, arr(eye(2)), arr([1, 4]))) == arr([2 1; 4 5])
     @test arr(eye(2)) .+ arr([1  4]) == arr([2 4; 1 5])
     @test arr([1  0]) .+ arr([1, 4]) == arr([2 1; 5 4])
     @test arr([1, 0]) .+ arr([1  4]) == arr([2 5; 1 4])
@@ -137,19 +137,16 @@ for arr in (identity, as_sub)
     @test A == diagm(10:12)
     @test_throws BoundsError broadcast_setindex!(A, 7, [1,-1], [1 2])
 
-    for (f, ewf) in (((==), (.==)),
-                     ((<) , (.<) ),
-                     ((!=), (.!=)),
-                     ((<=), (.<=)))
-        bittest(f, ewf, arr(eye(2)), arr([1, 4]))
-        bittest(f, ewf, arr(eye(2)), arr([1  4]))
-        bittest(f, ewf, arr([0, 1]), arr([1  4]))
-        bittest(f, ewf, arr([0  1]), arr([1, 4]))
-        bittest(f, ewf, arr([1, 0]), arr([1, 4]))
-        bittest(f, ewf, arr(rand(rb, n1, n2, n3)), arr(rand(rb, n1, n2, n3)))
-        bittest(f, ewf, arr(rand(rb,  1, n2, n3)), arr(rand(rb, n1,  1, n3)))
-        bittest(f, ewf, arr(rand(rb,  1, n2,  1)), arr(rand(rb, n1,  1, n3)))
-        bittest(f, ewf, arr(bitrand(n1, n2, n3)), arr(bitrand(n1, n2, n3)))
+    for f in ((==), (<) , (!=), (<=))
+        bittest(f, arr(eye(2)), arr([1, 4]))
+        bittest(f, arr(eye(2)), arr([1  4]))
+        bittest(f, arr([0, 1]), arr([1  4]))
+        bittest(f, arr([0  1]), arr([1, 4]))
+        bittest(f, arr([1, 0]), arr([1, 4]))
+        bittest(f, arr(rand(rb, n1, n2, n3)), arr(rand(rb, n1, n2, n3)))
+        bittest(f, arr(rand(rb,  1, n2, n3)), arr(rand(rb, n1,  1, n3)))
+        bittest(f, arr(rand(rb,  1, n2,  1)), arr(rand(rb, n1,  1, n3)))
+        bittest(f, arr(bitrand(n1, n2, n3)), arr(bitrand(n1, n2, n3)))
     end
 end
 
@@ -163,10 +160,8 @@ m = [1:2;]'
 @test m./r2 ≈ [ratio 2ratio]
 @test m./[r2;] ≈ [ratio 2ratio]
 
-@test @inferred([0,1.2].+reshape([0,-2],1,1,2)) == reshape([0 -2; 1.2 -0.8],2,1,2)
-rt = Base.return_types(.+, Tuple{Array{Float64, 3}, Array{Int, 1}})
-@test length(rt) == 1 && rt[1] == Array{Float64, 3}
-rt = Base.return_types(broadcast, Tuple{typeof(.+), Array{Float64, 3}, Array{Int, 3}})
+@test @inferred(broadcast(+,[0,1.2],reshape([0,-2],1,1,2))) == reshape([0 -2; 1.2 -0.8],2,1,2)
+rt = Base.return_types(broadcast, Tuple{typeof(+), Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
@@ -297,6 +292,14 @@ import Base.Meta: isexpr
 @test isexpr(expand(:(f.(x,1.0))), :thunk)
 @test isexpr(expand(:(f.(x,$π))), :thunk)
 
+# PR #17623: Fused binary operators
+@test [true] .* [true] == [true]
+@test [1,2,3] .|> (x->x+1) == [2,3,4]
+let g = Int[], ⊕ = (a,b) -> let c=a+2b; push!(g, c); c; end
+    @test [1,2,3] .⊕ [10,11,12] .⊕ [100,200,300] == [221,424,627]
+    @test g == [21,221,24,424,27,627] # test for loop fusion
+end
+
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
 @test isa(broadcast(+, [true]), Array{Int,1})
@@ -355,3 +358,18 @@ StrangeType18623(x,y) = (x,y)
 
 # 19419
 @test @inferred(broadcast(round, Int, [1])) == [1]
+
+# https://discourse.julialang.org/t/towards-broadcast-over-combinations-of-sparse-matrices-and-scalars/910
+let
+    f(A, n) = broadcast(x -> +(x, n), A)
+    @test @inferred(f([1.0], 1)) == [2.0]
+    g() = (a = 1; Base.Broadcast._broadcast_type(x -> x + a, 1.0))
+    @test @inferred(g()) === Float64
+end
+
+# Ref as 0-dimensional array for broadcast
+@test (-).(C_NULL, C_NULL)::UInt == 0
+@test (+).(1, Ref(2)) == fill(3)
+@test (+).(Ref(1), Ref(2)) == fill(3)
+@test (+).([[0,2], [1,3]], [1,-1]) == [[1,3], [0,2]]
+@test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]

@@ -156,15 +156,7 @@
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
 (define (method-lambda-expr argl body rett)
-  (let ((argl (map (lambda (x)
-                     (if (vararg? x)
-                         (make-decl (arg-name x) (arg-type x))
-                         (if (varargexpr? x)
-                             (if (pair? (caddr x))
-                                 x
-                                 `(|::| ,(arg-name x) (curly Vararg Any)))
-                             (arg-name x))))
-                   argl))
+  (let ((argl (map arg-name argl))
         (body (if (and (pair? body) (eq? (car body) 'block))
                   (if (null? (cdr body))
                       `(block (null))
@@ -935,6 +927,13 @@
                   (argl    (cddr name))
                   (has-sp  (and (pair? head) (eq? (car head) 'curly)))
                   (name    (deprecate-dotparen (if has-sp (cadr head) head)))
+                  (op (let ((op_ (maybe-undotop name))) ; handle .op -> broadcast deprecation
+                        (if op_
+                            (syntax-deprecation #f (string "function " (deparse name) "(...)")
+                                                (string "function Base.broadcast(::typeof(" (deparse op_) "), ...)")))
+                        op_))
+                  (name (if op '(|.| Base (inert broadcast)) name))
+                  (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
                   (sparams (if has-sp (cddr head) '()))
                   (isstaged (eq? (car e) 'stagedfunction))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
@@ -1660,7 +1659,9 @@
           (if (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
               `(call (core getfield) ,f ,x)
               (make-fuse f (cdr x))))
-        e))
+        (if (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
+            (make-fuse (undotop (cadr e)) (cddr e))
+            e)))
   ; given e == (fuse lambda args), compress the argument list by removing (pure)
   ; duplicates in args, inlining literals, and moving any varargs to the end:
   (define (compress-fuse e)
@@ -1936,7 +1937,9 @@
    (lambda (e)
      (if (length> e 2)
          (let ((f (cadr e)))
-           (cond ((and (pair? (caddr e))
+           (cond ((dotop? f)
+                  (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
+                 ((and (pair? (caddr e))
                        (eq? (car (caddr e)) 'parameters))
                   ;; (call f (parameters . kwargs) ...)
                   (expand-forms
@@ -1974,15 +1977,15 @@
                     (expand-forms
                      `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
 
-                 ((and (eq? (cadr e) '*) (length= e 4))
+                 ((and (eq? f '*) (length= e 4))
                   (expand-transposed-op
                    e
                    #(Ac_mul_Bc Ac_mul_B At_mul_Bt At_mul_B A_mul_Bc A_mul_Bt)))
-                 ((and (eq? (cadr e) '/) (length= e 4))
+                 ((and (eq? f '/) (length= e 4))
                   (expand-transposed-op
                    e
                    #(Ac_rdiv_Bc Ac_rdiv_B At_rdiv_Bt At_rdiv_B A_rdiv_Bc A_rdiv_Bt)))
-                 ((and (eq? (cadr e) '\\) (length= e 4))
+                 ((and (eq? f '\\) (length= e 4))
                   (expand-transposed-op
                    e
                    #(Ac_ldiv_Bc Ac_ldiv_B At_ldiv_Bt At_ldiv_B A_ldiv_Bc A_ldiv_Bt)))

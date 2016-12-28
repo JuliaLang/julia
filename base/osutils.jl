@@ -56,17 +56,20 @@ Partially evaluates an expression at parse time.
 For example, `@static is_windows() ? foo : bar` will evaluate `is_windows()` and insert either `foo` or `bar` into the expression.
 This is useful in cases where a construct would be invalid on other platforms,
 such as a `ccall` to a non-existent function.
+`@static if is_apple() foo end` and `@static foo <&&,||> bar` are also valid syntax.
 """
 macro static(ex)
     if isa(ex, Expr)
-        if ex.head === :if
+        if ex.head === :if || ex.head === :&& || ex.head === :||
             cond = eval(current_module(), ex.args[1])
-            if cond
+            if xor(cond, ex.head === :||)
                 return esc(ex.args[2])
             elseif length(ex.args) == 3
                 return esc(ex.args[3])
-            else
+            elseif ex.head === :if
                 return nothing
+            else
+                return cond
             end
         end
     end

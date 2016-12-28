@@ -13,25 +13,25 @@ to generically build upon those behaviors.
 | `next(iter, state)`            |                        | Returns the current item and the next state                                           |
 | `done(iter, state)`            |                        | Tests if there are any items remaining                                                |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `iteratorsize(IterType)`       | `HasLength()`          | One of *HasLength()*, *HasShape()*, *IsInfinite()*, or *SizeUnknown()* as appropriate |
-| `iteratoreltype(IterType)`     | `HasEltype()`          | Either *EltypeUnknown()* or *HasEltype()* as appropriate                              |
+| `iteratorsize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
+| `iteratoreltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
 | `eltype(IterType)`             | `Any`                  | The type the items returned by `next()`                                               |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim...])`         | (*undefined*)          | The number of items in each dimension, if known                                       |
 
 | Value returned by `iteratorsize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
-| *HasLength()*                              | `length(iter)`                             |
-| *HasShape()*                               | `length(iter)`  and `size(iter, [dim...])` |
-| *IsInfinite()*                             | (*none*)                                   |
-| *SizeUnknown()*                            | (*none*)                                   |
+| `HasLength()`                              | `length(iter)`                             |
+| `HasShape()`                               | `length(iter)`  and `size(iter, [dim...])` |
+| `IsInfinite()`                             | (*none*)                                   |
+| `SizeUnknown()`                            | (*none*)                                   |
 
 | Value returned by `iteratoreltype(IterType)` | Required Methods   |
 |:-------------------------------------------- |:------------------ |
-| *HasEltype()*                                | `eltype(IterType)` |
-| *EltypeUnknown()*                            | (*none*)           |
+| `HasEltype()`                                | `eltype(IterType)` |
+| `EltypeUnknown()`                            | (*none*)           |
 
-Sequential iteration is implemented by the methods `start()`, `done()`, and `next()`. Instead
+Sequential iteration is implemented by the methods [`start()`](@ref), [`done()`](@ref), and [`next()`](@ref). Instead
 of mutating objects as they are iterated over, Julia provides these three methods to keep track
 of the iteration state externally from the object. The `start(iter)` method returns the initial
 state for the iterable object `iter`. That state gets passed along to `done(iter, state)`, which
@@ -71,7 +71,7 @@ julia> immutable Squares
        Base.length(S::Squares) = S.count;
 ```
 
-With only `start`, `next`, and `done` definitions, the `Squares` type is already pretty powerful.
+With only [`start`](@ref), [`next`](@ref), and [`done`](@ref) definitions, the `Squares` type is already pretty powerful.
 We can iterate over all the elements:
 
 ```julia
@@ -87,7 +87,7 @@ julia> for i in Squares(7)
 49
 ```
 
-We can use many of the builtin methods that work with iterables, like `in()`, `mean()` and `std()`:
+We can use many of the builtin methods that work with iterables, like [`in()`](@ref), [`mean()`](@ref) and [`std()`](@ref):
 
 ```julia
 julia> 25 in Squares(10)
@@ -99,12 +99,12 @@ julia> mean(Squares(100)), std(Squares(100))
 
 There are a few more methods we can extend to give Julia more information about this iterable
 collection.  We know that the elements in a `Squares` sequence will always be `Int`. By extending
-the `eltype()` method, we can give that information to Julia and help it make more specialized
+the [`eltype()`](@ref) method, we can give that information to Julia and help it make more specialized
 code in the more complicated methods. We also know the number of elements in our sequence, so
-we can extend `length()`, too.
+we can extend [`length()`](@ref), too.
 
-Now, when we ask Julia to `collect()` all the elements into an array it can preallocate a `Vector{Int}`
-of the right size instead of blindly `push!`ing each element into a `Vector{Any}`:
+Now, when we ask Julia to [`collect()`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
+of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```julia
 julia> collect(Squares(100))' # transposed to save space
@@ -137,7 +137,7 @@ be used in their specific case.
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`.  To opt into this behavior, `Squares`
-simply needs to define `getindex()`:
+simply needs to define [`getindex()`](@ref):
 
 ```julia
 julia> function Base.getindex(S::Squares, i::Int)
@@ -148,7 +148,7 @@ julia> function Base.getindex(S::Squares, i::Int)
 529
 ```
 
-Additionally, to support the syntax `S[end]`, we must define `endof()` to specify the last valid
+Additionally, to support the syntax `S[end]`, we must define [`endof()`](@ref) to specify the last valid
 index:
 
 ```julia
@@ -157,9 +157,9 @@ julia> Base.endof(S::Squares) = length(S)
 529
 ```
 
-Note, though, that the above *only* defines `getindex()` with one integer index. Indexing with
-anything other than an `Int` will throw a `MethodError` saying that there was no matching method.
- In order to support indexing with ranges or vectors of Ints, separate methods must be written:
+Note, though, that the above *only* defines [`getindex()`](@ref) with one integer index. Indexing with
+anything other than an `Int` will throw a [`MethodError`](@ref) saying that there was no matching method.
+ In order to support indexing with ranges or vectors of `Int`s, separate methods must be written:
 
 ```julia
 julia> Base.getindex(S::Squares, i::Number) = S[convert(Int, i)]
@@ -204,7 +204,7 @@ If a type is defined as a subtype of `AbstractArray`, it inherits a very large s
 including iteration and multidimensional indexing built on top of single-element access.  See
 the [arrays manual page](@ref man-multi-dim-arrays) and [standard library section](@ref lib-arrays) for more supported methods.
 
-A key part in defining an `AbstractArray` subtype is `Base.linearindexing()`. Since indexing is
+A key part in defining an `AbstractArray` subtype is [`Base.linearindexing()`](@ref). Since indexing is
 such an important part of an array and often occurs in hot loops, it's important to make both
 indexing and indexed assignment as efficient as possible.  Array data structures are typically
 defined in one of two ways: either it most efficiently accesses its elements using just one index
@@ -234,7 +234,7 @@ julia> immutable SquaresVector <: AbstractArray{Int, 1}
 ```
 
 Note that it's very important to specify the two parameters of the `AbstractArray`; the first
-defines the `eltype()`, and the second defines the `ndims()`.  That supertype and those three
+defines the [`eltype()`](@ref), and the second defines the [`ndims()`](@ref). That supertype and those three
 methods are all it takes for `SquaresVector` to be an iterable, indexable, and completely functional
 array:
 
@@ -261,7 +261,7 @@ julia> s \ rand(7,2)
 ```
 
 As a more complicated example, let's define our own toy N-dimensional sparse-like array type built
-on top of `Dict`:
+on top of [`Dict`](@ref):
 
 ```julia
 julia> immutable SparseArray{T,N} <: AbstractArray{T,N}
@@ -279,8 +279,8 @@ julia> Base.size(A::SparseArray) = A.dims
        Base.setindex!{T,N}(A::SparseArray{T,N}, v, I::Vararg{Int,N}) = (A.data[I] = v)
 ```
 
-Notice that this is a `LinearSlow` array, so we must manually define `getindex()` and `setindex!()`
-at the dimensionality of the array.  Unlike the `SquaresVector`, we are able to define `setindex!()`,
+Notice that this is a `LinearSlow` array, so we must manually define [`getindex()`](@ref) and [`setindex!()`](@ref)
+at the dimensionality of the array.  Unlike the `SquaresVector`, we are able to define [`setindex!()`](@ref),
 and so we can mutate the array:
 
 ```julia
@@ -304,7 +304,7 @@ julia> A[:] = 1:length(A); A
 ```
 
 The result of indexing an `AbstractArray` can itself be an array (for instance when indexing by
-a `Range`). The `AbstractArray` fallback methods use `similar()` to allocate an `Array` of the
+a `Range`). The `AbstractArray` fallback methods use [`similar()`](@ref) to allocate an `Array` of the
 appropriate size and element type, which is filled in using the basic indexing method described
 above. However, when implementing an array wrapper you often want the result to be wrapped as
 well:
@@ -319,7 +319,7 @@ julia> A[1:2,:]
 In this example it is accomplished by defining `Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`
 to create the appropriate wrapped array. (Note that while `similar` supports 1- and 2-argument
 forms, in most case you only need to specialize the 3-argument form.) For this to work it's important
-that `SparseArray` is mutable (supports `setindex!`). `similar()` is also used to allocate result
+that `SparseArray` is mutable (supports `setindex!`). [`similar()`](@ref) is also used to allocate result
 arrays for arithmetic on `AbstractArrays`, for instance:
 
 ```julia
@@ -345,7 +345,7 @@ julia> dot(A[:,1],A[:,2])
 ```
 
 If you are defining an array type that allows non-traditional indexing (indices that start at
-something other than 1), you should specialize `indices`.  You should also specialize `similar`
+something other than 1), you should specialize `indices`.  You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design.  For more information, see [Arrays with custom indices](@ref).
 

@@ -113,7 +113,8 @@ julia> cross(a,b)
  0
 ```
 """
-cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+cross(a::AbstractVector, b::AbstractVector) =
+    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 """
     triu(M)
@@ -565,6 +566,19 @@ end
 For any iterable containers `x` and `y` (including arrays of any dimension) of numbers (or
 any element type for which `dot` is defined), compute the Euclidean dot product (the sum of
 `dot(x[i],y[i])`) as if they were vectors.
+
+# Examples
+```jldoctest
+julia> vecdot(1:5, 2:6)
+70
+
+julia> x = fill(2., (5,5));
+
+julia> y = fill(3., (5,5));
+
+julia> vecdot(x, y)
+150.0
+```
 """
 function vecdot(x, y) # arbitrary iterables
     ix = start(x)
@@ -628,7 +642,7 @@ By default, the value of `tol` is the largest
 dimension of `M` multiplied by the [`eps`](@ref)
 of the [`eltype`](@ref) of `M`.
 """
-rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
+rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
 function rank(A::AbstractMatrix)
     m,n = size(A)
     (m == 0 || n == 0) && return 0
@@ -981,7 +995,10 @@ function linreg(x::AbstractVector, y::AbstractVector)
     # where
     # b = cov(X, Y)/var(X)
     # a = mean(Y) - b*mean(X)
-    size(x) == size(y) || throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), but these must be the same size"))
+    if size(x) != size(y)
+        throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), " *
+            "but these must be the same size"))
+    end
     mx = mean(x)
     my = mean(y)
     # don't need to worry about the scaling (n vs n - 1) since they cancel in the ratio
@@ -1057,7 +1074,8 @@ function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{
 end
 
 
-# Elementary reflection similar to LAPACK. The reflector is not Hermitian but ensures that tridiagonalization of Hermitian matrices become real. See lawn72
+# Elementary reflection similar to LAPACK. The reflector is not Hermitian but
+# ensures that tridiagonalization of Hermitian matrices become real. See lawn72
 @inline function reflector!(x::AbstractVector)
     n = length(x)
     @inbounds begin
@@ -1080,7 +1098,8 @@ end
     ξ1/ν
 end
 
-@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix) # apply reflector from left
+# apply reflector from left
+@inline function reflectorApply!(x::AbstractVector, τ::Number, A::StridedMatrix)
     m, n = size(A)
     if length(x) != m
         throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
@@ -1134,16 +1153,16 @@ det(x::Number) = x
 """
     logabsdet(M)
 
-Log of absolute value of determinant of real matrix. Equivalent to `(log(abs(det(M))), sign(det(M)))`,
-but may provide increased accuracy and/or speed.
+Log of absolute value of determinant of real matrix. Equivalent to
+`(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 
 """
     logdet(M)
 
-Log of matrix determinant. Equivalent to `log(det(M))`, but may provide increased accuracy
-and/or speed.
+Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
+increased accuracy and/or speed.
 
 # Example
 
@@ -1166,7 +1185,8 @@ function logdet(A::AbstractMatrix)
 end
 
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
-function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
+function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S};
+        rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
     d = norm(x - y)
     if isfinite(d)
         return d <= atol + rtol*max(norm(x), norm(y))
@@ -1188,11 +1208,10 @@ function normalize!(v::AbstractVector, p::Real=2)
 end
 
 @inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
-    #The largest positive floating point number whose inverse is less than
-    #infinity
+    # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
 
-    if nrm ≥ δ #Safe to multiply with inverse
+    if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         scale!(v, invnrm)
 

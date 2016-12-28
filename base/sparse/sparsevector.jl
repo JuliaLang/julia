@@ -402,7 +402,7 @@ function getindex(x::SparseMatrixCSC, I::UnitRange, j::Integer)
     # Restrict to the selected rows
     r1 = searchsortedfirst(x.rowval, first(I), c1, c2, Forward)
     r2 = searchsortedlast(x.rowval, last(I), c1, c2, Forward)
-    SparseVector(length(I), x.rowval[r1:r2] - first(I) + 1, x.nzval[r1:r2])
+    SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
@@ -1251,18 +1251,21 @@ for (vop, fun, mode) in [(:_vadd, :+, 1),
 end
 
 # to workaround the ambiguities with BitVector
-.*(x::BitVector, y::AbstractSparseVector{Bool}) = _vmul(x, y)
-.*(x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y)
+broadcast(::typeof(*), x::BitVector, y::AbstractSparseVector{Bool}) = _vmul(x, y)
+broadcast(::typeof(*), x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y)
 
 # definition of operators
 
-for (op, vop) in [(:+, :_vadd), (:(.+), :_vadd),
-                  (:-, :_vsub), (:(.-), :_vsub),
-                  (:.*, :_vmul)]
-    @eval begin
+for (op, vop) in [(:+, :_vadd), (:-, :_vsub), (:*, :_vmul)]
+    op != :* && @eval begin
         $(op)(x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
         $(op)(x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
         $(op)(x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
+    end
+    @eval begin
+        broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
     end
 end
 
@@ -1284,8 +1287,6 @@ end
 ### Reduction
 
 sum(x::AbstractSparseVector) = sum(nonzeros(x))
-sumabs(x::AbstractSparseVector) = sumabs(nonzeros(x))
-sumabs2(x::AbstractSparseVector) = sumabs2(nonzeros(x))
 
 function maximum{T<:Real}(x::AbstractSparseVector{T})
     n = length(x)
@@ -1305,8 +1306,14 @@ function minimum{T<:Real}(x::AbstractSparseVector{T})
      min(zero(T), minimum(nonzeros(x))))::T
 end
 
-maxabs{T<:Number}(x::AbstractSparseVector{T}) = maxabs(nonzeros(x))
-minabs{T<:Number}(x::AbstractSparseVector{T}) = nnz(x) < length(x) ? abs(zero(T)) : minabs(nonzeros(x))
+for f in [:sum, :maximum, :minimum], op in [:abs, :abs2]
+    SV = :AbstractSparseVector
+    if f == :minimum
+        @eval ($f){T<:Number}(::typeof($op), x::$SV{T}) = nnz(x) < length(x) ? ($op)(zero(T)) : ($f)($op, nonzeros(x))
+    else
+        @eval ($f)(::typeof($op), x::$SV) = ($f)($op, nonzeros(x))
+    end
+end
 
 vecnorm(x::AbstractSparseVector, p::Real=2) = vecnorm(nonzeros(x), p)
 
@@ -1368,10 +1375,12 @@ scale!(a::Real, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 scale!(a::Complex, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 
 
-.*(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
-.*(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
-./(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
-
+*(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
+*(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
+/(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
+broadcast(::typeof(*), x::AbstractSparseVector, a::Number) = x * a
+broadcast(::typeof(*), a::Number, x::AbstractSparseVector) = a * x
+broadcast(::typeof(/), x::AbstractSparseVector, a::Number) = x / a
 
 # dot
 
@@ -1421,7 +1430,7 @@ function _spdot(f::Function,
 end
 
 function dot{Tx<:Number,Ty<:Number}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty})
-    x === y && return sumabs2(x)
+    x === y && return sum(abs2, x)
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
 

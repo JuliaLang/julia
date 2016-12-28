@@ -76,7 +76,7 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
-    // sigreturn orientated programming mitigation can work against us
+    // sigreturn oriented programming mitigation can work against us
     // by rejecting ucontext that is modified.
     // The current (staged) implementation in the Linux Kernel only
     // checks that the syscall is made in the signal handler and that

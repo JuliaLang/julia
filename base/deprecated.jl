@@ -307,26 +307,26 @@ for (Fun, func) in [(:IdFun, :identity),
                     (:OrFun, :|),
                     (:XorFun, :xor),
                     (:AddFun, :+),
-                    (:DotAddFun, :.+),
+                    # (:DotAddFun, :.+),
                     (:SubFun, :-),
-                    (:DotSubFun, :.-),
+                    # (:DotSubFun, :.-),
                     (:MulFun, :*),
-                    (:DotMulFun, :.*),
+                    # (:DotMulFun, :.*),
                     (:RDivFun, :/),
-                    (:DotRDivFun, :./),
+                    # (:DotRDivFun, :./),
                     (:LDivFun, :\),
                     (:IDivFun, :div),
-                    (:DotIDivFun, :.÷),
+                    # (:DotIDivFun, :.÷),
                     (:ModFun, :mod),
                     (:RemFun, :rem),
-                    (:DotRemFun, :.%),
+                    # (:DotRemFun, :.%),
                     (:PowFun, :^),
                     (:MaxFun, :scalarmax),
                     (:MinFun, :scalarmin),
                     (:LessFun, :<),
                     (:MoreFun, :>),
-                    (:DotLSFun, :.<<),
-                    (:DotRSFun, :.>>),
+                    # (:DotLSFun, :.<<),
+                    # (:DotRSFun, :.>>),
                     (:ElementwiseMaxFun, :max),
                     (:ElementwiseMinFun, :min),
                     (:ComplexFun, :complex),
@@ -815,7 +815,7 @@ function convert(::Type{Base.LinAlg.UnitUpperTriangular}, A::Diagonal)
         "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
         "Consider calling the `UnitUpperTriangular` constructor directly ",
         "(`Base.LinAlg.UnitUpperTriangular(A)`) instead."), :convert)
-    if !all(A.diag .== one(eltype(A)))
+    if !all(x -> x == one(x), A.diag)
         throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
     end
     Base.LinAlg.UnitUpperTriangular(Array(A))
@@ -825,7 +825,7 @@ function convert(::Type{Base.LinAlg.UnitLowerTriangular}, A::Diagonal)
         "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
         "Consider calling the `UnitLowerTriangular` constructor directly ",
         "(`Base.LinAlg.UnitLowerTriangular(A)`) instead."), :convert)
-    if !all(A.diag .== one(eltype(A)))
+    if !all(x -> x == one(x), A.diag)
         throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
     end
     Base.LinAlg.UnitLowerTriangular(Array(A))
@@ -1003,6 +1003,20 @@ macro vectorize_2arg(S,f)
 end
 export @vectorize_1arg, @vectorize_2arg
 
+# deprecations for uses of old dot operators (.* etc) as objects, rather than
+# just calling them infix.
+for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=, :≥, :\, :^, ://, :>>, :<<)
+    dotop = Symbol('.', op)
+    # define as const dotop = (a,b) -> ...
+    # to work around syntax deprecation for dotop(a,b) = ...
+    @eval const $dotop = (a,b) -> begin
+        depwarn(string($(string(dotop)), " is no longer a function object; use broadcast(",$op,", ...) instead"),
+                $(QuoteNode(dotop)))
+        broadcast($op, a, b)
+    end
+    @eval export $dotop
+end
+
 # Devectorize manually vectorized abs methods in favor of compact broadcast syntax
 @deprecate abs(f::Base.Pkg.Resolve.MaxSum.Field) abs.(f)
 @deprecate abs(B::BitArray) abs.(B)
@@ -1131,7 +1145,27 @@ eval(Base.Dates, quote
 end)
 
 # #18931
-@deprecate cummin(A, dim=1) accumulate(min, A, dim=1)
-@deprecate cummax(A, dim=1) accumulate(max, A, dim=1)
+@deprecate cummin(A, dim=1) accumulate(min, A, dim)
+@deprecate cummax(A, dim=1) accumulate(max, A, dim)
+
+# #19598
+@deprecate sumabs(x)          sum(abs, x)
+@deprecate sumabs(A, region)  sum(abs, A, region)
+@deprecate sumabs2(x)         sum(abs2, x)
+@deprecate sumabs2(A, region) sum(abs2, A, region)
+@deprecate minabs(x)          minimum(abs, x)
+@deprecate minabs(A, region)  minimum(abs, A, region)
+@deprecate maxabs(x)          maximum(abs, x)
+@deprecate maxabs(A, region)  maximum(abs, A, region)
+
+for (dep, f, op) in [(:sumabs!, :sum!, :abs),
+                     (:sumabs2!, :sum!, :abs2),
+                     (:minabs!, :minimum!, :abs),
+                     (:maxabs!, :maximum!, :abs)]
+    @eval function ($dep)(r, A; init=true)
+        Base.depwarn("$dep(r, A; init=$init) is deprecated, use $f($op, r, A; init=$init) instead.", Symbol($dep))
+        ($f)($op, r, A; init=init)
+    end
+end
 
 # End deprecations scheduled for 0.6

@@ -402,29 +402,33 @@ specify this trait, the default value `LinearSlow()` is used.
 
 ### Vectorized Operators and Functions
 
-The following operators are supported for arrays. The dot version of a binary operator should
-be used for elementwise operations.
+The following operators are supported for arrays.  Also, *every* binary
+operator supports a [dot version](@ref man-dot-operators) that can be
+applied to arrays (and combinations of arrays and scalars) as a
+[fused broadcasting operation](@ref man-vectorized).  (For comparison
+operations like `<`, *only* the `.<` version is applicable to arrays.)
 
 1. Unary arithmetic -- `-`, `+`, `!`
-2. Binary arithmetic -- `+`, `-`, `*`, `.*`, `/`, `./`, `\`, `.\`, `^`, `.^`, `div`, `mod`
-3. Comparison -- `.==`, `.!=`, `.<`, `.<=`, `.>`, `.>=`
+2. Binary arithmetic -- `+`, `-`, `*`, `/`, `\`, `^`, `.^`, `div`, `mod`
+3. Comparison -- `==`, `!=`, `≈` ([`isapprox`](@ref)), `≉`
 4. Unary Boolean or bitwise -- `~`
-5. Binary Boolean or bitwise -- `&`, `|`, `$`
+5. Binary Boolean or bitwise -- `&`, `|`, `⊻` ([`xor`](@ref))
 
-Some operators without dots operate elementwise anyway when one argument is a scalar. These operators
-are `*`, `+`, `-`, and the bitwise operators. The operators `/` and `\` operate elementwise when
+Some operators without dots operate elementwise anyway when one argument is a scalar:
+`*`, `+`, `-`, and the bitwise operators. The operators `/` and `\` operate elementwise when
 the denominator is a scalar.
 
 Note that comparisons such as `==` operate on whole arrays, giving a single boolean answer. Use
-dot operators for elementwise comparisons.
+dot operators like `.==` for elementwise comparisons.
 
-To enable convenient vectorization of mathematical and other operations, Julia provides the compact
-syntax `f.(args...)`, e.g. `sin.(x)` or `min.(x,y)`, for elementwise operations over arrays or
-mixtures of arrays and scalars (a [`broadcast()`](@ref) operation). See [Dot Syntax for Vectorizing Functions](@ref).
+To enable convenient vectorization of mathematical and other operations, Julia [provides the compact
+syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)` or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and scalars (a [Broadcasting](@ref) operation); these
+have the additional advantage of "fusing" into a single loop when combined with
+dot operators and other dot calls.
 
 Note that there is a difference between `max.(a,b)`, which `broadcast`s [`max()`](@ref) elementwise
-over `a` and `b`, and `maximum(a)`, which finds the largest value within `a`. The same statements
-hold for `min.(a,b)` and `minimum(a)`.
+over `a` and `b`, and `maximum(a)`, which finds the largest value within `a`. The same relationship
+holds for `min.(a,b)` and `minimum(a)`.
 
 ### Broadcasting
 
@@ -461,14 +465,17 @@ julia> broadcast(+, a, b)
  1.73659  0.873631
 ```
 
-Elementwise operators such as `.+` and `.*` perform broadcasting if necessary. There is also a
-[`broadcast!()`](@ref) function to specify an explicit destination, and [`broadcast_getindex()`](@ref)
+[Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
+to `broadcast` calls (except that they fuse, as described below). There is also a
+[`broadcast!()`](@ref) function to specify an explicit destination (which can also
+be accessed in a fusing fashion by `.=` assignment), and functions [`broadcast_getindex()`](@ref)
 and [`broadcast_setindex!()`](@ref) that broadcast the indices before indexing.   Moreover, `f.(args...)`
 is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broadcast any function
-([Dot Syntax for Vectorizing Functions](@ref)).
+([dot syntax](@ref man-vectorized)).  Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
+[automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
 Additionally, [`broadcast()`](@ref) is not limited to arrays (see the function documentation),
-it also handles tuples and treats any argument that is not an array or a tuple as a "scalar".
+it also handles tuples and treats any argument that is not an array, tuple or `Ref` (except for `Ptr`) as a "scalar".
 
 ```julia
 julia> convert.(Float32, [1, 2])

@@ -23,14 +23,14 @@ function getindex(A::Union{Eigen,GeneralizedEigen}, d::Symbol)
     throw(KeyError(d))
 end
 
-isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(A.values .> 0)
+isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
 
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     issymmetric(A) && return eigfact!(Symmetric(A))
     A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
-    all(WI .== 0.) && return Eigen(WR, VR)
+    iszero(WI) && return Eigen(WR, VR)
     evec = zeros(Complex{T}, n, n)
     j = 1
     while j <= n
@@ -164,7 +164,7 @@ Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
-    return all(valsim .== 0) ? valsre : complex(valsre, valsim)
+    return iszero(valsim) ? valsre : complex(valsre, valsim)
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     ishermitian(A) && return eigvals(Hermitian(A))
@@ -271,7 +271,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issymmetric(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
     n = size(A, 1)
     alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
-    all(alphai .== 0) && return GeneralizedEigen(alphar ./ beta, vr)
+    iszero(alphai) && return GeneralizedEigen(alphar ./ beta, vr)
 
     vecs = zeros(Complex{T}, n, n)
     j = 1
@@ -354,7 +354,7 @@ Same as [`eigvals`](@ref), but saves space by overwriting the input `A` (and `B`
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
-    return (all(alphai .== 0) ? alphar : complex(alphar, alphai))./beta
+    return (iszero(alphai) ? alphar : complex(alphar, alphai))./beta
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
     ishermitian(A) && isposdef(B) && return eigvals!(Hermitian(A), Hermitian(B))

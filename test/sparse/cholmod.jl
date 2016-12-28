@@ -150,35 +150,31 @@ pred = afiro'*sol
 
 let # Issue 9160
 
-    for Ti in CHOLMOD.ITypes.types
-        for elty in CHOLMOD.VRealTypes.types
+    A = sprand(10, 10, 0.1)
+    A = convert(SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}, A)
+    cmA = CHOLMOD.Sparse(A)
 
-            A = sprand(10,10,0.1)
-            A = convert(SparseMatrixCSC{elty,Ti},A)
-            cmA = CHOLMOD.Sparse(A)
+    B = sprand(10, 10, 0.1)
+    B = convert(SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}, B)
+    cmB = CHOLMOD.Sparse(B)
 
-            B = sprand(10,10,0.1)
-            B = convert(SparseMatrixCSC{elty,Ti},B)
-            cmB = CHOLMOD.Sparse(B)
+    # Ac_mul_B
+    @test sparse(cmA'*cmB) ≈ A'*B
 
-            # Ac_mul_B
-            @test sparse(cmA'*cmB) ≈ A'*B
+    # A_mul_Bc
+    @test sparse(cmA*cmB') ≈ A*B'
 
-            # A_mul_Bc
-            @test sparse(cmA*cmB') ≈ A*B'
+    # A_mul_Ac
+    @test sparse(cmA*cmA') ≈ A*A'
 
-            # A_mul_Ac
-            @test sparse(cmA*cmA') ≈ A*A'
+    # Ac_mul_A
+    @test sparse(cmA'*cmA) ≈ A'*A
 
-            # Ac_mul_A
-            @test sparse(cmA'*cmA) ≈ A'*A
+    # A_mul_Ac for symmetric A
+    A = 0.5*(A + A')
+    cmA = CHOLMOD.Sparse(A)
+    @test sparse(cmA*cmA') ≈ A*A'
 
-            # A_mul_Ac for symmetric A
-            A = 0.5*(A + A')
-            cmA = CHOLMOD.Sparse(A)
-            @test sparse(cmA*cmA') ≈ A*A'
-        end
-    end
 end
 
 # Issue #9915
@@ -684,6 +680,18 @@ let Apre = sprandn(10, 10, 0.2) - I
         b = A*x
         @test x ≈ A\b
         @test A.'\b ≈ A'\b
+    end
+end
+
+# Check that Symmetric{SparseMatrixCSC} can be constructed from CHOLMOD.Sparse
+let A = sprandn(10, 10, 0.1)
+    B = SparseArrays.CHOLMOD.Sparse(A)
+    C = B'B
+    # Change internal representation to symmetric (upper/lower)
+    o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
+    for uplo in (1, -1)
+        unsafe_store!(Ptr{Int8}(C.p), uplo, Int(o) + 1)
+        @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
     end
 end
 

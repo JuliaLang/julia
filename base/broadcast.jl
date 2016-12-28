@@ -3,24 +3,21 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: @pure, promote_eltype_op, _promote_op, linearindices, tail, OneTo, to_shape,
+using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache
-import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
-import Base: broadcast
-export broadcast!, bitbroadcast, dotview
+import Base: broadcast, broadcast!
+export bitbroadcast, dotview
 export broadcast_getindex, broadcast_setindex!
 
 ## Broadcasting utilities ##
 
-# fallback for broadcasting with zero arguments and some special cases
-broadcast(f) = f()
+# fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
 @inline broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
 @inline broadcast(f, As::AbstractArray...) = broadcast_c(f, Array, As...)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
-broadcast!(f, X::AbstractArray) = fill!(X, f())
 broadcast!(f, X::AbstractArray, x::Number...) = fill!(X, f(x...))
 function broadcast!{T,S,N}(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N})
     check_broadcast_shape(broadcast_indices(x), broadcast_indices(y))
@@ -30,7 +27,9 @@ end
 # logic for deciding the resulting container type
 containertype(x) = containertype(typeof(x))
 containertype(::Type) = Any
+containertype{T<:Ptr}(::Type{T}) = Any
 containertype{T<:Tuple}(::Type{T}) = Tuple
+containertype{T<:Ref}(::Type{T}) = Array
 containertype{T<:AbstractArray}(::Type{T}) = Array
 containertype(ct1, ct2) = promote_containertype(containertype(ct1), containertype(ct2))
 @inline containertype(ct1, ct2, cts...) = promote_containertype(containertype(ct1), containertype(ct2, cts...))
@@ -49,6 +48,7 @@ broadcast_indices(A) = broadcast_indices(containertype(A), A)
 broadcast_indices(::Type{Any}, A) = ()
 broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
 broadcast_indices(::Type{Array}, A) = indices(A)
+broadcast_indices(::Type{Array}, A::Ref) = ()
 @inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
@@ -121,6 +121,7 @@ map_newindexer(shape, ::Tuple{}) = (), ()
 end
 
 Base.@propagate_inbounds _broadcast_getindex(A, I) = _broadcast_getindex(containertype(A), A, I)
+Base.@propagate_inbounds _broadcast_getindex(::Type{Array}, A::Ref, I) = A[]
 Base.@propagate_inbounds _broadcast_getindex(::Type{Any}, A, I) = A
 Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 
@@ -129,7 +130,7 @@ Base.@propagate_inbounds _broadcast_getindex(::Any, A, I) = A[I]
 # of keeps). The first two type parameters are to ensure specialization.
 @generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
     quote
-        $(Expr(:meta, :noinline))
+        $(Expr(:meta, :inline))
         # destructure the keeps and As tuples
         @nexprs $nargs i->(A_i = As[i])
         @nexprs $nargs i->(keep_i = keeps[i])
@@ -150,7 +151,7 @@ end
 # and then copy in chunks into the output
 @generated function _broadcast!{K,ID,AT,nargs}(f, B::BitArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter)
     quote
-        $(Expr(:meta, :noinline))
+        $(Expr(:meta, :inline))
         # destructure the keeps and As tuples
         @nexprs $nargs i->(A_i = As[i])
         @nexprs $nargs i->(keep_i = keeps[i])
@@ -244,8 +245,19 @@ function broadcast_t(f, ::Type{Any}, shape, iter, As...)
     B[I] = val
     return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
-@inline function broadcast_t(f, T, shape, iter, As...)
+@inline function broadcast_t{nargs}(f, T, shape, iter, As::Vararg{Any,nargs})
     B = similar(Array{T}, shape)
+    keeps, Idefaults = map_newindexer(shape, As)
+    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
+    return B
+end
+
+# default to BitArray for broadcast operations producing Bool, to save 8x space
+# in the common case where this is used for logical array indexing; in
+# performance-critical cases where Array{Bool} is desired, one can always
+# use broadcast! instead.
+function broadcast_t(f, ::Type{Bool}, shape, iter, As...)
+    B = similar(BitArray, shape)
     nargs = length(As)
     keeps, Idefaults = map_newindexer(shape, As)
     _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter)
@@ -257,13 +269,22 @@ end
 @inline broadcast_elwise_op(f, As...) =
     broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
-@pure typestuple(a) = Tuple{eltype(a)}
-@pure typestuple(T::Type) = Tuple{Type{T}}
-@pure typestuple(a, b...) = Tuple{typestuple(a).types..., typestuple(b...).types...}
+ftype(f, A) = typeof(f)
+ftype(f, A...) = typeof(a -> f(a...))
+ftype(T::Type, A...) = Type{T}
+typestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
+typestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
+typestuple(a, b...) = (Base.@_pure_meta; Tuple{typestuple(a).types..., typestuple(b...).types...})
+ziptype(A) = typestuple(A)
+ziptype(A, B) = (Base.@_pure_meta; Iterators.Zip2{typestuple(A), typestuple(B)})
+@inline ziptype(A, B, C, D...) = Iterators.Zip{typestuple(A), ziptype(B, C, D...)}
+
+_broadcast_type(f, T::Type, As...) = Base._return_type(f, typestuple(T, As...))
+_broadcast_type(f, A, Bs...) = Base._default_eltype(Base.Generator{ziptype(A, Bs...), ftype(f, A, Bs...)})
 
 # broadcast methods that dispatch on the type of the final container
 @inline function broadcast_c(f, ::Type{Array}, A, Bs...)
-    T = _promote_op(f, typestuple(A, Bs...))
+    T = _broadcast_type(f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
     if isleaftype(T)
@@ -284,15 +305,16 @@ end
 """
     broadcast(f, As...)
 
-Broadcasts the arrays, tuples and/or scalars `As` to a container of the
+Broadcasts the arrays, tuples, `Ref` and/or scalars `As` to a container of the
 appropriate type and dimensions. In this context, anything that is not a
-subtype of `AbstractArray` or `Tuple` is considered a scalar. The resulting
-container is established by the following rules:
+subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple` is considered
+a scalar. The resulting container is established by the following rules:
 
  - If all the arguments are scalars, it returns a scalar.
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
- - If there is at least an array in the arguments, it returns an array
-   (and treats tuples as 1-dimensional arrays) expanding singleton dimensions.
+ - If there is at least an array or a `Ref` in the arguments, it returns an array
+   (and treats any `Ref` as a 0-dimensional array of its contents and any tuple
+   as a 1-dimensional array) expanding singleton dimensions.
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
@@ -334,10 +356,15 @@ julia> abs.((1, -2))
 julia> broadcast(+, 1.0, (0, -2.0))
 (1.0,-1.0)
 
-julia> broadcast(+, 1.0, (0, -2.0), [1])
+julia> broadcast(+, 1.0, (0, -2.0), Ref(1))
 2-element Array{Float64,1}:
  2.0
  0.0
+
+julia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))
+2-element Array{Array{Int64,1},1}:
+ [1,1]
+ [2,2]
 
 julia> string.(("one","two","three","four"), ": ", 1:4)
 4-element Array{String,1}:
@@ -456,147 +483,6 @@ position in `X` at the indices in `A` given by the same positions in `inds`.
             end
         end
         A
-    end
-end
-
-## elementwise operators ##
-
-for op in (:÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
-    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast_elwise_op($op, A, B)
-end
-.+(As::AbstractArray...) = broadcast_elwise_op(+, As...)
-.*(As::AbstractArray...) = broadcast_elwise_op(*, As...)
-
-# ## element-wise comparison operators returning BitArray ##
-
-.==(A::AbstractArray, B::AbstractArray) = bitbroadcast(==, A, B)
- .<(A::AbstractArray, B::AbstractArray) = bitbroadcast(<,  A, B)
-.!=(A::AbstractArray, B::AbstractArray) = bitbroadcast(!=, A, B)
-.<=(A::AbstractArray, B::AbstractArray) = bitbroadcast(<=, A, B)
-
-function broadcast_bitarrays(scalarf, bitf, A::AbstractArray{Bool}, B::AbstractArray{Bool})
-    local shape
-    try
-        shape = promote_shape(indices(A), indices(B))
-    catch
-        return bitbroadcast(scalarf, A, B)
-    end
-    F = BitArray(to_shape(shape))
-    Fc = F.chunks
-    Ac = BitArray(A).chunks
-    Bc = BitArray(B).chunks
-    if !isempty(Ac) && !isempty(Bc)
-        for i = 1:length(Fc) - 1
-            Fc[i] = (bitf)(Ac[i], Bc[i])
-        end
-        Fc[end] = (bitf)(Ac[end], Bc[end]) & _msk_end(F)
-    end
-    return F
-end
-
-biteq(a::UInt64, b::UInt64) = ~a ⊻ b
-bitlt(a::UInt64, b::UInt64) = ~a & b
-bitneq(a::UInt64, b::UInt64) = a ⊻ b
-bitle(a::UInt64, b::UInt64) = ~a | b
-
-.==(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(==, biteq, A, B)
- .<(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(<,  bitlt, A, B)
-.!=(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(!=, bitneq, A, B)
-.<=(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = broadcast_bitarrays(<=, bitle, A, B)
-
-function bitcache(op, A, B, refA, refB, l::Int, ind::Int, C::Vector{Bool})
-    left = l - ind + 1
-    @inbounds begin
-        for j = 1:min(bitcache_size, left)
-            C[j] = (op)(refA(A, ind), refB(B, ind))
-            ind += 1
-        end
-        C[left+1:bitcache_size] = false
-    end
-    return ind
-end
-
-# note: the following are not broadcasting, but need to be defined here to avoid
-# ambiguity warnings
-
-for (f, scalarf) in ((:.==, :(==)),
-                     (:.< , :<   ),
-                     (:.!=, :!=  ),
-                     (:.<=, :<=  ))
-    for (sigA, sigB, active, refA, refB) in ((:Any, :AbstractArray, :B,
-                                              :((A,ind)->A), :((B,ind)->B[ind])),
-                                             (:AbstractArray, :Any, :A,
-                                              :((A,ind)->A[ind]), :((B,ind)->B)))
-        shape = :(indices($active))
-        @eval begin
-            function ($f)(A::$sigA, B::$sigB)
-                P = similar(BitArray, $shape)
-                F = parent(P)
-                l = length(F)
-                l == 0 && return F
-                Fc = F.chunks
-                C = Array{Bool}(bitcache_size)
-                ind = first(linearindices($active))
-                cind = 1
-                for i = 1:div(l + bitcache_size - 1, bitcache_size)
-                    ind = bitcache($scalarf, A, B, $refA, $refB, l, ind, C)
-                    dumpbitcache(Fc, cind, C)
-                    cind += bitcache_chunks
-                end
-                return P
-            end
-        end
-    end
-end
-
-## specialized element-wise operators for BitArray
-
-(.^)(A::BitArray, B::AbstractArray{Bool}) = (B .<= A)
-(.^)(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = (B .<= A)
-
-function bitcache_pow{T}(Ac::Vector{UInt64}, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
-    left = l - ind + 1
-    @inbounds begin
-        for j = 1:min(bitcache_size, left)
-            C[j] = unsafe_bitgetindex(Ac, ind) ^ B[ind]
-            ind += 1
-        end
-        C[left+1:bitcache_size] = false
-    end
-    return ind
-end
-function (.^){T<:Integer}(A::BitArray, B::Array{T})
-    local shape
-    try
-        shape = promote_shape(indices(A), indices(B))
-    catch
-        return bitbroadcast(^, A, B)
-    end
-    F = BitArray(to_shape(shape))
-    l = length(F)
-    l == 0 && return F
-    Ac = A.chunks
-    Fc = F.chunks
-    C = Array{Bool}(bitcache_size)
-    ind = 1
-    cind = 1
-    for i = 1:div(l + bitcache_size - 1, bitcache_size)
-        ind = bitcache_pow(Ac, B, l, ind, C)
-        dumpbitcache(Fc, cind, C)
-        cind += bitcache_chunks
-    end
-    return F
-end
-
-for (sigA, sigB) in ((BitArray, BitArray),
-                     (AbstractArray{Bool}, BitArray),
-                     (BitArray, AbstractArray{Bool}))
-    @eval function (.*)(A::$sigA, B::$sigB)
-        try
-            return BitArray(A) & BitArray(B)
-        catch
-            return bitbroadcast(&, A, B)
-        end
     end
 end
 

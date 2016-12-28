@@ -4,6 +4,14 @@
 
 isinteger(x::Integer) = true
 
+"""
+    iszero(x)
+
+Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
+all of the elements of `x` are zero.
+"""
+iszero(x) = x == zero(x) # fallback method
+
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
 indices(x::Number) = ()
