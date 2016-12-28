@@ -253,10 +253,13 @@ end
 
 #Elementary operations
 broadcast(::typeof(abs), M::Bidiagonal) = Bidiagonal(abs.(M.dv), abs.(M.ev), abs.(M.isupper))
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag)
+broadcast(::typeof(trunc), M::Bidiagonal) = Bidiagonal(trunc.(M.dv), trunc.(M.ev), M.isupper)
+for func in (:conj, :copy, :round, :floor, :ceil, :real, :imag)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.isupper)
 end
-for func in (:round, :trunc, :floor, :ceil)
+broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::Bidiagonal) =
+    Bidiagonal(trunc.(T, M.dv), trunc.(T, M.ev), M.isupper)
+for func in (:round, :floor, :ceil)
     @eval ($func){T<:Integer}(::Type{T}, M::Bidiagonal) = Bidiagonal(($func)(T,M.dv), ($func)(T,M.ev), M.isupper)
 end
 
