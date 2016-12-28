@@ -40,8 +40,6 @@ end
 
 
 //(X::AbstractArray, y::Number) = X .// y
-.//(X::AbstractArray, y::Number) = reshape([ x // y for x in X ], size(X))
-.//(y::Number, X::AbstractArray) = reshape([ y // x for x in X ], size(X))
 
 function show(io::IO, x::Rational)
     show(io, numerator(x))

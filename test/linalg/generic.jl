@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base: -, *
+import Base: -, *, /, \
 using Base.Test
 
 # A custom Quaternion type with minimal defined interface and methods.
@@ -16,6 +16,7 @@ Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
 Base.abs(q::Quaternion) = sqrt(abs2(q))
 Base.real{T}(::Type{Quaternion{T}}) = T
 Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
+Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) & isfinite(q.v3)
 
 (-)(ql::Quaternion, qr::Quaternion) =
     Quaternion(ql.s - qr.s, ql.v1 - qr.v1, ql.v2 - qr.v2, ql.v3 - qr.v3)
@@ -23,6 +24,10 @@ Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
                                                q.s*w.v1 + q.v1*w.s + q.v2*w.v3 - q.v3*w.v2,
                                                q.s*w.v2 - q.v1*w.v3 + q.v2*w.s + q.v3*w.v1,
                                                q.s*w.v3 + q.v1*w.v2 - q.v2*w.v1 + q.v3*w.s)
+(*)(q::Quaternion, r::Real) = Quaternion(q.s*r, q.v1*r, q.v2*r, q.v3*r)
+(*)(q::Quaternion, b::Bool) = b * q # remove method ambiguity
+(/)(q::Quaternion, w::Quaternion) = q * conj(w) * (1.0 / abs2(w))
+(\)(q::Quaternion, w::Quaternion) = conj(q) * w * (1.0 / abs2(q))
 
 debug = false
 
@@ -206,8 +211,10 @@ q = Quaternion(0.44567, 0.755871, 0.882548, 0.423612)
 qmat = [Quaternion(0.015007, 0.355067, 0.418645, 0.318373)]
 @test scale!(q, copy(qmat)) != scale!(copy(qmat), q)
 ## Test * because it doesn't dispatch to scale!
-@test q*qmat != qmat*q
+@test q*qmat ≉ qmat*q
 @test conj(q*qmat) ≈ conj(qmat)*conj(q)
+@test q * (q \ qmat) ≈ qmat ≈ (qmat / q) * q
+@test q\qmat ≉ qmat/q
 
 # test ops on Numbers
 for elty in [Float32,Float64,Complex64,Complex128]

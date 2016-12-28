@@ -416,7 +416,7 @@ function serialize_typename(s::AbstractSerializer, t::TypeName)
     serialize(s, t.primary.ninitialized)
     if isdefined(t, :mt)
         serialize(s, t.mt.name)
-        serialize(s, t.mt.defs)
+        serialize(s, collect(Base.MethodList(t.mt)))
         serialize(s, t.mt.max_args)
         if isdefined(t.mt, :kwsorter)
             serialize(s, t.mt.kwsorter)
@@ -621,7 +621,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     name = deserialize(s)::Symbol
     file = deserialize(s)::Symbol
     line = deserialize(s)::Int32
-    sig = deserialize(s)
+    sig = deserialize(s)::DataType
     tvars = deserialize(s)::Union{SimpleVector, TypeVar}
     sparam_syms = deserialize(s)::SimpleVector
     ambig = deserialize(s)::Union{Array{Any,1}, Void}
@@ -649,6 +649,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             meth.unspecialized = linfo
         else
             meth.source = template
+        end
+        ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
+        if isdefined(ftype.name, :mt) && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), ftype.name.mt, sig, typemax(UInt))
+            ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), ftype.name.mt, meth, C_NULL)
         end
         known_object_data[lnumber] = meth
     end
@@ -803,8 +807,12 @@ function deserialize_typename(s::AbstractSerializer, number)
         if makenew
             tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
             tn.mt.name = mtname
-            tn.mt.defs = defs
             tn.mt.max_args = maxa
+            for def in defs
+                if isdefined(def, :sig)
+                    ccall(:jl_method_table_insert, Void, (Any, Any, Ptr{Void}), tn.mt, def, C_NULL)
+                end
+            end
         end
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG

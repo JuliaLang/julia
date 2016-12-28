@@ -66,30 +66,21 @@ end
 (+)(y::Period,x::TimeType) = x + y
 (-)(y::Period,x::TimeType) = x - y
 
-for op in (:.+, :.-)
-    op_ = Symbol(string(op)[2:end])
+for op in (:+, :-)
     @eval begin
         # GeneralPeriod, AbstractArray{TimeType}
-        ($op){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) =
-            reshape(T[($op_)(i,y) for i in x], size(x))
-        ($op){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = ($op)(x,y)
-        ($op_){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = ($op)(x,y)
-        ($op_){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = ($op)(x,y)
+        ($op){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) = broadcast($op,x,y)
+        ($op){T<:TimeType}(y::GeneralPeriod, x::AbstractArray{T}) = broadcast($op,x,y)
 
         # TimeType, StridedArray{GeneralPeriod}
-        ($op){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) =
-            reshape(T[($op_)(i,y) for i in x], size(x))
-        ($op){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
-        ($op_){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = ($op)(x,y)
-        ($op_){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = ($op)(x,y)
+        ($op){T<:TimeType,P<:GeneralPeriod}(x::StridedArray{P}, y::T) = broadcast($op,x,y)
+        ($op){P<:GeneralPeriod}(y::TimeType, x::StridedArray{P}) = broadcast($op,x,y)
     end
 end
 
 # TimeType, AbstractArray{TimeType}
-(.-){T<:TimeType}(x::AbstractArray{T}, y::T) = reshape(Period[i - y for i in x], size(x))
-(.-){T<:TimeType}(y::T, x::AbstractArray{T}) = -(x .- y)
 (-){T<:TimeType}(x::AbstractArray{T}, y::T) = x .- y
-(-){T<:TimeType}(y::T, x::AbstractArray{T}) = -(x .- y)
+(-){T<:TimeType}(y::T, x::AbstractArray{T}) = y .- x
 
 # AbstractArray{TimeType}, AbstractArray{TimeType}
 (-){T<:TimeType}(x::OrdinalRange{T}, y::OrdinalRange{T}) = collect(x) - collect(y)

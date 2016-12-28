@@ -127,6 +127,37 @@ The updating versions of all the binary arithmetic and bitwise operators are:
     true
     ```
 
+## [Vectorized "dot" operators](@id man-dot-operators)
+
+For *every* binary operation like `^`, there is a corresponding
+"dot" operation `.^` that is *automatically* defined
+to perform `^` element-by-element on arrays.   For example,
+`[1,2,3] ^ 3` is not defined, since there is no standard
+mathematical meaning to "cubing" an array, but `[1,2,3] .^ 3`
+is defined as computing the elementwise
+(or "vectorized") result `[1^3, 2^3, 3^3]`.
+
+More specifically, `a .^ b` is parsed as the ["dot" call](@ref man-vectorized)
+`(^).(a,b)`, which performs a [broadcast](@ref Broadcasting) operation:
+it can combine arrays and scalars, arrays of the same size (performing
+the operation elementwise), and even arrays of different shapes (e.g.
+combining row and column vectors to produce a matrix).   Moreover, like
+all vectorized "dot calls," these "dot operators" are
+*fusing*.  For example, if you compute `2 .* A.^2 .+ sin.(A)` for an
+array `A`, it performs a *single* loop over `A`, computing `2a^2 + sin(a)`
+for each element of `A`.  In particular, nested dot calls like `f.(g.(x))`
+are fused, and "adjacent" binary operators like `x .+ 3 .* x.^2` are
+equivalent to nested dot calls `(+).(x, (*).(3, (^).(x, 2)))`.
+
+Furthermore, "dotted" updating operators like `a .+= b` are parsed
+as `a .= a .+ b`, where `.=` is a fused *in-place* assignment operation
+(see the [dot syntax documentation](@ref man-vectorized)).
+
+Note the dot syntax is also applicable to user-defined operators.
+For example, if you define `⊗(A,B) = kron(A,B)` to give a convenient
+infix syntax `A ⊗ B` for Kronecker products ([`kron`](@ref)), then
+`[A,B] .⊗ [C,D]` will compute `[A⊗C, B⊗D]` with no additional coding.
+
 ## Numeric Comparisons
 
 Standard comparison operations are defined for all the primitive numeric types:
@@ -265,13 +296,6 @@ Chaining comparisons is often quite convenient in numerical code. Chained compar
 which allows them to work on arrays. For example, `0 .< A .< 1` gives a boolean array whose entries
 are true where the corresponding elements of `A` are between 0 and 1.
 
-The operator [`.<`](@ref) is intended for array objects; the operation `A .< B` is valid only
-if `A` and `B` have the same dimensions.  The operator returns an array with boolean entries and
-with the same dimensions as `A` and `B`.  Such operators are called *elementwise*; Julia offers
-a suite of elementwise operators: [`.*`](@ref), [`.+`](@ref), etc.  Some of the elementwise operators
-can take a scalar operand such as the example `0 .< A .< 1` in the preceding paragraph. This notation
-means that the scalar operand should be replicated for each entry of the array.
-
 Note the evaluation behavior of chained comparisons:
 
 ```julia
@@ -303,15 +327,15 @@ Julia applies the following order of operations, from highest precedence to lowe
 | Category       | Operators                                                                                         |
 |:-------------- |:------------------------------------------------------------------------------------------------- |
 | Syntax         | `.` followed by `::`                                                                              |
-| Exponentiation | `^` and its elementwise equivalent `.^`                                                           |
-| Fractions      | `//` and `.//`                                                                                    |
-| Multiplication | `* / % & \` and  `.* ./ .% .\`                                                                    |
-| Bitshifts      | `<< >> >>>` and `.<< .>> .>>>`                                                                    |
-| Addition       | `+ - \| ⊻` and `.+ .-`                                                                            |
+| Exponentiation | `^`                                                                                               |
+| Fractions      | `//`                                                                                              |
+| Multiplication | `* / % & \`                                                                                       |
+| Bitshifts      | `<< >> >>>`                                                                                       |
+| Addition       | `+ - \| ⊻`                                                                                        |
 | Syntax         | `: ..` followed by `\|>`                                                                          |
-| Comparisons    | `> < >= <= == === != !== <:` and `.> .< .>= .<= .== .!=`                                          |
+| Comparisons    | `> < >= <= == === != !== <:`                                                                      |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
-| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=` and `.+= .-= .*= ./= .//= .\= .^= .÷= .%=` |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            |
 
 ### Elementary Functions
 
@@ -321,8 +345,8 @@ including integers, floating-point numbers, rationals, and complexes, wherever s
 make sense.
 
 Moreover, these functions (like any Julia function) can be applied in "vectorized" fashion to
-arrays and other collections with the syntax `f.(A)`, e.g. `sin.(A)` will compute the elementwise
-sine of each element of an array `A`.  See [Dot Syntax for Vectorizing Functions](@ref).
+arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
+e.g. `sin.(A)` will compute the elementwise sine of each element of an array `A`.
 
 ## Numerical Conversions
 

@@ -746,17 +746,17 @@ let
     @test !issparse(m2)
 end
 
-#isinteger and isreal
+# isinteger and isreal
 @test isinteger(Diagonal(rand(1:5,5)))
 @test isreal(Diagonal(rand(5)))
 
-#unary ops
+# unary ops
 let A = Diagonal(rand(1:5,5))
     @test +(A) == A
     @test *(A) == A
 end
 
-#flipdim on empty
+# flipdim on empty
 @test flipdim(Diagonal([]),1) == Diagonal([])
 
 # ndims and friends

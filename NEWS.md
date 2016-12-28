@@ -7,7 +7,7 @@ New language features
 Language changes
 ----------------
 
-  * Multiline and singleline nonstandard command literals have been added. A
+  * Multi-line and single-line nonstandard command literals have been added. A
     nonstandard command literal is like a nonstandard string literal, but the
     syntax uses backquotes (``` ` ```) instead of double quotes, and the
     resulting macro called is suffixed with `_cmd`. For instance, the syntax
@@ -16,6 +16,14 @@ Language changes
   * Nonstandard string and command literals can now be qualified with their
     module. For instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`.
     Previously, this syntax parsed as an implicit multiplication. ([#18690])
+
+  * For every binary operator `⨳`, `a .⨳ b` is now automatically equivalent to
+    the `broadcast` call `(⨳).(a, b)`.  Hence, one no longer defines methods
+    for `.*` etcetera.  This also means that "dot operations" automatically
+    fuse into a single loop, along with other dot calls `f.(x)`. ([#17623])
+
+  * Newly defined methods are no longer callable from the same dynamic runtime
+    scope they were defined in ([#17057]).
 
 Breaking changes
 ----------------
@@ -33,6 +41,24 @@ This section lists changes that do not have deprecation warnings.
 
   * `broadcast` now handles tuples, and treats any argument that is not a tuple
     or an array as a "scalar" ([#16986]).
+
+  * `broadcast` now produces a `BitArray` instead of `Array{Bool}` for
+    functions yielding a boolean result.  If you want `Array{Bool}`, use
+    `broadcast!` or `.=` ([#17623]).
+
+  * Operations like `.+` and `.*` on `Range` objects are now generic
+    `broadcast` calls (see above) and produce an `Array`.  If you want
+    a `Range` result, use `+` and `*`, etcetera ([#17623]).
+
+  * `broadcast` now treats `Ref` (except for `Ptr`) arguments as 0-dimensional
+    arrays ([#18965]).
+
+  * The runtime now enforces when new method definitions can take effect ([#17057]).
+    The flip-side of this is that new method definitions should now reliably actually
+    take effect, and be called when evaluating new code ([#265]).
+
+  * The array-scalar operations `div`, `mod`, `rem`, `&`, `|`, `xor`, `/`, `\`, `*`, `+`, and `-`
+    now follow broadcast promotion rules ([#19692]).
 
 Library improvements
 --------------------
@@ -83,6 +109,8 @@ Library improvements
   * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
     That is, not every member of the input iterable will be visited if a `true` (in the case of `any`) or
     `false` (in the case of `all`) value is found, and `mapreduce` will visit all members of the iterable.
+
+  * Additional methods for `ones` and `zeros` functions to support the same signature as the `similar` function ([#19635]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -736,6 +764,7 @@ Language tooling improvements
 [#18628]: https://github.com/JuliaLang/julia/issues/18628
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
+[#18965]: https://github.com/JuliaLang/julia/issues/18965
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
 [#19233]: https://github.com/JuliaLang/julia/issues/19233

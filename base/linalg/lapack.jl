@@ -10,6 +10,8 @@ import ..LinAlg.BLAS.@blasfunc
 import ..LinAlg: BlasFloat, Char, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, checksquare
 
+using Base: iszero
+
 #Generic LAPACK error handlers
 """
 Handle only negative LAPACK error codes
@@ -5502,7 +5504,7 @@ for (gees, gges, elty) in
                     work = Array{$elty}(lwork)
                 end
             end
-            A, vs, all(wi .== 0) ? wr : complex(wr, wi)
+            A, vs, iszero(wi) ? wr : complex(wr, wi)
         end
 
         # *     .. Scalar Arguments ..
@@ -5751,7 +5753,7 @@ for (trexc, trsen, tgsen, elty) in
                     iwork  = Array{BlasInt}(liwork)
                 end
             end
-            T, Q, all(wi .== 0) ? wr : complex(wr, wi)
+            T, Q, iszero(wi) ? wr : complex(wr, wi)
         end
         trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
             trsen!('N', 'V', select, T, Q)

@@ -28,8 +28,9 @@ y = f(x::Int + 1)
 Writing functions is better style. It leads to more reusable code and clarifies what steps are
 being done, and what their inputs and outputs are.
 
-**NOTE:**  All code in the REPL is evaluated in global scope, so a variable defined and assigned
-at toplevel will be a **global** variable.
+!!! note
+    All code in the REPL is evaluated in global scope, so a variable defined and assigned
+    at toplevel will be a **global** variable.
 
 In the following REPL session:
 
@@ -116,8 +117,8 @@ the performance of your code:
     `*.mem` files to see information about where those allocations occur.  See [Memory allocation analysis](@ref).
   * `@code_warntype` generates a representation of your code that can be helpful in finding expressions
     that result in type uncertainty. See [`@code_warntype`](@ref) below.
-  * The [Lint](https://github.com/tonyhffong/Lint.jl) and [TypeCheck](https://github.com/astrieanna/TypeCheck.jl)
-    packages can also warn you of certain types of programming errors.
+  * The [Lint](https://github.com/tonyhffong/Lint.jl)
+    package can also warn you of certain types of programming errors.
 
 ## Avoid containers with abstract type parameters
 
@@ -185,7 +186,7 @@ MyAmbiguousType
 `b` and `c` have the same type, yet their underlying representation of data in memory is very
 different. Even if you stored just numeric values in field `a`, the fact that the memory representation
 of a `UInt8` differs from a `Float64` also means that the CPU needs to handle them using two different
-kinds of instructions.  Since the required information is not available in the type, such decisions
+kinds of instructions. Since the required information is not available in the type, such decisions
 have to be made at run-time. This slows performance.
 
 You can do better by declaring the type of `a`. Here, we are focused on the case where `a` might
@@ -285,7 +286,7 @@ code_llvm(func,(MyType,))
 
 For reasons of length the results are not shown here, but you may wish to try this yourself. Because
 the type is fully-specified in the first case, the compiler doesn't need to generate any code
-to resolve the type at run-time.  This results in shorter and faster code.
+to resolve the type at run-time. This results in shorter and faster code.
 
 ### Avoid fields with abstract containers
 
@@ -588,7 +589,7 @@ The second form is also often better style and can lead to more code reuse.
 
 This pattern is used in several places in the standard library. For example, see `hvcat_fill`
 in [abstractarray.jl](https://github.com/JuliaLang/julia/blob/master/base/abstractarray.jl), or
-the `fill!` function, which we could have used instead of writing our own `fill_twos!`.
+the [`fill!`](@ref) function, which we could have used instead of writing our own `fill_twos!`.
 
 Functions like `strange_twos` occur when dealing with data of uncertain type, for example data
 loaded from an input file that might contain either integers, floats, strings, or something else.
@@ -802,7 +803,7 @@ first element to appear in a slice expression should be coupled with the inner-m
 
 ## Pre-allocating outputs
 
-If your function returns an Array or some other complex type, it may have to allocate memory.
+If your function returns an `Array` or some other complex type, it may have to allocate memory.
  Unfortunately, oftentimes allocation and its converse, garbage collection, are substantial bottlenecks.
 
 Sometimes you can circumvent the need to allocate memory on each function call by preallocating
@@ -863,7 +864,52 @@ type from an algorithm.  In the example above, we could have passed a `SubArray`
 Taken to its extreme, pre-allocation can make your code uglier, so performance measurements and
 some judgment may be required.   However, for "vectorized" (element-wise) functions, the convenient
 syntax `x .= f.(y)` can be used for in-place operations with fused loops and no temporary arrays
-([Dot Syntax for Vectorizing Functions](@ref)).
+(see the [dot syntax for vectorizing functions](@ref man-vectorized)).
+
+## More dots: Fuse vectorized operations
+
+Julia has a special [dot syntax](@ref man-vectorized) that converts
+any scalar function into a "vectorized" function call, and any operator
+into a "vectorized" operator, with the special property that nested
+"dot calls" are *fusing*: they are combined at the syntax level into
+a single loop, without allocating temporary arrays.  If you use `.=` and
+similar assignment operators, the result can also be stored in-place
+in a pre-allocated array (see above).
+
+In a linear-algebra context, this means that even though operations like
+`vector + vector` and `vector * scalar` are defined, it can be advantageous
+to instead use `vector .+ vector` and `vector .* scalar` because the
+resulting loops can be fused with surrounding computations.  For example,
+consider the two functions:
+
+```julia
+f(x) = 3 * x.^2 + 4 * x + 7 * x.^3
+fdot(x) = 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
+```
+
+Both `f` and `fdot` compute the same thing.  However, `fdot` is
+significantly faster when applied to an array:
+
+```julia
+julia> x = rand(10^6);
+
+julia> @time f(x);
+  0.020244 seconds (26 allocations: 53.407 MB, 35.88% gc time)
+
+julia> @time fdot(x);
+  0.004579 seconds (10 allocations: 7.630 MB)
+
+julia> @time f.(x);
+  0.004391 seconds (35 allocations: 7.631 MB)
+```
+
+That is, `fdot(x)` is more than four times faster and allocates 1/7 the
+memory of `f(x)`, because each `*` and `+` operation in `f(x)` allocates
+a new temporary array and executes in a separate loop.   (Of course,
+if you just do `f.(x)` then it is as fast as `fdot(x)` in this
+example, but in many contexts it is more convenient to just sprinkle
+some dots in your expressions rather than defining a separate function
+for each vectorized operation.)
 
 ## Avoid string interpolation for I/O
 
@@ -918,8 +964,9 @@ responses = [fetch(r) for r in refs]
 ```
 
 The former results in a single network round-trip to every worker, while the latter results in
-two network calls - first by the `@spawnat` and the second due to the `fetch` (or even a `wait`).
-The `fetch`/`wait` is also being executed serially resulting in an overall poorer performance.
+two network calls - first by the [`@spawnat`](@ref) and the second due to the [`fetch`](@ref)
+(or even a [`wait`](@ref)).
+The [`fetch`](@ref)/[`wait`](@ref) is also being executed serially resulting in an overall poorer performance.
 
 ## Fix deprecation warnings
 

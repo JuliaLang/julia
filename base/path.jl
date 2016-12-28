@@ -25,7 +25,6 @@ if is_unix()
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
-    homedir() = ENV["HOME"]
 elseif is_windows()
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
@@ -38,7 +37,6 @@ elseif is_windows()
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         String(m.captures[1]), String(m.captures[2])
     end
-    homedir() = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
 else
     error("path primitives for this OS need to be defined")
 end
@@ -57,7 +55,22 @@ splitdrive(path::AbstractString)
 
 Return the current user's home directory.
 """
-homedir()
+function homedir()
+    path_max = 1024
+    buf = Vector{UInt8}(path_max)
+    sz = Ref{Csize_t}(path_max + 1)
+    while true
+        rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
+        if rc == 0
+            resize!(buf, sz[])
+            return String(buf)
+        elseif rc == UV_ENOBUFS
+            resize!(buf, sz[] - 1)
+        else
+            error("unable to retrieve home directory")
+        end
+    end
+end
 
 
 """

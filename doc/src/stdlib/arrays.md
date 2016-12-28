@@ -25,10 +25,8 @@ Base.LinAlg.checksquare
 ```@docs
 Core.Array
 Base.getindex(::Type, ::Any...)
-Base.zeros(::Any, ::Any)
-Base.zeros(::Any)
-Base.ones(::Any, ::Any)
-Base.ones(::Any)
+Base.zeros
+Base.ones
 Base.BitArray
 Base.trues
 Base.falses

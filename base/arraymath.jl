@@ -60,13 +60,13 @@ end
 promote_array_type(F, ::Type, ::Type, T::Type) = T
 promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
 promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
-promote_array_type{S<:Integer, A<:Integer}(::typeof(./), ::Type{S}, ::Type{A}, T::Type) = T
-promote_array_type{S<:Integer, A<:Integer}(::typeof(.\), ::Type{S}, ::Type{A}, T::Type) = T
-promote_array_type{S<:Integer}(::typeof(./), ::Type{S}, ::Type{Bool}, T::Type) = T
-promote_array_type{S<:Integer}(::typeof(.\), ::Type{S}, ::Type{Bool}, T::Type) = T
+promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
+promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
+promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
+promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
 promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
 
-for f in (:+, :-, :div, :mod, :&, :|, :xor)
+for f in (:+, :-, :div, :mod, :&, :|)
     @eval ($f)(A::AbstractArray, B::AbstractArray) =
         _elementwise($f, promote_eltype_op($f, A, B), A, B)
 end
@@ -89,54 +89,14 @@ function _elementwise{T}(op, ::Type{T}, A::AbstractArray, B::AbstractArray)
     return F
 end
 
-for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :xor)
-    @eval begin
-        function ($f){T}(A::Number, B::AbstractArray{T})
-            R = promote_op($f, typeof(A), T)
-            S = promote_array_type($f, typeof(A), T, R)
-            S === Any && return [($f)(A, b) for b in B]
-            F = similar(B, S)
-            RF, RB = eachindex(F), eachindex(B)
-            if RF == RB
-                for i in RB
-                    @inbounds F[i] = ($f)(A, B[i])
-                end
-            else
-                for (iF, iB) in zip(RF, RB)
-                    @inbounds F[iF] = ($f)(A, B[iB])
-                end
-            end
-            return F
-        end
-        function ($f){T}(A::AbstractArray{T}, B::Number)
-            R = promote_op($f, T, typeof(B))
-            S = promote_array_type($f, typeof(B), T, R)
-            S === Any && return [($f)(a, B) for a in A]
-            F = similar(A, S)
-            RF, RA = eachindex(F), eachindex(A)
-            if RF == RA
-                for i in RA
-                    @inbounds F[i] = ($f)(A[i], B)
-                end
-            else
-                for (iF, iA) in zip(RF, RA)
-                    @inbounds F[iF] = ($f)(A[iA], B)
-                end
-            end
-            return F
-        end
+for f in (:div, :mod, :rem, :&, :|, :/, :\, :*, :+, :-)
+    if f != :/
+        @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
+    end
+    if f != :\
+        @eval ($f){T}(A::AbstractArray{T}, B::Number) = broadcast($f, A, B)
     end
 end
-
-# familiar aliases for broadcasting operations of array ± scalar (#7226):
-(+)(A::AbstractArray{Bool},x::Bool) = A .+ x
-(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A
-(-)(A::AbstractArray{Bool},x::Bool) = A .- x
-(-)(x::Bool,A::AbstractArray{Bool}) = x .- A
-(+)(A::AbstractArray,x::Number) = A .+ x
-(+)(x::Number,A::AbstractArray) = x .+ A
-(-)(A::AbstractArray,x::Number) = A .- x
-(-)(x::Number,A::AbstractArray) = x .- A
 
 ## data movement ##
 

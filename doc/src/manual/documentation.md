@@ -11,7 +11,7 @@ The basic syntax is very simple: any string appearing at the top-level right bef
 (function, macro, type or instance) will be interpreted as documenting it (these are called *docstrings*).
 Here is a very simple example:
 
-```
+```julia
 "Tell whether there are too foo items in the array."
 foo(xs::Array) = ...
 ```
@@ -138,7 +138,7 @@ As in the example above, we recommend following some simple conventions when wri
 
    That is, write:
 
-   ```
+   ```julia
    """
    ...
 
@@ -149,7 +149,7 @@ As in the example above, we recommend following some simple conventions when wri
 
    rather than:
 
-   ```
+   ```julia
    """...
 
    ..."""
@@ -164,8 +164,8 @@ As in the example above, we recommend following some simple conventions when wri
 
 ## Accessing Documentation
 
-Documentation can be accessed at the REPL or in IJulia by typing `?` followed by the name of a
-function or macro, and pressing `Enter`. For example,
+Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
+by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
 
 ```julia
 ?fft
@@ -185,25 +185,37 @@ itself (i.e. the object created without any methods by `function bar end`). Spec
 only be documented if their behaviour differs from the more generic ones. In any case, they should
 not repeat the information provided elsewhere. For example:
 
-```
+```julia
 """
+    *(x, y, z...)
+
 Multiplication operator. `x*y*z*...` calls this function with multiple
 arguments, i.e. `*(x,y,z...)`.
 """
-function *(x, y)
-  # ... [implementation sold separately] ...
+function *(x, y, z...)
+    # ... [implementation sold separately] ...
 end
 
-"When applied to strings, concatenates them."
-function *(x::AbstractString, y::AbstractString)
-  # ... [insert secret sauce here] ...
-end
-
-help?>*
-Multiplication operator. `x*y*z*...` calls this function with multiple
-arguments, i.e. `*(x,y,z...)`.
+"""
+    *(x::AbstractString, y::AbstractString, z::AbstractString...)
 
 When applied to strings, concatenates them.
+"""
+function *(x::AbstractString, y::AbstractString, z::AbstractString...)
+    # ... [insert secret sauce here] ...
+end
+
+help?> *
+search: * .*
+
+  *(x, y, z...)
+
+  Multiplication operator. x*y*z*... calls this function with multiple
+  arguments, i.e. *(x,y,z...).
+
+  *(x::AbstractString, y::AbstractString, z::AbstractString...)
+
+  When applied to strings, concatenates them.
 ```
 
 When retrieving documentation for a generic function, the metadata for each method is concatenated
@@ -572,6 +584,27 @@ parentheses, `( )`, is the URL.
 ```
 A paragraph containing a link to [Julia](http://www.julialang.org).
 ```
+
+It's also possible to add cross-references to other documented functions/methods/variables within
+the Julia documentation itself. For example:
+
+```julia
+"""
+    eigvals!(A,[irange,][vl,][vu]) -> values
+
+Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+"""
+```
+
+This will create a link in the generated docs to the `eigvals` documentation
+(which has more information about what this function actually does). It's good to include
+cross references to mutating/non-mutating versions of a function, or to highlight a difference
+between two similar-seeming functions.
+
+!!! note
+    The above cross referencing is *not* a Markdown feature, and relies on
+    [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), which is
+    used to build base Julia's documentation.
 
 #### Footnote references
 

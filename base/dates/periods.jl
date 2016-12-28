@@ -65,7 +65,7 @@ Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
 =={P<:Period}(x::P,y::P) = value(x) == value(y)
 
 # Period Arithmetic, grouped by dimensionality:
-import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %, .+, .-, .*, .%
+import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 for op in (:+,:-,:lcm,:gcd)
     @eval ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
 end
@@ -84,23 +84,18 @@ for op in (:rem,:mod)
     end
 end
 
-/{P<:Period}(X::StridedArray{P}, y::P) = X ./ y
-%{P<:Period}(X::StridedArray{P}, y::P) = X .% y
 *{P<:Period}(x::P,y::Real) = P(value(x) * Int64(y))
 *(y::Real,x::Period) = x * y
-.*{P<:Period}(y::Real, X::StridedArray{P}) = X .* y
-for (op,Ty,Tz) in ((:.*,Real,:P),
-                   (:./,:P,Float64), (:./,Real,:P),
+for (op,Ty,Tz) in ((:*,Real,:P),
+                   (:/,:P,Float64), (:/,Real,:P),
                    (:div,:P,Int64), (:div,Integer,:P),
-                   (:.%,:P,:P),
+                   (:%,:P,:P),
                    (:mod,:P,:P))
-    sop = string(op)
-    op_ = sop[1] == '.' ? Symbol(sop[2:end]) : op
     @eval begin
         function ($op){P<:Period}(X::StridedArray{P},y::$Ty)
             Z = similar(X, $Tz)
             for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
-                @inbounds Z[Idst] = ($op_)(X[Isrc],y)
+                @inbounds Z[Idst] = ($op)(X[Isrc],y)
             end
             return Z
         end
@@ -322,21 +317,12 @@ GeneralPeriod = Union{Period,CompoundPeriod}
 (+)(x::GeneralPeriod) = x
 (+){P<:GeneralPeriod}(x::StridedArray{P}) = x
 
-for op in (:.+, :.-)
-    op_ = Symbol(string(op)[2:end])
+for op in (:+, :-)
     @eval begin
-        function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
-            Z = similar(X, CompoundPeriod)
-            for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
-                @inbounds Z[Idst] = ($op_)(X[Isrc],y)
-            end
-            return Z
-        end
-        ($op){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
-        ($op_){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
-        ($op_){P<:GeneralPeriod}(Y::StridedArray{P},x::GeneralPeriod) = ($op)(Y,x)
-        ($op_){P<:GeneralPeriod, Q<:GeneralPeriod}(X::StridedArray{P}, Y::StridedArray{Q}) =
-            reshape(CompoundPeriod[($op_)(x,y) for (x,y) in zip(X, Y)], promote_shape(size(X),size(Y)))
+        ($op){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = broadcast($op,x,Y)
+        ($op){P<:GeneralPeriod}(Y::StridedArray{P},x::GeneralPeriod) = broadcast($op,Y,x)
+        ($op){P<:GeneralPeriod, Q<:GeneralPeriod}(X::StridedArray{P}, Y::StridedArray{Q}) =
+            reshape(CompoundPeriod[($op)(x,y) for (x,y) in zip(X, Y)], promote_shape(size(X),size(Y)))
     end
 end
 

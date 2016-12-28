@@ -784,12 +784,12 @@ let b1 = bitrand(n1, n2)
     b2 = bitrand(n1, n2)
     @check_bit_operation (&)(b1, b2)  BitMatrix
     @check_bit_operation (|)(b1, b2)  BitMatrix
-    @check_bit_operation xor(b1, b2)  BitMatrix
+    @check_bit_operation broadcast(xor, b1, b2)  BitMatrix
     @check_bit_operation (+)(b1, b2)  Matrix{Int}
     @check_bit_operation (-)(b1, b2)  Matrix{Int}
-    @check_bit_operation (.*)(b1, b2) BitMatrix
-    @check_bit_operation (./)(b1, b2) Matrix{Float64}
-    @check_bit_operation (.^)(b1, b2) BitMatrix
+    @check_bit_operation broadcast(*, b1, b2) BitMatrix
+    @check_bit_operation broadcast(/, b1, b2) Matrix{Float64}
+    @check_bit_operation broadcast(^, b1, b2) BitMatrix
     @check_bit_operation (/)(b1,1) Matrix{Float64}
 
     b2 = trues(n1, n2)
@@ -815,8 +815,8 @@ end
 let b0 = falses(0)
     @check_bit_operation (&)(b0, b0)  BitVector
     @check_bit_operation (|)(b0, b0)  BitVector
-    @check_bit_operation xor(b0, b0)  BitVector
-    @check_bit_operation (.*)(b0, b0) BitVector
+    @check_bit_operation broadcast(xor, b0, b0)  BitVector
+    @check_bit_operation broadcast(*, b0, b0) BitVector
     @check_bit_operation (*)(b0, b0') Matrix{Int}
 end
 
@@ -826,12 +826,12 @@ let b1 = bitrand(n1, n2)
     i2 = rand(1:10, n1, n2)
     @check_bit_operation (&)(b1, i2)  Matrix{Int}
     @check_bit_operation (|)(b1, i2)  Matrix{Int}
-    @check_bit_operation xor(b1, i2)  Matrix{Int}
+    @check_bit_operation broadcast(xor, b1, i2)  Matrix{Int}
     @check_bit_operation (+)(b1, i2)  Matrix{Int}
     @check_bit_operation (-)(b1, i2)  Matrix{Int}
-    @check_bit_operation (.*)(b1, i2) Matrix{Int}
-    @check_bit_operation (./)(b1, i2) Matrix{Float64}
-    @check_bit_operation (.^)(b1, i2) BitMatrix
+    @check_bit_operation broadcast(*, b1, i2) Matrix{Int}
+    @check_bit_operation broadcast(/, b1, i2) Matrix{Float64}
+    @check_bit_operation broadcast(^, b1, i2) BitMatrix
     @check_bit_operation div(b1, i2)  Matrix{Int}
     @check_bit_operation mod(b1, i2)  Matrix{Int}
 end
@@ -840,9 +840,9 @@ end
 
 let b1 = bitrand(n1, n2)
     f2 = 1.0 .+ rand(n1, n2)
-    @check_bit_operation (.*)(b1, f2) Matrix{Float64}
-    @check_bit_operation (./)(b1, f2) Matrix{Float64}
-    @check_bit_operation (.^)(b1, f2) Matrix{Float64}
+    @check_bit_operation broadcast(*, b1, f2) Matrix{Float64}
+    @check_bit_operation broadcast(/, b1, f2) Matrix{Float64}
+    @check_bit_operation broadcast(^, b1, f2) Matrix{Float64}
     @check_bit_operation div(b1, f2)  Matrix{Float64}
     @check_bit_operation mod(b1, f2)  Matrix{Float64}
 end
@@ -859,67 +859,67 @@ let b2 = bitrand(n1, n2)
 
     @check_bit_operation (&)(i1, b2)  Matrix{Int}
     @check_bit_operation (|)(i1, b2)  Matrix{Int}
-    @check_bit_operation xor(i1, b2)  Matrix{Int}
-    @check_bit_operation (.+)(i1, b2)  Matrix{Int}
-    @check_bit_operation (.-)(i1, b2)  Matrix{Int}
-    @check_bit_operation (.*)(i1, b2) Matrix{Int}
+    @check_bit_operation broadcast(xor, i1, b2)  Matrix{Int}
+    @check_bit_operation broadcast(+, i1, b2)  Matrix{Int}
+    @check_bit_operation broadcast(-, i1, b2)  Matrix{Int}
+    @check_bit_operation broadcast(*, i1, b2) Matrix{Int}
 
     @check_bit_operation (&)(u1, b2)  Matrix{UInt8}
     @check_bit_operation (|)(u1, b2)  Matrix{UInt8}
-    @check_bit_operation xor(u1, b2)  Matrix{UInt8}
-    @check_bit_operation (.+)(u1, b2)  Matrix{UInt8}
-    @check_bit_operation (.-)(u1, b2)  Matrix{UInt8}
-    @check_bit_operation (.*)(u1, b2) Matrix{UInt8}
+    @check_bit_operation broadcast(xor, u1, b2)  Matrix{UInt8}
+    @check_bit_operation broadcast(+, u1, b2)  Matrix{UInt8}
+    @check_bit_operation broadcast(-, u1, b2)  Matrix{UInt8}
+    @check_bit_operation broadcast(*, u1, b2) Matrix{UInt8}
 
     for (x1,t1) = [(f1, Float64),
                    (ci1, Complex{Int}),
                    (cu1, Complex{UInt8}),
                    (cf1, Complex128)]
-        @check_bit_operation (.+)(x1, b2)  Matrix{t1}
-        @check_bit_operation (.-)(x1, b2)  Matrix{t1}
-        @check_bit_operation (.*)(x1, b2) Matrix{t1}
+        @check_bit_operation broadcast(+, x1, b2)  Matrix{t1}
+        @check_bit_operation broadcast(-, x1, b2)  Matrix{t1}
+        @check_bit_operation broadcast(*, x1, b2) Matrix{t1}
     end
 
     b2 = trues(n1, n2)
-    @check_bit_operation (./)(true, b2)  Matrix{Float64}
+    @check_bit_operation broadcast(/, true, b2)  Matrix{Float64}
     @check_bit_operation div(true, b2)   BitMatrix
     @check_bit_operation mod(true, b2)   BitMatrix
-    @check_bit_operation (./)(false, b2) Matrix{Float64}
+    @check_bit_operation broadcast(/, false, b2) Matrix{Float64}
     @check_bit_operation div(false, b2)  BitMatrix
     @check_bit_operation mod(false, b2)  BitMatrix
 
-    @check_bit_operation (./)(i1, b2) Matrix{Float64}
+    @check_bit_operation broadcast(/, i1, b2) Matrix{Float64}
     @check_bit_operation div(i1, b2)  Matrix{Int}
     @check_bit_operation mod(i1, b2)  Matrix{Int}
 
-    @check_bit_operation (./)(u1, b2) Matrix{Float64}
+    @check_bit_operation broadcast(/, u1, b2) Matrix{Float64}
     @check_bit_operation div(u1, b2)  Matrix{UInt8}
     @check_bit_operation mod(u1, b2)  Matrix{UInt8}
 
-    @check_bit_operation (./)(f1, b2) Matrix{Float64}
+    @check_bit_operation broadcast(/, f1, b2) Matrix{Float64}
     @check_bit_operation div(f1, b2)  Matrix{Float64}
     @check_bit_operation mod(f1, b2)  Matrix{Float64}
 
-    @check_bit_operation (./)(ci1, b2) Matrix{Complex128}
-    @check_bit_operation (./)(cu1, b2) Matrix{Complex128}
-    @check_bit_operation (./)(cf1, b2) Matrix{Complex128}
+    @check_bit_operation broadcast(/, ci1, b2) Matrix{Complex128}
+    @check_bit_operation broadcast(/, cu1, b2) Matrix{Complex128}
+    @check_bit_operation broadcast(/, cf1, b2) Matrix{Complex128}
 
     b2 = bitrand(n1, n2)
-    @check_bit_operation (.^)(false, b2) BitMatrix
-    @check_bit_operation (.^)(true, b2)  BitMatrix
-    @check_bit_operation (.^)(0x0, b2)   Matrix{UInt8}
-    @check_bit_operation (.^)(0x1, b2)   Matrix{UInt8}
-    @check_bit_operation (.^)(-1, b2)    Matrix{Int}
-    @check_bit_operation (.^)(0, b2)     Matrix{Int}
-    @check_bit_operation (.^)(1, b2)     Matrix{Int}
-    @check_bit_operation (.^)(0.0, b2)   Matrix{Float64}
-    @check_bit_operation (.^)(1.0, b2)   Matrix{Float64}
-    @check_bit_operation (.^)(0.0im, b2) Matrix{Complex128}
-    @check_bit_operation (.^)(1.0im, b2) Matrix{Complex128}
-    @check_bit_operation (.^)(0im, b2)   Matrix{Complex{Int}}
-    @check_bit_operation (.^)(1im, b2)   Matrix{Complex{Int}}
-    @check_bit_operation (.^)(0x0im, b2) Matrix{Complex{UInt8}}
-    @check_bit_operation (.^)(0x1im, b2) Matrix{Complex{UInt8}}
+    @check_bit_operation broadcast(^, false, b2) BitMatrix
+    @check_bit_operation broadcast(^, true, b2)  BitMatrix
+    @check_bit_operation broadcast(^, 0x0, b2)   Matrix{UInt8}
+    @check_bit_operation broadcast(^, 0x1, b2)   Matrix{UInt8}
+    @check_bit_operation broadcast(^, -1, b2)    Matrix{Int}
+    @check_bit_operation broadcast(^, 0, b2)     Matrix{Int}
+    @check_bit_operation broadcast(^, 1, b2)     Matrix{Int}
+    @check_bit_operation broadcast(^, 0.0, b2)   Matrix{Float64}
+    @check_bit_operation broadcast(^, 1.0, b2)   Matrix{Float64}
+    @check_bit_operation broadcast(^, 0.0im, b2) Matrix{Complex128}
+    @check_bit_operation broadcast(^, 1.0im, b2) Matrix{Complex128}
+    @check_bit_operation broadcast(^, 0im, b2)   Matrix{Complex{Int}}
+    @check_bit_operation broadcast(^, 1im, b2)   Matrix{Complex{Int}}
+    @check_bit_operation broadcast(^, 0x0im, b2) Matrix{Complex{UInt8}}
+    @check_bit_operation broadcast(^, 0x1im, b2) Matrix{Complex{UInt8}}
 end
 
 # Matrix/Number
@@ -941,91 +941,91 @@ let b1 = bitrand(n1, n2)
     @check_bit_operation (|)(b1, false)  BitMatrix
     @check_bit_operation (|)(true, b1)   BitMatrix
     @check_bit_operation (|)(false, b1)  BitMatrix
-    @check_bit_operation xor(b1, true)   BitMatrix
-    @check_bit_operation xor(b1, false)  BitMatrix
-    @check_bit_operation xor(true, b1)   BitMatrix
-    @check_bit_operation xor(false, b1)  BitMatrix
-    @check_bit_operation (.+)(b1, true)   Matrix{Int}
-    @check_bit_operation (.+)(b1, false)  Matrix{Int}
-    @check_bit_operation (.-)(b1, true)   Matrix{Int}
-    @check_bit_operation (.-)(b1, false)  Matrix{Int}
-    @check_bit_operation (.*)(b1, true)  BitMatrix
-    @check_bit_operation (.*)(b1, false) BitMatrix
-    @check_bit_operation (.*)(true, b1)  BitMatrix
-    @check_bit_operation (.*)(false, b1) BitMatrix
-    @check_bit_operation (./)(b1, true)  Matrix{Float64}
-    @check_bit_operation (./)(b1, false) Matrix{Float64}
+    @check_bit_operation broadcast(xor, b1, true)   BitMatrix
+    @check_bit_operation broadcast(xor, b1, false)  BitMatrix
+    @check_bit_operation broadcast(xor, true, b1)   BitMatrix
+    @check_bit_operation broadcast(xor, false, b1)  BitMatrix
+    @check_bit_operation broadcast(+, b1, true)   Matrix{Int}
+    @check_bit_operation broadcast(+, b1, false)  Matrix{Int}
+    @check_bit_operation broadcast(-, b1, true)   Matrix{Int}
+    @check_bit_operation broadcast(-, b1, false)  Matrix{Int}
+    @check_bit_operation broadcast(*, b1, true)  BitMatrix
+    @check_bit_operation broadcast(*, b1, false) BitMatrix
+    @check_bit_operation broadcast(*, true, b1)  BitMatrix
+    @check_bit_operation broadcast(*, false, b1) BitMatrix
+    @check_bit_operation broadcast(/, b1, true)  Matrix{Float64}
+    @check_bit_operation broadcast(/, b1, false) Matrix{Float64}
     @check_bit_operation div(b1, true)   BitMatrix
     @check_bit_operation mod(b1, true)   BitMatrix
 
     @check_bit_operation (&)(b1, b2)  BitMatrix
     @check_bit_operation (|)(b1, b2)  BitMatrix
-    @check_bit_operation xor(b1, b2)  BitMatrix
+    @check_bit_operation broadcast(xor, b1, b2)  BitMatrix
     @check_bit_operation (&)(b2, b1)  BitMatrix
     @check_bit_operation (|)(b2, b1)  BitMatrix
-    @check_bit_operation xor(b2, b1)  BitMatrix
+    @check_bit_operation broadcast(xor, b2, b1)  BitMatrix
     @check_bit_operation (&)(b1, i2)  Matrix{Int}
     @check_bit_operation (|)(b1, i2)  Matrix{Int}
-    @check_bit_operation xor(b1, i2)  Matrix{Int}
-    @check_bit_operation (.+)(b1, i2)  Matrix{Int}
-    @check_bit_operation (.-)(b1, i2)  Matrix{Int}
-    @check_bit_operation (.*)(b1, i2) Matrix{Int}
-    @check_bit_operation (./)(b1, i2) Matrix{Float64}
+    @check_bit_operation broadcast(xor, b1, i2)  Matrix{Int}
+    @check_bit_operation broadcast(+, b1, i2)  Matrix{Int}
+    @check_bit_operation broadcast(-, b1, i2)  Matrix{Int}
+    @check_bit_operation broadcast(*, b1, i2) Matrix{Int}
+    @check_bit_operation broadcast(/, b1, i2) Matrix{Float64}
     @check_bit_operation div(b1, i2)  Matrix{Int}
     @check_bit_operation mod(b1, i2)  Matrix{Int}
 
     @check_bit_operation (&)(b1, u2)  Matrix{UInt8}
     @check_bit_operation (|)(b1, u2)  Matrix{UInt8}
-    @check_bit_operation xor(b1, u2)  Matrix{UInt8}
-    @check_bit_operation (.+)(b1, u2)  Matrix{UInt8}
-    @check_bit_operation (.-)(b1, u2)  Matrix{UInt8}
-    @check_bit_operation (.*)(b1, u2) Matrix{UInt8}
-    @check_bit_operation (./)(b1, u2) Matrix{Float64}
+    @check_bit_operation broadcast(xor, b1, u2)  Matrix{UInt8}
+    @check_bit_operation broadcast(+, b1, u2)  Matrix{UInt8}
+    @check_bit_operation broadcast(-, b1, u2)  Matrix{UInt8}
+    @check_bit_operation broadcast(*, b1, u2) Matrix{UInt8}
+    @check_bit_operation broadcast(/, b1, u2) Matrix{Float64}
     @check_bit_operation div(b1, u2)  Matrix{UInt8}
     @check_bit_operation mod(b1, u2)  Matrix{UInt8}
 
-    @check_bit_operation (.+)(b1, f2)  Matrix{Float64}
-    @check_bit_operation (.-)(b1, f2)  Matrix{Float64}
-    @check_bit_operation (.*)(b1, f2) Matrix{Float64}
-    @check_bit_operation (./)(b1, f2) Matrix{Float64}
+    @check_bit_operation broadcast(+, b1, f2)  Matrix{Float64}
+    @check_bit_operation broadcast(-, b1, f2)  Matrix{Float64}
+    @check_bit_operation broadcast(*, b1, f2) Matrix{Float64}
+    @check_bit_operation broadcast(/, b1, f2) Matrix{Float64}
     @check_bit_operation div(b1, f2)  Matrix{Float64}
     @check_bit_operation mod(b1, f2)  Matrix{Float64}
 
-    @check_bit_operation (.+)(b1, ci2)  Matrix{Complex{Int}}
-    @check_bit_operation (.-)(b1, ci2)  Matrix{Complex{Int}}
-    @check_bit_operation (.*)(b1, ci2) Matrix{Complex{Int}}
-    @check_bit_operation (./)(b1, ci2) Matrix{Complex128}
+    @check_bit_operation broadcast(+, b1, ci2)  Matrix{Complex{Int}}
+    @check_bit_operation broadcast(-, b1, ci2)  Matrix{Complex{Int}}
+    @check_bit_operation broadcast(*, b1, ci2) Matrix{Complex{Int}}
+    @check_bit_operation broadcast(/, b1, ci2) Matrix{Complex128}
 
-    @check_bit_operation (.+)(b1, cu2)  Matrix{Complex{UInt8}}
-    @check_bit_operation (.-)(b1, cu2)  Matrix{Complex{UInt8}}
-    @check_bit_operation (.*)(b1, cu2) Matrix{Complex{UInt8}}
-    @check_bit_operation (./)(b1, cu2) Matrix{Complex128}
+    @check_bit_operation broadcast(+, b1, cu2)  Matrix{Complex{UInt8}}
+    @check_bit_operation broadcast(-, b1, cu2)  Matrix{Complex{UInt8}}
+    @check_bit_operation broadcast(*, b1, cu2) Matrix{Complex{UInt8}}
+    @check_bit_operation broadcast(/, b1, cu2) Matrix{Complex128}
 
-    @check_bit_operation (.+)(b1, cf2)  Matrix{Complex128}
-    @check_bit_operation (.-)(b1, cf2)  Matrix{Complex128}
-    @check_bit_operation (.*)(b1, cf2) Matrix{Complex128}
-    @check_bit_operation (./)(b1, cf2) Matrix{Complex128}
+    @check_bit_operation broadcast(+, b1, cf2)  Matrix{Complex128}
+    @check_bit_operation broadcast(-, b1, cf2)  Matrix{Complex128}
+    @check_bit_operation broadcast(*, b1, cf2) Matrix{Complex128}
+    @check_bit_operation broadcast(/, b1, cf2) Matrix{Complex128}
 
-    @check_bit_operation (.^)(b1, false) BitMatrix
-    @check_bit_operation (.^)(b1, true)  BitMatrix
-    @check_bit_operation (.^)(b1, 0x0)   BitMatrix
-    @check_bit_operation (.^)(b1, 0x1)   BitMatrix
-    @check_bit_operation (.^)(b1, 0)     BitMatrix
-    @check_bit_operation (.^)(b1, 1)     BitMatrix
-    @check_bit_operation (.^)(b1, -1.0)  Matrix{Float64}
-    @check_bit_operation (.^)(b1, 0.0)   Matrix{Float64}
-    @check_bit_operation (.^)(b1, 1.0)   Matrix{Float64}
-    @check_bit_operation (.^)(b1, 0.0im) Matrix{Complex128}
-    @check_bit_operation (.^)(b1, 0x0im) Matrix{Complex128}
-    @check_bit_operation (.^)(b1, 0im)   Matrix{Complex128}
-    @test_throws DomainError (.^)(b1, -1)
+    @check_bit_operation broadcast(^, b1, false) BitMatrix
+    @check_bit_operation broadcast(^, b1, true)  BitMatrix
+    @check_bit_operation broadcast(^, b1, 0x0)   BitMatrix
+    @check_bit_operation broadcast(^, b1, 0x1)   BitMatrix
+    @check_bit_operation broadcast(^, b1, 0)     BitMatrix
+    @check_bit_operation broadcast(^, b1, 1)     BitMatrix
+    @check_bit_operation broadcast(^, b1, -1.0)  Matrix{Float64}
+    @check_bit_operation broadcast(^, b1, 0.0)   Matrix{Float64}
+    @check_bit_operation broadcast(^, b1, 1.0)   Matrix{Float64}
+    @check_bit_operation broadcast(^, b1, 0.0im) Matrix{Complex128}
+    @check_bit_operation broadcast(^, b1, 0x0im) Matrix{Complex128}
+    @check_bit_operation broadcast(^, b1, 0im)   Matrix{Complex128}
+    @test_throws DomainError broadcast(^, b1, -1)
 
     b1 = trues(n1, n2)
-    @check_bit_operation (.^)(b1, -1.0im) Matrix{Complex128}
-    @check_bit_operation (.^)(b1, 1.0im)  Matrix{Complex128}
-    @check_bit_operation (.^)(b1, -1im)   Matrix{Complex128}
-    @check_bit_operation (.^)(b1, 1im)    Matrix{Complex128}
-    @check_bit_operation (.^)(b1, 0x1im)  Matrix{Complex128}
+    @check_bit_operation broadcast(^, b1, -1.0im) Matrix{Complex128}
+    @check_bit_operation broadcast(^, b1, 1.0im)  Matrix{Complex128}
+    @check_bit_operation broadcast(^, b1, -1im)   Matrix{Complex128}
+    @check_bit_operation broadcast(^, b1, 1im)    Matrix{Complex128}
+    @check_bit_operation broadcast(^, b1, 0x1im)  Matrix{Complex128}
 end
 
 timesofar("binary arithmetic")
@@ -1033,10 +1033,10 @@ timesofar("binary arithmetic")
 ## Binary comparison operators ##
 
 let b1 = bitrand(n1, n2), b2 = bitrand(n1, n2)
-    @check_bit_operation (.==)(b1, b2) BitMatrix
-    @check_bit_operation (.!=)(b1, b2) BitMatrix
-    @check_bit_operation (.<)(b1, b2) BitMatrix
-    @check_bit_operation (.<=)(b1, b2) BitMatrix
+    @check_bit_operation broadcast(==, b1, b2) BitMatrix
+    @check_bit_operation broadcast(!=, b1, b2) BitMatrix
+    @check_bit_operation broadcast(<, b1, b2) BitMatrix
+    @check_bit_operation broadcast(<=, b1, b2) BitMatrix
 end
 
 timesofar("binary comparison")
@@ -1119,7 +1119,7 @@ let b1 = trues(v1)
     for i = 3:(v1-1), j = 2:i
         submask = b1 << (v1-j+1)
         @test findnext((b1 >> i) | submask, j) == i+1
-        @test findnextnot((~(b1 >> i)) ⊻ submask, j) == i+1
+        @test findnextnot((~(b1 >> i)) .⊻ submask, j) == i+1
     end
 end
 
@@ -1276,7 +1276,7 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
 
     @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == b1 & b2
     @test map(|, b1, b2) == map((x,y)->x|y, b1, b2) == b1 | b2
-    @test map(⊻, b1, b2) == map((x,y)->x⊻y, b1, b2) == b1 ⊻ b2 == xor(b1, b2)
+    @test map(⊻, b1, b2) == map((x,y)->x⊻y, b1, b2) == broadcast(⊻, b1, b2) == broadcast(xor, b1, b2)
 
     @test map(^, b1, b2) == map((x,y)->x^y, b1, b2) == b1 .^ b2
     @test map(*, b1, b2) == map((x,y)->x*y, b1, b2) == b1 .* b2
@@ -1301,7 +1301,7 @@ for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
 
     @test map!(&, b, b1, b2) == map!((x,y)->x&y, b, b1, b2) == b1 & b2 == b
     @test map!(|, b, b1, b2) == map!((x,y)->x|y, b, b1, b2) == b1 | b2 == b
-    @test map!(⊻, b, b1, b2) == map!((x,y)->x⊻y, b, b1, b2) == b1 ⊻ b2 == xor(b1, b2) == b
+    @test map!(⊻, b, b1, b2) == map!((x,y)->x⊻y, b, b1, b2) == broadcast(⊻, b1, b2) == broadcast(xor, b1, b2) == b
 
     @test map!(^, b, b1, b2) == map!((x,y)->x^y, b, b1, b2) == b1 .^ b2 == b
     @test map!(*, b, b1, b2) == map!((x,y)->x*y, b, b1, b2) == b1 .* b2 == b

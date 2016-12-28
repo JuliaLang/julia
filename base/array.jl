@@ -207,9 +207,15 @@ fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
-        ($fname)(T::Type, dims...)       = fill!(Array{T}(dims...), ($felt)(T))
-        ($fname)(dims...)                = fill!(Array{Float64}(dims...), ($felt)(Float64))
-        ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
+        # allow signature of similar
+        $fname(a::AbstractArray, T::Type, dims::Tuple) = fill!(similar(a, T, dims), $felt(T))
+        $fname(a::AbstractArray, T::Type, dims...) = fill!(similar(a,T,dims...), $felt(T))
+        $fname(a::AbstractArray, T::Type=eltype(a)) = fill!(similar(a,T), $felt(T))
+
+        $fname(T::Type, dims::Tuple) = fill!(Array{T}(Dims(dims)), $felt(T))
+        $fname(dims::Tuple) = ($fname)(Float64, dims)
+        $fname(T::Type, dims...) = $fname(T, dims)
+        $fname(dims...) = $fname(dims)
     end
 end
 
@@ -731,7 +737,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:747
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:753
 ```
 """
 function deleteat!(a::Vector, inds)
