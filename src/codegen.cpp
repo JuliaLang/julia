@@ -27,6 +27,7 @@
 #include <sstream>
 #include <fstream>
 #include <map>
+#include <array>
 #include <vector>
 #include <set>
 #include <cstdio>
@@ -843,6 +844,11 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
     jl_method_instance_t *li = *pli;
     assert(jl_is_method_instance(li));
     jl_llvm_functions_t decls = {};
+
+    if (params != &jl_default_cgparams /* fast path */ &&
+        !compare_cgparams(params, &jl_default_cgparams) && params->cached)
+        jl_error("functions compiled with custom codegen params mustn't be cached");
+
     // Step 1. See if it is already compiled,
     //         Get the codegen lock,
     //         And get the source
@@ -946,25 +952,30 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
     Function *f = (Function*)decls.functionObject;
     Function *specf = (Function*)decls.specFunctionObject;
 
-    // Step 4. Prepare debug info to receive this function
-    // record that this function name came from this linfo,
-    // so we can build a reverse mapping for debug-info.
-    bool toplevel = li->def == NULL;
-    if (!toplevel) {
-        const DataLayout &DL =
-#if JL_LLVM_VERSION >= 30500
-            m->getDataLayout();
-#else
-            *jl_data_layout;
-#endif
-        // but don't remember toplevel thunks because
-        // they may not be rooted in the gc for the life of the program,
-        // and the runtime doesn't notify us when the code becomes unreachable :(
-        jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
-    }
 
-    // Step 5. Add the result to the execution engine now
-    jl_finalize_module(m.release(), !toplevel);
+    if (JL_HOOK_TEST(params, module_activation)) {
+        JL_HOOK_CALL(params, module_activation, 1, jl_box_voidpointer(wrap(m.release())));
+    } else {
+        // Step 4. Prepare debug info to receive this function
+        // record that this function name came from this linfo,
+        // so we can build a reverse mapping for debug-info.
+        bool toplevel = li->def == NULL;
+        if (!toplevel) {
+            const DataLayout &DL =
+    #if JL_LLVM_VERSION >= 30500
+                m->getDataLayout();
+    #else
+                *jl_data_layout;
+    #endif
+            // but don't remember toplevel thunks because
+            // they may not be rooted in the gc for the life of the program,
+            // and the runtime doesn't notify us when the code becomes unreachable :(
+            jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
+        }
+
+        // Step 5. Add the result to the execution engine now
+        jl_finalize_module(m.release(), !toplevel);
+    }
 
     if (world && li->jlcall_api != 2) {
         // if not inlineable, code won't be needed again
@@ -1009,8 +1020,13 @@ static Value *getModuleFlag(Module *m, StringRef Key)
 #define getModuleFlag(m,str) m->getModuleFlag(str)
 #endif
 
-static void jl_setup_module(Module *m)
+static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default_cgparams)
 {
+    if (JL_HOOK_TEST(params, module_setup)) {
+        JL_HOOK_CALL(params, module_setup, 1, jl_box_voidpointer(wrap(m)));
+        return;
+    }
+
     // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
     // imaging mode. The structure of v4 is slightly nicer for debugging JIT
     // code.
@@ -4286,7 +4302,7 @@ static std::unique_ptr<Module> emit_function(
 
     ctx.sret = false;
     Module *M = new Module(ctx.name, jl_LLVMContext);
-    jl_setup_module(M);
+    jl_setup_module(M, params);
     if (specsig) { // assumes !va and !needsparams
         std::vector<Type*> fsig(0);
         Type *rt;
