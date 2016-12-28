@@ -59,7 +59,7 @@ This section lists changes that do not have deprecation warnings.
 
   * The array-scalar operations `div`, `mod`, `rem`, `&`, `|`, `xor`, `/`, `\`, `*`, `+`, and `-`
     now follow broadcast promotion rules ([#19692]).
-    
+
   * `quadgk` has been moved from Base into a separate package. ([#19741])
 
 Library improvements
