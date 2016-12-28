@@ -6469,7 +6469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
@@ -10413,7 +10413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.fill!",
     "category": "Function",
-    "text": "fill!(A, x)\n\nFill array A with the value x. If x is an object reference, all elements will refer to the same object. fill!(A, Foo()) will return A filled with the result of evaluating Foo() once.\n\njulia> A = zeros(2,3)\n2×3 Array{Float64,2}:\n 0.0  0.0  0.0\n 0.0  0.0  0.0\n\njulia> fill!(A, 2.)\n2×3 Array{Float64,2}:\n 2.0  2.0  2.0\n 2.0  2.0  2.0\n\njulia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A\n3-element Array{Array{Int64,1},1}:\n [2,1,1]\n [2,1,1]\n [2,1,1]\n\njulia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())\n  1\n  1\n  1\n\n\n\n"
+    "text": "fill!(A, x)\n\nFill array A with the value x. If x is an object reference, all elements will refer to the same object. fill!(A, Foo()) will return A filled with the result of evaluating Foo() once.\n\njulia> A = zeros(2,3)\n2×3 Array{Float64,2}:\n 0.0  0.0  0.0\n 0.0  0.0  0.0\n\njulia> fill!(A, 2.)\n2×3 Array{Float64,2}:\n 2.0  2.0  2.0\n 2.0  2.0  2.0\n\njulia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A\n3-element Array{Array{Int64,1},1}:\n [2,1,1]\n [2,1,1]\n [2,1,1]\n\njulia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())\n3-element Array{Int64,1}:\n 1\n 1\n 1\n\n\n\n"
 },
 
 {
@@ -12349,7 +12349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.vecdot",
     "category": "Function",
-    "text": "vecdot(x, y)\n\nFor any iterable containers x and y (including arrays of any dimension) of numbers (or any element type for which dot is defined), compute the Euclidean dot product (the sum of dot(x[i],y[i])) as if they were vectors.\n\n\n\n"
+    "text": "vecdot(x, y)\n\nFor any iterable containers x and y (including arrays of any dimension) of numbers (or any element type for which dot is defined), compute the Euclidean dot product (the sum of dot(x[i],y[i])) as if they were vectors.\n\nExamples\n\njulia> vecdot(1:5, 2:6)\n70\n\njulia> x = fill(2., (5,5));\n\njulia> y = fill(3., (5,5));\n\njulia> vecdot(x, y)\n150.0\n\n\n\n"
 },
 
 {
@@ -12709,7 +12709,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svdfact",
     "category": "Function",
-    "text": "svdfact(A, [thin=true]) -> SVD\n\nCompute the singular value decomposition (SVD) of A and return an SVD object.\n\nU, S, V and Vt can be obtained from the factorization F with F[:U], F[:S], F[:V] and F[:Vt], such that A = U*diagm(S)*Vt. The algorithm produces Vt and hence Vt is more efficient to extract than V.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> F = svdfact(A)\nBase.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],[3.0,2.23607,2.0,0.0],[-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])\n\njulia> F[:U] * diagm(F[:S]) * F[:Vt]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvdfact(A, B) -> GeneralizedSVD\n\nCompute the generalized SVD of A and B, returning a GeneralizedSVD factorization object F, such that A = F[:U]*F[:D1]*F[:R0]*F[:Q]' and B = F[:V]*F[:D2]*F[:R0]*F[:Q]'.\n\nFor an M-by-N matrix A and P-by-N matrix B,\n\nF[:U] is a M-by-M orthogonal matrix,\nF[:V] is a P-by-P orthogonal matrix,\nF[:Q] is a N-by-N orthogonal matrix,\nF[:R0] is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is          nonsingular upper block triangular,\nF[:D1] is a M-by-(K+L) diagonal matrix with 1s in the first K entries,\nF[:D2] is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,\n\nK+L is the effective numerical rank of the matrix [A; B].\n\nThe entries of F[:D1] and F[:D2] are related, as explained in the LAPACK documentation for the generalized SVD and the xGGSVD3 routine which is called underneath (in LAPACK 3.6.0 and newer).\n\n\n\n"
+    "text": "svdfact(A, thin::Bool=true) -> SVD\n\nCompute the singular value decomposition (SVD) of A and return an SVD object.\n\nU, S, V and Vt can be obtained from the factorization F with F[:U], F[:S], F[:V] and F[:Vt], such that A = U*diagm(S)*Vt. The algorithm produces Vt and hence Vt is more efficient to extract than V.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> F = svdfact(A)\nBase.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],[3.0,2.23607,2.0,0.0],[-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])\n\njulia> F[:U] * diagm(F[:S]) * F[:Vt]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvdfact(A, B) -> GeneralizedSVD\n\nCompute the generalized SVD of A and B, returning a GeneralizedSVD factorization object F, such that A = F[:U]*F[:D1]*F[:R0]*F[:Q]' and B = F[:V]*F[:D2]*F[:R0]*F[:Q]'.\n\nFor an M-by-N matrix A and P-by-N matrix B,\n\nF[:U] is a M-by-M orthogonal matrix,\nF[:V] is a P-by-P orthogonal matrix,\nF[:Q] is a N-by-N orthogonal matrix,\nF[:R0] is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is          nonsingular upper block triangular,\nF[:D1] is a M-by-(K+L) diagonal matrix with 1s in the first K entries,\nF[:D2] is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,\n\nK+L is the effective numerical rank of the matrix [A; B].\n\nThe entries of F[:D1] and F[:D2] are related, as explained in the LAPACK documentation for the generalized SVD and the xGGSVD3 routine which is called underneath (in LAPACK 3.6.0 and newer).\n\n\n\n"
 },
 
 {
@@ -12717,7 +12717,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svdfact!",
     "category": "Function",
-    "text": "svdfact!(A, [thin=true]) -> SVD\n\nsvdfact! is the same as svdfact, but saves space by overwriting the input A, instead of creating a copy.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\n\n\n"
+    "text": "svdfact!(A, thin::Bool=true) -> SVD\n\nsvdfact! is the same as svdfact, but saves space by overwriting the input A, instead of creating a copy.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\n\n\nsvdfact!(A, B) -> GeneralizedSVD\n\nsvdfact! is the same as svdfact, but modifies the arguments A and B in-place, instead of making copies.\n\n\n\n"
 },
 
 {
@@ -12725,7 +12725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svd",
     "category": "Function",
-    "text": "svd(A, [thin=true]) -> U, S, V\n\nComputes the SVD of A, returning U, vector S, and V such that A == U*diagm(S)*V'.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nsvd is a wrapper around svdfact, extracting all parts of the SVD factorization to a tuple. Direct use of svdfact is therefore more efficient.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> U, S, V = svd(A)\n(\n[0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],\n\n[3.0,2.23607,2.0,0.0],\n[-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])\n\njulia> U*diagm(S)*V'\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvd(A, B) -> U, V, Q, D1, D2, R0\n\nWrapper around svdfact extracting all parts of the factorization to a tuple. Direct use of svdfact is therefore generally more efficient. The function returns the generalized SVD of A and B, returning U, V, Q, D1, D2, and R0 such that A = U*D1*R0*Q' and B = V*D2*R0*Q'.\n\n\n\n"
+    "text": "svd(A, thin::Bool=true) -> U, S, V\n\nComputes the SVD of A, returning U, vector S, and V such that A == U*diagm(S)*V'.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nsvd is a wrapper around svdfact, extracting all parts of the SVD factorization to a tuple. Direct use of svdfact is therefore more efficient.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> U, S, V = svd(A)\n(\n[0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],\n\n[3.0,2.23607,2.0,0.0],\n[-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])\n\njulia> U*diagm(S)*V'\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvd(A, B) -> U, V, Q, D1, D2, R0\n\nWrapper around svdfact extracting all parts of the factorization to a tuple. Direct use of svdfact is therefore generally more efficient. The function returns the generalized SVD of A and B, returning U, V, Q, D1, D2, and R0 such that A = U*D1*R0*Q' and B = V*D2*R0*Q'.\n\n\n\n"
 },
 
 {
@@ -12733,7 +12733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svdvals",
     "category": "Function",
-    "text": "svdvals(A)\n\nReturns the singular values of A.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> svdvals(A)\n4-element Array{Float64,1}:\n 3.0\n 2.23607\n 2.0\n 0.0\n\n\n\nsvdvals(A, B)\n\nReturn the generalized singular values from the generalized singular value decomposition of A and B.\n\n\n\n"
+    "text": "svdvals(A)\n\nReturns the singular values of A.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> svdvals(A)\n4-element Array{Float64,1}:\n 3.0\n 2.23607\n 2.0\n 0.0\n\n\n\nsvdvals(A, B)\n\nReturn the generalized singular values from the generalized singular value decomposition of A and B. See also svdfact.\n\n\n\n"
 },
 
 {
@@ -12957,7 +12957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.SparseArrays.blkdiag",
     "category": "Function",
-    "text": "blkdiag(A...)\n\nConcatenate matrices block-diagonally. Currently only implemented for sparse matrices.\n\n\n\n"
+    "text": "blkdiag(A...)\n\nConcatenate matrices block-diagonally. Currently only implemented for sparse matrices.\n\nExample\n\njulia> blkdiag(speye(3), 2*speye(2))\n5×5 sparse matrix with 5 Float64 nonzero entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  2.0\n  [5, 5]  =  2.0\n\n\n\n"
 },
 
 {
