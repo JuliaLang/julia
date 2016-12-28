@@ -136,14 +136,14 @@ try
 
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    t = redirected_stderr("WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition ")
-    try
-        @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
-    finally
-        close(STDERR)
-        redirect_stderr(olderr)
-    end
-    wait(t)
+    # t = redirected_stderr("WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition ")
+    # try
+        @test isa(Base._require_from_serialized(cachefile), Array{Any,1})
+    # finally
+    #     close(STDERR)
+    #     redirect_stderr(olderr)
+    # end
+    # wait(t)
 
     let Foo = getfield(Main, Foo_module)
         @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
