@@ -271,18 +271,17 @@ end
     return (idx, (nextidx, r, state, true))
 end
 done(L::LogicalIndex, s) = s[end]
-# When wrapped in a LogicalIndex, the BitArray knows what proportion of its
-# values are true. The specialized findnext logic is only faster when it's able
-# to skip a number of elements at once.
-@inline start{B<:BitArray}(L::LogicalIndex{Int, B}) = next(L, 0)[2]
+# When wrapped in a BitArray we can lean upon the internal iterator state
+@inline start{B<:BitArray}(L::LogicalIndex{Int, B}) = next(L, (0, false))[2]
 @inline function next{B<:BitArray}(L::LogicalIndex{Int, B}, s)
-    L.sum < length(L.mask) >> 1 && return (s, findnext(L.mask, s+1))
-    @inbounds for i in s+1:length(L.mask)
-        L.mask[i] && return (s, i)
+    idx = state = s[1]
+    while !done(L.mask, state)
+        b, state = next(L.mask, state)
+        b && return (idx, (state, false))
     end
-    return (s, 0)
+    return (idx, (state, true))
 end
-@inline done{B<:BitArray}(L::LogicalIndex{Int, B}, s) = s == 0
+@inline done{B<:BitArray}(L::LogicalIndex{Int, B}, s) = s[2]
 
 checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = checkbounds(Bool, A, I.mask)
 checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = checkindex(Bool, indx, I.mask)
@@ -322,19 +321,20 @@ getindex(t::Tuple, I...) = getindex(t, IteratorsMD.flatten(I)...)
 
 @inline function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
     @boundscheck checkbounds(A, I...)
-    _unsafe_getindex(l, _maybe_reshape(l, A, I), I...)
+    _unsafe_getindex(l, _maybe_reshape(l, A, I...), I...)
 end
-# But we can speed up LinearSlow arrays by reshaping them to vectors:
-_maybe_reshape(::LinearFast, A::AbstractArray, i) = A
-_maybe_reshape(::LinearSlow, A::AbstractVector, i) = A
-@inline _maybe_reshape(::LinearSlow, A::AbstractArray, i) = _maybe_reshape(LinearSlow(), index_ndims(i...), A)
-@inline _maybe_reshape{T,N}(::LinearIndexing, ::NTuple{N}, A::AbstractArray{T,N}) = A
-@inline _maybe_reshape{N}(::LinearIndexing, ::NTuple{N}, A) = reshape(A, Val{N})
+# But we can speed up LinearSlow arrays by reshaping them to the appropriate dimensionality:
+_maybe_reshape(::LinearFast, A::AbstractArray, I...) = A
+_maybe_reshape(::LinearSlow, A::AbstractVector, I...) = A
+@inline _maybe_reshape(::LinearSlow, A::AbstractArray, I...) = __maybe_reshape(A, index_ndims(I...))
+@inline __maybe_reshape{T,N}(A::AbstractArray{T,N}, ::NTuple{N}) = A
+@inline __maybe_reshape{N}(A::AbstractArray, ::NTuple{N}) = reshape(A, Val{N})
 
 @generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
     N = length(I)
     quote
-        # This is specifically *not* inlined.
+        # This is inlined and @generated to prevent allocations from splatting tuples
+        @_inline_meta
         @nexprs $N d->(I_d = I[d])
         shape = @ncall $N index_shape I
         dest = similar(A, shape)
@@ -369,12 +369,16 @@ _iterable(v::AbstractArray) = v
 _iterable(v) = Iterators.repeated(v)
 @inline function _setindex!(l::LinearIndexing, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
     @boundscheck checkbounds(A, I...)
-    _unsafe_setindex!(l, _maybe_reshape(l, A, I), x, I...)
+    _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
     A
 end
 
-@inline function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray}...)
-    _unsafe_batchsetindex!(A, _iterable(x), J...)
+@generated function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray}...)
+    N = length(J)
+    quote
+        @_inline_meta
+        @ncall $N _unsafe_batchsetindex! A _iterable(x) d->J[d]
+    end
 end
 
 @generated function _unsafe_batchsetindex!(A::AbstractArray, X, I::Union{Real,AbstractArray}...)
