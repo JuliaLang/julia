@@ -43,8 +43,9 @@ let t0 = time()
     end
 end
 
-# empty bitvector
-@test BitVector() == BitVector(0)
+@testset "empty bitvector" begin
+    @test BitVector() == BitVector(0)
+end
 
 # vectors size
 v1 = 260
@@ -56,8 +57,7 @@ s1, s2, s3, s4 = 5, 8, 3, 7
 allsizes = [((), BitArray{0}), ((v1,), BitVector),
             ((n1,n2), BitMatrix), ((s1,s2,s3,s4), BitArray{4})]
 
-# trues and falses
-for (sz,T) in allsizes
+@testset "trues and falses for size $sz" for (sz,T) in allsizes
     a = falses(sz...)
     @test a == falses(sz)
     @test !any(a)
@@ -76,9 +76,8 @@ for (sz,T) in allsizes
     @test sz == size(d)
 end
 
-## Conversions ##
 
-for (sz,T) in allsizes
+@testset "Conversions for size $sz" for (sz, T) in allsizes
     b1 = rand!(falses(sz...))
     @test isequal(BitArray(Array(b1)), b1)
     @test isequal(convert(Array{Float64,ndims(b1)}, b1),
@@ -92,108 +91,110 @@ end
 
 timesofar("conversions")
 
-## utility functions ##
+@testset "utility functions" begin
+    let b1 = bitrand(v1)
+        @test isequal(fill!(b1, true), trues(size(b1)))
+        @test isequal(fill!(b1, false), falses(size(b1)))
+    end
 
-let b1 = bitrand(v1)
-    @test isequal(fill!(b1, true), trues(size(b1)))
-    @test isequal(fill!(b1, false), falses(size(b1)))
-end
+    for (sz,T) in allsizes
+        @test isequal(Array(trues(sz...)), ones(Bool, sz...))
+        @test isequal(Array(falses(sz...)), zeros(Bool, sz...))
 
-for (sz,T) in allsizes
-    @test isequal(Array(trues(sz...)), ones(Bool, sz...))
-    @test isequal(Array(falses(sz...)), zeros(Bool, sz...))
+        b1 = rand!(falses(sz...))
+        @test isa(b1, T)
 
-    b1 = rand!(falses(sz...))
-    @test isa(b1, T)
+        @check_bit_operation length(b1) Int
+        @check_bit_operation ndims(b1)  Int
+        @check_bit_operation size(b1)   Tuple{Vararg{Int}}
 
-    @check_bit_operation length(b1) Int
-    @check_bit_operation ndims(b1)  Int
-    @check_bit_operation size(b1)   Tuple{Vararg{Int}}
+        b2 = similar(b1)
+        u1 = Array(b1)
+        @check_bit_operation copy!(b2, b1) T
+        @check_bit_operation copy!(b2, u1) T
+    end
 
-    b2 = similar(b1)
-    u1 = Array(b1)
-    @check_bit_operation copy!(b2, b1) T
-    @check_bit_operation copy!(b2, u1) T
-end
-
-# copy!
-
-for n in [1; 1023:1025]
-    b1 = falses(n)
-    for m in [1; 10; 1023:1025]
-        u1 = ones(Bool, m)
-        for fu! in [u->fill!(u, true), u->rand!(u)]
-            fu!(u1)
-            c1 = convert(Vector{Int}, u1)
-            for i1 in [1; 10; 53:65; 1013:1015; 1020:1025], i2 in [1; 3; 10; 511:513], l in [1; 5; 10; 511:513; 1023:1025]
-                for fb! in [b->fill!(b, false), b->rand!(b)]
-                    fb!(b1)
-                    if i1 < 1 || i1 > n || (i2 + l - 1 > m) || (i1 + l - 1 > n)
-                        @test_throws BoundsError copy!(b1, i1, u1, i2, l)
-                    else
-                        @check_bit_operation copy!(b1, i1, u1, i2, l) BitArray
-                        @check_bit_operation copy!(b1, i1, c1, i2, l) BitArray
+    @testset "copy!" begin
+        for n in [1; 1023:1025]
+            b1 = falses(n)
+            for m in [1; 10; 1023:1025]
+                u1 = ones(Bool, m)
+                for fu! in [u->fill!(u, true), u->rand!(u)]
+                    fu!(u1)
+                    c1 = convert(Vector{Int}, u1)
+                    for i1 in [1; 10; 53:65; 1013:1015; 1020:1025], i2 in [1; 3; 10; 511:513], l in [1; 5; 10; 511:513; 1023:1025]
+                        for fb! in [b->fill!(b, false), b->rand!(b)]
+                            fb!(b1)
+                            if i1 < 1 || i1 > n || (i2 + l - 1 > m) || (i1 + l - 1 > n)
+                                @test_throws BoundsError copy!(b1, i1, u1, i2, l)
+                            else
+                                @check_bit_operation copy!(b1, i1, u1, i2, l) BitArray
+                                @check_bit_operation copy!(b1, i1, c1, i2, l) BitArray
+                            end
+                        end
                     end
                 end
             end
         end
     end
+
+    @test_throws BoundsError size(trues(5), 0)
+
+    @testset "reshape and resize!" begin
+        let b1 = bitrand(n1, n2)
+            @check_bit_operation reshape(b1, (n2,n1)) BitMatrix
+            @test_throws DimensionMismatch reshape(b1, (1,n1))
+        end
+        let b1 = bitrand(s1, s2, s3, s4)
+            @check_bit_operation reshape(b1, (s3,s1,s2,s4)) BitArray{4}
+            @test_throws DimensionMismatch reshape(b1, (1,n1))
+        end
+
+        let b1 = bitrand(v1)
+            @test_throws BoundsError resize!(b1, -1)
+            @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
+            gr(b) = (resize!(b, v1)[(v1÷2):end] = 1; b)
+            @check_bit_operation gr(b1) BitVector
+        end
+    end
+
+    @testset "sizeof (issue #7515)" begin
+        @test sizeof(BitArray(64)) == 8
+        @test sizeof(BitArray(65)) == 16
+    end
 end
-
-@test_throws BoundsError size(trues(5), 0)
-
-# reshape and resize!
-
-let b1 = bitrand(n1, n2)
-    @check_bit_operation reshape(b1, (n2,n1)) BitMatrix
-    @test_throws DimensionMismatch reshape(b1, (1,n1))
-end
-let b1 = bitrand(s1, s2, s3, s4)
-    @check_bit_operation reshape(b1, (s3,s1,s2,s4)) BitArray{4}
-    @test_throws DimensionMismatch reshape(b1, (1,n1))
-end
-
-let b1 = bitrand(v1)
-    @test_throws BoundsError resize!(b1, -1)
-    @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
-    gr(b) = (resize!(b, v1)[(v1÷2):end] = 1; b)
-    @check_bit_operation gr(b1) BitVector
-end
-
-# sizeof (issue #7515)
-@test sizeof(BitArray(64)) == 8
-@test sizeof(BitArray(65)) == 16
 
 timesofar("utils")
 
-## Constructors ##
+@testset "Constructors" begin
+    @testset "non-Int dims constructors" begin
+        let b1 = BitArray(Int32(v1)),
+            b2 = BitArray(Int64(v1))
+            @test size(b1) == size(b2)
+        end
 
-# non-Int dims constructors
+        for c in [trues, falses]
+            b1 = c(Int32(v1))
+            b2 = c(Int64(v1))
+            @test b1 == b2
+        end
+    end
 
-let b1 = BitArray(Int32(v1)),
-    b2 = BitArray(Int64(v1))
-    @test size(b1) == size(b2)
+    @testset "constructors from iterables" begin
+        for g in ((x%7==3 for x = 1:v1),
+                  (x%7==3 for x = 1:v1 if x>5),
+                  ((x+y)%5==2 for x = 1:n1, y = 1:n2),
+                  ((x+y+z+t)%5==2 for x = 1:s2, y = 1:s2, z = 1:s3, t = 1:s4),
+                  ((x+y)%5==2 for x = 1:n1 for y = 1:n2))
+            @test BitArray(g) == BitArray(collect(g))
+        end
+    end
+
+    @testset "one" begin
+        @test Array(one(BitMatrix(2,2))) == eye(2,2)
+        @test_throws DimensionMismatch one(BitMatrix(2,3))
+    end
 end
-
-for c in [trues, falses]
-    b1 = c(Int32(v1))
-    b2 = c(Int64(v1))
-    @test b1 == b2
-end
-
-# constructors from iterables
-
-for g in ((x%7==3 for x = 1:v1),
-          (x%7==3 for x = 1:v1 if x>5),
-          ((x+y)%5==2 for x = 1:n1, y = 1:n2),
-          ((x+y+z+t)%5==2 for x = 1:s2, y = 1:s2, z = 1:s3, t = 1:s4),
-          ((x+y)%5==2 for x = 1:n1 for y = 1:n2))
-    @test BitArray(g) == BitArray(collect(g))
-end
-
-# one
-@test Array(one(BitMatrix(2,2))) == eye(2,2)
-@test_throws DimensionMismatch one(BitMatrix(2,3))
 
 timesofar("constructors")
 
