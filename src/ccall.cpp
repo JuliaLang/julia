@@ -146,10 +146,10 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
     Constant *initnul = ConstantPointerNull::get((PointerType*)T_pvoidfunc);
     LoadInst *llvmf_orig = builder.CreateAlignedLoad(llvmgv, sizeof(void*));
     // This in principle needs a consume ordering so that load from
-    // this pointer sees valid value. However, this is not supported by
+    // this pointer sees a valid value. However, this is not supported by
     // LLVM (or agreed on in the C/C++ standard FWIW) and should be
     // almost impossible to happen on every platform we support since this
-    // ordering is enforced by the hardware and LLVM has to speculate a
+    // ordering is enforced by the hardware and LLVM has to speculate an
     // invalid load from the `cglobal` but doesn't depend on the `cglobal`
     // value for this to happen.
     // llvmf_orig->setAtomic(AtomicOrdering::Consume);
@@ -324,7 +324,7 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
     GlobalVariable *got = prepare_global(shadowgot);
     LoadInst *got_val = builder.CreateAlignedLoad(got, sizeof(void*));
     // See comment in `runtime_sym_lookup` above. This in principle needs a
-    // consume ordering too. This is even less likely to cause issue though
+    // consume ordering too. This is even less likely to cause issues though
     // since the only thing we do to this loaded pointer is to call it
     // immediately.
     // got_val->setAtomic(AtomicOrdering::Consume);
