@@ -272,8 +272,8 @@ let n = 12 #Size of matrix problem to test
 
         debug && println("Rounding to Ints")
         if elty <: Real
-            @test round(Int,A) == round(Int,fA)
-            @test isa(round(Int,A), SymTridiagonal)
+            @test round.(Int,A) == round.(Int,fA)
+            @test isa(round.(Int,A), SymTridiagonal)
             @test trunc(Int,A) == trunc(Int,fA)
             @test isa(trunc(Int,A), SymTridiagonal)
             @test ceil(Int,A) == ceil(Int,fA)
@@ -390,8 +390,8 @@ let n = 12 #Size of matrix problem to test
 
         debug && println("Rounding to Ints")
         if elty <: Real
-            @test round(Int,A) == round(Int,fA)
-            @test isa(round(Int,A), Tridiagonal)
+            @test round.(Int,A) == round.(Int,fA)
+            @test isa(round.(Int,A), Tridiagonal)
             @test trunc(Int,A) == trunc(Int,fA)
             @test isa(trunc(Int,A), Tridiagonal)
             @test ceil(Int,A) == ceil(Int,fA)
