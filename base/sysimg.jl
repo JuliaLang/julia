@@ -4,16 +4,21 @@ baremodule Base
 
 using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), true)
-function include(path::AbstractString)
-    local result
-    if INCLUDE_STATE === 1
-        result = Core.include(path)
-    elseif INCLUDE_STATE === 2
-        result = _include(path)
-    elseif INCLUDE_STATE === 3
-        result = include_from_node1(path)
+
+let SOURCE_PATH = ""
+    global function include(path::AbstractString)
+        if INCLUDE_STATE === 1
+            return Core.include(path)
+        elseif INCLUDE_STATE === 2
+            prev = SOURCE_PATH
+            path = joinpath(dirname(prev),path)
+            SOURCE_PATH = path
+            value = Core.include(path)
+            SOURCE_PATH = prev
+            return value
+        end
+        _include(path) # INCLUDE_STATE === 3
     end
-    result
 end
 INCLUDE_STATE = 1 # include = Core.include
 
@@ -220,16 +225,7 @@ importall .Math
 const (√)=sqrt
 const (∛)=cbrt
 
-let SOURCE_PATH = ""
-    global function _include(path)
-        prev = SOURCE_PATH
-        path = joinpath(dirname(prev),path)
-        SOURCE_PATH = path
-        Core.include(path)
-        SOURCE_PATH = prev
-    end
-end
-INCLUDE_STATE = 2 # include = _include (from lines above)
+INCLUDE_STATE = 2 # Core.include with try-less source-path wrapper
 
 # reduction along dims
 include("reducedim.jl")  # macros in this file relies on string.jl
@@ -391,7 +387,7 @@ function __init__()
     init_threadcall()
 end
 
-INCLUDE_STATE = 3 # include = include_from_node1
+INCLUDE_STATE = 3 # include = Base._include (standard include)
 include("precompile.jl")
 
 end # baremodule Base

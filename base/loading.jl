@@ -197,7 +197,7 @@ const _track_dependencies = Ref(false) # set this to true to track the list of f
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
     path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev), _path)
-    if myid() == 1 && _track_dependencies[]
+    if _track_dependencies[]
         apath = abspath(path)
         push!(_require_dependencies, (apath, mtime(apath)))
     end
@@ -376,7 +376,7 @@ function require(mod::Symbol)
 
         # just load the file normally via include
         # for unknown dependencies
-        try eval(Main, :(Base.include_from_node1($path)))
+        try eval(Main, :(Base._include($path)))
         catch ex
             if doneprecompile === true || JLOptions().use_compilecache == 0 || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
@@ -397,8 +397,6 @@ function require(mod::Symbol)
     end
     nothing
 end
-
-# remote/parallel load
 
 """
     include_string(code::AbstractString, filename::AbstractString="string")
@@ -450,21 +448,13 @@ evaluated by `julia -e <expr>`.
 """
 macro __DIR__() source_dir() end
 
-include_from_node1(path::AbstractString) = include_from_node1(String(path))
-function include_from_node1(_path::String)
+_include(path::AbstractString) = _include(String(path))
+
+function _include(_path::String)
     path, prev = _include_dependency(_path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
-    local result
-    try
-        if myid()==1
-            # sleep a bit to process file requests from other nodes
-            nprocs()>1 && sleep(0.005)
-            result = Core.include(path)
-            nprocs()>1 && sleep(0.005)
-        else
-            result = include_string(remotecall_fetch(readstring, 1, path), path)
-        end
+    try Core.include(path)
     finally
         if prev === nothing
             delete!(tls, :SOURCE_PATH)
@@ -472,7 +462,6 @@ function include_from_node1(_path::String)
             tls[:SOURCE_PATH] = prev
         end
     end
-    result
 end
 
 """
@@ -567,7 +556,6 @@ This can be used to reduce package load times. Cache files are stored in
 for important notes.
 """
 function compilecache(name::String)
-    myid() == 1 || error("can only precompile from node 1")
     # decide where to get the source file from
     path = find_in_path(name, nothing)
     path === nothing && throw(ArgumentError("$name not found in path"))
