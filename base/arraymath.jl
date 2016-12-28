@@ -89,7 +89,7 @@ function _elementwise{T}(op, ::Type{T}, A::AbstractArray, B::AbstractArray)
     return F
 end
 
-for f in (:div, :mod, :rem, :&, :|, :xor, :/, :\, :*, :+, :-)
+for f in (:div, :mod, :&, :|, :xor, :/, :\, :*, :+, :-)
     if f != :/
         @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
     end
