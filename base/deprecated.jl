@@ -1168,6 +1168,13 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
     end
 end
 
+# Deprecate vectorized xor in favor of compact broadcast syntax
+@deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
+@deprecate xor(A::BitArray, b::Bool)                xor.(A, b)
+@deprecate xor(a::Number, B::AbstractArray)         xor.(a, B)
+@deprecate xor(A::AbstractArray, b::Number)         xor.(A, b)
+@deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
+
 # QuadGK moved to a package (#19741)
 function quadgk(args...)
     error(string(quadgk, args, " has been moved to the package QuadGK.jl.\n",
