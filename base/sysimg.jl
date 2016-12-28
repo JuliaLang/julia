@@ -331,10 +331,6 @@ importall .DFT
 include("dsp.jl")
 importall .DSP
 
-# Numerical integration
-include("quadgk.jl")
-importall .QuadGK
-
 # Fast math
 include("fastmath.jl")
 importall .FastMath

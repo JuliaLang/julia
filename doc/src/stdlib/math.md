@@ -288,12 +288,3 @@ Base.DFT.FFTW.r2r!
 Base.DFT.FFTW.plan_r2r
 Base.DFT.FFTW.plan_r2r!
 ```
-
-## Numerical Integration
-
-Although several external packages are available for numeric integration and solution of ordinary
-differential equations, we also provide some built-in integration support in Julia.
-
-```@docs
-Base.QuadGK.quadgk
-```
