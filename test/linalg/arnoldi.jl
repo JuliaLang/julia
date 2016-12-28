@@ -236,9 +236,9 @@ end
     eigs(rand(1:10, 10, 10))
     eigs(rand(1:10, 10, 10), rand(1:10, 10, 10) |> t -> t't)
     svds(rand(1:10, 10, 8))
-    @test_throws MethodError eigs(big(rand(1:10, 10, 10)))
-    @test_throws MethodError eigs(big(rand(1:10, 10, 10)), rand(1:10, 10, 10))
-    @test_throws MethodError svds(big(rand(1:10, 10, 8)))
+    @test_throws MethodError eigs(big.(rand(1:10, 10, 10)))
+    @test_throws MethodError eigs(big.(rand(1:10, 10, 10)), rand(1:10, 10, 10))
+    @test_throws MethodError svds(big.(rand(1:10, 10, 8)))
 end
 
 # Symmetric generalized with singular B
