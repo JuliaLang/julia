@@ -97,10 +97,12 @@ similar{T}(S::SymTridiagonal, ::Type{T}) = SymTridiagonal{T}(similar(S.dv, T), s
 
 #Elementary operations
 broadcast(::typeof(abs), M::SymTridiagonal) = SymTridiagonal(abs.(M.dv), abs.(M.ev))
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag)
+broadcast(::typeof(floor), M::SymTridiagonal) = SymTridiagonal(floor.(M.dv), floor.(M.ev))
+for func in (:conj, :copy, :round, :trunc, :ceil, :real, :imag)
     @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
-for func in (:round, :trunc, :floor, :ceil)
+broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::SymTridiagonal) = SymTridiagonal(floor.(T, M.dv), floor.(T, M.ev))
+for func in (:round, :trunc, :ceil)
     @eval ($func){T<:Integer}(::Type{T},M::SymTridiagonal) = SymTridiagonal(($func)(T,M.dv), ($func)(T,M.ev))
 end
 transpose(M::SymTridiagonal) = M #Identity operation
@@ -464,12 +466,15 @@ copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl),
 
 #Elementary operations
 broadcast(::typeof(abs), M::Tridiagonal) = Tridiagonal(abs.(M.dl), abs.(M.d), abs.(M.du), abs.(M.du2))
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag)
+broadcast(::typeof(floor), M::Tridiagonal) = Tridiagonal(floor.(M.dl), floor.(M.d), floor.(M.du), floor.(M.du2))
+for func in (:conj, :copy, :round, :trunc, :ceil, :real, :imag)
     @eval function ($func)(M::Tridiagonal)
         Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du), ($func)(M.du2))
     end
 end
-for func in (:round, :trunc, :floor, :ceil)
+broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::Tridiagonal) =
+    Tridiagonal(floor.(T, M.dl), floor.(T, M.d), floor.(T, M.du), floor.(T, M.du2))
+for func in (:round, :trunc, :ceil)
     @eval function ($func){T<:Integer}(::Type{T},M::Tridiagonal)
         Tridiagonal(($func)(T,M.dl), ($func)(T,M.d), ($func)(T,M.du), ($func)(T,M.du2))
     end
