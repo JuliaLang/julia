@@ -548,3 +548,19 @@ let io = IOBuffer()
         end, [])
     @test length(String(take!(io))) < 1500
 end
+
+function test_replinit()
+    stdin_write, stdout_read, stdout_read, repl = fake_repl()
+    # Relies on implementation detail to make sure we only have the single
+    # replinit callback we want to test.
+    saved_replinit = copy(Base.repl_hooks)
+    slot = Ref(false)
+    # Create a closure from a newer world to check if `_atreplinit`
+    # can run it correctly
+    atreplinit(eval(:(repl::Base.REPL.LineEditREPL->($slot[] = true))))
+    Base._atreplinit(repl)
+    @test slot[]
+    @test_throws MethodError Base.repl_hooks[1](repl)
+    copy!(Base.repl_hooks, saved_replinit)
+end
+test_replinit()

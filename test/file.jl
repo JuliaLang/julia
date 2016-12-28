@@ -436,7 +436,8 @@ mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
     files_stat = stat(file)
-    close(open(file,"w")) # like touch, but lets the operating system update the timestamp for greater precision on some platforms (windows)
+    close(open(file,"w")) # like touch, but lets the operating system update
+    # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
     mv(file, newfile)
@@ -862,7 +863,7 @@ if !is_windows()
 
         # mv ----------------------------------------------------
         # move all 4 existing dirs
-        # As expected this will leave some absolute links brokern #11145#issuecomment-99315168
+        # As expected this will leave some absolute links broken #11145#issuecomment-99315168
         for d in [copytodir, maindir_new, maindir_new_keepsym, maindir]
             d_mv = joinpath(dirname(d), "$(basename(d))_mv")
             mv(d, d_mv; remove_destination=true)
@@ -920,7 +921,10 @@ let f = open(file, "w")
 end
 
 # issue #10994: pathnames cannot contain embedded NUL chars
-for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath, stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch, isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid, issetuid, issocket, issticky, realpath, watch_file, poll_file)
+for f in (mkdir, cd, Base.Filesystem.unlink, readlink, rm, touch, readdir, mkpath,
+        stat, lstat, ctime, mtime, filemode, filesize, uperm, gperm, operm, touch,
+        isblockdev, ischardev, isdir, isfifo, isfile, islink, ispath, issetgid,
+        issetuid, issocket, issticky, realpath, watch_file, poll_file)
     @test_throws ArgumentError f("adir\0bad")
 end
 @test_throws ArgumentError chmod("ba\0d", 0o222)

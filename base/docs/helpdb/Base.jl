@@ -34,9 +34,10 @@ julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A
  [2,1,1]
 
 julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())
-  1
-  1
-  1
+3-element Array{Int64,1}:
+ 1
+ 1
+ 1
 ```
 """
 fill!

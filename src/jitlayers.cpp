@@ -342,8 +342,8 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 
 // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
 template <typename ObjSetT, typename LoadResult>
-void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
-                const LoadResult &LOS)
+void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetHandleT H,
+                const ObjSetT &Objects, const LoadResult &LOS)
 {
 #if JL_LLVM_VERSION < 30800
     notifyObjectLoaded(JIT.MemMgr, H);
@@ -365,10 +365,12 @@ void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetH
         if (!SavedObject.getBinary()) {
             // This is unfortunate, but there doesn't seem to be a way to take
             // ownership of the original buffer
-            auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(), Object->getFileName());
+            auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(),
+                                                            Object->getFileName());
             auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
             assert(NewObj);
-            SavedObject = OwningBinary<object::ObjectFile>(std::move(*NewObj),std::move(NewBuffer));
+            SavedObject = OwningBinary<object::ObjectFile>(std::move(*NewObj),
+                                                           std::move(NewBuffer));
         }
         else {
             NotifyGDB(SavedObject);
@@ -756,9 +758,9 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
     }
 }
 
-// to finalizing a function, look up its name in the `module_for_fname` map of unfinalized functions
-// and merge it, plus any other modules it depends upon, into `collector`
-// then add `collector` to the execution engine
+// to finalize a function, look up its name in the `module_for_fname` map of
+// unfinalized functions and merge it, plus any other modules it depends upon,
+// into `collector` then add `collector` to the execution engine
 static StringMap<Module*> module_for_fname;
 static void jl_merge_recursive(Module *m, Module *collector);
 
@@ -1107,7 +1109,8 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
 #endif
 
     if (sysimg_data) {
-        Constant *data = ConstantDataArray::get(jl_LLVMContext, ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
+        Constant *data = ConstantDataArray::get(jl_LLVMContext,
+            ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
         addComdat(new GlobalVariable(*mod, data->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data"));

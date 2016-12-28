@@ -3,9 +3,12 @@
 # Methods operating on different special matrix types
 
 # Interconversion between special matrix types
-convert{T}(::Type{Bidiagonal}, A::Diagonal{T})=Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
-convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
-convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
+convert{T}(::Type{Bidiagonal}, A::Diagonal{T}) =
+    Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
+convert{T}(::Type{SymTridiagonal}, A::Diagonal{T}) =
+    SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
+convert{T}(::Type{Tridiagonal}, A::Diagonal{T}) =
+    Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
     if !iszero(A.ev)
@@ -21,7 +24,9 @@ function convert(::Type{SymTridiagonal}, A::Bidiagonal)
     SymTridiagonal(A.dv, A.ev)
 end
 
-convert{T}(::Type{Tridiagonal}, A::Bidiagonal{T})=Tridiagonal(A.isupper?zeros(T, size(A.dv,1)-1):A.ev, A.dv, A.isupper?A.ev:zeros(T, size(A.dv,1)-1))
+convert{T}(::Type{Tridiagonal}, A::Bidiagonal{T}) =
+    Tridiagonal(A.isupper ? zeros(T, size(A.dv,1)-1) : A.ev, A.dv,
+                A.isupper ? A.ev:zeros(T, size(A.dv,1)-1))
 
 function convert(::Type{Bidiagonal}, A::SymTridiagonal)
     if !iszero(A.ev)
@@ -38,9 +43,12 @@ function convert(::Type{Diagonal}, A::Tridiagonal)
 end
 
 function convert(::Type{Bidiagonal}, A::Tridiagonal)
-    if iszero(A.dl) return Bidiagonal(A.d, A.du, true)
-    elseif iszero(A.du) return Bidiagonal(A.d, A.dl, false)
-    else throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
+    if iszero(A.dl)
+        return Bidiagonal(A.d, A.du, true)
+    elseif iszero(A.du)
+        return Bidiagonal(A.d, A.dl, false)
+    else
+        throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
     end
 end
 
@@ -73,7 +81,8 @@ function convert(::Type{Bidiagonal}, A::AbstractTriangular)
     end
 end
 
-convert(::Type{SymTridiagonal}, A::AbstractTriangular) = convert(SymTridiagonal, convert(Tridiagonal, A))
+convert(::Type{SymTridiagonal}, A::AbstractTriangular) =
+    convert(SymTridiagonal, convert(Tridiagonal, A))
 
 function convert(::Type{Tridiagonal}, A::AbstractTriangular)
     fA = full(A)

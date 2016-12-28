@@ -23,8 +23,6 @@ end
 
 function unicode_data()
     file = normpath(JULIA_HOME, "..", "..", "doc", "UnicodeData.txt")
-    url = "http://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt"
-    isfile(file) || download(url, file)
     names = Dict{UInt32, String}()
     open(file) do unidata
         for line in readlines(unidata)

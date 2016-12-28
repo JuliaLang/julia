@@ -751,7 +751,7 @@ mktempdir() do dir
                                 finalize(repo)
                             end
                             """
-                            # We try to be helpful by desparately looking for
+                            # We try to be helpful by desperately looking for
                             # a way to prompt the password interactively. Pretend
                             # to be a TTY to suppress those shenanigans. Further, we
                             # need to detach and change the controlling terminal with

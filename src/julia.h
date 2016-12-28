@@ -1771,6 +1771,25 @@ typedef struct {
 // codegen interface ----------------------------------------------------------
 
 typedef struct {
+    // to disable a hook: set to NULL or nothing
+
+    // module setup: prepare a module for code emission (data layout, DWARF version, ...)
+    // parameters: LLVMModuleRef as Ptr{Void}
+    // return value: none
+    jl_value_t *module_setup;
+
+    // module activation: registers debug info, adds module to JIT
+    // parameters: LLVMModuleRef as Ptr{Void}
+    // return value: none
+    jl_value_t *module_activation;
+
+    // exception raising: emit LLVM instructions to raise an exception
+    // parameters: LLVMBasicBlockRef as Ptr{Void}, LLVMValueRef as Ptr{Void}
+    // return value: none
+    jl_value_t *raise_exception;
+} jl_cghooks_t;
+
+typedef struct {
     int cached;             // can the compiler use/populate the compilation cache?
 
     // language features (C-style integer booleans)
@@ -1780,8 +1799,10 @@ typedef struct {
     int code_coverage;      // can we measure coverage (don't if disallowed)?
     int static_alloc;       // is the compiler allowed to allocate statically?
     int dynamic_alloc;      // is the compiler allowed to allocate dynamically (requires runtime)?
+
+    jl_cghooks_t hooks;
 } jl_cgparams_t;
-extern JL_DLLEXPORT const jl_cgparams_t jl_default_cgparams;
+extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 
 #ifdef __cplusplus
 }
