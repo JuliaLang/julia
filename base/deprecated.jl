@@ -1168,4 +1168,11 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
     end
 end
 
+# Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
+for f in (:sec, :sech, :secd, :asec, :asech,
+            :csc, :csch, :cscd, :acsc, :acsch,
+            :cot, :coth, :cotd, :acot, :acoth)
+    @eval @deprecate $f{T<:Number}(A::AbstractArray{T}) $f.(A)
+end
+
 # End deprecations scheduled for 0.6
