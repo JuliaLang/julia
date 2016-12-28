@@ -1172,4 +1172,11 @@ end
 @deprecate getindex(t::Tuple, r::AbstractArray)       getindex(t, vec(r))
 @deprecate getindex(t::Tuple, b::AbstractArray{Bool}) getindex(t, vec(b))
 
+# Deprecate vectorized xor in favor of compact broadcast syntax
+@deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
+@deprecate xor(A::BitArray, b::Bool)                xor.(A, b)
+@deprecate xor(a::Number, B::AbstractArray)         xor.(a, B)
+@deprecate xor(A::AbstractArray, b::Number)         xor.(A, b)
+@deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
+
 # End deprecations scheduled for 0.6

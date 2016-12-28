@@ -2290,7 +2290,6 @@ min(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(min, A, B)
 max(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(max, A, B)
 (&)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(&, A, B)
 (|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(|, A, B)
-xor(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(xor, A, B)
 
 ( +)(A::SparseMatrixCSC, B::Array ) = Array(A)  + B
 ( +)(A::Array , B::SparseMatrixCSC) = A  + Array(B)
@@ -3811,6 +3810,17 @@ end
     blkdiag(A...)
 
 Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
+
+# Example
+```jldoctest
+julia> blkdiag(speye(3), 2*speye(2))
+5×5 sparse matrix with 5 Float64 nonzero entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
+  [4, 4]  =  2.0
+  [5, 5]  =  2.0
+```
 """
 function blkdiag(X::SparseMatrixCSC...)
     num = length(X)

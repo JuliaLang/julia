@@ -57,6 +57,9 @@ This section lists changes that do not have deprecation warnings.
     The flip-side of this is that new method definitions should now reliably actually
     take effect, and be called when evaluating new code ([#265]).
 
+  * The array-scalar operations `div`, `mod`, `rem`, `&`, `|`, `xor`, `/`, `\`, `*`, `+`, and `-`
+    now follow broadcast promotion rules ([#19692]).
+
 Library improvements
 --------------------
 
