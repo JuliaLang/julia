@@ -25,6 +25,9 @@ Language changes
   * Newly defined methods are no longer callable from the same dynamic runtime
     scope they were defined in ([#17057]).
 
+  * `isa` is now parsed as an infix operator with the same precedence as `in`
+    ([#19677]).
+
 Breaking changes
 ----------------
 
