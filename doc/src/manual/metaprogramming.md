@@ -332,8 +332,8 @@ objects: the [`parse()`](@ref) function, which takes a string of Julia code and 
 
 ```julia
 julia> function math_expr(op, op1, op2)
-         expr = Expr(:call, op, op1, op2)
-         return expr
+           expr = Expr(:call, op, op1, op2)
+           return expr
        end
 
  julia>  ex = math_expr(:+, 1, Expr(:call, :*, 4, 5))
@@ -348,11 +348,11 @@ alone:
 
 ```julia
 julia> function make_expr2(op, opr1, opr2)
-         opr1f, opr2f = map(x -> isa(x, Number) ? 2*x : x, (opr1, opr2))
-         retexpr = Expr(:call, op, opr1f, opr2f)
+           opr1f, opr2f = map(x -> isa(x, Number) ? 2*x : x, (opr1, opr2))
+           retexpr = Expr(:call, op, opr1f, opr2f)
 
-         return retexpr
-   end
+           return retexpr
+       end
 make_expr2 (generic function with 1 method)
 
 julia> make_expr2(:+, 1, 2)
@@ -485,9 +485,9 @@ macro body:
 
 ```julia
 julia> macro showarg(x)
-   show(x)
-   # ... remainder of macro, returning an expression
-end
+           show(x)
+           # ... remainder of macro, returning an expression
+       end
 
 julia> @showarg(a)
 (:a,)
@@ -624,13 +624,13 @@ final value. The macro might look like this:
 
 ```julia
 macro time(ex)
-  return quote
-    local t0 = time()
-    local val = $ex
-    local t1 = time()
-    println("elapsed time: ", t1-t0, " seconds")
-    val
-  end
+    return quote
+        local t0 = time()
+        local val = $ex
+        local t1 = time()
+        println("elapsed time: ", t1-t0, " seconds")
+        val
+    end
 end
 ```
 
@@ -680,13 +680,13 @@ or manipulate user variables. For example, the following macro sets `x` to zero 
 
 ```julia
 macro zerox()
-  return esc(:(x = 0))
+    return esc(:(x = 0))
 end
 
 function foo()
-  x = 1
-  @zerox
-  x  # is zero
+    x = 1
+    @zerox
+    x  # is zero
 end
 ```
 
@@ -703,9 +703,9 @@ For example, the following code defines a series of operators on three arguments
 
 ```julia
 for op = (:+, :*, :&, :|, :$)
-  eval(quote
-    ($op)(a,b,c) = ($op)(($op)(a,b),c)
-  end)
+    eval(quote
+        ($op)(a,b,c) = ($op)(($op)(a,b),c)
+    end)
 end
 ```
 
@@ -715,7 +715,7 @@ more tersely using the `:` prefix quoting form:
 
 ```julia
 for op = (:+, :*, :&, :|, :$)
-  eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
+    eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
 end
 ```
 
@@ -724,7 +724,7 @@ enough that Julia comes with a macro to abbreviate this pattern:
 
 ```julia
 for op = (:+, :*, :&, :|, :$)
-  @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
+    @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
 end
 ```
 
@@ -734,7 +734,7 @@ block:
 
 ```julia
 @eval begin
-  # multiple lines
+    # multiple lines
 end
 ```
 
@@ -753,7 +753,7 @@ is just the following:
 
 ```julia
 macro r_str(p)
-  Regex(p)
+    Regex(p)
 end
 ```
 
@@ -773,12 +773,12 @@ regular expression occurs in a loop:
 
 ```julia
 for line = lines
-  m = match(r"^\s*(?:#|$)", line)
-  if m === nothing
-    # non-comment
-  else
-    # comment
-  end
+    m = match(r"^\s*(?:#|$)", line)
+    if m === nothing
+        # non-comment
+    else
+        # comment
+    end
 end
 ```
 
@@ -789,12 +789,12 @@ In order to accomplish this without macros, one would have to write this loop li
 ```julia
 re = Regex("^\\s*(?:#|\$)")
 for line = lines
-  m = match(re, line)
-  if m === nothing
-    # non-comment
-  else
-    # comment
-  end
+    m = match(re, line)
+    if m === nothing
+        # non-comment
+    else
+        # comment
+    end
 end
 ```
 
@@ -825,7 +825,7 @@ is implemented with the following innocuous-looking macro:
 
 ```julia
 macro cmd(str)
-  :(cmd_gen($(shell_parse(str)[1])))
+    :(cmd_gen($(shell_parse(str)[1])))
 end
 ```
 
@@ -920,6 +920,53 @@ function with side effects - when, and how often, the side effects occur is unde
 true for macros too - and just like for macros, the use of [`eval()`](@ref) in a generated function
 is a sign that you're doing something the wrong way.) However, unlike macros, the runtime system
 cannot correctly handle a call to [`eval()`](@ref), so it is disallowed.
+
+It is also important to see how `@generated` functions interact with method redefinition.
+Following the principle that a correct `@generated` function must not observe any
+mutable state or cause any mutation of global state, we see the following behavior.
+Observe that the generated function *cannot* call any method that was not defined
+prior to the *definition* of the generated function itself.
+
+```julia
+julia> # initially f(x) has one definition:
+
+julia> f(x) = "original definition";
+
+julia> # start some other operations that use f(x):
+
+julia> g(x) = f(x);
+
+julia> @generated gen1(x) = f(x);
+
+julia> @generated gen2(x) = :(f(x));
+
+julia> # now we add some new definitions for f(x):
+
+julia> f(x::Int) = "definition for Int";
+
+julia> f(x::Type{Int}) = "definition for Type{Int}";
+
+julia> # and compare how these results differ:
+
+julia> f(1)
+"definition for Int"
+
+julia> g(1)
+"definition for Int"
+
+julia> gen1(1)
+"original definition"
+
+julia> gen2(1)
+"definition for Int"
+
+julia> # each method of a generated function has its own view of defined functions:
+
+julia> @generated gen1(x::Real) = f(x);
+
+julia> gen1(1)
+"definition for Type{Int}"
+```
 
 The example generated function `foo` above did not do anything a normal function `foo(x) = x * x`
 could not do (except printing the type on the first invocation, and incurring higher overhead).

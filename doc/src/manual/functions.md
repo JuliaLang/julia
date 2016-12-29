@@ -92,7 +92,7 @@ Of course, in a purely linear function body like `g`, the usage of `return` is p
 the expression `x + y` is never evaluated and we could simply make `x * y` the last expression
 in the function and omit the `return`. In conjunction with other control flow, however, `return`
 is of real use. Here, for example, is a function that computes the hypotenuse length of a right
-triangle with sides of length *x* and *y*, avoiding overflow:
+triangle with sides of length `x` and `y`, avoiding overflow:
 
 ```julia
 function hypot(x,y)
@@ -111,7 +111,7 @@ end
 ```
 
 There are three possible points of return from this function, returning the values of three different
-expressions, depending on the values of *x* and *y*. The `return` on the last line could be omitted
+expressions, depending on the values of `x` and `y`. The `return` on the last line could be omitted
 since it is the last expression.
 
 ## Operators Are Functions
@@ -179,8 +179,8 @@ julia> function (x)
 (::#3) (generic function with 1 method)
 ```
 
-This creates a function taking one argument *x* and returning the value of the polynomial *x*^2 +
-2*x* - 1 at that value. Notice that the result is a generic function, but with a compiler-generated
+This creates a function taking one argument `x` and returning the value of the polynomial `x^2 +
+2x - 1` at that value. Notice that the result is a generic function, but with a compiler-generated
 name based on consecutive numbering.
 
 The primary use for anonymous functions is passing them to functions which take other functions
@@ -554,7 +554,7 @@ normally or threw an exception. (The `try/finally` construct will be described i
 With the `do` block syntax, it helps to check the documentation or implementation to know how
 the arguments of the user function are initialized.
 
-## Dot Syntax for Vectorizing Functions
+## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
 
 In technical-computing languages, it is common to have "vectorized" versions of functions, which
 simply apply a given function `f(x)` to each element of an array `A` to yield a new array via
@@ -583,7 +583,7 @@ there is only a single loop over `X`, and a single array is allocated for the re
 `tmp=cos(X)`, and then compute `sin(tmp)` in a separate loop, allocating a second array.] This
 loop fusion is not a compiler optimization that may or may not occur, it is a *syntactic guarantee*
 whenever nested `f.(args...)` calls are encountered.  Technically, the fusion stops as soon as
-a "non-dot" function is encountered; for example, in `sin.(sort(cos.(X)))` the `sin` and `cos`
+a "non-dot" function call is encountered; for example, in `sin.(sort(cos.(X)))` the `sin` and `cos`
 loops cannot be merged because of the intervening `sort` function.
 
 Finally, the maximum efficiency is typically achieved when the output array of a vectorized operation
@@ -595,10 +595,10 @@ overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-index
 e.g. `X[2:end] .= sin.(Y)`, then it translates to `broadcast!` on a `view`, e.g. `broadcast!(sin, view(X, 2:endof(X)), Y)`,
 so that the left-hand side is updated in-place.
 
-(In future versions of Julia, operators like `.*` will also be handled with the same mechanism:
-they will be equivalent to `broadcast` calls and will be fused with other nested "dot" calls.
- `X .+= Y` is equivalent to `X .= X .+ Y` and will eventually result in a fused in-place assignment.
-Similarly for `.*=` etcetera.)
+Operators like `.*` are handled with the same mechanism:
+they are equivalent to `broadcast` calls and are fused with other nested "dot" calls.
+ `X .+= Y` etcetera is equivalent to `X .= X .+ Y` and results in a fused in-place assignment;
+ see also [dot operators](@ref man-dot-operators).
 
 ## Further Reading
 
@@ -607,4 +607,3 @@ a sophisticated type system and allows multiple dispatch on argument types. None
 given here provide any type annotations on their arguments, meaning that they are applicable to
 all types of arguments. The type system is described in [Types](@ref man-types) and defining a function
 in terms of methods chosen by multiple dispatch on run-time argument types is described in [Methods](@ref).
-

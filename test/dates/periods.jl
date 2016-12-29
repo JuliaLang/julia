@@ -328,6 +328,8 @@ emptyperiod = ((y + d) - d) - y
 pa = [1y 1m 1w 1d; 1h 1mi 1s 1ms]
 cpa = [1y+1s 1m+1s 1w+1s 1d+1s; 1h+1s 1mi+1s 2m+1s 1s+1ms]
 
+@test +pa == pa == -(-pa)
+@test -pa == map(-, pa)
 @test 1y .+ pa == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]
 @test (1y+1m) .+ pa == [2y+1m 1y+2m 1y+1m+1w 1y+1m+1d; 1y+1m+1h 1y+1m+1mi 1y+1m+1s 1y+1m+1ms]
 @test pa .+ 1y == [2y 1y+1m 1y+1w 1y+1d; 1y+1h 1y+1mi 1y+1s 1y+1ms]

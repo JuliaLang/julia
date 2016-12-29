@@ -454,6 +454,9 @@ precompile(Base.string, (String, String, Char))
 precompile(Base.string, (String, String, Int))
 precompile(Base.vect, (Base.LineEdit.Prompt, String))
 
+# Speed up type inference in the post-Base world redefinition of convert
+isdefined(Core, :Inference) && Base.code_typed(Base.code_typed)
+
 # Speeding up addprocs for LocalManager
 precompile(Base.start_worker, ())
 precompile(Base.start_worker, (Base.TTY,))

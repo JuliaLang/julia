@@ -683,7 +683,7 @@ end
     else
         a = T(v[i])
         b = T(v[i+1])
-        return a + h*(b-a)
+        return a + ifelse(a == b, zero(a), h*(b-a))
     end
 end
 

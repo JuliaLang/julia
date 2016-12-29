@@ -76,17 +76,18 @@ real{T<:Real}(::Type{T}) = T
 real{T<:Real}(::Type{Complex{T}}) = T
 
 isreal(x::Real) = true
-isreal(z::Complex) = imag(z) == 0
+isreal(z::Complex) = iszero(imag(z))
 """
     isimag(z) -> Bool
 
 Test whether `z` is purely imaginary, i.e. has a real part equal to 0.
 """
-isimag(z::Number) = real(z) == 0
+isimag(z::Number) = iszero(real(z))
 isinteger(z::Complex) = isreal(z) & isinteger(real(z))
 isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
 isnan(z::Complex) = isnan(real(z)) | isnan(imag(z))
 isinf(z::Complex) = isinf(real(z)) | isinf(imag(z))
+iszero(z::Complex) = iszero(real(z)) & iszero(imag(z))
 
 """
     complex(r, [i])

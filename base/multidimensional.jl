@@ -493,7 +493,7 @@ rcum_promote_type{T}(op, ::Type{T}) = T
 rcum_promote_type{T,N}(op, ::Type{Array{T,N}}) = Array{rcum_promote_type(op,T), N}
 
 # accumulate_pairwise slightly slower then accumulate, but more numerically
-# stable in certain situtations (e.g. sums).
+# stable in certain situations (e.g. sums).
 # it does double the number of operations compared to accumulate,
 # though for cheap operations like + this does not have much impact (20%)
 function _accumulate_pairwise!{T, Op}(op::Op, c::AbstractVector{T}, v::AbstractVector, s, i1, n)::T
@@ -1247,8 +1247,7 @@ end
             (@nref $N B i) = (AI, AI)
         end
         Bmax = sB
-        Istart = ones(Int,ndims(A))
-        Istart[([sB...].==1) & ([sA...].!=1)] = 2
+        Istart = Int[sB[i] == 1 != sA[i] ? 2 : 1 for i = 1:ndims(A)]
         @inbounds @nloops $N i d->(Istart[d]:size(A,d)) begin
             AI = @nref $N A i
             @nexprs $N d->(j_d = min(Bmax[d], i_{d}))

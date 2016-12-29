@@ -130,7 +130,7 @@ end
 
 big(x::Irrational) = convert(BigFloat,x)
 
-## specific irriational mathematical constants
+## specific irrational mathematical constants
 
 @irrational π        3.14159265358979323846  pi
 @irrational e        2.71828182845904523536  exp(big(1))
@@ -182,13 +182,9 @@ catalan
 
 # use exp for e^x or e.^x, as in
 #    ^(::Irrational{:e}, x::Number) = exp(x)
-#    .^(::Irrational{:e}, x) = exp(x)
 # but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
 for T in (Irrational, Rational, Integer, Number)
     ^(::Irrational{:e}, x::T) = exp(x)
-end
-for T in (Range, BitArray, StridedArray, AbstractArray)
-    .^(::Irrational{:e}, x::T) = exp.(x)
 end
 
 log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)

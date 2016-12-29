@@ -59,7 +59,7 @@ the [LLVM library](http://llvm.org).
 8-bit serialisation tags for 256 frequently used `jl_value_t` values. The serialisation mechanism
 uses these tags as shorthand (in lieu of storing whole objects) to save storage space.
 
-If there is no sysimg file (`!jl_options.image_file`) then then `Core` and `Main` modules are
+If there is no sysimg file (`!jl_options.image_file`) then the `Core` and `Main` modules are
 created and `boot.jl` is evaluated:
 
 `jl_core_module = jl_new_module(jl_symbol("Core"))` creates the Julia `Core` module.

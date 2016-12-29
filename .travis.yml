@@ -9,9 +9,7 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-            - kalakris-cmake
           packages:
-            - cmake
             - bar
             - time
             - binutils
@@ -30,9 +28,7 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-            - kalakris-cmake
           packages:
-            - cmake
             - bar
             - time
             - g++-5
@@ -82,7 +78,7 @@ before_install:
         contrib/travis_fastfail.sh || exit 1;
         brew tap staticfloat/julia;
         brew rm --force $(brew deps --HEAD julia);
-        brew install -v cmake staticfloat/juliadeps/libgfortran;
+        brew install -v staticfloat/juliadeps/libgfortran;
         brew install -v --only-dependencies --HEAD julia;
         BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm37-julia)/bin/llvm-config-3.7 LLVM_SIZE=$(brew --prefix llvm37-julia)/bin/llvm-size-3.7";
         BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
@@ -100,12 +96,13 @@ before_install:
     - git clone -q git://git.kitenet.net/moreutils
 script:
     - echo $BUILDOPTS
+    - contrib/download_cmake.sh
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
     # capture the log, but only print it if `make deps` fails
     # try to show the end of the log first, because this log might be very long (> 4MB)
     # and thus be truncated by travis
-    - moreutils/mispipe "make \$BUILDOPTS VERBOSE=0 -C deps 2> deps-err.log" "$BAR" > deps.log ||
+    - moreutils/mispipe "make $BUILDOPTS VERBOSE=0 -C deps 2> deps-err.log" "$BAR" > deps.log ||
         { echo "-- deps build log stderr tail 100 --------------------------------------";
           tail -n 100 deps-err.log;
           echo "-- deps build log stdout tail 100 --------------------------------------";
@@ -129,7 +126,6 @@ script:
         /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 &&
-        ulimit -n 128 &&
         cd /tmp/julia/share/julia/test &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg

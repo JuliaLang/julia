@@ -257,6 +257,7 @@ static void NOINLINE JL_NORETURN start_task(void)
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT);
+            ptls->world_age = jl_world_counter;
             res = jl_apply(&t->start, 1);
         }
         JL_CATCH {
@@ -265,6 +266,7 @@ static void NOINLINE JL_NORETURN start_task(void)
             jl_gc_wb(t, res);
         }
     }
+    jl_get_ptls_states()->world_age = jl_world_counter; // TODO
     finish_task(t, res);
     gc_debug_critical_error();
     abort();
@@ -306,14 +308,16 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
     if (!jl_setjmp(ptls->current_task->ctx, 0)) {
         // backtraces don't survive task switches, see e.g. issue #12485
         ptls->bt_size = 0;
-#ifdef COPY_STACKS
         jl_task_t *lastt = ptls->current_task;
+#ifdef COPY_STACKS
         save_stack(ptls, lastt);
 #endif
 
         // set up global state for new task
-        ptls->current_task->gcstack = ptls->pgcstack;
+        lastt->gcstack = ptls->pgcstack;
+        lastt->world_age = ptls->world_age;
         ptls->pgcstack = t->gcstack;
+        ptls->world_age = t->world_age;
 #ifdef JULIA_ENABLE_THREADING
         // If the current task is not holding any locks, free the locks list
         // so that it can be GC'd without leaking memory

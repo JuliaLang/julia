@@ -15,6 +15,30 @@ systemerror
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
 the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
 `Foo()` once.
+
+```jldoctest
+julia> A = zeros(2,3)
+2×3 Array{Float64,2}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+
+julia> fill!(A, 2.)
+2×3 Array{Float64,2}:
+ 2.0  2.0  2.0
+ 2.0  2.0  2.0
+
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A
+3-element Array{Array{Int64,1},1}:
+ [2,1,1]
+ [2,1,1]
+ [2,1,1]
+
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())
+3-element Array{Int64,1}:
+ 1
+ 1
+ 1
+```
 """
 fill!
 
@@ -86,19 +110,6 @@ false
 isinteger
 
 """
-    ./(x, y)
-
-Element-wise right division operator.
-
-```jldoctest
-julia> [1 2 3] ./ [1 2 3]
-1×3 Array{Float64,2}:
- 1.0  1.0  1.0
-```
-"""
-Base.:(./)
-
-"""
     prod!(r, A)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
@@ -145,21 +156,6 @@ losslessly, some loss is tolerated; for example, `promote_type(Int64,Float64)` r
 `Float64` values.
 """
 promote_type
-
-"""
-```
-.*(x, y)
-```
-
-Element-wise multiplication operator.
-
-```jldoctest
-julia> [1 2 3] .* [1 2 3]
-1×3 Array{Int64,2}:
- 1  4  9
-```
-"""
-Base.:(.*)
 
 """
     backtrace()
@@ -311,19 +307,6 @@ that N is inbounds on either array. Incorrect usage may corrupt or segfault your
 the same manner as C.
 """
 unsafe_copy!(dest::Array, d, src::Array, so, N)
-
-"""
-    .^(x, y)
-
-Element-wise exponentiation operator.
-
-```jldoctest
-julia> [1 2 3] .^ [1 2 3]
-1×3 Array{Int64,2}:
- 1  4  27
-```
-"""
-Base.:(.^)
 
 """
     Float32(x [, mode::RoundingMode])
@@ -590,26 +573,24 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
 fd
 
-"""
-    ones(type, dims)
 
-Create an array of all ones of specified type. The type defaults to `Float64` if not specified.
+"""
+    ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+
+Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
 
 ```jldoctest
 julia> ones(Complex128, 2, 3)
 2×3 Array{Complex{Float64},2}:
  1.0+0.0im  1.0+0.0im  1.0+0.0im
  1.0+0.0im  1.0+0.0im  1.0+0.0im
-```
-"""
-ones(t,dims)
 
-"""
-    ones(A)
+julia> ones(1,2)
+1×2 Array{Float64,2}:
+ 1.0  1.0
 
-Create an array of all ones with the same element type and shape as `A`.
-
-```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
@@ -619,9 +600,21 @@ julia> ones(A)
 2×2 Array{Int64,2}:
  1  1
  1  1
+
+julia> ones(A, Float64)
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  1.0
+
+julia> ones(A, Bool, (3,))
+3-element Array{Bool,1}:
+ true
+ true
+ true
 ```
+See also [`zeros`](@ref), [`similar`](@ref).
 """
-ones(A)
+ones
 
 """
     reshape(A, dims)
@@ -933,21 +926,6 @@ reverse
 In-place version of [`reverse`](@ref).
 """
 reverse!
-
-"""
-    .<(x, y)
-
-Element-wise less-than comparison operator.
-
-```jldoctest
-julia> [1; 2; 3] .< [2; 1; 4]
-3-element BitArray{1}:
-  true
- false
-  true
-```
-"""
-Base.:(.<)
 
 """
     UndefRefError()
@@ -2073,21 +2051,6 @@ Compute the minimum value of `A` over the singleton dimensions of `r`, and write
 minimum!
 
 """
-    .-(x, y)
-
-Element-wise subtraction operator.
-
-```jldoctest
-julia> [4; 5; 6] .- [1; 2; 4]
-3-element Array{Int64,1}:
- 3
- 3
- 2
-```
-"""
-Base.:(.-)
-
-"""
     unsafe_trunc(T, x)
 
 `unsafe_trunc(T, x)` returns the nearest integral value of type `T` whose absolute value is
@@ -2258,52 +2221,6 @@ Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` c
 `setfield!(a, :b, c)`.
 """
 setfield!
-
-"""
-    .\\(x, y)
-
-Element-wise left division operator.
-
-```jldoctest
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> A .\\ [1 2]
-2×2 Array{Float64,2}:
- 1.0       1.0
- 0.333333  0.5
-```
-
-```jldoctest
-julia> A = [1 0; 0 -1];
-
-julia> B = [0 1; 1 0];
-
-julia> C = [A, B]
-2-element Array{Array{Int64,2},1}:
- [1 0; 0 -1]
- [0 1; 1 0]
-
-julia> x = [1; 0];
-
-julia> y = [0; 1];
-
-julia> D = [x, y]
-2-element Array{Array{Int64,1},1}:
- [1,0]
- [0,1]
-
-julia> C .\\ D
-2-element Array{Array{Float64,1},1}:
- [1.0,-0.0]
- [1.0,0.0]
-```
-
-See also [`broadcast`](@ref).
-"""
-Base.:(.\)(x,y)
 
 """
 ```
@@ -2486,19 +2403,6 @@ issubnormal
 An attempted access to a [`Nullable`](@ref) with no defined value.
 """
 NullException
-
-"""
-    .==(x, y)
-
-Element-wise equality comparison operator.
-
-```jldoctest
-julia> [1 2 3] .== [1 2 4]
-1×3 BitArray{2}:
- true  true  false
-```
-"""
-Base.:(.==)
 
 """
     cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
@@ -2819,26 +2723,23 @@ Test whether any values along the given dimensions of an array are `true`.
 any(::AbstractArray,dims)
 
 """
-    zeros(type, dims)
+    zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
-Create an array of all zeros of specified type.
-The type defaults to `Float64` if not specified.
+Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
+
 
 ```jldoctest
+julia> zeros(1)
+1-element Array{Float64,1}:
+ 0.0
+
 julia> zeros(Int8, 2, 3)
 2×3 Array{Int8,2}:
  0  0  0
  0  0  0
-```
-"""
-zeros(t,dims)
 
-"""
-    zeros(A)
-
-Create an array of all zeros with the same element type and shape as `A`.
-
-```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
  1  2
@@ -2848,9 +2749,21 @@ julia> zeros(A)
 2×2 Array{Int64,2}:
  0  0
  0  0
+
+julia> zeros(A, Float64)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+julia> zeros(A, Bool, (3,))
+3-element Array{Bool,1}:
+ false
+ false
+ false
 ```
+See also [`ones`](@ref), [`similar`](@ref).
 """
-zeros(A)
+zeros
 
 """
     Symbol(x...) -> Symbol
@@ -2891,31 +2804,6 @@ Compute the midpoints of the bins with edges `e`. The result is a vector/range o
 `length(e) - 1`. Note: Julia does not ignore `NaN` values in the computation.
 """
 midpoints
-
-"""
-    .+(x, y)
-
-Element-wise addition operator.
-
-```jldoctest
-julia> A = [1 2; 3 4];
-
-julia> B = [5 6; 7 8];
-
-julia> C = [A, B]
-2-element Array{Array{Int64,2},1}:
- [1 2; 3 4]
- [5 6; 7 8]
-
-julia> C .+ [[1; 2] [3; 4]]
-2×2 Array{Array{Int64,2},2}:
- [2 3; 4 5]   [4 5; 6 7]
- [7 8; 9 10]  [9 10; 11 12]
-```
-
-See also [`broadcast`](@ref).
-"""
-Base.:(.+)
 
 """
     reverseind(v, i)

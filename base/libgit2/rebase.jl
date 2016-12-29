@@ -41,11 +41,24 @@ function Base.next(rb::GitRebase)
     return unsafe_load(convert(Ptr{RebaseOperation}, rb_op_ptr_ptr[]), 1)
 end
 
+
+"""
+    LibGit2.commit(rb::GitRebase, sig::GitSignature)
+
+Commits the current patch to the rebase `rb`, using `sig` as the committer. Is silent if
+the commit has already been applied.
+"""
 function commit(rb::GitRebase, sig::GitSignature)
     oid_ptr = Ref(Oid())
-    @check ccall((:git_rebase_commit, :libgit2), Cint,
-                  (Ptr{Oid}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
-                   oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
+    try
+        @check ccall((:git_rebase_commit, :libgit2), Error.Code,
+                     (Ptr{Oid}, Ptr{Void}, Ptr{SignatureStruct}, Ptr{SignatureStruct}, Ptr{UInt8}, Ptr{UInt8}),
+                      oid_ptr, rb.ptr, C_NULL, sig.ptr, C_NULL, C_NULL)
+    catch err
+        # TODO: return current HEAD instead
+        err.code == Error.EAPPLIED && return nothing
+        rethrow(err)
+    end
     return oid_ptr[]
 end
 
