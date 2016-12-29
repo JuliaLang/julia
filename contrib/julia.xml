@@ -181,7 +181,6 @@
       <item> TCPSocket </item>
       <item> Task </item>
       <item> TimeoutAsyncWork </item>
-      <item> TmStruct </item>
       <item> Triangular </item>
       <item> Tridiagonal </item>
       <item> Tuple </item>

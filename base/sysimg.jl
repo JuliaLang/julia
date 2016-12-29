@@ -183,15 +183,15 @@ importall .Base64
 # nullable types
 include("nullable.jl")
 
-# version
-include("version.jl")
-
 # system & environment
 include("libc.jl")
-using .Libc: getpid, gethostname, time
+using .Libc: getpid, gethostname, now, MicrosecondTime, time
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
+
+# version
+include("version.jl")
 
 # Scheduling
 include("libuv.jl")
@@ -355,7 +355,7 @@ importall .Profile
 
 # dates
 include("dates/Dates.jl")
-import .Dates: Date, DateTime, now
+import .Dates: Date, DateTime
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")

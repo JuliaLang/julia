@@ -68,30 +68,12 @@ since the unix epoch `1970-01-01T00:00:00` as a `Float64`.
 datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH)/1000.0
 
 """
-    now() -> DateTime
-
-Returns a `DateTime` corresponding to the user's system time including the system timezone
-locale.
-"""
-function now()
-    tv = Libc.TimeVal()
-    tm = Libc.TmStruct(tv.sec)
-    return DateTime(tm.year+1900,tm.month+1,tm.mday,tm.hour,tm.min,tm.sec,div(tv.usec,1000))
-end
-
-"""
     today() -> Date
 
 Returns the date portion of `now()`.
 """
-today() = Date(now())
+today() = Date( convert(DateTime, Base.now() ) )
 
-"""
-    now(::Type{UTC}) -> DateTime
-
-Returns a `DateTime` corresponding to the user's system time as UTC/GMT.
-"""
-now(::Type{UTC}) = unix2datetime(time())
 
 """
     rata2datetime(days) -> DateTime
@@ -129,3 +111,9 @@ Takes the given `DateTime` and returns the number of Julian calendar days since 
 epoch `-4713-11-24T12:00:00` as a `Float64`.
 """
 datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH)/86400000.0
+
+function Base.convert(::Type{DateTime}, m::Libc.MicrosecondTime)
+    base = unix2datetime(m.seconds)
+    extra = Millisecond( round( m.microseconds / 1000 ) )
+    base + extra
+end

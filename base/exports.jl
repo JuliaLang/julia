@@ -981,6 +981,7 @@ export
 # dates
     Date,
     DateTime,
+    MicrosecondTime,
     now,
 
 # errors
