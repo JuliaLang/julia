@@ -173,6 +173,14 @@ using .IteratorsMD
 @inline checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
     checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
 
+# Indexing into Array with mixtures of Integers and CartesianIndices is
+# extremely performance-sensitive. While the abstract fallbacks support this,
+# codegen has extra support for SIMDification that sub2ind doesn't (yet) support
+@propagate_inbounds getindex(A::Array, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...) =
+    A[to_indices(A, (i1, I...))...]
+@propagate_inbounds setindex!(A::Array, v, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...) =
+    (A[to_indices(A, (i1, I...))...] = v; A)
+
 # Support indexing with an array of CartesianIndex{N}s
 # Here we try to consume N of the indices (if there are that many available)
 # The first two simply handle ambiguities
