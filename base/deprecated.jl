@@ -1146,6 +1146,10 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
     end
 end
 
+# #19719
+@deprecate getindex(t::Tuple, r::AbstractArray)       getindex(t, vec(r))
+@deprecate getindex(t::Tuple, b::AbstractArray{Bool}) getindex(t, vec(b))
+
 @deprecate airy(z::Number) airyai(z)
 @deprecate airyx(z::Number) airyaix(z)
 @deprecate airyprime(z::Number) airyaiprime(z)
