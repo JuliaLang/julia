@@ -9,51 +9,13 @@ Transform an array to its complex conjugate in-place.
 
 See also [`conj`](@ref).
 """
-function conj!{T<:Number}(A::AbstractArray{T})
-    for i in eachindex(A)
-        A[i] = conj(A[i])
-    end
-    return A
+conj!{T<:Number}(A::AbstractArray{T}) = broadcast!(conj, A, A)
+
+for f in (:-, :~, :conj, :sign, :real, :imag)
+    @eval ($f)(A::AbstractArray) = broadcast($f, A)
 end
 
-for f in (:-, :~, :conj, :sign)
-    @eval begin
-        function ($f)(A::AbstractArray)
-            F = similar(A)
-            RF, RA = eachindex(F), eachindex(A)
-            if RF == RA
-                for i in RA
-                    F[i] = ($f)(A[i])
-                end
-            else
-                for (iF, iA) in zip(RF, RA)
-                   F[iF] = ($f)(A[iA])
-                end
-            end
-            return F
-        end
-    end
-end
-
-(-)(A::AbstractArray{Bool}) = reshape([ -A[i] for i in eachindex(A) ], size(A))
-
-real(A::AbstractArray) = reshape([ real(x) for x in A ], size(A))
-imag(A::AbstractArray) = reshape([ imag(x) for x in A ], size(A))
-
-function !(A::AbstractArray{Bool})
-    F = similar(A)
-    RF, RA = eachindex(F), eachindex(A)
-    if RF == RA
-        for i in RA
-            F[i] = !A[i]
-        end
-    else
-        for (iF, iA) in zip(RF, RA)
-            F[iF] = !A[iA]
-        end
-    end
-    return F
-end
+!(A::AbstractArray{Bool}) = broadcast(!, A)
 
 ## Binary arithmetic operators ##
 
