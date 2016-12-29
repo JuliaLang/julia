@@ -289,6 +289,10 @@ ensure_indexable(I::Tuple{}) = ()
 ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
 ensure_indexable(I::Tuple{LogicalIndex, Vararg{Any}}) = (collect(I), ensure_indexable(tail(I))...)
 
+# In simple cases, we know that we don't need to use indices(A). Optimize those
+# until Julia gets smart enough to elide the call on its own:
+to_indices(A, I::Tuple{}) = ()
+@inline to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = to_indices(A, (), I)
 # But some index types require more context spanning multiple indices
 # CartesianIndexes are simple; they just splat out
 @inline to_indices(A, inds, I::Tuple{CartesianIndex, Vararg{Any}}) =
@@ -319,9 +323,13 @@ getindex(t::Tuple, I...) = getindex(t, IteratorsMD.flatten(I)...)
 # These are not defined on directly on getindex to avoid
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
-@inline function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
-    @boundscheck checkbounds(A, I...)
-    _unsafe_getindex(l, _maybe_reshape(l, A, I...), I...)
+@generated function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
+    N = length(I)
+    quote
+        @_inline_meta
+        @boundscheck checkbounds(A, I...)
+        _unsafe_getindex(l, _maybe_reshape(l, A, I...), I...)
+    end
 end
 # But we can speed up LinearSlow arrays by reshaping them to the appropriate dimensionality:
 _maybe_reshape(::LinearFast, A::AbstractArray, I...) = A
@@ -333,8 +341,7 @@ _maybe_reshape(::LinearSlow, A::AbstractVector, I...) = A
 @generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray}...)
     N = length(I)
     quote
-        # This is inlined and @generated to prevent allocations from splatting tuples
-        @_inline_meta
+        # This is specifically not inlined to prevent exessive allocations in type unstable code
         @nexprs $N d->(I_d = I[d])
         shape = @ncall $N index_shape I
         dest = similar(A, shape)
@@ -362,28 +369,22 @@ end
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
 ## setindex! ##
-# For multi-element setindex!, we check bounds
-# and ensure the value to set is either an AbstractArray or a Repeated scalar
-# before redispatching to the _unsafe_batchsetindex!
-_iterable(v::AbstractArray) = v
-_iterable(v) = Iterators.repeated(v)
-@inline function _setindex!(l::LinearIndexing, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
-    @boundscheck checkbounds(A, I...)
-    _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
-    A
-end
-
-@generated function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray}...)
-    N = length(J)
+@generated function _setindex!(l::LinearIndexing, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
+    N = length(I)
     quote
         @_inline_meta
-        @ncall $N _unsafe_batchsetindex! A _iterable(x) d->J[d]
+        @boundscheck checkbounds(A, I...)
+        _unsafe_setindex!(l, _maybe_reshape(l, A, I...), x, I...)
+        A
     end
 end
 
-@generated function _unsafe_batchsetindex!(A::AbstractArray, X, I::Union{Real,AbstractArray}...)
+_iterable(v::AbstractArray) = v
+_iterable(v) = Iterators.repeated(v)
+@generated function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::Union{Real,AbstractArray}...)
     N = length(I)
     quote
+        X = _iterable(x)
         @nexprs $N d->(I_d = I[d])
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check X (d->idxlens[d])
