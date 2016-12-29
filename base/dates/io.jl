@@ -83,7 +83,7 @@ end
 
 for (c, fn) in zip("YmdHMS", [year, month, day, hour, minute, second])
     @eval function format(io, d::DatePart{$c}, dt)
-        write(io, minwidth($fn(dt), d.width))
+        write(io, dec($fn(dt), d.width))
     end
 end
 
@@ -99,8 +99,13 @@ for (tok, fn) in zip("eE", [dayabbr, dayname])
     end
 end
 
+function fixwidth(num, n)
+    assert(num>=0)
+    dec(num,n)[end-(n-1):end]
+end
+
 function format(io, d::DatePart{'y'}, dt)
-    write(io, rfixwidth(year(dt), d.width))
+    write(io, fixwidth(year(dt), d.width))
 end
 
 function format(io, d::DatePart{'s'}, dt)
@@ -351,9 +356,10 @@ Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
 Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(Date,dt,df)
 
-function format(io::IO, dt::TimeType, fmt::DateFormat)
-    for t in fmt.tokens
-        format(io, t, dt, fmt.locale)
+@generated function format{S,N}(io::IO, dt::TimeType, fmt::DateFormat{S,NTuple{N}})
+    quote
+        ts = fmt.tokens
+        Base.@nexprs $N i-> format(io, ts[i], dt, fmt.locale)
     end
 end
 
