@@ -113,7 +113,7 @@ Return the full day name corresponding to the day of the week of the `Date` or `
 the given `locale`.
 """
 function dayname(dt::TimeType;locale::AbstractString="english")
-   dayname(dayofweek(dt); locale=locale)
+    dayname(dayofweek(dt); locale=locale)
 end
 
 """
@@ -123,7 +123,7 @@ Return the abbreviated name corresponding to the day of the week of the `Date` o
 in the given `locale`.
 """
 function dayabbr(dt::TimeType;locale::AbstractString="english")
-   dayabbr(dayofweek(dt); locale=locale)
+    dayabbr(dayofweek(dt); locale=locale)
 end
 
 # Convenience methods for each day
