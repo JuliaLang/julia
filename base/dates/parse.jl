@@ -52,7 +52,7 @@ end
 
 function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{Ni}, valid_till)
     ntuple(Val{Ni}) do i
-        if idx[i] == 0 || idx[i] > valid_till
+        if idx[i] == 0 || idx[i] >= valid_till
             default[i]
         else
             val[idx[i]]

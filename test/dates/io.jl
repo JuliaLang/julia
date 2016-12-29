@@ -296,6 +296,10 @@ f = "y m d"
 # can't find space delimiter (finds '/'), so fails
 @test_throws ArgumentError Dates.Date("2000/1",f)
 
+f = "ymd"
+@test Dates.Date("111", f) == Dates.Date(1)
+@test Dates.Date("1", f) == Dates.Date(1)
+
 @test Dates.DateTime("20140529 120000","yyyymmdd HHMMSS") == Dates.DateTime(2014,5,29,12)
 
 @test Dates.Date(string(Dates.Date(dt))) == Dates.Date(dt)
