@@ -22,6 +22,30 @@ export GenericString
 
 #-----------------------------------------------------------------------
 
+# Backtrace utility functions
+function ip_matches_name(ip, dir::String, file::String)
+    for fr in StackTraces.lookup(ip)
+        if fr === StackTraces.UNKNOWN || fr.from_c
+            return false
+        end
+        path = string(fr.file)
+        dirname(path) == dir && basename(path) == file && return true
+    end
+    return false
+end
+
+function scrub_backtrace(bt)
+    do_test_ind = findfirst(addr->Base.REPL.ip_matches_func(addr, :do_test), bt)
+    if do_test_ind != 0 && length(bt) > do_test_ind
+        bt = bt[do_test_ind + 1:end]
+    end
+    name_ind = findfirst(addr->ip_matches_name(addr, ".", "test.jl"), bt)
+    if name_ind != 0 && length(bt) != 0
+        bt = bt[1:name_ind]
+    end
+    return bt
+end
+
 """
     Result
 
@@ -111,7 +135,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Test threw an exception of type ", typeof(t.value))
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        errmsg = sprint(showerror, t.value, t.backtrace)
+        errmsg = sprint(showerror, t.value, scrub_backtrace(t.backtrace))
         print(io, join(map(line->string("  ",line),
                             split(errmsg, "\n")), "\n"))
     elseif t.test_type == :test_unbroken
@@ -430,7 +454,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
         print(t)
         # don't print the backtrace for Errors because it gets printed in the show
         # method
-        isa(t, Error) || Base.show_backtrace(STDOUT, backtrace())
+        isa(t, Error) || Base.show_backtrace(STDOUT, scrub_backtrace(backtrace()))
         println()
     end
     push!(ts.results, t)
