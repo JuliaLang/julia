@@ -43,7 +43,7 @@ done(x::Number, state) = state
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 
-map(f, x::Number) = f(x)
+map(f, x::Number, ys::Number...) = f(x, ys...)
 
 zero(x::Number) = oftype(x,0)
 zero{T<:Number}(::Type{T}) = convert(T,0)
