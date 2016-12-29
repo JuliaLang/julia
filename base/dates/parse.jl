@@ -1,7 +1,8 @@
 ### Parsing utilities
 
-@generated function tryparse_internal{T<:TimeType, S, N}(::Type{T}, str::AbstractString, df::DateFormat{S, NTuple{N}}, raise::Bool=false)
-    token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in df.parameters[2].parameters]
+@generated function tryparse_internal{T<:TimeType,S,F}(::Type{T}, str::AbstractString, df::DateFormat{S,F}, raise::Bool=false)
+    token_types = Type[dp <: DatePart ? SLOT_RULE[first(dp.parameters)] : Void for dp in F.parameters]
+    N = length(F.parameters)
 
     types = slot_order(T)
     num_types = length(types)
@@ -13,6 +14,9 @@
     field_defaults = slot_defaults(T)
     field_order = tuple(order...)
     tuple_type = slot_types(T)
+
+    # `slot_order`, `slot_defaults`, and `slot_types` return tuples of the same length
+    assert(num_types == length(field_order) == length(field_defaults))
 
     quote
         R = Nullable{$tuple_type}
@@ -50,8 +54,9 @@ function gen_exception(tokens, err_idx, pos)
     end
 end
 
-function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{Ni}, valid_till)
-    ntuple(Val{Ni}) do i
+function reorder_args(val::Tuple, idx::Tuple, default::Tuple, valid_till::Integer)
+    # Note: idx and default have the same length
+    ntuple(length(idx)) do i
         if idx[i] == 0 || idx[i] >= valid_till
             default[i]
         else
