@@ -27,6 +27,7 @@ export
 
 # Types
     AbstractChannel,
+    AbstractEnum,
     AbstractMatrix,
     AbstractSet,
     AbstractUnitRange,
@@ -62,6 +63,7 @@ export
     Enumerate,
     Factorization,
     FileMonitor,
+    FlagEnum,
     FloatRange,
     Future,
     Hermitian,
@@ -1381,6 +1383,7 @@ export
 
     @assert,
     @enum,
+    @flagenum,
     @label,
     @goto,
     @view,
