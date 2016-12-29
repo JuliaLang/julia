@@ -29,26 +29,10 @@ promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = 
 promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
 
 for f in (:+, :-, :div, :mod, :&, :|)
-    @eval ($f)(A::AbstractArray, B::AbstractArray) =
-        _elementwise($f, promote_eltype_op($f, A, B), A, B)
-end
-function _elementwise(op, ::Type{Any}, A::AbstractArray, B::AbstractArray)
-    promote_shape(A, B) # check size compatibility
-    return broadcast(op, A, B)
-end
-function _elementwise{T}(op, ::Type{T}, A::AbstractArray, B::AbstractArray)
-    F = similar(A, T, promote_shape(A, B))
-    RF, RA, RB  = eachindex(F), eachindex(A), eachindex(B)
-    if RF == RA == RB
-        for i in RA
-            @inbounds F[i] = op(A[i], B[i])
-        end
-    else
-        for (iF, iA, iB) in zip(RF, RA, RB)
-            @inbounds F[iF] = op(A[iA], B[iB])
-        end
+    @eval function ($f)(A::AbstractArray, B::AbstractArray)
+        promote_shape(A, B) # check size compatibility
+        broadcast($f, A, B)
     end
-    return F
 end
 
 for f in (:div, :mod, :rem, :&, :|, :/, :\, :*, :+, :-)
