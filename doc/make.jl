@@ -122,8 +122,8 @@ makedocs(
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
     sitename  = "The Julia Language",
-    authors   = "Jeff Bezanson, Stefan Karpinski, Viral Shah, Alan Edelman, et al.",
-    analytics = "UA-28835595-1",
+    authors   = "The Julia Project",
+    analytics = "UA-28835595-6",
     pages     = PAGES,
 )
 
