@@ -1,15 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 """
-A type of token in a date time string
+    AbstractDateToken
 
-each subtype must define
+A token used in parsing or formatting a date time string. Each subtype must define the
+methods:
 
     tryparsenext(t::DatePart, str, i, len, [locale])
-
-and
-
-    format(io, t::TokenType, dt, [locale])
+    format(io, t::AbstractDateToken, dt, [locale])
 """
 abstract AbstractDateToken
 
@@ -22,9 +20,7 @@ end
     format(io, d, dt)
 end
 
-"""
-Information for parsing and formatting date time values.
-"""
+# Information for parsing and formatting date time values.
 immutable DateFormat{S,T<:Tuple}
     tokens::T
     locale::DateLocale
@@ -214,7 +210,7 @@ slot_defaults(::Type{DateTime}) = map(Int64, (1, 1, 1, 0, 0, 0, 0))
 slot_types{T<:TimeType}(::Type{T}) = typeof(slot_defaults(T))
 
 """
-    DateFormat(format::AbstractString, locale="english", default_fields=(1,1,1,0,0,0,0)) -> DateFormat
+    DateFormat(format::AbstractString, locale="english") -> DateFormat
 
 Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. The following character codes can be used to construct the `format`
