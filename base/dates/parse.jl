@@ -30,7 +30,7 @@
             pos > len && @goto done
             nv, next_pos = tryparsenext(t[i], str, pos, len, l)
             isnull(nv) && @goto error
-            val_i, pos = nv.value, next_pos
+            val_i, pos = unsafe_get(nv), next_pos
             err_idx += 1
         end)
         pos <= len && @goto error
@@ -70,13 +70,13 @@ function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateForm
     if isnull(nt)
         return Nullable{T}()
     else
-        return Nullable{T}(T(nt.value...))
+        return Nullable{T}(T(unsafe_get(nt)...))
     end
 end
 
 function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
     nt = tryparse_internal(T, str, df, true)
-    T(nt.value...)
+    T(unsafe_get(nt)...)
 end
 
 @inline function tryparsenext_base10(str::AbstractString, i::Int, len::Int, min_width::Int=1, max_width::Int=0)
@@ -126,7 +126,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("
     th = tm = ts = tms = Int64(0)
 
     nv, i = tryparsenext_base10(s,i,end_pos,1)
-    dy = isnull(nv) ? (@goto error) : nv.value
+    dy = isnull(nv) ? (@goto error) : unsafe_get(nv)
     i > end_pos && @goto error
 
     c, i = next(s,i)
@@ -134,7 +134,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("
     i > end_pos && @goto done
 
     nv, i = tryparsenext_base10(s,i,end_pos,1,2)
-    dm = isnull(nv) ? (@goto error) : nv.value
+    dm = isnull(nv) ? (@goto error) : unsafe_get(nv)
     i > end_pos && @goto done
 
     c, i = next(s,i)
@@ -142,7 +142,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("
     i > end_pos && @goto done
 
     nv, i = tryparsenext_base10(s,i,end_pos,1,2)
-    dd = isnull(nv) ? (@goto error) : nv.value
+    dd = isnull(nv) ? (@goto error) : unsafe_get(nv)
     i > end_pos && @goto done
 
     c, i = next(s,i)
@@ -150,7 +150,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("
     i > end_pos && @goto done
 
     nv, i = tryparsenext_base10(s,i,end_pos,1,2)
-    th = isnull(nv) ? (@goto error) : nv.value
+    th = isnull(nv) ? (@goto error) : unsafe_get(nv)
     i > end_pos && @goto done
 
     c, i = next(s,i)
@@ -158,7 +158,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("
     i > end_pos && @goto done
 
     nv, i = tryparsenext_base10(s,i,end_pos,1,2)
-    tm = isnull(nv) ? (@goto error) : nv.value
+    tm = isnull(nv) ? (@goto error) : unsafe_get(nv)
     i > end_pos && @goto done
 
     c, i = next(s,i)
@@ -166,7 +166,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("
     i > end_pos && @goto done
 
     nv, i = tryparsenext_base10(s,i,end_pos,1,2)
-    ts = isnull(nv) ? (@goto error) : nv.value
+    ts = isnull(nv) ? (@goto error) : unsafe_get(nv)
     i > end_pos && @goto done
 
     c, i = next(s,i)
@@ -174,7 +174,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("
     i > end_pos && @goto done
 
     nv, j = tryparsenext_base10(s,i,end_pos,1,3)
-    tms = isnull(nv) ? (@goto error) : nv.value
+    tms = isnull(nv) ? (@goto error) : unsafe_get(nv)
     tms *= 10 ^ (3 - (j - i))
 
     j > end_pos || @goto error
