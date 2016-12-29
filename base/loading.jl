@@ -113,14 +113,6 @@ function find_in_path(name::String, wd)
 end
 find_in_path(name::AbstractString, wd = pwd()) = find_in_path(String(name), wd)
 
-function find_in_node_path(name::String, srcpath, node::Int=1)
-    if myid() == node
-        return find_in_path(name, srcpath)
-    else
-        return remotecall_fetch(find_in_path, node, name, srcpath)
-    end
-end
-
 function find_source_file(file::String)
     (isabspath(file) || isfile(file)) && return file
     file2 = find_in_path(file)
@@ -151,45 +143,9 @@ function _include_from_serialized(path::String)
 end
 
 # returns an array of modules loaded, or an Exception that describes why it failed
-# and also attempts to load the same file across all nodes (if toplevel_node and myid() == master)
 # and it reconnects the Base.Docs.META
-function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, toplevel_load::Bool)
-    local restored = nothing
-    local content::Vector{UInt8}
-    if toplevel_load && myid() == 1 && nprocs() > 1
-        # broadcast top-level import/using from node 1 (only)
-        if node == myid()
-            content = open(read, path_to_try)
-        else
-            content = remotecall_fetch(open, node, read, path_to_try)
-        end
-        restored = _include_from_serialized(content)
-        isa(restored, Exception) && return restored
-        others = filter(x -> x != myid(), procs())
-        refs = Any[
-            (p, @spawnat(p,
-                let m = try
-                            _include_from_serialized(content)
-                        catch ex
-                            isa(ex, Exception) ? ex : ErrorException(string(ex))
-                        end
-                    isa(m, Exception) ? m : nothing
-                end))
-            for p in others ]
-        for (id, ref) in refs
-            m = fetch(ref)
-            if m !== nothing
-                warn("Node state is inconsistent: node $id failed to load cache from $path_to_try. Got:")
-                warn(m, prefix="WARNING: ")
-            end
-        end
-    elseif node == myid()
-        restored = _include_from_serialized(path_to_try)
-    else
-        content = remotecall_fetch(open, node, read, path_to_try)
-        restored = _include_from_serialized(content)
-    end
-
+function _require_from_serialized(path_to_try::String)
+    restored = _include_from_serialized(path_to_try)
     if !isa(restored, Exception)
         for M in restored::Vector{Any}
             if isdefined(M, Base.Docs.META)
@@ -203,18 +159,13 @@ end
 # returns `true` if require found a precompile cache for this mod, but couldn't load it
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
-function _require_search_from_serialized(node::Int, mod::Symbol, sourcepath::String, toplevel_load::Bool)
-    if node == myid()
-        paths = find_all_in_cache_path(mod)
-    else
-        paths = @fetchfrom node find_all_in_cache_path(mod)
-    end
-
+function _require_search_from_serialized(mod::Symbol, sourcepath::String)
+    paths = find_all_in_cache_path(mod)
     for path_to_try in paths::Vector{String}
         if stale_cachefile(sourcepath, path_to_try)
             continue
         end
-        restored = _require_from_serialized(node, mod, path_to_try, toplevel_load)
+        restored = _require_from_serialized(path_to_try)
         if isa(restored, Exception)
             if isa(restored, ErrorException) && endswith(restored.msg, " uuid did not match cache file.")
                 # can't use this cache due to a module uuid mismatch,
@@ -246,7 +197,7 @@ const _track_dependencies = Ref(false) # set this to true to track the list of f
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
     path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev), _path)
-    if myid() == 1 && _track_dependencies[]
+    if _track_dependencies[]
         apath = abspath(path)
         push!(_require_dependencies, (apath, mtime(apath)))
     end
@@ -304,10 +255,9 @@ order to throw an error if Julia attempts to precompile it.
 using `__precompile__()`. Failure to do so can result in a runtime error when loading the module.
 """
 function __precompile__(isprecompilable::Bool=true)
-    if (myid() == 1 &&
-        JLOptions().use_compilecache != 0 &&
+    if (JLOptions().use_compilecache != 0 &&
         isprecompilable != (0 != ccall(:jl_generating_output, Cint, ())) &&
-        !(isprecompilable && toplevel_load::Bool))
+        !isprecompilable)
         throw(PrecompilableError(isprecompilable))
     end
 end
@@ -348,9 +298,6 @@ function reload(name::AbstractString)
     end
 end
 
-# require always works in Main scope and loads files from node 1
-toplevel_load = true
-
 """
     require(module::Symbol)
 
@@ -359,11 +306,10 @@ already defined in `Main`. It can also be called directly to force reloading a m
 regardless of whether it has been loaded before (for example, when interactively developing
 libraries).
 
-Loads a source file, in the context of the `Main` module, on every active node, searching
-standard locations for files. `require` is considered a top-level operation, so it sets the
-current `include` path but does not use it to search for files (see help for `include`).
-This function is typically used to load library code, and is implicitly called by `using` to
-load packages.
+Loads a source file, in the context of the `Main` module, searching standard locations for
+files. `require` is considered a top-level operation, so it sets the current `include` path
+but does not use it to search for files (see help for `include`). This function is
+typically used to load library code, and is implicitly called by `using` to load packages.
 
 When searching for files, `require` first looks for package code under `Pkg.dir()`,
 then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
@@ -377,7 +323,6 @@ function require(mod::Symbol)
     _track_dependencies[] = false
     DEBUG_LOADING[] = haskey(ENV, "JULIA_DEBUG_LOADING")
 
-    global toplevel_load
     loading = get(package_locks, mod, false)
     if loading !== false
         # load already in progress for this module
@@ -386,12 +331,10 @@ function require(mod::Symbol)
     end
     package_locks[mod] = Condition()
 
-    last = toplevel_load::Bool
     try
-        toplevel_load = false
         # perform the search operation to select the module file require intends to load
         name = string(mod)
-        path = find_in_node_path(name, nothing, 1)
+        path = find_in_path(name, nothing)
         if path === nothing
             throw(ArgumentError("Module $name not found in current path.\nRun `Pkg.add(\"$name\")` to install the $name package."))
         end
@@ -399,7 +342,7 @@ function require(mod::Symbol)
         # attempt to load the module file via the precompile cache locations
         doneprecompile = false
         if JLOptions().use_compilecache != 0
-            doneprecompile = _require_search_from_serialized(1, mod, path, last)
+            doneprecompile = _require_search_from_serialized(mod, path)
             if !isa(doneprecompile, Bool)
                 return # success
             end
@@ -422,7 +365,7 @@ function require(mod::Symbol)
             # spawn off a new incremental pre-compile task from node 1 for recursive `require` calls
             # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
             cachefile = compilecache(mod)
-            m = _require_from_serialized(1, mod, cachefile, last)
+            m = _require_from_serialized(cachefile)
             if isa(m, Exception)
                 warn("The call to compilecache failed to create a usable precompiled cache file for module $name. Got:")
                 warn(m, prefix="WARNING: ")
@@ -434,24 +377,14 @@ function require(mod::Symbol)
 
         # just load the file normally via include
         # for unknown dependencies
-        try
-            if last && myid() == 1 && nprocs() > 1
-                # include on node 1 first to check for PrecompilableErrors
-                eval(Main, :(Base.include_from_node1($path)))
-
-                # broadcast top-level import/using from node 1 (only)
-                refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in filter(x -> x != 1, procs()) ]
-                for r in refs; wait(r); end
-            else
-                eval(Main, :(Base.include_from_node1($path)))
-            end
+        try eval(Main, :(Base._include($path)))
         catch ex
             if doneprecompile === true || JLOptions().use_compilecache == 0 || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
             end
             # the file requested `__precompile__`, so try to build a cache file and use that
             cachefile = compilecache(mod)
-            m = _require_from_serialized(1, mod, cachefile, last)
+            m = _require_from_serialized(cachefile)
             if isa(m, Exception)
                 warn(m, prefix="WARNING: ")
                 # TODO: disable __precompile__(true) error and do normal include instead of error
@@ -459,15 +392,12 @@ function require(mod::Symbol)
             end
         end
     finally
-        toplevel_load = last
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
         _track_dependencies[] = old_track_dependencies
     end
     nothing
 end
-
-# remote/parallel load
 
 """
     include_string(code::AbstractString, filename::AbstractString="string")
@@ -519,21 +449,13 @@ evaluated by `julia -e <expr>`.
 """
 macro __DIR__() source_dir() end
 
-include_from_node1(path::AbstractString) = include_from_node1(String(path))
-function include_from_node1(_path::String)
+_include(path::AbstractString) = _include(String(path))
+
+function _include(_path::String)
     path, prev = _include_dependency(_path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
-    local result
-    try
-        if myid()==1
-            # sleep a bit to process file requests from other nodes
-            nprocs()>1 && sleep(0.005)
-            result = Core.include(path)
-            nprocs()>1 && sleep(0.005)
-        else
-            result = include_string(remotecall_fetch(readstring, 1, path), path)
-        end
+    try Core.include(path)
     finally
         if prev === nothing
             delete!(tls, :SOURCE_PATH)
@@ -541,7 +463,6 @@ function include_from_node1(_path::String)
             tls[:SOURCE_PATH] = prev
         end
     end
-    result
 end
 
 """
@@ -636,7 +557,6 @@ This can be used to reduce package load times. Cache files are stored in
 for important notes.
 """
 function compilecache(name::String)
-    myid() == 1 || error("can only precompile from node 1")
     # decide where to get the source file from
     path = find_in_path(name, nothing)
     path === nothing && throw(ArgumentError("$name not found in path"))
