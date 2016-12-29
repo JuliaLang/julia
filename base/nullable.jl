@@ -176,18 +176,29 @@ vectorization.
 """
 null_safe_op(f::Any, ::Type, ::Type...) = false
 
-typealias NullSafeSignedInts Union{Int128, Int16, Int32, Int64, Int8}
-typealias NullSafeUnsignedInts Union{Bool, UInt128, UInt16, UInt32, UInt64, UInt8}
+typealias NullSafeSignedInts Union{Type{Int128}, Type{Int16}, Type{Int32},
+                                   Type{Int64}, Type{Int8}}
+typealias NullSafeUnsignedInts Union{Type{Bool}, Type{UInt128}, Type{UInt16},
+                                     Type{UInt32}, Type{UInt64}, Type{UInt8}}
 typealias NullSafeInts Union{NullSafeSignedInts, NullSafeUnsignedInts}
-typealias NullSafeFloats Union{Float16, Float32, Float64}
+typealias NullSafeFloats Union{Type{Float16}, Type{Float32}, Type{Float64}}
 typealias NullSafeTypes Union{NullSafeInts, NullSafeFloats}
+typealias EqualOrLess Union{typeof(isequal), typeof(isless)}
 
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isequal), ::Type{S}, ::Type{T}) = true
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isequal), ::Type{Complex{S}}, ::Type{Complex{T}}) = true
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isequal), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
+null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
+
+eltypes() = Tuple{}
+eltypes(x, xs...) = Tuple{eltype(x), eltypes(xs...).parameters...}
+
+@pure null_safe_eltype_op(op, xs...) =
+    null_safe_op(op, eltypes(xs...).parameters...)
+
+null_safe_op(f::EqualOrLess, ::NullSafeTypes, ::NullSafeTypes) = true
+null_safe_op{S,T}(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) =
+    null_safe_op(f, T, S)
+# complex numbers can be compared for equality but not in general ordered
+null_safe_op{S,T}(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) =
+    null_safe_op(isequal, T, S)
 
 """
     isequal(x::Nullable, y::Nullable)
@@ -207,13 +218,6 @@ end
 isequal(x::Nullable{Union{}}, y::Nullable{Union{}}) = true
 isequal(x::Nullable{Union{}}, y::Nullable) = isnull(y)
 isequal(x::Nullable, y::Nullable{Union{}}) = isnull(x)
-
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isless), ::Type{S}, ::Type{T}) = true
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isless), ::Type{Complex{S}}, ::Type{Complex{T}}) = true
-null_safe_op{S<:NullSafeTypes,
-             T<:NullSafeTypes}(::typeof(isless), ::Type{Rational{S}}, ::Type{Rational{T}}) = true
 
 """
     isless(x::Nullable, y::Nullable)
@@ -246,4 +250,90 @@ function hash(x::Nullable, h::UInt)
     else
         return hash(x.value, h + nullablehash_seed)
     end
+end
+
+# higher-order functions
+"""
+    filter(p, x::Nullable)
+
+Return null if either `x` is null or `p(get(x))` is false, and `x` otherwise.
+"""
+function filter{T}(p, x::Nullable{T})
+    if isbits(T)
+        val = unsafe_get(x)
+        Nullable{T}(val, !isnull(x) && p(val))
+    else
+        isnull(x) || p(unsafe_get(x)) ? x : Nullable{T}()
+    end
+end
+
+"""
+Return the given type if it is concrete, and `Union{}` otherwise.
+"""
+nullable_returntype{T}(::Type{T}) = isleaftype(T) ? T : Union{}
+
+"""
+    map(f, x::Nullable)
+
+Return `f` applied to the value of `x` if it has one, as a `Nullable`. If `x`
+is null, then return a null value of type `Nullable{S}`. `S` is guaranteed to
+be either `Union{}` or a concrete type. Whichever of these is chosen is an
+implementation detail, but typically the choice that maximizes performance
+would be used. If `x` has a value, then the return type is guaranteed to be of
+type `Nullable{typeof(f(x))}`.
+"""
+function map{T}(f, x::Nullable{T})
+    S = promote_op(f, T)
+    if isleaftype(S) && null_safe_op(f, T)
+        Nullable(f(unsafe_get(x)), !isnull(x))
+    else
+        if isnull(x)
+            Nullable{nullable_returntype(S)}()
+        else
+            Nullable(f(unsafe_get(x)))
+        end
+    end
+end
+
+# We need the following function and specializations because LLVM cannot
+# optimize !any(isnull, t) without further guidance.
+hasvalue(x::Nullable) = x.hasvalue
+hasvalue(x) = true
+all(f::typeof(hasvalue), t::Tuple) = f(t[1]) & all(f, tail(t))
+all(f::typeof(hasvalue), t::Tuple{}) = true
+
+is_nullable_array(::Any) = false
+is_nullable_array{T}(::Type{T}) = eltype(T) <: Nullable
+is_nullable_array(A::AbstractArray) = eltype(A) <: Nullable
+
+# Overloads of null_safe_op
+# Unary operators
+
+# Note this list does not include sqrt since it can raise a DomainError
+for op in (+, -, abs, abs2)
+    null_safe_op(::typeof(op), ::NullSafeTypes) = true
+    null_safe_op{S}(::typeof(op), ::Type{Complex{S}}) = null_safe_op(op, S)
+    null_safe_op{S}(::typeof(op), ::Type{Rational{S}}) = null_safe_op(op, S)
+end
+
+null_safe_op(::typeof(~), ::NullSafeInts) = true
+null_safe_op(::typeof(!), ::Type{Bool}) = true
+
+# Binary operators
+
+# Note this list does not include ^, ÷ and %
+# Operations between signed and unsigned types are not safe: promotion to unsigned
+# gives an InexactError for negative numbers
+for op in (+, -, *, /, &, |, <<, >>, >>>,
+           scalarmin, scalarmax)
+    # to fix ambiguities
+    null_safe_op(::typeof(op), ::NullSafeFloats, ::NullSafeFloats) = true
+    null_safe_op(::typeof(op), ::NullSafeSignedInts, ::NullSafeSignedInts) = true
+    null_safe_op(::typeof(op), ::NullSafeUnsignedInts, ::NullSafeUnsignedInts) = true
+end
+for op in (+, -, *, /)
+    null_safe_op{S,T}(::typeof(op), ::Type{Complex{S}}, ::Type{T}) =
+        null_safe_op(op, T, S)
+    null_safe_op{S,T}(::typeof(op), ::Type{Rational{S}}, ::Type{T}) =
+        null_safe_op(op, T, S)
 end
