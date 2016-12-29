@@ -1160,4 +1160,21 @@ function quadgk(args...)
 end
 export quadgk
 
+# Not exported, but used outside Base
+_promote_array_type(F, ::Type, ::Type, T::Type) = T
+_promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
+_promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
+_promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
+_promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
+_promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Union{Complex, Real}, T<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{T}}, ::Type) = Complex{T}
+function promote_array_type(F, R, S, T)
+    Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " *
+                 "in Base. See https://github.com/JuliaLang/julia/issues/19669 " *
+                 "for more information.", :promote_array_type)
+    _promote_array_type(F, R, S, T)
+end
+
 # End deprecations scheduled for 0.6
