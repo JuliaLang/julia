@@ -62,7 +62,11 @@ end
 
 function Base.tryparse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
     nt = tryparse_internal(T, str, df, false)
-    Nullable{T}(isnull(nt) ? nothing : T(nt.value...))
+    if isnull(nt)
+        return Nullable{T}()
+    else
+        return Nullable{T}(T(nt.value...))
+    end
 end
 
 function Base.parse{T<:TimeType}(::Type{T}, str::AbstractString, df::DateFormat)
@@ -84,8 +88,11 @@ end
         end
         i = ii
     end
-    i > min_pos || (return Nullable{Int64}(), i)
-    return Nullable{Int64}(d), i
+    if i <= min_pos
+        return Nullable{Int64}(), i
+    else
+        return Nullable{Int64}(d), i
+    end
 end
 
 @inline function tryparsenext_word(str::AbstractString, i, len, locale, maxchars=0)
@@ -100,7 +107,11 @@ end
         end
         i = ii
     end
-    return Nullable{SubString}(word_end == 0 ? nothing : SubString(str, word_start, word_end)), i
+    if word_end == 0
+        return Nullable{SubString}(), i
+    else
+        return Nullable{SubString}(SubString(str, word_start, word_end)), i
+    end
 end
 
 function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("yyyy-mm-dd\\THH:MM:SS.s")})

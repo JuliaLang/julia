@@ -66,7 +66,11 @@ for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         word, i = tryparsenext_word(str, i, len, locale, max_width(d))
         val = isnull(word) ? 0 : $fn(get(word), locale)
-        return Nullable{Int64}(val == 0 ? nothing : val), i
+        if val == 0
+            return Nullable{Int64}(), i
+        else
+            return Nullable{Int64}(val), i
+        end
     end
 end
 
