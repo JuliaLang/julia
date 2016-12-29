@@ -356,7 +356,8 @@ Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
 Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(Date,dt,df)
 
-@generated function format{S,N}(io::IO, dt::TimeType, fmt::DateFormat{S,NTuple{N}})
+@generated function format{S,T}(io::IO, dt::TimeType, fmt::DateFormat{S,T})
+    N = length(T.parameters)
     quote
         ts = fmt.tokens
         Base.@nexprs $N i-> format(io, ts[i], dt, fmt.locale)
