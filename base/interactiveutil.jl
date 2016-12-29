@@ -247,7 +247,7 @@ detailed system information is shown as well.
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
     if !isempty(GIT_VERSION_INFO.commit_short)
-      println(io,             "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
+        println(io,         "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
     if ccall(:jl_is_debugbuild, Cint, ())!=0
         println(io, "DEBUG build")
@@ -257,7 +257,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
     cpu = Sys.cpu_info()
-    println(io,         "  CPU: ", cpu[1].model)
+    println(io,             "  CPU: ", cpu[1].model)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""

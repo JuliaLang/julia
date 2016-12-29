@@ -265,7 +265,7 @@ export fieldoffsets
 # 14766
 @deprecate write(io::IO, p::Ptr, nb::Integer) unsafe_write(io, p, nb)
 
-@deprecate isgeneric(f) isa(f,Function)
+@deprecate(isgeneric(f), isa(f, Function))
 
 # need to do this manually since the front end deprecates method defs of `call`
 const call = @eval function(f, args...; kw...)
@@ -1167,5 +1167,12 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
         ($f)($op, r, A; init=init)
     end
 end
+
+# Deprecate vectorized xor in favor of compact broadcast syntax
+@deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
+@deprecate xor(A::BitArray, b::Bool)                xor.(A, b)
+@deprecate xor(a::Number, B::AbstractArray)         xor.(a, B)
+@deprecate xor(A::AbstractArray, b::Number)         xor.(A, b)
+@deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
 
 # End deprecations scheduled for 0.6

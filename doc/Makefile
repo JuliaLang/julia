@@ -18,12 +18,16 @@ help:
 	@echo "  doctest   to run all doctests embedded in the documentation"
 	@echo "  check     to run linkcheck and doctests"
 
+deps:
+	$(JLDOWNLOAD) http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
+	$(JLCHECKSUM) UnicodeData.txt
+
 clean:
-	-rm -rf _build/* deps/* docbuild.log
+	-rm -rf _build/* deps/* docbuild.log UnicodeData.txt
 
 cleanall: clean
 
-html:
+html: deps
 	@echo "Building HTML documentation."
 ifneq ($(OS),WINNT)
 	$(JULIA_EXECUTABLE) make.jl -- deploy
@@ -34,22 +38,24 @@ else
 endif
 	@echo "Build finished. The HTML pages are in _build/html."
 
-pdf:
+pdf: deps
 	@echo "Building PDF documentation."
 	$(JULIA_EXECUTABLE) make.jl -- pdf
 	@echo "Build finished."
 
-linkcheck:
+linkcheck: deps
 	@echo "Checking external documentation links."
 	$(JULIA_EXECUTABLE) make.jl -- linkcheck
 	@echo "Checks finished."
 
-doctest:
+doctest: deps
 	@echo "Running all embedded 'doctests'."
-	$(JULIA_EXECUTABLE) make.jl -- doctest
+	$(JULIA_EXECUTABLE) --color=yes make.jl -- doctest
 	@echo "Checks finished."
 
-check:
+check: deps
 	@echo "Running all embedded 'doctests' and checking external links."
-	$(JULIA_EXECUTABLE) make.jl -- doctest linkcheck
+	$(JULIA_EXECUTABLE) --color=yes make.jl -- doctest linkcheck
 	@echo "Checks finished."
+
+.PHONY: deps
