@@ -2,8 +2,8 @@
 ENV["JULIA_PKGDIR"] = joinpath(@__DIR__, "deps")
 Pkg.init()
 cp(joinpath(@__DIR__, "REQUIRE"), Pkg.dir("REQUIRE"); remove_destination = true)
-Pkg.resolve()
 Pkg.update()
+Pkg.resolve()
 
 using Documenter
 
@@ -118,11 +118,12 @@ makedocs(
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
-    strict    = "strict" in ARGS,
+    strict    = true,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,
     sitename  = "The Julia Language",
-    authors   = "Jeff Bezanson, Stefan Karpinski, Viral Shah, Alan Edelman, et al.",
+    authors   = "The Julia Project",
+    analytics = "UA-28835595-6",
     pages     = PAGES,
 )
 

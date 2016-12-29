@@ -31,7 +31,7 @@ function open_fake_pty()
         ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), O_RDWR|O_NOCTTY)
 
     # slave
-    slave   = RawFD(fds)
+    slave = RawFD(fds)
     master = Base.TTY(RawFD(fdm); readable = true)
     slave, master
 end

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#Array test
+# Array test
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -431,7 +431,7 @@ end
     @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
     @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
 
-    # #14085
+    #14085
     @test findmax(4:9) == (9,6)
     @test indmax(4:9) == 6
     @test findmin(4:9) == (4,1)
@@ -444,14 +444,14 @@ end
 
 @testset "permutedims" begin
 
-    #keeps the num of dim
+    # keeps the num of dim
     p = randperm(5)
     q = randperm(5)
     a = rand(p...)
     b = permutedims(a,q)
     @test isequal(size(b), tuple(p[q]...))
 
-    #hand made case
+    # hand made case
     y = zeros(1,2,3)
     for i = 1:6
         y[i]=i
@@ -463,7 +463,7 @@ end
         z[i+3] = i*2
     end
 
-    #permutes correctly
+    # permutes correctly
     @test isequal(z,permutedims(y,[3,1,2]))
     @test isequal(z,permutedims(y,(3,1,2)))
 

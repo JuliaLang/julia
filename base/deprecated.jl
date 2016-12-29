@@ -265,7 +265,7 @@ export fieldoffsets
 # 14766
 @deprecate write(io::IO, p::Ptr, nb::Integer) unsafe_write(io, p, nb)
 
-@deprecate isgeneric(f) isa(f,Function)
+@deprecate(isgeneric(f), isa(f, Function))
 
 # need to do this manually since the front end deprecates method defs of `call`
 const call = @eval function(f, args...; kw...)
@@ -1005,7 +1005,7 @@ export @vectorize_1arg, @vectorize_2arg
 
 # deprecations for uses of old dot operators (.* etc) as objects, rather than
 # just calling them infix.
-for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=, :≥, :\, :^)
+for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=, :≥, :\, :^, ://, :>>, :<<)
     dotop = Symbol('.', op)
     # define as const dotop = (a,b) -> ...
     # to work around syntax deprecation for dotop(a,b) = ...
@@ -1228,5 +1228,11 @@ for afn in (:airy,:airyx)
     end
 end
 
+# Deprecate vectorized xor in favor of compact broadcast syntax
+@deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
+@deprecate xor(A::BitArray, b::Bool)                xor.(A, b)
+@deprecate xor(a::Number, B::AbstractArray)         xor.(a, B)
+@deprecate xor(A::AbstractArray, b::Number)         xor.(A, b)
+@deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
 
 # End deprecations scheduled for 0.6

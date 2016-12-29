@@ -186,7 +186,7 @@ let a = Real[2, 2.0, 4//2] / 2
     @test eltype(a) == Real
 end
 let a = Real[2, 2.0, 4//2] / 2.0
-    @test eltype(a) == Real
+    @test eltype(a) == Float64
 end
 
 # issue 16164

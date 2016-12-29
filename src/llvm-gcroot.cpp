@@ -248,8 +248,8 @@ void JuliaGCAllocator::lowerHandlers()
     typedef std::map<CallInst*,HandlerData>::iterator hdlr_iter_t;
     // For each exception enter, compute the life time of the enter, find
     // the corresponding leaves and collect a list of nested exception frames.
-    // This assumes the exception frames has simple structure. E.g.
-    // there's no recursion and different frames do no share the same leave.
+    // This assumes the exception frames have simple structure. E.g.
+    // there's no recursion and different frames do not share the same leave.
     std::function<void(hdlr_iter_t)> process_handler = [&] (hdlr_iter_t hdlr) {
         auto enter = hdlr->first;
         auto &data = hdlr->second;
@@ -338,7 +338,7 @@ void JuliaGCAllocator::lowerHandlers()
     Value *handler_sz = ConstantInt::get(T_int32, sizeof(jl_handler_t));
     // Now allocate the stack slots.
     // At each iteration, we allocate a new handler and assign all the remaining
-    // frames that doesn't have a non-processed child to this handler.
+    // frames that don't have a non-processed child to this handler.
     Instruction *firstInst = &F.getEntryBlock().front();
     while (!handlers.empty()) {
         processing.clear();

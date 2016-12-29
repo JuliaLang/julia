@@ -124,10 +124,10 @@ for (idx, tname) in enumerate(msgtypes)
     end
 end
 
-function deserialize_msg(s)
+function deserialize_msg(s::AbstractSerializer)
     idx = read(s.io, UInt8)
     t = msgtypes[idx]
-    return deserialize_msg(s, t)
+    return eval(current_module(), Expr(:body, Expr(:return, Expr(:call, deserialize_msg, QuoteNode(s), QuoteNode(t)))))
 end
 
 function send_msg_unknown(s::IO, header, msg)
@@ -321,7 +321,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
     try
         reset_state(w.w_serializer)
         serialize_hdr_raw(io, header)
-        serialize(w.w_serializer, msg)  # io is wrapped in w_serializer
+        eval(current_module(), Expr(:body, Expr(:return, Expr(:call, serialize, QuoteNode(w.w_serializer), QuoteNode(msg)))))  # io is wrapped in w_serializer
         write(io, MSG_BOUNDARY)
 
         if !now && w.gcflag
@@ -505,32 +505,50 @@ function workers()
 end
 
 """
-    rmprocs(pids...; waitfor=0.0)
+    rmprocs(pids...; waitfor=typemax(Int))
 
-Removes the specified workers. Note that only
-process 1 can add or remove workers - if another
-worker tries to call `rmprocs`, an error will be
-thrown. The optional argument `waitfor` determines
-how long the first process will wait for the workers
-to shut down.
+Removes the specified workers. Note that only process 1 can add or remove
+workers.
+
+Argument `waitfor` specifies how long to wait for the workers to shut down:
+    - If unspecified, `rmprocs` will wait until all requested `pids` are removed.
+    - An `ErrorException` is raised if all workers cannot be terminated before
+      the requested `waitfor` seconds.
+    - With a `waitfor` value of 0, the call returns immediately with the workers
+      scheduled for removal in a different task. The scheduled `Task` object is
+      returned. The user should call `wait` on the task before invoking any other
+      parallel calls.
 """
-function rmprocs(pids...; waitfor = 0.0)
+function rmprocs(pids...; waitfor=typemax(Int))
     # Only pid 1 can add and remove processes
     if myid() != 1
-        error("only process 1 can add and remove processes")
+        throw(ErrorException("only process 1 can add and remove processes"))
     end
 
+    pids = vcat(pids...)
+    if waitfor == 0
+        t = @schedule _rmprocs(pids, typemax(Int))
+        yield()
+        return t
+    else
+        _rmprocs(pids, waitfor)
+        # return a dummy task object that user code can wait on.
+        return @schedule nothing
+    end
+end
+
+function _rmprocs(pids, waitfor)
     lock(worker_lock)
     try
         rmprocset = []
-        for i in vcat(pids...)
-            if i == 1
+        for p in vcat(pids...)
+            if p == 1
                 warn("rmprocs: process 1 not removed")
             else
-                if haskey(map_pid_wrkr, i)
-                    w = map_pid_wrkr[i]
+                if haskey(map_pid_wrkr, p)
+                    w = map_pid_wrkr[p]
                     set_worker_state(w, W_TERMINATING)
-                    kill(w.manager, i, w.config)
+                    kill(w.manager, p, w.config)
                     push!(rmprocset, w)
                 end
             end
@@ -538,18 +556,20 @@ function rmprocs(pids...; waitfor = 0.0)
 
         start = time()
         while (time() - start) < waitfor
-            if all(w -> w.state == W_TERMINATED, rmprocset)
-                break
-            else
-                sleep(0.1)
-            end
+            all(w -> w.state == W_TERMINATED, rmprocset) && break
+            sleep(min(0.1, waitfor - (time() - start)))
         end
 
-        ((waitfor > 0) && any(w -> w.state != W_TERMINATED, rmprocset)) ? :timed_out : :ok
+        unremoved = [wrkr.id for wrkr in filter(w -> w.state != W_TERMINATED, rmprocset)]
+        if length(unremoved) > 0
+            estr = string("rmprocs: pids ", unremoved, " not terminated after ", waitfor, " seconds.")
+            throw(ErrorException(estr))
+        end
     finally
         unlock(worker_lock)
     end
 end
+
 
 """
     ProcessExitedException()
@@ -812,7 +832,7 @@ function lookup_ref(pg, rrid, f)
         rv = get(pg.refs, rrid, false)
         if rv === false
             # first we've heard of this ref
-            rv = RemoteValue(f())
+            rv = RemoteValue(eval(Main, Expr(:body, Expr(:return, Expr(:call, f)))))
             pg.refs[rrid] = rv
             push!(rv.clientset, rrid.whence)
         end
@@ -2238,18 +2258,18 @@ function check_same_host(pids)
 end
 
 function terminate_all_workers()
-    if myid() != 1
-        return
-    end
+    myid() != 1 && return
 
     if nprocs() > 1
-        ret = rmprocs(workers(); waitfor=0.5)
-        if ret !== :ok
+        try
+            rmprocs(workers(); waitfor=5.0)
+        catch _ex
             warn("Forcibly interrupting busy workers")
             # Might be computation bound, interrupt them and try again
             interrupt(workers())
-            ret = rmprocs(workers(); waitfor=0.5)
-            if ret !== :ok
+            try
+                rmprocs(workers(); waitfor=5.0)
+            catch _ex2
                 warn("Unable to terminate all workers")
             end
         end

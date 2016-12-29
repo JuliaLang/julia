@@ -6,14 +6,16 @@ import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
 
 ccall(:jl_set_istopmod, Void, (Bool,), false)
 
-eval(x) = Core.eval(Inference,x)
-eval(m,x) = Core.eval(m,x)
+eval(x) = Core.eval(Inference, x)
+eval(m, x) = Core.eval(m, x)
 
-include = Core.include
+const include = Core.include
+# conditional to allow redefining Core.Inference after base exists
+isdefined(Main, :Base) || ((::Type{T}){T}(arg) = convert(T, arg)::T)
 
 ## Load essential files and libraries
-include("ctypes.jl")
 include("essentials.jl")
+include("ctypes.jl")
 include("generator.jl")
 include("reflection.jl")
 include("options.jl")
@@ -33,15 +35,6 @@ include("operators.jl")
 include("pointer.jl")
 const checked_add = +
 const checked_sub = -
-if !isdefined(Main, :Base)
-    # conditional to allow redefining Core.Inference after base exists
-    (::Type{T}){T}(arg) = convert(T, arg)::T
-end
-
-# Symbol constructors
-Symbol(s::String) = Symbol(s.data)
-Symbol(a::Array{UInt8,1}) =
-    ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
 
 # core array operations
 include("array.jl")
