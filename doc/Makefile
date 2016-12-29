@@ -50,12 +50,12 @@ linkcheck: deps
 
 doctest: deps
 	@echo "Running all embedded 'doctests'."
-	$(JULIA_EXECUTABLE) make.jl -- doctest
+	$(JULIA_EXECUTABLE) --color=yes make.jl -- doctest
 	@echo "Checks finished."
 
 check: deps
 	@echo "Running all embedded 'doctests' and checking external links."
-	$(JULIA_EXECUTABLE) make.jl -- doctest linkcheck
+	$(JULIA_EXECUTABLE) --color=yes make.jl -- doctest linkcheck
 	@echo "Checks finished."
 
 .PHONY: deps
