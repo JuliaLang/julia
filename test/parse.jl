@@ -384,6 +384,12 @@ end
 @test parse("x<:y<:z").head === :comparison
 @test parse("x>:y<:z").head === :comparison
 
+# PR #19765
+let <-(x,y) = 2x + y
+    @test (3<-10) == 16
+end
+@test parse("x<-y<-z") == Expr(:call, :(<-), :x, Expr(:call, :(<-), :y, :z))
+
 # issue #11169
 uncalled(x) = @test false
 fret() = uncalled(return true)
