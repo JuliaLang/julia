@@ -188,7 +188,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         if frame.func === empty_sym
             @printf(io, "ip:%#x", frame.pointer)
         else
-            print(io, frame.func)
+            print_with_color(Base.have_color ? Base.stackframe_function_color() : :nothing, io, string(frame.func))
         end
     else
         linfo = get(frame.linfo)
@@ -200,16 +200,20 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     end
 end
 
-function show(io::IO, frame::StackFrame; full_path::Bool=false)
-    print(io, " in ")
+function show(io::IO, frame::StackFrame; full_path::Bool=false,
+              prefix = " in ")
+    print(io, prefix)
     show_spec_linfo(io, frame)
     if frame.file !== empty_sym
         file_info = full_path ? string(frame.file) : basename(string(frame.file))
-        print(io, " at ", file_info, ":")
-        if frame.line >= 0
-            print(io, frame.line)
-        else
-            print(io, "?")
+        print(io, " at ")
+        Base.with_output_color(Base.have_color ? Base.stackframe_lineinfo_color() : :nothing, io) do io
+            print(io, file_info, ":")
+            if frame.line >= 0
+                print(io, frame.line)
+            else
+                print(io, "?")
+            end
         end
     end
     if frame.inlined
