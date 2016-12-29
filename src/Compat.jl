@@ -1158,12 +1158,21 @@ if !isdefined(Base, :istextmime)
     istextmime(m::@compat(Union{MIME,AbstractString})) = istext(m)
 end
 
+function primarytype(t::ANY)
+    tn = t.name
+    if isdefined(tn, :primary)
+        return tn.primary
+    else
+        return tn.wrapper
+    end
+end
+
 export @functorize
 macro functorize(f)
     if VERSION >= v"0.5.0-dev+3701"
         f === :scalarmax       ? :(Base.scalarmax) :
         f === :scalarmin       ? :(Base.scalarmin) :
-        f === :centralizedabs2fun ? :(typeof(Base.centralizedabs2fun(0)).name.primary) :
+        f === :centralizedabs2fun ? :(primarytype(typeof(Base.centralizedabs2fun(0)))) :
         f
     else
         f = f === :identity        ? :(Base.IdFun()) :
