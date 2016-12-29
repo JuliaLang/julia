@@ -406,6 +406,10 @@ function Base.show(io::IO, ex::TestSetException)
     print(io, ex.broken, " broken.")
 end
 
+function Base.showerror(io::IO, ex::TestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, string(ex))
+end
+
 #-----------------------------------------------------------------------
 
 """
@@ -417,12 +421,20 @@ immutable FallbackTestSet <: AbstractTestSet
 end
 fallback_testset = FallbackTestSet()
 
+type FallbackTestSetException <: Exception
+    msg::String
+end
+
+function Base.showerror(io::IO, ex::FallbackTestSetException, bt; backtrace=true)
+    print_with_color(Base.error_color(), io, ex.msg)
+end
+
 # Records nothing, and throws an error immediately whenever a Fail or
 # Error occurs. Takes no action in the event of a Pass or Broken result
 record(ts::FallbackTestSet, t::Union{Pass,Broken}) = t
 function record(ts::FallbackTestSet, t::Union{Fail,Error})
     println(t)
-    error("There was an error during testing")
+    throw(FallbackTestSetException("There was an error during testing"))
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
