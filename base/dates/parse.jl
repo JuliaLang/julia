@@ -160,9 +160,8 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("
     nv, j = tryparsenext_base10(s,i,end_pos,1,3)
     tms = isnull(nv) ? (@goto error) : nv.value
     tms *= 10 ^ (3 - (j - i))
-    i = j
 
-    i > end_pos || @goto error
+    j > end_pos || @goto error
 
     @label done
     return DateTime(dy,dm,dd,th,tm,ts,tms)
