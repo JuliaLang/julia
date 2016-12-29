@@ -9,6 +9,16 @@ immutable SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
 end
 SVD{T,Tr}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = SVD{T,Tr,typeof(U)}(U, S, Vt)
 
+"""
+    svdfact!(A, thin::Bool=true) -> SVD
+
+`svdfact!` is the same as [`svdfact`](@ref), but saves space by
+overwriting the input `A`, instead of creating a copy.
+
+If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
+`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
+``M \\times \\min(M, N)`` for a thin SVD.
+"""
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool=true)
     m,n = size(A)
     if m == 0 || n == 0
@@ -20,7 +30,7 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool=true)
 end
 
 """
-    svdfact(A, [thin=true]) -> SVD
+    svdfact(A, thin::Bool=true) -> SVD
 
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
@@ -60,7 +70,7 @@ svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/a
 svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
 
 """
-    svd(A, [thin=true]) -> U, S, V
+    svd(A, thin::Bool=true) -> U, S, V
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
 `A == U*diagm(S)*V'`.
@@ -121,6 +131,7 @@ end
     svdvals!(A)
 
 Returns the singular values of `A`, saving space by overwriting the input.
+See also [`svdvals`](@ref).
 """
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = findfirst(size(A), 0) > 0 ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
 svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
@@ -176,14 +187,10 @@ end
 GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
 
 """
-    svdfact!(A, [thin=true]) -> SVD
+    svdfact!(A, B) -> GeneralizedSVD
 
-`svdfact!` is the same as [`svdfact`](@ref), but saves space by
-overwriting the input `A`, instead of creating a copy.
-
-If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
-`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
-``M \\times \\min(M, N)`` for a thin SVD.
+`svdfact!` is the same as [`svdfact`](@ref), but modifies the arguments
+`A` and `B` in-place, instead of making copies.
 """
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
@@ -292,7 +299,7 @@ svdvals{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = svdvals!(copy(A
     svdvals(A, B)
 
 Return the generalized singular values from the generalized singular value
-decomposition of `A` and `B`.
+decomposition of `A` and `B`. See also [`svdfact`](@ref).
 """
 function svdvals{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)

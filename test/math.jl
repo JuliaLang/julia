@@ -773,6 +773,7 @@ module Test19626
     +(a::MockQuantity, b::MockQuantity) = MockQuantity(a.val+b.val)
     -(a::MockQuantity, b::MockQuantity) = MockQuantity(a.val-b.val)
     *(a::MockQuantity, b::Number) = MockQuantity(a.val*b)
+    *(a::MockQuantity, b::Bool) = MockQuantity(a.val*b) # resolve ambiguity
     abs(a::MockQuantity) = MockQuantity(abs(a.val))
     isnan(a::MockQuantity) = isnan(a.val)
     isinf(a::MockQuantity) = isinf(a.val)

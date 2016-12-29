@@ -34,7 +34,9 @@ ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
     Void, (Ptr{Csize_t},), cholmod_com_offsets)
 
 ## macro to generate the name of the C function according to the integer type
-macro cholmod_name(nm,typ) string("cholmod_", eval(typ) == SuiteSparse_long ? "l_" : "", nm) end
+macro cholmod_name(nm, typ)
+    string("cholmod_", eval(typ) == SuiteSparse_long ? "l_" : "", nm)
+end
 
 function start(a::Vector{UInt8})
     @isok ccall((@cholmod_name("start", SuiteSparse_long), :libcholmod),
@@ -238,7 +240,8 @@ type Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
     p::Ptr{C_Sparse{Tv}}
     function Sparse(p::Ptr{C_Sparse{Tv}})
         if p == C_NULL
-            throw(ArgumentError("sparse matrix construction failed for unknown reasons. Please submit a bug report."))
+            throw(ArgumentError("sparse matrix construction failed for " *
+                "unknown reasons. Please submit a bug report."))
         end
         new(p)
     end
@@ -316,19 +319,22 @@ type Factor{Tv} <: Factorization{Tv}
     p::Ptr{C_Factor{Tv}}
     function Factor(p::Ptr{C_Factor{Tv}})
         if p == C_NULL
-            throw(ArgumentError("factorization construction failed for unknown reasons. Please submit a bug report."))
+            throw(ArgumentError("factorization construction failed for " *
+                "unknown reasons. Please submit a bug report."))
         end
         new(p)
     end
 end
 Factor{Tv<:VTypes}(p::Ptr{C_Factor{Tv}}) = Factor{Tv}(p)
 
-# Define get similar to get(Nullable) to check pointers. All pointer loads should be wrapped in get to make sure
-# that SuiteSparse is not called with a C_NULL pointer which could cause a segfault. Pointers are set to null
+# Define get similar to get(Nullable) to check pointers. All pointer loads
+# should be wrapped in get to make sure that SuiteSparse is not called with
+# a C_NULL pointer which could cause a segfault. Pointers are set to null
 # when serialized so this can happen when mutiple processes are in use.
 function get{T<:SuiteSparseStruct}(p::Ptr{T})
     if p == C_NULL
-        throw(ArgumentError("pointer to the $T object is null. This can happen if the object has been serialized."))
+        throw(ArgumentError("pointer to the $T object is null. This can " *
+            "happen if the object has been serialized."))
     else
         return p
     end
@@ -341,11 +347,14 @@ type FactorComponent{Tv,S} <: AbstractMatrix{Tv}
     function FactorComponent(F::Factor{Tv})
         s = unsafe_load(get(F.p))
         if s.is_ll != 0
-            S == :L || S == :U || S == :PtL || S == :UP || throw(CHOLMODException(string(S, " not supported for sparse LLt matrices; try :L, :U, :PtL, or :UP")))
-        else
-            S == :L || S == :U || S == :PtL || S == :UP ||
-            S == :D || S == :LD || S == :DU || S == :PtLD || S == :DUP ||
-            throw(CHOLMODException(string(S, " not supported for sparse LDLt matrices; try :L, :U, :PtL, :UP, :D, :LD, :DU, :PtLD, or :DUP")))
+            if !(S == :L || S == :U || S == :PtL || S == :UP)
+                throw(CHOLMODException(string(S, " not supported for sparse ",
+                    "LLt matrices; try :L, :U, :PtL, or :UP")))
+            end
+        elseif !(S == :L || S == :U || S == :PtL || S == :UP ||
+                S == :D || S == :LD || S == :DU || S == :PtLD || S == :DUP)
+            throw(CHOLMODException(string(S, " not supported for sparse LDLt ",
+                "matrices; try :L, :U, :PtL, :UP, :D, :LD, :DU, :PtLD, or :DUP")))
         end
         new(F)
     end
@@ -380,7 +389,8 @@ function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Complex
     d
 end
 
-free_dense!{T}(p::Ptr{C_Dense{T}}) = ccall((:cholmod_l_free_dense, :libcholmod), Cint, (Ref{Ptr{C_Dense{T}}}, Ptr{Void}), p, common())
+free_dense!{T}(p::Ptr{C_Dense{T}}) = ccall((:cholmod_l_free_dense, :libcholmod),
+    Cint, (Ref{Ptr{C_Dense{T}}}, Ptr{Void}), p, common())
 
 function zeros{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
     d = Dense(ccall((:cholmod_l_zeros, :libcholmod), Ptr{C_Dense{T}},
@@ -449,16 +459,19 @@ end
 
 # Non-Dense wrappers
 ### cholmod_core.h ###
-function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer, sorted::Bool, packed::Bool, stype::Integer, ::Type{Float64})
-    s = Sparse(ccall((@cholmod_name("allocate_sparse", SuiteSparse_long), :libcholmod), Ptr{C_Sparse{Float64}},
-            (Csize_t, Csize_t, Csize_t, Cint,
-                Cint, Cint, Cint, Ptr{Void}),
-            nrow, ncol, nzmax, sorted,
+function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
+        sorted::Bool, packed::Bool, stype::Integer, ::Type{Float64})
+    s = Sparse(ccall((@cholmod_name("allocate_sparse", SuiteSparse_long), :libcholmod),
+            Ptr{C_Sparse{Float64}},
+                (Csize_t, Csize_t, Csize_t, Cint,
+                 Cint, Cint, Cint, Ptr{Void}),
+                nrow, ncol, nzmax, sorted,
                 packed, stype, REAL, common()))
     finalizer(s, free!)
     s
 end
-function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer, sorted::Bool, packed::Bool, stype::Integer, ::Type{Complex{Float64}})
+function allocate_sparse(nrow::Integer, ncol::Integer, nzmax::Integer,
+        sorted::Bool, packed::Bool, stype::Integer, ::Type{Complex{Float64}})
     s = Sparse(ccall((@cholmod_name("allocate_sparse", SuiteSparse_long), :libcholmod),
             Ptr{C_Sparse{Complex{Float64}}},
                 (Csize_t, Csize_t, Csize_t, Cint,
@@ -524,14 +537,16 @@ function factor_to_sparse!{Tv<:VTypes}(F::Factor{Tv})
     s
 end
 
-function change_factor!{Tv<:VTypes}(::Type{Float64}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv})
+function change_factor!{Tv<:VTypes}(::Type{Float64}, to_ll::Bool,
+        to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv})
     @isok ccall((@cholmod_name("change_factor", SuiteSparse_long),:libcholmod), Cint,
             (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 REAL, to_ll, to_super, to_packed, to_monotonic, get(F.p), common())
     Factor{Float64}(F.p)
 end
 
-function change_factor!{Tv<:VTypes}(::Type{Complex{Float64}}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv})
+function change_factor!{Tv<:VTypes}(::Type{Complex{Float64}}, to_ll::Bool,
+        to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv})
     @isok ccall((@cholmod_name("change_factor", SuiteSparse_long),:libcholmod), Cint,
             (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv}}, Ptr{UInt8}),
                 COMPLEX, to_ll, to_super, to_packed, to_monotonic, get(F.p), common())
@@ -628,7 +643,8 @@ function print_factor{Tv<:VTypes}(F::Factor{Tv}, name::String)
 end
 
 ### cholmod_matrixops.h ###
-function ssmult{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, stype::Integer, values::Bool, sorted::Bool)
+function ssmult{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, stype::Integer,
+        values::Bool, sorted::Bool)
     lA = unsafe_load(get(A.p))
     lB = unsafe_load(get(B.p))
     if lA.ncol != lB.nrow
@@ -665,18 +681,23 @@ end
 function scale!{Tv<:VRealTypes}(S::Dense{Tv}, scale::Integer, A::Sparse{Tv})
     sS = unsafe_load(get(S.p))
     sA = unsafe_load(get(A.p))
-    sS.ncol == 1 || sS.nrow == 1 || throw(DimensionMismatch("first argument must be a vector"))
+    if sS.ncol != 1 && sS.nrow != 1
+        throw(DimensionMismatch("first argument must be a vector"))
+    end
     if scale == SCALAR && sS.nrow != 1
         throw(DimensionMismatch("scaling argument must have length one"))
     elseif scale == ROW && sS.nrow*sS.ncol != sA.nrow
-        throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), but matrix has $(sA.nrow) rows."))
+        throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " *
+            "but matrix has $(sA.nrow) rows."))
     elseif scale == COL && sS.nrow*sS.ncol != sA.ncol
-        throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), but matrix has $(sA.ncol) columns"))
+        throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " *
+            "but matrix has $(sA.ncol) columns"))
     elseif scale == SYM
         if sA.nrow != sA.ncol
             throw(DimensionMismatch("matrix must be square"))
         elseif sS.nrow*sS.ncol != sA.nrow
-            throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), but matrix has $(sA.ncol) columns and rows"))
+            throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " *
+                "but matrix has $(sA.ncol) columns and rows"))
         end
     end
 
@@ -687,7 +708,8 @@ function scale!{Tv<:VRealTypes}(S::Dense{Tv}, scale::Integer, A::Sparse{Tv})
     A
 end
 
-function sdmult!{Tv<:VTypes}(A::Sparse{Tv}, transpose::Bool, α::Number, β::Number, X::Dense{Tv}, Y::Dense{Tv})
+function sdmult!{Tv<:VTypes}(A::Sparse{Tv}, transpose::Bool,
+        α::Number, β::Number, X::Dense{Tv}, Y::Dense{Tv})
     m, n = size(A)
     nc = transpose ? m : n
     nr = transpose ? n : m
@@ -703,7 +725,8 @@ function sdmult!{Tv<:VTypes}(A::Sparse{Tv}, transpose::Bool, α::Number, β::Num
 end
 
 function vertcat{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv}, values::Bool)
-    s = Sparse(ccall((@cholmod_name("vertcat", SuiteSparse_long), :libcholmod), Ptr{C_Sparse{Tv}},
+    s = Sparse(ccall((@cholmod_name("vertcat", SuiteSparse_long), :libcholmod),
+            Ptr{C_Sparse{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{C_Sparse{Tv}}, Cint, Ptr{UInt8}),
                 get(A.p), get(B.p), values, common()))
     finalizer(s, free!)
@@ -738,8 +761,9 @@ function analyze_p{Tv<:VTypes}(A::Sparse{Tv}, perm::Vector{SuiteSparse_long},
     cmmn::Vector{UInt8})
     length(perm) != size(A,1) && throw(BoundsError())
     f = Factor(ccall((@cholmod_name("analyze_p", SuiteSparse_long),:libcholmod),
-        Ptr{C_Factor{Tv}},
-            (Ptr{C_Sparse{Tv}}, Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long}, Csize_t, Ptr{UInt8}),
+            Ptr{C_Factor{Tv}},
+            (Ptr{C_Sparse{Tv}}, Ptr{SuiteSparse_long}, Ptr{SuiteSparse_long},
+                Csize_t, Ptr{UInt8}),
                 get(A.p), perm, C_NULL, 0, cmmn))
     finalizer(f, free!)
     f
@@ -762,7 +786,8 @@ end
 
 function solve{Tv<:VTypes}(sys::Integer, F::Factor{Tv}, B::Dense{Tv})
     if size(F,1) != size(B,1)
-        throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
+        throw(DimensionMismatch("LHS and RHS should have the same number of rows. " *
+            "LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
     end
     d = Dense(ccall((@cholmod_name("solve", SuiteSparse_long),:libcholmod), Ptr{C_Dense{Tv}},
             (Cint, Ptr{C_Factor{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
@@ -773,7 +798,8 @@ end
 
 function spsolve{Tv<:VTypes}(sys::Integer, F::Factor{Tv}, B::Sparse{Tv})
     if size(F,1) != size(B,1)
-        throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
+        throw(DimensionMismatch("LHS and RHS should have the same number of rows. " *
+            "LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
     end
     s = Sparse(ccall((@cholmod_name("spsolve", SuiteSparse_long),:libcholmod),
         Ptr{C_Sparse{Tv}},
@@ -855,7 +881,10 @@ function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
     return o
 end
 
-function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv})
+function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
+        colptr::Vector{SuiteSparse_long},
+        rowval::Vector{SuiteSparse_long},
+        nzval::Vector{Tv})
     o = Sparse(m, n, colptr, rowval, nzval, 0)
 
     # sort indices
@@ -885,7 +914,8 @@ function (::Type{Sparse}){Tv<:VTypes}(A::SparseMatrixCSC{Tv,SuiteSparse_long}, s
 end
 
 # convert SparseVectors into CHOLMOD Sparse types through a mx1 CSC matrix
-convert{Tv<:VTypes}(::Type{Sparse}, A::SparseVector{Tv,SuiteSparse_long}) = convert(Sparse, convert(SparseMatrixCSC, A))
+convert{Tv<:VTypes}(::Type{Sparse}, A::SparseVector{Tv,SuiteSparse_long}) =
+    convert(Sparse, convert(SparseMatrixCSC, A))
 function convert{Tv<:VTypes,Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,Ti})
     o = Sparse(A, 0)
     # check if array is symmetric and change stype if it is
@@ -894,9 +924,12 @@ function convert{Tv<:VTypes,Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Tv,Ti
     end
     o
 end
-convert{Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},Ti}) = convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
-convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
-convert{Tv<:VTypes}(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) = Sparse(A.data, A.uplo == 'L' ? -1 : 1)
+convert{Ti<:ITypes}(::Type{Sparse}, A::SparseMatrixCSC{Complex{Float32},Ti}) =
+    convert(Sparse, convert(SparseMatrixCSC{Complex{Float64},SuiteSparse_long}, A))
+convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}) =
+    Sparse(A.data, A.uplo == 'L' ? -1 : 1)
+convert{Tv<:VTypes}(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) =
+    Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 function convert{Ti<:ITypes}(::Type{Sparse},
     A::Union{SparseMatrixCSC{BigFloat,Ti},
              Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
@@ -915,7 +948,8 @@ end
 # Useful when reading in files, but not type stable
 function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
     if p == C_NULL
-        throw(ArgumentError("sparse matrix construction failed for unknown reasons. Please submit a bug report."))
+        throw(ArgumentError("sparse matrix construction failed for " *
+            "unknown reasons. Please submit a bug report."))
     end
 
     s = unsafe_load(p)
@@ -923,10 +957,12 @@ function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
     # Check integer type
     if s.itype == INT
         free_sparse!(p)
-        throw(CHOLMODException("the value of itype was $s.itype. Only integer type of $SuiteSparse_long is supported."))
+        throw(CHOLMODException("the value of itype was $s.itype. " *
+            "Only integer type of $SuiteSparse_long is supported."))
     elseif s.itype == INTLONG
         free_sparse!(p)
-        throw(CHOLMODException("the value of itype was $s.itype. This combination of integer types shouldn't happen. Please submit a bug report."))
+        throw(CHOLMODException("the value of itype was $s.itype. This combination " *
+            "of integer types shouldn't happen. Please submit a bug report."))
     elseif s.itype != LONG # must be s.itype == LONG
         free_sparse!(p)
         throw(CHOLMODException("illegal value of itype: $s.itype"))
@@ -1001,7 +1037,8 @@ convert{T}(::Type{Vector}, D::Dense{T}) = convert(Vector{T}, D)
 function convert{Tv}(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv})
     s = unsafe_load(A.p)
     if s.stype != 0
-        throw(ArgumentError("matrix has stype != 0. Convert to matrix with stype == 0 before converting to SparseMatrixCSC"))
+        throw(ArgumentError("matrix has stype != 0. Convert to matrix " *
+            "with stype == 0 before converting to SparseMatrixCSC"))
     end
 
     B = SparseMatrixCSC(s.nrow, s.ncol,
@@ -1090,7 +1127,9 @@ sparse(D::Dense) = sparse(Sparse(D))
 function sparse{Tv}(FC::FactorComponent{Tv,:L})
     F = Factor(FC)
     s = unsafe_load(F.p)
-    s.is_ll != 0 || throw(CHOLMODException("sparse: supported only for :LD on LDLt factorizations"))
+    if s.is_ll == 0
+        throw(CHOLMODException("sparse: supported only for :LD on LDLt factorizations"))
+    end
     sparse(Sparse(F))
 end
 sparse{Tv}(FC::FactorComponent{Tv,:LD}) = sparse(Sparse(Factor(FC)))
@@ -1192,7 +1231,8 @@ function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
     r1 = Int(unsafe_load(s.p, i1) + 1)
     r2 = Int(unsafe_load(s.p, i1 + 1))
     (r1 > r2) && return zero(T)
-    r1 = Int(searchsortedfirst(unsafe_wrap(Array, s.i, (s.nzmax,), false), i0 - 1, r1, r2, Base.Order.Forward))
+    r1 = Int(searchsortedfirst(unsafe_wrap(Array, s.i, (s.nzmax,), false),
+        i0 - 1, r1, r2, Base.Order.Forward))
     ((r1 > r2) || (unsafe_load(s.i, r1) + 1 != i0)) ? zero(T) : unsafe_load(s.x, r1)
 end
 
@@ -1420,7 +1460,7 @@ function ldltfact(A::Sparse; shift::Real=0.0,
 
     # Makes it an LDLt
     unsafe_store!(common_final_ll, 0)
-    # Really make sure it's an LDLt by avoiding supernodal factorisation
+    # Really make sure it's an LDLt by avoiding supernodal factorization
     unsafe_store!(common_supernodal, 0)
 
     # Compute the symbolic factorization
@@ -1430,7 +1470,9 @@ function ldltfact(A::Sparse; shift::Real=0.0,
     ldltfact!(F, A; shift = shift)
 
     s = unsafe_load(get(F.p))
-    s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
+    if s.minor < size(A, 1)
+        throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
+    end
     return F
 end
 
@@ -1488,7 +1530,7 @@ for (T, f) in ((:Dense, :solve), (:Sparse, :spsolve))
         # Solve PLx = b and L'P'x=b where A = P*L*L'*P'
         function (\){T}(L::FactorComponent{T,:PtL}, B::$T)
             F = Factor(L)
-            ($f)(CHOLMOD_L, F, ($f)(CHOLMOD_P, F, B))  # Confusingly, CHOLMOD_P solves P'x = b
+            ($f)(CHOLMOD_L, F, ($f)(CHOLMOD_P, F, B)) # Confusingly, CHOLMOD_P solves P'x = b
         end
         function (\){T}(L::FactorComponent{T,:UP}, B::$T)
             F = Factor(L)
@@ -1572,7 +1614,8 @@ function diag{Tv}(F::Factor{Tv})
             res[pos] = unsafe_load(xv, base)
             pos += 1
             for j in 1:unsafe_load(fsuper, i + 1) - unsafe_load(fsuper, i) - 1
-                res[pos] = unsafe_load(xv, base + j*(unsafe_load(fpi, i + 1) - unsafe_load(fpi, i) + 1))
+                res[pos] = unsafe_load(xv, base + j*(unsafe_load(fpi, i + 1) -
+                    unsafe_load(fpi, i) + 1))
                 pos += 1
             end
         end
@@ -1638,8 +1681,11 @@ function ishermitian(A::Sparse{Complex{Float64}})
     end
 end
 
-(*){Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}, B::SparseVecOrMat{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
-(*){Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}, B::SparseVecOrMat{Complex{Float64},Ti}) = sparse(Sparse(A)*Sparse(B))
-(*){Ti}(A::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}, B::SparseVecOrMat{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}},
+    B::SparseVecOrMat{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}},
+    B::SparseVecOrMat{Complex{Float64},Ti}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}},
+    B::SparseVecOrMat{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
 
 end #module

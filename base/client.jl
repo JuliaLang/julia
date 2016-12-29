@@ -338,16 +338,17 @@ file.
 """
 atreplinit(f::Function) = (unshift!(repl_hooks, f); nothing)
 
-function _atreplinit(repl)
+function __atreplinit(repl)
     for f in repl_hooks
         try
             f(repl)
         catch err
-            show(STDERR, err)
+            showerror(STDERR, err)
             println(STDERR)
         end
     end
 end
+_atreplinit(repl) = eval(Main, :($__atreplinit($repl)))
 
 function _start()
     empty!(ARGS)

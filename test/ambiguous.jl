@@ -133,7 +133,8 @@ ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
 # Test that Core and Base are free of ambiguities
-@test (x->(isempty(x) || println(x)))(detect_ambiguities(Core, Base; imported=true))
+@test detect_ambiguities(Core, Base; imported=true) == []
+# not using isempty so this prints more information when it fails
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2
