@@ -450,7 +450,8 @@ If `T` is not a bitstype, an error is thrown.
 ```jldoctest
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
- in sizeof(::Type{T}) at ./essentials.jl:99
+Stacktrace:
+ [1] sizeof(::Type{T}) at ./essentials.jl:99
 ```
 """
 sizeof(::Type)
@@ -2491,7 +2492,8 @@ readavailable
 """
     isa(x, type) -> Bool
 
-Determine whether `x` is of the given `type`.
+Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
+`x isa type`.
 """
 isa
 
@@ -2531,7 +2533,8 @@ julia> convert(Int, 3.0)
 
 julia> convert(Int, 3.5)
 ERROR: InexactError()
- in convert(::Type{Int64}, ::Float64) at ./float.jl:656
+Stacktrace:
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:656
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,

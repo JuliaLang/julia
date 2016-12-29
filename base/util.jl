@@ -309,7 +309,7 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
     have_color && print(buf, get(text_colors, color, color_normal))
     try f(IOContext(buf, io), args...)
     finally
-        have_color && print(buf, get(disable_text_style, color, text_colors[:default]))
+        have_color && color != :nothing && print(buf, get(disable_text_style, color, text_colors[:default]))
         have_color && (bold || color == :bold) && print(buf, disable_text_style[:bold])
         print(io, String(take!(buf)))
     end

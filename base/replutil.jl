@@ -194,7 +194,9 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        showerror(io, ex)
+        with_output_color(have_color ? error_color() : :nothing, io) do io
+            showerror(io, ex)
+        end
     finally
         backtrace && show_backtrace(io, bt)
     end
@@ -577,15 +579,21 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     end
 end
 
-function show_trace_entry(io, frame, n)
+function show_trace_entry(io, frame, n; prefix = " in ")
     print(io, "\n")
-    show(io, frame, full_path=true)
+    show(io, frame, full_path=true; prefix = prefix)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
 function show_backtrace(io::IO, t::Vector)
-    process_entry(last_frame, n) =
-        show_trace_entry(io, last_frame, n)
+    n_frames = 0
+    frame_counter = 0
+    process_backtrace((a,b) -> n_frames += 1, t)
+    n_frames != 0 && print(io, "\nStacktrace:")
+    process_entry = (last_frame, n) -> begin
+        frame_counter += 1
+        show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter, "] "))
+    end
     process_backtrace(process_entry, t)
 end
 

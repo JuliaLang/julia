@@ -22,17 +22,18 @@ const text_colors = AnyDict(
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
+    :nothing       => "",
 )
+
+for i in 0:255
+    text_colors[i] = "\033[38;5;$(i)m"
+end
 
 const disable_text_style = AnyDict(
     :bold => "\033[22m",
     :normal => "",
     :default => "",
 )
-
-for i in 0:255
-    text_colors[i] = "\033[38;5;$(i)m"
-end
 
 # Create a docstring with an automatically generated list
 # of colors.
@@ -52,6 +53,7 @@ Available colors are: $available_text_colors_docstring as well as the integers 0
 
 The color `:default` will print text in the default color while the color `:normal`
 will print text with all text properties (like boldness) reset.
+Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
@@ -82,6 +84,9 @@ info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
 # Print input and answer in bold.
 input_color()  = text_colors[:bold] * text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
 answer_color() = text_colors[:bold] * text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
+
+stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
+stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
