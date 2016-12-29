@@ -15,6 +15,9 @@
     field_order = tuple(order...)
     tuple_type = slot_types(T)
 
+    # `slot_order`, `slot_defaults`, and `slot_types` return tuples of the same length
+    assert(num_types == length(field_order) == length(field_defaults))
+
     quote
         R = Nullable{$tuple_type}
         t = df.tokens
@@ -51,8 +54,9 @@ function gen_exception(tokens, err_idx, pos)
     end
 end
 
-function reorder_args{Nv, Ni}(val::NTuple{Nv}, idx::NTuple{Ni}, default::NTuple{Ni}, valid_till)
-    ntuple(Val{Ni}) do i
+function reorder_args(val::Tuple, idx::Tuple, default::Tuple, valid_till::Integer)
+    # Note: idx and default have the same length
+    ntuple(length(idx)) do i
         if idx[i] == 0 || idx[i] >= valid_till
             default[i]
         else
