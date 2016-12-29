@@ -34,6 +34,9 @@ B = [true true false]
 @test isa([:a=>1, :b=>2.0], Vector{Pair{Symbol,Float64}})
 @test isa(["a"=>1, :b=>2.0], Vector{Pair{Any,Float64}})
 
+# Infix `isa`
+@test 1 isa Integer
+
 p = 1=>:foo
 @test first(p) == 1
 @test last(p)  == :foo
