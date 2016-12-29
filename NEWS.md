@@ -138,6 +138,10 @@ Compiler/Runtime improvements
 Deprecated or removed
 ---------------------
 
+  * `getindex(x::Number)` and similar functions (`ndims`, `size`) that treat
+    numbers as 0-dimensional arrays have been removed, although they are
+    still iterable ([#19700]).
+
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).
 
   * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).

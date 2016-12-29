@@ -433,20 +433,19 @@ function fix_kinds(region, kinds)
             if isempty(kinds)
                 throw(ArgumentError("must supply a transform kind"))
             end
-            k = Array{Int32}(length(region))
-            k[1:length(kinds)] = [kinds...]
-            k[length(kinds)+1:end] = kinds[end]
-            kinds = k
+            fixedkinds = Array{Int32}(length(region))
+            copy!(fixedkinds, 1, kinds, 1, length(kinds))
+            fixedkinds[length(kinds)+1:end] = last(kinds)
         end
     else
-        kinds = Int32[kinds...]
+        fixedkinds = Int32[kinds...]
     end
-    for i = 1:length(kinds)
-        if kinds[i] < 0 || kinds[i] > 10
+    for k in fixedkinds
+        if k < 0 || k > 10
             throw(ArgumentError("invalid transform kind"))
         end
     end
-    return kinds
+    return fixedkinds
 end
 
 # low-level FFTWPlan creation (for internal use in FFTW module)
