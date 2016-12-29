@@ -23,7 +23,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        erfinv, erfcinv, @evalpoly
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
-             acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
+             acos, atan, asinh, acosh, atanh, sqrt, cbrt, log2, log10,
              max, min, minmax, ^, exp2, muladd,
              exp10, expm1, log1p,
              sign_mask, exponent_mask, exponent_one, exponent_half,

@@ -285,6 +285,64 @@ for T in types
 end
 
 # Operators
+
+SafeTestTypes = Union{Base.NullSafeTypes, BigInt, BigFloat,
+                      Complex{Int}, Complex{Float64}, Rational{Int}}.types
+
+# check for fast path (null-safe combinations of operators and types)
+for S in Base.NullSafeTypes.types, T in Base.NullSafeTypes.types
+    # mixing signed and unsigned types is unsafe (slow path tested below)
+    if !((S <: Signed && T <: Signed) ||
+         (S <: Unsigned && T <: Unsigned) ||
+         (S <: AbstractFloat && T <: AbstractFloat) ||
+         (S == T))
+        continue
+    end
+
+    u0 = zero(S)
+    u1 = one(S)
+    u2 = rand(S)
+
+    v0 = zero(T)
+    v1 = one(T)
+    v2 = rand(T)
+
+    # safe unary operators
+    for op in (+, -, ~, abs, abs2, cbrt)
+        S <: AbstractFloat && op == (~) && continue
+        !(T <: Real) && op == cbrt && continue
+
+        @test op(Nullable(u0)) === Nullable(op(u0))
+        @test op(Nullable(u1)) === Nullable(op(u1))
+        @test op(Nullable(u2)) === Nullable(op(u2))
+        @test op(Nullable(u0, false)) === Nullable(op(u0), false)
+    end
+
+    for u in (u0, u1, u2), v in (v0, v1, v2)
+        # safe binary operators: === checks that the fast-path was taken (no branch)
+        for op in (+, -, *, /, &, |, >>, <<, >>>,
+                   Base.scalarmin, Base.scalarmax)
+            (T <: AbstractFloat || S <: AbstractFloat) && op in (&, |, >>, <<, >>>) && continue
+
+            @test op(Nullable(u), Nullable(v)) === Nullable(op(u, v))
+            @test op(Nullable(u, false), Nullable(v, false)) === Nullable(op(u, v), false)
+            @test op(Nullable(u), Nullable(v, false)) === Nullable(op(u, v), false)
+            @test op(Nullable(u, false), Nullable(v)) === Nullable(op(u, v), false)
+        end
+    end
+end
+
+@test !Nullable(true) === Nullable(false)
+@test !Nullable(false) === Nullable(true)
+@test !(Nullable(true, false)) === Nullable(false, false)
+@test !(Nullable(false, false)) === Nullable(true, false)
+
+# test all types and operators (including null-unsafe ones)
+
+ensure_neg(x::Unsigned) = -convert(Signed, x)
+ensure_neg{T<:Complex}(x::T) = T(-abs(real(x)), -abs(imag(x)))
+ensure_neg(x::Any) = -abs(x)
+
 TestTypes = Union{Base.NullSafeTypes, BigInt, BigFloat,
                   Complex{Int}, Complex{Float64}, Complex{BigFloat},
                   Rational{Int}, Rational{BigInt}}.types
@@ -309,7 +367,137 @@ for S in TestTypes, T in TestTypes
         v2 = v1
     end
 
+    # safe unary operators
+    for op in (+, -, ~, abs, abs2, cbrt)
+        !(T <: Integer) && op == (~) && continue
+        !(T <: Real) && op == cbrt && continue
+
+        R = Base.promote_op(op, T)
+        x = op(Nullable(v0))
+        @test isa(x, Nullable{R}) && isequal(x, Nullable(op(v0)))
+        x = op(Nullable(v1))
+        @test isa(x, Nullable{R}) && isequal(x, Nullable(op(v1)))
+        x = op(Nullable(v2))
+        @test isa(x, Nullable{R}) && isequal(x, Nullable(op(v2)))
+        x = op(Nullable(v0, false))
+        @test isa(x, Nullable{R}) && isnull(x)
+        x = op(Nullable(v1, false))
+        @test isa(x, Nullable{R}) && isnull(x)
+        x = op(Nullable(v2, false))
+        @test isa(x, Nullable{R}) && isnull(x)
+        x = op(Nullable{R}())
+        @test isa(x, Nullable{R}) && isnull(x)
+
+        x = op(Nullable())
+        @test isa(x, Nullable{Union{}}) && isnull(x)
+    end
+
+    # unsafe unary operators
+    # sqrt
+    T <: Real && @test_throws DomainError sqrt(Nullable(ensure_neg(v1)))
+    R = Base.promote_op(sqrt, T)
+    x = sqrt(Nullable(v0))
+    @test isa(x, Nullable{R}) && isequal(x, Nullable(sqrt(v0)))
+    x = sqrt(Nullable(v1))
+    @test isa(x, Nullable{R}) && isequal(x, Nullable(sqrt(v1)))
+    x = sqrt(Nullable(v0, false))
+    @test isa(x, Nullable{R}) && isnull(x)
+    x = sqrt(Nullable(ensure_neg(v1), false))
+    @test isa(x, Nullable{R}) && isnull(x)
+    x = sqrt(Nullable(ensure_neg(v2), false))
+    @test isa(x, Nullable{R}) && isnull(x)
+    x = sqrt(Nullable{R}())
+    @test isa(x, Nullable{R}) && isnull(x)
+
+    x = sqrt(Nullable())
+    @test isa(x, Nullable{Union{}}) && isnull(x)
+
     for u in (u0, u1, u2), v in (v0, v1, v2)
+        # safe binary operators
+        for op in (+, -, *, /, &, |, >>, <<, >>>,
+                   Base.scalarmin, Base.scalarmax)
+            (T <: AbstractFloat || S <: AbstractFloat) && op in (&, |, >>, <<, >>>) && continue
+            (T <: Bool || S <: Bool) && op in (>>, <<, >>>) && continue
+            (T <: BigInt || S <: BigInt) && op in (&, |, >>, <<, >>>) && continue
+            (T <: Complex || S <: Complex) && op in (&, |, >>, <<, >>>, Base.scalarmin, Base.scalarmax) && continue
+            (T <: Rational || S <: Rational) && op in (-, /, &, |, >>, <<, >>>, Base.scalarmin, Base.scalarmax) && continue
+
+            if S <: Unsigned || T <: Unsigned
+                @test isequal(op(Nullable(abs(u)), Nullable(abs(v))), Nullable(op(abs(u), abs(v))))
+            else
+                @test isequal(op(Nullable(u), Nullable(v)), Nullable(op(u, v)))
+            end
+            R = Base.promote_op(op, S, T)
+            x = op(Nullable(u, false), Nullable(v, false))
+            @test isa(x, Nullable{R}) && isnull(x)
+            x = op(Nullable(u), Nullable(v, false))
+            @test isa(x, Nullable{R}) && isnull(x)
+            x = op(Nullable(u, false), Nullable(v))
+            @test isa(x, Nullable{R}) && isnull(x)
+
+            x = op(Nullable(u, false), Nullable())
+            @test isa(x, Nullable{S}) && isnull(x)
+            x = op(Nullable(), Nullable(u, false))
+            @test isa(x, Nullable{S}) && isnull(x)
+            x = op(Nullable(), Nullable())
+            @test isa(x, Nullable{Union{}}) && isnull(x)
+        end
+
+        # unsafe binary operators
+        # ^
+        if S <: Integer && T <: Integer && u != 0 && u != 1 && v != 0
+            @test_throws DomainError Nullable(u)^Nullable(ensure_neg(v))
+        end
+        @test isequal(Nullable(u)^Nullable(one(T)+one(T)), Nullable(u^(one(T)+one(T))))
+        R = Base.promote_op(^, S, T)
+        if S <: Real && T <: Real
+            x = Nullable(u, false)^Nullable(-abs(v), false)
+            @test isnull(x) && eltype(x) === R
+            x = Nullable(u, true)^Nullable(-abs(v), false)
+            @test isnull(x) && eltype(x) === R
+            x = Nullable(u, false)^Nullable(-abs(v), true)
+            @test isnull(x) && eltype(x) === R
+        else
+            x = Nullable(u, false)^Nullable(v, false)
+            @test isnull(x) && eltype(x) === R
+            x = Nullable(u, true)^Nullable(v, false)
+            @test isnull(x) && eltype(x) === R
+            x = Nullable(u, false)^Nullable(v, true)
+            @test isnull(x) && eltype(x) === R
+        end
+
+        x = Nullable(u, false)^Nullable()
+        @test isa(x, Nullable{S}) && isnull(x)
+        x = Nullable()^Nullable(u, false)
+        @test isa(x, Nullable{S}) && isnull(x)
+        x = Nullable()^Nullable()
+        @test isa(x, Nullable{Union{}}) && isnull(x)
+
+        if S <: Real && T <: Real
+            # ÷ and %
+            for op in (÷, %)
+                if S <: Union{Integer, Rational} && T <: Union{Integer, Rational} && v == 0
+                    @test_throws DivideError op(Nullable(u), Nullable(v))
+                else
+                    @test isequal(op(Nullable(u), Nullable(v)), Nullable(op(u, v)))
+                end
+                R = Base.promote_op(op, S, T)
+                x = op(Nullable(u, false), Nullable(v, false))
+                @test isnull(x) && eltype(x) === R
+                x = op(Nullable(u, true), Nullable(v, false))
+                @test isnull(x) && eltype(x) === R
+                x = op(Nullable(u, false), Nullable(v, true))
+                @test isnull(x) && eltype(x) === R
+
+                x = op(Nullable(u, false), Nullable())
+                @test isa(x, Nullable{S}) && isnull(x)
+                x = op(Nullable(), Nullable(u, false))
+                @test isa(x, Nullable{S}) && isnull(x)
+                x = op(Nullable(), Nullable())
+                @test isa(x, Nullable{Union{}}) && isnull(x)
+            end
+        end
+
         # function isequal(x::Nullable, y::Nullable)
         @test isequal(Nullable(u), Nullable(v)) === isequal(u, v)
         @test isequal(Nullable(u), Nullable(u)) === true
