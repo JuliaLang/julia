@@ -260,6 +260,8 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
     end
 end
 
+/(x::BigInt, y::BigInt) = float(x)/float(y)
+
 function invmod(x::BigInt, y::BigInt)
     z = zero(BigInt)
     ya = abs(y)
@@ -341,6 +343,9 @@ function *(x::BigInt, c::ClongMax)
     return z
 end
 *(c::ClongMax, x::BigInt) = x * c
+
+/(x::BigInt, y::Union{ClongMax,CulongMax}) = float(x)/y
+/(x::Union{ClongMax,CulongMax}, y::BigInt) = x/float(y)
 
 # unary ops
 for (fJ, fC) in ((:-, :neg), (:~, :com))
