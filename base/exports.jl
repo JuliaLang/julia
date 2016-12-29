@@ -926,9 +926,6 @@ export
     rfft,
     xcorr,
 
-# numerical integration
-    quadgk,
-
 # iteration
     done,
     next,

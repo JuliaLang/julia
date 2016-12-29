@@ -74,6 +74,8 @@ This section lists changes that do not have deprecation warnings.
     removed before `waitfor` seconds. With a `waitfor=0`, `rmprocs` returns immediately
     without waiting for worker exits.
 
+  * `quadgk` has been moved from Base into a separate package. ([#19741])
+
 Library improvements
 --------------------
 
