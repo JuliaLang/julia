@@ -1165,12 +1165,14 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
+typealias NumberArray{T<:Number} AbstractArray{T}
+
 """
     promote_leaf_eltypes(itr)
 
 For an (possibly nested) iterable object `itr`, promote the types of leaf
 elements.  Equivalent to `promote_type(typeof(leaf1), typeof(leaf2), ...)`.
-Currently support only numeric leaf elements.
+Currently supports only numeric leaf elements.
 
 # Example
 
@@ -1185,7 +1187,6 @@ julia> promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """
-typealias NumberArray{T<:Number} AbstractArray{T}
 promote_leaf_eltypes{T<:Number}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = T
 promote_leaf_eltypes{T<:NumberArray}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = eltype(T)
 promote_leaf_eltypes{T}(x::T) = T
@@ -1194,7 +1195,9 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
 # Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
 # `a ≈ a` is `true`.
-function isapprox(x::AbstractArray, y::AbstractArray; rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y)), atol::Real=0, norm::Function=vecnorm)
+function isapprox(x::AbstractArray, y::AbstractArray;
+    rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y)),
+    atol::Real=0, norm::Function=vecnorm)
     d = norm(x - y)
     if isfinite(d)
         return d <= atol + rtol*max(norm(x), norm(y))
