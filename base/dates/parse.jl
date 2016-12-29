@@ -103,18 +103,6 @@ end
     return Nullable{SubString}(word_end == 0 ? nothing : SubString(str, word_start, word_end)), i
 end
 
-function minwidth(num, n)
-    s = string(abs(num))
-    s = length(s) < n ? lpad(s, n, 0) : s
-    num < 0 ? string('-', s) : s
-end
-
-function rfixwidth(num, n)
-    assert(num >= 0)
-    s = string(num)
-    length(s) < n ? lpad(s, n, 0) : s[end - n + 1:end]
-end
-
 function Base.parse(::Type{DateTime}, s::AbstractString, df::DateFormat{Symbol("yyyy-mm-dd\\THH:MM:SS.s")})
     i, end_pos = start(s), endof(s)
 
