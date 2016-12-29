@@ -292,6 +292,7 @@ f = "y m d"
 @test_throws ArgumentError Dates.Date(" 1 1 32",f)
 @test_throws ArgumentError Dates.Date("# 1 1 32",f)
 @test Dates.Date("1",f) == Dates.Date(1)
+@test Dates.Date("1 ",f) == Dates.Date(1)
 @test Dates.Date("1 2",f) == Dates.Date(1,2)
 # can't find space delimiter (finds '/'), so fails
 @test_throws ArgumentError Dates.Date("2000/1",f)
