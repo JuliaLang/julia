@@ -71,3 +71,11 @@ let xs = [[i:i+4;] for i in 1:10]
         @test max.(xs[1:n]...) == [n:n+4;]
     end
 end
+
+# issue #19714
+immutable T19714 <: Integer end
+Base.float(::T19714) = 19714.0
+Base.:/(::T19714, ::T19714) = T19714()
+Base.convert(::Type{T19714}, ::Int) = T19714()
+Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
+@test T19714()/1 === 1/T19714() === T19714()
