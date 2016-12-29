@@ -232,11 +232,8 @@ JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
 #endif
 
-extern MDNode *tbaa_const;
-extern MDNode *tbaa_gcframe;
-
-Pass *createLowerPTLSPass(bool imaging_mode, MDNode *tbaa_const);
-Pass *createLowerGCFramePass(MDNode *tbaa_gcframe);
+Pass *createLowerPTLSPass(bool imaging_mode);
+Pass *createLowerGCFramePass();
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {

@@ -280,7 +280,7 @@ rsplit{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _rsp
 """
     rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
 
-Similar to [`split`](:func:`split`), but starting from the end of the string.
+Similar to [`split`](@ref), but starting from the end of the string.
 
 ```jldoctest
 julia> a = "M.a.r.c.h"
@@ -358,7 +358,7 @@ function replace(str::String, pattern, repl, limit::Integer)
         n += 1
     end
     write(out, SubString(str,i))
-    takebuf_string(out)
+    String(take!(out))
 end
 
 """

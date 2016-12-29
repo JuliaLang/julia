@@ -16,6 +16,15 @@ function redirected_stderr(expected)
     return t
 end
 
+Foo_module = :Foo4b3a94a1a081a8cb
+FooBase_module = :FooBase4b3a94a1a081a8cb
+@eval module ConflictingBindings
+    export $Foo_module, $FooBase_module
+    $Foo_module = 232
+    $FooBase_module = 9134
+end
+using .ConflictingBindings
+
 # this environment variable would affect some error messages being tested below
 # so we disable it for the tests below
 withenv( "JULIA_DEBUG_LOADING" => nothing ) do
@@ -25,15 +34,24 @@ dir = mktempdir()
 dir2 = mktempdir()
 insert!(LOAD_PATH, 1, dir)
 insert!(Base.LOAD_CACHE_PATH, 1, dir)
-Foo_module = :Foo4b3a94a1a081a8cb
 try
     Foo_file = joinpath(dir, "$Foo_module.jl")
+    FooBase_file = joinpath(dir, "$FooBase_module.jl")
 
+    write(FooBase_file,
+          """
+          __precompile__(true)
+
+          module $FooBase_module
+          end
+          """)
     write(Foo_file,
           """
           __precompile__(true)
 
           module $Foo_module
+              using $FooBase_module
+
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
               include_dependency("foo.jl")
@@ -103,8 +121,8 @@ try
               let some_method = @which Base.include("string")
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
-                      ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any),
-                          some_method, Tuple{typeof(Base.include), String}, Core.svec())
+                      ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt),
+                          some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
               end
           end
           """)
@@ -127,7 +145,15 @@ try
     end
     wait(t)
 
-    let Foo = eval(Main, Foo_module)
+    let Foo = getfield(Main, Foo_module)
+        @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
+    end
+    @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
+              FooBase_module = $(QuoteNode(FooBase_module)),
+              Foo = getfield(Main, Foo_module),
+              dir = $(QuoteNode(dir)),
+              cachefile = $(QuoteNode(cachefile)),
+              Foo_file = $(QuoteNode(Foo_file))
         @test Foo.foo(17) == 18
         @test Foo.Bar.bar(17) == 19
 
@@ -140,8 +166,8 @@ try
         @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test sort(modules) == map(s -> (s, Base.module_uuid(eval(s))),
-                                   [:Base, :Core, :Main])
+        @test sort(modules) == Any[(s, Base.module_uuid(getfield(Foo, s))) for s in
+                                   [:Base, :Core, FooBase_module, :Main]]
         @test deps == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -169,8 +195,8 @@ try
             0:25)
         some_method = @which Base.include("string")
         some_linfo =
-                ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any),
-                    some_method, Tuple{typeof(Base.include), String}, Core.svec())
+                ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt),
+                    some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         PV = Foo.Value18343{Nullable}.types[1]
@@ -191,7 +217,7 @@ try
           end
           """)
 
-    t = redirected_stderr("ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\n in __precompile__")
+    t = redirected_stderr("ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__")
     try
         Base.compilecache("Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
@@ -288,7 +314,7 @@ try
           error("break me")
           end
           """)
-    t = redirected_stderr("ERROR: LoadError: break me\n in error")
+    t = redirected_stderr("ERROR: LoadError: break me\nStacktrace:\n [1] error")
     try
         Base.require(:FooBar)
         error("\"LoadError: break me\" test failed")
@@ -361,7 +387,7 @@ let module_name = string("a",randstring())
     code = """module $(module_name)\nend\n"""
     write(file_name, code)
     reload(module_name)
-    @test typeof(eval(Symbol(module_name))) == Module
+    @test isa(eval(Main, Symbol(module_name)), Module)
     deleteat!(LOAD_PATH,1)
     rm(file_name)
 end

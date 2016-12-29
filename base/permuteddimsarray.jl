@@ -56,7 +56,7 @@ julia> A = reshape(collect(1:8), (2,2,2))
 [:, :, 1] =
  1  3
  2  4
-<BLANKLINE>
+
 [:, :, 2] =
  5  7
  6  8
@@ -66,7 +66,7 @@ julia> permutedims(A, [3, 2, 1])
 [:, :, 1] =
  1  3
  5  7
-<BLANKLINE>
+
 [:, :, 2] =
  2  4
  6  8

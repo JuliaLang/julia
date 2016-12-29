@@ -27,15 +27,13 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Packages:** <http://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
+- **Discussion forum:** <https://discourse.julialang.org>
 - **Mailing lists:** <http://julialang.org/community/>
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-The mailing list for developer discussion is
-<http://groups.google.com/group/julia-dev/>. All are welcome, but the volume
-of messages is higher, and the discussions tend to be more esoteric. New
-developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
+New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md) helpful to start contributing to the Julia codebase.
 
 ### External Resources
 <a name="External-Resources"/>
@@ -49,11 +47,11 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 ## Currently Supported Platforms
 
 - **Linux**
-- **Darwin/OS X**
+- **MacOS**
 - **FreeBSD**
 - **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER (little-endian) is available too.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit, except MacOS) architectures. Support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER8 (little-endian) has been added recently.
 
 <a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
@@ -203,8 +201,6 @@ You can also set `MARCH=native` for a maximum-performance build customized for t
 
 The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for Julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#System-Provided-Libraries).
 
-For a fast and easy current installation, the `before_install` section of [travis.yml](https://github.com/JuliaLang/julia/blob/master/.travis.yml) is a great resource.  Note that those instructions are for Ubuntu 12.04, and for later versions you may need to install newer versions of dependencies, such as `libunwind8-dev` instead of `libunwind7-dev`.
-
 #### RHEL/CentOS 6
 
 On RHEL/CentOS 6 systems, the default compiler (`gcc` 4.4) is too old to build Julia.
@@ -247,10 +243,9 @@ You must use the `gmake` command on FreeBSD instead of `make`.
 Note that Julia is community-supported and we have little control over our upstream dependencies, you may still run into issues with dependencies and YMMV. Current known issues include:
 
  - The x86 arch doesn't support threading due to lack of compiler runtime library support (set `JULIA_THREADS=0`).
- - libunwind needs a small patch to its tests to compile.
  - OpenBLAS patches in pkg haven't been upstreamed.
  - gfortran can't link binaries. Set `FFLAGS=-Wl,-rpath,/usr/local/lib/gcc6` to work around this (upstream bug submitted to FreeBSD pkg maintainers).
- - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=/usr/local/lib` and `CPPFLAGS=/usr/local/include` to your environment or `Make.user` file to build successfully.
+ - System libraries installed by pkg are not on the compiler path by default. You may need to add `LDFLAGS=-L/usr/local/lib` and `CPPFLAGS=-I/usr/local/include` to your environment or `Make.user` file to build successfully.
 
 
 ### Windows
@@ -301,8 +296,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
-
-For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
 
 [GNU make]:     http://www.gnu.org/software/make
 [patch]:        http://www.gnu.org/software/patch
@@ -393,7 +386,7 @@ The Julia source code is organized as follows:
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
+If you would rather not compile the latest Julia from source, platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
 

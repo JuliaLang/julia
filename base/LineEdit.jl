@@ -267,7 +267,7 @@ function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
     termbuf = TerminalBuffer(outbuf)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
     # Output the entire refresh at once
-    write(terminal, takebuf_array(outbuf))
+    write(terminal, take!(outbuf))
     flush(terminal)
     return ret
 end
@@ -437,7 +437,7 @@ function splice_buffer!{T<:Integer}(buf::IOBuffer, r::UnitRange{T}, ins::Abstrac
     elseif pos > last(r)
         seek(buf, pos - length(r))
     end
-    splice!(buf.data, r .+ 1, ins.data) # position(), etc, are 0-indexed
+    splice!(buf.data, r + 1, ins.data) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - length(r)
     seek(buf, position(buf) + sizeof(ins))
 end
@@ -629,6 +629,7 @@ function write_prompt(terminal, p::Prompt)
     prefix = isa(p.prompt_prefix,Function) ? p.prompt_prefix() : p.prompt_prefix
     suffix = isa(p.prompt_suffix,Function) ? p.prompt_suffix() : p.prompt_suffix
     write(terminal, prefix)
+    write(terminal, Base.text_colors[:bold])
     write(terminal, p.prompt)
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
@@ -668,7 +669,7 @@ function normalize_key(key::AbstractString)
             write(buf, c)
         end
     end
-    return takebuf_string(buf)
+    return String(take!(buf))
 end
 
 function normalize_keys(keymap::Dict)
@@ -1501,7 +1502,7 @@ end
 activate(m::ModalInterface, s::MIState, termbuf, term::TextTerminal) =
     activate(s.current_mode, s, termbuf, term)
 
-commit_changes(t::UnixTerminal, termbuf) = write(t, takebuf_array(termbuf.out_stream))
+commit_changes(t::UnixTerminal, termbuf) = write(t, take!(termbuf.out_stream))
 function transition(f::Function, s::MIState, mode)
     if mode === :abort
         s.aborted = true

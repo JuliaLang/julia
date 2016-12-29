@@ -34,8 +34,8 @@ lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
 """
     lgamma(x)
 
-Compute the logarithm of the absolute value of [`gamma`](:func:`gamma`) for
-[`Real`](:obj:`Real`) `x`, while for [`Complex`](:obj:`Complex`) `x` it computes the
+Compute the logarithm of the absolute value of [`gamma`](@ref) for
+`Real` `x`, while for `Complex` `x` it computes the
 principal branch cut of the logarithm of `gamma(x)` (defined for negative `real(x)`
 by analytic continuation from positive `real(x)`).
 """
@@ -145,7 +145,7 @@ gamma(z::Complex) = exp(lgamma(z))
 """
     digamma(x)
 
-Compute the digamma function of `x` (the logarithmic derivative of `gamma(x)`)
+Compute the digamma function of `x` (the logarithmic derivative of [`gamma(x)`](@ref)).
 """
 function digamma(z::Union{Float64,Complex{Float64}})
     # Based on eq. (12), without looking at the accompanying source
@@ -179,7 +179,7 @@ end
 """
     trigamma(x)
 
-Compute the trigamma function of `x` (the logarithmic second derivative of `gamma(x)`).
+Compute the trigamma function of `x` (the logarithmic second derivative of [`gamma(x)`](@ref)).
 """
 function trigamma(z::Union{Float64,Complex{Float64}})
     # via the derivative of the Kölbig digamma formulation
@@ -447,7 +447,7 @@ end
     polygamma(m, x)
 
 Compute the polygamma function of order `m` of argument `x` (the `(m+1)th` derivative of the
-logarithm of `gamma(x)`)
+logarithm of [`gamma(x)`](@ref))
 """
 function polygamma(m::Integer, z::Union{Float64,Complex{Float64}})
     m == 0 && return digamma(z)
@@ -535,7 +535,7 @@ invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
 """
     invdigamma(x)
 
-Compute the inverse [`digamma`](:func:`digamma`) function of `x`.
+Compute the inverse [`digamma`](@ref) function of `x`.
 """
 invdigamma(x::Real) = invdigamma(Float64(x))
 
@@ -554,7 +554,7 @@ end
 """
     lbeta(x, y)
 
-Natural logarithm of the absolute value of the [`beta`](:func:`beta`)
+Natural logarithm of the absolute value of the [`beta`](@ref)
 function ``\\log(|\\operatorname{B}(x,y)|)``.
 """
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)

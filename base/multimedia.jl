@@ -26,6 +26,13 @@ end
 # For any type T one can define show(io, ::MIME"type", x::T) = ...
 # in order to provide a way to export T as a given mime type.
 
+"""
+    mimewritable(mime, x)
+
+Returns a boolean value indicating whether or not the object `x` can be written as the given
+`mime` type. (By default, this is determined automatically by the existence of the
+corresponding [`show`](@ref) method for `typeof(x)`.)
+"""
 mimewritable{mime}(::MIME{mime}, x) =
   method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
 
@@ -63,7 +70,7 @@ _textreprmime(m::MIME"text/plain", x::AbstractString) =
 function _binreprmime(m::MIME, x)
     s = IOBuffer()
     verbose_show(s, m, x)
-    takebuf_array(s)
+    take!(s)
 end
 _binreprmime(m::MIME, x::Vector{UInt8}) = x
 
@@ -71,7 +78,7 @@ _binreprmime(m::MIME, x::Vector{UInt8}) = x
     stringmime(mime, x)
 
 Returns an `AbstractString` containing the representation of `x` in the
-requested `mime` type. This is similar to [`reprmime`](:func:`reprmime`) except
+requested `mime` type. This is similar to [`reprmime`](@ref) except
 that binary data is base64-encoded as an ASCII string.
 """
 stringmime(m::MIME, x) = istextmime(m) ? reprmime(m, x) : _binstringmime(m, x)
@@ -118,10 +125,27 @@ abstract Display
 # it is convenient to accept strings instead of ::MIME
 display(d::Display, mime::AbstractString, x) = display(d, MIME(mime), x)
 display(mime::AbstractString, x) = display(MIME(mime), x)
+
+"""
+    displayable(mime) -> Bool
+    displayable(d::Display, mime) -> Bool
+
+Returns a boolean value indicating whether the given `mime` type (string) is displayable by
+any of the displays in the current display stack, or specifically by the display `d` in the
+second variant.
+"""
 displayable(d::Display, mime::AbstractString) = displayable(d, MIME(mime))
 displayable(mime::AbstractString) = displayable(MIME(mime))
 
 # simplest display, which only knows how to display text/plain
+
+"""
+    TextDisplay(io::IO)
+
+Returns a `TextDisplay <: Display`, which can display any object as the text/plain MIME type
+(only), writing the text representation to the given I/O stream. (The text representation is
+the same as the way an object is printed in the Julia REPL.)
+"""
 immutable TextDisplay <: Display
     io::IO
 end

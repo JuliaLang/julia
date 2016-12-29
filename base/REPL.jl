@@ -66,7 +66,7 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 value = eval(Main, ast)
                 backend.in_eval = false
                 # note: value wrapped in a closure to ensure it doesn't get passed through expand
-                eval(Main, Expr(:(=), :ans, Expr(:call, ()->value)))
+                eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 put!(backend.response_channel, (value, nothing))
             end
             break
@@ -111,15 +111,13 @@ function ip_matches_func(ip, func::Symbol)
 end
 
 function display_error(io::IO, er, bt)
-    Base.with_output_color(:red, io) do io
-        print(io, "ERROR: ")
-        # remove REPL-related frames from interactive printing
-        eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
-        if eval_ind != 0
-            bt = bt[1:eval_ind-1]
-        end
-        Base.showerror(io, er, bt)
+    print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
+    # remove REPL-related frames from interactive printing
+    eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
+    if eval_ind != 0
+        bt = bt[1:eval_ind-1]
     end
+    showerror(IOContext(io, :limit => true), er, bt)
 end
 
 immutable REPLDisplay{R<:AbstractREPL} <: Display
@@ -153,9 +151,9 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
                 if val !== nothing && show_value
                     try
                         if specialdisplay === nothing
-                            display(val)
+                            eval(Main, Expr(:body, Expr(:return, Expr(:call, display, QuoteNode(val)))))
                         else
-                            display(specialdisplay,val)
+                            eval(Main, Expr(:body, Expr(:return, Expr(:call, specialdisplay, QuoteNode(val)))))
                         end
                     catch err
                         println(errio, "Error showing value of type ", typeof(val), ":")
@@ -167,6 +165,8 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
         catch err
             if bt !== nothing
                 println(errio, "SYSTEM: show(lasterr) caused an error")
+                println(errio, err)
+                Base.show_backtrace(errio, bt)
                 break
             end
             val = err
@@ -646,7 +646,7 @@ function respond(f, repl, main; pass_empty = false)
         if !ok
             return transition(s, :abort)
         end
-        line = takebuf_string(buf)
+        line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
             val, bt = send_to_backend(f(line), backend(repl))
@@ -840,7 +840,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 return
             end
             edit_insert(sbuffer, input)
-            input = takebuf_string(sbuffer)
+            input = String(take!(sbuffer))
             oldpos = start(input)
             firstline = true
             isprompt_paste = false
@@ -854,7 +854,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                     end
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
                     jl_prompt_len = 7
-                     if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
+                    if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
                     # If we are prompt pasting and current statement does not begin with julia> , skip to next line

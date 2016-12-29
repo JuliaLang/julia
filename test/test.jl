@@ -105,69 +105,69 @@ end
 end
 @testset "accounting" begin
     local ts
-    try ts = @testset "outer" begin
-        @testset "inner1" begin
-            @test true
-            @test false
-            @test 1 == 1
-            @test 2 == :foo
-            @test 3 == 3
-            @testset "d" begin
+    try
+        ts = @testset "outer" begin
+            @testset "inner1" begin
+                @test true
+                @test false
+                @test 1 == 1
+                @test 2 == :foo
+                @test 3 == 3
+                @testset "d" begin
+                    @test 4 == 4
+                end
+                @testset begin
+                    @test :blank != :notblank
+                end
+            end
+            @testset "inner1" begin
+                @test 1 == 1
+                @test 2 == 2
+                @test 3 == :bar
                 @test 4 == 4
-            end
-            @testset begin
-                @test :blank != :notblank
-            end
-        end
-        @testset "inner1" begin
-            @test 1 == 1
-            @test 2 == 2
-            @test 3 == :bar
-            @test 4 == 4
-            @test_throws ErrorException 1+1
-            @test_throws ErrorException error()
-            @test_throws RemoteException error()
-            @testset "errrrr" begin
-                @test "not bool"
-                @test error()
+                @test_throws ErrorException 1+1
+                @test_throws ErrorException error()
+                @test_throws RemoteException error()
+                @testset "errrrr" begin
+                    @test "not bool"
+                    @test error()
+                end
+
+                error("exceptions in testsets should be caught")
+                @test 1 == 1 # this test will not be run
             end
 
-            error("exceptions in testsets should be caught")
-            @test 1 == 1 # this test will not be run
-        end
-
-        @testset "loop with desc" begin
-            @testset "loop1 $T" for T in (Float32, Float64)
-                @test 1 == T(1)
+            @testset "loop with desc" begin
+                @testset "loop1 $T" for T in (Float32, Float64)
+                    @test 1 == T(1)
+                end
+            end
+            @testset "loops without desc" begin
+                @testset for T in (Float32, Float64)
+                    @test 1 == T(1)
+                end
+                @testset for T in (Float32, Float64), S in (Int32,Int64)
+                    @test S(1) == T(1)
+                end
+            end
+            srand(123)
+            @testset "some loops fail" begin
+                @testset for i in 1:5
+                    @test i <= rand(1:10)
+                end
+                # should add 3 errors and 3 passing tests
+                @testset for i in 1:6
+                    iseven(i) || error("error outside of test")
+                    @test true # only gets run if the above passed
+                end
             end
         end
-        @testset "loops without desc" begin
-            @testset for T in (Float32, Float64)
-                @test 1 == T(1)
-            end
-            @testset for T in (Float32, Float64), S in (Int32,Int64)
-                @test S(1) == T(1)
-            end
-        end
-        srand(123)
-        @testset "some loops fail" begin
-            @testset for i in 1:5
-                @test i <= rand(1:10)
-            end
-            # should add 3 errors and 3 passing tests
-            @testset for i in 1:6
-                iseven(i) || error("error outside of test")
-                @test true # only gets run if the above passed
-            end
-        end
-    end
-    # These lines shouldn't be called
-    redirect_stdout(OLD_STDOUT)
-    error("No exception was thrown!")
+        # These lines shouldn't be called
+        error("No exception was thrown!")
     catch ex
-        #redirect_stdout(OLD_STDOUT)
-        #redirect_stderr(OLD_STDERR)
-        #@show ex
+        redirect_stdout(OLD_STDOUT)
+        redirect_stderr(OLD_STDERR)
+        ex
     end
     @testset "ts results" begin
         @test isa(ts, Test.DefaultTestSet)
@@ -390,3 +390,8 @@ end
 @test @inferred(inferrable_kwtest(1; y=1)) == 2
 @test @inferred(uninferrable_kwtest(1)) == 3
 @test_throws ErrorException @inferred(uninferrable_kwtest(1; y=2)) == 2
+
+@test_throws ErrorException @testset "$(error())" for i in 1:10
+end
+@test_throws ErrorException @testset "$(error())" begin
+end

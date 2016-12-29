@@ -2,7 +2,8 @@
 
 ### Common definitions
 
-import Base: scalarmax, scalarmin, sort, find, findnz
+import Base: scalarmax, scalarmin, sort, find, findnz, @_pure_meta
+import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
 
@@ -401,7 +402,7 @@ function getindex(x::SparseMatrixCSC, I::UnitRange, j::Integer)
     # Restrict to the selected rows
     r1 = searchsortedfirst(x.rowval, first(I), c1, c2, Forward)
     r2 = searchsortedlast(x.rowval, last(I), c1, c2, Forward)
-    SparseVector(length(I), x.rowval[r1:r2] - first(I) + 1, x.nzval[r1:r2])
+    SparseVector(length(I), [x.rowval[i] - first(I) + 1 for i = r1:r2], x.nzval[r1:r2])
 end
 
 # In the general case, we piggy back upon SparseMatrixCSC's optimized solution
@@ -871,16 +872,16 @@ typealias _TypedDenseConcatGroup{T} Union{Vector{T}, Matrix{T}, _Annotated_Typed
 
 # Concatenations involving un/annotated sparse/special matrices/vectors should yield sparse arrays
 function cat(catdims, Xin::_SparseConcatGroup...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
     T = promote_eltype(Xin...)
     Base.cat_t(catdims, T, X...)
 end
 function hcat(Xin::_SparseConcatGroup...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
     hcat(X...)
 end
 function vcat(Xin::_SparseConcatGroup...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    X = map(x -> SparseMatrixCSC(issparse(x) ? x : sparse(x)), Xin)
     vcat(X...)
 end
 function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
@@ -894,6 +895,11 @@ function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
     end
     vcat(tmp_rows...)
 end
+
+# make sure UniformScaling objects are converted to sparse matrices for concatenation
+promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = (@_pure_meta; SparseMatrixCSC)
+promote_to_array_type(A::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = (@_pure_meta; Matrix)
+promote_to_arrays_{T}(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling{T}) = sparse(J, n,n)
 
 # Concatenations strictly involving un/annotated dense matrices/vectors should yield dense arrays
 cat(catdims, xs::_DenseConcatGroup...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
@@ -1245,18 +1251,21 @@ for (vop, fun, mode) in [(:_vadd, :+, 1),
 end
 
 # to workaround the ambiguities with BitVector
-.*(x::BitVector, y::AbstractSparseVector{Bool}) = _vmul(x, y)
-.*(x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y)
+broadcast(::typeof(*), x::BitVector, y::AbstractSparseVector{Bool}) = _vmul(x, y)
+broadcast(::typeof(*), x::AbstractSparseVector{Bool}, y::BitVector) = _vmul(x, y)
 
 # definition of operators
 
-for (op, vop) in [(:+, :_vadd), (:(.+), :_vadd),
-                  (:-, :_vsub), (:(.-), :_vsub),
-                  (:.*, :_vmul)]
-    @eval begin
+for (op, vop) in [(:+, :_vadd), (:-, :_vsub), (:*, :_vmul)]
+    op != :* && @eval begin
         $(op)(x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
         $(op)(x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
         $(op)(x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
+    end
+    @eval begin
+        broadcast(::typeof($op), x::AbstractSparseVector, y::AbstractSparseVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::StridedVector, y::AbstractSparseVector) = $(vop)(x, y)
+        broadcast(::typeof($op), x::AbstractSparseVector, y::StridedVector) = $(vop)(x, y)
     end
 end
 
@@ -1278,8 +1287,6 @@ end
 ### Reduction
 
 sum(x::AbstractSparseVector) = sum(nonzeros(x))
-sumabs(x::AbstractSparseVector) = sumabs(nonzeros(x))
-sumabs2(x::AbstractSparseVector) = sumabs2(nonzeros(x))
 
 function maximum{T<:Real}(x::AbstractSparseVector{T})
     n = length(x)
@@ -1299,8 +1306,14 @@ function minimum{T<:Real}(x::AbstractSparseVector{T})
      min(zero(T), minimum(nonzeros(x))))::T
 end
 
-maxabs{T<:Number}(x::AbstractSparseVector{T}) = maxabs(nonzeros(x))
-minabs{T<:Number}(x::AbstractSparseVector{T}) = nnz(x) < length(x) ? abs(zero(T)) : minabs(nonzeros(x))
+for f in [:sum, :maximum, :minimum], op in [:abs, :abs2]
+    SV = :AbstractSparseVector
+    if f == :minimum
+        @eval ($f){T<:Number}(::typeof($op), x::$SV{T}) = nnz(x) < length(x) ? ($op)(zero(T)) : ($f)($op, nonzeros(x))
+    else
+        @eval ($f)(::typeof($op), x::$SV) = ($f)($op, nonzeros(x))
+    end
+end
 
 vecnorm(x::AbstractSparseVector, p::Real=2) = vecnorm(nonzeros(x), p)
 
@@ -1362,10 +1375,12 @@ scale!(a::Real, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 scale!(a::Complex, x::AbstractSparseVector) = (scale!(nonzeros(x), a); x)
 
 
-.*(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
-.*(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
-./(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
-
+*(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) * a)
+*(a::Number, x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), a * nonzeros(x))
+/(x::AbstractSparseVector, a::Number) = SparseVector(length(x), copy(nonzeroinds(x)), nonzeros(x) / a)
+broadcast(::typeof(*), x::AbstractSparseVector, a::Number) = x * a
+broadcast(::typeof(*), a::Number, x::AbstractSparseVector) = a * x
+broadcast(::typeof(/), x::AbstractSparseVector, a::Number) = x / a
 
 # dot
 
@@ -1415,7 +1430,7 @@ function _spdot(f::Function,
 end
 
 function dot{Tx<:Number,Ty<:Number}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty})
-    is(x, y) && return sumabs2(x)
+    x === y && return sum(abs2, x)
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
 
@@ -1840,8 +1855,8 @@ droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) >
 Removes stored numerical zeros from `x`, optionally trimming resulting excess space from
 `x.nzind` and `x.nzval` when `trim` is `true`.
 
-For an out-of-place version, see [`dropzeros`](:func:`Base.SparseArrays.dropzeros`). For
-algorithmic information, see [`Base.SparseArrays.fkeep!`](:func:`Base.SparseArrays.fkeep!`).
+For an out-of-place version, see [`dropzeros`](@ref). For
+algorithmic information, see `fkeep!`.
 """
 dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
 """
@@ -1850,7 +1865,7 @@ dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, tri
 Generates a copy of `x` and removes numerical zeros from that copy, optionally trimming
 excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
 
-For an in-place version and algorithmic information, see [`dropzeros!`](:func:`Base.SparseArrays.dropzeros!`).
+For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 """
 dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
 

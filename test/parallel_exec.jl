@@ -512,66 +512,6 @@ workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 # @parallel reduction should work even with very short ranges
 @test @parallel(+, for i=1:2; i; end) == 3
 
-# Testing timedwait on multiple channels
-@sync begin
-    rr1 = Channel()
-    rr2 = Channel()
-    rr3 = Channel()
-
-    callback() = all(map(isready, [rr1, rr2, rr3]))
-    # precompile functions which will be tested for execution time
-    @test !callback()
-    @test timedwait(callback, 0.0) === :timed_out
-
-    @async begin sleep(0.5); put!(rr1, :ok) end
-    @async begin sleep(1.0); put!(rr2, :ok) end
-    @async begin sleep(2.0); put!(rr3, :ok) end
-
-    tic()
-    timedwait(callback, 1.0)
-    et=toq()
-    # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
-    try
-        @test (et >= 1.0) && (et <= 1.5)
-        @test !isready(rr3)
-    catch
-        warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
-    end
-    @test isready(rr1)
-end
-
-# Test multiple concurrent put!/take! on a channel
-function testcpt()
-    c = Channel()
-    size = 0
-    inc() = size += 1
-    dec() = size -= 1
-    @sync for i = 1:10^4
-        @async (sleep(rand()); put!(c, i); inc())
-        @async (sleep(rand()); take!(c); dec())
-    end
-    @test size == 0
-end
-testcpt()
-
-# Test multiple "for" loops waiting on the same channel which
-# is closed after adding a few elements.
-c=Channel()
-results=[]
-@sync begin
-    for i in 1:20
-        @async for i in c
-            push!(results, i)
-        end
-    end
-    sleep(1.0)
-    for i in 1:5
-        put!(c,i)
-    end
-    close(c)
-end
-@test sum(results) == 15
-
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
@@ -593,7 +533,7 @@ num_small_requests = 10000
 
 # test parallel sends of large arrays from multiple tasks to the same remote worker
 ntasks = 10
-rr_list = [Channel() for x in 1:ntasks]
+rr_list = [Channel(32) for x in 1:ntasks]
 a = ones(2*10^5)
 for rr in rr_list
     @async let rr=rr
@@ -834,8 +774,118 @@ end
 # Test pmap with a generator type iterator
 @test [1:100...] == pmap(x->x, Base.Generator(x->(sleep(0.0001); x), 1:100))
 
+# Test pgenerate
+n = 10
+as = [rand(4,4) for i in 1:n]
+bs = deepcopy(as)
+cs = collect(Base.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
+svdas = map(svdfact, as)
+for i in 1:n
+    @test cs[i][:U] ≈ svdas[i][:U]
+    @test cs[i][:S] ≈ svdas[i][:S]
+    @test cs[i][:V] ≈ svdas[i][:V]
+end
+
 # Test asyncmap
 @test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
+
+# num tasks
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:20; ntasks=5))) == 5
+
+# default num tasks
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200))) == 100
+
+# ntasks as a function
+let nt=0
+    global nt_func
+    nt_func() = (v=div(nt, 25); nt+=1; v)  # increment number of tasks by 1 for every 25th call.
+                                           # nt_func() will be called initally once and then for every
+                                           # iteration
+end
+@test length(unique(asyncmap(x->(yield();object_id(current_task())), 1:200; ntasks=nt_func))) == 7
+
+# batch mode tests
+let ctr=0
+    global next_ctr
+    next_ctr() = (ctr+=1; ctr)
+end
+resp = asyncmap(x->(v=next_ctr(); map(_->v, x)), 1:22; ntasks=5, batch_size=5)
+@test length(resp) == 22
+@test length(unique(resp)) == 5
+
+input = rand(1:1000, 100)
+@test asyncmap(x->map(args->identity(args...), x), input; ntasks=5, batch_size=5) == input
+
+# check whether shape is retained
+a=rand(2,2)
+b=asyncmap(identity, a)
+@test a == b
+@test size(a) == size(b)
+
+# check with an iterator that does not implement size()
+c=Channel(32); foreach(i->put!(c,i), 1:10); close(c)
+b=asyncmap(identity, c)
+@test Int[1:10...] == b
+@test size(b) == (10,)
+
+# check with an iterator that has only implements length()
+len_only_iterable = (1,2,3,4,5)
+@test Base.iteratorsize(len_only_iterable) == Base.HasLength()
+@test asyncmap(identity, len_only_iterable) == map(identity, len_only_iterable)
+
+# Error conditions
+@test_throws ArgumentError asyncmap(identity, 1:10; batch_size=0)
+@test_throws ArgumentError asyncmap(identity, 1:10; batch_size="10")
+@test_throws ArgumentError asyncmap(identity, 1:10; ntasks="10")
+
+# asyncmap and pmap with various types. Test for equivalence with map
+function testmap_equivalence(f, c...)
+    x1 = asyncmap(f,c...)
+    x2 = pmap(f,c...)
+    x3 = map(f,c...)
+
+    if Base.iteratorsize == Base.HasShape()
+        @test size(x1) == size(x3)
+        @test size(x2) == size(x3)
+    else
+        @test length(x1) == length(x3)
+        @test length(x2) == length(x3)
+    end
+
+    @test eltype(x1) == eltype(x3)
+    @test eltype(x2) == eltype(x3)
+
+    for (v1,v2) in zip(x1,x3)
+        @test v1==v2
+    end
+    for (v1,v2) in zip(x2,x3)
+        @test v1==v2
+    end
+end
+
+testmap_equivalence(identity, (1,2,3,4))
+testmap_equivalence(x->x>0?1.0:0.0, sparse(eye(5)))
+testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
+testmap_equivalence(x->x?false:true, BitArray(10,10))
+testmap_equivalence(x->"foobar", BitArray(10,10))
+testmap_equivalence((x,y,z)->string(x,y,z), BitArray(10), ones(10), "1234567890")
+
+@test asyncmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+@test pmap(uppercase, "Hello World!") == map(uppercase, "Hello World!")
+
+
+# Test that the default worker pool cycles through all workers
+pmap(_->myid(), 1:nworkers())  # priming run
+@test nworkers() == length(unique(pmap(_->myid(), 1:100)))
+
+# Test same behaviour when executed on a worker
+@test nworkers() == length(unique(remotecall_fetch(()->pmap(_->myid(), 1:100), id_other)))
+
+# Same tests with custom worker pools.
+wp = WorkerPool(workers())
+@test nworkers() == length(unique(pmap(wp, _->myid(), 1:100)))
+@test nworkers() == length(unique(remotecall_fetch(wp->pmap(wp, _->myid(), 1:100), id_other, wp)))
+
 
 # CachingPool tests
 wp = CachingPool(workers())
@@ -870,7 +920,7 @@ if DoFullTest
     println("Testing exception printing on remote worker from a `remote_do` call")
     println("Please ensure the remote error and backtrace is displayed on screen")
 
-    Base.remote_do(id_other) do
+    remote_do(id_other) do
         throw(ErrorException("TESTING EXCEPTION ON REMOTE DO. PLEASE IGNORE"))
     end
     sleep(0.5)  # Give some time for the above error to be printed
@@ -903,9 +953,7 @@ if is_unix() # aka have ssh
             end
         end
 
-        @test :ok == remotecall_fetch(1, new_pids) do p
-            rmprocs(p; waitfor=5.0)
-        end
+        remotecall_fetch(plst->rmprocs(plst; waitfor=5.0), 1, new_pids)
     end
 
     print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
@@ -1015,7 +1063,7 @@ function test_f_args(result, args...; kwargs...)
     @test remotecall_fetch(args...; kwargs...) == result
 
     # A visual test - remote_do should NOT print any errors
-    !isa(args[2], WorkerPool) && Base.remote_do(args...; kwargs...)
+    remote_do(args...; kwargs...)
 end
 
 for tid in [id_other, id_me, Base.default_worker_pool()]
@@ -1025,6 +1073,15 @@ for tid in [id_other, id_me, Base.default_worker_pool()]
     test_f_args(13, f_args, tid, 1; kw1=4, kw2=8)
     test_f_args(15, f_args, tid, 1, 2; kw1=4, kw2=8)
 end
+
+# Test remote_do
+f=Future(id_me)
+remote_do(fut->put!(fut, myid()), id_me, f)
+@test fetch(f) == id_me
+
+f=Future(id_other)
+remote_do(fut->put!(fut, myid()), id_other, f)
+@test fetch(f) == id_other
 
 # github PR #14456
 n = DoFullTest ? 6 : 5
@@ -1106,6 +1163,15 @@ let
     @test_throws RemoteException fetch(ref)
 end
 
+# Test calling @everywhere from a module not defined on the workers
+module LocalBar
+    bar() = @everywhere new_bar()=myid()
+end
+LocalBar.bar()
+for p in procs()
+    @test p == remotecall_fetch(new_bar, p)
+end
+
 # Test addprocs enable_threaded_blas parameter
 
 const get_num_threads = function() # anonymous so it will be serialized when called
@@ -1143,7 +1209,7 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() == nothing
+    if get_num_threads() === nothing
         warn("Skipping blas num threads tests due to unsupported blas version")
         return
     end
@@ -1182,3 +1248,30 @@ function test_add_procs_threaded_blas()
     rmprocs(processes_added)
 end
 test_add_procs_threaded_blas()
+
+#19687
+# ensure no race conditions between rmprocs and addprocs
+for i in 1:5
+    p = addprocs(1)[1]
+    @spawnat p sleep(5)
+    rmprocs(p; waitfor=0)
+end
+
+# Test if a wait has been called on rmprocs(...;waitfor=0), further remotecalls
+# don't throw errors.
+for i in 1:5
+    p = addprocs(1)[1]
+    np = nprocs()
+    @spawnat p sleep(5)
+    wait(rmprocs(p; waitfor=0))
+    for pid in procs()
+        @test pid == remotecall_fetch(myid, pid)
+    end
+    @test nprocs() == np - 1
+end
+
+# Test that an exception is thrown if workers are unable to be removed within requested time.
+if DoFullTest
+    pids=addprocs(4);
+    @test_throws ErrorException rmprocs(pids; waitfor=0.001);
+end

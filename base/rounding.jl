@@ -1,7 +1,20 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 module Rounding
-include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "fenv_constants.jl".data))) # include($BUILDROOT/base/fenv_constants.jl)
+
+let fenv_consts = Vector{Cint}(9)
+    ccall(:jl_get_fenv_consts, Void, (Ptr{Cint},), fenv_consts)
+    global const JL_FE_INEXACT = fenv_consts[1]
+    global const JL_FE_UNDERFLOW = fenv_consts[2]
+    global const JL_FE_OVERFLOW = fenv_consts[3]
+    global const JL_FE_DIVBYZERO = fenv_consts[4]
+    global const JL_FE_INVALID = fenv_consts[5]
+
+    global const JL_FE_TONEAREST = fenv_consts[6]
+    global const JL_FE_UPWARD = fenv_consts[7]
+    global const JL_FE_DOWNWARD = fenv_consts[8]
+    global const JL_FE_TOWARDZERO = fenv_consts[9]
+end
 
 export
     RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
@@ -14,19 +27,19 @@ export
     RoundingMode
 
 A type used for controlling the rounding mode of floating point operations (via
-[`rounding`](:func:`rounding`)/[`setrounding`](:func:`setrounding`) functions), or as
-optional arguments for rounding to the nearest integer (via the [`round`](:func:`round`)
+[`rounding`](@ref)/[`setrounding`](@ref) functions), or as
+optional arguments for rounding to the nearest integer (via the [`round`](@ref)
 function).
 
 Currently supported rounding modes are:
 
-- [`RoundNearest`](:obj:`RoundNearest`) (default)
-- [`RoundNearestTiesAway`](:obj:`RoundNearestTiesAway`)
-- [`RoundNearestTiesUp`](:obj:`RoundNearestTiesUp`)
-- [`RoundToZero`](:obj:`RoundToZero`)
-- [`RoundFromZero`](:obj:`RoundFromZero`) (`BigFloat` only)
-- [`RoundUp`](:obj:`RoundUp`)
-- [`RoundDown`](:obj:`RoundDown`)
+- [`RoundNearest`](@ref) (default)
+- [`RoundNearestTiesAway`](@ref)
+- [`RoundNearestTiesUp`](@ref)
+- [`RoundToZero`](@ref)
+- `RoundFromZero` (`BigFloat` only)
+- [`RoundUp`](@ref)
+- [`RoundDown`](@ref)
 """
 immutable RoundingMode{T} end
 
@@ -41,21 +54,21 @@ const RoundNearest = RoundingMode{:Nearest}()
 """
     RoundToZero
 
-[`round`](:func:`round`) using this rounding mode is an alias for [`trunc`](:func:`trunc`).
+[`round`](@ref) using this rounding mode is an alias for [`trunc`](@ref).
 """
 const RoundToZero = RoundingMode{:ToZero}()
 
 """
     RoundUp
 
-[`round`](:func:`round`) using this rounding mode is an alias for [`ceil`](:func:`ceil`).
+[`round`](@ref) using this rounding mode is an alias for [`ceil`](@ref).
 """
 const RoundUp = RoundingMode{:Up}()
 
 """
     RoundDown
 
-[`round`](:func:`round`) using this rounding mode is an alias for [`floor`](:func:`floor`).
+[`round`](@ref) using this rounding mode is an alias for [`floor`](@ref).
 """
 const RoundDown = RoundingMode{:Down}()
 
@@ -65,7 +78,7 @@ const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
     RoundNearestTiesAway
 
 Rounds to nearest integer, with ties rounded away from zero (C/C++
-[`round`](:func:`round`) behaviour).
+[`round`](@ref) behaviour).
 """
 const RoundNearestTiesAway = RoundingMode{:NearestTiesAway}()
 
@@ -73,7 +86,7 @@ const RoundNearestTiesAway = RoundingMode{:NearestTiesAway}()
     RoundNearestTiesUp
 
 Rounds to nearest integer, with ties rounded toward positive infinity (Java/JavaScript
-[`round`](:func:`round`) behaviour).
+[`round`](@ref) behaviour).
 """
 const RoundNearestTiesUp = RoundingMode{:NearestTiesUp}()
 
@@ -100,13 +113,13 @@ end
     setrounding(T, mode)
 
 Set the rounding mode of floating point type `T`, controlling the rounding of basic
-arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`),
-[`/`](:func:`/`) and [`sqrt`](:func:`sqrt`)) and type conversion. Other numerical
+arithmetic functions ([`+`](@ref), [`-`](@ref), [`*`](@ref),
+[`/`](@ref) and [`sqrt`](@ref)) and type conversion. Other numerical
 functions may give incorrect or invalid values when using rounding modes other than the
 default `RoundNearest`.
 
 Note that this may affect other types, for instance changing the rounding mode of `Float64`
-will change the rounding mode of `Float32`. See [`RoundingMode`](:obj:`RoundingMode`) for
+will change the rounding mode of `Float32`. See [`RoundingMode`](@ref) for
 available modes.
 
 !!! warning
@@ -119,10 +132,10 @@ setrounding(T::Type, mode)
     rounding(T)
 
 Get the current floating point rounding mode for type `T`, controlling the rounding of basic
-arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`](:func:`/`)
-and [`sqrt`](:func:`sqrt`)) and type conversion.
+arithmetic functions ([`+`](@ref), [`-`](@ref), [`*`](@ref), [`/`](@ref)
+and [`sqrt`](@ref)) and type conversion.
 
-See [`RoundingMode`](:obj:`RoundingMode`) for available modes.
+See [`RoundingMode`](@ref) for available modes.
 """
 :rounding
 
@@ -143,7 +156,7 @@ equivalent to:
     f()
     setrounding(T, old)
 
-See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
+See [`RoundingMode`](@ref) for available rounding modes.
 
 !!! warning
 
@@ -151,8 +164,8 @@ See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
     known problem is the interaction with compiler optimisations, e.g.
 
         julia> setrounding(Float64,RoundDown) do
-            1.1 + 0.1
-        end
+                   1.1 + 0.1
+               end
         1.2000000000000002
 
     Here the compiler is *constant folding*, that is evaluating a known constant
@@ -163,8 +176,8 @@ See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
         julia> x = 1.1; y = 0.1;
 
         julia> setrounding(Float64,RoundDown) do
-            x + y
-        end
+                   x + y
+               end
         1.2
 """
 function setrounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)

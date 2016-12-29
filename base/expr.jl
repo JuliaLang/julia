@@ -50,7 +50,7 @@ copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
     expand(x)
 
 Takes the expression `x` and returns an equivalent expression in lowered form.
-See also [`code_lowered`](:func:`code_lowered`).
+See also [`code_lowered`](@ref).
 """
 expand(x::ANY) = ccall(:jl_expand, Any, (Any,), x)
 
@@ -75,13 +75,13 @@ julia> module M
                1
            end
            function f()
-              (@macroexpand(@m), macroexpand(:(@m)))
+               (@macroexpand(@m), macroexpand(:(@m)))
            end
        end
 M
 
 julia> macro m()
-          2
+           2
        end
 @m (macro with 1 method)
 
@@ -272,7 +272,7 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    filter!(x->!((isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)), ex.args)
+    filter!(x->!((isa(x,Expr) && x.head === :line) || isa(x,LineNumberNode)), ex.args)
     for subex in ex.args
         remove_linenums!(subex)
     end

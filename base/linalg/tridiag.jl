@@ -19,7 +19,32 @@ end
 
 Construct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal,
 respectively. The result is of type `SymTridiagonal` and provides efficient specialized
-eigensolvers, but may be converted into a regular matrix with [`full`](:func:`full`).
+eigensolvers, but may be converted into a regular matrix with
+[`convert(Array, _)`](@ref) (or `Array(_)` for short).
+
+# Example
+
+```jldoctest
+julia> dv = [1; 2; 3; 4]
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> ev = [7; 8; 9]
+3-element Array{Int64,1}:
+ 7
+ 8
+ 9
+
+julia> SymTridiagonal(dv, ev)
+4×4 SymTridiagonal{Int64}:
+ 1  7  ⋅  ⋅
+ 7  2  8  ⋅
+ ⋅  8  3  9
+ ⋅  ⋅  9  4
+```
 """
 SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(dv, ev)
 
@@ -181,8 +206,8 @@ eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eig
 
 #tril and triu
 
-istriu(M::SymTridiagonal) = all(M.ev .== 0)
-istril(M::SymTridiagonal) = all(M.ev .== 0)
+istriu(M::SymTridiagonal) = iszero(M.ev)
+istril(M::SymTridiagonal) = iszero(M.ev)
 
 function tril!(M::SymTridiagonal, k::Integer=0)
     n = length(M.dv)
@@ -328,8 +353,39 @@ end
 
 Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal,
 respectively.  The result is of type `Tridiagonal` and provides efficient specialized linear
-solvers, but may be converted into a regular matrix with [`full`](:func:`full`).
+solvers, but may be converted into a regular matrix with
+[`convert(Array, _)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
+
+# Example
+
+```jldoctest
+julia> dl = [1; 2; 3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> du = [4; 5; 6]
+3-element Array{Int64,1}:
+ 4
+ 5
+ 6
+
+julia> d = [7; 8; 9; 0]
+4-element Array{Int64,1}:
+ 7
+ 8
+ 9
+ 0
+
+julia> Tridiagonal(dl, d, du)
+4×4 Tridiagonal{Int64}:
+ 7  4  ⋅  ⋅
+ 1  8  5  ⋅
+ ⋅  2  9  6
+ ⋅  ⋅  3  0
+```
 """
 # Basic constructor takes in three dense vectors of same type
 function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
@@ -351,6 +407,24 @@ end
 
 returns a `Tridiagonal` array based on (abstract) matrix `A`, using its first lower diagonal,
 main diagonal, and first upper diagonal.
+
+# Example
+
+```jldoctest
+julia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]
+4×4 Array{Int64,2}:
+ 1  2  3  4
+ 1  2  3  4
+ 1  2  3  4
+ 1  2  3  4
+
+julia> Tridiagonal(A)
+4×4 Tridiagonal{Int64}:
+ 1  2  ⋅  ⋅
+ 1  2  3  ⋅
+ ⋅  2  3  4
+ ⋅  ⋅  3  4
+```
 """
 function Tridiagonal(A::AbstractMatrix)
     return Tridiagonal(diag(A,-1), diag(A), diag(A,+1))
@@ -452,8 +526,8 @@ end
 
 #tril and triu
 
-istriu(M::Tridiagonal) = all(M.dl .== 0)
-istril(M::Tridiagonal) = all(M.du .== 0)
+istriu(M::Tridiagonal) = iszero(M.dl)
+istril(M::Tridiagonal) = iszero(M.du)
 
 function tril!(M::Tridiagonal, k::Integer=0)
     n = length(M.d)

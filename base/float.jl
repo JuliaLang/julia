@@ -248,9 +248,28 @@ convert(::Type{AbstractFloat}, x::UInt32)  = convert(Float64, x)
 convert(::Type{AbstractFloat}, x::UInt64)  = convert(Float64, x) # LOSSY
 convert(::Type{AbstractFloat}, x::UInt128) = convert(Float64, x) # LOSSY
 
+"""
+    float(x)
+
+Convert a number or array to a floating point data type.
+When passed a string, this function is equivalent to `parse(Float64, x)`.
+"""
 float(x) = convert(AbstractFloat, x)
 
-# for constructing arrays
+"""
+    float(T::Type)
+
+Returns an appropriate type to represent a value of type `T` as a floating point value.
+Equivalent to `typeof(float(zero(T)))`.
+
+```jldoctest
+julia> float(Complex{Int})
+Complex{Float64}
+
+julia> float(Int)
+Float64
+```
+"""
 float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
 
 for Ti in (Int8, Int16, Int32, Int64)
@@ -342,7 +361,7 @@ _default_type(T::Union{Type{Real},Type{AbstractFloat}}) = Float64
 ## floating point arithmetic ##
 -(x::Float64) = box(Float64,neg_float(unbox(Float64,x)))
 -(x::Float32) = box(Float32,neg_float(unbox(Float32,x)))
--(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) $ 0x8000)
+-(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) ⊻ 0x8000)
 
 for op in (:+,:-,:*,:/,:\,:^)
     @eval ($op)(a::Float16, b::Float16) = Float16(($op)(Float32(a), Float32(b)))
@@ -381,7 +400,7 @@ function mod{T<:AbstractFloat}(x::T, y::T)
     r = rem(x,y)
     if r == 0
         copysign(r,y)
-    elseif (r > 0) $ (y > 0)
+    elseif (r > 0) ⊻ (y > 0)
         r+y
     else
         r
@@ -512,7 +531,7 @@ const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
 
 hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
 hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64,abs(x)), Float64(x), h)
-hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN $ h) : hx(box(UInt64,fptoui(unbox(Float64,abs(x)))), x, h)
+hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN ⊻ h) : hx(box(UInt64,fptoui(unbox(Float64,abs(x)))), x, h)
 
 hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
@@ -558,7 +577,7 @@ function nextfloat(f::Union{Float16,Float32,Float64}, d::Integer)
         fu = fumax
     else
         du = da % U
-        if fneg $ dneg
+        if fneg ⊻ dneg
             if du > fu
                 fu = min(fumax, du - fu)
                 fneg = !fneg

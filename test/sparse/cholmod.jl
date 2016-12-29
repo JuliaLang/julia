@@ -150,35 +150,31 @@ pred = afiro'*sol
 
 let # Issue 9160
 
-    for Ti in CHOLMOD.ITypes.types
-        for elty in CHOLMOD.VRealTypes.types
+    A = sprand(10, 10, 0.1)
+    A = convert(SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}, A)
+    cmA = CHOLMOD.Sparse(A)
 
-            A = sprand(10,10,0.1)
-            A = convert(SparseMatrixCSC{elty,Ti},A)
-            cmA = CHOLMOD.Sparse(A)
+    B = sprand(10, 10, 0.1)
+    B = convert(SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}, B)
+    cmB = CHOLMOD.Sparse(B)
 
-            B = sprand(10,10,0.1)
-            B = convert(SparseMatrixCSC{elty,Ti},B)
-            cmB = CHOLMOD.Sparse(B)
+    # Ac_mul_B
+    @test sparse(cmA'*cmB) ≈ A'*B
 
-            # Ac_mul_B
-            @test sparse(cmA'*cmB) ≈ A'*B
+    # A_mul_Bc
+    @test sparse(cmA*cmB') ≈ A*B'
 
-            # A_mul_Bc
-            @test sparse(cmA*cmB') ≈ A*B'
+    # A_mul_Ac
+    @test sparse(cmA*cmA') ≈ A*A'
 
-            # A_mul_Ac
-            @test sparse(cmA*cmA') ≈ A*A'
+    # Ac_mul_A
+    @test sparse(cmA'*cmA) ≈ A'*A
 
-            # Ac_mul_A
-            @test sparse(cmA'*cmA) ≈ A'*A
+    # A_mul_Ac for symmetric A
+    A = 0.5*(A + A')
+    cmA = CHOLMOD.Sparse(A)
+    @test sparse(cmA*cmA') ≈ A*A'
 
-            # A_mul_Ac for symmetric A
-            A = 0.5*(A + A')
-            cmA = CHOLMOD.Sparse(A)
-            @test sparse(cmA*cmA') ≈ A*A'
-        end
-    end
 end
 
 # Issue #9915
@@ -363,8 +359,8 @@ for elty in (Float64, Complex{Float64})
 
     # Factor
     @test_throws ArgumentError cholfact(A1)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(full(A1 + A1'))I)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(full(A1 + A1')))
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))I)
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))
     @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
     @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))
     @test_throws ArgumentError cholfact(A1)
@@ -379,19 +375,20 @@ for elty in (Float64, Complex{Float64})
     @test F\CHOLMOD.Sparse(sparse(ones(elty, 5))) ≈ A1pd\ones(5)
     @test_throws DimensionMismatch F\CHOLMOD.Dense(ones(elty, 4))
     @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(ones(elty, 4)))
-    @test F'\ones(elty, 5) ≈ full(A1pd)'\ones(5)
-    @test F'\sparse(ones(elty, 5)) ≈ full(A1pd)'\ones(5)
-    @test logdet(F) ≈ logdet(full(A1pd))
+    @test F'\ones(elty, 5) ≈ Array(A1pd)'\ones(5)
+    @test F'\sparse(ones(elty, 5)) ≈ Array(A1pd)'\ones(5)
+    @test F.'\ones(elty, 5) ≈ conj(A1pd)'\ones(elty, 5)
+    @test logdet(F) ≈ logdet(Array(A1pd))
     @test det(F) == exp(logdet(F))
     let # to test supernodal, we must use a larger matrix
         Ftmp = sprandn(100,100,0.1)
         Ftmp = Ftmp'Ftmp + I
-        @test logdet(cholfact(Ftmp)) ≈ logdet(full(Ftmp))
+        @test logdet(cholfact(Ftmp)) ≈ logdet(Array(Ftmp))
     end
-    @test logdet(ldltfact(A1pd)) ≈ logdet(full(A1pd))
+    @test logdet(ldltfact(A1pd)) ≈ logdet(Array(A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
-    @test !isposdef(A1 + A1' |> t -> t - 2eigmax(full(t))*I)
+    @test !isposdef(A1 + A1' |> t -> t - 2eigmax(Array(t))*I)
 
     if elty <: Real
         @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
@@ -659,4 +656,42 @@ end
 A = sprandn(5,5,0.4) |> t -> t't + I
 B = complex(randn(5,2), randn(5,2))
 @test cholfact(A)\B ≈ A\B
+
+# Make sure that ldltfact performs an LDLt (Issue #19032)
+let m = 400, n = 500
+    A = sprandn(m, n, .2)
+    M = [speye(n) A'; A -speye(m)]
+    b = M*ones(m + n)
+    F = ldltfact(M)
+    s = unsafe_load(get(F.p))
+    @test s.is_super == 0
+    @test F\b ≈ ones(m + n)
+end
+
+# Test that \ and '\ and .'\ work for Symmetric and Hermitian. This is just
+# a dispatch exercise so it doesn't matter that the complex matrix has
+# zero imaginary parts
+let Apre = sprandn(10, 10, 0.2) - I
+    for A in (Symmetric(Apre), Hermitian(Apre),
+              Symmetric(Apre + 10I), Hermitian(Apre + 10I),
+              Hermitian(complex(Apre)), Hermitian(complex(Apre) + 10I))
+
+        x = ones(10)
+        b = A*x
+        @test x ≈ A\b
+        @test A.'\b ≈ A'\b
+    end
+end
+
+# Check that Symmetric{SparseMatrixCSC} can be constructed from CHOLMOD.Sparse
+let A = sprandn(10, 10, 0.1)
+    B = SparseArrays.CHOLMOD.Sparse(A)
+    C = B'B
+    # Change internal representation to symmetric (upper/lower)
+    o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
+    for uplo in (1, -1)
+        unsafe_store!(Ptr{Int8}(C.p), uplo, Int(o) + 1)
+        @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
+    end
+end
 

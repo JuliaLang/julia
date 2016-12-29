@@ -20,13 +20,14 @@ end
 
 # issue #9684
 let
+    undot(op) = Symbol(string(op)[2:end])
     for (ex1, ex2) in [("5.≠x", "5.!=x"),
                        ("5.≥x", "5.>=x"),
                        ("5.≤x", "5.<=x")]
         ex1 = parse(ex1); ex2 = parse(ex2)
         @test ex1.head === :call && (ex1.head === ex2.head)
         @test ex1.args[2] === 5 && ex2.args[2] === 5
-        @test is(eval(Main, ex1.args[1]), eval(Main, ex2.args[1]))
+        @test eval(Main, undot(ex1.args[1])) === eval(Main, undot(ex2.args[1]))
         @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
     end
 end
@@ -173,17 +174,17 @@ macro f(args...) end; @f ""
 @test_throws ParseError parse("(1 2)") # issue #15248
 
 # integer parsing
-@test is(parse(Int32,"0",36),Int32(0))
-@test is(parse(Int32,"1",36),Int32(1))
-@test is(parse(Int32,"9",36),Int32(9))
-@test is(parse(Int32,"A",36),Int32(10))
-@test is(parse(Int32,"a",36),Int32(10))
-@test is(parse(Int32,"B",36),Int32(11))
-@test is(parse(Int32,"b",36),Int32(11))
-@test is(parse(Int32,"F",36),Int32(15))
-@test is(parse(Int32,"f",36),Int32(15))
-@test is(parse(Int32,"Z",36),Int32(35))
-@test is(parse(Int32,"z",36),Int32(35))
+@test parse(Int32,"0",36) === Int32(0)
+@test parse(Int32,"1",36) === Int32(1)
+@test parse(Int32,"9",36) === Int32(9)
+@test parse(Int32,"A",36) === Int32(10)
+@test parse(Int32,"a",36) === Int32(10)
+@test parse(Int32,"B",36) === Int32(11)
+@test parse(Int32,"b",36) === Int32(11)
+@test parse(Int32,"F",36) === Int32(15)
+@test parse(Int32,"f",36) === Int32(15)
+@test parse(Int32,"Z",36) === Int32(35)
+@test parse(Int32,"z",36) === Int32(35)
 
 @test parse(Int,"0") == 0
 @test parse(Int,"-0") == 0
@@ -598,6 +599,20 @@ end
               local x = 1
               end")) == Expr(:error, "variable \"x\" declared both local and global")
 
+@test expand(parse("let
+              local x = 2
+              local x = 1
+              end")) == Expr(:error, "local \"x\" declared twice")
+
+@test expand(parse("let x
+                  local x = 1
+              end")) == Expr(:error, "local \"x\" declared twice")
+
+@test expand(parse("let x = 2
+                  local x = 1
+              end")) == Expr(:error, "local \"x\" declared twice")
+
+
 # make sure front end can correctly print values to error messages
 let ex = expand(parse("\"a\"=1"))
     @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
@@ -641,7 +656,7 @@ module A15838
     const x = :a
 end
 module B15838
-    import A15838.@f
+    import ..A15838.@f
     macro f(x); return :x; end
     const x = :b
 end
@@ -823,3 +838,32 @@ end
 @test parse("typealias a (Int)") == Expr(:typealias, :a, :Int)
 @test parse("typealias b (Int,)") == Expr(:typealias, :b, Expr(:tuple, :Int))
 @test parse("typealias Foo{T} Bar{T}") == Expr(:typealias, Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
+
+# don't insert push_loc for filename `none` at the top level
+let ex = expand(parse("""
+begin
+    x = 1
+end"""))
+    @test !any(x->(x == Expr(:meta, :push_loc, :none)), ex.args)
+end
+
+# Check qualified string macros
+Base.r"regex" == r"regex"
+
+module QualifiedStringMacro
+module SubModule
+macro x_str(x)
+    1
+end
+macro y_cmd(x)
+    2
+end
+end
+end
+
+@test QualifiedStringMacro.SubModule.x"" === 1
+@test QualifiedStringMacro.SubModule.y`` === 2
+
+let ..(x,y) = x + y
+    @test 3 .. 4 === 7
+end

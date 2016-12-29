@@ -140,7 +140,7 @@ export
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     # object model functions
-    fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
+    fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa, typeassert,
@@ -148,8 +148,6 @@ export
     applicable, invoke,
     # constants
     nothing, Main
-
-const (===) = is
 
 typealias AnyVector Array{Any,1}
 
@@ -178,7 +176,7 @@ bitstype 64  UInt64  <: Unsigned
 bitstype 128 Int128  <: Signed
 bitstype 128 UInt128 <: Unsigned
 
-if is(Int,Int64)
+if Int === Int64
     typealias UInt UInt64
 else
     typealias UInt UInt32
@@ -310,6 +308,7 @@ unsafe_convert{T}(::Type{T}, x::T) = x
 
 typealias NTuple{N,T} Tuple{Vararg{T,N}}
 
+
 # primitive array constructors
 (::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
@@ -338,6 +337,15 @@ Array{T}(::Type{T}, d::Int...)            = Array(T, d)
 Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
+
+
+# primitive Symbol constructors
+Symbol(s::String) = Symbol(s.data)
+function Symbol(a::Array{UInt8,1})
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
+          ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
+          Intrinsics.arraylen(a))
+end
 
 
 # docsystem basics

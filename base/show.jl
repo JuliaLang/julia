@@ -5,10 +5,10 @@ print(io::IO, s::Symbol) = (write(io,s); nothing)
 """
     IOContext
 
-IOContext provides a mechanism for passing output configuration settings among `show` methods.
+`IOContext` provides a mechanism for passing output configuration settings among [`show`](@ref) methods.
 
 In short, it is an immutable dictionary that is a subclass of `IO`. It supports standard
-dictionary operations such as `getindex`, and can also be used as an I/O stream.
+dictionary operations such as [`getindex`](@ref), and can also be used as an I/O stream.
 """
 immutable IOContext{IO_t <: IO} <: AbstractPipe
     io::IO_t
@@ -76,7 +76,7 @@ pipe_writer(io::IOContext) = io.io
 lock(io::IOContext) = lock(io.io)
 unlock(io::IOContext) = unlock(io.io)
 
-in(key_value::Pair, io::IOContext) = in(key_value, io.dict, is)
+in(key_value::Pair, io::IOContext) = in(key_value, io.dict, ===)
 in(key_value::Pair, io::IO) = false
 haskey(io::IOContext, key) = haskey(io.dict, key)
 haskey(io::IO, key) = false
@@ -156,7 +156,7 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
         end
         mod = parent
     end
-    return isexported(mod, name) && isdefined(mod, name) && getfield(mod, name) === orig
+    return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
 end
 
 function show(io::IO, f::Function)
@@ -202,7 +202,7 @@ function show_datatype(io::IO, x::DataType)
         n = length(x.parameters)
 
         # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
-        if n > 3 && all(i -> is(x.parameters[1], i), x.parameters)
+        if n > 3 && all(i -> (x.parameters[1] === i), x.parameters)
             print(io, "NTuple{", n, ',', x.parameters[1], "}")
         else
             show(io, x.name)
@@ -265,7 +265,7 @@ function show(io::IO, p::Pair)
 end
 
 function show(io::IO, m::Module)
-    if is(m,Main)
+    if m === Main
         print(io, "Main")
     else
         print(io, join(fullname(m),"."))
@@ -449,7 +449,7 @@ const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√)
 const expr_infix_wide = Set{Symbol}([
     :(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(^=), :(&=), :(|=), :(÷=), :(%=), :(>>>=), :(>>=), :(<<=),
     :(.=), :(.+=), :(.-=), :(.*=), :(./=), :(.\=), :(.^=), :(.&=), :(.|=), :(.÷=), :(.%=), :(.>>>=), :(.>>=), :(.<<=),
-    :(&&), :(||), :(<:), :(=>), :($=)])
+    :(&&), :(||), :(<:), :(=>), :($=), :(⊻=)]) # `$=` should be removed after deprecation is removed, issue #18977
 const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
@@ -514,9 +514,9 @@ typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 const indent_width = 4
 
 function show_expr_type(io::IO, ty, emph)
-    if is(ty, Function)
+    if ty === Function
         print(io, "::F")
-    elseif is(ty, Core.IntrinsicFunction)
+    elseif ty === Core.IntrinsicFunction
         print(io, "::I")
     else
         if emph && (!isleaftype(ty) || ty == Core.Box)
@@ -527,7 +527,7 @@ function show_expr_type(io::IO, ty, emph)
     end
 end
 
-emphasize(io, str::AbstractString) = have_color ? print_with_color(:red, io, str) : print(io, uppercase(str))
+emphasize(io, str::AbstractString) = have_color ? print_with_color(Base.error_color(), io, str; bold = true) : print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io," # line ",line,':')
 show_linenumber(io::IO, line, file) = print(io," # ", file,", line ",line,':')
@@ -537,7 +537,7 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     print(io, head, ' ')
     show_list(io, args, ", ", indent)
 
-    ind = is(head, :module) || is(head, :baremodule) ? indent : indent + indent_width
+    ind = head === :module || head === :baremodule ? indent : indent + indent_width
     exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
         if !is_linenumber(ex); print(io, '\n', " "^ind); end
@@ -705,7 +705,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_type = false
     end
     # dot (i.e. "x.y"), but not compact broadcast exps
-    if is(head, :(.)) && !is_expr(args[2], :tuple)
+    if head === :(.) && !is_expr(args[2], :tuple)
         show_unquoted(io, args[1], indent + indent_width)
         print(io, '.')
         if is_quoted(args[2])
@@ -717,7 +717,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # infix (i.e. "x<:y" or "x = y")
-    elseif (head in expr_infix_any && nargs==2) || (is(head,:(:)) && nargs==3)
+    elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
         if func_prec <= prec
@@ -783,7 +783,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if (na == 2 || (na > 2 && func in (:+, :++, :*))) && all(!isa(a, Expr) || a.head !== :... for a in func_args)
+            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
+                    all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
@@ -836,12 +837,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, " if ")
         show_unquoted(io, args[1], indent)
 
-    elseif is(head, :ccall)
+    elseif head === :ccall
         show_unquoted(io, :ccall, indent)
         show_enclosed_list(io, '(', args, ",", ')', indent)
 
     # comparison (i.e. "x < y < z")
-    elseif is(head, :comparison) && nargs >= 3 && (nargs&1==1)
+    elseif head === :comparison && nargs >= 3 && (nargs&1==1)
         comp_prec = minimum(operator_precedence, args[2:2:end])
         if comp_prec <= prec
             show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec)
@@ -863,31 +864,31 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_block(io, head, args[1], args[2], indent)
         print(io, "end")
 
-    elseif is(head, :module) && nargs==3 && isa(args[1],Bool)
+    elseif head === :module && nargs==3 && isa(args[1],Bool)
         show_block(io, args[1] ? :module : :baremodule, args[2], args[3], indent)
         print(io, "end")
 
     # type declaration
-    elseif is(head, :type) && nargs==3
+    elseif head === :type && nargs==3
         show_block(io, args[1] ? :type : :immutable, args[2], args[3], indent)
         print(io, "end")
 
-    elseif is(head, :bitstype) && nargs == 2
+    elseif head === :bitstype && nargs == 2
         print(io, "bitstype ")
         show_list(io, args, ' ', indent)
 
     # empty return (i.e. "function f() return end")
-    elseif is(head, :return) && nargs == 1 && is(args[1], nothing)
+    elseif head === :return && nargs == 1 && args[1] === nothing
         print(io, head)
 
     # type annotation (i.e. "::Int")
-    elseif is(head, Symbol("::")) && nargs == 1
+    elseif head === Symbol("::") && nargs == 1
         print(io, "::")
         show_unquoted(io, args[1], indent)
 
     # var-arg declaration or expansion
     # (i.e. "function f(L...) end" or "f(B...)")
-    elseif is(head, :(...)) && nargs == 1
+    elseif head === :(...) && nargs == 1
         show_unquoted(io, args[1], indent)
         print(io, "...")
 
@@ -899,7 +900,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
 
-    elseif is(head, :macrocall) && nargs >= 1
+    elseif head === :macrocall && nargs >= 1
         # Use the functional syntax unless specifically designated with prec=-1
         if prec >= 0
             show_call(io, :call, ex.args[1], ex.args[2:end], indent)
@@ -907,53 +908,53 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_list(io, args, ' ', indent)
         end
 
-    elseif is(head, :typealias) && nargs == 2
+    elseif head === :typealias && nargs == 2
         print(io, "typealias ")
         show_list(io, args, ' ', indent)
 
-    elseif is(head, :line) && 1 <= nargs <= 2
+    elseif head === :line && 1 <= nargs <= 2
         show_linenumber(io, args...)
 
-    elseif is(head, :if) && nargs == 3     # if/else
+    elseif head === :if && nargs == 3     # if/else
         show_block(io, "if",   args[1], args[2], indent)
         show_block(io, "else", args[3], indent)
         print(io, "end")
 
-    elseif is(head, :try) && 3 <= nargs <= 4
+    elseif head === :try && 3 <= nargs <= 4
         show_block(io, "try", args[1], indent)
         if is_expr(args[3], :block)
-            show_block(io, "catch", is(args[2], false) ? Any[] : args[2], args[3], indent)
+            show_block(io, "catch", args[2] === false ? Any[] : args[2], args[3], indent)
         end
         if nargs >= 4 && is_expr(args[4], :block)
             show_block(io, "finally", Any[], args[4], indent)
         end
         print(io, "end")
 
-    elseif is(head, :let) && nargs >= 1
+    elseif head === :let && nargs >= 1
         show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
 
-    elseif is(head, :block) || is(head, :body)
+    elseif head === :block || head === :body
         show_block(io, "begin", ex, indent); print(io, "end")
 
-    elseif is(head, :quote) && nargs == 1 && isa(args[1],Symbol)
+    elseif head === :quote && nargs == 1 && isa(args[1],Symbol)
         show_unquoted_quote_expr(io, args[1], indent, 0)
 
-    elseif is(head, :gotoifnot) && nargs == 2
+    elseif head === :gotoifnot && nargs == 2
         print(io, "unless ")
         show_list(io, args, " goto ", indent)
 
-    elseif is(head, :string) && nargs == 1 && isa(args[1], AbstractString)
+    elseif head === :string && nargs == 1 && isa(args[1], AbstractString)
         show(io, args[1])
 
-    elseif is(head, :null)
+    elseif head === :null
         print(io, "nothing")
 
-    elseif is(head, :kw) && length(args)==2
+    elseif head === :kw && length(args)==2
         show_unquoted(io, args[1], indent+indent_width)
         print(io, '=')
         show_unquoted(io, args[2], indent+indent_width)
 
-    elseif is(head, :string)
+    elseif head === :string
         print(io, '"')
         for x in args
             if !isa(x,AbstractString)
@@ -970,7 +971,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, '"')
 
-    elseif (is(head, :&)#= || is(head, :$)=#) && length(args) == 1
+    elseif (head === :&#= || head === :$=#) && length(args) == 1
         print(io, head)
         a1 = args[1]
         parens = (isa(a1,Expr) && a1.head !== :tuple) || (isa(a1,Symbol) && isoperator(a1))
@@ -989,7 +990,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, head)
 
-    elseif is(head, :import) || is(head, :importall) || is(head, :using)
+    elseif head === :import || head === :importall || head === :using
         print(io, head)
         first = true
         for a = args
@@ -999,14 +1000,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             else
                 print(io, '.')
             end
-            if !is(a, :.)
+            if a !== :.
                 print(io, a)
             end
         end
-    elseif is(head, :meta) && length(args) >= 2 && args[1] === :push_loc
+    elseif head === :meta && length(args) >= 2 && args[1] === :push_loc
         print(io, "# meta: location ", join(args[2:end], " "))
         show_type = false
-    elseif is(head, :meta) && length(args) == 1 && args[1] === :pop_loc
+    elseif head === :meta && length(args) == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
         show_type = false
     # print anything else as "Expr(head, args...)"
@@ -1030,31 +1031,37 @@ end
 
 function show_lambda_types(io::IO, li::Core.MethodInstance)
     # print a method signature tuple for a lambda definition
-    if li.specTypes === Tuple
-        print(io, li.def.name, "(...)")
-        return
+    local sig
+    returned_from_do = false
+    Base.with_output_color(have_color ? stackframe_function_color() : :nothing, io) do io
+        if li.specTypes === Tuple
+            print(io, li.def.name, "(...)")
+            returned_from_do = true
+            return
+        end
+        sig = li.specTypes.parameters
+        ft = sig[1]
+        if ft <: Function && isempty(ft.parameters) &&
+                isdefined(ft.name.module, ft.name.mt.name) &&
+                ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            print(io, ft.name.mt.name)
+        elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
+            f = ft.parameters[1]
+            print(io, f)
+        else
+            print(io, "(::", ft, ")")
+        end
     end
-
-    sig = li.specTypes.parameters
-    ft = sig[1]
-    if ft <: Function && isempty(ft.parameters) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
-        f = ft.parameters[1]
-        print(io, f)
-    else
-        print(io, "(::", ft, ")")
-    end
+    returned_from_do && return
     first = true
-    print(io, '(')
+    print_style = have_color ? :bold : :nothing
+    print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         print(io, "::", sig[i])
     end
-    print(io, ')')
+    print_with_color(print_style, io, ")")
     nothing
 end
 
@@ -1084,12 +1091,12 @@ function show(io::IO, tv::TypeVar)
         have_env = false
         in_env = false
     end
-    if !in_env && !is(tv.lb, Bottom)
+    if !in_env && tv.lb !== Bottom
         show(io, tv.lb)
         print(io, "<:")
     end
     write(io, tv.name)
-    if have_env ? !in_env : !is(tv.ub, Any)
+    if have_env ? !in_env : tv.ub !== Any
         print(io, "<:")
         show(io, tv.ub)
     end
@@ -1504,6 +1511,14 @@ Return a string giving a brief description of a value. By default returns
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.
+
+```jldoctest
+julia> summary(1)
+"Int64"
+
+julia> summary(zeros(2))
+"2-element Array{Float64,1}"
+```
 """
 summary(x) = string(typeof(x)) # e.g. Int64
 

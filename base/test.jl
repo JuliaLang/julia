@@ -43,8 +43,10 @@ immutable Pass <: Result
     value
 end
 function Base.show(io::IO, t::Pass)
-    print_with_color(:green, io, "Test Passed\n")
-    print(io, "  Expression: ", t.orig_expr)
+    print_with_color(:green, io, "Test Passed\n"; bold = true)
+    if !(t.orig_expr === nothing)
+        print(io, "  Expression: ", t.orig_expr)
+    end
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
@@ -68,7 +70,7 @@ type Fail <: Result
     value
 end
 function Base.show(io::IO, t::Fail)
-    print_with_color(:red, io, "Test Failed\n")
+    print_with_color(Base.error_color(), io, "Test Failed\n"; bold = true)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
@@ -100,7 +102,7 @@ type Error <: Result
     backtrace
 end
 function Base.show(io::IO, t::Error)
-    print_with_color(:red, io, "Error During Test\n")
+    print_with_color(Base.error_color(), io, "Error During Test\n"; bold = true)
     if t.test_type == :test_nonbool
         println(io, "  Expression evaluated to non-Boolean")
         println(io, "  Expression: ", t.orig_expr)
@@ -138,10 +140,10 @@ type Broken <: Result
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(:yellow, io, "Test Broken\n")
-    if t.test_type == :skipped
+    print_with_color(Base.warn_color(), io, "Test Broken\n"; bold = true)
+    if t.test_type == :skipped && !(t.orig_expr === nothing)
         println(io, "  Skipped: ", t.orig_expr)
-    else
+    elseif !(t.orig_expr === nothing)
         println(io, "Expression: ", t.orig_expr)
     end
 end
@@ -226,8 +228,9 @@ end
 # can be displayed nicely.
 function get_test_result(ex)
     orig_ex = Expr(:inert, ex)
-    # Normalize comparison operator calls to :comparison expressions
+    # Normalize non-dot comparison operator calls to :comparison expressions
     if isa(ex, Expr) && ex.head == :call && length(ex.args)==3 &&
+        first(string(ex.args[1])) != '.' &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         testret = :(eval_comparison(Expr(:comparison,
                                          $(esc(ex.args[2])), $(esc(ex.args[1])), $(esc(ex.args[3])))))
@@ -476,21 +479,21 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
-    print_with_color(:white, rpad("Test Summary:",align," "), " | ")
+    print_with_color(:white, rpad("Test Summary:",align," "), " | "; bold = true)
     if pass_width > 0
-        print_with_color(:green, lpad("Pass",pass_width," "), "  ")
+        print_with_color(:green, lpad("Pass",pass_width," "), "  "; bold = true)
     end
     if fail_width > 0
-        print_with_color(:red, lpad("Fail",fail_width," "), "  ")
+        print_with_color(Base.error_color(), lpad("Fail",fail_width," "), "  "; bold = true)
     end
     if error_width > 0
-        print_with_color(:red, lpad("Error",error_width," "), "  ")
+        print_with_color(Base.error_color(), lpad("Error",error_width," "), "  "; bold = true)
     end
     if broken_width > 0
-        print_with_color(:yellow, lpad("Broken",broken_width," "), "  ")
+        print_with_color(Base.warn_color(), lpad("Broken",broken_width," "), "  "; bold = true)
     end
     if total_width > 0
-        print_with_color(:blue, lpad("Total",total_width, " "))
+        print_with_color(Base.info_color(), lpad("Total",total_width, " "); bold = true)
     end
     println()
     # Recursively print a summary at every level
@@ -601,7 +604,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nf = fails + c_fails
     if nf > 0
-        print_with_color(:red, lpad(string(nf), fail_width, " "), "  ")
+        print_with_color(Base.error_color(), lpad(string(nf), fail_width, " "), "  ")
     elseif fail_width > 0
         # No fails at this level, but some at another level
         print(lpad(" ", fail_width), "  ")
@@ -609,7 +612,7 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     ne = errors + c_errors
     if ne > 0
-        print_with_color(:red, lpad(string(ne), error_width, " "), "  ")
+        print_with_color(Base.error_color(), lpad(string(ne), error_width, " "), "  ")
     elseif error_width > 0
         # No errors at this level, but some at another level
         print(lpad(" ", error_width), "  ")
@@ -617,16 +620,16 @@ function print_counts(ts::DefaultTestSet, depth, align,
 
     nb = broken + c_broken
     if nb > 0
-        print_with_color(:yellow, lpad(string(nb), broken_width, " "), "  ")
+        print_with_color(Base.warn_color(), lpad(string(nb), broken_width, " "), "  ")
     elseif broken_width > 0
         # None broken at this level, but some at another level
         print(lpad(" ", broken_width), "  ")
     end
 
     if np == 0 && nf == 0 && ne == 0 && nb == 0
-        print_with_color(:blue, "No tests")
+        print_with_color(Base.info_color(), "No tests")
     else
-        print_with_color(:blue, lpad(string(subtotal), total_width, " "))
+        print_with_color(Base.info_color(), lpad(string(subtotal), total_width, " "))
     end
     println()
 
@@ -765,9 +768,9 @@ function testset_forloop(args, testloop)
             pop_testset()
             push!(arr, finish(ts))
         end
-        first_iteration = false
         ts = $(testsettype)($desc; $options...)
         push_testset(ts)
+        first_iteration = false
         try
             $(esc(tests))
         catch err
@@ -953,7 +956,12 @@ julia> typeof(f(1,2,3))
 Int64
 
 julia> @code_warntype f(1,2,3)
-...
+Variables:
+  #self#::#f
+  a::Int64
+  b::Int64
+  c::Int64
+
 Body:
   begin
       unless (Base.slt_int)(1,b::Int64)::Bool goto 3
@@ -964,8 +972,8 @@ Body:
 
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
- in error(::String) at ./error.jl:21
- ...
+Stacktrace:
+ [1] error(::String) at ./error.jl:21
 
 julia> @inferred max(1,2)
 2
@@ -978,26 +986,28 @@ macro inferred(ex)
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
 
     Base.remove_linenums!(quote
-        $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
-            # Has keywords
-            args = gensym()
-            kwargs = gensym()
-            quote
-                $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
-            end
-        else
-            # No keywords
-            quote
-                args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
-                result = $(esc(ex.args[1]))(args...)
-                inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
-            end
-        end)
-        @assert length(inftypes) == 1
-        rettype = isa(result, Type) ? Type{result} : typeof(result)
-        rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
-        result
+        let
+            $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+                # Has keywords
+                args = gensym()
+                kwargs = gensym()
+                quote
+                    $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                    inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                end
+            else
+                # No keywords
+                quote
+                    args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
+                    result = $(esc(ex.args[1]))(args...)
+                    inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+                end
+            end)
+            @assert length(inftypes) == 1
+            rettype = isa(result, Type) ? Type{result} : typeof(result)
+            rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
+            result
+        end
     end)
 end
 

@@ -2,7 +2,7 @@
 
 module Sort
 
-using Base: Order, Checked, copymutable, linearindices, linearindexing, viewindexing, LinearFast
+using Base: Order, Checked, copymutable, linearindices, linearindexing, viewindexing, LinearFast, _length
 
 import
     Base.sort,
@@ -59,14 +59,15 @@ end
     issorted(v, by=identity, rev:Bool=false, order::Ordering=Forward)
 
 Test whether a vector is in sorted order. The `by`, `lt` and `rev` keywords modify what
-order is considered to be sorted just as they do for [`sort`](:func:`sort`).
+order is considered to be sorted just as they do for [`sort`](@ref).
 """
 issorted(itr;
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
 
 function select!(v::AbstractVector, k::Union{Int,OrdinalRange}, o::Ordering)
-    sort!(v, 1, length(v), PartialQuickSort(k), o)
+    inds = indices(v, 1)
+    sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
     v[k]
 end
 select!(v::AbstractVector, k::Union{Int,OrdinalRange};
@@ -167,18 +168,24 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
 end
 
 function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
-    if step(a) == 0
-        lt(o, first(a), x) ? length(a) + 1 : 1
+    if lt(o, first(a), x)
+        if step(a) == 0
+            length(a) + 1
+        else
+            min(cld(x - first(a), step(a)), length(a)) + 1
+        end
     else
-        clamp(-fld(first(a) - signed(x), step(a)) + 1, 1, length(a) + 1)
+        1
     end
 end
 
 function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
-    if step(a) == 0
-        lt(o, x, first(a)) ? 0 : length(a)
+    if lt(o, x, first(a))
+        0
+    elseif step(a) == 0
+        length(a)
     else
-        clamp( fld(signed(x) - first(a), step(a)) + 1, 0, length(a))
+        min(fld(x - first(a), step(a)) + 1, length(a))
     end
 end
 
@@ -187,7 +194,7 @@ searchsorted{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering) =
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = $s(v,x,1,length(v),o)
+        $s(v::AbstractVector, x, o::Ordering) = (inds = indices(v, 1); $s(v,x,first(inds),last(inds),o))
         $s(v::AbstractVector, x;
            lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
@@ -432,7 +439,7 @@ function sort!(v::AbstractVector;
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = length(v)
+        n = _length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -471,14 +478,14 @@ end
 """
     sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Variant of [`sort!`](:func:`sort!`) that returns a sorted copy of `v` leaving `v` itself unmodified.
+Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 """
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
 ## selectperm: the permutation to sort the first k elements of an array ##
 
 selectperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
-    selectperm!(Vector{eltype(k)}(length(v)), v, k; kwargs..., initialized=false)
+    selectperm!(similar(Vector{eltype(k)}, indices(v,1)), v, k; kwargs..., initialized=false)
 
 function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
                                  k::Union{Int, OrdinalRange};
@@ -511,7 +518,7 @@ appear in ascending order. If you choose a non-stable sorting algorithm such as 
 a different permutation that puts the array into order may be returned. The order is
 specified using the same keywords as `sort!`.
 
-See also [`sortperm!`](:func:`sortperm!`).
+See also [`sortperm!`](@ref).
 """
 function sortperm(v::AbstractVector;
                   alg::Algorithm=DEFAULT_UNSTABLE,
@@ -521,7 +528,7 @@ function sortperm(v::AbstractVector;
                   order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = length(v)
+        n = _length(v)
         if n > 1
             min, max = extrema(v)
             (diff, o1) = sub_with_overflow(max, min)
@@ -542,7 +549,7 @@ end
 """
     sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
-Like [`sortperm`](:func:`sortperm`), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
+Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
 (the default), ix is initialized to contain the values `1:length(v)`.
 """
 function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
@@ -553,7 +560,7 @@ function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
                                order::Ordering=Forward,
                                initialized::Bool=false)
     if indices(x,1) != indices(v,1)
-        throw(ArgumentError("index vector must be the same length as the source vector, $(indices(x,1)) != $(indices(v,1))"))
+        throw(ArgumentError("index vector must have the same indices as the source vector, $(indices(x,1)) != $(indices(v,1))"))
     end
     if !initialized
         @inbounds for i = indices(v,1)
@@ -591,7 +598,7 @@ end
     sort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
 
 Sort a multidimensional array `A` along the given dimension.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sort(A::AbstractArray, dim::Integer;
@@ -629,7 +636,7 @@ end
     sortrows(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the rows of matrix `A` lexicographically.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sortrows(A::AbstractMatrix; kws...)
@@ -647,7 +654,7 @@ end
     sortcols(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the columns of matrix `A` lexicographically.
-See [`sort!`](:func:`sort!`) for a description of possible
+See [`sort!`](@ref) for a description of possible
 keyword arguments.
 """
 function sortcols(A::AbstractMatrix; kws...)

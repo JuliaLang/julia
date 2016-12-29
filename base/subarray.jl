@@ -58,6 +58,11 @@ parent(V::SubArray) = V.parent
 parentindexes(V::SubArray) = V.indexes
 
 parent(a::AbstractArray) = a
+"""
+    parentindexes(A)
+
+From an array view `A`, returns the corresponding indexes in the parent.
+"""
 parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 
 ## SubArray creation
@@ -68,6 +73,14 @@ parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 _maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val{1})
 _maybe_reshape_parent{_,N}(A::AbstractArray{_,N}, ::NTuple{N, Bool}) = A
 _maybe_reshape_parent{N}(A::AbstractArray, ::NTuple{N, Bool}) = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
+"""
+    view(A, inds...)
+
+Like [`getindex`](@ref), but returns a view into the parent array `A` with the
+given indices instead of making a copy.  Calling [`getindex`](@ref) or
+[`setindex!`](@ref) on the returned `SubArray` computes the
+indices to the parent array on the fly without checking bounds.
+"""
 function view(A::AbstractArray, I::ViewIndex...)
     @_inline_meta
     @boundscheck checkbounds(A, I...)

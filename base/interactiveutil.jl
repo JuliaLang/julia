@@ -6,8 +6,8 @@
     editor()
 
 Determines the editor to use when running functions like `edit`. Returns an Array compatible
-for use within backticks. You can change the editor by setting JULIA_EDITOR, VISUAL, or
-EDITOR as an environmental variable.
+for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `VISUAL` or
+`EDITOR` as an environmental variable.
 """
 function editor()
     if is_windows() || is_apple()
@@ -27,7 +27,8 @@ end
     edit(path::AbstractString, line::Integer=0)
 
 Edit a file or directory optionally providing a line number to edit the file at.
-Returns to the `julia` prompt when you quit the editor.
+Returns to the `julia` prompt when you quit the editor. The editor can be changed
+by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environmental variable.
 """
 function edit(path::AbstractString, line::Integer=0)
     command = editor()
@@ -74,7 +75,8 @@ end
     edit(function, [types])
 
 Edit the definition of a function, optionally specifying a tuple of types to
-indicate which method to edit.
+indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
+`VISUAL` or `EDITOR` as an environmental variable.
 """
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
@@ -245,7 +247,7 @@ detailed system information is shown as well.
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
     if !isempty(GIT_VERSION_INFO.commit_short)
-      println(io,             "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
+        println(io,         "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
     if ccall(:jl_is_debugbuild, Cint, ())!=0
         println(io, "DEBUG build")
@@ -255,7 +257,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
     cpu = Sys.cpu_info()
-    println(io,         "  CPU: ", cpu[1].model)
+    println(io,             "  CPU: ", cpu[1].model)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
@@ -291,7 +293,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     if verbose
         println(io,         "Environment:")
         for (k,v) in ENV
-            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)), nothing)
+            if match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)) !== nothing
                 println(io, "  $(k) = $(v)")
             end
         end
@@ -313,7 +315,7 @@ and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in
 as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
 This serves as a warning of potential type instability. Not all non-leaf types are particularly
 problematic for performance, so the results need to be used judiciously.
-See [Manual](:ref:`man-code-warntype`) for more information.
+See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
 function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
@@ -458,7 +460,7 @@ It calls out to the `functionloc` function.
     @code_typed
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_typed`](:func:`code_typed`) on the resulting expression.
+[`code_typed`](@ref) on the resulting expression.
 """
 :@code_typed
 
@@ -466,7 +468,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_warntype
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_warntype`](:func:`code_warntype`) on the resulting expression.
+[`code_warntype`](@ref) on the resulting expression.
 """
 :@code_warntype
 
@@ -474,7 +476,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_lowered
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_lowered`](:func:`code_lowered`) on the resulting expression.
+[`code_lowered`](@ref) on the resulting expression.
 """
 :@code_lowered
 
@@ -482,7 +484,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_llvm
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_llvm`](:func:`code_llvm`) on the resulting expression.
+[`code_llvm`](@ref) on the resulting expression.
 """
 :@code_llvm
 
@@ -490,7 +492,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_native
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
-[`code_native`](:func:`code_native`) on the resulting expression.
+[`code_native`](@ref) on the resulting expression.
 """
 :@code_native
 
@@ -498,7 +500,7 @@ function type_close_enough(x::ANY, t::ANY)
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
             !isleaftype(t) && x <: t) ||
-           (isa(x,Union) && isa(t,DataType) && any(u -> is(u,t), x.types))
+           (isa(x,Union) && isa(t,DataType) && any(u -> u===t, x.types))
 end
 
 # `methodswith` -- shows a list of methods using the type given

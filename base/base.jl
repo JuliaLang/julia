@@ -57,7 +57,10 @@ Alternatively, there is no unique most-specific method.
 type MethodError <: Exception
     f
     args
+    world::UInt
+    MethodError(f::ANY, args::ANY, world::UInt) = new(f, args, world)
 end
+MethodError(f::ANY, args::ANY) = MethodError(f, args, typemax(UInt))
 
 """
     EOFError()

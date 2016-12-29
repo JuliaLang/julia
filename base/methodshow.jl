@@ -58,9 +58,9 @@ function arg_decl_parts(m::Method)
     return tv, decls, file, line
 end
 
-function kwarg_decl(sig::ANY, kwtype::DataType)
-    sig = Tuple{kwtype, Core.AnyVector, sig.parameters...}
-    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any), kwtype.name.mt, sig)
+function kwarg_decl(m::Method, kwtype::DataType)
+    sig = Tuple{kwtype, Core.AnyVector, m.sig.parameters...}
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
     if kwli !== nothing
         kwli = kwli::Method
         src = kwli.isstaged ? kwli.unspecialized.inferred : kwli.source
@@ -87,7 +87,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
                 # TODO: more accurate test? (tn.name === "#" name)
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -104,13 +104,13 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     if !isnull(kwtype)
-        kwargs = kwarg_decl(m.sig, get(kwtype))
+        kwargs = kwarg_decl(m, get(kwtype))
         if !isempty(kwargs)
             print(io, "; ")
             join(io, kwargs, ", ", ", ")
         end
     end
-    print(io, ")")
+    print(io, ") in ", m.module)
     if line > 0
         print(io, " at ", file, ":", line)
     end
@@ -208,7 +208,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
+    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
         f = ft.parameters[1]
         if isa(f, DataType) && isempty(f.parameters)
             print(io, f)
@@ -227,7 +227,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
     join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
     if !isnull(kwtype)
-        kwargs = kwarg_decl(m.sig, get(kwtype))
+        kwargs = kwarg_decl(m, get(kwtype))
         if !isempty(kwargs)
             print(io, "; <i>")
             join(io, kwargs, ", ", ", ")

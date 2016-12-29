@@ -65,7 +65,7 @@ clamp{T}(x::AbstractArray{T}, lo, hi) =
     clamp!(array::AbstractArray, lo, hi)
 
 Restrict values in `array` to the specified range, in-place.
-See also [`clamp`](:func:`clamp`).
+See also [`clamp`](@ref).
 """
 function clamp!{T}(x::AbstractArray{T}, lo, hi)
     @inbounds for i in eachindex(x)
@@ -163,7 +163,7 @@ log{T<:Number}(b::T, x::T) = log(x)/log(b)
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws `DomainError` for negative `Real` arguments.
+Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
 
 ```jldoctest
 julia> log(4,8)
@@ -174,7 +174,7 @@ julia> log(4,2)
 ```
 
 !!! note
-    If `b` is a power of 2 or 10, `log2` or `log10` should be used, as these will
+    If `b` is a power of 2 or 10, [`log2`](@ref) or [`log10`](@ref) should be used, as these will
     typically be faster and more accurate. For example,
 
     ```jldoctest
@@ -272,7 +272,7 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws `DomainError` for negative `Real` arguments. Use complex
+Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative `Real` arguments. Use complex
 negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt(x::Real) = sqrt(float(x))
@@ -349,8 +349,49 @@ julia> ldexp(5., 2)
 20.0
 ```
 """
-ldexp(x::Float64,e::Integer) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, Int32(e))
-ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, Int32(e))
+function ldexp{T<:AbstractFloat}(x::T, e::Integer)
+    xu = reinterpret(Unsigned, x)
+    xs = xu & ~sign_mask(T)
+    xs >= exponent_mask(T) && return x # NaN or Inf
+    k = Int(xs >> significand_bits(T))
+    if k == 0 # x is subnormal
+        xs == 0 && return x # +-0
+        m = leading_zeros(xs) - exponent_bits(T)
+        ys = xs << unsigned(m)
+        xu = ys | (xu & sign_mask(T))
+        k = 1 - m
+        # underflow, otherwise may have integer underflow in the following n + k
+        e < -50000 && return flipsign(T(0.0), x)
+    end
+    # For cases where e of an Integer larger than Int make sure we properly
+    # overflow/underflow; this is optimized away otherwise.
+    if e > typemax(Int)
+        return flipsign(T(Inf), x)
+    elseif e < typemin(Int)
+        return flipsign(T(0.0), x)
+    end
+    n = e % Int
+    k += n
+    # overflow, if k is larger than maximum posible exponent
+    if k >= Int(exponent_mask(T) >> significand_bits(T))
+        return flipsign(T(Inf), x)
+    end
+    if k > 0 # normal case
+        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
+        return reinterpret(T, xu)
+    else # subnormal case
+        if k <= -significand_bits(T) # underflow
+            # overflow, for the case of integer overflow in n + k
+            e > 50000 && return flipsign(T(Inf), x)
+            return flipsign(T(0.0), x)
+        end
+        k += significand_bits(T)
+        z = T(2.0)^-significand_bits(T)
+        xu = (xu & ~exponent_mask(T)) | (k % typeof(xu) << significand_bits(T))
+        return z*reinterpret(T, xu)
+    end
+end
+ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
     exponent(x) -> Int
@@ -358,18 +399,15 @@ ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), 
 Get the exponent of a normalized floating-point number.
 """
 function exponent{T<:AbstractFloat}(x::T)
-    xu = reinterpret(Unsigned,x)
-    xe = xu & exponent_mask(T)
-    k = Int(xe >> significand_bits(T))
-    if xe == 0 # x is subnormal
-        x == 0 && throw(DomainError())
-        xu &= significand_mask(T)
-        m = leading_zeros(xu)-exponent_bits(T)
-        k = 1-m
-    elseif xe == exponent_mask(T) # NaN or Inf
-        throw(DomainError())
+    xs = reinterpret(Unsigned, x) & ~sign_mask(T)
+    xs >= exponent_mask(T) && return throw(DomainError()) # NaN or Inf
+    k = Int(xs >> significand_bits(T))
+    if k == 0 # x is subnormal
+        xs == 0 && throw(DomainError())
+        m = leading_zeros(xs) - exponent_bits(T)
+        k = 1 - m
     end
-    k - exponent_bias(T)
+    return k - exponent_bias(T)
 end
 
 """
@@ -388,20 +426,17 @@ julia> significand(15.2)*8
 ```
 """
 function significand{T<:AbstractFloat}(x::T)
-    xu = reinterpret(Unsigned,x)
-    xe = xu & exponent_mask(T)
-    if xe == 0 # x is subnormal
-        x == 0 && return x
-        xs = xu & sign_mask(T)
-        xu $= xs
-        m = leading_zeros(xu)-exponent_bits(T)
-        xu <<= m
-        xu $= xs
-    elseif xe == exponent_mask(T) # NaN or Inf
-        return x
+    xu = reinterpret(Unsigned, x)
+    xs = xu & ~sign_mask(T)
+    xs >= exponent_mask(T) && return x # NaN or Inf
+    if xs <= (~exponent_mask(T) & ~sign_mask(T)) # x is subnormal
+        xs == 0 && return x # +-0
+        m = unsigned(leading_zeros(xs) - exponent_bits(T))
+        xs <<= m
+        xu = xs | (xu & sign_mask(T))
     end
     xu = (xu & ~exponent_mask(T)) | exponent_one(T)
-    reinterpret(T,xu)
+    return reinterpret(T, xu)
 end
 
 """
@@ -411,23 +446,20 @@ Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0
 and `val` is equal to ``x \\times 2^{exp}``.
 """
 function frexp{T<:AbstractFloat}(x::T)
-    xu = reinterpret(Unsigned,x)
-    xe = xu & exponent_mask(T)
-    k = Int(xe >> significand_bits(T))
-    if xe == 0 # x is subnormal
-        x == 0 && return x, 0
-        xs = xu & sign_mask(T)
-        xu $= xs
-        m = leading_zeros(xu)-exponent_bits(T)
-        xu <<= m
-        xu $= xs
-        k = 1-m
-    elseif xe == exponent_mask(T) # NaN or Inf
-        return x,0
+    xu = reinterpret(Unsigned, x)
+    xs = xu & ~sign_mask(T)
+    xs >= exponent_mask(T) && return x, 0 # NaN or Inf
+    k = Int(xs >> significand_bits(T))
+    if k == 0 # x is subnormal
+        xs == 0 && return x, 0 # +-0
+        m = leading_zeros(xs) - exponent_bits(T)
+        xs <<= unsigned(m)
+        xu = xs | (xu & sign_mask(T))
+        k = 1 - m
     end
-    k -= (exponent_bias(T)-1)
+    k -= (exponent_bias(T) - 1)
     xu = (xu & ~exponent_mask(T)) | exponent_half(T)
-    reinterpret(T,xu), k
+    return reinterpret(T, xu), k
 end
 
 function frexp{T<:AbstractFloat}(A::Array{T})
@@ -593,7 +625,7 @@ end
 
 Combined multiply-add, computes `x*y+z` in an efficient manner. This may on some systems be
 equivalent to `x*y+z`, or to `fma(x,y,z)`. `muladd` is used to improve performance.
-See [`fma`](:func:`fma`).
+See [`fma`](@ref).
 """
 muladd(x,y,z) = x*y+z
 
@@ -613,7 +645,6 @@ for func in (:atan2,:hypot)
     end
 end
 
-ldexp(a::Float16, b::Integer) = Float16(ldexp(Float32(a), b))
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions

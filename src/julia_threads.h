@@ -56,7 +56,7 @@ typedef struct {
     // variables for allocating objects from pools
 #ifdef _P64
 #  define JL_GC_N_POOLS 41
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_X86_)
 #  define JL_GC_N_POOLS 42
 #else
 #  define JL_GC_N_POOLS 43
@@ -68,6 +68,7 @@ typedef struct {
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
+    size_t world_age;
     struct _jl_value_t *exception_in_transit;
     volatile size_t *safepoint;
     // Whether it is safe to execute GC at the same time.
@@ -156,7 +157,7 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
  * we use only a compiler (signal) barrier and use the signal handler to do the
  * synchronization in order to lower the mutator overhead as much as possible.
  *
- * We use the compiler instrinsics to implement a similar API to the c11/c++11
+ * We use the compiler intrinsics to implement a similar API to the c11/c++11
  * one instead of using it directly because,
  *
  *     1. We support GCC 4.7 and GCC add support for c11 atomics in 4.9.

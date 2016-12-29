@@ -161,6 +161,25 @@ end
 
 Compute the Cholesky factorization of a positive definite matrix `A`
 and return the UpperTriangular matrix `U` such that `A = U'U`.
+
+# Example
+
+```jldoctest
+julia> A = [1. 2.; 2. 50.]
+2×2 Array{Float64,2}:
+ 1.0   2.0
+ 2.0  50.0
+
+julia> U = chol(A)
+2×2 UpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  2.0
+  ⋅   6.78233
+
+julia> U'U
+2×2 Array{Float64,2}:
+ 1.0   2.0
+ 2.0  50.0
+```
 """
 function chol(A::AbstractMatrix)
     ishermitian(A) || non_hermitian_error("chol")
@@ -172,6 +191,13 @@ end
     chol(x::Number) -> y
 
 Compute the square root of a non-negative number `x`.
+
+# Example
+
+```jldoctest
+julia> chol(16)
+4.0
+```
 """
 chol(x::Number, args...) = _chol!(x, nothing)
 
@@ -200,9 +226,21 @@ end
     cholfact!(A, [uplo::Symbol,] Val{false}) -> Cholesky
 
 The same as `cholfact`, but saves space by overwriting the input `A`, instead
-of creating a copy. An `InexactError` exception is thrown if the factorisation
+of creating a copy. An `InexactError` exception is thrown if the factorization
 produces a number not representable by the element type of `A`, e.g. for
 integer types.
+
+# Example
+
+```jldoctest
+julia> A = [1 2; 2 50]
+2×2 Array{Int64,2}:
+ 1   2
+ 2  50
+
+julia> cholfact!(A)
+ERROR: InexactError()
+```
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
     ishermitian(A) || non_hermitian_error("cholfact!")
@@ -239,7 +277,7 @@ cholfact!{T<:Real,S}(A::RealHermSymComplexHerm{T,S}, ::Type{Val{true}};
 
 The same as `cholfact`, but saves space by overwriting the input `A`, instead
 of creating a copy. An `InexactError` exception is thrown if the
-factorisation produces a number not representable by the element type of `A`,
+factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0)
@@ -267,6 +305,35 @@ The default is to use `:U`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
 The following functions are available for `Cholesky` objects: `size`, `\\`, `inv`, `det`.
 A `PosDefException` exception is thrown in case the matrix is not positive definite.
+
+# Example
+
+```jldoctest
+julia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+3×3 Array{Float64,2}:
+   4.0   12.0  -16.0
+  12.0   37.0  -43.0
+ -16.0  -43.0   98.0
+
+julia> C = cholfact(A)
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
+[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]
+
+julia> C[:U]
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 2.0  6.0  -8.0
+  ⋅   1.0   5.0
+  ⋅    ⋅    3.0
+
+julia> C[:L]
+3×3 LowerTriangular{Float64,Array{Float64,2}}:
+  2.0   ⋅    ⋅
+  6.0  1.0   ⋅
+ -8.0  5.0  3.0
+
+julia> C[:L] * C[:U] == A
+true
+```
 """
 function cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
     ishermitian(A) || non_hermitian_error("cholfact")
@@ -301,7 +368,8 @@ and return a `CholeskyPivoted` factorization. The matrix `A` can either be a `Sy
 the optional argument `uplo` may be `:L` for using the lower part or `:U` for the upper part of `A`.
 The default is to use `:U`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
-The following functions are available for `PivotedCholesky` objects: `size`, `\\`, `inv`, `det`, and `rank`.
+The following functions are available for `PivotedCholesky` objects:
+`size`, `\\`, `inv`, `det`, and `rank`.
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
 """
@@ -335,7 +403,7 @@ convert(::Type{AbstractMatrix}, C::Cholesky) = C.uplo == 'U' ? C[:U]'C[:U] : C[:
 convert(::Type{AbstractArray}, C::Cholesky) = convert(AbstractMatrix, C)
 convert(::Type{Matrix}, C::Cholesky) = convert(Array, convert(AbstractArray, C))
 convert(::Type{Array}, C::Cholesky) = convert(Matrix, C)
-full(C::Cholesky) = convert(Array, C)
+full(C::Cholesky) = convert(AbstractArray, C)
 
 function convert(::Type{AbstractMatrix}, F::CholeskyPivoted)
     ip = invperm(F[:p])
@@ -344,7 +412,7 @@ end
 convert(::Type{AbstractArray}, F::CholeskyPivoted) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::CholeskyPivoted) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::CholeskyPivoted) = convert(Matrix, F)
-full(F::CholeskyPivoted) = convert(Array, F)
+full(F::CholeskyPivoted) = convert(AbstractArray, F)
 
 copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo)
 copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
@@ -406,32 +474,62 @@ end
 
 function A_ldiv_B!(C::CholeskyPivoted, B::StridedVector)
     if C.uplo == 'L'
-        Ac_ldiv_B!(LowerTriangular(C.factors), A_ldiv_B!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+        Ac_ldiv_B!(LowerTriangular(C.factors),
+            A_ldiv_B!(LowerTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
     else
-        A_ldiv_B!(UpperTriangular(C.factors), Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
+        A_ldiv_B!(UpperTriangular(C.factors),
+            Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv]))[invperm(C.piv)]
     end
 end
 
 function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
     if C.uplo == 'L'
-        Ac_ldiv_B!(LowerTriangular(C.factors), A_ldiv_B!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+        Ac_ldiv_B!(LowerTriangular(C.factors),
+            A_ldiv_B!(LowerTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
     else
-        A_ldiv_B!(UpperTriangular(C.factors), Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
+        A_ldiv_B!(UpperTriangular(C.factors),
+            Ac_ldiv_B!(UpperTriangular(C.factors), B[C.piv,:]))[invperm(C.piv),:]
     end
 end
 
 function det(C::Cholesky)
-    dd = one(eltype(C))
-    for i in 1:size(C.factors,1); dd *= abs2(C.factors[i,i]) end
+    dd = one(real(eltype(C)))
+    for i in 1:size(C.factors,1)
+        dd *= real(C.factors[i,i])^2
+    end
     dd
 end
 
-det(C::CholeskyPivoted) = C.rank < size(C.factors, 1) ? real(zero(eltype(C))) : prod(abs2.(diag(C.factors)))
-
 function logdet(C::Cholesky)
-    dd = zero(eltype(C))
-    for i in 1:size(C.factors,1); dd += log(C.factors[i,i]) end
+    dd = zero(real(eltype(C)))
+    for i in 1:size(C.factors,1)
+        dd += log(real(C.factors[i,i]))
+    end
     dd + dd # instead of 2.0dd which can change the type
+end
+
+function det(C::CholeskyPivoted)
+    if C.rank < size(C.factors, 1)
+        return zero(real(eltype(C)))
+    else
+        dd = one(real(eltype(C)))
+        for i in 1:size(C.factors,1)
+            dd *= real(C.factors[i,i])^2
+        end
+        return dd
+    end
+end
+
+function logdet(C::CholeskyPivoted)
+    if C.rank < size(C.factors, 1)
+        return real(eltype(C))(-Inf)
+    else
+        dd = zero(real(eltype(C)))
+        for i in 1:size(C.factors,1)
+            dd += log(real(C.factors[i,i]))
+        end
+        return dd + dd # instead of 2.0dd which can change the type
+    end
 end
 
 inv!{T<:BlasFloat,S<:StridedMatrix}(C::Cholesky{T,S}) =
@@ -446,14 +544,21 @@ function inv(C::CholeskyPivoted)
     copytri!(LAPACK.potri!(C.uplo, copy(C.factors)), C.uplo, true)[ipiv, ipiv]
 end
 
-chkfullrank(C::CholeskyPivoted) = C.rank < size(C.factors, 1) && throw(RankDeficientException(C.info))
+function chkfullrank(C::CholeskyPivoted)
+    if C.rank < size(C.factors, 1)
+        throw(RankDeficientException(C.info))
+    end
+end
 
 rank(C::CholeskyPivoted) = C.rank
 
 """
     lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
-Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)` operations. The input factorization `C` is updated in place such that on exit `C == CC`. The vector `v` is destroyed during the computation.
+Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then
+`CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)`
+operations. The input factorization `C` is updated in place such that on exit `C == CC`.
+The vector `v` is destroyed during the computation.
 """
 function lowrankupdate!(C::Cholesky, v::StridedVector)
     A = C.factors
@@ -496,7 +601,10 @@ end
 """
     lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
-Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)` operations. The input factorization `C` is updated in place such that on exit `C == CC`. The vector `v` is destroyed during the computation.
+Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then
+`CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)`
+operations. The input factorization `C` is updated in place such that on exit `C == CC`.
+The vector `v` is destroyed during the computation.
 """
 function lowrankdowndate!(C::Cholesky, v::StridedVector)
     A = C.factors
@@ -546,13 +654,17 @@ end
 """
     lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
-Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)` operations.
+Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]`
+then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses
+`O(n^2)` operations.
 """
 lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
 
 """
     lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky
 
-Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)` operations.
+Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]`
+then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses
+`O(n^2)` operations.
 """
 lowrankdowndate(C::Cholesky, v::StridedVector) = lowrankdowndate!(copy(C), copy(v))

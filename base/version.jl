@@ -203,7 +203,7 @@ end
     VERSION
 
 A `VersionNumber` object describing which version of Julia is in use. For details see
-[Version Number Literals](:ref:`man-version-number-literals`).
+[Version Number Literals](@ref man-version-number-literals).
 """
 const VERSION = try
     ver = convert(VersionNumber, VERSION_STRING)

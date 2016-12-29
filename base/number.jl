@@ -4,6 +4,14 @@
 
 isinteger(x::Integer) = true
 
+"""
+    iszero(x)
+
+Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
+all of the elements of `x` are zero.
+"""
+iszero(x) = x == zero(x) # fallback method
+
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
 indices(x::Number) = ()
@@ -104,9 +112,9 @@ _default_type(::Type{Number}) = Int
 """
     factorial(n)
 
-Factorial of `n`.  If `n` is an [`Integer`](:obj:`Integer`), the factorial is computed as an
+Factorial of `n`.  If `n` is an `Integer`, the factorial is computed as an
 integer (promoted to at least 64 bits).  Note that this may overflow if `n` is not small,
 but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
-If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](:func:`gamma(n+1) <gamma>`).
+If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](@ref).
 """
 factorial(x::Number) = gamma(x + 1) # fallback for x not Integer

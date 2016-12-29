@@ -68,7 +68,28 @@ end
 unsafe_wrap{N,I<:Integer}(Atype::Type, p::Ptr, dims::NTuple{N,I}, own::Bool=false) =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
 
+"""
+    unsafe_load(p::Ptr{T}, i::Integer=1)
+
+Load a value of type `T` from the address of the `i`th element (1-indexed) starting at `p`.
+This is equivalent to the C expression `p[i-1]`.
+
+The `unsafe` prefix on this function indicates that no validation is performed on the
+pointer `p` to ensure that it is valid. Incorrect usage may segfault your program or return
+garbage answers, in the same manner as C.
+"""
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
+
+"""
+    unsafe_store!(p::Ptr{T}, x, i::Integer=1)
+
+Store a value of type `T` to the address of the `i`th element (1-indexed) starting at `p`.
+This is equivalent to the C expression `p[i-1] = x`.
+
+The `unsafe` prefix on this function indicates that no validation is performed on the
+pointer `p` to ensure that it is valid. Incorrect usage may corrupt or segfault your
+program, in the same manner as C.
+"""
 unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!{T}(p::Ptr{T}, x, i::Integer=1) = pointerset(p, convert(T,x), Int(i), 1)
 
@@ -88,7 +109,7 @@ when the array is no longer referenced.
 This function is labelled "unsafe" because it will crash if `p` is not
 a valid memory address to data of the requested length.
 
-See also [`unsafe_string`](:func:`unsafe_string`), which takes a pointer
+See also [`unsafe_string`](@ref), which takes a pointer
 and makes a copy of the data.
 """
 unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false) =
@@ -99,7 +120,22 @@ unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, own::Bool=false) =
     unsafe_wrap(String, p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
 
 # convert a raw Ptr to an object reference, and vice-versa
+"""
+    unsafe_pointer_to_objref(p::Ptr)
+
+Convert a `Ptr` to an object reference. Assumes the pointer refers to a valid heap-allocated
+Julia object. If this is not the case, undefined behavior results, hence this function is
+considered "unsafe" and should be used with care.
+"""
 unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
+
+"""
+    pointer_from_objref(x)
+
+Get the memory address of a Julia object as a `Ptr`. The existence of the resulting `Ptr`
+will not protect the object from garbage collection, so you must ensure that the object
+remains referenced for the whole time that the `Ptr` will be used.
+"""
 pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}
 

@@ -194,7 +194,9 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        showerror(io, ex)
+        with_output_color(have_color ? error_color() : :nothing, io) do io
+            showerror(io, ex)
+        end
     finally
         backtrace && show_backtrace(io, bt)
     end
@@ -222,13 +224,19 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
             if code.func == :nan_dom_err
                 continue
             elseif code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io,"\n$(code.func) will only return a complex result if called with a complex argument. Try $(string(code.func))(complex(x)).")
-            elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) || code.func == :power_by_squaring #3024
-                print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
+                print(io, "\n$(code.func) will only return a complex result if called ",
+                    "with a complex argument. Try $(string(code.func))(complex(x)).")
+            elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) ||
+                    code.func == :power_by_squaring #3024
+                print(io, "\nCannot raise an integer x to a negative power -n. ",
+                    "\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead ",
+                    "of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
             elseif code.func == :^ &&
                     (code.file == Symbol("promotion.jl") || code.file == Symbol("math.jl") ||
-                    code.file == Symbol(joinpath(".","promotion.jl")) || code.file == Symbol(joinpath(".","math.jl")))
-                print(io, "\nExponentiation yielding a complex result requires a complex argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
+                    code.file == Symbol(joinpath(".","promotion.jl")) ||
+                    code.file == Symbol(joinpath(".","math.jl")))
+                print(io, "\nExponentiation yielding a complex result requires a complex ",
+                    "argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
             end
             break
         end
@@ -335,8 +343,13 @@ function showerror(io::IO, ex::MethodError)
         basef = getfield(Base, name)
         if basef !== ex.f && method_exists(basef, arg_types)
             println(io)
-            print(io, "you may have intended to import Base.", name)
+            print(io, "You may have intended to import Base.", name)
         end
+    end
+    if method_exists(ex.f, arg_types)
+        curworld = ccall(:jl_get_world_counter, UInt, ())
+        println(io)
+        print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     end
     if !is_arg_types
         # Check for row vectors used where a column vector is intended.
@@ -462,7 +475,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
                     if Base.have_color
-                        Base.with_output_color(:red, buf) do buf
+                        Base.with_output_color(Base.error_color(), buf) do buf
                             print(buf, "::$sigstr")
                         end
                     else
@@ -503,7 +516,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                             print(buf, ", ")
                         end
                         if Base.have_color
-                            Base.with_output_color(:red, buf) do buf
+                            Base.with_output_color(Base.error_color(), buf) do buf
                                 print(buf, "::$sigstr")
                             end
                         else
@@ -514,7 +527,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 kwords = Symbol[]
                 if isdefined(ft.name.mt, :kwsorter)
                     kwsorter_t = typeof(ft.name.mt.kwsorter)
-                    kwords = kwarg_decl(method.sig, kwsorter_t)
+                    kwords = kwarg_decl(method, kwsorter_t)
                     length(kwords) > 0 && print(buf, "; ", join(kwords, ", "))
                 end
                 print(buf, ")")
@@ -529,12 +542,19 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                         end
                     end
                     if !isempty(unexpected)
-                        Base.with_output_color(:red, buf) do buf
+                        Base.with_output_color(Base.error_color(), buf) do buf
                             plur = length(unexpected) > 1 ? "s" : ""
                             print(buf, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
                         end
                     end
                 end
+                if ex.world < min_world(method)
+                    print(buf, " (method too new to be called from this world context.)")
+                end
+                if ex.world > max_world(method)
+                    print(buf, " (method deleted before this world age.)")
+                end
+                # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
             end
         end
@@ -553,21 +573,27 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     break
                 end
                 i += 1
-                print(io, takebuf_string(line[1]))
+                print(io, String(take!(line[1])))
             end
         end
     end
 end
 
-function show_trace_entry(io, frame, n)
+function show_trace_entry(io, frame, n; prefix = " in ")
     print(io, "\n")
-    show(io, frame, full_path=true)
+    show(io, frame, full_path=true; prefix = prefix)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
 function show_backtrace(io::IO, t::Vector)
-    process_entry(last_frame, n) =
-        show_trace_entry(io, last_frame, n)
+    n_frames = 0
+    frame_counter = 0
+    process_backtrace((a,b) -> n_frames += 1, t)
+    n_frames != 0 && print(io, "\nStacktrace:")
+    process_entry = (last_frame, n) -> begin
+        frame_counter += 1
+        show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter, "] "))
+    end
     process_backtrace(process_entry, t)
 end
 

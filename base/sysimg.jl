@@ -19,8 +19,12 @@ INCLUDE_STATE = 1 # include = Core.include
 
 include("coreio.jl")
 
-eval(x) = Core.eval(Base,x)
-eval(m,x) = Core.eval(m,x)
+eval(x) = Core.eval(Base, x)
+eval(m, x) = Core.eval(m, x)
+(::Type{T}){T}(arg) = convert(T, arg)::T
+(::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
+convert{T<:VecElement}(::Type{T}, arg) = T(arg)
+convert{T<:VecElement}(::Type{T}, arg::T) = arg
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str
@@ -42,8 +46,8 @@ if false
 end
 
 ## Load essential files and libraries
-include("ctypes.jl")
 include("essentials.jl")
+include("ctypes.jl")
 include("base.jl")
 include("generator.jl")
 include("reflection.jl")
@@ -63,21 +67,18 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
-(::Type{T}){T}(arg) = convert(T, arg)::T
-(::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
-convert{T<:VecElement}(::Type{T}, arg) = T(arg)
-convert{T<:VecElement}(::Type{T}, arg::T) = arg
 include("checked.jl")
 importall .Checked
 
-# Symbol constructors
-if !isdefined(Core, :Inference)
-    Symbol(s::String) = Symbol(s.data)
-    Symbol(a::Array{UInt8,1}) =
-        ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
-end
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
+
+# Define the broadcast function, which is mostly implemented in
+# broadcast.jl, so that we can overload broadcast methods for
+# specific array types etc.
+#  --Here, just define fallback routines for broadcasting with no arguments
+broadcast(f) = f()
+broadcast!(f, X::AbstractArray) = fill!(X, f())
 
 # array structures
 include("array.jl")
@@ -129,7 +130,9 @@ include("intset.jl")
 include("associative.jl")
 include("dict.jl")
 include("set.jl")
-include("iterator.jl")
+include("iterators.jl")
+using .Iterators: zip, enumerate
+using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
 typealias StridedReshapedArray{T,N,A<:DenseArray} ReshapedArray{T,N,A}
@@ -163,11 +166,23 @@ include("parse.jl")
 include("shell.jl")
 include("regex.jl")
 include("show.jl")
-include("base64.jl")
-importall .Base64
+
+# multidimensional arrays
+include("cartesian.jl")
+using .Cartesian
+include("multidimensional.jl")
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
 
 # nullable types
 include("nullable.jl")
+
+include("broadcast.jl")
+importall .Broadcast
+
+# base64 conversions (need broadcast)
+include("base64.jl")
+importall .Base64
 
 # version
 include("version.jl")
@@ -206,13 +221,6 @@ importall .Math
 const (√)=sqrt
 const (∛)=cbrt
 
-# multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
-include("multidimensional.jl")
-include("permuteddimsarray.jl")
-using .PermutedDimsArrays
-
 let SOURCE_PATH = ""
     global function _include(path)
         prev = SOURCE_PATH
@@ -245,7 +253,7 @@ include("mpfr.jl")
 importall .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
-big(q::Rational) = big(num(q))//big(den(q))
+big(q::Rational) = big(numerator(q))//big(denominator(q))
 
 include("combinatorics.jl")
 
@@ -275,9 +283,7 @@ include("channels.jl")
 include("clusterserialize.jl")
 include("multi.jl")
 include("workerpool.jl")
-include("pmap.jl")
 include("managers.jl")
-include("asyncmap.jl")
 
 # code loading
 include("loading.jl")
@@ -307,9 +313,6 @@ include("client.jl")
 
 # misc useful functions & macros
 include("util.jl")
-
-include("broadcast.jl")
-importall .Broadcast
 
 # dense linear algebra
 include("linalg/linalg.jl")
@@ -358,6 +361,10 @@ import .Dates: Date, DateTime, now
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
 importall .SparseArrays
+
+# parallel map
+include("asyncmap.jl")
+include("pmap.jl")
 
 # worker threads
 include("threadcall.jl")

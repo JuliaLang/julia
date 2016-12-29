@@ -167,7 +167,7 @@ transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, 
 function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
-    takebuf_array(buf)
+    take!(buf)
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, src.data)
@@ -187,24 +187,24 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
                 push!(dst, a)
                 a = b; continue
             elseif a < 0xe0 # 2-byte UTF-8
-                push!(dst, 0x3080 $ (UInt16(a) << 6) $ b)
+                push!(dst, xor(0x3080, UInt16(a) << 6, b))
             elseif i < n # 3/4-byte character
                 c = src[i += 1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
-                    push!(dst, 0x2080 $ (UInt16(a) << 12) $ (UInt16(b) << 6) $ c)
+                    push!(dst, xor(0x2080, UInt16(a) << 12, UInt16(b) << 6, c))
                 elseif i < n
                     d = src[i += 1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
-                        push!(dst, 0x2080 $ (UInt16(b) << 12) $ (UInt16(c) << 6) $ d)
+                        push!(dst, xor(0x2080, UInt16(b) << 12, UInt16(c) << 6, d))
                     else # 4-byte UTF-8
                         push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   0xdc80 $ (UInt16(c & 0xf) << 6) $ d)
+                                   xor(0xdc80, UInt16(c & 0xf) << 6, d))
                     end
                 else # too short
                     push!(dst, a, b, c)
@@ -273,7 +273,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
                 a += 0x2840
                 dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
                 dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
-                dst[j += 1] = 0xf0 $ ((((a % UInt8) << 4) & 0x3f) $ (b >> 6) % UInt8)
+                dst[j += 1] = xor(0xf0, ((a % UInt8) << 4) & 0x3f, (b >> 6) % UInt8)
                 dst[j += 1] = 0x80 | ((b % UInt8) & 0x3f)
             else
                 dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)

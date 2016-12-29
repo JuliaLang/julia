@@ -278,7 +278,8 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
     if (!ImageBase)
         return 0;
 
-    PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(GetCurrentProcess(), cursor->Rip);
+    PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
+        GetCurrentProcess(), cursor->Rip);
     if (!FunctionEntry) { // assume this is a NO_FPO RBP-based function
         cursor->Rsp = cursor->Rbp;                 // MOV RSP, RBP
         if (!readable_pointer((LPCVOID)cursor->Rsp))
@@ -304,12 +305,6 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
     return cursor->Rip != 0;
 #endif
 }
-
-#elif defined(_CPU_ARM_)
-// platforms on which libunwind may be broken
-
-static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) { return 0; }
-static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) { return 0; }
 
 #else
 // stacktrace using libunwind
@@ -401,10 +396,12 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
         else {
             const char *inlined = frame.inlined ? " [inlined]" : "";
             if (frame.line != -1) {
-                jl_safe_printf("%s at %s:%" PRIuPTR "%s\n", frame.func_name, frame.file_name, (uintptr_t)frame.line, inlined);
+                jl_safe_printf("%s at %s:%" PRIuPTR "%s\n", frame.func_name,
+                    frame.file_name, (uintptr_t)frame.line, inlined);
             }
             else {
-                jl_safe_printf("%s at %s (unknown line)%s\n", frame.func_name, frame.file_name, inlined);
+                jl_safe_printf("%s at %s (unknown line)%s\n", frame.func_name,
+                    frame.file_name, inlined);
             }
             free(frame.func_name);
             free(frame.file_name);

@@ -257,7 +257,7 @@ CROSS_COMPILE:=
 HOSTCC = $(CC)
 else
 HOSTCC := gcc
-override OPENBLAS_DYNAMIC_ARCH := 1
+OPENBLAS_DYNAMIC_ARCH := 1
 override CROSS_COMPILE:=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
@@ -640,11 +640,11 @@ endif
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
-override LLVM_VER:=3.9.0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=POWER8
+LLVM_VER:=3.9.0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=POWER8
 # GCC doesn't do -march= on ppc64le
-override MARCH=
+MARCH=
 endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
@@ -656,11 +656,18 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
 
-override LLVM_VER:=3.8.1
-override USE_BLAS64:=0
-override OPENBLAS_DYNAMIC_ARCH:=0
-override OPENBLAS_TARGET_ARCH:=ARMV7
-override USE_SYSTEM_LIBM:=1
+LLVM_VER:=3.9.0
+USE_BLAS64:=0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV7
+USE_SYSTEM_LIBM:=1
+endif
+
+# If we are running on aarch64 (e.g. ARMv8 or ARM64), set certain options automatically
+ifneq (,$(findstring aarch64,$(ARCH)))
+LLVM_VER:=3.9.0
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=ARMV8
 endif
 
 # Set MARCH-specific flags
@@ -893,6 +900,11 @@ endif
 
 ifeq ($(OS), Linux)
 OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -Wl,--export-dynamic,--as-needed,--no-whole-archive $(LIBUNWIND)
+# Detect if ifunc is supported
+IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void f(void) __attribute__((ifunc("f0")));'
+ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
+JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
+endif
 ifneq ($(SANITIZE),1)
 ifneq ($(SANITIZE_MEMORY),1)
 ifneq ($(LLVM_SANITIZE),1)

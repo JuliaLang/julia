@@ -273,7 +273,9 @@ for code in Any[
             notconst(a)
         end
     end
-    notconst.(code.code)
+    for e in code.code
+        notconst(e)
+    end
 end
 
 # branching based on inferrable conditions
@@ -421,3 +423,51 @@ function cat10880(a, b)
     Tuple{a.parameters..., b.parameters...}
 end
 @inferred cat10880(Tuple{Int8,Int16}, Tuple{Int32})
+
+# issue #19348
+function is_intrinsic_expr(e::Expr)
+    if e.head === :call
+        return Base.is_intrinsic_expr(e.args[1])
+    elseif e.head == :invoke
+        return false
+    elseif e.head === :new
+        return false
+    elseif e.head === :copyast
+        return false
+    elseif e.head === :inert
+        return false
+    end
+    return true
+end
+test_inferred_static(other::ANY) = true
+test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
+function test_inferred_static(expr::Expr)
+    if !is_intrinsic_expr(expr)
+        @test isleaftype(expr.typ)
+    end
+    for a in expr.args
+        test_inferred_static(a)
+    end
+end
+function test_inferred_static(arrow::Pair)
+    code, rt = arrow
+    @test isleaftype(rt)
+    @test code.inferred
+    @test all(x->isleaftype(x), code.slottypes)
+    @test all(x->isleaftype(x), code.ssavaluetypes)
+    for e in code.code
+        test_inferred_static(e)
+    end
+end
+
+function g19348(x)
+    a, b = x
+    return a + b
+end
+test_inferred_static(@code_typed g19348((1, 2.0)))
+
+# Issue 19641
+foo19641() = let a = 1.0
+    Core.Inference.return_type(x -> x + a, Tuple{Float64})
+end
+@inferred foo19641()

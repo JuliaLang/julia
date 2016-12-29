@@ -507,6 +507,9 @@ function setup_stdio(anon::Function, stdio::StdIOSet)
 end
 
 function spawn(cmd::Cmd, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+    if isempty(cmd.exec)
+        throw(ArgumentError("cannot spawn empty command"))
+    end
     loop = eventloop()
     pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3])
     setup_stdio(stdios) do in, out, err

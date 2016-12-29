@@ -9,6 +9,10 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
+
 ambigs = Any[[], [3], [2,5], [], [3]]
 
 mt = methods(ambig)
@@ -51,9 +55,9 @@ let err = try
           end
     io = IOBuffer()
     Base.showerror(io, err)
-    lines = split(takebuf_string(io), '\n')
-    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) at") ||
-                           startswith(str, "  ambig(x::Integer, y) at")
+    lines = split(String(take!(io)), '\n')
+    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in $curmod_str at") ||
+                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at")
     @test ambig_checkline(lines[2])
     @test ambig_checkline(lines[3])
 end
@@ -129,7 +133,8 @@ ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
 # Test that Core and Base are free of ambiguities
-@test (x->(isempty(x) || println(x)))(detect_ambiguities(Core, Base; imported=true))
+@test detect_ambiguities(Core, Base; imported=true) == []
+# not using isempty so this prints more information when it fails
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2

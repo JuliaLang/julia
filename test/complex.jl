@@ -55,6 +55,13 @@ end
             @test isequal(im * T(+1.0), Complex(T(+0.0), T(+1.0)))
             @test isequal(im * T(-1.0), Complex(T(-0.0), T(-1.0)))
         end
+
+        @testset "divide" begin
+            @test isequal(T(+0.0) / im, Complex(T(+0.0), T(-0.0)))
+            @test isequal(T(-0.0) / im, Complex(T(-0.0), T(+0.0)))
+            @test isequal(T(+1.0) / im, Complex(T(+0.0), T(-1.0)))
+            @test isequal(T(-1.0) / im, Complex(T(-0.0), T(+1.0)))
+        end
     end
     @test isequal(true + complex(true,false), complex(true,false) + complex(true,false))
     @test isequal(complex(true,false) + true, complex(true,false) + complex(true,false))
@@ -822,22 +829,22 @@ harddivs = ((1.0+im*1.0, 1.0+im*2^1023.0, 2^-1023.0-im*2^-1023.0), #1
       (2^-347.0+im*2^-54., 2^-1037.0+im*2^-1058.0, z7), #7
       (2^-1074.0+im*2^-1074., 2^-1073.0+im*2^-1074., 0.6+im*0.2), #8
       (2^1015.0+im*2^-989., 2^1023.0+im*2^1023.0, z9), #9
-      (2^-622.0+im*2^-1071., 2^-343.0+im*2^-798.0, z10)#10
+      (2^-622.0+im*2^-1071., 2^-343.0+im*2^-798.0, z10) #10
       )
 
 # calculate "accurate bits" in range 0:53 by algorithm given in arxiv.1210.4539
 function sb_accuracy(x,expected)
-  min(logacc(real(x),real(expected)),
-    logacc(imag(x),imag(expected)) )
+    min(logacc(real(x),real(expected)),
+        logacc(imag(x),imag(expected)))
 end
 relacc(x,expected) = abs(x-expected)/abs(expected)
 function logacc(x::Float64,expected::Float64)
-  x == expected && (return 53)
-  expected == 0 && (return 0)
-  (x == Inf || x == -Inf) && (return 0)
-  isnan(x) && (return 0)
-  ra = relacc(BigFloat(x),BigFloat(expected))
-  max(floor(Int,-log2(ra)),0)
+    x == expected && (return 53)
+    expected == 0 && (return 0)
+    (x == Inf || x == -Inf) && (return 0)
+    isnan(x) && (return 0)
+    ra = relacc(BigFloat(x),BigFloat(expected))
+    max(floor(Int,-log2(ra)),0)
 end
 # the robust division algorithm should have 53 or 52
 # bits accuracy for each of the hard divisions
@@ -845,8 +852,8 @@ end
 
 # division of non-Float64
 function cdiv_test(a,b)
-  c=convert(Complex{Float64},a)/convert(Complex{Float64},b)
-  50 <= sb_accuracy(c,convert(Complex{Float64},a/b))
+    c=convert(Complex{Float64},a)/convert(Complex{Float64},b)
+    50 <= sb_accuracy(c,convert(Complex{Float64},a/b))
 end
 @test cdiv_test(complex(1//2, 3//4), complex(17//13, 4//5))
 @test cdiv_test(complex(1,2), complex(8997,2432))
@@ -925,7 +932,7 @@ end
     @test Float16(1)+Float16(1)im === Complex32(1, 1)
     @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
     @test Float16(1)*im === Complex32(im)
-    @test Float16(1)/im === 1.0f0/im === Complex(0.0, -1.0)
+    @test Float16(1)/im === Complex32(0,-1)
     @test Float16(1)^im === Complex32(1) === Float16(1)+Float16(0)im
 end
 
@@ -959,3 +966,6 @@ end
         @inferred expm1(x)
     end
 end
+
+# issue #19240
+@test big(1)/(10+10im) ≈ (5-5im)/big(100) ≈ big"0.05" - big"0.05"*im

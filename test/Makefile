@@ -9,7 +9,8 @@ TESTS = all linalg sparse unicode strings dates $(filter-out TestHelpers runtest
 default: all
 
 $(TESTS):
-	@cd $(SRCDIR) && $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
 
 perf:
 	@$(MAKE) -C $(SRCDIR)/perf all

@@ -70,6 +70,7 @@ function depwarn(msg, funcsym)
             throw(ErrorException(msg))
         end
     end
+    nothing
 end
 
 function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
@@ -143,6 +144,7 @@ end
 @deprecate chol(A::AbstractMatrix, ::Type{Val{:U}}) chol(A)
 @deprecate chol(A::Number, ::Type{Val{:L}})         ctranspose(chol(A))
 @deprecate chol(A::AbstractMatrix, ::Type{Val{:L}}) ctranspose(chol(A))
+
 
 # Number updates
 
@@ -241,7 +243,7 @@ export fieldoffsets
 # 14766
 @deprecate write(io::IO, p::Ptr, nb::Integer) unsafe_write(io, p, nb)
 
-@deprecate isgeneric(f) isa(f,Function)
+@deprecate(isgeneric(f), isa(f, Function))
 
 # need to do this manually since the front end deprecates method defs of `call`
 const call = @eval function(f, args...; kw...)
@@ -281,28 +283,28 @@ for (Fun, func) in [(:IdFun, :identity),
                     (:ConjFun, :conj),
                     (:AndFun, :&),
                     (:OrFun, :|),
-                    (:XorFun, :$),
+                    (:XorFun, :xor),
                     (:AddFun, :+),
-                    (:DotAddFun, :.+),
+                    # (:DotAddFun, :.+),
                     (:SubFun, :-),
-                    (:DotSubFun, :.-),
+                    # (:DotSubFun, :.-),
                     (:MulFun, :*),
-                    (:DotMulFun, :.*),
+                    # (:DotMulFun, :.*),
                     (:RDivFun, :/),
-                    (:DotRDivFun, :./),
+                    # (:DotRDivFun, :./),
                     (:LDivFun, :\),
                     (:IDivFun, :div),
-                    (:DotIDivFun, :.÷),
+                    # (:DotIDivFun, :.÷),
                     (:ModFun, :mod),
                     (:RemFun, :rem),
-                    (:DotRemFun, :.%),
+                    # (:DotRemFun, :.%),
                     (:PowFun, :^),
                     (:MaxFun, :scalarmax),
                     (:MinFun, :scalarmin),
                     (:LessFun, :<),
                     (:MoreFun, :>),
-                    (:DotLSFun, :.<<),
-                    (:DotRSFun, :.>>),
+                    # (:DotLSFun, :.<<),
+                    # (:DotRSFun, :.>>),
                     (:ElementwiseMaxFun, :max),
                     (:ElementwiseMinFun, :min),
                     (:ComplexFun, :complex),
@@ -743,9 +745,10 @@ end
 
 # Deprecate no-op transpose fallback. Please see #13171 and #17075.
 function transpose(x)
-    depwarn(string("the no-op `transpose` fallback is deprecated, and no more specific ",
-        "`transpose` method for $(typeof(x)) exists. Consider `permutedims(x, [2, 1])` ",
-        "or writing a specific `transpose(x::$(typeof(x)))` method if appropriate."),
+    depwarn(string("the no-op `transpose` for non-numeric arrays is deprecated, ",
+        "and no specific `transpose` method for $(typeof(x)) exists. Use ",
+        "`permutedims(x, (2, 1))` for matrices and `reshape(x, 1, length(x))` for vectors, ",
+        "or write a specific `transpose(x::$(typeof(x)))` method if appropriate."),
         :transpose)
     return x
 end
@@ -790,20 +793,20 @@ function convert(::Type{Base.LinAlg.UnitUpperTriangular}, A::Diagonal)
         "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
         "Consider calling the `UnitUpperTriangular` constructor directly ",
         "(`Base.LinAlg.UnitUpperTriangular(A)`) instead."), :convert)
-    if !all(A.diag .== one(eltype(A)))
+    if !all(x -> x == one(x), A.diag)
         throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
     end
-    Base.LinAlg.UnitUpperTriangular(full(A))
+    Base.LinAlg.UnitUpperTriangular(Array(A))
 end
 function convert(::Type{Base.LinAlg.UnitLowerTriangular}, A::Diagonal)
     depwarn(string("`convert(::Type{UnitLowerTriangular}, A::Diagonal)` and other methods ",
         "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
         "Consider calling the `UnitLowerTriangular` constructor directly ",
         "(`Base.LinAlg.UnitLowerTriangular(A)`) instead."), :convert)
-    if !all(A.diag .== one(eltype(A)))
+    if !all(x -> x == one(x), A.diag)
         throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
     end
-    Base.LinAlg.UnitLowerTriangular(full(A))
+    Base.LinAlg.UnitLowerTriangular(Array(A))
 end
 function convert(::Type{LowerTriangular}, A::Bidiagonal)
     depwarn(string("`convert(::Type{LowerTriangular}, A::Bidiagonal)` and other methods ",
@@ -811,7 +814,7 @@ function convert(::Type{LowerTriangular}, A::Bidiagonal)
         "Consider calling the `LowerTriangular` constructor directly (`LowerTriangular(A)`) ",
         "instead."), :convert)
     if !A.isupper
-        LowerTriangular(full(A))
+        LowerTriangular(Array(A))
     else
         throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
     end
@@ -822,7 +825,7 @@ function convert(::Type{UpperTriangular}, A::Bidiagonal)
         "Consider calling the `UpperTriangular` constructor directly (`UpperTriangular(A)`) ",
         "instead."), :convert)
     if A.isupper
-        UpperTriangular(full(A))
+        UpperTriangular(Array(A))
     else
         throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
     end
@@ -832,7 +835,7 @@ end
 for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
         :sinpi, :cosc, :ceil, :floor, :trunc, :round, :real, :imag,
-        :log1p, :expm1, :abs, :abs2, :conj,
+        :log1p, :expm1, :abs, :abs2,
         :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
         :cos, :cosh, :cosd, :acos, :acosd,
         :cot, :coth, :cotd, :acot, :acotd,
@@ -978,6 +981,20 @@ macro vectorize_2arg(S,f)
 end
 export @vectorize_1arg, @vectorize_2arg
 
+# deprecations for uses of old dot operators (.* etc) as objects, rather than
+# just calling them infix.
+for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=, :≥, :\, :^, ://, :>>, :<<)
+    dotop = Symbol('.', op)
+    # define as const dotop = (a,b) -> ...
+    # to work around syntax deprecation for dotop(a,b) = ...
+    @eval const $dotop = (a,b) -> begin
+        depwarn(string($(string(dotop)), " is no longer a function object; use broadcast(",$op,", ...) instead"),
+                $(QuoteNode(dotop)))
+        broadcast($op, a, b)
+    end
+    @eval export $dotop
+end
+
 # Devectorize manually vectorized abs methods in favor of compact broadcast syntax
 @deprecate abs(f::Base.Pkg.Resolve.MaxSum.Field) abs.(f)
 @deprecate abs(B::BitArray) abs.(B)
@@ -998,5 +1015,142 @@ eval(Multimedia, :(macro textmime(mime)
 end))
 
 @deprecate ipermutedims(A::AbstractArray,p) permutedims(A, invperm(p))
+
+# 18696
+function ($)(x, y)
+    depwarn("`x \$ y` is deprecated.  use `xor(x, y)` or `x ⊻ y` instead.", :$)
+    xor(x, y)
+end
+export $
+
+@deprecate is (===)
+
+
+@deprecate_binding Filter    Iterators.Filter
+@deprecate_binding Zip       Iterators.Zip
+@deprecate filter(flt, itr)  Iterators.filter(flt, itr)
+@deprecate_binding rest      Iterators.rest
+@deprecate_binding countfrom Iterators.countfrom
+@deprecate_binding take      Iterators.take
+@deprecate_binding drop      Iterators.drop
+@deprecate_binding cycle     Iterators.cycle
+@deprecate_binding repeated  Iterators.repeated
+
+# promote_op method where the operator is also a type
+function promote_op(op::Type, Ts::Type...)
+    depwarn("promote_op(op::Type, ::Type...) is deprecated as it is no " *
+            "longer needed in Base. If you need its functionality, consider " *
+            "defining it locally.", :promote_op)
+    if isdefined(Core, :Inference)
+        return Core.Inference.return_type(op, Tuple{Ts...})
+    end
+    return op
+end
+
+# NOTE: Deprecation of Channel{T}() is implemented in channels.jl.
+# To be removed from there when 0.6 deprecations are removed.
+
+# Not exported, but probably better to have deprecations anyway
+function reduced_dims(::Tuple{}, d::Int)
+    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    ()
+end
+reduced_dims(::Tuple{}, region) = ()
+function reduced_dims(dims::Dims, region)
+    Base.depwarn("`reduced_dims` is deprecated for Dims-tuples; pass `indices` to `reduced_indices` instead", :reduced_dims)
+    map(last, reduced_indices(map(OneTo, dims), region))
+end
+
+function reduced_dims0(::Tuple{}, d::Int)
+    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    ()
+end
+reduced_dims0(::Tuple{}, region) = ()
+function reduced_dims0(dims::Dims, region)
+    Base.depwarn("`reduced_dims0` is deprecated for Dims-tuples; pass `indices` to `reduced_indices0` instead", :reduced_dims0)
+    map(last, reduced_indices0(map(OneTo, dims), region))
+end
+
+function reduced_dims(a::AbstractArray, region)
+    Base.depwarn("`reduced_dims` is deprecated in favor of `reduced_indices`", :reduced_dims)
+    to_shape(reduced_indices(a, region))  # to_shape keeps the return-type consistent, when it's possible to do so
+end
+
+function reduced_dims0(a::AbstractArray, region)
+    Base.depwarn("`reduced_dims0` is deprecated in favor of `reduced_indices0`", :reduced_dims)
+    to_shape(reduced_indices0(a, region))
+end
+
+# #18218
+eval(Base.LinAlg, quote
+    function arithtype(T)
+        Base.depwarn(string("arithtype is now deprecated. If you were using it inside a ",
+            "promote_op call, use promote_op(LinAlg.matprod, Ts...) instead. Otherwise, ",
+            "if you need its functionality, consider defining it locally."),
+            :arithtype)
+        T
+    end
+    function arithtype(::Type{Bool})
+        Base.depwarn(string("arithtype is now deprecated. If you were using it inside a ",
+            "promote_op call, use promote_op(LinAlg.matprod, Ts...) instead. Otherwise, ",
+            "if you need its functionality, consider defining it locally."),
+            :arithtype)
+        Int
+    end
+end)
+
+# #19246
+@deprecate den denominator
+@deprecate num numerator
+
+Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching(::_FDWatcher) should not be used", :stop_watching)
+
+# #19088
+@deprecate takebuf_array take!
+@deprecate takebuf_string(b) String(take!(b))
+
+# #19288
+eval(Base.Dates, quote
+    function recur{T<:TimeType}(fun::Function, dr::StepRange{T}; negate::Bool=false, limit::Int=10000)
+        Base.depwarn("Dates.recur is deprecated, use filter instead.",:recur)
+        if negate
+            filter(x -> !fun(x), dr)
+        else
+            filter(fun, dr)
+        end
+     end
+     recur{T<:TimeType}(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000) = recur(fun, start:step:stop; negate=negate)
+end)
+
+# #18931
+@deprecate cummin(A, dim=1) accumulate(min, A, dim)
+@deprecate cummax(A, dim=1) accumulate(max, A, dim)
+
+# #19598
+@deprecate sumabs(x)          sum(abs, x)
+@deprecate sumabs(A, region)  sum(abs, A, region)
+@deprecate sumabs2(x)         sum(abs2, x)
+@deprecate sumabs2(A, region) sum(abs2, A, region)
+@deprecate minabs(x)          minimum(abs, x)
+@deprecate minabs(A, region)  minimum(abs, A, region)
+@deprecate maxabs(x)          maximum(abs, x)
+@deprecate maxabs(A, region)  maximum(abs, A, region)
+
+for (dep, f, op) in [(:sumabs!, :sum!, :abs),
+                     (:sumabs2!, :sum!, :abs2),
+                     (:minabs!, :minimum!, :abs),
+                     (:maxabs!, :maximum!, :abs)]
+    @eval function ($dep)(r, A; init=true)
+        Base.depwarn("$dep(r, A; init=$init) is deprecated, use $f($op, r, A; init=$init) instead.", Symbol($dep))
+        ($f)($op, r, A; init=init)
+    end
+end
+
+# Deprecate vectorized xor in favor of compact broadcast syntax
+@deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
+@deprecate xor(A::BitArray, b::Bool)                xor.(A, b)
+@deprecate xor(a::Number, B::AbstractArray)         xor.(a, B)
+@deprecate xor(A::AbstractArray, b::Number)         xor.(A, b)
+@deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
 
 # End deprecations scheduled for 0.6

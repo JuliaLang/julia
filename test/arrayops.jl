@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#Array test
+# Array test
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -431,7 +431,7 @@ end
     @test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
     @test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
 
-    # #14085
+    #14085
     @test findmax(4:9) == (9,6)
     @test indmax(4:9) == 6
     @test findmin(4:9) == (4,1)
@@ -444,14 +444,14 @@ end
 
 @testset "permutedims" begin
 
-    #keeps the num of dim
+    # keeps the num of dim
     p = randperm(5)
     q = randperm(5)
     a = rand(p...)
     b = permutedims(a,q)
     @test isequal(size(b), tuple(p[q]...))
 
-    #hand made case
+    # hand made case
     y = zeros(1,2,3)
     for i = 1:6
         y[i]=i
@@ -463,7 +463,7 @@ end
         z[i+3] = i*2
     end
 
-    #permutes correctly
+    # permutes correctly
     @test isequal(z,permutedims(y,[3,1,2]))
     @test isequal(z,permutedims(y,(3,1,2)))
 
@@ -952,6 +952,17 @@ end
         asc = sortcols(a)
         @test lexless(asc[:,1],asc[:,2])
         @test lexless(asc[:,2],asc[:,3])
+
+        # mutating functions
+        o = ones(3, 4)
+        m = mapslices(x->fill!(x, 0), o, 2)
+        @test m == zeros(3, 4)
+        @test o == ones(3, 4)
+
+        # issue #18524
+        m = mapslices(x->tuple(x), [1 2; 3 4], 1)
+        @test m[1,1] == ([1,3],)
+        @test m[1,2] == ([2,4],)
 
         asr = sortrows(a, rev=true)
         @test lexless(asr[2,:],asr[1,:])
@@ -1533,7 +1544,7 @@ end
 
 module RetTypeDecl
     using Base.Test
-    import Base: +, *, .*, convert
+    import Base: +, *, broadcast, convert
 
     immutable MeterUnits{T,P} <: Number
         val::T
@@ -1546,15 +1557,15 @@ module RetTypeDecl
     (+){T,pow}(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) = MeterUnits{T,pow}(x.val+y.val)
     (*){T,pow}(x::Int, y::MeterUnits{T,pow}) = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
     (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    (.*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
+    broadcast{T}(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
     convert{T,pow}(::Type{MeterUnits{T,pow}}, y::Real) = MeterUnits{T,pow}(convert(T,y))
 
     @test @inferred(m+[m,m]) == [m+m,m+m]
     @test @inferred([m,m]+m) == [m+m,m+m]
-    @test @inferred(m.*[m,m]) == [m2,m2]
-    @test @inferred([m,m].*m) == [m2,m2]
+    @test @inferred(broadcast(*,m,[m,m])) == [m2,m2]
+    @test @inferred(broadcast(*,[m,m],m)) == [m2,m2]
     @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
-    @test @inferred([m m].*[m,m]) == [m2 m2; m2 m2]
+    @test @inferred(broadcast(*,[m m],[m,m])) == [m2 m2; m2 m2]
 end
 
 # range, range ops
@@ -1868,3 +1879,109 @@ end
         @test size(a) == size(b)
     end
 end
+
+isdefined(Main, :TestHelpers) || eval(Main, :(include("TestHelpers.jl")))
+using TestHelpers.OAs
+
+@testset "accumulate, accumulate!" begin
+
+    @test accumulate(+, [1,2,3]) == [1, 3, 6]
+    @test accumulate(min, [1 2; 3 4], 1) == [1 2; 1 2]
+    @test accumulate(max, [1 2; 3 0], 2) == [1 2; 3 3]
+    @test accumulate(+, Bool[]) == Int[]
+    @test accumulate(*, Bool[]) == Bool[]
+    @test accumulate(+, Float64[]) == Float64[]
+
+    @test accumulate(min, [1, 2, 5, -1, 3, -2]) == [1, 1, 1, -1, -1, -2]
+    @test accumulate(max, [1, 2, 5, -1, 3, -2]) == [1, 2, 5, 5, 5, 5]
+
+    @test accumulate(max, [1 0; 0 1], 1) == [1 0; 1 1]
+    @test accumulate(max, [1 0; 0 1], 2) == [1 1; 0 1]
+    @test accumulate(min, [1 0; 0 1], 1) == [1 0; 0 0]
+    @test accumulate(min, [1 0; 0 1], 2) == [1 0; 0 0]
+
+    @test isa(accumulate(+,     Int[]) , Vector{Int})
+    @test isa(accumulate(+, 1., Int[]) , Vector{Float64})
+    @test accumulate(+, 1, [1,2]) == [2, 4]
+    arr = randn(4)
+    @test accumulate(*, 1, arr) ≈ accumulate(*, arr)
+
+    N = 5
+    for arr in [rand(Float64, N), rand(Bool, N), rand(-2:2, N)]
+        for (op, cumop) in [(+, cumsum), (*, cumprod)]
+            @inferred accumulate(op, arr)
+            accumulate_arr = accumulate(op, arr)
+            @test accumulate_arr ≈ cumop(arr)
+            @test accumulate_arr[end] ≈ reduce(op, arr)
+            @test accumulate_arr[1] ≈ arr[1]
+            @test accumulate(op, arr, 10) ≈ arr
+
+            if eltype(arr) in [Int, Float64] # eltype of out easy
+                out = similar(arr)
+                @test accumulate!(op, out, arr) ≈ accumulate_arr
+                @test out ≈ accumulate_arr
+            end
+        end
+    end
+
+    # exotic indexing
+    arr = randn(4)
+    oarr = OffsetArray(arr, (-3,))
+    @test accumulate(+, oarr).parent == accumulate(+, arr)
+
+    @inferred accumulate(+, randn(3))
+    @inferred accumulate(+, 1, randn(3))
+
+    # asymmetric operation
+    op(x,y) = 2x+y
+    @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
+    @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
+end
+
+@testset "zeros and ones" begin
+    @test ones([1,2], Float64, (2,3)) == ones(2,3)
+    @test ones(2) == ones(Int, 2) == ones([2,3], Float32, 2) ==  [1,1]
+    @test isa(ones(2), Vector{Float64})
+    @test isa(ones(Int, 2), Vector{Int})
+    @test isa(ones([2,3], Float32, 2), Vector{Float32})
+
+    function test_zeros(arr, T, s)
+        @test all(arr .== 0)
+        @test isa(arr, T)
+        @test size(arr) == s
+    end
+    test_zeros(zeros(),      Array{Float64, 0}, ())
+    test_zeros(zeros(2),     Vector{Float64},   (2,))
+    test_zeros(zeros(2,3),   Matrix{Float64},   (2,3))
+    test_zeros(zeros((2,3)), Matrix{Float64},   (2,3))
+
+    test_zeros(zeros(Int, 6),      Vector{Int}, (6,))
+    test_zeros(zeros(Int, 2, 3),   Matrix{Int}, (2,3))
+    test_zeros(zeros(Int, (2, 3)), Matrix{Int}, (2,3))
+
+    test_zeros(zeros([1 2; 3 4]), Matrix{Int}, (2, 2))
+    test_zeros(zeros([1 2; 3 4], Float64), Matrix{Float64}, (2, 2))
+
+    zs = zeros(SparseMatrixCSC([1 2; 3 4]), Complex{Float64}, (2,3))
+    test_zeros(zs, SparseMatrixCSC{Complex{Float64}}, (2, 3))
+
+    @testset "#19265" begin
+        @test_throws MethodError zeros(Float64, [1.])
+        x = [1.]
+        test_zeros(zeros(x, Float64), Vector{Float64}, (1,))
+        @test x == [1.]
+    end
+
+    # exotic indexing
+    oarr = zeros(randn(3), UInt16, 1:3, -1:0)
+    @test indices(oarr) == (1:3, -1:0)
+    test_zeros(oarr.parent, Matrix{UInt16}, (3, 2))
+end
+
+# issue #11053
+type T11053
+    a::Float64
+end
+Base.:*(a::T11053, b::Real) = T11053(a.a*b)
+Base.:(==)(a::T11053, b::T11053) = a.a == b.a
+@test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]

@@ -16,6 +16,14 @@ invalid_dlm(::Type{UInt32}) = 0xfffffffe
 const offs_chunk_size = 5000
 
 countlines(f::AbstractString, eol::Char='\n') = open(io->countlines(io,eol), f)::Int
+
+"""
+    countlines(io::IO, eol::Char='\\n')
+
+Read `io` until the end of the stream/file and count the number of lines. To specify a file
+pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
+passing them as the second argument.
+"""
 function countlines(io::IO, eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
@@ -115,7 +123,9 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
     use_mmap = get(optsd, :use_mmap, is_windows() ? false : true)
     fsz = filesize(input)
     if use_mmap && fsz > 0 && fsz < typemax(Int)
-        a = Mmap.mmap(input, Vector{UInt8}, (Int(fsz),))
+        a = open(input, "r") do f
+            Mmap.mmap(f, Vector{UInt8}, (Int(fsz),))
+        end
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
         # jl_try_substrtod to segfault below.
@@ -643,9 +653,9 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
             writedlm_cell(pb, a[i, j], dlm, quotes)
             j == lastc ? write(pb,'\n') : print(pb,dlm)
         end
-        (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
+        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
     end
-    write(io, takebuf_array(pb))
+    write(io, take!(pb))
     nothing
 end
 
@@ -677,9 +687,9 @@ function writedlm(io::IO, itr, dlm; opts...)
     pb = PipeBuffer()
     for row in itr
         writedlm_row(pb, row, dlm, quotes)
-        (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
+        (nb_available(pb) > (16*1024)) && write(io, take!(pb))
     end
-    write(io, takebuf_array(pb))
+    write(io, take!(pb))
     nothing
 end
 
@@ -693,7 +703,7 @@ end
     writedlm(f, A, delim='\\t'; opts)
 
 Write `A` (a vector, matrix, or an iterable collection of iterable rows) as text to `f`
-(either a filename string or an [`IO`](:class:`IO`) stream) using the given delimiter
+(either a filename string or an `IO` stream) using the given delimiter
 `delim` (which defaults to tab, but can be any printable Julia object, typically a `Char` or
 `AbstractString`).
 
@@ -705,7 +715,7 @@ writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 """
     writecsv(filename, A; opts)
 
-Equivalent to [`writedlm`](:func:`writedlm`) with `delim` set to comma.
+Equivalent to [`writedlm`](@ref) with `delim` set to comma.
 """
 writecsv(io, a; opts...) = writedlm(io, a, ','; opts...)
 

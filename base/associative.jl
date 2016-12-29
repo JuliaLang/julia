@@ -8,7 +8,7 @@ haskey(d::Associative, k) = in(k,keys(d))
 
 function in(p::Pair, a::Associative, valcmp=(==))
     v = get(a,p[1],secret_table_token)
-    if !is(v, secret_table_token)
+    if v !== secret_table_token
         valcmp(v, p[2]) && return true
     end
     return false
@@ -57,8 +57,7 @@ function next(v::ValueIterator, state)
     n[1][2], n[2]
 end
 
-in(k, v::KeyIterator) = !is(get(v.dict, k, secret_table_token),
-                            secret_table_token)
+in(k, v::KeyIterator) = get(v.dict, k, secret_table_token) !== secret_table_token
 
 
 """
@@ -116,7 +115,7 @@ end
     merge!(d::Associative, others::Associative...)
 
 Update collection with pairs from the other collections.
-See also [`merge`](:func:`merge`).
+See also [`merge`](@ref).
 """
 function merge!(d::Associative, others::Associative...)
     for other in others
@@ -139,7 +138,7 @@ end
 """
     keytype(type)
 
-Get the key type of an associative collection type. Behaves similarly to [`eltype`](:func:`eltype`).
+Get the key type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 """
 keytype{K,V}(::Type{Associative{K,V}}) = K
 keytype(a::Associative) = keytype(typeof(a))
@@ -148,7 +147,7 @@ keytype{A<:Associative}(::Type{A}) = keytype(supertype(A))
 """
     valtype(type)
 
-Get the value type of an associative collection type. Behaves similarly to [`eltype`](:func:`eltype`).
+Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 """
 valtype{K,V}(::Type{Associative{K,V}}) = V
 valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))
@@ -252,14 +251,14 @@ const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::Associative, h::UInt)
     h = hash(hasha_seed, h)
     for (k,v) in a
-        h $= hash(k, hash(v))
+        h ⊻= hash(k, hash(v))
     end
     return h
 end
 
 function getindex(t::Associative, key)
     v = get(t, key, secret_table_token)
-    if is(v, secret_table_token)
+    if v === secret_table_token
         throw(KeyError(key))
     end
     return v
@@ -324,7 +323,7 @@ end
 
 function pop!(t::ObjectIdDict, key::ANY)
     val = pop!(t, key, secret_table_token)
-    !is(val,secret_table_token) ? val : throw(KeyError(key))
+    val !== secret_table_token ? val : throw(KeyError(key))
 end
 
 function delete!(t::ObjectIdDict, key::ANY)

@@ -1,10 +1,15 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+
 function test_have_color(buf, color, no_color)
     if Base.have_color
-        @test takebuf_string(buf) == color
+        @test String(take!(buf)) == color
     else
-        @test takebuf_string(buf) == no_color
+        @test String(take!(buf)) == no_color
     end
 end
 
@@ -38,7 +43,7 @@ test_have_color(buf, "", "")
 
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
-let mc = takebuf_string(buf)
+let mc = String(take!(buf))
     @test contains(mc, "\nClosest candidates are:\n  Tuple{}{T}(")
     @test !contains(mc, cfile)
 end
@@ -97,22 +102,22 @@ PR16155line2 = @__LINE__ + 1
 (::Type{T}){T<:PR16155}(arg::Any) = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  PR16155(::Any, ::Any)$cfile$PR16155line\n  PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  PR16155{T<:PR16155}(::Any)$cfile$PR16155line2\n  ...\e[0m",
-                     "\nClosest candidates are:\n  PR16155(::Any, ::Any)$cfile$PR16155line\n  PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  PR16155{T<:PR16155}(::Any)$cfile$PR16155line2\n  ...")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155{T<:$(curmod_prefix)PR16155}(::Any)$cfile$PR16155line2\n  ...\e[0m",
+                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155{T<:$(curmod_prefix)PR16155}(::Any)$cfile$PR16155line2\n  ...")
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  PR16155(::Int64, ::Any)$cfile$PR16155line\n  PR16155(::Any, ::Any)$cfile$PR16155line\n  PR16155{T<:PR16155}(::Any)$cfile$PR16155line2\n  ...\e[0m",
-                     "\nClosest candidates are:\n  PR16155(::Int64, ::Any)$cfile$PR16155line\n  PR16155(::Any, ::Any)$cfile$PR16155line\n  PR16155{T<:PR16155}(::Any)$cfile$PR16155line2\n  ...")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155{T<:$(curmod_prefix)PR16155}(::Any)$cfile$PR16155line2\n  ...\e[0m",
+                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155{T<:$(curmod_prefix)PR16155}(::Any)$cfile$PR16155line2\n  ...")
 
 c6line = @__LINE__
 method_c6(; x=1) = x
 method_c6(a; y=1) = y
 m_error = try method_c6(y=1) catch e; e; end
 showerror(buf, m_error)
-error_out = takebuf_string(buf)
+error_out = String(take!(buf))
 m_error = try method_c6(1, x=1) catch e; e; end
 showerror(buf, m_error)
-error_out1 = takebuf_string(buf)
+error_out1 = String(take!(buf))
 
 c6mline = @__LINE__
 module TestKWError
@@ -121,10 +126,10 @@ method_c6_in_module(a; y=1) = y
 end
 m_error = try TestKWError.method_c6_in_module(y=1) catch e; e; end
 showerror(buf, m_error)
-error_out2 = takebuf_string(buf)
+error_out2 = String(take!(buf))
 m_error = try TestKWError.method_c6_in_module(1, x=1) catch e; e; end
 showerror(buf, m_error)
-error_out3 = takebuf_string(buf)
+error_out3 = String(take!(buf))
 
 if Base.have_color
     @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1)\e[1m\e[31m got unsupported keyword argument \"y\"\e[0m")
@@ -170,9 +175,9 @@ macro except_str(expr, err_type)
             end
             err === nothing && error("expected failure, but no exception thrown")
             @test typeof(err) === $(esc(err_type))
-            buff = IOBuffer()
-            showerror(buff, err)
-            takebuf_string(buff)
+            buf = IOBuffer()
+            showerror(buf, err)
+            String(take!(buf))
         end
     end
 end
@@ -186,9 +191,9 @@ macro except_strbt(expr, err_type)
             end
             err === nothing && error("expected failure, but no exception thrown")
             @test typeof(err) === $(esc(err_type))
-            buff = IOBuffer()
-            showerror(buff, err, catch_backtrace())
-            takebuf_string(buff)
+            buf = IOBuffer()
+            showerror(buf, err, catch_backtrace())
+            String(take!(buf))
         end
     end
 end
@@ -218,14 +223,14 @@ let
     f11007(::MethodType11007) = nothing
     err_str = @except_str(invoke(f11007, Tuple{InvokeType11007},
                                  InstanceType11007()), MethodError)
-    @test !contains(err_str, "::InstanceType11007")
-    @test contains(err_str, "::InvokeType11007")
+    @test !contains(err_str, "::$(curmod_prefix)InstanceType11007")
+    @test contains(err_str, "::$(curmod_prefix)InvokeType11007")
 end
 
 module __tmp_replutil
 
 using Base.Test
-import Main.@except_str
+import ..@except_str
 global +
 +() = nothing
 err_str = @except_str 1 + 2 MethodError
@@ -250,7 +255,7 @@ end
 abstract T11007
 let
     err_str = @except_str T11007() MethodError
-    @test contains(err_str, "no method matching T11007()")
+    @test contains(err_str, "no method matching $(curmod_prefix)T11007()")
 end
 
 immutable TypeWithIntParam{T <: Integer} end
@@ -306,11 +311,11 @@ end
 
 # issue 11845
 let
-    buff = IOBuffer()
-    showerror(buff, MethodError(convert, (3, 1.0)))
-    showerror(buff, MethodError(convert, (Int, 1.0)))
-    showerror(buff, MethodError(convert, Tuple{Type, Float64}))
-    showerror(buff, MethodError(convert, Tuple{DataType, Float64}))
+    buf = IOBuffer()
+    showerror(buf, MethodError(convert, (3, 1.0)))
+    showerror(buf, MethodError(convert, (Int, 1.0)))
+    showerror(buf, MethodError(convert, Tuple{Type, Float64}))
+    showerror(buf, MethodError(convert, Tuple{DataType, Float64}))
 end
 
 # Issue #14884
@@ -326,17 +331,17 @@ let err_str,
     err_str = @except_str :a() MethodError
     @test contains(err_str, "MethodError: objects of type Symbol are not callable")
     err_str = @except_str EightBitType() MethodError
-    @test contains(err_str, "MethodError: no method matching EightBitType()")
+    @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitType()")
     err_str = @except_str i() MethodError
-    @test contains(err_str, "MethodError: objects of type EightBitType are not callable")
+    @test contains(err_str, "MethodError: objects of type $(curmod_prefix)EightBitType are not callable")
     err_str = @except_str EightBitTypeT() MethodError
-    @test contains(err_str, "MethodError: no method matching EightBitTypeT{T}()")
+    @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitTypeT{T}()")
     err_str = @except_str EightBitTypeT{Int32}() MethodError
-    @test contains(err_str, "MethodError: no method matching EightBitTypeT{Int32}()")
+    @test contains(err_str, "MethodError: no method matching $(curmod_prefix)EightBitTypeT{Int32}()")
     err_str = @except_str j() MethodError
-    @test contains(err_str, "MethodError: objects of type EightBitTypeT{Int32} are not callable")
+    @test contains(err_str, "MethodError: objects of type $(curmod_prefix)EightBitTypeT{Int32} are not callable")
     err_str = @except_str FunctionLike()() MethodError
-    @test contains(err_str, "MethodError: no method matching (::FunctionLike)()")
+    @test contains(err_str, "MethodError: no method matching (::$(curmod_prefix)FunctionLike)()")
     err_str = @except_str [1,2](1) MethodError
     @test contains(err_str, "MethodError: objects of type Array{$Int,1} are not callable\nUse square brackets [] for indexing an Array.")
     # Issue 14940
@@ -363,15 +368,15 @@ let err_str,
     sp = Base.source_path()
     sn = basename(sp)
 
-    @test sprint(show, which(Symbol, Tuple{})) == "Symbol() at $sp:$(method_defs_lineno + 0)"
-    @test sprint(show, which(:a, Tuple{})) == "(::Symbol)() at $sp:$(method_defs_lineno + 1)"
-    @test sprint(show, which(EightBitType, Tuple{})) == "EightBitType() at $sp:$(method_defs_lineno + 2)"
-    @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) == "(::EightBitType)() at $sp:$(method_defs_lineno + 3)"
-    @test sprint(show, which(EightBitTypeT, Tuple{})) == "(::Type{EightBitTypeT})() at $sp:$(method_defs_lineno + 4)"
-    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{EightBitTypeT{T}}){T}() at $sp:$(method_defs_lineno + 5)"
-    @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::EightBitTypeT)() at $sp:$(method_defs_lineno + 6)"
-    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) at boot.jl:")
-    @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::FunctionLike)() at $sp:$(method_defs_lineno + 7)")
+    @test sprint(show, which(Symbol, Tuple{})) == "Symbol() in $curmod_str at $sp:$(method_defs_lineno + 0)"
+    @test sprint(show, which(:a, Tuple{})) == "(::Symbol)() in $curmod_str at $sp:$(method_defs_lineno + 1)"
+    @test sprint(show, which(EightBitType, Tuple{})) == "$(curmod_prefix)EightBitType() in $curmod_str at $sp:$(method_defs_lineno + 2)"
+    @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) == "(::$(curmod_prefix)EightBitType)() in $curmod_str at $sp:$(method_defs_lineno + 3)"
+    @test sprint(show, which(EightBitTypeT, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT})() in $curmod_str at $sp:$(method_defs_lineno + 4)"
+    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT{T}}){T}() in $curmod_str at $sp:$(method_defs_lineno + 5)"
+    @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
+    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) in Core at boot.jl:")
+    @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
     @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
     @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
@@ -380,17 +385,17 @@ let err_str,
     err_str = @except_stackframe :a() ErrorException
     @test err_str == " in (::Symbol)() at $sn:$(method_defs_lineno + 1)"
     err_str = @except_stackframe EightBitType() ErrorException
-    @test err_str == " in EightBitType() at $sn:$(method_defs_lineno + 2)"
+    @test err_str == " in $(curmod_prefix)EightBitType() at $sn:$(method_defs_lineno + 2)"
     err_str = @except_stackframe i() ErrorException
-    @test err_str == " in (::EightBitType)() at $sn:$(method_defs_lineno + 3)"
+    @test err_str == " in (::$(curmod_prefix)EightBitType)() at $sn:$(method_defs_lineno + 3)"
     err_str = @except_stackframe EightBitTypeT() ErrorException
-    @test err_str == " in EightBitTypeT{T}() at $sn:$(method_defs_lineno + 4)"
+    @test err_str == " in $(curmod_prefix)EightBitTypeT{T}() at $sn:$(method_defs_lineno + 4)"
     err_str = @except_stackframe EightBitTypeT{Int32}() ErrorException
-    @test err_str == " in EightBitTypeT{Int32}() at $sn:$(method_defs_lineno + 5)"
+    @test err_str == " in $(curmod_prefix)EightBitTypeT{Int32}() at $sn:$(method_defs_lineno + 5)"
     err_str = @except_stackframe j() ErrorException
-    @test err_str == " in (::EightBitTypeT{Int32})() at $sn:$(method_defs_lineno + 6)"
+    @test err_str == " in (::$(curmod_prefix)EightBitTypeT{Int32})() at $sn:$(method_defs_lineno + 6)"
     err_str = @except_stackframe FunctionLike()() ErrorException
-    @test err_str == " in (::FunctionLike)() at $sn:$(method_defs_lineno + 7)"
+    @test err_str == " in (::$(curmod_prefix)FunctionLike)() at $sn:$(method_defs_lineno + 7)"
 end
 
 # Issue #13032
@@ -452,7 +457,7 @@ end
 # @macroexpand tests
 macro seven_dollar(ex)
     # simonbyrne example 18240
-    isa(ex,Expr) && ex.head == :$ ? 7 : ex
+    isa(ex,Expr) && ex.head == :$ ? 7 : esc(ex)
 end
 
 let

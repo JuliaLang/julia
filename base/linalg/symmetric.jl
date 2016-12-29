@@ -10,13 +10,35 @@ end
 
 Construct a `Symmetric` matrix from the upper (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A`.
 
-**Example**
+# Example
 
-```julia
-A = randn(10,10)
-Supper = Symmetric(A)
-Slower = Symmetric(A,:L)
-eigfact(Supper)
+```jldoctest
+julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
+5×5 Array{Int64,2}:
+ 1  0  2  0  3
+ 0  4  0  5  0
+ 6  0  7  0  8
+ 0  9  0  1  0
+ 2  0  3  0  4
+
+julia> Supper = Symmetric(A)
+5×5 Symmetric{Int64,Array{Int64,2}}:
+ 1  0  2  0  3
+ 0  4  0  5  0
+ 2  0  7  0  8
+ 0  5  0  1  0
+ 3  0  8  0  4
+
+julia> Slower = Symmetric(A, :L)
+5×5 Symmetric{Int64,Array{Int64,2}}:
+ 1  0  6  0  2
+ 0  4  0  9  0
+ 6  0  7  0  3
+ 0  9  0  1  0
+ 2  0  3  0  4
+
+julia> eigfact(Supper)
+Base.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([-2.96684,-2.72015,0.440875,7.72015,14.526],[-0.302016 -2.22045e-16 … 1.11022e-16 0.248524; -6.67755e-16 0.596931 … -0.802293 1.93069e-17; … ; 8.88178e-16 -0.802293 … -0.596931 0.0; 0.772108 8.93933e-16 … 0.0 0.630015])
 ```
 
 `eigfact` will use a method specialized for matrices known to be symmetric.
@@ -32,13 +54,29 @@ end
 
 Construct a `Hermitian` matrix from the upper (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A`.
 
-**Example**
+# Example
 
-```julia
-A = randn(10,10)
-Hupper = Hermitian(A)
-Hlower = Hermitian(A,:L)
-eigfact(Hupper)
+```jldoctest
+julia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];
+
+julia> Hupper = Hermitian(A)
+5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:
+ 1+0im  0+0im  2+2im  0+0im  3-3im
+ 0+0im  4+0im  0+0im  5+0im  0+0im
+ 2-2im  0+0im  7+0im  0+0im  8+8im
+ 0+0im  5+0im  0+0im  1+0im  0+0im
+ 3+3im  0+0im  8-8im  0+0im  4+0im
+
+julia> Hlower = Hermitian(A, :L)
+5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:
+ 1+0im  0+0im  6+6im  0+0im  2-2im
+ 0+0im  4+0im  0+0im  9+0im  0+0im
+ 6-6im  0+0im  7+0im  0+0im  3+3im
+ 0+0im  9+0im  0+0im  1+0im  0+0im
+ 2+2im  0+0im  3-3im  0+0im  4+0im
+
+julia> eigfact(Hupper)
+Base.LinAlg.Eigen{Complex{Float64},Float64,Array{Complex{Float64},2},Array{Float64,1}}([-8.32069,-2.72015,3.1496,7.72015,17.1711],Complex{Float64}[-0.231509+0.392692im -4.16334e-17+5.55112e-17im … -2.77556e-17-1.11022e-16im -0.129023-0.00628656im; 0.0+0.0im -0.532524+0.269711im … -0.521035+0.610079im 0.0+0.0im; … ; 0.0-1.38778e-17im 0.715729-0.362501im … -0.387666+0.453917im 0.0-6.93889e-18im; 0.67898-0.0im 0.0+0.0im … 0.0+0.0im -0.661651-0.0im])
 ```
 
 `eigfact` will use a method specialized for matrices known to be Hermitian.
@@ -69,6 +107,21 @@ end
     r
 end
 
+function setindex!(A::Symmetric, v, i::Integer, j::Integer)
+    i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
+    setindex!(A.data, v, i, j)
+end
+
+function setindex!(A::Hermitian, v, i::Integer, j::Integer)
+    if i != j
+        throw(ArgumentError("Cannot set a non-diagonal index in a Hermitian matrix"))
+    elseif !isreal(v)
+        throw(ArgumentError("Cannot set a diagonal entry in a Hermitian matrix to a nonreal value"))
+    else
+        setindex!(A.data, v, i, j)
+    end
+end
+
 similar{T}(A::Symmetric, ::Type{T}) = Symmetric(similar(A.data, T))
 # Hermitian version can be simplified when check for imaginary part of
 # diagonal in Hermitian has been removed
@@ -95,11 +148,30 @@ convert{T}(::Type{AbstractMatrix{T}}, A::Hermitian) = Hermitian(convert(Abstract
 
 copy{T,S}(A::Symmetric{T,S}) = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy{T,S}(A::Hermitian{T,S}) = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
+
+function copy!(dest::Symmetric, src::Symmetric)
+    if src.uplo == dest.uplo
+        copy!(dest.data, src.data)
+    else
+        transpose!(dest.data, src.data)
+    end
+    return dest
+end
+
+function copy!(dest::Hermitian, src::Hermitian)
+    if src.uplo == dest.uplo
+        copy!(dest.data, src.data)
+    else
+        ctranspose!(dest.data, src.data)
+    end
+    return dest
+end
+
 ishermitian(A::Hermitian) = true
 ishermitian{T<:Real,S}(A::Symmetric{T,S}) = true
-ishermitian{T<:Complex,S}(A::Symmetric{T,S}) = all(imag(A.data) .== 0)
+ishermitian{T<:Complex,S}(A::Symmetric{T,S}) = isreal(A.data)
 issymmetric{T<:Real,S}(A::Hermitian{T,S}) = true
-issymmetric{T<:Complex,S}(A::Hermitian{T,S}) = all(imag(A.data) .== 0)
+issymmetric{T<:Complex,S}(A::Hermitian{T,S}) = isreal(A.data)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
 ctranspose{T<:Real}(A::Symmetric{T}) = A
@@ -179,6 +251,13 @@ A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{
 
 *(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)
+
+for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
+    # Deal with an ambiguous case
+    @eval ($op)(A::$T, x::Bool) = ($T)(($op)(A.data, x), Symbol(A.uplo))
+    S = T == :Hermitian ? :Real : :Number
+    @eval ($op)(A::$T, x::$S) = ($T)(($op)(A.data, x), Symbol(A.uplo))
+end
 
 bkfact(A::HermOrSym) = bkfact(A.data, Symbol(A.uplo), issymmetric(A))
 factorize(A::HermOrSym) = bkfact(A)

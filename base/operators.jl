@@ -100,7 +100,6 @@ generally not implement this, and rely on the fallback definition `!=(x,y) = !(x
 const ≠ = !=
 
 """
-    is(x, y) -> Bool
     ===(x,y) -> Bool
     ≡(x,y) -> Bool
 
@@ -108,16 +107,16 @@ Determine whether `x` and `y` are identical, in the sense that no program could 
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
 numbers) by contents at the bit level. This function is sometimes called `egal`.
 """
-is
-const ≡ = is
+===
+const ≡ = ===
 
 """
     !==(x, y)
     ≢(x,y)
 
-Equivalent to `!is(x, y)`.
+Equivalent to `!(x === y)`.
 """
-!==(x,y) = !is(x,y)
+!==(x,y) = !(x===y)
 const ≢ = !==
 
 """
@@ -155,22 +154,6 @@ Greater-than-or-equals comparison operator.
 """
 >=(x,y) = (y <= x)
 const ≥ = >=
-
-"""
-    .>(x, y)
-
-Element-wise greater-than comparison operator.
-"""
-.>(x,y) = y .< x
-
-"""
-    .>=(x, y)
-    .≥(x,y)
-
-Element-wise greater-than-or-equals comparison operator.
-"""
-.>=(x,y) = y .<= x
-const .≥ = .>=
 
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
@@ -218,7 +201,7 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
 """
     max(x, y, ...)
 
-Return the maximum of the arguments. See also the [`maximum`](:func:`maximum`) function
+Return the maximum of the arguments. See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
 """
 max(x,y) = ifelse(y < x, x, y)
@@ -226,7 +209,7 @@ max(x,y) = ifelse(y < x, x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments. See also the [`minimum`](:func:`minimum`) function
+Return the minimum of the arguments. See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
 """
 min(x,y) = ifelse(y < x, y, x)
@@ -234,7 +217,7 @@ min(x,y) = ifelse(y < x, y, x)
 """
     minmax(x, y)
 
-Return `(min(x,y), max(x,y))`. See also: [`extrema`](:func:`extrema`) that returns `(minimum(x), maximum(x))`.
+Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
 
 ```jldoctest
 julia> minmax('c','b')
@@ -266,7 +249,9 @@ identity(x) = x
 *(x::Number) = x
 (&)(x::Integer) = x
 (|)(x::Integer) = x
-($)(x::Integer) = x
+xor(x::Integer) = x
+
+const ⊻ = xor
 
 # foldl for argument lists. expand recursively up to a point, then
 # switch to a loop. this allows small cases like `a+b+c+d` to be inlined
@@ -280,7 +265,7 @@ function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
     y
 end
 
-for op in (:+, :*, :&, :|, :$, :min, :max, :kron)
+for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
@@ -299,38 +284,6 @@ Left division operator: multiplication of `y` by the inverse of `x` on the left.
 floating-point results for integer arguments.
 """
 \(x,y) = (y'/x')'
-
-# .<op> defaults to <op>
-./(x::Number,y::Number) = x/y
-.\(x::Number,y::Number) = y./x
-.*(x::Number,y::Number) = x*y
-.^(x::Number,y::Number) = x^y
-.+(x::Number,y::Number) = x+y
-.-(x::Number,y::Number) = x-y
-.<<(x::Integer,y::Integer) = x<<y
-.>>(x::Integer,y::Integer) = x>>y
-
-.==(x::Number,y::Number) = x == y
-
-"""
-    .!=(x, y)
-    .≠(x,y)
-
-Element-wise not-equals comparison operator.
-"""
-.!=(x::Number,y::Number) = x != y
-.<( x::Real,y::Real) = x < y
-
-"""
-    .<=(x, y)
-    .≤(x,y)
-
-Element-wise less-than-or-equals comparison operator.
-"""
-.<=(x::Real,y::Real) = x <= y
-
-const .≤ = .<=
-const .≠ = .!=
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -353,7 +306,7 @@ julia> bits(Int8(3))
 julia> bits(Int8(12))
 "00001100"
 ```
-See also [`>>`](:func:`>>`), [`>>>`](:func:`>>>`).
+See also [`>>`](@ref), [`>>>`](@ref).
 """
 function <<(x::Integer, c::Integer)
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
@@ -391,7 +344,7 @@ julia> bits(Int8(-14))
 julia> bits(Int8(-4))
 "11111100"
 ```
-See also [`>>>`](:func:`>>>`), [`<<`](:func:`<<`).
+See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
@@ -408,7 +361,7 @@ Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
 shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
 is equivalent to `x << -n`.
 
-For `Unsigned` integer types, this is equivalent to [`>>`](:func:`>>`). For
+For `Unsigned` integer types, this is equivalent to [`>>`](@ref). For
 `Signed` integer types, this is equivalent to `signed(unsigned(x) >> n)`.
 
 ```jldoctest
@@ -422,9 +375,9 @@ julia> bits(Int8(60))
 "00111100"
 ```
 `BigInt`s are treated as if having infinite size, so no filling is required and this
-is equivalent to [`>>`](:func:`>>`).
+is equivalent to [`>>`](@ref).
 
-See also [`>>`](:func:`>>`), [`<<`](:func:`<<`).
+See also [`>>`](@ref), [`<<`](@ref).
 """
 >>>(x::Integer, c::Integer) =
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
@@ -477,7 +430,6 @@ x == div(x,y)*y + rem(x,y)
 """
 rem
 const % = rem
-.%(x::Real, y::Real) = x%y
 
 """
     div(x, y)
@@ -487,8 +439,6 @@ The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
 """
 div
 const ÷ = div
-.÷(x::Real, y::Real) = x÷y
-
 
 """
     mod1(x, y)
@@ -530,6 +480,20 @@ fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
     ctranspose(A)
 
 The conjugate transposition operator (`'`).
+
+# Example
+
+```jldoctest
+julia> A =  [3+2im 9+2im; 8+7im  4+6im]
+2×2 Array{Complex{Int64},2}:
+ 3+2im  9+2im
+ 8+7im  4+6im
+
+julia> ctranspose(A)
+2×2 Array{Complex{Int64},2}:
+ 3-2im  8-7im
+ 9-2im  4-6im
+```
 """
 ctranspose(x) = conj(transpose(x))
 conj(x) = x
@@ -866,7 +830,7 @@ to_index(i) = throw(ArgumentError("invalid index: $i"))
 
 to_indexes() = ()
 to_indexes(i1) = (to_index(i1),)
-to_indexes(i1, I...) = (to_index(i1), to_indexes(I...)...)
+to_indexes(i1, I...) = (@_inline_meta; (to_index(i1), to_indexes(I...)...))
 
 # Addition/subtraction of ranges
 for f in (:+, :-)
@@ -966,8 +930,11 @@ length(p::Pair) = 2
 
 convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
 function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
-    convert(A, x[1]) => convert(B, x[2])
+    Pair{A, B}(convert(A, x[1]), convert(B, x[2]))
 end
+
+promote_rule{A1, B1, A2, B2}(::Type{Pair{A1, B1}}, ::Type{Pair{A2, B2}}) =
+    Pair{promote_type(A1, A2), promote_type(B1, B2)}
 
 # some operators not defined yet
 global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
@@ -980,27 +947,13 @@ export
     !=,
     !==,
     ===,
-    $,
+    xor,
     %,
-    .%,
     ÷,
-    .÷,
     &,
     *,
     +,
     -,
-    .!=,
-    .+,
-    .-,
-    .*,
-    ./,
-    .<,
-    .<=,
-    .==,
-    .>,
-    .>=,
-    .\,
-    .^,
     /,
     //,
     <,
@@ -1014,12 +967,7 @@ export
     ≥,
     ≤,
     ≠,
-    .≥,
-    .≤,
-    .≠,
     >>,
-    .>>,
-    .<<,
     >>>,
     \,
     ^,
@@ -1040,6 +988,7 @@ export
     ∪,
     √,
     ∛,
+    ⊻,
     colon,
     hcat,
     vcat,
@@ -1049,10 +998,10 @@ export
     transpose,
     ctranspose
 
-import ..this_module: !, !=, $, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
-    .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
+import ..this_module: !, !=, xor, %, ÷, &, *, +, -,
+    /, //, <, <:, <<, <=, ==, >, >=, >>, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+    ≥, ≤, ≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ⊻
 
 end

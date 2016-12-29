@@ -20,7 +20,7 @@ vals = vcat(
 
 function coerce(T::Type, x)
     if T<:Rational
-        convert(T, coerce(typeof(num(zero(T))), x))
+        convert(T, coerce(typeof(numerator(zero(T))), x))
     elseif !(T<:Integer)
         convert(T, x)
     else
@@ -89,7 +89,7 @@ end
 x = sprand(10, 10, 0.5)
 x[1] = 1
 x.nzval[1] = 0
-@test hash(x) == hash(full(x))
+@test hash(x) == hash(Array(x))
 
 let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)

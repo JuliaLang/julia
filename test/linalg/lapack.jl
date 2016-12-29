@@ -52,7 +52,7 @@ end
             d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
             U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
             s, _ = LAPACK.bdsqr!('U', copy(d), copy(e), Vt, U, C)
-            @test full(Bidiagonal(d, e, true)) ≈ U*Diagonal(s)*Vt
+            @test Array(Bidiagonal(d, e, true)) ≈ U*Diagonal(s)*Vt
 
             @test_throws ArgumentError LAPACK.bdsqr!('A', d, e, Vt, U, C)
             @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, [e; 1], Vt, U, C)
@@ -488,7 +488,7 @@ end
 
 @testset "posv and some errors for friends" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        A = 0.01*rand(elty,10,10)
+        A = rand(elty,10,10)/100
         A += real(diagm(10*real(rand(elty,10))))
         if elty <: Complex
             A = A + A'

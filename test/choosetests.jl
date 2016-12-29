@@ -15,12 +15,13 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 """ ->
 function choosetests(choices = [])
     testnames = [
-        "linalg", "subarray", "core", "inference", "keywordargs", "numbers",
+        "linalg", "subarray", "core", "inference", "worlds",
+        "keywordargs", "numbers",
         "printf", "char", "strings", "triplequote", "unicode",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "blas", "sparse",
-        "bitarray", "copy", "math", "fastmath", "functional",
+        "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
         "priorityqueue", "file", "read", "mmap", "version", "resolve",
@@ -33,8 +34,16 @@ function choosetests(choices = [])
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
-        "boundscheck", "error", "ambiguous", "cartesian", "asmvariant"
+        "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
+        "channels"
     ]
+    profile_skipped = false
+    if startswith(string(Sys.ARCH), "arm")
+        # Remove profile from default tests on ARM since it currently segfaults
+        # Allow explicitly adding it for testing
+        filter!(x -> (x != "profile"), testnames)
+        profile_skipped = true
+    end
 
     if Base.USE_GPL_LIBS
         testnames = [testnames, "fft", "dsp"; ]
@@ -58,6 +67,9 @@ function choosetests(choices = [])
 
     if tests == ["all"] || isempty(tests)
         tests = testnames
+        if profile_skipped
+            warn("profile test skipped")
+        end
     end
 
     datestests = ["dates/accessors", "dates/adjusters", "dates/query",

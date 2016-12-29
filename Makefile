@@ -19,7 +19,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/perf)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
@@ -55,8 +55,8 @@ julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
-$(BUILDROOT)/doc/_build/html:
-	@$(MAKE) -C $(BUILDROOT)/doc html
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc -path $(BUILDROOT)/doc/_build -prune -o -print)
+	@$(MAKE) docs
 
 # doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
 CLEAN_TARGETS += clean-docdir
@@ -80,7 +80,7 @@ endif
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
-julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
+julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -105,11 +105,8 @@ julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink ju
 
 debug release : % : julia-%
 
-julia-genstdlib: julia-sysimg-$(JULIA_BUILD_MODE)
-	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) $(call cygpath_w, $(JULIAHOME)/doc/genstdlib.jl))
-
-docs: julia-genstdlib
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc
+docs: julia-sysimg-$(JULIA_BUILD_MODE)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
@@ -120,21 +117,11 @@ endif
 
 release-candidate: release testall
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/contrib/add_license_to_files.jl #add license headers
-	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/genstdlib.jl
 	@#Check documentation
 	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/NEWS-update.jl #Add missing cross-references to NEWS.md
-	@$(MAKE) -C $(BUILDROOT)/doc unicode #Rebuild Unicode table if necessary
-	@$(JULIA_EXECUTABLE) $(JULIAHOME)/doc/DocCheck.jl > $(BUILDROOT)/doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
-	@if [ -z "$(cat $(BUILDROOT)/doc/UNDOCUMENTED.rst)" ]; then \
-		rm $(BUILDROOT)/doc/UNDOCUMENTED.rst; \
-	else \
-		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
-		exit 1; \
-	fi
-	@$(MAKE) -C $(BUILDROOT)/doc html  SPHINXOPTS="-n" #Rebuild Julia HTML docs pedantically
-	@$(MAKE) -C $(BUILDROOT)/doc latex SPHINXOPTS="-n" #Rebuild Julia PDF docs pedantically
-	@$(MAKE) -C $(BUILDROOT)/doc doctest #Run Julia doctests
-	@$(MAKE) -C $(BUILDROOT)/doc linkcheck #Check all links
+	@$(MAKE) -C $(BUILDROOT)/doc html
+	@$(MAKE) -C $(BUILDROOT)/doc pdf
+	@$(MAKE) -C $(BUILDROOT)/doc check
 
 	@# Check to see if the above make invocations changed anything important
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -177,6 +164,9 @@ ifeq ($(OS), WINNT)
 $(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/contrib/windows/juliarc.jl
 endif
 
+$(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
+	$(INSTALL_M) $< $(dir $@)
+
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$(if $(findstring -debug.$(SHLIB_EXT),$(notdir $@)),-ljulia-debug,-ljulia) \
@@ -198,7 +188,6 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/inference.jl \
 		base/int.jl \
 		base/intset.jl \
-		base/iterator.jl \
 		base/nofloat_hashing.jl \
 		base/number.jl \
 		base/operators.jl \
@@ -327,7 +316,7 @@ define stringreplace
 	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep '$2' | awk '{print $$1;}') '$3' 255 "$(call cygpath_w,$1)"
 endef
 
-install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html
+install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) all
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
@@ -364,28 +353,19 @@ endif
 	done
 endif
 
-ifeq ($(USE_SYSTEM_LIBUV),0)
-ifeq ($(OS),WINNT)
-	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
-endif
-	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
-endif
-	$(INSTALL_F) $(addprefix $(JULIAHOME)/,src/julia.h src/julia_threads.h src/support/*.h) $(DESTDIR)$(includedir)/julia
-	$(INSTALL_F) $(BUILDROOT)/src/julia_version.h $(DESTDIR)$(includedir)/julia
+	# Copy public headers
+	cp -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) $(JULIAHOME)/contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
-	# Copy in standalone julia-config script
-	$(INSTALL_M) $(JULIAHOME)/contrib/julia-config.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Copy documentation
 	cp -R -L $(build_docdir)/* $(DESTDIR)$(docdir)/
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
-	-rm $(DESTDIR)$(docdir)/html/.buildinfo
 	# Remove perf suite
 	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
 	# Remove various files which should not be installed
@@ -453,10 +433,9 @@ ifneq ($(OS), WINNT)
 endif
 ifeq ($(OS), Linux)
 	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir) $(DESTDIR)$(private_libdir)
-	# We need to bundle ca certs on linux now that we're using libgit2 with ssl
-ifeq ($(shell [ -e $(shell openssl version -d | cut -d '"' -f 2)/cert.pem ] && echo exists),exists)
-	-cp $(shell openssl version -d | cut -d '"' -f 2)/cert.pem $(DESTDIR)$(datarootdir)/julia/
-endif
+
+	# Copy over any bundled ca certs we picked up from the system during buildi
+	-cp $(build_datarootdir)/julia/cert.pem $(DESTDIR)$(datarootdir)/julia/
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
 	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.

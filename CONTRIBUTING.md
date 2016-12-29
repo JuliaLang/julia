@@ -12,7 +12,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 - Contributing code? Be sure to review the [contributor checklist](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#contributor-checklist) for helpful tips on the tools we use to build Julia.
 
-- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](http://docs.julialang.org/en/release-0.4/manual/packages/#package-development). Please email the [julia-users](https://groups.google.com/forum/#!forum/julia-users) mailing list to discuss library ideas. Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
+- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](http://docs.julialang.org/en/release-0.4/manual/packages/#package-development). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org/). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
 
 ## Contributor Checklist
 
@@ -26,7 +26,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 * Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.GitHub.io/levels/1/challenges/1).
 
-* Review discussions on the [dev mailing list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev).
+* Review discussions on the [Julia Discourse forum](https://discourse.julialang.org/).
 
 * For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
 
@@ -37,7 +37,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 A useful bug report filed as a GitHub issue provides information about how to reproduce the error.
 
 1. Before opening a new [GitHub issue](https://github.com/JuliaLang/julia/issues):
-  - Try searching the existing issues or the [`julia-users` mailing list](https://groups.google.com/forum/#!forum/julia-users) to see if someone else has already noticed the same problem.
+  - Try searching the existing issues or the [Julia Discourse forum](https://discourse.julialang.org/) to see if someone else has already noticed the same problem.
   - Try some simple debugging techniques to help isolate the problem.
     - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
     - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
@@ -100,59 +100,80 @@ Coveralls shows functionality that still needs "proof of concept" tests. These a
 
 *By contributing documentation to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
-Julia's documentation is stored in the `doc` directory, and like everything else can be modified using `git`.
-
-Julia's documentation is built with [Sphinx](http://sphinx-doc.org/contents.html), which supports (and Julia's docs rely heavily on) [ReST directives](http://docutils.sourceforge.net/docs/ref/rst/directives.html). To build the documentation locally, run
-
-    make -C doc html
-
-or
-
-    make -C doc latex
-
-from Julia's root directory. Sometimes errors only show up in one of them, so if you're preparing a pull request it is nice if you've checked both formats before you submit.
-
-Existing docstrings now live primarily in `base/docs/helpdb.jl`.
-It is a goal over time to move the docstrings inline to their respective method definitions.
-If you want to edit the body of a method docstring, run the `doc/genstdlib.jl` script to regenerate the restructured text files **after** you have already rebuilt Julia.
-(From the top-level source directory, you can do this with `make julia-genstdlib`.)
-If you want to edit an existing docstring signature, you **first** have to change the signature in the `doc/stdlib` `..function` or `..data` definition (not the auto-generated content) and *then*
-edit the helpdb.jl or inline method docstrings.  The existing signatures in the `doc/stdlib/*.rst` files are pattern matched to base docstrings and the new content overwrites the content in `doc/stdlib/`.
-The signature definitions **must** be in sync or else the pattern match will fail and documentation will be lost in the result.
-To add entirely new methods to the `stdlib` documentation, first add the signature in the appropriate `doc/stdlib/*.rst` file before writing the docstring, rebuilding Julia, and re-running `doc/genstdlib.jl`.
-Pattern matching requires that multiline method signatures' inter-line character alignment in `doc/stdlib/*.rst` match that in the corresponding docstring. In the following example,
-
-```julia
-"""
-    foo(bar, baz,
-        qux, quux)
-
-Foo `bar`, `baz`, `qux`, and `quux`.
-"""
-```
-
-will only match entries in `doc/stdlib/*.rst` beginning with
+Julia's documentation source files are stored in the `doc/` directory and all docstrings are found in `base/`. Like everything else these can be modified using `git`. Documentation is built with [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), which uses Markdown syntax. The HTML documentation can be built locally by running
 
 ```
-.. function:: foo(bar, baz,
-                  qux, quux)
+make docs
 ```
 
-Note that the second line of the signature is indented by four spaces relative to `foo(bar, baz,`
-in the first line of the signature. This leading indent matches the indent used in the
-docstring exactly. If it did not match, such as in the following example,
+from Julia's root directory. This will rebuild the Julia system image, then install or update the package dependencies required to build the documentation, and finally build the HTML documentation and place the resulting files in `doc/_build/html/`.
 
-```
-.. function:: foo(bar, baz,
-                 qux, quux)
-```
+> **Note**
+>
+> When making changes to any of Julia's documentation it is recommended that you run `make docs` to check the your changes are valid and do not produce any errors before opening a pull request.
 
-where three spaces instead of four are used then running `genstdlib.jl` will print a warning
-and not update the docstring.
+Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable/) if you encounter anything that is not covered by the sections below.
 
-It is encouraged to write all new docstrings in Markdown markup.  If you need to write a more complicated docstring that contains cross-references or citations it can be written in a restructured text codeblock.
-Many of the existing docstrings are currently restructured text codeblocks and these will be transitioned to Markdown over time.  RST codeblocks are delineated with the triple-quote (\`\`\`rst  \`\`\`) Makdown codeblock syntax.
-The content of the codeblock is spliced directly into the final restructured text document unmodified.
+#### Modifying files in `doc/src/`
+
+Most of the source text for the Julia Manual is located in `doc/src/`. To update or add new text to any one of the existing files the following steps should be followed:
+
+1. update the text in whichever `.md` files are applicable;
+2. run `make docs` from the root directory;
+3. check the output in `doc/_build/html/` to make sure the changes are correct;
+4. commit your changes and open a pull request.
+
+> **Note**
+>
+> The contents of `doc/_build/` does **not** need to be committed when you make changes.
+
+To add a **new file** to `doc/src/` rather than updating a file replace step `1` above with
+
+1. add the file to the appropriate subdirectory in `doc/src/` and also add the file path to the `PAGES` vector in `doc/make.jl`.
+
+#### Modifying an existing docstring in `base/`
+
+All docstrings are written inline above the methods or types they are associated with and can be found by clicking on the `source` link that appears below each docstring in the HTML file. The steps needed to make a change to an existing docstring are listed below:
+
+1. find the docstring in `base/`;
+2. update the text in the docstring;
+3. run `make docs` from the root directory;
+4. check the output in `doc/_build/html/` to make sure the changes are correct;
+5. commit your changes and open a pull request.
+
+> **Note**
+>
+> Currently there are a large number of docstrings found in `base/docs/helpdb/Base.jl`. When any of these docstrings are modified please move them out of this file and place them above the most appropriate definition in one of the `base/` source files.
+
+#### Adding a new docstring to `base/`
+
+The steps required to add a new docstring are listed below:
+
+1. find a suitable definition in `base/` that the docstring will be most applicable to;
+2. add a docstring above the definition;
+3. find a suitable `@docs` code block in one of the `doc/src/stdlib/` files where you would like the docstring to appear;
+4. add the name of the definition to the `@docs` code block. For example, with a docstring added to a function `bar`
+
+    ```julia
+    "..."
+    function bar(args...)
+        # ...
+    end
+    ```
+
+   you would add the name `bar` to a `@docs` block in `doc/src/stdlib/`
+
+        ```@docs
+        foo
+        bar # <-- Added this one.
+        baz
+        ```
+
+5. run `make docs` from the root directory;
+6. check the output in `doc/_build/html` to make sure the changes are correct;
+7. commit your changes and open a pull request.
+
+#### Doctests
 
 Examples written within docstrings can be used as testcases known as "doctests" by annotating code blocks with `jldoctest`.
 
@@ -161,7 +182,9 @@ Examples written within docstrings can be used as testcases known as "doctests" 
     "DOCSTRING TEST"
     ```
 
-A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you first run `make julia-genstdlib` then `make -C doc doctest`.
+A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc check` from the root directory.
+
+#### News-worthy changes
 
 For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`; after adding this, run `./julia doc/NEWS-update.jl` from the `julia` directory to update the cross-reference links. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.
 
@@ -171,7 +194,7 @@ For new functionality and other substantial changes, add a brief summary to `NEW
 
 The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR). You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
 
-Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the mailing list or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
+Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org/) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
 Add new code to Julia's base libraries as follows:
 
@@ -240,7 +263,7 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
 
 * Julia
   - **Homepage:** <http://julialang.org>
-  - **Mailing lists:** <http://julialang.org/community/>
+  - **Community:** <http://julialang.org/community/>
   - **IRC:** <http://webchat.freenode.net/?channels=Julia>
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>

@@ -24,9 +24,9 @@ srand(1)
         @test typeof(convert(Diagonal{Complex64},D)) == Diagonal{Complex64}
         @test typeof(convert(AbstractMatrix{Complex64},D))   == Diagonal{Complex64}
 
-        @test full(real(D)) == real(DM)
-        @test full(abs.(D)) == abs.(DM)
-        @test full(imag(D)) == imag(DM)
+        @test Array(real(D)) == real(DM)
+        @test Array(abs.(D)) == abs.(DM)
+        @test Array(imag(D)) == imag(DM)
 
         @test parent(D) == d
         @test diag(D) == d
@@ -43,7 +43,7 @@ srand(1)
 
     @testset "Simple unary functions" begin
         for op in (-,)
-          @test op(D)==op(DM)
+            @test op(D)==op(DM)
         end
 
         for func in (det, trace)
@@ -76,8 +76,8 @@ srand(1)
                 @test_approx_eq_eps D*v DM*v n*eps(relty)*(elty<:Complex ? 2:1)
                 @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(elty<:Complex ? 2:1)
 
-                @test U.'*D ≈ U.'*full(D)
-                @test U'*D ≈ U'*full(D)
+                @test U.'*D ≈ U.'*Array(D)
+                @test U'*D ≈ U'*Array(D)
 
                 if relty != BigFloat
                     @test_approx_eq_eps D\v DM\v 2n^2*eps(relty)*(elty<:Complex ? 2:1)
@@ -89,12 +89,12 @@ srand(1)
                     @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))
                     b = rand(elty,n,n)
                     b = sparse(b)
-                    @test A_ldiv_B!(D,copy(b)) ≈ full(D)\full(b)
+                    @test A_ldiv_B!(D,copy(b)) ≈ Array(D)\Array(b)
                     @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty,n)),copy(b))
                     b = view(rand(elty,n),collect(1:n))
                     b2 = copy(b)
                     c = A_ldiv_B!(D,b)
-                    d = full(D)\b2
+                    d = Array(D)\b2
                     for i in 1:n
                         @test c[i] ≈ d[i]
                     end
@@ -113,27 +113,27 @@ srand(1)
     DM2= diagm(d)
     @testset "Binary operations" begin
         for op in (+, -, *)
-            @test full(op(D, D2)) ≈ op(DM, DM2)
+            @test Array(op(D, D2)) ≈ op(DM, DM2)
         end
         @testset "with plain numbers" begin
             a = rand()
-            @test full(a*D) ≈ a*DM
-            @test full(D*a) ≈ DM*a
-            @test full(D/a) ≈ DM/a
+            @test Array(a*D) ≈ a*DM
+            @test Array(D*a) ≈ DM*a
+            @test Array(D/a) ≈ DM/a
             if relty <: BlasFloat
                 b = rand(elty,n,n)
                 b = sparse(b)
-                @test A_mul_B!(copy(D), copy(b)) ≈ full(D)*full(b)
-                @test At_mul_B!(copy(D), copy(b)) ≈ full(D).'*full(b)
-                @test Ac_mul_B!(copy(D), copy(b)) ≈ full(D)'*full(b)
+                @test A_mul_B!(copy(D), copy(b)) ≈ Array(D)*Array(b)
+                @test At_mul_B!(copy(D), copy(b)) ≈ Array(D).'*Array(b)
+                @test Ac_mul_B!(copy(D), copy(b)) ≈ Array(D)'*Array(b)
             end
         end
 
         #a few missing mults
         bd = Bidiagonal(D2)
-        @test D*D2.' ≈ full(D)*full(D2).'
-        @test D2*D.' ≈ full(D2)*full(D).'
-        @test D2*D' ≈ full(D2)*full(D)'
+        @test D*D2.' ≈ Array(D)*Array(D2).'
+        @test D2*D.' ≈ Array(D2)*Array(D).'
+        @test D2*D' ≈ Array(D2)*Array(D)'
 
         #division of two Diagonals
         @test D/D2 ≈ Diagonal(D.diag./D2.diag)
@@ -175,7 +175,7 @@ srand(1)
     @testset "conj and transpose" begin
         @test transpose(D) == D
         if elty <: BlasComplex
-            @test full(conj(D)) ≈ conj(DM)
+            @test Array(conj(D)) ≈ conj(DM)
             @test ctranspose(D) == conj(D)
         end
     end
@@ -260,7 +260,7 @@ end
 @testset "inverse" begin
     for d in (randn(n), [1, 2, 3], [1im, 2im, 3im])
         D = Diagonal(d)
-        @test inv(D) ≈ inv(full(D))
+        @test inv(D) ≈ inv(Array(D))
     end
     @test_throws SingularException inv(Diagonal(zeros(n)))
     @test_throws SingularException inv(Diagonal([0, 1, 2]))

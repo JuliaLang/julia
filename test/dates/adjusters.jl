@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-module DatesAdjustersTests
-using Base.Test
 #trunc
 dt = Dates.Date(2012,12,21)
 @test trunc(dt,Dates.Year) == Dates.Date(2012)
@@ -307,36 +305,34 @@ dt = Dates.Date(2014,5,21)
 
 @test Dates.tolast(Dates.Date(0),Dates.Mon) == Dates.Date(0,1,31)
 
-# recur
+# filter (was recur)
 startdate = Dates.Date(2014,1,1)
 stopdate = Dates.Date(2014,2,1)
-@test length(Dates.recur(x->true,startdate:stopdate)) == 32
-@test length(Dates.recur(x->true,stopdate:Dates.Day(-1):startdate)) == 32
+@test length(filter(x->true,startdate:stopdate)) == 32
+@test length(filter(x->true,stopdate:Dates.Day(-1):startdate)) == 32
 
 Januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014,1,20),Dates.Date(2014,1,27)]
-@test Dates.recur(Dates.ismonday,startdate,stopdate) == Januarymondays2014
-@test Dates.recur(Dates.ismonday,startdate:stopdate) == Januarymondays2014
-@test Dates.recur(x->!Dates.ismonday(x),startdate,stopdate;negate=true) == Januarymondays2014
+@test filter(Dates.ismonday,startdate:stopdate) == Januarymondays2014
 
-@test_throws MethodError Dates.recur((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
+@test_throws MethodError filter((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
 @test_throws MethodError Dates.DateFunction((x,y)->x+y, false, Date(0))
 @test_throws ArgumentError Dates.DateFunction((dt)->2, false, Date(0))
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,2))) == 32
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,1))) == 1
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,2))) == 2
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,3))) == 3
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,4))) == 4
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,5))) == 5
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,6))) == 6
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,7))) == 7
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,8))) == 8
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Month(1):Dates.Date(2013,1,1))) == 1
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Day(-1):Dates.Date(2012,1,1))) == 367
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,2))) == 32
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,1))) == 1
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,2))) == 2
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,3))) == 3
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,4))) == 4
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,5))) == 5
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,6))) == 6
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,7))) == 7
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2013,1,8))) == 8
+@test length(filter(x->true,Dates.Date(2013):Dates.Month(1):Dates.Date(2013,1,1))) == 1
+@test length(filter(x->true,Dates.Date(2013):Dates.Day(-1):Dates.Date(2012,1,1))) == 367
 # Empty range
-@test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2012,1,1))) == 0
+@test length(filter(x->true,Dates.Date(2013):Dates.Date(2012,1,1))) == 0
 
 # All leap days in 20th century
-@test length(Dates.recur(Dates.Date(1900):Dates.Date(2000)) do x
+@test length(filter(Dates.Date(1900):Dates.Date(2000)) do x
     Dates.month(x) == Dates.Feb && Dates.day(x) == 29
 end) == 24
 
@@ -357,7 +353,7 @@ end == Dates.Date(2013,11,28)
 
 # Pittsburgh street cleaning
 dr = Dates.Date(2014):Dates.Date(2015)
-@test length(Dates.recur(dr) do x
+@test length(filter(dr) do x
     Dates.dayofweek(x) == Dates.Tue &&
     Dates.April < Dates.month(x) < Dates.Nov &&
     Dates.dayofweekofmonth(x) == 2
@@ -414,7 +410,7 @@ const HOLIDAYS = x->isnewyears(x) || isindependenceday(x) ||
                     ismemorialday(x) || islaborday(x) ||
                     iscolumbusday(x) || isthanksgiving(x)
 
-@test length(Dates.recur(HOLIDAYS,dr)) == 11
+@test length(filter(HOLIDAYS,dr)) == 11
 
 const OBSERVEDHOLIDAYS = x->begin
     # If the holiday is on a weekday
@@ -431,18 +427,17 @@ const OBSERVEDHOLIDAYS = x->begin
     end
 end
 
-observed = Dates.recur(OBSERVEDHOLIDAYS,Dates.Date(1999):Dates.Date(2000))
+observed = filter(OBSERVEDHOLIDAYS,Dates.Date(1999):Dates.Date(2000))
 @test length(observed) == 11
 @test observed[10] == Dates.Date(1999,12,24)
 @test observed[11] == Dates.Date(1999,12,31)
 
 # Get all business/working days of 2014
 # Since we have already defined observed holidays,
-# we just look at weekend days and use the "negate" keyword of recur
-# validate with http://www.workingdays.us/workingdays_holidays_2014.htm
-@test length(Dates.recur(Dates.Date(2014):Dates.Date(2015);negate=true) do x
-    OBSERVEDHOLIDAYS(x) ||
-    Dates.dayofweek(x) > 5
+# we just look at weekend days and negate the result
+@test length(filter(Dates.Date(2014):Dates.Date(2015)) do x
+    !(OBSERVEDHOLIDAYS(x) ||
+    Dates.dayofweek(x) > 5)
 end) == 251
 
 # First day of the next month for each day of 2014
@@ -452,7 +447,7 @@ end) == 251
 # From those goofy email forwards claiming a "special, lucky month"
 # that has 5 Fridays, 5 Saturdays, and 5 Sundays and that it only
 # occurs every 823 years
-@test length(Dates.recur(Date(2000):Dates.Month(1):Date(2016)) do dt
+@test length(filter(Date(2000):Dates.Month(1):Date(2016)) do dt
     sum = 0
     for i = 1:7
         sum += Dates.dayofweek(dt) > 4 ? Dates.daysofweekinmonth(dt) : 0
@@ -460,4 +455,3 @@ end) == 251
     end
     return sum == 15
 end) == 15 # On average, there's one of those months every year
-end

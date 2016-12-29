@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+isdefined(Main, :TestHelpers) || eval(Main, :(include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))))
 using TestHelpers
 
 const LIBGIT2_MIN_VER = v"0.23.0"
@@ -95,29 +95,29 @@ end
 
     # SSH URL using scp-like syntax
     m = match(LibGit2.URL_REGEX, "user@server:project.git")
-    @test m[:scheme] == nothing
+    @test m[:scheme] === nothing
     @test m[:user] == "user"
-    @test m[:password] == nothing
+    @test m[:password] === nothing
     @test m[:host] == "server"
-    @test m[:port] == nothing
+    @test m[:port] === nothing
     @test m[:path] == "project.git"
 
     # Realistic example from GitHub using HTTPS
     m = match(LibGit2.URL_REGEX, "https://github.com/JuliaLang/Example.jl.git")
     @test m[:scheme] == "https"
-    @test m[:user] == nothing
-    @test m[:password] == nothing
+    @test m[:user] === nothing
+    @test m[:password] === nothing
     @test m[:host] == "github.com"
-    @test m[:port] == nothing
+    @test m[:port] === nothing
     @test m[:path] == "/JuliaLang/Example.jl.git"
 
     # Realistic example from GitHub using SSH
     m = match(LibGit2.URL_REGEX, "git@github.com:JuliaLang/Example.jl.git")
-    @test m[:scheme] == nothing
+    @test m[:scheme] === nothing
     @test m[:user] == "git"
-    @test m[:password] == nothing
+    @test m[:password] === nothing
     @test m[:host] == "github.com"
-    @test m[:port] == nothing
+    @test m[:port] === nothing
     @test m[:path] == "JuliaLang/Example.jl.git"
 
     # Make sure usernames can contain special characters
@@ -586,6 +586,50 @@ mktempdir() do dir
         end
     end
 
+    @testset "rebase" begin
+        repo = LibGit2.GitRepo(test_repo)
+        try
+            LibGit2.branch!(repo, "branch/a")
+
+            oldhead = LibGit2.head_oid(repo)
+            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(repo, "file1")
+            LibGit2.commit(repo, "add file1")
+
+            open(joinpath(LibGit2.path(repo),"file2"),"w") do f
+                write(f, "222\n")
+            end
+            LibGit2.add!(repo, "file2")
+            LibGit2.commit(repo, "add file2")
+
+            LibGit2.branch!(repo, "branch/b")
+
+            # squash last 2 commits
+            LibGit2.reset!(repo, oldhead, LibGit2.Consts.RESET_SOFT)
+            LibGit2.commit(repo, "squash file1 and file2")
+
+            # add another file
+            open(joinpath(LibGit2.path(repo),"file3"),"w") do f
+                write(f, "333\n")
+            end
+            LibGit2.add!(repo, "file3")
+            LibGit2.commit(repo, "add file3")
+
+            newhead = LibGit2.head_oid(repo)
+
+            # switch back and rebase
+            LibGit2.branch!(repo, "branch/a")
+            LibGit2.rebase!(repo, "branch/b")
+
+            # issue #19624
+            @test LibGit2.head_oid(repo) == newhead
+        finally
+            finalize(repo)
+        end
+    end
+
     @testset "Transact test repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
@@ -707,7 +751,7 @@ mktempdir() do dir
                                 finalize(repo)
                             end
                             """
-                            # We try to be helpful by desparately looking for
+                            # We try to be helpful by desperately looking for
                             # a way to prompt the password interactively. Pretend
                             # to be a TTY to suppress those shenanigans. Further, we
                             # need to detach and change the controlling terminal with

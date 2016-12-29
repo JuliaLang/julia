@@ -45,7 +45,7 @@ Copy a string from the address of a C-style (NUL-terminated) string encoded as U
 This function is labelled "unsafe" because it will crash if `p` is not
 a valid memory address to data of the requested length.
 
-See also [`unsafe_wrap(String, p, [length])`](:func:`unsafe_wrap`), which takes a pointer
+See also [`unsafe_wrap(String, p, [length])`](@ref), which takes a pointer
 and wraps a string object around it without making a copy.
 """
 function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
@@ -105,8 +105,6 @@ julia> "Hello " * "world"
 ```
 """
 (*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
-(.*){T<:AbstractString}(v::Vector{T},s::AbstractString) = [i*s for i in v]
-(.*){T<:AbstractString}(s::AbstractString,v::Vector{T}) = [s*i for i in v]
 
 length(s::DirectIndexString) = endof(s)
 
@@ -139,15 +137,17 @@ function cmp(a::AbstractString, b::AbstractString)
     end
     i = start(a)
     j = start(b)
-    while !done(a,i) && !done(b,i)
+    while !done(a,i)
+        if done(b,j)
+            return +1
+        end
         c, i = next(a,i)
         d, j = next(b,j)
         if c != d
             return c < d ? -1 : +1
         end
     end
-    done(a,i) && !done(b,j) ? -1 :
-    !done(a,i) && done(b,j) ? +1 : 0
+    done(b,j) ? 0 : -1
 end
 
 ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
@@ -158,11 +158,7 @@ isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 cmp(a::String, b::String) = lexcmp(a.data, b.data)
 cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
 
-function ==(a::String, b::String)
-    len = length(a.data)
-    return len == length(b.data) &&
-        0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a.data, b.data, len)
-end
+==(a::String, b::String) = a.data == b.data
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 
 ## Generic validation functions ##
@@ -380,7 +376,7 @@ byte_string_classify(s::String) = byte_string_classify(s.data)
 isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) != 0
 isvalid(s::String) = isvalid(String, s)
 
-## uppercase and lowercase transformations ##
+## uppercase, lowercase, and titlecase transformations ##
 
 """
     uppercase(s::AbstractString)
@@ -405,6 +401,31 @@ julia> lowercase("STRINGS AND THINGS")
 ```
 """
 lowercase(s::AbstractString) = map(lowercase, s)
+
+"""
+    titlecase(s::AbstractString)
+
+Capitalizes the first character of each word in `s`.
+
+```jldoctest
+julia> titlecase("the julia programming language")
+"The Julia Programming Language"
+```
+"""
+function titlecase(s::AbstractString)
+    startword = true
+    b = IOBuffer()
+    for c in s
+        if isspace(c)
+            print(b, c)
+            startword = true
+        else
+            print(b, startword ? titlecase(c) : c)
+            startword = false
+        end
+    end
+    return String(take!(b))
+end
 
 """
     ucfirst(s::AbstractString)
@@ -446,7 +467,7 @@ function map(f, s::AbstractString)
         end
         write(out, c2::Char)
     end
-    String(takebuf_array(out))
+    String(take!(out))
 end
 
 function filter(f, s::AbstractString)
@@ -457,5 +478,5 @@ function filter(f, s::AbstractString)
             write(out, c)
         end
     end
-    takebuf_string(out)
+    String(take!(out))
 end

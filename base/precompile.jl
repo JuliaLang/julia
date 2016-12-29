@@ -389,7 +389,7 @@ precompile(Base.systemerror, (Symbol, Bool))
 precompile(Base.take!, (Base.RemoteValue,))
 precompile(Base.take!, (RemoteChannel,))
 precompile(Base.take_ref, (Tuple{Int,Int},))
-precompile(Base.takebuf_string, (IOBuffer,))
+precompile(Base.take!, (IOBuffer,))
 precompile(Base.task_local_storage, ())
 precompile(Base.terminate_all_workers, ())
 precompile(Base.try_include, (String,))
@@ -453,6 +453,9 @@ precompile(Base.joinpath, (String, String, String, String))
 precompile(Base.string, (String, String, Char))
 precompile(Base.string, (String, String, Int))
 precompile(Base.vect, (Base.LineEdit.Prompt, String))
+
+# Speed up type inference in the post-Base world redefinition of convert
+isdefined(Core, :Inference) && Base.code_typed(Base.code_typed)
 
 # Speeding up addprocs for LocalManager
 precompile(Base.start_worker, ())

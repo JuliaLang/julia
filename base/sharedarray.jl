@@ -15,7 +15,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # Local shmem map.
     s::Array{T,N}
 
-    # idx of current workers pid into the pids vector, 0 if this shared array is not mapped locally.
+    # idx of current worker's pid in the pids vector, 0 if this shared array is not mapped locally.
     pidx::Int
 
     # the local partition into the array when viewed as a single dimensional array.
@@ -142,9 +142,14 @@ file is not writable.
 `offset` allows you to skip the specified number of bytes at the
 beginning of the file.
 """
-function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
-    isabspath(filename) || throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
-    isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int},
+        offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
+    if !isabspath(filename)
+        throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
+    end
+    if !isbits(T)
+        throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+    end
 
     pids, onlocalhost = shared_pids(pids)
 
@@ -156,12 +161,18 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     workermode = mode == "w+" ? "r+" : mode  # workers don't truncate!
 
     # Ensure the file will be readable
-    mode in ("r", "r+", "w+", "a+") || throw(ArgumentError("mode must be readable, but $mode is not"))
+    if !(mode in ("r", "r+", "w+", "a+"))
+        throw(ArgumentError("mode must be readable, but $mode is not"))
+    end
     if init !== false
         typeassert(init, Function)
-        mode in ("r+", "w+", "a+") || throw(ArgumentError("cannot initialize unwritable array (mode = $mode)"))
+        if !(mode in ("r+", "w+", "a+"))
+            throw(ArgumentError("cannot initialize unwritable array (mode = $mode)"))
+        end
     end
-    mode == "r" && !isfile(filename) && throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
+    if mode == "r" && !isfile(filename)
+        throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
+    end
 
     # Create the file if it doesn't exist, map it if it does
     refs = Array{Future}(length(pids))
@@ -238,7 +249,9 @@ size(S::SharedArray) = S.dims
 linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
-    (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
+    if length(a) != prod(dims)
+        throw(DimensionMismatch("dimensions must be consistent with array size"))
+    end
     refs = Array{Future}(length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, a.refs[i], dims) do r,d
@@ -254,15 +267,16 @@ end
 """
     procs(S::SharedArray)
 
-Get the vector of processes that have mapped the shared array.
+Get the vector of processes mapping the shared array.
 """
 procs(S::SharedArray) = S.pids
 
 """
     indexpids(S::SharedArray)
 
-Returns the index of the current worker into the `pids` vector, i.e., the list of workers
-mapping the SharedArray
+Returns the current worker's index in the list of workers
+mapping the `SharedArray` (i.e. in the same list returned by `procs(S)`), or
+0 if the `SharedArray` is not mapped locally.
 """
 indexpids(S::SharedArray) = S.pidx
 
@@ -281,20 +295,29 @@ Returns a range describing the "default" indexes to be handled by the
 current process.  This range should be interpreted in the sense of
 linear indexing, i.e., as a sub-range of `1:length(S)`.  In
 multi-process contexts, returns an empty range in the parent process
-(or any process for which `indexpids` returns 0).
+(or any process for which [`indexpids`](@ref) returns 0).
 
 It's worth emphasizing that `localindexes` exists purely as a
 convenience, and you can partition work on the array among workers any
-way you wish.  For a SharedArray, all indexes should be equally fast
+way you wish. For a `SharedArray`, all indexes should be equally fast
 for each worker process.
 """
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray) = unsafe_convert(Ptr{T}, sdata(S))
 
-convert(::Type{SharedArray}, A::Array) = (S = SharedArray(eltype(A), size(A)); copy!(S, A))
-convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); copy!(S, A))
-convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N}) = (S = SharedArray(TS, size(A)); copy!(S, A))
+function convert(::Type{SharedArray}, A::Array)
+    S = SharedArray(eltype(A), size(A))
+    copy!(S, A)
+end
+function convert{T}(::Type{SharedArray{T}}, A::Array)
+    S = SharedArray(T, size(A))
+    copy!(S, A)
+end
+function convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N})
+    S = SharedArray(TS, size(A))
+    copy!(S, A)
+end
 
 function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
     haskey(stackdict, S) && return stackdict[S]
@@ -343,7 +366,7 @@ end
 
 sub_1dim(S::SharedArray, pidx) = view(S.s, range_1dim(S, pidx))
 
-function init_loc_flds{T,N}(S::SharedArray{T,N})
+function init_loc_flds{T,N}(S::SharedArray{T,N}, empty_local=false)
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         if isa(S.refs[1], Future)
@@ -356,6 +379,9 @@ function init_loc_flds{T,N}(S::SharedArray{T,N})
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
+        if empty_local
+            S.s = Array{T}(ntuple(d->0,N))
+        end
         S.loc_subarr_1d = view(Array{T}(ntuple(d->0,N)), 1:0)
     end
 end
@@ -386,8 +412,26 @@ end
 
 function deserialize{T,N}(s::AbstractSerializer, t::Type{SharedArray{T,N}})
     S = invoke(deserialize, Tuple{AbstractSerializer, DataType}, s, t)
-    init_loc_flds(S)
+    init_loc_flds(S, true)
     S
+end
+
+function show(io::IO, S::SharedArray)
+    if length(S.s) > 0
+        invoke(show, (IO, DenseArray), io, S)
+    else
+        show(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S))
+    end
+end
+
+function show(io::IO, mime::MIME"text/plain", S::SharedArray)
+    if length(S.s) > 0
+        invoke(show, (IO, MIME"text/plain", DenseArray), io, MIME"text/plain"(), S)
+    else
+        # retrieve from the first worker mapping the array.
+        println(io, summary(S), ":")
+        showarray(io, remotecall_fetch(sharr->sharr.s, S.pids[1], S), false; header=false)
+    end
 end
 
 convert(::Type{Array}, S::SharedArray) = S.s
@@ -572,6 +616,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint, (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
+shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint,
+    (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
 
 end # os-test

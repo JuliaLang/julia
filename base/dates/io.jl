@@ -81,15 +81,22 @@ SLOT_RULE['M'] = Minute
 SLOT_RULE['S'] = Second
 SLOT_RULE['s'] = Millisecond
 
-duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
+function anyduplicates(slots)
+    for i = 1:length(slots), j = i+1:length(slots)
+        if slots[i].parser == slots[j].parser
+            return true
+        end
+    end
+    return false
+end
 
 """
     DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
 
 Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. For details on the syntax for `format` see
-[`DateTime(::AbstractString, ::AbstractString)`](:ref:`parsing <man-date-parsing>`) and
-[`format`](:ref:`formatting <man-date-formatting>`).
+[`DateTime(::AbstractString, ::AbstractString)`](@ref) and
+[`format`](@ref).
 """
 function DateFormat(f::AbstractString, locale::AbstractString="english")
     slots = Slot[]
@@ -130,7 +137,7 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
         push!(slots,slot)
     end
 
-    duplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
+    anyduplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
     return DateFormat(slots,prefix,locale)
 end
 
@@ -261,7 +268,7 @@ DateTime(dt::AbstractString,format::AbstractString;locale::AbstractString="engli
     DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date string following the pattern given in
-the [`DateFormat`](:func:`Dates.DateFormat`) object. Similar to
+the [`DateFormat`](@ref) object. Similar to
 `DateTime(::AbstractString, ::AbstractString)` but more efficient when repeatedly parsing
 similarly formatted date strings with a pre-created `DateFormat` object.
 """

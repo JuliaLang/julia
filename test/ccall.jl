@@ -134,6 +134,30 @@ end
 test_struct1(Struct1)
 test_struct1(Struct1I)
 
+let a, b, x
+    a = Struct1(352.39422f23, 19.287577)
+    b = Float32(123.456)
+    a2 = copy(a)
+
+    x = ccall((:test_1long_a, libccalltest), Struct1, (Int, Int, Int, Struct1, Float32), 2, 3, 4, a2, b)
+    @test a2.x == a.x && a2.y == a.y
+    @test !(a2 === x)
+    @test x.x ≈ a.x + b + 9
+    @test x.y ≈ a.y - 2*b
+
+    x = ccall((:test_1long_b, libccalltest), Struct1, (Int, Float64, Int, Struct1, Float32), 2, 3, 4, a2, b)
+    @test a2.x == a.x && a2.y == a.y
+    @test !(a2 === x)
+    @test x.x ≈ a.x + b + 9
+    @test x.y ≈ a.y - 2*b
+
+    x = ccall((:test_1long_c, libccalltest), Struct1, (Int, Float64, Int, Int, Struct1, Float32), 2, 3, 4, 5, a2, b)
+    @test a2.x == a.x && a2.y == a.y
+    @test !(a2 === x)
+    @test x.x ≈ a.x + b + 14
+    @test x.y ≈ a.y - 2*b
+end
+
 let a, b, x, y
     a = Complex{Int32}(Int32(10),Int32(31))
     b = Int32(42)
@@ -542,6 +566,16 @@ function test_struct_big{Struct}(::Type{Struct})
 end
 test_struct_big(Struct_Big)
 test_struct_big(Struct_BigI)
+
+let a, a2, x
+    a = Struct_Big(424,-5,Int8('Z'))
+    a2 = copy(a)
+    x = ccall((:test_big_long, libccalltest), Struct_Big, (Int, Int, Int, Struct_Big,), 2, 3, 4, a2)
+    @test a2.x == a.x && a2.y == a.y && a2.z == a.z
+    @test x.x == a.x + 10
+    @test x.y == a.y - 2
+    @test x.z == a.z - Int('A')
+end
 
 const Struct_huge1a = NTuple{8, Int64}
 const Struct_huge1b = NTuple{9, Int64}
@@ -1010,3 +1044,94 @@ function f17204(a)
 end
 @test ccall(cfunction(f17204, Vector{Any}, Tuple{Vector{Any}}),
             Vector{Any}, (Vector{Any},), Any[1:10;]) == Any[11:20;]
+
+# This used to trigger incorrect ccall callee inlining.
+# Not sure if there's a more reliable way to test this.
+# Do not put these in a function.
+@noinline g17413() = rand()
+@inline f17413() = (g17413(); g17413())
+ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+for i in 1:3
+    ccall((:test_echo_p, libccalltest), Ptr{Void}, (Any,), f17413())
+end
+
+immutable SpillPint
+    a::Ptr{Cint}
+    b::Ptr{Cint}
+end
+Base.cconvert(::Type{SpillPint}, v::NTuple{2,Cint}) =
+    Base.cconvert(Ref{NTuple{2,Cint}}, v)
+function Base.unsafe_convert(::Type{SpillPint}, vr)
+    ptr = Base.unsafe_convert(Ref{NTuple{2,Cint}}, vr)
+    return SpillPint(ptr, ptr + 4)
+end
+
+macro test_spill_n(n::Int, intargs, floatargs)
+    fname_int = Symbol(:test_spill_int, n)
+    fname_float = Symbol(:test_spill_float, n)
+    quote
+        local ints = $(esc(intargs))
+        local floats = $(esc(intargs))
+        @test ccall(($(QuoteNode(fname_int)), libccalltest), Cint,
+                    ($((:(Ref{Cint}) for j in 1:n)...), SpillPint),
+                    $((:(ints[$j]) for j in 1:n)...),
+                    (ints[$n + 1], ints[$n + 2])) == sum(ints[1:($n + 2)])
+        @test ccall(($(QuoteNode(fname_float)), libccalltest), Float32,
+                    ($((:Float32 for j in 1:n)...), NTuple{2,Float32}),
+                    $((:(floats[$j]) for j in 1:n)...),
+                    (floats[$n + 1], floats[$n + 2])) == sum(floats[1:($n + 2)])
+    end
+end
+
+for i in 1:100
+    local intargs = rand(1:10000, 14)
+    local int32args = Int32.(intargs)
+    local intsum = sum(intargs)
+    local floatargs = rand(14)
+    local float32args = Float32.(floatargs)
+    local float32sum = sum(float32args)
+    local float64sum = sum(floatargs)
+    @test ccall((:test_long_args_intp, libccalltest), Cint,
+                (Ref{Cint}, Ref{Cint}, Ref{Cint}, Ref{Cint},
+                 Ref{Cint}, Ref{Cint}, Ref{Cint}, Ref{Cint},
+                 Ref{Cint}, Ref{Cint}, Ref{Cint}, Ref{Cint},
+                 Ref{Cint}, Ref{Cint}),
+                intargs[1], intargs[2], intargs[3], intargs[4],
+                intargs[5], intargs[6], intargs[7], intargs[8],
+                intargs[9], intargs[10], intargs[11], intargs[12],
+                intargs[13], intargs[14]) == intsum
+    @test ccall((:test_long_args_int, libccalltest), Cint,
+                (Cint, Cint, Cint, Cint, Cint, Cint, Cint, Cint,
+                 Cint, Cint, Cint, Cint, Cint, Cint),
+                intargs[1], intargs[2], intargs[3], intargs[4],
+                intargs[5], intargs[6], intargs[7], intargs[8],
+                intargs[9], intargs[10], intargs[11], intargs[12],
+                intargs[13], intargs[14]) == intsum
+    @test ccall((:test_long_args_float, libccalltest), Float32,
+                (Float32, Float32, Float32, Float32, Float32, Float32,
+                 Float32, Float32, Float32, Float32, Float32, Float32,
+                 Float32, Float32),
+                floatargs[1], floatargs[2], floatargs[3], floatargs[4],
+                floatargs[5], floatargs[6], floatargs[7], floatargs[8],
+                floatargs[9], floatargs[10], floatargs[11], floatargs[12],
+                floatargs[13], floatargs[14]) ≈ float32sum
+    @test ccall((:test_long_args_double, libccalltest), Float64,
+                (Float64, Float64, Float64, Float64, Float64, Float64,
+                 Float64, Float64, Float64, Float64, Float64, Float64,
+                 Float64, Float64),
+                floatargs[1], floatargs[2], floatargs[3], floatargs[4],
+                floatargs[5], floatargs[6], floatargs[7], floatargs[8],
+                floatargs[9], floatargs[10], floatargs[11], floatargs[12],
+                floatargs[13], floatargs[14]) ≈ float64sum
+
+    @test_spill_n 1 int32args float32args
+    @test_spill_n 2 int32args float32args
+    @test_spill_n 3 int32args float32args
+    @test_spill_n 4 int32args float32args
+    @test_spill_n 5 int32args float32args
+    @test_spill_n 6 int32args float32args
+    @test_spill_n 7 int32args float32args
+    @test_spill_n 8 int32args float32args
+    @test_spill_n 9 int32args float32args
+    @test_spill_n 10 int32args float32args
+end

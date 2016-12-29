@@ -380,7 +380,7 @@ isempty(r::LinSpace) = length(r) == 0
 """
     step(r)
 
-Get the step size of a [`Range`](:obj:`Range`) object.
+Get the step size of a `Range` object.
 ```jldoctest
 julia> step(1:10)
 1
@@ -743,41 +743,41 @@ end
 -(r::FloatRange)   = FloatRange(-r.start, -r.step, r.len, r.divisor)
 -(r::LinSpace)     = LinSpace(-r.start, -r.stop, r.len, r.divisor)
 
-.+(x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
-.+(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
-#.+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
-.+(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
-function .+{T}(x::Real, r::LinSpace{T})
++(x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
++(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
+#+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
++(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
+function +{T}(x::Real, r::LinSpace{T})
     x2 = x * r.divisor / (r.len - 1)
     LinSpace(x2 + r.start, x2 + r.stop, r.len, r.divisor)
 end
-.+(r::Range, x::Real)      = x + r
-#.+(r::FloatRange, x::Real) = x + r
++(r::Range, x::Real)      = x + r
+#+(r::FloatRange, x::Real) = x + r
 
-.-(x::Real, r::Range)      = (x-first(r)):-step(r):(x-last(r))
-.-(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
-function .-(x::Real, r::LinSpace)
+-(x::Real, r::Range)      = (x-first(r)):-step(r):(x-last(r))
+-(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
+function -(x::Real, r::LinSpace)
     x2 = x * r.divisor / (r.len - 1)
     LinSpace(x2 - r.start, x2 - r.stop, r.len, r.divisor)
 end
-.-(r::AbstractUnitRange, x::Real) = range(first(r)-x, length(r))
-.-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
-.-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
-function .-(r::LinSpace, x::Real)
+-(r::AbstractUnitRange, x::Real) = range(first(r)-x, length(r))
+-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
+-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
+function -(r::LinSpace, x::Real)
     x2 = x * r.divisor / (r.len - 1)
     LinSpace(r.start - x2, r.stop - x2, r.len, r.divisor)
 end
 
-.*(x::Real, r::OrdinalRange) = range(x*first(r), x*step(r), length(r))
-.*(x::Real, r::FloatRange)   = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
-.*(x::Real, r::LinSpace)     = LinSpace(x * r.start, x * r.stop, r.len, r.divisor)
-.*(r::Range, x::Real)        = x .* r
-.*(r::FloatRange, x::Real)   = x .* r
-.*(r::LinSpace, x::Real)     = x .* r
+*(x::Real, r::OrdinalRange) = range(x*first(r), x*step(r), length(r))
+*(x::Real, r::FloatRange)   = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
+*(x::Real, r::LinSpace)     = LinSpace(x * r.start, x * r.stop, r.len, r.divisor)
+*(r::Range, x::Real)        = x * r
+*(r::FloatRange, x::Real)   = x * r
+*(r::LinSpace, x::Real)     = x * r
 
-./(r::OrdinalRange, x::Real) = range(first(r)/x, step(r)/x, length(r))
-./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
-./(r::LinSpace, x::Real)     = LinSpace(r.start / x, r.stop / x, r.len, r.divisor)
+/(r::OrdinalRange, x::Real) = range(first(r)/x, step(r)/x, length(r))
+/(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
+/(r::LinSpace, x::Real)     = LinSpace(r.start / x, r.stop / x, r.len, r.divisor)
 
 promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
     UnitRange{promote_type(T1,T2)}
@@ -844,20 +844,17 @@ convert{T<:AbstractFloat}(::Type{LinSpace}, r::FloatRange{T}) =
 
 ## non-linear operations on ranges and fallbacks for non-real numbers ##
 
-.+(x::Number, r::Range) = [ x+y for y=r ]
-.+(r::Range, y::Number) = [ x+y for x=r ]
++(x::Number, r::Range) = [ x+y for y=r ]
++(r::Range, y::Number) = [ x+y for x=r ]
 
-.-(x::Number, r::Range) = [ x-y for y=r ]
-.-(r::Range, y::Number) = [ x-y for x=r ]
+-(x::Number, r::Range) = [ x-y for y=r ]
+-(r::Range, y::Number) = [ x-y for x=r ]
 
-.*(x::Number, r::Range) = [ x*y for y=r ]
-.*(r::Range, y::Number) = [ x*y for x=r ]
+*(x::Number, r::Range) = [ x*y for y=r ]
+*(r::Range, y::Number) = [ x*y for x=r ]
 
-./(x::Number, r::Range) = [ x/y for y=r ]
-./(r::Range, y::Number) = [ x/y for x=r ]
-
-.^(x::Number, r::Range) = [ x^y for y=r ]
-.^(r::Range, y::Number) = [ x^y for x=r ]
+/(x::Number, r::Range) = [ x/y for y=r ]
+/(r::Range, y::Number) = [ x/y for x=r ]
 
 ## concatenation ##
 

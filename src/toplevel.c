@@ -73,14 +73,17 @@ static jl_function_t *jl_module_get_initializer(jl_module_t *m)
     return (jl_function_t*)jl_get_global(m, jl_symbol("__init__"));
 }
 
+
 void jl_module_run_initializer(jl_module_t *m)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
+    size_t last_age = jl_get_ptls_states()->world_age;
     JL_TRY {
+        jl_get_ptls_states()->world_age = jl_world_counter;
         jl_apply(&f, 1);
+        jl_get_ptls_states()->world_age = last_age;
     }
     JL_CATCH {
         if (jl_initerror_type == NULL) {
@@ -88,11 +91,10 @@ void jl_module_run_initializer(jl_module_t *m)
         }
         else {
             jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
-                                           ptls->exception_in_transit));
+                                           jl_exception_in_transit));
         }
     }
 }
-
 
 // load time init procedure: in build mode, only record order
 static void jl_module_load_time_initialize(jl_module_t *m)
@@ -174,25 +176,30 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     jl_value_t *defaultdefs = NULL, *form = NULL;
     JL_GC_PUSH3(&last_module, &defaultdefs, &form);
+    size_t last_age = ptls->world_age;
     jl_module_t *task_last_m = ptls->current_task->current_module;
     ptls->current_task->current_module = ptls->current_module = newm;
+
     jl_module_t *prev_outermost = outermost;
     size_t stackidx = module_stack.len;
     if (outermost == NULL)
         outermost = newm;
 
-    if (std_imports) {
-        // add `eval` function
-        defaultdefs = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex);
-        jl_toplevel_eval_flex(defaultdefs, 0, 1);
-        defaultdefs = NULL;
-    }
-
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     JL_TRY {
-        for(int i=0; i < jl_array_len(exprs); i++) {
+        if (std_imports) {
+            // add `eval` function
+            defaultdefs = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex);
+            ptls->world_age = jl_world_counter;
+            jl_toplevel_eval_flex(defaultdefs, 0, 1);
+            defaultdefs = NULL;
+        }
+
+        for (int i = 0; i < jl_array_len(exprs); i++) {
             // process toplevel form
+            ptls->world_age = jl_world_counter;
             form = jl_expand(jl_array_ptr_ref(exprs, i));
+            ptls->world_age = jl_world_counter;
             (void)jl_toplevel_eval_flex(form, 1, 1);
         }
     }
@@ -204,6 +211,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_rethrow();
     }
     JL_GC_POP();
+    ptls->world_age = last_age;
     ptls->current_module = last_module;
     ptls->current_task->current_module = task_last_m;
     outermost = prev_outermost;
@@ -233,8 +241,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     if (outermost == NULL || ptls->current_module == jl_main_module) {
         JL_TRY {
-            size_t i, l=module_stack.len;
-            for(i = stackidx; i < l; i++) {
+            size_t i, l = module_stack.len;
+            for (i = stackidx; i < l; i++) {
                 jl_module_load_time_initialize((jl_module_t*)module_stack.items[i]);
             }
             assert(module_stack.len == l);
@@ -634,7 +642,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
 
     if (ewc) {
         li = jl_new_thunk(thk);
-        jl_type_infer(li, 0);
+        size_t world = jl_get_ptls_states()->world_age;
+        jl_type_infer(&li, world, 0);
         jl_value_t *dummy_f_arg = NULL;
         result = jl_call_method_internal(li, &dummy_f_arg, 1);
     }
@@ -791,7 +800,7 @@ static jl_datatype_t *first_arg_datatype(jl_value_t *a, int got_tuple1)
 }
 
 // get DataType of first tuple element, or NULL if cannot be determined
-jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
+JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
 {
     return first_arg_datatype(argtypes, 0);
 }
