@@ -170,3 +170,6 @@ for n = 0:20
         @test t[i] == i
     end
 end
+
+# Check type stability of last for tuples
+@inferred last((1, 2.0))
