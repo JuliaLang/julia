@@ -425,11 +425,14 @@ add_tfunc(arraysize, 2, 2, (a::ANY, d::ANY)->Int)
 add_tfunc(pointerref, 3, 3,
           function (a::ANY, i::ANY, align::ANY)
               a = widenconst(a)
-              if isa(a,DataType) && a<:Ptr
-                  if isa(a.parameters[1],Type)
+              if a <: Ptr
+                  if isa(a,DataType) && isa(a.parameters[1],Type)
                       return a.parameters[1]
-                  elseif isa(a.parameters[1],TypeVar)
-                      return a.parameters[1].ub
+                  elseif isa(a,UnionAll) && !has_free_typevars(a)
+                      unw = unwrap_unionall(a)
+                      if isa(unw,DataType)
+                          return rewrap_unionall(unw.parameters[1], a)
+                      end
                   end
               end
               return Any
@@ -581,11 +584,8 @@ function getfield_tfunc(s00::ANY, name)
             if isa(sv, Module) && isa(nv, Symbol)
                 return abstract_eval_global(sv, nv)
             end
-            if isa(sv,DataType) || isimmutable(sv)
-                try
-                    return abstract_eval_constant(getfield(sv, nv))
-                catch
-                end
+            if (isa(sv,DataType) || isimmutable(sv)) && isdefined(sv, nv)
+                return abstract_eval_constant(getfield(sv, nv))
             end
         end
         s = typeof(sv)
@@ -612,6 +612,7 @@ function getfield_tfunc(s00::ANY, name)
         if length(s.types) == 1
             return rewrap_unionall(unwrapva(s.types[1]), s00)
         end
+        # union together types of all fields
         R = reduce(tmerge, Bottom, map(t->rewrap_unionall(unwrapva(t),s00), s.types))
         # do the same limiting as the known-symbol case to preserve type-monotonicity
         if isempty(s.parameters)
@@ -723,6 +724,7 @@ function apply_type_tfunc(args...)
         elseif isa(ai, Const) && valid_tparam(ai.val)
             push!(tparams, ai.val)
         else
+            # TODO: return `Bottom` for trying to apply a non-UnionAll
             #if !istuple && i-1 > length(headtype.parameters)
             #    # too many parameters for type
             #    return Bottom
@@ -731,6 +733,7 @@ function apply_type_tfunc(args...)
             if istuple
                 push!(tparams, Any)
             else
+                # TODO: use rewrap_unionall to skip only the unknown parameters
                 #push!(tparams, headtype.parameters[i-1])
                 break
             end
@@ -818,12 +821,17 @@ function builtin_tfunction(f::ANY, argtypes::Array{Any,1}, sv::InferenceState)
             return Bottom
         end
         a = widenconst(argtypes[1])
-        if isa(a,UnionAll)
-            a = unwrap_unionall(a)
-        end
-        if isa(a,DataType) && a<:Array && isa(a.parameters[1],Union{Type,TypeVar})
-            a = a.parameters[1]
-            return isa(a,TypeVar) ? a.ub : a
+        if a <: Array
+            if isa(a,DataType) && (isa(a.parameters[1],Type) || isa(a.parameters[1],TypeVar))
+                # TODO: the TypeVar case should not be needed here
+                a = a.parameters[1]
+                return isa(a,TypeVar) ? a.ub : a
+            elseif isa(a,UnionAll) && !has_free_typevars(a)
+                unw = unwrap_unionall(a)
+                if isa(unw,DataType)
+                    return rewrap_unionall(unw.parameters[1], a)
+                end
+            end
         end
         return Any
     elseif f === Expr
@@ -873,10 +881,18 @@ function limit_tuple_depth_(params::InferenceParams, t::ANY, d::Int)
     if isa(t,Union)
         # also limit within Union types.
         # may have to recur into other stuff in the future too.
-        return Union{map(x->limit_tuple_depth_(params,x,d+1), (t.a,t.b))...}
+        return Union{limit_tuple_depth_(params, t.a, d+1),
+                     limit_tuple_depth_(params, t.b, d+1)}
     elseif isa(t,UnionAll)
-        var = TypeVar(t.var.name, t.var.lb, limit_tuple_depth_(params, t.var.ub, d))
-        body = limit_tuple_depth_(params, t{var}, d)
+        ub = limit_tuple_depth_(params, t.var.ub, d)
+        if ub !== t.var.ub
+            var = TypeVar(t.var.name, t.var.lb, ub)
+            body = t{var}
+        else
+            var = t.var
+            body = t.body
+        end
+        body = limit_tuple_depth_(params, body, d)
         return UnionAll(var, body)
     elseif !(isa(t,DataType) && t.name === Tuple.name)
         return t
@@ -1249,16 +1265,16 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
         return Any
     elseif f === UnionAll
         if length(fargs) == 3 && isa(argtypes[2],Const)
-            if isType(argtypes[3])
-                body = argtypes[3].parameters[1]
-            elseif isa(argtypes[3],Const)
-                body = argtypes[3].val
-            else
-                return Any
-            end
-            try
-                return abstract_eval_constant(UnionAll(argtypes[2].val, body))
-            catch
+            tv = argtypes[2].val
+            if isa(tv,TypeVar)
+                if isType(argtypes[3])
+                    body = argtypes[3].parameters[1]
+                elseif isa(argtypes[3],Const)
+                    body = argtypes[3].val
+                else
+                    return Any
+                end
+                return abstract_eval_constant(UnionAll(tv, body))
             end
         end
         return Any

@@ -329,10 +329,6 @@ typedef struct {
 
 typedef struct {
     JL_DATA_TYPE
-} jl_bottomtype_t;
-
-typedef struct {
-    JL_DATA_TYPE
     jl_value_t *a;
     jl_value_t *b;
 } jl_uniontype_t;
@@ -485,7 +481,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_tvar_type;
 
 extern JL_DLLEXPORT jl_datatype_t *jl_any_type;
 extern JL_DLLEXPORT jl_unionall_t *jl_type_type;
-extern JL_DLLEXPORT jl_tvar_t     *jl_typetype_tvar;
 extern JL_DLLEXPORT jl_unionall_t *jl_typetype_type;
 extern JL_DLLEXPORT jl_value_t    *jl_ANY_flag;
 extern JL_DLLEXPORT jl_datatype_t *jl_typename_type;
@@ -880,11 +875,15 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 
+STATIC_INLINE int jl_is_kind(jl_value_t *v)
+{
+    return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
+            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_bottomtype_type);
+}
+
 STATIC_INLINE int jl_is_type(jl_value_t *v)
 {
-    jl_value_t *t = jl_typeof(v);
-    return (t == (jl_value_t*)jl_datatype_type || t == (jl_value_t*)jl_uniontype_type ||
-            t == (jl_value_t*)jl_unionall_type || v == jl_bottom_type);
+    return jl_is_kind(jl_typeof(v));
 }
 
 STATIC_INLINE int jl_is_bitstype(void *v)
@@ -947,12 +946,6 @@ STATIC_INLINE int jl_is_abstract_ref_type(jl_value_t *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == ((jl_datatype_t*)jl_ref_type->body)->name);
-}
-
-STATIC_INLINE int jl_is_ref_type(jl_value_t *t)
-{
-    if (!jl_is_datatype(t)) return 0;
-    return jl_subtype(t, (jl_value_t*)jl_ref_type);
 }
 
 STATIC_INLINE int jl_is_tuple_type(void *t)
