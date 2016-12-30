@@ -363,7 +363,7 @@ StrangeType18623(x,y) = (x,y)
 let
     f(A, n) = broadcast(x -> +(x, n), A)
     @test @inferred(f([1.0], 1)) == [2.0]
-    g() = (a = 1; Base.Broadcast._broadcast_type(Any, x -> x + a, 1.0))
+    g() = (a = 1; Base.Broadcast._broadcast_type(x -> x + a, 1.0))
     @test @inferred(g()) === Float64
 end
 
