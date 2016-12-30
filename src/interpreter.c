@@ -121,6 +121,7 @@ static int equiv_svec_dt(jl_svec_t *sa, jl_svec_t *sb)
 }
 static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 {
+    // TODO: revisit after jb/subtype
     return (jl_typeof(dta) == jl_typeof(dtb) &&
             dta->name->name == dtb->name->name &&
             dta->abstract == dtb->abstract &&

@@ -254,9 +254,9 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (jl_is_uniontype(b) && in_union(b, a))
         return b;
-    if (is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
+    if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
         return a;
-    if (is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
+    if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
         return b;
     if (jl_is_type_type(a) && jl_is_type_type(b) && !jl_is_typevar(jl_tparam0(a)) &&
         jl_typeof(jl_tparam0(a)) == jl_typeof(jl_tparam0(b)))
@@ -698,7 +698,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             jl_value_t *tp0 = jl_tparam0(yd);
             if (!jl_is_typevar(tp0))
                 return 0;
-            if (!is_kind(x)) return 0;
+            if (!jl_is_kind(x)) return 0;
             jl_varbinding_t *yy = lookup(e, (jl_tvar_t*)tp0);
             jl_value_t *ub = yy ? yy->ub : ((jl_tvar_t*)tp0)->ub;
             int ans;
@@ -1469,7 +1469,7 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     jl_value_t *p0 = jl_tparam0(x);
     if (!jl_is_typevar(p0))
         return (jl_typeof(p0) == y) ? x : jl_bottom_type;
-    if (!is_kind(y)) return jl_bottom_type;
+    if (!jl_is_kind(y)) return jl_bottom_type;
     if (((jl_tvar_t*)p0)->ub == (jl_value_t*)jl_any_type)
         return y;
     return x;

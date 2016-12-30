@@ -17,7 +17,6 @@ extern "C" {
 JL_DLLEXPORT jl_value_t *jl_true;
 JL_DLLEXPORT jl_value_t *jl_false;
 
-jl_tvar_t     *jl_typetype_tvar;
 jl_unionall_t *jl_typetype_type;
 jl_value_t    *jl_ANY_flag;
 
@@ -675,9 +674,11 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
     }
     jl_value_t *root = (jl_value_t*)sparam_syms;
     jl_method_t *m = NULL;
-    JL_GC_PUSH2(&root, &m);
+    JL_GC_PUSH1(&root);
 
     m = jl_new_method_uninit();
+    m->sparam_syms = sparam_syms;
+    root = (jl_value_t*)m;
     m->min_world = ++jl_world_counter;
     m->isstaged = isstaged;
     m->name = name;
@@ -688,8 +689,6 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
         m->tvars = (jl_svec_t*)jl_svecref(tvars, 0);
     else
         m->tvars = tvars;
-    m->sparam_syms = sparam_syms;
-    root = (jl_value_t*)m;
     jl_method_set_source(m, definition);
     if (isstaged) {
         // create and store generator for generated functions
