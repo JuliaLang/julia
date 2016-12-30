@@ -43,7 +43,7 @@ srand(1)
 
     @testset "Simple unary functions" begin
         for op in (-,)
-          @test op(D)==op(DM)
+            @test op(D)==op(DM)
         end
 
         for func in (det, trace)

@@ -15,8 +15,8 @@ endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 getindex(t::Tuple, i::Int) = getfield(t, i)
 getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
-getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
-getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
+getindex{T}(t::Tuple, r::AbstractArray{T,1}) = tuple([t[ri] for ri in r]...)
+getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
 
 ## iterating ##
 

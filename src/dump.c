@@ -2810,7 +2810,7 @@ static void jl_recache_other(void)
             _new = (jl_value_t*)jl_recache_method_instance((jl_method_instance_t*)o, i);
         }
         else {
-            assert(0);
+            abort();
         }
         if (loc)
             *loc = _new;

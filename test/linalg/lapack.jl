@@ -488,7 +488,7 @@ end
 
 @testset "posv and some errors for friends" begin
     @testset for elty in (Float32, Float64, Complex64, Complex128)
-        A = 0.01*rand(elty,10,10)
+        A = rand(elty,10,10)/100
         A += real(diagm(10*real(rand(elty,10))))
         if elty <: Complex
             A = A + A'

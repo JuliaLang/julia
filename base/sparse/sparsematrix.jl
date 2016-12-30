@@ -1413,7 +1413,7 @@ function map{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N})
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = fofzeros == zero(fofzeros)
     maxnnzC = fpreszeros ? min(length(A), _sumnnzs(A, Bs...)) : length(A)
-    entrytypeC = _broadcast_type(f, A, Bs...)
+    entrytypeC = _broadcast_type(Any, f, A, Bs...)
     indextypeC = _promote_indtype(A, Bs...)
     Ccolptr = Vector{indextypeC}(A.n + 1)
     Crowval = Vector{indextypeC}(maxnnzC)
@@ -1443,7 +1443,7 @@ function broadcast{Tf,N}(f::Tf, A::SparseMatrixCSC, Bs::Vararg{SparseMatrixCSC,N
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = fofzeros == zero(fofzeros)
     indextypeC = _promote_indtype(A, Bs...)
-    entrytypeC = _broadcast_type(f, A, Bs...)
+    entrytypeC = _broadcast_type(Any, f, A, Bs...)
     Cm, Cn = Base.to_shape(Base.Broadcast.broadcast_indices(A, Bs...))
     maxnnzC = fpreszeros ? _checked_maxnnzbcres(Cm, Cn, A, Bs...) : (Cm * Cn)
     Ccolptr = Vector{indextypeC}(Cn + 1)
@@ -2179,7 +2179,6 @@ min(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(min, A, B)
 max(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(max, A, B)
 (&)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(&, A, B)
 (|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(|, A, B)
-xor(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(xor, A, B)
 
 ( +)(A::SparseMatrixCSC, B::Array ) = Array(A)  + B
 ( +)(A::Array , B::SparseMatrixCSC) = A  + Array(B)
@@ -3700,6 +3699,17 @@ end
     blkdiag(A...)
 
 Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
+
+# Example
+```jldoctest
+julia> blkdiag(speye(3), 2*speye(2))
+5×5 sparse matrix with 5 Float64 nonzero entries:
+  [1, 1]  =  1.0
+  [2, 2]  =  1.0
+  [3, 3]  =  1.0
+  [4, 4]  =  2.0
+  [5, 5]  =  2.0
+```
 """
 function blkdiag(X::SparseMatrixCSC...)
     num = length(X)

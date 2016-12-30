@@ -164,8 +164,8 @@ As in the example above, we recommend following some simple conventions when wri
 
 ## Accessing Documentation
 
-Documentation can be accessed at the REPL or in IJulia by typing `?` followed by the name of a
-function or macro, and pressing `Enter`. For example,
+Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
+by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
 
 ```julia
 ?fft
@@ -584,6 +584,27 @@ parentheses, `( )`, is the URL.
 ```
 A paragraph containing a link to [Julia](http://www.julialang.org).
 ```
+
+It's also possible to add cross-references to other documented functions/methods/variables within
+the Julia documentation itself. For example:
+
+```julia
+"""
+    eigvals!(A,[irange,][vl,][vu]) -> values
+
+Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+"""
+```
+
+This will create a link in the generated docs to the `eigvals` documentation
+(which has more information about what this function actually does). It's good to include
+cross references to mutating/non-mutating versions of a function, or to highlight a difference
+between two similar-seeming functions.
+
+!!! note
+    The above cross referencing is *not* a Markdown feature, and relies on
+    [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), which is
+    used to build base Julia's documentation.
 
 #### Footnote references
 

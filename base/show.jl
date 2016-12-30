@@ -783,7 +783,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if (na == 2 || (na > 2 && func in (:+, :++, :*))) && all(!isa(a, Expr) || a.head !== :... for a in func_args)
+            if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
+                    all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
@@ -1030,31 +1031,37 @@ end
 
 function show_lambda_types(io::IO, li::Core.MethodInstance)
     # print a method signature tuple for a lambda definition
-    if li.specTypes === Tuple
-        print(io, li.def.name, "(...)")
-        return
+    local sig
+    returned_from_do = false
+    Base.with_output_color(have_color ? stackframe_function_color() : :nothing, io) do io
+        if li.specTypes === Tuple
+            print(io, li.def.name, "(...)")
+            returned_from_do = true
+            return
+        end
+        sig = li.specTypes.parameters
+        ft = sig[1]
+        if ft <: Function && isempty(ft.parameters) &&
+                isdefined(ft.name.module, ft.name.mt.name) &&
+                ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            print(io, ft.name.mt.name)
+        elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
+            f = ft.parameters[1]
+            print(io, f)
+        else
+            print(io, "(::", ft, ")")
+        end
     end
-
-    sig = li.specTypes.parameters
-    ft = sig[1]
-    if ft <: Function && isempty(ft.parameters) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.name && isleaftype(ft)
-        f = ft.parameters[1]
-        print(io, f)
-    else
-        print(io, "(::", ft, ")")
-    end
+    returned_from_do && return
     first = true
-    print(io, '(')
+    print_style = have_color ? :bold : :nothing
+    print_with_color(print_style, io, "(")
     for i = 2:length(sig)  # fixme (iter): `eachindex` with offset?
         first || print(io, ", ")
         first = false
         print(io, "::", sig[i])
     end
-    print(io, ')')
+    print_with_color(print_style, io, ")")
     nothing
 end
 

@@ -501,6 +501,18 @@ function uncompressed_ast(m::Method, s::CodeInfo)
     return s
 end
 
+# this type mirrors jl_cghooks_t (documented in julia.h)
+immutable CodegenHooks
+    module_setup::Ptr{Void}
+    module_activation::Ptr{Void}
+    raise_exception::Ptr{Void}
+
+    CodegenHooks(;module_setup=nothing, module_activation=nothing, raise_exception=nothing) =
+        new(pointer_from_objref(module_setup),
+            pointer_from_objref(module_activation),
+            pointer_from_objref(raise_exception))
+end
+
 # this type mirrors jl_cgparams_t (documented in julia.h)
 immutable CodegenParams
     cached::Cint
@@ -512,14 +524,18 @@ immutable CodegenParams
     static_alloc::Cint
     dynamic_alloc::Cint
 
+    hooks::CodegenHooks
+
     CodegenParams(;cached::Bool=true,
                    runtime::Bool=true, exceptions::Bool=true,
                    track_allocations::Bool=true, code_coverage::Bool=true,
-                   static_alloc::Bool=true, dynamic_alloc::Bool=true) =
+                   static_alloc::Bool=true, dynamic_alloc::Bool=true,
+                   hooks::CodegenHooks=CodegenHooks()) =
         new(Cint(cached),
             Cint(runtime), Cint(exceptions),
             Cint(track_allocations), Cint(code_coverage),
-            Cint(static_alloc), Cint(dynamic_alloc))
+            Cint(static_alloc), Cint(dynamic_alloc),
+            hooks)
 end
 
 # Printing code representations in IR and assembly

@@ -430,13 +430,14 @@ export
     ≉,
 
 # specfun
-    airy,
     airyai,
     airyaiprime,
     airybi,
     airybiprime,
-    airyprime,
-    airyx,
+    airyaix,
+    airyaiprimex,
+    airybix,
+    airybiprimex,
     besselh,
     besselhx,
     besseli,
@@ -925,9 +926,6 @@ export
     plan_rfft,
     rfft,
     xcorr,
-
-# numerical integration
-    quadgk,
 
 # iteration
     done,
