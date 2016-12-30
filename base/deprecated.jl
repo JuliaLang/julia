@@ -1341,7 +1341,7 @@ end
 @deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
 
 # QuadGK moved to a package (#19741)
-function quadgk(args...)
+function quadgk(args...; kwargs...)
     error(string(quadgk, args, " has been moved to the package QuadGK.jl.\n",
                  "Run Pkg.add(\"QuadGK\") to install QuadGK on Julia v0.6 and later, and then run `using QuadGK`."))
 end
