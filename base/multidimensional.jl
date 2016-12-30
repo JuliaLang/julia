@@ -295,7 +295,7 @@ checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = checkbounds(Bool,
 checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = checkindex(Bool, indx, I.mask)
 ensure_indexable(I::Tuple{}) = ()
 ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
-ensure_indexable(I::Tuple{LogicalIndex, Vararg{Any}}) = (collect(I), ensure_indexable(tail(I))...)
+ensure_indexable(I::Tuple{LogicalIndex, Vararg{Any}}) = (collect(I[1]), ensure_indexable(tail(I))...)
 
 # In simple cases, we know that we don't need to use indices(A). Optimize those
 # until Julia gets smart enough to elide the call on its own:

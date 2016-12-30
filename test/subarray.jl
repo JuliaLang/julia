@@ -365,11 +365,11 @@ sA = view(A, 1:2, 3, [1 3; 4 2])
 
 # logical indexing #4763
 A = view([1:10;], 5:8)
-@test A[A.<7] == [5, 6]
+@test A[A.<7] == view(A, A.<7) == [5, 6]
 @test Base.unsafe_getindex(A, A.<7) == [5, 6]
 B = reshape(1:16, 4, 4)
 sB = view(B, 2:3, 2:3)
-@test sB[sB.>8] == [10, 11]
+@test sB[sB.>8] == view(sB, sB.>8) == [10, 11]
 @test Base.unsafe_getindex(sB, sB.>8) == [10, 11]
 
 # Tests where dimensions are dropped
