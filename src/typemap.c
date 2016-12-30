@@ -64,7 +64,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
                         return 0;
                 }
             }
-            else if (!is_kind(a) || !jl_is_typevar(tp0) || ((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type) {
+            else if (!jl_is_kind(a) || !jl_is_typevar(tp0) || ((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type) {
                 // manually unroll jl_subtype(a, decl)
                 // where `a` can be a subtype like TypeConstructor
                 // and decl is Type{T}
@@ -328,7 +328,7 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
 {
     if (jl_is_datatype(ty)) {
         uintptr_t uid = ((jl_datatype_t*)ty)->uid;
-        if (!uid || is_kind(ty) || jl_has_free_typevars(ty))
+        if (!uid || jl_is_kind(ty) || jl_has_free_typevars(ty))
             // be careful not to put non-leaf types or DataType/TypeConstructor in the cache here,
             // since they should have a lower priority and need to go into the sorted list
             return NULL;
@@ -445,7 +445,7 @@ int jl_typemap_visitor(union jl_typemap_t cache, jl_typemap_visitor_fptr fptr, v
 // and does not need a more expensive linear scan to find all intersections
 int is_cache_leaf(jl_value_t *ty)
 {
-    return (jl_is_datatype(ty) && ((jl_datatype_t*)ty)->uid != 0 && !is_kind(ty));
+    return (jl_is_datatype(ty) && ((jl_datatype_t*)ty)->uid != 0 && !jl_is_kind(ty));
 }
 
 static int jl_typemap_intersection_array_visitor(struct jl_ordereddict_t *a, jl_value_t *ty, int tparam,
