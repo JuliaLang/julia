@@ -716,7 +716,6 @@ timesofar("indexing")
     empty!(i1)
     @test isequal(Array(b1), i1)
     @test bitcheck(b1)
-
 end
 
 timesofar("dequeue")
@@ -782,7 +781,6 @@ timesofar("unary arithmetic")
         @check_bit_operation (\)(b1, b1) Matrix{Float64}
 
         b0 = falses(0)
-         b0 = falses(0)
         @check_bit_operation (&)(b0, b0)  BitVector
         @check_bit_operation (|)(b0, b0)  BitVector
         @check_bit_operation broadcast(xor, b0, b0)  BitVector
@@ -998,20 +996,17 @@ end
 timesofar("binary arithmetic")
 
 @testset "Binary comparison operators" begin
-
     b1 = bitrand(n1, n2)
     b2 = bitrand(n1, n2)
     @check_bit_operation broadcast(==, b1, b2) BitMatrix
     @check_bit_operation broadcast(!=, b1, b2) BitMatrix
     @check_bit_operation broadcast(<, b1, b2) BitMatrix
     @check_bit_operation broadcast(<=, b1, b2) BitMatrix
-
 end
 
 timesofar("binary comparison")
 
 @testset "Data movement" begin
-
     b1 = bitrand(s1, s2, s3, s4)
     for d = 1:4
         j = rand(1:size(b1, d))
@@ -1021,7 +1016,6 @@ timesofar("binary comparison")
         @check_bit_operation flipdim(b1, d) BitArray{4}
     end
     @test_throws ArgumentError flipdim(b1, 5)
-
 
     b1 = bitrand(n1, n2)
     for k = 1:4
@@ -1059,7 +1053,6 @@ end
 timesofar("datamove")
 
 @testset "countnz & find" begin
-
     for m = 0:v1, b1 in Any[bitrand(m), trues(m), falses(m)]
         @check_bit_operation countnz(b1) Int
 
@@ -1091,13 +1084,11 @@ timesofar("datamove")
 
     b1 = bitrand(n1, n2)
     @check_bit_operation findnz(b1) Tuple{Vector{Int}, Vector{Int}, BitArray}
-
 end
 
 timesofar("nnz&find")
 
 @testset "Findnext/findprev" begin
-
     b1 = trues(v1)
     b2 = falses(v1)
     for i = 1:v1
@@ -1229,7 +1220,7 @@ timesofar("reductions")
 
 @testset "map over bitarrays" begin
     for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
-         b1 = bitrand(l)
+        b1 = bitrand(l)
         b2 = bitrand(l)
         @test map(~, b1) == map(x->~x, b1) == ~b1
         @test map(identity, b1) == map(x->x, b1) == b1
@@ -1304,18 +1295,15 @@ end
 timesofar("transpose")
 
 @testset "Permutedims" begin
-
     b1 = bitrand(s1, s2, s3, s4)
     p = randperm(4)
     @check_bit_operation permutedims(b1, p) BitArray{4}
     @check_bit_operation permutedims(b1, tuple(p...)) BitArray{4}
-
 end
 
 timesofar("permutedims")
 
 @testset "Concatenation" begin
-
     b1 = bitrand(v1)
     b2 = bitrand(v1)
     @check_bit_operation hcat(b1, b2) BitMatrix
@@ -1349,13 +1337,11 @@ timesofar("permutedims")
     for m1 = 1:(n1-1), m2 = 1:(n2-1)
         @test isequal([b1[1:m1,1:m2] b1[1:m1,m2+1:end]; b1[m1+1:end,1:m2] b1[m1+1:end,m2+1:end]], b1)
     end
-
 end
 
 timesofar("cat")
 
 @testset "Linear algebra" begin
-
     b1 = bitrand(v1)
     b2 = bitrand(v1)
     @check_bit_operation dot(b1, b2) Int
