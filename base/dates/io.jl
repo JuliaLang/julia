@@ -1,15 +1,43 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+
 """
     AbstractDateToken
 
-A token used in parsing or formatting a date time string. Each subtype must define the
-methods:
+A token used in parsing or formatting a date time string. Each subtype must
+define the tryparsenext and format methods.
 
-    tryparsenext(t::DatePart, str, i, len, [locale])
-    format(io, t::AbstractDateToken, dt, [locale])
 """
 abstract AbstractDateToken
+
+"""
+    tryparsenext(tok::AbstractDateToken, str::String, i::Int, len::Int, locale::DateLocale)
+
+`tryparsenext` parses for the `tok` token in `str` starting at index `i`.
+`len` is the length of the string.  parsing can be optionally based on the
+`locale`. If a `tryparsenext` method does not need a locale, it can leave
+the argument out in the method definition.
+
+Returns a tuple of 2 elements `(res, idx)`, where:
+
+* `res` is a `Nullable{T}` - the result of the parsing, null if parsing failed.
+* `idx` is an `Int` - if parsing failed, the index at which it failed; if
+   parsing succeeded, `idx` is the index _after_ the index at which parsing ended.
+"""
+function tryparsenext end
+
+"""
+    format(io::IO, tok::AbstractDateToken, dt::TimeType, locale)
+
+format the `tok` token from `dt` and write it to `io`. The formatting can
+be based on `locale`.
+
+all subtypes of `AbstractDateToken` must define this method in order
+to be able to print a Date / DateTime object according to a `DateFormat`
+containing that token.
+"""
+function format end
+
 
 # fallback to tryparsenext/format methods that don't care about locale
 @inline function tryparsenext(d::AbstractDateToken, str, i, len, locale)
@@ -99,13 +127,14 @@ for (tok, fn) in zip("eE", [dayabbr, dayname])
     end
 end
 
-function fixwidth(num, n)
-    assert(num>=0)
-    dec(num,n)[end-(n-1):end]
-end
-
 function format(io, d::DatePart{'y'}, dt)
-    write(io, fixwidth(year(dt), d.width))
+    y = year(dt)
+    n = d.width
+
+    # the last `n` digits of `y`
+    # will be 0 padded if `y` has less than `n` digits
+    str = dec(y,n)[end-(n-1):end]
+    write(io, str)
 end
 
 function format(io, d::DatePart{'s'}, dt)

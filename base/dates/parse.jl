@@ -54,6 +54,17 @@ function gen_exception(tokens, err_idx, pos)
     end
 end
 
+#    reorder_args(val, idx, default, default_from)
+#
+# reorder elements of `val` tuple according to `idx` tuple. Use `default[i]`
+# when `idx[i] == 0` or i >= default_from
+#
+# returns a tuple `xs` of the same length as `idx` where `xs[i]` is
+# `val[idx[i]]` if `idx[i]` is non zero, `default[i]` if `idx[i]` is zero.
+#
+# `xs[i]` is `default[i]` for all i >= `default_from`.
+#
+#
 function reorder_args{N}(val::Tuple, idx::NTuple{N}, default::Tuple, default_from::Integer)
     ntuple(Val{N}) do i
         if idx[i] == 0 || idx[i] >= default_from
