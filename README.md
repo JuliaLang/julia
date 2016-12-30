@@ -214,7 +214,7 @@ Install or contact your systems administrator to install a more recent version o
 ------------------------|---------------------
  OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX2 = 1` disables AVX2 instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed. </li></ul></li></ul><p> If you get an error that looks like ```../kernel/x86_64/dgemm_kernel_4x4_haswell.S:1709: Error: no such instruction: `vpermpd $ 0xb1,%ymm0,%ymm0'```, then you need to set `OPENBLAS_DYNAMIC_ARCH = 0` or `OPENBLAS_NO_AVX2 = 1`, or you need a newer version of `binutils` (2.18 or newer). ([Issue #7653](https://github.com/JuliaLang/julia/issues/7653))
 Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)).
-LibGit2 build failure | If LibGit2 configuration step reports `CMake Error at /usr/share/cmake-3.0/Modules/FindOpenSSL.cmake:294 (list):` then the versions of [OpenSSL and CMake are probably incompatible](https://cmake.org/Bug/view.php?id=15386). The recommended solution is to upgrade the version of CMake to 3.1.2 or above.
+LibGit2 build failure | If LibGit2 configuration step reports `CMake Error at /usr/share/cmake-3.0/Modules/FindOpenSSL.cmake:294 (list):` then the versions of [OpenSSL and CMake are probably incompatible](https://cmake.org/Bug/view.php?id=15386). The recommended solution is to upgrade the version of CMake to 3.7.1 or above.
 
 ### OS X
 
@@ -271,6 +271,10 @@ Building Julia requires that the following software be installed:
 - **[patch]**                   — for modifying source code.
 - **[cmake]**                   — needed to build `libgit2`.
 - **[pkg-config]**              - needed to build `libgit2` correctly, especially for proxy support
+- **[which]**                   - needed by Make
+- **[openssl]**                 - needed by Make
+- **[bzip2]**                   - needed to build dependencies
+- **[openssl-devel]**           - needed to build dependencies (libgit2)
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
