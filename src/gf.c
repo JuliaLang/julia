@@ -1931,6 +1931,24 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     return verify_type(res);
 }
 
+JL_DLLEXPORT jl_value_t *jl_invoke_latest(jl_value_t *f, jl_value_t *argtuple)
+{
+    assert(jl_is_tuple(argtuple));
+    size_t nargs = jl_nfields(argtuple);
+    jl_value_t **argv;
+    JL_GC_PUSHARGS(argv, nargs+1);
+    argv[0] = f;
+    for(int i=1; i<nargs+1; i++)
+        argv[i] = jl_fieldref(argtuple, i-1);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    ptls->world_age = jl_get_world_counter();
+    jl_value_t *v = jl_apply(argv, nargs+1);
+    ptls->world_age = last_age;
+    JL_GC_POP();
+    return v;
+}
+
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_datatype_t *types, size_t world)
 {
     jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;

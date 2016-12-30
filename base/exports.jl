@@ -1044,6 +1044,7 @@ export
     atreplinit,
     clipboard,
     exit,
+    invokelatest,
     ntuple,
     quit,
 

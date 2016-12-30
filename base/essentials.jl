@@ -337,3 +337,16 @@ function vector_any(xs::ANY...)
 end
 
 isempty(itr) = done(itr, start(itr))
+
+"""
+    invokelatest(f, args...)
+
+Calls `f(args...)`, but guarantees that the most recent method of `f`
+will be executed.   This is useful in specialized circumstances,
+especially `cfunction` callbacks that may extract a Julia `Function`
+from a pointer, or Julia functions that call `eval` or similar,
+in which case obsolete versions of `f` may otherwise be called.
+(The drawback is that `invokelatest` is somewhat slower than calling
+`f` directly, and the type of the result cannot be inferred by the compiler.)
+"""
+invokelatest(f, args...) = ccall(:jl_invoke_latest, Any, (Any,Any), f, args)
