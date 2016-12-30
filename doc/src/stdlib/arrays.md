@@ -48,7 +48,7 @@ All mathematical operations and functions are supported for arrays
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
-Base.Broadcast.bitbroadcast
+Base.bitbroadcast
 ```
 
 ## Indexing, Assignment, and Concatenation

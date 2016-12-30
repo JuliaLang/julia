@@ -1224,4 +1224,24 @@ function quadgk(args...)
 end
 export quadgk
 
+# Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
+"""
+    bitbroadcast(f, As...)
+
+Like [`broadcast`](@ref), but allocates a `BitArray` to store the
+result, rather then an `Array`.
+
+```jldoctest
+julia> bitbroadcast(isodd,[1,2,3,4,5])
+5-element BitArray{1}:
+  true
+ false
+  true
+ false
+  true
+```
+"""
+function bitbroadcast end
+@deprecate bitbroadcast  broadcast
+
 # End deprecations scheduled for 0.6

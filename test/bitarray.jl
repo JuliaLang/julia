@@ -1138,8 +1138,8 @@ let b1 = trues(v1), b2 = falses(v1)
     end
 end
 
-let odds = bitbroadcast(isodd, 1:2000)
-    evens = bitbroadcast(iseven, 1:2000)
+let odds = broadcast(isodd, 1:2000)
+    evens = broadcast(iseven, 1:2000)
     for i = 1:2:2000
         @test findprev(odds,i)  == findprevnot(evens,i) == i
         @test findnext(odds,i)  == findnextnot(evens,i) == i
