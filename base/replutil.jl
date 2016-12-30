@@ -586,7 +586,7 @@ function show_trace_entry(io, frame, n; prefix = " in ")
 end
 
 # Contains file name and file number. Gets set when a backtrace
-# is showed. Used by the REPL to make it possible to open
+# is shown. Used by the REPL to make it possible to open
 # the location of a stackframe in the edítor.
 global LAST_BACKTRACE_LINE_INFOS = Tuple{String, Int}[]
 
