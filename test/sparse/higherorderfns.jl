@@ -104,6 +104,8 @@ end
             @test broadcast(+, X, Y) == sparse(broadcast(+, fX, fY))
             @test broadcast(*, X, Y) == sparse(broadcast(*, fX, fY))
             @test broadcast(f, X, Y) == sparse(broadcast(f, fX, fY))
+            # TODO strengthen this test, avoiding dependence on checking whether
+            # broadcast_indices throws to determine whether sparse broadcast should throw
             try
                 Base.Broadcast.broadcast_indices(spzeros((shapeX .- 1)...), Y)
             catch
@@ -125,6 +127,8 @@ end
             @test (@allocated broadcast!(f, Z, X, Y)) == 0
             @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
             # --> test shape checks for both broadcast and broadcast! entry points
+            # TODO strengthen this test, avoiding dependence on checking whether
+            # broadcast_indices throws to determine whether sparse broadcast should throw
             try
                 Base.Broadcast.check_broadcast_indices(indices(Z), spzeros((shapeX .- 1)...), Y)
             catch
@@ -150,6 +154,8 @@ end
             @test broadcast(+, X, Y, Z) == sparse(broadcast(+, fX, fY, fZ))
             @test broadcast(*, X, Y, Z) == sparse(broadcast(*, fX, fY, fZ))
             @test broadcast(f, X, Y, Z) == sparse(broadcast(f, fX, fY, fZ))
+            # TODO strengthen this test, avoiding dependence on checking whether
+            # broadcast_indices throws to determine whether sparse broadcast should throw
             try
                 Base.Broadcast.broadcast_indices(spzeros((shapeX .- 1)...), Y, Z)
             catch
@@ -176,6 +182,8 @@ end
             # almost certainly should not allocate. so not certain what's going on.
             @test broadcast!(f, Q, X, Y, Z) == sparse(broadcast!(f, fQ, fX, fY, fZ))
             # --> test shape checks for both broadcast and broadcast! entry points
+            # TODO strengthen this test, avoiding dependence on checking whether
+            # broadcast_indices throws to determine whether sparse broadcast should throw
             try
                 Base.Broadcast.check_broadcast_indices(indices(Q), spzeros((shapeX .- 1)...), Y, Z)
             catch
