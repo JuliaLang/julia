@@ -373,3 +373,6 @@ end
 @test (+).(Ref(1), Ref(2)) == fill(3)
 @test (+).([[0,2], [1,3]], [1,-1]) == [[1,3], [0,2]]
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
+
+# Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722).
+@test let z = 1; A = broadcast!(() -> z += 1, zeros(2)); A[1] != A[2]; end
