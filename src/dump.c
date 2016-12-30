@@ -489,6 +489,29 @@ static int type_in_worklist(jl_datatype_t *dt)
     return 0;
 }
 
+static int type_recursively_external(jl_datatype_t *dt);
+
+static int type_parameter_recursively_external(jl_value_t *p0)
+{
+    jl_datatype_t *p = (jl_datatype_t*)p0;
+    while (jl_is_unionall(p)) {
+        if (!type_parameter_recursively_external(((jl_unionall_t*)p)->var->lb))
+            return 0;
+        if (!type_parameter_recursively_external(((jl_unionall_t*)p)->var->ub))
+            return 0;
+        p = (jl_datatype_t*)((jl_unionall_t*)p)->body;
+    }
+    if (!jl_is_datatype(p))
+        return 0;
+    if (module_in_worklist(p->name->module))
+        return 0;
+    if (p->name->wrapper != (jl_value_t*)p0) {
+        if (!type_recursively_external(p))
+            return 0;
+    }
+    return 1;
+}
+
 // returns true if all of the parameters are tag 6 or 7
 static int type_recursively_external(jl_datatype_t *dt)
 {
@@ -499,16 +522,8 @@ static int type_recursively_external(jl_datatype_t *dt)
 
     int i, l = jl_svec_len(dt->parameters);
     for (i = 0; i < l; i++) {
-        jl_value_t *p0 = jl_tparam(dt, i);
-        jl_datatype_t *p = (jl_datatype_t*)jl_unwrap_unionall(p0);
-        if (!jl_is_datatype(p))
+        if (!type_parameter_recursively_external(jl_tparam(dt, i)))
             return 0;
-        if (module_in_worklist(p->name->module))
-            return 0;
-        if (p->name->wrapper != p0) {
-            if (!type_recursively_external(p))
-                return 0;
-        }
     }
     return 1;
 }
@@ -2805,6 +2820,7 @@ jl_method_t *jl_recache_method(jl_method_t *m, size_t start)
 jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_t start)
 {
     jl_datatype_t *sig = (jl_datatype_t*)li->def;
+    assert(jl_is_datatype(sig) || jl_is_unionall(sig));
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;
     jl_method_t *m = (jl_method_t*)jl_methtable_lookup(mt, sig, /*TODO*/jl_world_counter);

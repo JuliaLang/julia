@@ -582,7 +582,7 @@ static void jl_cacheable_sig(
         jl_value_t *elt = jl_tparam(type, i);
         jl_value_t *decl_i = jl_nth_slot_type((jl_value_t*)decl, i);
         if ((tt != type && elt != jl_tparam(tt, i)) || // if join_tsig made a swap
-                is_kind(elt)) { // might see a kind if called at compile-time
+                jl_is_kind(elt)) { // might see a kind if called at compile-time
             // kind slots always need guard entries (checking for subtypes of Type)
             *need_guard_entries = 1;
             continue;
@@ -596,8 +596,8 @@ static void jl_cacheable_sig(
         // avoid specializing on an argument of type Tuple
         // unless matching a declared type of `::Type`
         if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
-            (!jl_subtype(decl_i, (jl_value_t*)jl_type_type) || is_kind(decl_i))) { // Type{Tuple{...}}
-            elt = (jl_value_t*)jl_anytuple_type_type; // Type{T<:Tuple}
+            (!jl_subtype(decl_i, (jl_value_t*)jl_type_type) || jl_is_kind(decl_i))) { // Type{Tuple{...}}
+            elt = (jl_value_t*)jl_anytuple_type_type; // Type{T} where T<:Tuple
             if (!*newparams) *newparams = jl_svec_copy(type->parameters);
             jl_svecset(*newparams, i, elt);
             *need_guard_entries = 1;
@@ -613,9 +613,11 @@ static void jl_cacheable_sig(
         }
         else if (notcalled_func && (decl_i == (jl_value_t*)jl_any_type ||
                                     decl_i == (jl_value_t*)jl_function_type ||
-                                    (jl_is_uniontype(decl_i) && //jl_svec_len(((jl_uniontype_t*)decl_i)->types)==2 &&
-                                     jl_subtype((jl_value_t*)jl_function_type, decl_i) &&
-                                     jl_subtype((jl_value_t*)jl_datatype_type, decl_i)))) {
+                                    (jl_is_uniontype(decl_i) &&
+                                     ((((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_function_type &&
+                                       ((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_datatype_type) ||
+                                      (((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_function_type &&
+                                       ((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_datatype_type))))) {
             // and attempt to despecialize types marked Function, Callable, or Any
             // when called with a subtype of Function but is not called
             if (!*newparams) *newparams = jl_svec_copy(type->parameters);
@@ -634,14 +636,15 @@ static void jl_cacheable_sig(
               this can be determined using a type intersection.
             */
             if (!*newparams) *newparams = jl_svec_copy(type->parameters);
-            if (decl_i) {
-                jl_value_t *declt = decl_i;
+            jl_value_t *ud = jl_unwrap_unionall((jl_value_t*)decl);
+            if (i < jl_nparams(ud)) {
+                jl_value_t *declt = jl_tparam(ud, i);
                 // for T..., intersect with T
                 if (jl_is_vararg_type(declt))
                     declt = jl_unwrap_vararg(declt);
                 jl_value_t *di = jl_type_intersection(declt, (jl_value_t*)jl_typetype_type);
                 assert(di != (jl_value_t*)jl_bottom_type);
-                if (is_kind(di))
+                if (jl_is_kind(di))
                     // issue #11355: DataType has a UID and so takes precedence in the cache
                     jl_svecset(*newparams, i, (jl_value_t*)jl_typetype_type);
                 else
@@ -703,7 +706,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
 
         if (jl_is_vararg_type(elt)) // varargs are always considered compilable
             continue;
-        if (is_kind(elt)) // kind slots always need guard entries (checking for subtypes of Type)
+        if (jl_is_kind(elt)) // kind slots always need guard entries (checking for subtypes of Type)
             continue;
         if (decl_i == jl_ANY_flag) {
             // don't specialize on slots marked ANY
@@ -718,16 +721,15 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
             // needs to be corrected to the leaf type 'kind'
             jl_value_t *kind = jl_typeof(jl_tparam0(elt));
             if (kind != (jl_value_t*)jl_tvar_type && jl_subtype(kind, decl_i)) {
-                if (!jl_subtype((jl_value_t*)jl_type_type, decl_i)) {
+                if (!jl_subtype((jl_value_t*)jl_type_type, decl_i))
                     return 0;
-                }
             }
         }
         // avoid specializing on an argument of type Tuple
         // unless matching a declared type of `::Type`
         if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
-            (!jl_subtype(decl_i, (jl_value_t*)jl_type_type) || is_kind(decl_i))) { // Type{Tuple{...}}
-            if (elt != (jl_value_t*)jl_anytuple_type_type)
+            (!jl_subtype(decl_i, (jl_value_t*)jl_type_type) || jl_is_kind(decl_i))) { // Type{Tuple{...}}
+            if (!jl_types_equal(elt, (jl_value_t*)jl_anytuple_type_type))
                 return 0;
             continue;
         }
@@ -736,9 +738,11 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
         if (notcalled_func && (decl_i == (jl_value_t*)jl_any_type ||
                                decl_i == (jl_value_t*)jl_function_type ||
-                               (jl_is_uniontype(decl_i) && //jl_svec_len(((jl_uniontype_t*)decl_i)->types)==2 &&
-                                jl_subtype((jl_value_t*)jl_function_type, decl_i) &&
-                                jl_subtype((jl_value_t*)jl_datatype_type, decl_i)))) {
+                               (jl_is_uniontype(decl_i) &&
+                                ((((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_function_type &&
+                                  ((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_datatype_type) ||
+                                 (((jl_uniontype_t*)decl_i)->b == (jl_value_t*)jl_function_type &&
+                                  ((jl_uniontype_t*)decl_i)->a == (jl_value_t*)jl_datatype_type))))) {
             // and attempt to despecialize types marked Function, Callable, or Any
             // when called with a subtype of Function but is not called
             if (elt != (jl_value_t*)jl_function_type)
@@ -755,15 +759,15 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
               specific like Type{Type{Int32}} was actually declared.
               this can be determined using a type intersection.
             */
-
-            if (i < jl_nparams(decl)) {
-                jl_value_t *declt = jl_tparam(decl, i);
+            jl_value_t *ud = jl_unwrap_unionall((jl_value_t*)decl);
+            if (i < jl_nparams(ud)) {
+                jl_value_t *declt = jl_tparam(ud, i);
                 // for T..., intersect with T
                 if (jl_is_vararg_type(declt))
                     declt = jl_unwrap_vararg(declt);
                 jl_value_t *di = jl_type_intersection(declt, (jl_value_t*)jl_typetype_type);
                 assert(di != (jl_value_t*)jl_bottom_type);
-                if (is_kind(di))
+                if (jl_is_kind(di))
                     return 0;
                 else if (!jl_subtype(di, elt) || !jl_subtype(elt, di))
                     return 0;
@@ -1702,7 +1706,7 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
     return (jl_tupletype_t*)tt;
 }
 
-#if 0
+#if 0  // TODO restore this for jb/subtype
 static int tupletype_any_bottom(jl_value_t *sig)
 {
     sig = jl_unwrap_unionall(sig);
@@ -2425,13 +2429,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         // the "limited" mode used by type inference.
         for (i = 0; i < len; i++) {
             jl_value_t *prior_ti = jl_svecref(jl_array_ptr_ref(closure->t, i), 0);
-            // in issue #13007 we incorrectly set skip=1 here, due to
-            // Type{_<:T} ∩ (UnionAll S Type{T{S}}) = Type{T{S}}
-            // Instead we should have computed the intersection as (UnionAll S Type{T{S}}),
-            // which is a bigger type that would not have been a subtype of the prior
-            // match (prior_ti). We simulate that for now by checking jl_has_typevars.
-            if (jl_is_leaf_type(prior_ti) && !jl_has_free_typevars(closure->match.ti) && !jl_has_free_typevars(prior_ti) &&
-                jl_subtype(closure->match.ti, prior_ti)) {
+            // TODO: should be possible to remove the `jl_is_leaf_type` check
+            if (jl_is_leaf_type(prior_ti) && jl_subtype(closure->match.ti, prior_ti)) {
                 skip = 1;
                 break;
             }
@@ -2549,10 +2548,11 @@ static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
                               jl_tupletype_t *type, int lim, int include_ambiguous,
                               size_t world, size_t *min_valid, size_t *max_valid)
 {
-    size_t l = jl_svec_len(type->parameters);
+    jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)type);
+    size_t l = jl_svec_len(((jl_datatype_t*)unw)->parameters);
     jl_value_t *va = NULL;
     if (l > 0) {
-        va = jl_tparam(type, l - 1);
+        va = jl_tparam(unw, l - 1);
         if (jl_is_vararg_type(va))
             va = jl_unwrap_vararg(va);
         else

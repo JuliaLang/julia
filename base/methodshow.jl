@@ -28,7 +28,8 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
                 t = t.body
             end
         end
-        tt, tn = t.parameters[1], t.parameters[2]
+        ut = unwrap_unionall(t)
+        tt, tn = ut.parameters[1], ut.parameters[2]
         if isa(tn, TypeVar) && (tn === v1 || tn === v2)
             if tt === Any || (isa(tt, TypeVar) && (tt === v1 || tt === v2))
                 return string(s, "..."), ""

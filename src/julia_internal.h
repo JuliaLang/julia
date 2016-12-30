@@ -741,14 +741,6 @@ STATIC_INLINE void jl_free_aligned(void *p)
 
 // -- typemap.c -- //
 
-STATIC_INLINE int is_kind(jl_value_t *v)
-{
-    return (v==(jl_value_t*)jl_uniontype_type ||
-            v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_unionall_type ||
-            v==(jl_value_t*)jl_bottomtype_type);
-}
-
 // a descriptor of a jl_typemap_t that gets
 // passed around as self-documentation of the parameters of the type
 struct jl_typemap_info {
