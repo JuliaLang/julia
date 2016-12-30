@@ -23,23 +23,23 @@ export GenericString
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
-function ip_matches_name(ip, dir::String, file::String)
+function ip_matches_func_and_name(ip, func::Symbol, dir::String, file::String)
     for fr in StackTraces.lookup(ip)
         if fr === StackTraces.UNKNOWN || fr.from_c
             return false
         end
         path = string(fr.file)
-        dirname(path) == dir && basename(path) == file && return true
+        fr.func == func && dirname(path) == dir && basename(path) == file && return true
     end
     return false
 end
 
 function scrub_backtrace(bt)
-    do_test_ind = findfirst(addr->Base.REPL.ip_matches_func(addr, :do_test), bt)
+    do_test_ind = findfirst(addr->ip_matches_func_and_name(addr, :do_test, ".", "test.jl"), bt)
     if do_test_ind != 0 && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(addr->ip_matches_name(addr, ".", "test.jl"), bt)
+    name_ind = findfirst(addr->ip_matches_func_and_name(addr, Symbol("macro expansion;"), ".", "test.jl"), bt)
     if name_ind != 0 && length(bt) != 0
         bt = bt[1:name_ind]
     end
