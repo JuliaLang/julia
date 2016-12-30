@@ -2,6 +2,8 @@
 
 ## shell-like command parsing ##
 
+const shell_special = "#{}()[]<>|&*?~;"
+
 function shell_parse(str::AbstractString, interpolate::Bool=true)
     s = lstrip(str)
     # strips the end but respects the space when the string ends with "\\ "
@@ -92,6 +94,8 @@ function shell_parse(str::AbstractString, interpolate::Bool=true)
                     update_arg(s[i:j-1]); i = k
                     c, k = next(s,k)
                 end
+            elseif !in_single_quotes && !in_double_quotes && c in shell_special
+                depwarn("special characters \"$shell_special\" should now be quoted in commands", :shell_parse)
             end
             j = k
         end
@@ -122,14 +126,14 @@ function shell_split(s::AbstractString)
     args
 end
 
-function print_shell_word(io::IO, word::AbstractString)
+function print_shell_word(io::IO, word::AbstractString, special::AbstractString = shell_special)
     if isempty(word)
         print(io, "''")
     end
     has_single = false
     has_special = false
     for c in word
-        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
+        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$' || c in special
             has_special = true
             if c == '\''
                 has_single = true
@@ -152,13 +156,17 @@ function print_shell_word(io::IO, word::AbstractString)
     end
 end
 
-function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...)
-    print_shell_word(io, cmd)
+function print_shell_escaped(
+        io::IO, cmd::AbstractString, args::AbstractString...;
+        special::AbstractString=shell_special
+    )
+    print_shell_word(io, cmd, special)
     for arg in args
         print(io, ' ')
-        print_shell_word(io, arg)
+        print_shell_word(io, arg, special)
     end
 end
-print_shell_escaped(io::IO) = nothing
+print_shell_escaped(io::IO; special::String=shell_special) = nothing
 
-shell_escape(args::AbstractString...) = sprint(print_shell_escaped, args...)
+shell_escape(args::AbstractString...; special::AbstractString=shell_special) =
+    sprint(io->print_shell_escaped(io, args..., special=special))
