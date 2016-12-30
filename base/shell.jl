@@ -2,9 +2,9 @@
 
 ## shell-like command parsing ##
 
-function shell_parse(raw::AbstractString, interp::Bool)
-    s = lstrip(raw)
-    #Strips the end but respects the space when the string endswith "\\ "
+function shell_parse(str::AbstractString, interpolate::Bool=true)
+    s = lstrip(str)
+    # strips the end but respects the space when the string ends with "\\ "
     r = RevString(s)
     i = start(r)
     c_old = nothing
@@ -22,7 +22,7 @@ function shell_parse(raw::AbstractString, interp::Bool)
     s = s[1:end-i+1]
 
     last_parse = 0:-1
-    isempty(s) && return interp ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
+    isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
 
     in_single_quotes = false
     in_double_quotes = false
@@ -57,7 +57,7 @@ function shell_parse(raw::AbstractString, interp::Bool)
                 end
                 j = k
             end
-        elseif interp && !in_single_quotes && c == '$'
+        elseif interpolate && !in_single_quotes && c == '$'
             update_arg(s[i:j-1]); i = k; j = k
             if done(s,k)
                 error("\$ right before end of command")
@@ -103,18 +103,15 @@ function shell_parse(raw::AbstractString, interp::Bool)
     update_arg(s[i:end])
     append_arg()
 
-    if !interp
-        return (args,last_parse)
-    end
+    interpolate || return args, last_parse
 
     # construct an expression
     ex = Expr(:tuple)
     for arg in args
         push!(ex.args, Expr(:tuple, arg...))
     end
-    (ex,last_parse)
+    return ex, last_parse
 end
-shell_parse(s::AbstractString) = shell_parse(s,true)
 
 function shell_split(s::AbstractString)
     parsed = shell_parse(s,false)[1]
