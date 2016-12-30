@@ -157,6 +157,38 @@ linear algebra routines it is useful to call the BLAS functions directly.
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
 four methods defined, for `Float64`, `Float32`, `Complex128`, and `Complex64` arrays.
 
+### [BLAS Character Arguments](@id stdlib-blas-chars)
+Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
+which triangle of a matrix to reference (`uplo` or `ul`),
+whether the diagonal of a triangular matrix can be assumed to
+be all ones (`dA`) or which side of a matrix multiplication
+the input argument belongs on (`side`). The possiblities are:
+
+#### [Multplication Order](@id stdlib-blas-side)
+| `side` | Meaning                                                             |
+|:-------|:--------------------------------------------------------------------|
+| `'L'`  | The argument goes on the *left* side of a matrix-matrix operation.  |
+| `'R'`  | The argument goes on the *right* side of a matrix-matrix operation. |
+
+#### [Triangle Referencing](@id stdlib-blas-uplo)
+| `uplo`/`ul` | Meaning                                               |
+|:------------|:------------------------------------------------------|
+| `'U'`       | Only the *upper* triangle of the matrix will be used. |
+| `'L'`       | Only the *lower* triangle of the matrix will be used. |
+
+#### [Transposition Operation](@id stdlib-blas-trans)
+| `trans`/`tX` | Meaning                                                 |
+|:-------------|:--------------------------------------------------------|
+| `'N'`        | The input matrix `X` is not transposed or conjugated.   |
+| `'T'`        | The input matrix `X` will be transposed.                |
+| `'C'`        | The input matrix `X` will be conjugated and transposed. |
+
+#### [Unit Diagonal](@id stdlib-blas-diag)
+| `diag`/`dX` | Meaning                                                   |
+|:------------|:----------------------------------------------------------|
+| `'N'`       | The diagonal values of the matrix `X` will be read.       |
+| `'U'`       | The diagonal of the matrix `X` is assumed to be all ones. |
+
 ```@docs
 Base.LinAlg.BLAS.dotu
 Base.LinAlg.BLAS.dotc
