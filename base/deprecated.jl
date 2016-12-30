@@ -1280,8 +1280,16 @@ eval(SparseArrays, :(broadcast_zpreserving!(f, C::SparseMatrixCSC, A::Union{Arra
 @deprecate airyx{T<:Number}(x::AbstractArray{T}) airyaix.(x)
 @deprecate airyprime{T<:Number}(x::AbstractArray{T}) airyprime.(x)
 
+function airy_depwarn(afn, suf, K, X, broadcast::Bool)
+    if broadcast
+        msg = "`$afn(k::$K,x::$X)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead."
+    else
+        msg = "`$afn(k::$K,x::$X)` is deprecated, use `airyai$suf(x)`, `airyaiprime$suf(x)`, `airybi$suf(x)` or `airybiprime$suf(x)` instead."
+    end
+    depwarn(msg, Symbol(afn))
+end
+
 function _airy(k::Integer, z::Complex128)
-    depwarn("`airy(k,x)` is deprecated, use `airyai(x)`, `airyaiprime(x)`, `airybi(x)` or `airybiprime(x)` instead.",:airy)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
         return _airy(z, id, Int32(1))
@@ -1291,8 +1299,8 @@ function _airy(k::Integer, z::Complex128)
         throw(ArgumentError("k must be between 0 and 3"))
     end
 end
+
 function _airyx(k::Integer, z::Complex128)
-    depwarn("`airyx(k,x)` is deprecated, use `airyaix(x)`, `airyaiprimex(x)`, `airybix(x)` or `airybiprimex(x)` instead.",:airyx)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
         return _airy(z, id, Int32(2))
@@ -1308,7 +1316,7 @@ for afn in (:airy,:airyx)
     suf  = string(afn)[5:end]
     @eval begin
         function $afn(k::Integer, z::Complex128)
-            depwarn("`$afn(k,x)` is deprecated, use `airyai$suf(x)`, `airyaiprime$suf(x)`, `airybi$suf(x)` or `airybiprime$suf(x)` instead.",$(QuoteNode(afn)))
+            airy_depwarn($afn, $suf, "Number", "Number", false)
             $_afn(k,z)
         end
 
@@ -1319,15 +1327,15 @@ for afn in (:airy,:airyx)
         $afn(k::Integer, x::AbstractFloat) = real($afn(k, complex(x)))
 
         function $afn{T<:Number}(k::Number, x::AbstractArray{T})
-            depwarn("`$afn(k::Number,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
+            airy_depwarn($afn, $suf, "Number", "AbstractArray", true)
             $_afn.(k,x)
         end
         function $afn{S<:Number}(k::AbstractArray{S}, x::Number)
-            depwarn("`$afn(k::AbstractArray,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
+            airy_depwarn($afn, $suf, "AbstractArray", "Number", true)
             $_afn.(k,x)
         end
         function $afn{S<:Number,T<:Number}(k::AbstractArray{S}, x::AbstractArray{T})
-            depwarn("`$afn(k::AbstractArray,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
+            airy_depwarn($afn, $suf, "AbstractArray", "AbstractArray", true)
             $_afn.(k,x)
         end
     end
