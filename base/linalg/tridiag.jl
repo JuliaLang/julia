@@ -202,6 +202,44 @@ eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
 eigvecs(A::SymTridiagonal) = eigfact(A)[:vectors]
+
+"""
+    eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix
+
+Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
+be obtained from the slice `M[:, k]`.)
+
+If the optional vector of eigenvalues `eigvals` is specified, `eigvecs`
+returns the specific corresponding eigenvectors.
+
+# Example
+
+```jldoctest
+julia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])
+3×3 SymTridiagonal{Float64}:
+ 1.0  2.0   ⋅
+ 2.0  2.0  3.0
+  ⋅   3.0  1.0
+
+julia> eigvals(A)
+3-element Array{Float64,1}:
+ -2.14005
+  1.0
+  5.14005
+
+julia> eigvecs(A)
+3×3 Array{Float64,2}:
+  0.418304  -0.83205      0.364299
+ -0.656749  -7.39009e-16  0.754109
+  0.627457   0.5547       0.546448
+
+julia> eigvecs(A, [1.])
+3×1 Array{Float64,2}:
+  0.83205
+  4.26351e-17
+ -0.5547
+```
+"""
 eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
 #tril and triu
