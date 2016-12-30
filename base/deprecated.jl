@@ -1499,4 +1499,8 @@ end
 # Calling promote_op is likely a bad idea, so deprecate its convenience wrapper promote_eltype_op
 @deprecate promote_eltype_op(op, As...) promote_op(op, map(eltype, As)...)
 
+# #19660
+@deprecate finalize(sa::LibGit2.StrArrayStruct) close(sa)
+@deprecate finalize(sa::LibGit2.Buffer) close(sa)
+
 # End deprecations scheduled for 0.6
