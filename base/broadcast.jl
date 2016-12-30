@@ -11,20 +11,9 @@ export bitbroadcast, dotview
 export broadcast_getindex, broadcast_setindex!
 
 ## Broadcasting utilities ##
-
-broadcast_array_type() = Array
-broadcast_array_type(A, As...) =
-    if is_nullable_array(A) || broadcast_array_type(As...) === Array{Nullable}
-        Array{Nullable}
-    else
-        Array
-    end
-
 # fallbacks for some special cases
 @inline broadcast(f, x::Number...) = f(x...)
 @inline broadcast{N}(f, t::NTuple{N}, ts::Vararg{NTuple{N}}) = map(f, t, ts...)
-@inline broadcast(f, As::AbstractArray...) =
-    broadcast_c(f, broadcast_array_type(As...), As...)
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
@@ -313,7 +302,7 @@ ziptype{T}(::Type{T}, A) = typestuple(T, A)
 ziptype{T}(::Type{T}, A, B) = (Base.@_pure_meta; Iterators.Zip2{typestuple(T, A), typestuple(T, B)})
 @inline ziptype{T}(::Type{T}, A, B, C, D...) = Iterators.Zip{typestuple(T, A), ziptype(T, B, C, D...)}
 
-_broadcast_type{S}(::Type{S}, f, T::Type, As...) = Base._return_type(S, typestuple(S, T, As...))
+_broadcast_type{S}(::Type{S}, f, T::Type, As...) = Base._return_type(f, typestuple(S, T, As...))
 _broadcast_type{T}(::Type{T}, f, A, Bs...) = Base._default_eltype(Base.Generator{ziptype(T, A, Bs...), ftype(f, A, Bs...)})
 
 # broadcast methods that dispatch on the type of the final container
