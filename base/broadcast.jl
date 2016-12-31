@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
-            nullable_returntype, null_safe_eltype_op, hasvalue, is_nullable_array
+            nullable_returntype, null_safe_eltype_op, hasvalue
 import Base: broadcast, broadcast!
 export broadcast_getindex, broadcast_setindex!, dotview
 
@@ -276,17 +276,10 @@ ftype(f, A) = typeof(f)
 ftype(f, A...) = typeof(a -> f(a...))
 ftype(T::Type, A...) = Type{T}
 
-# nullables need to be treated like scalars sometimes and like containers
-# other times, so there are two variants of typestuple.
-
-# if the first argument is Any, then Nullable should be treated like a
-# scalar; if the first argument is Array, then Nullable should be treated
-# like a container.
 typestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
 typestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
 typestuple(a, b...) = (Base.@_pure_meta; Tuple{typestuple(a).types..., typestuple(b...).types...})
 
-# these functions take the variant of typestuple to be used as first argument
 ziptype(A) = typestuple(A)
 ziptype(A, B) = (Base.@_pure_meta; Iterators.Zip2{typestuple(A), typestuple(B)})
 @inline ziptype(A, B, C, D...) = Iterators.Zip{typestuple(A), ziptype(B, C, D...)}
@@ -332,8 +325,8 @@ end
 
 Broadcasts the arrays, tuples, `Ref`, nullables, and/or scalars `As` to a
 container of the appropriate type and dimensions. In this context, anything
-that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s) or `Tuple`
-is considered a scalar. The resulting container is established by
+that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s), `Tuple`
+or `Nullable` is considered a scalar. The resulting container is established by
 the following rules:
 
  - If all the arguments are scalars, it returns a scalar.
