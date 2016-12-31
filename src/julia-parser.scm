@@ -53,10 +53,17 @@
             (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
           prec-names)
 
-(define is-prec-comparison?
-  (let ((compare-ops (Set prec-comparison)))
+(define (augment-prec-with-infix prec-list . extra-infix)
+  (let ((compare-ops (Set prec-list)))
     (lambda (t)
-      (or (compare-ops t) (or (eq? t 'in) (eq? t 'isa))))))
+      (or (compare-ops t) (member t extra-infix)))))
+
+(define is-prec-comparison?
+  (augment-prec-with-infix prec-comparison 'in 'isa))
+(define is-prec-lazy-and?
+  (augment-prec-with-infix prec-lazy-and 'and))
+(define is-prec-lazy-or?
+  (augment-prec-with-infix prec-lazy-or 'or))
 
 ;; hash table of binary operators -> precedence
 (define prec-table (let ((t (table)))
