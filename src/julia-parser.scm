@@ -754,8 +754,17 @@
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s) (parse-Nary s parse-cond  '(#\,) 'tuple (lambda (x) #f) #f #f))
 (define (parse-arrow s) (parse-RtoL s parse-or    is-prec-arrow? (eq? t '-->) parse-arrow))
-(define (parse-or s)    (parse-RtoL s parse-and   is-prec-lazy-or? #t parse-or))
-(define (parse-and s)   (parse-RtoL s parse-comparison is-prec-lazy-and? #t parse-and))
+(define (normalize-or ex)
+  (if (and (list? ex) (eq? (car ex) 'or))
+    (cons '|\|\|| (cdr ex))
+    ex))
+(define (normalize-and ex)
+  (if (and (list? ex) (eq? (car ex) 'and))
+    (cons '&& (cdr ex))
+    ex))
+
+(define (parse-or s)    (normalize-or (parse-RtoL s parse-and   is-prec-lazy-or? #t parse-or)))
+(define (parse-and s)   (normalize-and (parse-RtoL s parse-comparison is-prec-lazy-and? #t parse-and)))
 
 ;; parse left to right chains of a certain binary operator
 ;; returns a list of arguments
