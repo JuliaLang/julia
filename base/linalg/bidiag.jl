@@ -211,7 +211,7 @@ convert{Tnew,Told}(::Type{Bidiagonal{Tnew}}, A::Bidiagonal{Told}) = Bidiagonal(c
 # When asked to convert Bidiagonal{Told} to AbstractMatrix{Tnew}, preserve structure by converting to Bidiagonal{Tnew} <: AbstractMatrix{Tnew}
 convert{Tnew,Told}(::Type{AbstractMatrix{Tnew}}, A::Bidiagonal{Told}) = convert(Bidiagonal{Tnew}, A)
 
-big(B::Bidiagonal) = Bidiagonal(big(B.dv), big(B.ev), B.isupper)
+broadcast(::typeof(big), B::Bidiagonal) = Bidiagonal(big.(B.dv), big.(B.ev), B.isupper)
 
 similar{T}(B::Bidiagonal, ::Type{T}) = Bidiagonal{T}(similar(B.dv, T), similar(B.ev, T), B.isupper)
 
@@ -253,12 +253,17 @@ end
 
 #Elementary operations
 broadcast(::typeof(abs), M::Bidiagonal) = Bidiagonal(abs.(M.dv), abs.(M.ev), abs.(M.isupper))
-for func in (:conj, :copy, :round, :trunc, :floor, :ceil, :real, :imag)
+broadcast(::typeof(round), M::Bidiagonal) = Bidiagonal(round.(M.dv), round.(M.ev), M.isupper)
+broadcast(::typeof(trunc), M::Bidiagonal) = Bidiagonal(trunc.(M.dv), trunc.(M.ev), M.isupper)
+broadcast(::typeof(floor), M::Bidiagonal) = Bidiagonal(floor.(M.dv), floor.(M.ev), M.isupper)
+broadcast(::typeof(ceil), M::Bidiagonal) = Bidiagonal(ceil.(M.dv), ceil.(M.ev), M.isupper)
+for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.isupper)
 end
-for func in (:round, :trunc, :floor, :ceil)
-    @eval ($func){T<:Integer}(::Type{T}, M::Bidiagonal) = Bidiagonal(($func)(T,M.dv), ($func)(T,M.ev), M.isupper)
-end
+broadcast{T<:Integer}(::typeof(round), ::Type{T}, M::Bidiagonal) = Bidiagonal(round.(T, M.dv), round.(T, M.ev), M.isupper)
+broadcast{T<:Integer}(::typeof(trunc), ::Type{T}, M::Bidiagonal) = Bidiagonal(trunc.(T, M.dv), trunc.(T, M.ev), M.isupper)
+broadcast{T<:Integer}(::typeof(floor), ::Type{T}, M::Bidiagonal) = Bidiagonal(floor.(T, M.dv), floor.(T, M.ev), M.isupper)
+broadcast{T<:Integer}(::typeof(ceil), ::Type{T}, M::Bidiagonal) = Bidiagonal(ceil.(T, M.dv), ceil.(T, M.ev), M.isupper)
 
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)

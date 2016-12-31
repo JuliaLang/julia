@@ -1237,73 +1237,16 @@ end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)
 (/)(x::Number, B::BitArray) = (/)(x, Array(B))
 
-function div(A::BitArray, B::BitArray)
-    shp = promote_shape(size(A), size(B))
-    all(B) || throw(DivideError())
-    return reshape(copy(A), shp)
-end
-div(A::BitArray, B::Array{Bool}) = div(A, BitArray(B))
-div(A::Array{Bool}, B::BitArray) = div(BitArray(A), B)
-function div(B::BitArray, x::Bool)
-    return x ? copy(B) : throw(DivideError())
-end
-function div(x::Bool, B::BitArray)
-    all(B) || throw(DivideError())
-    return x ? trues(size(B)) : falses(size(B))
-end
-function div(x::Number, B::BitArray)
-    all(B) || throw(DivideError())
-    y = div(x, true)
-    return fill(y, size(B))
-end
-
-function mod(A::BitArray, B::BitArray)
-    shp = promote_shape(size(A), size(B))
-    all(B) || throw(DivideError())
-    return falses(shp)
-end
-mod(A::BitArray, B::Array{Bool}) = mod(A, BitArray(B))
-mod(A::Array{Bool}, B::BitArray) = mod(BitArray(A), B)
-function mod(B::BitArray, x::Bool)
-    return x ? falses(size(B)) : throw(DivideError())
-end
-function mod(x::Bool, B::BitArray)
-    all(B) || throw(DivideError())
-    return falses(size(B))
-end
-function mod(x::Number, B::BitArray)
-    all(B) || throw(DivideError())
-    y = mod(x, true)
-    return fill(y, size(B))
-end
-
-for f in (:div, :mod)
+# broadcast specializations for &, |, and xor/⊻
+broadcast(::typeof(&), B::BitArray, x::Bool) = x ? copy(B) : falses(size(B))
+broadcast(::typeof(&), x::Bool, B::BitArray) = broadcast(&, B, x)
+broadcast(::typeof(|), B::BitArray, x::Bool) = x ? trues(size(B)) : copy(B)
+broadcast(::typeof(|), x::Bool, B::BitArray) = broadcast(|, B, x)
+broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? ~B : copy(B)
+broadcast(::typeof(xor), x::Bool, B::BitArray) = broadcast(xor, B, x)
+for f in (:&, :|, :xor)
     @eval begin
-        function ($f)(B::BitArray, x::Number)
-            T = promote_op($f, Bool, typeof(x))
-            T === Any && return [($f)(b, x) for b in B]
-            F = Array{T}(size(B))
-            for i = 1:length(F)
-                F[i] = ($f)(B[i], x)
-            end
-            return F
-        end
-    end
-end
-
-function (&)(B::BitArray, x::Bool)
-    x ? copy(B) : falses(size(B))
-end
-(&)(x::Bool, B::BitArray) = B & x
-
-function (|)(B::BitArray, x::Bool)
-    x ? trues(size(B)) : copy(B)
-end
-(|)(x::Bool, B::BitArray) = B | x
-
-for f in (:&, :|)
-    @eval begin
-        function ($f)(A::BitArray, B::BitArray)
+        function broadcast(::typeof($f), A::BitArray, B::BitArray)
             F = BitArray(promote_shape(size(A),size(B))...)
             Fc = F.chunks
             Ac = A.chunks
@@ -1315,12 +1258,11 @@ for f in (:&, :|)
             Fc[end] &= _msk_end(F)
             return F
         end
-        ($f)(A::DenseArray{Bool}, B::BitArray) = ($f)(BitArray(A), B)
-        ($f)(B::BitArray, A::DenseArray{Bool}) = ($f)(B, BitArray(A))
-        ($f)(x::Number, B::BitArray) = ($f)(x, Array(B))
-        ($f)(B::BitArray, x::Number) = ($f)(Array(B), x)
+        broadcast(::typeof($f), A::DenseArray{Bool}, B::BitArray) = broadcast($f, BitArray(A), B)
+        broadcast(::typeof($f), B::BitArray, A::DenseArray{Bool}) = broadcast($f, B, BitArray(A))
     end
 end
+
 
 ## promotion to complex ##
 

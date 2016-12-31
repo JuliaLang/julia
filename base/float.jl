@@ -735,7 +735,7 @@ function float{T}(A::AbstractArray{T})
     convert(AbstractArray{typeof(float(zero(T)))}, A)
 end
 
-for fn in (:float,:big)
+for fn in (:float,)
     @eval begin
         $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
         $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
@@ -748,5 +748,13 @@ for fn in (:float,:big)
     end
 end
 
-big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
-big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
+# big, broadcast over arrays
+# TODO: do the definitions below primarily pertaining to integers belong in float.jl?
+function big end # no prior definitions of big in sysimg.jl, necessitating this
+broadcast(::typeof(big), r::UnitRange) = big(r.start):big(last(r))
+broadcast(::typeof(big), r::StepRange) = big(r.start):big(r.step):big(last(r))
+broadcast(::typeof(big), r::FloatRange) = FloatRange(big(r.start), big(r.step), r.len, big(r.divisor))
+function broadcast(::typeof(big), r::LinSpace)
+    big(r.len) == r.len || throw(ArgumentError(string(r, ": too long for ", big)))
+    LinSpace(big(r.start), big(r.stop), big(r.len), big(r.divisor))
+end
