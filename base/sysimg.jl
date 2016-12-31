@@ -78,7 +78,7 @@ Symbol(x...) = Symbol(string(x...))
 # specific array types etc.
 #  --Here, just define fallback routines for broadcasting with no arguments
 broadcast(f) = f()
-broadcast!(f, X::AbstractArray) = fill!(X, f())
+broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
 
 # array structures
 include("array.jl")

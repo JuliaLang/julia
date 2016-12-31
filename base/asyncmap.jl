@@ -413,16 +413,6 @@ size(itr::AsyncGenerator) = size(itr.collector.enumerator)
 length(itr::AsyncGenerator) = length(itr.collector.enumerator)
 
 """
-    asyncmap!(f, c; ntasks=0, batch_size=nothing)
-
-In-place version of [`asyncmap()`](@ref).
-"""
-function asyncmap!(f, c; ntasks=0, batch_size=nothing)
-    foreach(identity, AsyncCollector(f, c, c; ntasks=ntasks, batch_size=batch_size))
-    c
-end
-
-"""
     asyncmap!(f, results, c...; ntasks=0, batch_size=nothing)
 
 Like [`asyncmap()`](@ref), but stores output in `results` rather than
