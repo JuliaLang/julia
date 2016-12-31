@@ -88,10 +88,7 @@
 (define vararg-op (string->symbol "..."))
 
 (define (is-word-operator? op)
-  (let loop ((chars (string->list (symbol->string op))))
-    (if (null? chars)
-         #t
-         (and (identifier-start-char? (car chars)) (loop (cdr chars))))))
+  (every identifier-start-char? (string->list (symbol->string op))))
 
 (define operators
   (filter (lambda (x) (not (is-word-operator? x)))
