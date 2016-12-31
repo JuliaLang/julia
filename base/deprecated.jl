@@ -1346,6 +1346,9 @@ function quadgk(args...; kwargs...)
 end
 export quadgk
 
+# Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
+@deprecate bitbroadcast broadcast
+
 # Deprecate two-argument map! (map!(f, A)) for a cycle in anticipation of semantic change
 @deprecate map!{F}(f::F, A::AbstractArray) map!(f, A, A)
 @deprecate asyncmap!(f, c; ntasks=0, batch_size=nothing) asyncmap!(f, c, c; ntasks=ntasks, batch_size=batch_size)
