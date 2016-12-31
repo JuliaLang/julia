@@ -417,7 +417,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         x = Atri \ b
         γ = n*ε/(1 - n*ε)
         if eltya != BigFloat
-            bigA = big(Atri)
+            bigA = big.(Atri)
             x̂ = ones(n, 2)
             for i = 1:size(b, 2)
                 @test norm(x̂[:,i] - x[:,i], Inf)/norm(x̂[:,i], Inf) <= condskeel(bigA, x̂[:,i])*γ/(1 - condskeel(bigA)*γ)
@@ -442,11 +442,11 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         end
 
         debug && println("Test forward error [JIN 5705] if this is not a BigFloat")
-        b = eltyb == Int ? trunc(Int,Atri*ones(n, 2)) : convert(Matrix{eltyb}, Atri*ones(eltya, n, 2))
+        b = eltyb == Int ? trunc.(Int,Atri*ones(n, 2)) : convert(Matrix{eltyb}, Atri*ones(eltya, n, 2))
         x = Atri \ b
         γ = n*ε/(1 - n*ε)
         if eltya != BigFloat
-            bigA = big(Atri)
+            bigA = big.(Atri)
             x̂ = ones(n, 2)
             for i = 1:size(b, 2)
                 @test norm(x̂[:,i] - x[:,i], Inf)/norm(x̂[:,i], Inf) <= condskeel(bigA, x̂[:,i])*γ/(1 - condskeel(bigA)*γ)

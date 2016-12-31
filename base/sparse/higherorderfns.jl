@@ -141,7 +141,6 @@ end
     return SparseMatrixCSC(shape..., pointers, storedinds, storedvals)
 end
 # Ambiguity killers, TODO: nix conflicting specializations
-broadcast(::typeof(abs), x::SparseVector) = _noshapecheck_map(abs, x) # base/sparse/sparevectors.jl: 921
 ambiguityfunnel{Tf}(f::Tf, x, y) = _aresameshape(x, y) ? _noshapecheck_map(f, x, y) : _diffshape_broadcast(f, x, y)
 broadcast(::typeof(+), x::SparseVector, y::SparseVector) = ambiguityfunnel(+, x, y) # base/sparse/sparsevectors.jl:1266
 broadcast(::typeof(-), x::SparseVector, y::SparseVector) = ambiguityfunnel(-, x, y) # base/sparse/sparsevectors.jl:1266

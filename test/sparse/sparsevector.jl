@@ -588,7 +588,7 @@ let x = spv_x1, x2 = spv_x2
 
     # abs and abs2
     @test exact_equal(abs.(x), SparseVector(8, [2, 5, 6], abs.([1.25, -0.75, 3.5])))
-    @test exact_equal(abs2(x), SparseVector(8, [2, 5, 6], abs2.([1.25, -0.75, 3.5])))
+    @test exact_equal(abs2.(x), SparseVector(8, [2, 5, 6], abs2.([1.25, -0.75, 3.5])))
 
     # plus and minus
     xa = SparseVector(8, [1,2,5,6,7], [3.25,5.25,-0.75,-2.0,-6.0])
@@ -609,7 +609,7 @@ let x = spv_x1, x2 = spv_x2
 
     # multiplies
     xm = SparseVector(8, [2, 6], [5.0, -19.25])
-    @test exact_equal(x .* x, abs2(x))
+    @test exact_equal(x .* x, abs2.(x))
     @test exact_equal(x .* x2, xm)
     @test exact_equal(x2 .* x, xm)
 
@@ -617,11 +617,11 @@ let x = spv_x1, x2 = spv_x2
     @test x .* Array(x2) == Array(xm)
 
     # max & min
-    @test exact_equal(max(x, x), x)
-    @test exact_equal(min(x, x), x)
-    @test exact_equal(max(x, x2),
+    @test exact_equal(max.(x, x), x)
+    @test exact_equal(min.(x, x), x)
+    @test exact_equal(max.(x, x2),
         SparseVector(8, Int[1, 2, 6], Float64[3.25, 4.0, 3.5]))
-    @test exact_equal(min(x, x2),
+    @test exact_equal(min.(x, x2),
         SparseVector(8, Int[2, 5, 6, 7], Float64[1.25, -0.75, -5.5, -6.0]))
 end
 
@@ -910,13 +910,13 @@ end
 # left-division operations involving triangular matrices and sparse vectors (#14005)
 let m = 10
     sparsefloatvecs = SparseVector[sprand(m, 0.4) for k in 1:3]
-    sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
+    sparseintvecs = SparseVector[SparseVector(m, sprvec.nzind, round.(Int, sprvec.nzval*10)) for sprvec in sparsefloatvecs]
     sparsecomplexvecs = SparseVector[SparseVector(m, sprvec.nzind, complex(sprvec.nzval, sprvec.nzval)) for sprvec in sparsefloatvecs]
 
     sprmat = sprand(m, m, 0.2)
     sparsefloatmat = speye(m) + sprmat/(2m)
     sparsecomplexmat = speye(m) + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, complex(sprmat.nzval, sprmat.nzval)/(4m))
-    sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round(Int, sprmat.nzval*10))
+    sparseintmat = speye(Int, m)*10m + SparseMatrixCSC(m, m, sprmat.colptr, sprmat.rowval, round.(Int, sprmat.nzval*10))
 
     denseintmat = eye(Int, m)*10m + rand(1:m, m, m)
     densefloatmat = eye(m) + randn(m, m)/(2m)

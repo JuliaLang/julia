@@ -272,14 +272,14 @@ let n = 12 #Size of matrix problem to test
 
         debug && println("Rounding to Ints")
         if elty <: Real
-            @test round(Int,A) == round(Int,fA)
-            @test isa(round(Int,A), SymTridiagonal)
-            @test trunc(Int,A) == trunc(Int,fA)
-            @test isa(trunc(Int,A), SymTridiagonal)
-            @test ceil(Int,A) == ceil(Int,fA)
-            @test isa(ceil(Int,A), SymTridiagonal)
-            @test floor(Int,A) == floor(Int,fA)
-            @test isa(floor(Int,A), SymTridiagonal)
+            @test round.(Int,A) == round.(Int,fA)
+            @test isa(round.(Int,A), SymTridiagonal)
+            @test trunc.(Int,A) == trunc.(Int,fA)
+            @test isa(trunc.(Int,A), SymTridiagonal)
+            @test ceil.(Int,A) == ceil.(Int,fA)
+            @test isa(ceil.(Int,A), SymTridiagonal)
+            @test floor.(Int,A) == floor.(Int,fA)
+            @test isa(floor.(Int,A), SymTridiagonal)
         end
 
         debug && println("Tridiagonal/SymTridiagonal mixing ops")
@@ -390,14 +390,14 @@ let n = 12 #Size of matrix problem to test
 
         debug && println("Rounding to Ints")
         if elty <: Real
-            @test round(Int,A) == round(Int,fA)
-            @test isa(round(Int,A), Tridiagonal)
-            @test trunc(Int,A) == trunc(Int,fA)
-            @test isa(trunc(Int,A), Tridiagonal)
-            @test ceil(Int,A) == ceil(Int,fA)
-            @test isa(ceil(Int,A), Tridiagonal)
-            @test floor(Int,A) == floor(Int,fA)
-            @test isa(floor(Int,A), Tridiagonal)
+            @test round.(Int,A) == round.(Int,fA)
+            @test isa(round.(Int,A), Tridiagonal)
+            @test trunc.(Int,A) == trunc.(Int,fA)
+            @test isa(trunc.(Int,A), Tridiagonal)
+            @test ceil.(Int,A) == ceil.(Int,fA)
+            @test isa(ceil.(Int,A), Tridiagonal)
+            @test floor.(Int,A) == floor.(Int,fA)
+            @test isa(floor.(Int,A), Tridiagonal)
         end
 
         debug && println("Binary operations")
