@@ -19,14 +19,14 @@ end
 
 ## Binary arithmetic operators ##
 
-for f in (:+, :-, :div, :mod, :&, :|)
+for f in (:+, :-)
     @eval function ($f)(A::AbstractArray, B::AbstractArray)
         promote_shape(A, B) # check size compatibility
         broadcast($f, A, B)
     end
 end
 
-for f in (:div, :mod, :rem, :&, :|, :/, :\, :*, :+, :-)
+for f in (:/, :\, :*, :+, :-)
     if f != :/
         @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
     end

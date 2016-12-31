@@ -7,8 +7,7 @@ using Base: promote_eltype_op, linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             nullable_returntype, null_safe_eltype_op, hasvalue, is_nullable_array
 import Base: broadcast, broadcast!
-export bitbroadcast, dotview
-export broadcast_getindex, broadcast_setindex!
+export broadcast_getindex, broadcast_setindex!, dotview
 
 ## Broadcasting utilities ##
 # fallbacks for some special cases
@@ -452,24 +451,6 @@ julia> Ref(7) .+ Nullable(3)
 ```
 """
 @inline broadcast(f, A, Bs...) = broadcast_c(f, containertype(A, Bs...), A, Bs...)
-
-"""
-    bitbroadcast(f, As...)
-
-Like [`broadcast`](@ref), but allocates a `BitArray` to store the
-result, rather then an `Array`.
-
-```jldoctest
-julia> bitbroadcast(isodd,[1,2,3,4,5])
-5-element BitArray{1}:
-  true
- false
-  true
- false
-  true
-```
-"""
-@inline bitbroadcast(f, As...) = broadcast!(f, similar(BitArray, broadcast_indices(As...)), As...)
 
 """
     broadcast_getindex(A, inds...)

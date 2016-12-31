@@ -35,12 +35,12 @@ do33 = ones(3)
         sqrfloatmat, colfloatmat = sprand(4, 4, 0.5), sprand(4, 1, 0.5)
         @test_throws DimensionMismatch (+)(sqrfloatmat, colfloatmat)
         @test_throws DimensionMismatch (-)(sqrfloatmat, colfloatmat)
-        @test_throws DimensionMismatch min(sqrfloatmat, colfloatmat)
-        @test_throws DimensionMismatch max(sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch map(min, sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch map(max, sqrfloatmat, colfloatmat)
         sqrboolmat, colboolmat = sprand(Bool, 4, 4, 0.5), sprand(Bool, 4, 1, 0.5)
-        @test_throws DimensionMismatch (&)(sqrboolmat, colboolmat)
-        @test_throws DimensionMismatch (|)(sqrboolmat, colboolmat)
-        # @test_throws DimensionMismatch xor(sqrboolmat, colboolmat) # vectorized xor no longer exists
+        @test_throws DimensionMismatch map(&, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(|, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(xor, sqrboolmat, colboolmat)
     end
 end
 
@@ -546,8 +546,8 @@ end
     # Test representatives of [unary functions that map both zeros and nonzeros to nonzeros]
     @test cos.(Afull) == Array(cos.(A))
     # Test representatives of remaining vectorized-nonbroadcast unary functions
-    @test ceil(Int, Afull) == Array(ceil(Int, A))
-    @test floor(Int, Afull) == Array(floor(Int, A))
+    @test ceil.(Int, Afull) == Array(ceil.(Int, A))
+    @test floor.(Int, Afull) == Array(floor.(Int, A))
     # Tests of real, imag, abs, and abs2 for SparseMatrixCSC{Int,X}s previously elsewhere
     for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
         R = rand(T[1:100;], 2, 2)
@@ -800,7 +800,7 @@ end
     @test countnz(A) == 11
     @test A[I] == A[X] == c
 
-    S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
+    S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
     I = sprand(Bool, 50, 30, 0.2)
     FS = Array(S)
     FI = Array(I)
@@ -828,7 +828,7 @@ end
     S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
 
-    S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
+    S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
     N = length(S) >> 2
     I = randperm(N) .* 4
     J = randperm(N)
@@ -1432,17 +1432,17 @@ end
     @test A12118 - B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [-1,1,3,1,4,7])
     @test typeof(A12118 - B12118) == SparseMatrixCSC{Int,Int}
 
-    @test max(A12118, B12118) == sparse([1,2,3,4,5], [1,2,3,4,5], [2,2,3,4,5])
-    @test typeof(max(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+    @test max.(A12118, B12118) == sparse([1,2,3,4,5], [1,2,3,4,5], [2,2,3,4,5])
+    @test typeof(max.(A12118, B12118)) == SparseMatrixCSC{Int,Int}
 
-    @test min(A12118, B12118) == sparse([1,2,4,5], [1,2,3,5], [1,1,-1,-2])
-    @test typeof(min(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+    @test min.(A12118, B12118) == sparse([1,2,4,5], [1,2,3,5], [1,1,-1,-2])
+    @test typeof(min.(A12118, B12118)) == SparseMatrixCSC{Int,Int}
 end
 
 @testset "sparse matrix norms" begin
     Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
     Ar = sprandn(10,10,.1)
-    Ai = ceil(Int,Ar*100)
+    Ai = ceil.(Int,Ar*100)
     @test norm(Ac,1) ≈ norm(Array(Ac),1)
     @test norm(Ac,Inf) ≈ norm(Array(Ac),Inf)
     @test vecnorm(Ac) ≈ vecnorm(Array(Ac))
@@ -1452,11 +1452,11 @@ end
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
-    Ai = trunc(Int,Ar*100)
+    Ai = trunc.(Int, Ar*100)
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
-    Ai = round(Int,Ar*100)
+    Ai = round.(Int, Ar*100)
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
@@ -1484,9 +1484,9 @@ end
 
 @testset "sparse matrix normestinv" begin
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
-    Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
+    Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
-    Ari = ceil(Int64,100*Ar)
+    Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
         @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(Array(Ac)),1) 1e-4
         @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(Array(Aci)),1) 1e-4
@@ -1506,27 +1506,26 @@ end
     A13024 = sparse([1,2,3,4,5], [1,2,3,4,5], fill(true,5))
     B13024 = sparse([1,2,4,5],   [1,2,3,5],   fill(true,4))
 
-    @test A13024 & B13024 == sparse([1,2,5], [1,2,5], fill(true,3))
-    @test typeof(A13024 & B13024) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(&, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(broadcast(&, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test A13024 | B13024 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-    @test typeof(A13024 | B13024) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(|, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(broadcast(|, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
     @test broadcast(⊻, A13024, B13024) == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
     @test typeof(broadcast(⊻, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test max(A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-    @test typeof(max(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(max, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(broadcast(max, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test min(A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
-    @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(min, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(broadcast(min, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test broadcast(xor, A13024, B13024) == broadcast(xor, Array(A13024), Array(B13024))
-    for op in (+, -, &, |)
+    for op in (+, -)
         @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
     end
-    for op in (max, min)
-        @test op(A13024, B13024) == op.(Array(A13024), Array(B13024))
+    for op in (max, min, &, |, xor)
+        @test op.(A13024, B13024) == op.(Array(A13024), Array(B13024))
     end
 end
 
@@ -1605,7 +1604,7 @@ end
 @testset "issue #16073" begin
     @inferred sprand(1, 1, 1.0)
     @inferred sprand(1, 1, 1.0, rand, Float64)
-    @inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))
+    @inferred sprand(1, 1, 1.0, x -> round.(Int, rand(x) * 100))
 end
 
 # Test that concatenations of combinations of sparse matrices with sparse matrices or dense

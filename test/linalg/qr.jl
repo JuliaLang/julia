@@ -148,8 +148,8 @@ end
 @test_throws ErrorException ctranspose(qrfact(randn(3,3)))
 @test_throws ErrorException transpose(qrfact(randn(3,3), Val{false}))
 @test_throws ErrorException ctranspose(qrfact(randn(3,3), Val{false}))
-@test_throws ErrorException transpose(qrfact(big(randn(3,3))))
-@test_throws ErrorException ctranspose(qrfact(big(randn(3,3))))
+@test_throws ErrorException transpose(qrfact(big.(randn(3,3))))
+@test_throws ErrorException ctranspose(qrfact(big.(randn(3,3))))
 
 # Issue 7304
 let

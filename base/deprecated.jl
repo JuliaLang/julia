@@ -1367,4 +1367,93 @@ function promote_array_type(F, R, S, T)
     _promote_array_type(F, R, S, T)
 end
 
+# Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
+@deprecate abs2(x::AbstractSparseVector) abs2.(x)
+
+# Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
+for f in (:sec, :sech, :secd, :asec, :asech,
+            :csc, :csch, :cscd, :acsc, :acsch,
+            :cot, :coth, :cotd, :acot, :acoth)
+    @eval @deprecate $f{T<:Number}(A::AbstractArray{T}) $f.(A)
+end
+
+# Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
+@deprecate clamp(A::AbstractArray, lo, hi) clamp.(A, lo, hi)
+
+# Deprecate manually vectorized round methods in favor of compact broadcast syntax
+@deprecate round(M::Bidiagonal) round.(M)
+@deprecate round(M::Tridiagonal) round.(M)
+@deprecate round(M::SymTridiagonal) round.(M)
+@deprecate round{T<:Integer}(::Type{T}, x::AbstractArray) round.(T, x)
+@deprecate round{T<:Integer}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round(x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round(x::AbstractArray, digits::Integer, base::Integer = 10) round.(x, digits, base)
+
+# Deprecate manually vectorized trunc methods in favor of compact broadcast syntax
+@deprecate trunc(M::Bidiagonal) trunc.(M)
+@deprecate trunc(M::Tridiagonal) trunc.(M)
+@deprecate trunc(M::SymTridiagonal) trunc.(M)
+@deprecate trunc{T<:Integer}(::Type{T}, x::AbstractArray) trunc.(T, x)
+@deprecate trunc(x::AbstractArray, digits::Integer, base::Integer = 10) trunc.(x, digits, base)
+
+# Deprecate manually vectorized floor methods in favor of compact broadcast syntax
+@deprecate floor(M::Bidiagonal) floor.(M)
+@deprecate floor(M::Tridiagonal) floor.(M)
+@deprecate floor(M::SymTridiagonal) floor.(M)
+@deprecate floor{T<:Integer}(::Type{T}, A::AbstractArray) floor.(T, A)
+@deprecate floor(A::AbstractArray, digits::Integer, base::Integer = 10) floor.(A, digits, base)
+
+# Deprecate manually vectorized ceil methods in favor of compact broadcast syntax
+@deprecate ceil(M::Bidiagonal) ceil.(M)
+@deprecate ceil(M::Tridiagonal) ceil.(M)
+@deprecate ceil(M::SymTridiagonal) ceil.(M)
+@deprecate ceil{T<:Integer}(::Type{T}, x::AbstractArray) ceil.(T, x)
+@deprecate ceil(x::AbstractArray, digits::Integer, base::Integer = 10) ceil.(x, digits, base)
+
+# Deprecate manually vectorized `big` methods in favor of compact broadcast syntax
+@deprecate big(r::UnitRange) big.(r)
+@deprecate big(r::StepRange) big.(r)
+@deprecate big(r::FloatRange) big.(r)
+@deprecate big(r::LinSpace) big.(r)
+@deprecate big{T<:Integer,N}(x::AbstractArray{T,N}) big.(x)
+@deprecate big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) big.(x)
+@deprecate big(A::LowerTriangular) big.(A)
+@deprecate big(A::UpperTriangular) big.(A)
+@deprecate big(A::Base.LinAlg.UnitLowerTriangular) big.(A)
+@deprecate big(A::Base.LinAlg.UnitUpperTriangular) big.(A)
+@deprecate big(B::Bidiagonal) big.(B)
+@deprecate big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) big.(A)
+@deprecate big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) big.(A)
+@deprecate big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) big.(A)
+
+# Deprecate manually vectorized div methods in favor of compact broadcast syntax
+@deprecate div(A::Number, B::AbstractArray) div.(A, B)
+@deprecate div(A::AbstractArray, B::Number) div.(A, B)
+@deprecate div(A::AbstractArray, B::AbstractArray) div.(A, B)
+
+# Deprecate manually vectorized rem methods in favor of compact broadcast syntax
+@deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
+@deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
+
+# Deprecate manually vectorized mod methods in favor of compact broadcast syntax
+@deprecate mod(B::BitArray, x::Bool) mod.(B, x)
+@deprecate mod(x::Bool, B::BitArray) mod.(x, B)
+@deprecate mod(A::AbstractArray, B::AbstractArray) mod.(A, B)
+@deprecate mod{T}(x::Number, A::AbstractArray{T}) mod.(x, A)
+@deprecate mod{T}(A::AbstractArray{T}, x::Number) mod.(A, x)
+
+# Deprecate vectorized & in favor of dot syntax
+@deprecate (&)(a::Bool, B::BitArray)                a .& B
+@deprecate (&)(A::BitArray, b::Bool)                A .& b
+@deprecate (&)(a::Number, B::AbstractArray)         a .& B
+@deprecate (&)(A::AbstractArray, b::Number)         A .& b
+@deprecate (&)(A::AbstractArray, B::AbstractArray)  A .& B
+
+# Deprecate vectorized | in favor of compact broadcast syntax
+@deprecate (|)(a::Bool, B::BitArray)                a .| B
+@deprecate (|)(A::BitArray, b::Bool)                A .| b
+@deprecate (|)(a::Number, B::AbstractArray)         a .| B
+@deprecate (|)(A::AbstractArray, b::Number)         A .| b
+@deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
+
 # End deprecations scheduled for 0.6

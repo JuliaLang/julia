@@ -864,9 +864,6 @@ function complex{T}(A::AbstractArray{T})
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
 
-big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigInt},N}, A)
-big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, A)
-
 ## promotion to complex ##
 
 _default_type(T::Type{Complex}) = Complex{Int}

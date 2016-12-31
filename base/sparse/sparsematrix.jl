@@ -1403,21 +1403,10 @@ sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 conj!(A::SparseMatrixCSC) = (broadcast!(conj, A.nzval, A.nzval); A)
 (-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
 
-# TODO: The following definitions should be deprecated.
-ceil{To}(::Type{To}, A::SparseMatrixCSC) = ceil.(To, A)
-floor{To}(::Type{To}, A::SparseMatrixCSC) = floor.(To, A)
-trunc{To}(::Type{To}, A::SparseMatrixCSC) = trunc.(To, A)
-round{To}(::Type{To}, A::SparseMatrixCSC) = round.(To, A)
-
 
 ## Binary arithmetic and boolean operators
 (+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
 (-)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(-, A, B)
-# TODO: Vectorized min, max, |, and xor should be deprecated in favor of compact-broadcast syntax.
-min(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(min, A, B)
-max(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(max, A, B)
-(&)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(&, A, B)
-(|)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(|, A, B)
 
 ( +)(A::SparseMatrixCSC, B::Array ) = Array(A)  + B
 ( +)(A::Array , B::SparseMatrixCSC) = A  + Array(B)
