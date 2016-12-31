@@ -617,11 +617,11 @@ let x = spv_x1, x2 = spv_x2
     @test x .* Array(x2) == Array(xm)
 
     # max & min
-    @test exact_equal(max(x, x), x)
-    @test exact_equal(min(x, x), x)
-    @test exact_equal(max(x, x2),
+    @test exact_equal(max.(x, x), x)
+    @test exact_equal(min.(x, x), x)
+    @test exact_equal(max.(x, x2),
         SparseVector(8, Int[1, 2, 6], Float64[3.25, 4.0, 3.5]))
-    @test exact_equal(min(x, x2),
+    @test exact_equal(min.(x, x2),
         SparseVector(8, Int[2, 5, 6, 7], Float64[1.25, -0.75, -5.5, -6.0]))
 end
 
