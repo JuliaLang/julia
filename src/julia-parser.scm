@@ -181,16 +181,16 @@
 (define (newline? c) (eqv? c #\newline))
 
 (define (skip-to-eol port)
-  (let ((c (peek-char port)))
+  (let ((c (npeek-char port)))
     (cond ((eof-object? c)    c)
           ((eqv? c #\newline) c)
-          (else               (read-char port)
+          (else               (nread-char port)
                               (skip-to-eol port)))))
 
 (define (read-operator port c)
   (if (and (eqv? c #\*) (eqv? (npeek-char port) #\*))
       (error "use \"^\" instead of \"**\""))
-  (if (or (eof-object? (peek-char port)) (not (opchar? (npeek-char port))))
+  (if (or (eof-object? (npeek-char port)) (not (opchar? (npeek-char port))))
       (symbol (string c)) ; 1-char operator
       (let ((str (let loop ((str (string c))
                             (c   (npeek-char port)))
@@ -198,7 +198,7 @@
                        (let* ((newop (string str c))
                               (opsym (string->symbol newop)))
                          (if (operator? opsym)
-                             (begin (read-char port)
+                             (begin (nread-char port)
                                     (loop newop (npeek-char port)))
                              str))
                        str))))
@@ -210,7 +210,7 @@
   (let loop ((str '())
              (c c))
     (if (and _-digit-sep (eqv? c #\_))
-        (begin (read-char port)
+        (begin (nread-char port)
                (let ((c (npeek-char port)))
                  (if (and (not (eof-object? c)) (pred c))
                      (loop str c)
@@ -218,7 +218,7 @@
                        (io.ungetc port #\_)
                        (list->string (reverse str))))))
         (if (and (not (eof-object? c)) (pred c))
-            (begin (read-char port)
+            (begin (nread-char port)
                    (loop (cons c str) (npeek-char port)))
             (list->string (reverse str))))))
 
@@ -260,7 +260,7 @@
              (begin (write-char (nread-char port) str) #t))))
     (define (disallow-dot)
       (if (eqv? (npeek-char port) #\.)
-          (begin (read-char port)
+          (begin (nread-char port)
                  (if (dot-opchar? (npeek-char port))
                      (io.ungetc port #\.)
                      (error (string "invalid numeric constant \""
@@ -293,7 +293,7 @@
             (allow #\.)))
     (read-digs leadingzero #t)
     (if (eqv? (npeek-char port) #\.)
-        (begin (read-char port)
+        (begin (nread-char port)
                (if (dot-opchar? (npeek-char port))
                    (io.ungetc port #\.)
                    (begin (write-char #\. str)
@@ -306,7 +306,7 @@
       (if (or (and is-hex-float-literal (or ispP (error "hex float literal must contain \"p\" or \"P\"")))
               (and (eq? pred char-hex?) ispP)
               (memv c '(#\e #\E #\f)))
-          (begin (read-char port)
+          (begin (nread-char port)
                  (let ((d (npeek-char port)))
                    (if (and (not (eof-object? d))
                             (or (char-numeric? d) (eqv? d #\+) (eqv? d #\-)))
@@ -425,21 +425,21 @@
                      (let ((c (npeek-char port)))
                        (if (eqv? c #\#)
                            (begin
-                             (read-char port)
+                             (nread-char port)
                              (if (> count 1)
                                  (skip-multiline-comment port (- count 1))))
                            (skip-multiline-comment port count)))
                      (if (eqv? c #\#)
                          (skip-multiline-comment port
                                                  (if (eqv? (npeek-char port) #\=)
-                                                     (begin (read-char port)
+                                                     (begin (nread-char port)
                                                             (+ count 1))
                                                      count))
                          (skip-multiline-comment port count)))))))
 
-  (read-char port) ; read # that was already peeked
+  (nread-char port) ; read # that was already peeked
   (if (eqv? (npeek-char port) #\=)
-      (begin (read-char port) ; read initial =
+      (begin (nread-char port) ; read initial =
              (skip-multiline-comment port 1))
       (skip-to-eol port)))
 
@@ -463,7 +463,7 @@
   (let ((c (npeek-char port)))
     (cond ((or (eof-object? c) (eqv? c #\newline))  (nread-char port))
 
-          ((identifier-start-char? c)     (accum-julia-symbol (peek-char port) port))
+          ((identifier-start-char? c)     (accum-julia-symbol c port))
 
           ((string.find "()[]{},;\"`@" c) (nread-char port))
 
@@ -489,7 +489,7 @@
           ((opchar? c)  (read-operator port (nread-char port)))
 
           (else
-           (read-char port)
+           (nread-char port)
            (if (default-ignorable-char? c)
                (error (string "invisible character \\u" (number->string (fixnum c) 16)))
                (error (string "invalid character \"" c "\"")))))))
@@ -1684,7 +1684,7 @@
       c))
 
 (define (take-char p)
-  (begin (read-char p) p))
+  (begin (nread-char p) p))
 
 ;; map the first element of lst
 (define (map-first f lst)
@@ -1744,20 +1744,20 @@
 
 (define (triplequoted-string-indentation- s)
   (let ((p (open-input-string s)))
-    (let loop ((c (read-char p))
+    (let loop ((c (nread-char p))
                (state 0)
                (prefix ())
                (prefixes ()))
       (cond
        ((eqv? c #\newline)
-        (loop (read-char p) 1 () prefixes))
+        (loop (nread-char p) 1 () prefixes))
        ((eqv? state 0)
         (if (eof-object? c) prefixes
-            (loop (read-char p) 0 () prefixes)))
+            (loop (nread-char p) 0 () prefixes)))
        ((memv c '(#\space #\tab))
-        (loop (read-char p) 2 (cons c prefix) prefixes))
+        (loop (nread-char p) 2 (cons c prefix) prefixes))
        (else
-        (loop (read-char p) 0 () (cons (reverse prefix) prefixes)))))))
+        (loop (nread-char p) 0 () (cons (reverse prefix) prefixes)))))))
 
 ;; return the longest common prefix of the elements of l
 ;; e.g., (longest-common-prefix ((1 2) (1 4))) -> (1)
@@ -1800,7 +1800,7 @@
     (cond ((identifier-start-char? c)
            (parse-atom s))
           ((eqv? c #\()
-           (read-char p)
+           (nread-char p)
            (let ((ex (parse-eq* s))
                  (t (require-token s)))
              (cond ((eqv? t #\) )
@@ -1821,14 +1821,14 @@
 ;; when raw is #t, unescape only \\ and delimiter
 ;; otherwise do full unescaping, and parse interpolations too
 (define (parse-string-literal- n p s delim raw)
-  (let loop ((c (read-char p))
+  (let loop ((c (nread-char p))
              (b (open-output-string))
              (e ())
              (quotes 0))
     (cond
       ((eqv? c delim)
        (if (< quotes n)
-           (loop (read-char p) b e (+ quotes 1))
+           (loop (nread-char p) b e (+ quotes 1))
            (reverse (cons (tostr raw b) e))))
 
       ((= quotes 1)
@@ -1844,16 +1844,16 @@
        (loop c b e 0))
 
       ((eqv? c #\\)
-       (let ((nxch (not-eof-for delim (read-char p))))
+       (let ((nxch (not-eof-for delim (nread-char p))))
          (if (or (not raw)
                  (not (or (eqv? nxch delim) #;(eqv? nxch #\\))))
              (write-char #\\ b))
          (write-char nxch b)
-         (loop (read-char p) b e 0)))
+         (loop (nread-char p) b e 0)))
 
       ((and (eqv? c #\$) (not raw))
        (let ((ex (parse-interpolate s)))
-         (loop (read-char p)
+         (loop (nread-char p)
                (open-output-string)
                (list* ex (tostr raw b) e)
                0)))
@@ -1861,14 +1861,14 @@
       ; convert literal \r and \r\n in strings to \n (issue #11988)
       ((eqv? c #\return) ; \r
        (begin
-         (if (eqv? (peek-char p) #\linefeed) ; \r\n
-             (read-char p))
+         (if (eqv? (npeek-char p) #\linefeed) ; \r\n
+             (nread-char p))
          (write-char #\newline b)
-         (loop (read-char p) b e 0)))
+         (loop (nread-char p) b e 0)))
 
       (else
        (write-char (not-eof-for delim c) b)
-       (loop (read-char p) b e 0)))))
+       (loop (nread-char p) b e 0)))))
 
 (define (not-eof-1 c)
   (if (eof-object? c)
@@ -1892,12 +1892,12 @@
     (cond ;; char literal
           ((eq? t '|'|)
            (take-token s)
-           (let ((firstch (read-char (ts:port s))))
+           (let ((firstch (nread-char (ts:port s))))
                (if (and (not (eqv? firstch #\\))
                         (not (eof-object? firstch))
-                        (eqv? (peek-char (ts:port s)) #\'))
+                        (eqv? (npeek-char (ts:port s)) #\'))
                    ;; easy case: 1 character, no \
-                   (begin (read-char (ts:port s)) firstch)
+                   (begin (nread-char (ts:port s)) firstch)
                    (let ((b (open-output-string)))
                      (let loop ((c firstch))
                        (if (eqv? c #\')
@@ -1908,8 +1908,8 @@
                                   (write-char (not-eof-1 c) b)
                                   (if (eqv? c #\\)
                                       (write-char
-                                       (not-eof-1 (read-char (ts:port s))) b))
-                                      (loop (read-char (ts:port s))))))
+                                       (not-eof-1 (nread-char (ts:port s))) b))
+                                      (loop (nread-char (ts:port s))))))
                      (let ((str (unescape-string (io.tostring! b))))
                        (if (= (length str) 1)
                            ;; one byte, e.g. '\xff'. maybe not valid UTF-8, but we
