@@ -1346,4 +1346,8 @@ function quadgk(args...; kwargs...)
 end
 export quadgk
 
+# Deprecate two-argument map! (map!(f, A)) for a cycle in anticipation of semantic change
+@deprecate map!{F}(f::F, A::AbstractArray) map!(f, A, A)
+@deprecate asyncmap!(f, c; ntasks=0, batch_size=nothing) asyncmap!(f, c, c; ntasks=ntasks, batch_size=batch_size)
+
 # End deprecations scheduled for 0.6
