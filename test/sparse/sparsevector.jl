@@ -609,9 +609,7 @@ let x = spv_x1, x2 = spv_x2
 
     # multiplies
     xm = SparseVector(8, [2, 6], [5.0, -19.25])
-    let y=x # workaround for broadcast not preserving sparsity in general
-        @test exact_equal(x .* y, abs2(x))
-    end
+    @test exact_equal(x .* x, abs2(x))
     @test exact_equal(x .* x2, xm)
     @test exact_equal(x2 .* x, xm)
 
