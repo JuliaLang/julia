@@ -132,17 +132,31 @@ function BigFloat(x, prec::Int)
     end
 end
 
+"""
+    BigFloat(x, prec::Int, rounding::RoundingMode)
+
+Create a representation of `x` as a `BigFloat` with precision `prec` and rounding mode `rounding`.
+"""
 function BigFloat(x, prec::Int, rounding::RoundingMode)
     setrounding(BigFloat, rounding) do
         BigFloat(x, prec)
     end
 end
 
+"""
+    BigFloat(x, rounding::RoundingMode)
+
+Create a representation of `x` as a `BigFloat` with the current global precision and rounding mode `rounding`.
+"""
 function BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
     BigFloat(x, precision(BigFloat), rounding)
 end
 
+"""
+    BigFloat(x::String)
 
+Create a representation of the string `x` as a `BigFloat`.
+"""
 BigFloat(x::String) = parse(BigFloat, x)
 
 
