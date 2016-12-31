@@ -376,6 +376,7 @@ end
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722).
 @test let z = 1; A = broadcast!(() -> z += 1, zeros(2)); A[1] != A[2]; end
+@test let z = 1; A = broadcast!(x -> z += x, zeros(2), 1); A[1] != A[2]; end
 
 # broadcasting for custom AbstractArray
 immutable Array19745{T,N} <: AbstractArray{T,N}
