@@ -69,6 +69,8 @@
                      t))
 (put! prec-table 'in  (get prec-table '== 0)) ; add `in` to the prec-table
 (put! prec-table 'isa (get prec-table '== 0)) ; add `isa` to the prec-table
+(put! prec-table 'and (get prec-table '&& 0)) ; add `and` to the prec-table
+(put! prec-table 'or (get prec-table '|\|\|| 0)) ; add `and` to the prec-table
 (define (operator-precedence op) (get prec-table op 0))
 
 (define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))
