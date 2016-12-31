@@ -6229,7 +6229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map!",
     "category": "Function",
-    "text": "map!(function, collection)\n\nIn-place version of map.\n\n\n\nmap!(function, destination, collection...)\n\nLike map, but stores the result in destination rather than a new collection. destination must be at least as large as the first collection.\n\n\n\n"
+    "text": "map!(function, destination, collection...)\n\nLike map, but stores the result in destination rather than a new collection. destination must be at least as large as the first collection.\n\n\n\n"
 },
 
 {
@@ -11549,7 +11549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.asyncmap!",
     "category": "Function",
-    "text": "asyncmap!(f, c; ntasks=0, batch_size=nothing)\n\nIn-place version of asyncmap().\n\n\n\nasyncmap!(f, results, c...; ntasks=0, batch_size=nothing)\n\nLike asyncmap(), but stores output in results rather than returning a collection.\n\n\n\n"
+    "text": "asyncmap!(f, results, c...; ntasks=0, batch_size=nothing)\n\nLike asyncmap(), but stores output in results rather than returning a collection.\n\n\n\n"
 },
 
 {
