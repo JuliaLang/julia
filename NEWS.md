@@ -78,6 +78,9 @@ This section lists changes that do not have deprecation warnings.
 
   * `quadgk` has been moved from Base into a separate package. ([#19741])
 
+  * The `Collections` module has been removed, and all functions defined therein have been
+    moved to the `DataStructures` package. ([#19800])
+
 Library improvements
 --------------------
 
