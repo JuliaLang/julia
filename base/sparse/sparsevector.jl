@@ -919,7 +919,8 @@ hvcat{T}(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) = Base.type
 
 # zero-preserving functions (z->z, nz->nz)
 broadcast(::typeof(abs), x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), abs.(nonzeros(x)))
-for op in [:abs2, :conj]
+broadcast(::typeof(abs2), x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), abs2.(nonzeros(x)))
+for op in [:conj]
     @eval begin
         $(op)(x::AbstractSparseVector) =
             SparseVector(length(x), copy(nonzeroinds(x)), $(op).(nonzeros(x)))
