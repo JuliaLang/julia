@@ -887,12 +887,6 @@ let ε=1, μ=2, x=3, î=4
     # NFC normalization of identifiers:
     @test parse("\u0069\u0302") === parse("\u00ee")
     @test î == 4
-    # fullwidth punctuation and symbols (#5903):
-    @test parse("\uff58") === parse("\u0078")
-    @test parse("\uff1d\uff1d") === parse("\u003d\u003d")
-    @test ｘ ＝＝ x == 3
-    @test UInt16('ｘ') == 0xff58
-    @test （１１．５ｅ０） === 11.5
     # latin vs greek ε (#14751)
     @test parse("\u025B") === parse("\u03B5")
     @test ɛ == ε == 1

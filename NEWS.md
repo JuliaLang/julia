@@ -75,11 +75,9 @@ This section lists changes that do not have deprecation warnings.
 
   * `quadgk` has been moved from Base into a separate package. ([#19741])
 
-  * Fullwidth and halfwidth characters are now considered equivalent in
-    identifiers and code, and certain Greek-like Unicode characters
-    (µ "micro" and ɛ "latin epsilon") are considered equivalent to
-    the corresponding Greek characters, for ease of input.  `\varepsilon`
-    now tab-completes to U+03B5 (greek small letter epsilon).  ([#19464])
+  * (µ "micro" and ɛ "latin epsilon") are considered equivalent to
+    the corresponding Greek characters in identifiers.  `\varepsilon`
+    now tab-completes to U+03B5 (greek small letter epsilon) ([#19464]).
 
 Library improvements
 --------------------

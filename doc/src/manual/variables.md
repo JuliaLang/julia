@@ -109,13 +109,11 @@ ERROR: syntax: unexpected "="
 ```
 
 Some Unicode characters are considered to be equivalent in identifiers.
-"Fullwidth" versions of ASCII and other symbols are treated as equivalent
-to the ordinary (halfwidth) versions, to simplify Julia code entry in
-some Asian languages.  The Unicode characters `ɛ` (U+025B: Latin small letter open e)
-and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
-Greek letters, because the former are easily accessible via some input methods.
 Different ways of entering Unicode combining characters (e.g., accents)
 are treated as equivalent (specifically, Julia identifiers are NFC-normalized).
+The Unicode characters `ɛ` (U+025B: Latin small letter open e)
+and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
+Greek letters, because the former are easily accessible via some input methods.
 
 ## Stylistic Conventions
 
