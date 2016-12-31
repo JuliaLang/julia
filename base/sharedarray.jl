@@ -451,7 +451,7 @@ function fill!(S::SharedArray, v)
 end
 
 function rand!{T}(S::SharedArray{T})
-    f = S->map!(x->rand(T), S.loc_subarr_1d)
+    f = S->map!(x -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)
     end
@@ -459,7 +459,7 @@ function rand!{T}(S::SharedArray{T})
 end
 
 function randn!(S::SharedArray)
-    f = S->map!(x->randn(), S.loc_subarr_1d)
+    f = S->map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)
     end
@@ -475,9 +475,9 @@ shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
 # rand variant with range
 function shmem_rand(TR::Union{DataType, UnitRange}, dims; kwargs...)
     if isa(TR, UnitRange)
-        SharedArray(Int, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
+        SharedArray(Int, dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
     else
-        SharedArray(TR, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
+        SharedArray(TR, dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
     end
 end
 shmem_rand(TR::Union{DataType, UnitRange}, i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
@@ -487,7 +487,7 @@ shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
 shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)
 
 function shmem_randn(dims; kwargs...)
-    SharedArray(Float64, dims; init = S-> map!((x)->randn(), S.loc_subarr_1d), kwargs...)
+    SharedArray(Float64, dims; init = S-> map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 
@@ -501,11 +501,14 @@ reduce(f, S::SharedArray) =
               Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
-function map!(f, S::SharedArray)
+function map!(f, S::SharedArray, Q::SharedArray)
+    if !(S === Q) && (procs(S) != procs(Q) || localindexes(S) != localindexes(Q))
+        throw(ArgumentError("incompatible source and destination arguments"))
+    end
     @sync for p in procs(S)
         @spawnat p begin
             for idx in localindexes(S)
-                S.s[idx] = f(S.s[idx])
+                S.s[idx] = f(Q.s[idx])
             end
         end
     end

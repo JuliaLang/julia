@@ -1798,12 +1798,6 @@ promote_eltype_op(op, A, B, C, D...) = (@_inline_meta; promote_eltype_op(op, elt
 
 ## 1 argument
 
-"""
-    map!(function, collection)
-
-In-place version of [`map`](@ref).
-"""
-map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
     for (i,j) in zip(eachindex(dest),eachindex(A))
         dest[i] = f(A[j])
