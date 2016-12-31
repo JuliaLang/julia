@@ -1367,8 +1367,8 @@ end
 @deprecate round(M::Bidiagonal) round.(M)
 @deprecate round(M::Tridiagonal) round.(M)
 @deprecate round(M::SymTridiagonal) round.(M)
-@deprecate round{T<:Integer}(::Type{T}, x::AbstractArray) round.(T, x)
-@deprecate round{T<:Integer}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round{T}(::Type{T}, x::AbstractArray) round.(T, x)
+@deprecate round{T}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(x, r)
 @deprecate round(x::AbstractArray, r::RoundingMode) round.(x, r)
 @deprecate round(x::AbstractArray, digits::Integer, base::Integer = 10) round.(x, digits, base)
 
@@ -1376,21 +1376,21 @@ end
 @deprecate trunc(M::Bidiagonal) trunc.(M)
 @deprecate trunc(M::Tridiagonal) trunc.(M)
 @deprecate trunc(M::SymTridiagonal) trunc.(M)
-@deprecate trunc{T<:Integer}(::Type{T}, x::AbstractArray) trunc.(T, x)
+@deprecate trunc{T}(::Type{T}, x::AbstractArray) trunc.(T, x)
 @deprecate trunc(x::AbstractArray, digits::Integer, base::Integer = 10) trunc.(x, digits, base)
 
 # Deprecate manually vectorized floor methods in favor of compact broadcast syntax
 @deprecate floor(M::Bidiagonal) floor.(M)
 @deprecate floor(M::Tridiagonal) floor.(M)
 @deprecate floor(M::SymTridiagonal) floor.(M)
-@deprecate floor{T<:Integer}(::Type{T}, A::AbstractArray) floor.(T, A)
+@deprecate floor{T}(::Type{T}, A::AbstractArray) floor.(T, A)
 @deprecate floor(A::AbstractArray, digits::Integer, base::Integer = 10) floor.(A, digits, base)
 
 # Deprecate manually vectorized ceil methods in favor of compact broadcast syntax
 @deprecate ceil(M::Bidiagonal) ceil.(M)
 @deprecate ceil(M::Tridiagonal) ceil.(M)
 @deprecate ceil(M::SymTridiagonal) ceil.(M)
-@deprecate ceil{T<:Integer}(::Type{T}, x::AbstractArray) ceil.(T, x)
+@deprecate ceil{T}(::Type{T}, x::AbstractArray) ceil.(T, x)
 @deprecate ceil(x::AbstractArray, digits::Integer, base::Integer = 10) ceil.(x, digits, base)
 
 # Deprecate manually vectorized `big` methods in favor of compact broadcast syntax
