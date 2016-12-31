@@ -867,3 +867,19 @@ end
 let ..(x,y) = x + y
     @test 3 .. 4 === 7
 end
+
+# Check `and` & `or`, issue #5238, PR #19788
+@test :(a and b) == :(a && b)
+@test true and :foo == :foo
+@test false or :bar == :bar
+@test true and false or true == true
+@test (x = 5; x > 4) or (x = 0) == 0
+
+function fact_test(n::Int)
+    n >= 0 or error("n must be non-negative")
+    n == 0 and return 1
+    n * fact_test(n - 1)
+end
+
+@test fact_test(5) == 120
+@test_throws ErrorException fact_test(-1)
