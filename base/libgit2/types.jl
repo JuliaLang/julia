@@ -432,7 +432,7 @@ for (typ, ref, sup, fnc) in (
         function $typ(ptr::Ptr{$ref})
             @assert ptr != C_NULL
             obj = new(ptr)
-            finalizer(obj, close)
+            finalizer(obj, Base.close)
             return obj
         end
     end
