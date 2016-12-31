@@ -69,7 +69,7 @@ This section lists changes that do not have deprecation warnings.
 
   * The array-scalar operations `div`, `mod`, `rem`, `&`, `|`, `xor`, `/`, `\`, `*`, `+`, and `-`
     now follow broadcast promotion rules ([#19692]).
-    
+
   * `broadcast!(f, A)` now calls `f()` for each element of `A`, rather than doing `fill!(A, f())` ([#19722]).
 
   * `rmprocs` now throws an exception if requested workers have not been completely
