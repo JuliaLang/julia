@@ -35,6 +35,12 @@ do33 = ones(3)
         sqrfloatmat, colfloatmat = sprand(4, 4, 0.5), sprand(4, 1, 0.5)
         @test_throws DimensionMismatch (+)(sqrfloatmat, colfloatmat)
         @test_throws DimensionMismatch (-)(sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch map(min, sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch map(max, sqrfloatmat, colfloatmat)
+        sqrboolmat, colboolmat = sprand(Bool, 4, 4, 0.5), sprand(Bool, 4, 1, 0.5)
+        @test_throws DimensionMismatch map(&, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(|, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(xor, sqrboolmat, colboolmat)
     end
 end
 
