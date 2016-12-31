@@ -466,6 +466,29 @@ let
     @test c_18711 == 1
 end
 
+g19801(a) = a
+f19801() = cfunction(g19801, Int, (Int,))
+f19801_dynamic = f19801
+# Run a single function twice to make sure the function is recompiled
+function test19801(first, ptr0=f19801())
+    if first
+        @test ccall(ptr0, Int, (Int,), 1) == 1
+        @eval g19801(a::Int) = a + 1
+        # Check that both static and dynamic version returns the old pointer
+        @test f19801() == ptr0
+        @test f19801_dynamic() == ptr0
+        @test ccall(f19801(), Int, (Int,), 1) == 1
+    else
+        @test ccall(ptr0, Int, (Int,), 1) == 1
+        @test f19801() != ptr0
+        @test f19801_dynamic() == f19801()
+        @test ccall(f19801(), Int, (Int,), 1) == 2
+    end
+    return ptr0
+end
+ptr19801 = test19801(true)
+test19801(false, ptr19801)
+
 let
     old_have_color = Base.have_color
     try

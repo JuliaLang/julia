@@ -1635,7 +1635,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 frt = jl_tparam0(frt);
                 Value *llvmf = NULL;
                 JL_TRY {
-                    llvmf = jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt);
+                    llvmf = jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt, ctx->world);
                 }
                 JL_CATCH {
                     llvmf = NULL;

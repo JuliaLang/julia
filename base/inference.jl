@@ -1210,6 +1210,10 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
             end
         end
     end
+    if istopfunction(tm, f, :cfunction) && length(fargs) == 4
+        # This can be skipped if codegen cannot inline the call
+        update_valid_age!(sv.params.world, sv.params.world, sv)
+    end
 
     atype = argtypes_to_type(argtypes)
     t = pure_eval_call(f, argtypes, atype, vtypes, sv)

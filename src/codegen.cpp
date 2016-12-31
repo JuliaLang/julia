@@ -1225,17 +1225,19 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
     return fptr;
 }
 
-static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt);
+static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt, size_t world);
 // get the address of a C-callable entry point for a function
 extern "C" JL_DLLEXPORT
 void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_GC_PUSH1(&argt);
     if (jl_is_tuple(argt)) {
         // TODO: maybe deprecation warning, better checking
         argt = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argt), jl_nfields(argt));
     }
-    Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
+    Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt,
+                                          ptls->world_age);
     JL_GC_POP();
     return (void*)getAddressForFunction(llvmf);
 }
@@ -1255,8 +1257,10 @@ void *jl_function_ptr_by_llvm_name(char *name) {
 extern "C" JL_DLLEXPORT
 void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_tuple_type(argt));
-    Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
+    Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt,
+                                          ptls->world_age);
     if (llvmf) {
         // force eager emission of the function (llvm 3.3 gets confused otherwise and tries to do recursive compilation)
         uint64_t Addr = getAddressForFunction(llvmf);
@@ -3739,7 +3743,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     ctx.f = cw;
     ctx.linfo = lam;
     ctx.code = NULL;
-    ctx.world = jl_world_counter;
+    ctx.world = world;
     ctx.sret = false;
     ctx.spvals_ptr = NULL;
     ctx.params = &jl_default_cgparams;
@@ -4000,7 +4004,7 @@ const struct jl_typemap_info cfunction_cache = {
 // Get the LLVM Function* for the C-callable entry point for a certain function
 // and argument types.
 // here argt does not include the leading function type argument
-static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_tupletype_t *argt)
+static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_tupletype_t *argt, size_t world)
 {
     // validate and unpack the arguments
     JL_TYPECHK(cfunction, type, declrt);
@@ -4051,7 +4055,6 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     cfunc_sig = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)cfunc_sig);
 
     // check the cache
-    size_t world = jl_world_counter;
     if (jl_cfunction_list.unknown != jl_nothing) {
         jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(jl_cfunction_list, (jl_tupletype_t*)cfunc_sig, NULL, 1, 0, /*offs*/0, world);
         if (sf) {
