@@ -121,6 +121,11 @@ convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
 
 # generic constructor with arbitrary precision:
+"""
+    BigFloat(x, prec::Int)
+
+Create a representation of `x` as a `BigFloat` with precision `prec`.
+"""
 function BigFloat(x, prec::Int)
     setprecision(BigFloat, prec) do
         BigFloat(x)
