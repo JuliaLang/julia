@@ -1,10 +1,10 @@
 #!/bin/sh
 #
-# usage: jlchecksum <filename>
+# usage: jlchecksum.sh <filename>
 #
 
 if [ -z "$1" ]; then
-    echo "Usage: ./jlchecksum <filename>" >&2
+    echo "Usage: ./jlchecksum.sh <filename>" >&2
     exit 1
 fi
 
@@ -13,14 +13,14 @@ DEPSDIR="$( cd "$( dirname "$0" )"/.. && pwd )"
 
 # Get the basename of the file we're trying to checksum
 ARG1=$1
-BASENAME=$(basename $1)
+BASENAME=$(basename "$1")
 
 # Print out a hash, and wrap around if we're longer than 64 characters
 print_hash()
 {
     if [ ${#1} -gt 64 ]; then
         NUM_LINES=$(( (${#1} + 63) / 64))
-        for i in `seq 0 1 $((NUM_LINES - 1))`; do
+        for i in $(seq 0 1 $((NUM_LINES - 1))); do
             str_piece=$(echo "$1" | awk "{ string=substr(\$0, $((i*64 + 1)), $(((i+1)*64))); print string; }")
             echo "      $str_piece"
         done
@@ -51,10 +51,10 @@ find_checksum()
         # Generate as many checksum types as we can
         mkdir -p "$DEPSDIR/checksums/$BASENAME"
         if [ ! -z "$MD5_PROG" ]; then
-            echo $(eval $MD5_PROG) > "$DEPSDIR/checksums/$BASENAME/md5"
+            eval "$MD5_PROG" > "$DEPSDIR/checksums/$BASENAME/md5"
         fi
         if [ ! -z "$SHA512_PROG" ]; then
-            echo $(eval $SHA512_PROG) > "$DEPSDIR/checksums/$BASENAME/sha512"
+            eval "$SHA512_PROG" > "$DEPSDIR/checksums/$BASENAME/sha512"
         fi
     fi
 
@@ -66,15 +66,15 @@ SHA512_PROG=""
 MD5_PROG=""
 find_checksum_progs()
 {
-    if [ ! -z $(which sha512sum) ]; then
+    if [ ! -z "$(which sha512sum)" ]; then
         SHA512_PROG="sha512sum $ARG1 | awk '{ print \$1; }'"
-    elif [ ! -z $(which shasum) ]; then
+    elif [ ! -z "$(which shasum)" ]; then
         SHA512_PROG="shasum -a 512 $ARG1 | awk '{ print \$1; }'"
     fi
 
-    if [ ! -z $(which md5sum) ]; then
+    if [ ! -z "$(which md5sum)" ]; then
         MD5_PROG="md5sum $ARG1 | awk '{ print \$1; }'"
-    elif [ ! -z $(which md5) ]; then
+    elif [ ! -z "$(which md5)" ]; then
         MD5_PROG="md5 -q $ARG1"
     fi
 }
@@ -99,7 +99,7 @@ fi
 find_checksum "$CHECKSUM_TYPE"
 
 # Calculate actual checksum
-CURR_CHECKSUM=$(eval $CHECKSUM_PROG)
+CURR_CHECKSUM=$(eval "$CHECKSUM_PROG")
 
 # Make sure they're the same.  If not, error out!
 if [ "$TRUE_CHECKSUM" != "$CURR_CHECKSUM" ]; then
