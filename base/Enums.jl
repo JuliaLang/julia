@@ -31,7 +31,7 @@ end
 """
     @enum EnumName[::BaseType] EnumValue1[=x] EnumValue2[=y]
 
-Create an [`Enum`]{`BaseType`} subtype with name `EnumName` and enum member values of
+Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values of
 `EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively.
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
@@ -46,7 +46,7 @@ julia> f(apple)
 ```
 
 `BaseType`, which defaults to `Int32`, must be a bitstype subtype of Integer. Member values can be converted between
-the enum type and `BaseType`. `read` and and `write` perform these conversions automatically.
+the enum type and `BaseType`. `read` and `write` perform these conversions automatically.
 """
 macro enum(T,syms...)
     if isempty(syms)
