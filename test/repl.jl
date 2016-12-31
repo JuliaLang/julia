@@ -550,7 +550,8 @@ end
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
     Base.display_error(io,
-        try [][trues(6000)]
+        try
+            [][trues(6000)]
         catch e
             e
         end, [])
