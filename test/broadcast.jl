@@ -409,3 +409,12 @@ Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...) =
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .* aa', Array19745)
 end
+
+# broadcast should only "peel off" one container layer
+let io = IOBuffer()
+    broadcast(x -> print(io, x), [Nullable(1.0)])
+    @test String(take!(io)) == "Nullable{Float64}(1.0)"
+    v = []
+    broadcast(x -> push!(v, x), [Nullable(1)])
+    @test get.(v) == get.([Nullable(1)])
+end
