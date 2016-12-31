@@ -147,12 +147,12 @@ let ex = t265.exception
     @test ex.world == wc265
     str = sprint(showerror, ex)
     wc = world_counter()
-    cmp = """
+    cmps = """
         MethodError: no method matching h265()
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
-    @test startswith(str, cmp)
-    cmp = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
-    @test contains(str, cmp)
+    @test startswith(str, cmps)
+    cmps = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
+    @test contains(str, cmps)
 end
 
 # test for generated function correctness
