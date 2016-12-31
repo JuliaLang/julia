@@ -1146,6 +1146,129 @@ for (dep, f, op) in [(:sumabs!, :sum!, :abs),
     end
 end
 
+## Deprecate broadcast_zpreserving[!] (wasn't exported, but might as well be friendly)
+function gen_broadcast_function_sparse(genbody::Function, f::Function, is_first_sparse::Bool)
+    body = genbody(f, is_first_sparse)
+    @eval let
+        local _F_
+        function _F_{Tv,Ti}(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2)
+            $body
+        end
+        _F_
+    end
+end
+function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
+    F = Expr(:quote, f)
+    if is_first_sparse
+        A1 = :(A_1)
+        A2 = :(A_2)
+        op1 = :(val1)
+        op2 = :(val2)
+    else
+        A1 = :(A_2)
+        A2 = :(A_1)
+        op1 = :(val2)
+        op2 = :(val1)
+    end
+    quote
+        Base.Broadcast.check_broadcast_indices(indices(B), $A1)
+        Base.Broadcast.check_broadcast_indices(indices(B), $A2)
+
+        nnzB = isempty(B) ? 0 :
+               nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
+        if length(B.rowval) < nnzB
+            resize!(B.rowval, nnzB)
+        end
+        if length(B.nzval) < nnzB
+            resize!(B.nzval, nnzB)
+        end
+        z = zero(Tv)
+
+        ptrB = 1
+        B.colptr[1] = 1
+
+        @inbounds for col = 1:B.n
+            ptr1::Int  = ($A1).n == 1 ? ($A1).colptr[1] : ($A1).colptr[col]
+            stop1::Int = ($A1).n == 1 ? ($A1).colptr[2] : ($A1).colptr[col+1]
+            col2 = size($A2, 2) == 1 ? 1 : col
+            row = 1
+            while ptr1 < stop1 && row <= B.m
+                if ($A1).m != 1
+                    row = ($A1).rowval[ptr1]
+                end
+                row2 = size($A2, 1) == 1 ? 1 : row
+                val1 = ($A1).nzval[ptr1]
+                val2 = ($A2)[row2,col2]
+                res = ($F)($op1, $op2)
+                if res != z
+                    B.rowval[ptrB] = row
+                    B.nzval[ptrB] = res
+                    ptrB += 1
+                end
+                if ($A1).m != 1
+                    ptr1 += 1
+                else
+                    row += 1
+                end
+            end
+            B.colptr[col+1] = ptrB
+        end
+        deleteat!(B.rowval, B.colptr[end]:length(B.rowval))
+        deleteat!(B.nzval, B.colptr[end]:length(B.nzval))
+        nothing
+    end
+end
+for (Bsig, A1sig, A2sig, gbb, funcname) in
+    (
+     (SparseMatrixCSC   , SparseMatrixCSC  ,  Array,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
+     (SparseMatrixCSC   , Array  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
+     (SparseMatrixCSC   , Number  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
+     (SparseMatrixCSC   , SparseMatrixCSC  ,  Number,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
+     (SparseMatrixCSC   , BitArray  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
+     (SparseMatrixCSC   , SparseMatrixCSC  ,  BitArray,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
+     )
+    @eval let cache = Dict{Function,Function}()
+        global $funcname
+        function $funcname(f::Function, B::$Bsig, A1::$A1sig, A2::$A2sig)
+            func       = @get! cache  f  gen_broadcast_function_sparse($gbb, f, ($A1sig) <: SparseMatrixCSC)
+            # need eval because func was just created by gen_broadcast_function_sparse
+            # TODO: convert this to a generated function
+            eval(current_module(), Expr(:body, Expr(:return, Expr(:call, QuoteNode(func), QuoteNode(B), QuoteNode(A1), QuoteNode(A2)))))
+            return B
+        end
+    end  # let broadcast_cache
+end
+_broadcast_zpreserving!(args...) = broadcast!(args...)
+_broadcast_zpreserving(args...) = Base.Broadcast.broadcast_elwise_op(args...)
+_broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
+    _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
+_broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
+    _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
+_broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{Tv,Ti}) =
+    _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
+
+function _depstring_bczpres()
+    return string("broadcast_zpreserving[!] is deprecated. Generic sparse broadcast[!] ",
+        "provides most of broadcast_zpreserving[!]'s functionality. If you have a use case ",
+        "that generic sparse broadcast[!] does not cover, please describe your use case in ",
+        " issue #19533 (https://github.com/JuliaLang/julia/issues/19533).")
+end
+function _depwarn_bczpres(f, args...)
+    depwarn(_depstring_bczpres(), :broadcast_zpreserving)
+    return _broadcast_zpreserving(f, args...)
+end
+function _depwarn_bczpres!(f, args...)
+    depwarn(_depstring_bczpres(), :broadcast_zpreserving!)
+    return _broadcast_zpreserving!(f, args...)
+end
+eval(SparseArrays, :(broadcast_zpreserving(f, args...) = Base._depwarn_bczpres(f, args...)))
+eval(SparseArrays, :(broadcast_zpreserving(f, A::SparseMatrixCSC, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)))
+eval(SparseArrays, :(broadcast_zpreserving(f, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres(f, A, B)))
+eval(SparseArrays, :(broadcast_zpreserving(f, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)))
+eval(SparseArrays, :(broadcast_zpreserving!(f, args...) = Base._depwarn_bczpres!(f, args...)))
+eval(SparseArrays, :(broadcast_zpreserving!(f, C::SparseMatrixCSC, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres!(f, C, A, B)))
+eval(SparseArrays, :(broadcast_zpreserving!(f, C::SparseMatrixCSC, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres!(f, C, A, B)))
+
 # #19719
 @deprecate getindex(t::Tuple, r::AbstractArray)       getindex(t, vec(r))
 @deprecate getindex(t::Tuple, b::AbstractArray{Bool}) getindex(t, vec(b))
@@ -1161,9 +1284,9 @@ function _airy(k::Integer, z::Complex128)
     depwarn("`airy(k,x)` is deprecated, use `airyai(x)`, `airyaiprime(x)`, `airybi(x)` or `airybiprime(x)` instead.",:airy)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
-        return _airy(z, id, Int32(1))
+        return Base.Math._airy(z, id, Int32(1))
     elseif k == 2 || k == 3
-        return _biry(z, id, Int32(1))
+        return Base.Math._biry(z, id, Int32(1))
     else
         throw(ArgumentError("k must be between 0 and 3"))
     end
@@ -1172,9 +1295,9 @@ function _airyx(k::Integer, z::Complex128)
     depwarn("`airyx(k,x)` is deprecated, use `airyaix(x)`, `airyaiprimex(x)`, `airybix(x)` or `airybiprimex(x)` instead.",:airyx)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
-        return _airy(z, id, Int32(2))
+        return Base.Math._airy(z, id, Int32(2))
     elseif k == 2 || k == 3
-        return _biry(z, id, Int32(2))
+        return Base.Math._biry(z, id, Int32(2))
     else
         throw(ArgumentError("k must be between 0 and 3"))
     end
@@ -1185,6 +1308,8 @@ for afn in (:airy,:airyx)
     suf  = string(afn)[5:end]
     @eval begin
         function $afn(k::Integer, z::Complex128)
+            afn = $(QuoteNode(afn))
+            suf = $(QuoteNode(suf))
             depwarn("`$afn(k,x)` is deprecated, use `airyai$suf(x)`, `airyaiprime$suf(x)`, `airybi$suf(x)` or `airybiprime$suf(x)` instead.",$(QuoteNode(afn)))
             $_afn(k,z)
         end
@@ -1196,16 +1321,13 @@ for afn in (:airy,:airyx)
         $afn(k::Integer, x::AbstractFloat) = real($afn(k, complex(x)))
 
         function $afn{T<:Number}(k::Number, x::AbstractArray{T})
-            depwarn("`$afn(k::Number,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
-            $_afn.(k,x)
+            $afn.(k,x)
         end
         function $afn{S<:Number}(k::AbstractArray{S}, x::Number)
-            depwarn("`$afn(k::AbstractArray,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
-            $_afn.(k,x)
+            $afn.(k,x)
         end
         function $afn{S<:Number,T<:Number}(k::AbstractArray{S}, x::AbstractArray{T})
-            depwarn("`$afn(k::AbstractArray,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
-            $_afn.(k,x)
+            $afn.(k,x)
         end
     end
 end
@@ -1218,13 +1340,17 @@ end
 @deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
 
 # QuadGK moved to a package (#19741)
-function quadgk(args...)
+function quadgk(args...; kwargs...)
     error(string(quadgk, args, " has been moved to the package QuadGK.jl.\n",
                  "Run Pkg.add(\"QuadGK\") to install QuadGK on Julia v0.6 and later, and then run `using QuadGK`."))
 end
 export quadgk
 
 # Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
-@deprecate bitbroadcast  broadcast
+@deprecate bitbroadcast broadcast
+
+# Deprecate two-argument map! (map!(f, A)) for a cycle in anticipation of semantic change
+@deprecate map!{F}(f::F, A::AbstractArray) map!(f, A, A)
+@deprecate asyncmap!(f, c; ntasks=0, batch_size=nothing) asyncmap!(f, c, c; ntasks=ntasks, batch_size=batch_size)
 
 # End deprecations scheduled for 0.6

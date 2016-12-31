@@ -443,7 +443,7 @@ d2 = map(x->1, d)
 @test reduce(+, d2) == 100
 
 @test reduce(+, d) == ((50*id_me) + (50*id_other))
-map!(x->1, d)
+map!(x->1, d, d)
 @test reduce(+, d) == 100
 
 @test fill!(d, 1) == ones(10, 10)
