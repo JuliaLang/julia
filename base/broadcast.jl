@@ -323,21 +323,21 @@ end
 """
     broadcast(f, As...)
 
-Broadcasts the arrays, tuples, `Ref`, nullables, and/or scalars `As` to a
+Broadcasts the arrays, tuples, `Ref`s, nullables, and/or scalars `As` to a
 container of the appropriate type and dimensions. In this context, anything
-that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s), `Tuple`
+that is not a subtype of `AbstractArray`, `Ref` (except for `Ptr`s), `Tuple`,
 or `Nullable` is considered a scalar. The resulting container is established by
 the following rules:
 
  - If all the arguments are scalars, it returns a scalar.
  - If the arguments are tuples and zero or more scalars, it returns a tuple.
- - If there is at least an array or a `Ref` in the arguments, it returns an array
-   (and treats any `Ref` as a 0-dimensional array of its contents and any tuple
-   as a 1-dimensional array) expanding singleton dimensions.
+ - If the arguments contain at least one array or `Ref`, it returns an array
+   (expanding singleton dimensions), and treats `Ref`s as 0-dimensional arrays,
+   and tuples as a 1-dimensional arrays.
 
 The following additional rule applies to `Nullable` arguments: If there is at
-least a `Nullable`, and all the arguments are scalars or `Nullable`, it returns
-a `Nullable` treating `Nullable`s as "containers".
+least one `Nullable`, and all the arguments are scalars or `Nullable`, it
+returns a `Nullable` treating `Nullable`s as "containers".
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
