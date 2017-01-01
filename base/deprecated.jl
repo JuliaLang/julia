@@ -1421,6 +1421,12 @@ end
 @deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
 @deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
 
+# Deprecate manually vectorized div, mod, and % methods for dates
+@deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::P)         div.(X, y)
+@deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::Integer)   div.(X, y)
+@deprecate (%){P<:Dates.Period}(X::StridedArray{P}, y::P)         X .% y
+@deprecate mod{P<:Dates.Period}(X::StridedArray{P}, y::P)         mod.(X, y)
+
 # Deprecate manually vectorized mod methods in favor of compact broadcast syntax
 @deprecate mod(B::BitArray, x::Bool) mod.(B, x)
 @deprecate mod(x::Bool, B::BitArray) mod.(x, B)
