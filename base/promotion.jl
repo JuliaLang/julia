@@ -231,15 +231,13 @@ end
 promote_op(::Any...) = (@_pure_meta; Any)
 function promote_op{S}(f, ::Type{S})
     @_inline_meta
-    Z = Tuple{_default_type(S)}
-    T = _default_eltype(Generator{Z, typeof(f)})
+    T = _return_type(f, Tuple{_default_type(S)})
     isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(S, T)
 end
 function promote_op{R,S}(f, ::Type{R}, ::Type{S})
     @_inline_meta
-    Z = Iterators.Zip2{Tuple{_default_type(R)}, Tuple{_default_type(S)}}
-    T = _default_eltype(Generator{Z, typeof(a -> f(a...))})
+    T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
     isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(R, S, T)
 end

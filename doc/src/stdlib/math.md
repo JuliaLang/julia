@@ -184,13 +184,14 @@ Base.Math.digamma
 Base.Math.invdigamma
 Base.Math.trigamma
 Base.Math.polygamma
-Base.Math.airy
 Base.Math.airyai
-Base.Math.airyprime
 Base.Math.airyaiprime
+Base.Math.airyaix
+Base.Math.airyaiprimex
 Base.Math.airybi
 Base.Math.airybiprime
-Base.Math.airyx
+Base.Math.airybix
+Base.Math.airybiprimex
 Base.Math.besselj0
 Base.Math.besselj1
 Base.Math.besselj
@@ -287,13 +288,4 @@ Base.DFT.FFTW.r2r
 Base.DFT.FFTW.r2r!
 Base.DFT.FFTW.plan_r2r
 Base.DFT.FFTW.plan_r2r!
-```
-
-## Numerical Integration
-
-Although several external packages are available for numeric integration and solution of ordinary
-differential equations, we also provide some built-in integration support in Julia.
-
-```@docs
-Base.QuadGK.quadgk
 ```

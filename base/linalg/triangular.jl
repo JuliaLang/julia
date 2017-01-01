@@ -36,7 +36,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
 
         copy(A::$t) = $t(copy(A.data))
 
-        big(A::$t) = $t(big(A.data))
+        broadcast(::typeof(big), A::$t) = $t(big.(A.data))
 
         real{T<:Real}(A::$t{T}) = A
         real{T<:Complex}(A::$t{T}) = (B = real(A.data); $t(B))

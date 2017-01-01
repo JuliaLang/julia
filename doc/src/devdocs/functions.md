@@ -268,7 +268,8 @@ filtering definitions from "replaced modules" out of method tables and caches be
 system image. A "replaced module" is one that satisfies the condition `m != jl_get_global(m->parent, m->name)`
 -- in other words, some newer module has taken its name and place.
 
-Another type inference worst case was triggered by the following code from quadgk.jl:
+Another type inference worst case was triggered by the following code from the QuadGK.jl package,
+formerly part of Base:
 
 ```julia
 function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)

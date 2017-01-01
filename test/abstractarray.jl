@@ -646,10 +646,10 @@ function test_map(::Type{TestAbstractArray})
 
     # In-place map
     A = Float64[1:10...]
-    map!(x->x*x, A)
-    @test A == map(x->x*x, Float64[1:10...])
+    map!(x -> x*x, A, A)
+    @test A == map(x -> x*x, Float64[1:10...])
     B = Float64[1:10...]
-    Base.asyncmap!(x->x*x, B)
+    Base.asyncmap!(x->x*x, B, B)
     @test A == B
 
     # Map to destination collection

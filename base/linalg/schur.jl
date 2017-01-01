@@ -12,7 +12,7 @@ Schur{Ty}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) = Schur{
 """
     schurfact!(A::StridedMatrix) -> F::Schur
 
-Same as `schurfact` but uses the input argument as workspace.
+Same as [`schurfact`](@ref) but uses the input argument as workspace.
 """
 schurfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
 
@@ -68,7 +68,7 @@ Computes the Schur factorization of the matrix `A`. The methods return the (quas
 triangular Schur factor `T` and the orthogonal/unitary Schur vectors `Z` such that
 `A = Z*T*Z'`. The eigenvalues of `A` are returned in the vector `λ`.
 
-See `schurfact`.
+See [`schurfact`](@ref).
 
 # Example
 
@@ -102,7 +102,7 @@ end
 """
     ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
 
-Same as `ordschur` but overwrites the factorization `F`.
+Same as [`ordschur`](@ref) but overwrites the factorization `F`.
 """
 function ordschur!{Ty<:BlasFloat}(schur::Schur{Ty}, select::Union{Vector{Bool},BitVector})
     _, _, vals = ordschur!(schur.T, schur.Z, select)
@@ -125,7 +125,7 @@ ordschur{Ty<:BlasFloat}(schur::Schur{Ty}, select::Union{Vector{Bool},BitVector})
 """
     ordschur!(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
 
-Same as `ordschur` but overwrites the input arguments.
+Same as [`ordschur`](@ref) but overwrites the input arguments.
 """
 ordschur!{Ty<:BlasFloat}(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) = LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)
 
@@ -155,7 +155,7 @@ GeneralizedSchur{Ty}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector
 """
     schurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
 
-Same as `schurfact` but uses the input matrices `A` and `B` as workspace.
+Same as [`schurfact`](@ref) but uses the input matrices `A` and `B` as workspace.
 """
 schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B)...)
 
@@ -202,7 +202,7 @@ ordschur{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union{Vector{Bool}
 """
     ordschur!(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
 
-Same as `ordschur` but overwrites the factorization the input arguments.
+Same as [`ordschur`](@ref) but overwrites the factorization the input arguments.
 """
 ordschur!{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) = LinAlg.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)
 
@@ -242,7 +242,7 @@ end
 """
     schur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
 
-See `schurfact`.
+See [`schurfact`](@ref).
 """
 function schur(A::StridedMatrix, B::StridedMatrix)
     SchurF = schurfact(A, B)
