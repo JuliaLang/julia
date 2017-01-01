@@ -341,6 +341,9 @@ immutable DiffFile
     size::Int64
     flags::UInt32
     mode::UInt16
+    @static if LibGit2.VERSION >= v"0.25.0"
+        id_abbrev::UInt16
+    end
 end
 DiffFile() = DiffFile(Oid(), Cstring_NULL, Int64(0), UInt32(0), UInt16(0))
 
