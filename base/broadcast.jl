@@ -272,24 +272,14 @@ end
 @inline broadcast_elwise_op(f, As...) =
     broadcast!(f, similar(Array{promote_eltype_op(f, As...)}, broadcast_indices(As...)), As...)
 
-ftype(f, A) = typeof(f)
-ftype(f, A...) = typeof(a -> f(a...))
-ftype(T::Type, A...) = Type{T}
-
-typestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
-typestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
-typestuple(a, b...) = (Base.@_pure_meta; Tuple{typestuple(a).types..., typestuple(b...).types...})
-
-ziptype(A) = typestuple(A)
-ziptype(A, B) = (Base.@_pure_meta; Iterators.Zip2{typestuple(A), typestuple(B)})
-@inline ziptype(A, B, C, D...) = Iterators.Zip{typestuple(A), ziptype(B, C, D...)}
-
-_broadcast_type(f, T::Type, As...) = Base._return_type(f, typestuple(T, As...))
-_broadcast_type(f, A, Bs...) = Base._default_eltype(Base.Generator{ziptype(A, Bs...), ftype(f, A, Bs...)})
+eltypestuple(a) = (Base.@_pure_meta; Tuple{eltype(a)})
+eltypestuple(T::Type) = (Base.@_pure_meta; Tuple{Type{T}})
+eltypestuple(a, b...) = (Base.@_pure_meta; Tuple{eltypestuple(a).types..., eltypestuple(b...).types...})
+_broadcast_eltype(f, A, Bs...) = Base._return_type(f, eltypestuple(A, Bs...))
 
 # broadcast methods that dispatch on the type of the final container
 @inline function broadcast_c(f, ::Type{Array}, A, Bs...)
-    T = _broadcast_type(f, A, Bs...)
+    T = _broadcast_eltype(f, A, Bs...)
     shape = broadcast_indices(A, Bs...)
     iter = CartesianRange(shape)
     if isleaftype(T)
@@ -307,7 +297,7 @@ function broadcast_c(f, ::Type{Tuple}, As...)
 end
 @inline function broadcast_c(f, ::Type{Nullable}, a...)
     nonnull = all(hasvalue, a)
-    S = _broadcast_type(f, a...)
+    S = _broadcast_eltype(f, a...)
     if isleaftype(S) && null_safe_eltype_op(f, a...)
         Nullable{S}(f(map(unsafe_get, a)...), nonnull)
     else
