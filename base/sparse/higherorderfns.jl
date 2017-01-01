@@ -73,7 +73,7 @@ function _noshapecheck_map{Tf,N}(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecO
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     maxnnzC = fpreszeros ? min(length(A), _sumnnzs(A, Bs...)) : length(A)
-    entrytypeC = Base.Broadcast._broadcast_type(f, A, Bs...)
+    entrytypeC = Base.Broadcast._broadcast_eltype(f, A, Bs...)
     indextypeC = _promote_indtype(A, Bs...)
     C = _allocres(size(A), indextypeC, entrytypeC, maxnnzC)
     return fpreszeros ? _map_zeropres!(f, C, A, Bs...) :
@@ -101,7 +101,7 @@ function _diffshape_broadcast{Tf,N}(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseV
     fofzeros = f(_zeros_eltypes(A, Bs...)...)
     fpreszeros = _iszero(fofzeros)
     indextypeC = _promote_indtype(A, Bs...)
-    entrytypeC = Base.Broadcast._broadcast_type(f, A, Bs...)
+    entrytypeC = Base.Broadcast._broadcast_eltype(f, A, Bs...)
     shapeC = to_shape(Base.Broadcast.broadcast_indices(A, Bs...))
     maxnnzC = fpreszeros ? _checked_maxnnzbcres(shapeC, A, Bs...) : _densennz(shapeC)
     C = _allocres(shapeC, indextypeC, entrytypeC, maxnnzC)
