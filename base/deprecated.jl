@@ -1380,6 +1380,11 @@ for f in (:sec, :sech, :secd, :asec, :asech,
     @eval @deprecate $f{T<:Number}(A::AbstractArray{T}) $f.(A)
 end
 
+# Deprecate vectorized two-argument complex in favor of compact broadcast syntax
+@deprecate complex(A::AbstractArray, b::Real)           complex.(A, b)
+@deprecate complex(a::Real, B::AbstractArray)           complex.(a, B)
+@deprecate complex(A::AbstractArray, B::AbstractArray)  complex.(A, B)
+
 # Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
 @deprecate clamp(A::AbstractArray, lo, hi) clamp.(A, lo, hi)
 

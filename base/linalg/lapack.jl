@@ -5504,7 +5504,7 @@ for (gees, gges, elty) in
                     work = Array{$elty}(lwork)
                 end
             end
-            A, vs, iszero(wi) ? wr : complex(wr, wi)
+            A, vs, iszero(wi) ? wr : complex.(wr, wi)
         end
 
         # *     .. Scalar Arguments ..
@@ -5553,7 +5553,7 @@ for (gees, gges, elty) in
                     work = Array{$elty}(lwork)
                 end
             end
-            A, B, complex(alphar, alphai), beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
+            A, B, complex.(alphar, alphai), beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
         end
     end
 end
@@ -5753,7 +5753,7 @@ for (trexc, trsen, tgsen, elty) in
                     iwork  = Array{BlasInt}(liwork)
                 end
             end
-            T, Q, iszero(wi) ? wr : complex(wr, wi)
+            T, Q, iszero(wi) ? wr : complex.(wr, wi)
         end
         trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty}) =
             trsen!('N', 'V', select, T, Q)
@@ -5822,7 +5822,7 @@ for (trexc, trsen, tgsen, elty) in
                     iwork = Array{BlasInt}(liwork)
                 end
             end
-            S, T, complex(alphar, alphai), beta, Q, Z
+            S, T, complex.(alphar, alphai), beta, Q, Z
         end
     end
 end

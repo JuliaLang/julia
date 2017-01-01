@@ -10,7 +10,7 @@ end
 end
 
 @testset "sparse matrix construction" begin
-    @test isequal(Array(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
+    @test isequal(Array(sparse(complex.(ones(5,5), ones(5,5)))), complex.(ones(5,5), ones(5,5)))
     @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
     @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
     @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2,3], 0, 1)
