@@ -1353,6 +1353,23 @@ export quadgk
 @deprecate map!{F}(f::F, A::AbstractArray) map!(f, A, A)
 @deprecate asyncmap!(f, c; ntasks=0, batch_size=nothing) asyncmap!(f, c, c; ntasks=ntasks, batch_size=batch_size)
 
+# Not exported, but used outside Base
+_promote_array_type(F, ::Type, ::Type, T::Type) = T
+_promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
+_promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
+_promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
+_promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
+_promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Union{Complex, Real}, T<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{T}}, ::Type) = Complex{T}
+function promote_array_type(F, R, S, T)
+    Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " *
+                 "in Base. See https://github.com/JuliaLang/julia/issues/19669 " *
+                 "for more information.", :promote_array_type)
+    _promote_array_type(F, R, S, T)
+end
+
 # Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
 @deprecate abs2(x::AbstractSparseVector) abs2.(x)
 
