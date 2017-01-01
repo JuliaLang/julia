@@ -170,6 +170,7 @@ $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.j
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$(if $(findstring -debug.$(SHLIB_EXT),$(notdir $@)),-ljulia-debug,-ljulia) \
+		$(build_private_libdir)/libcompiler-rt.$(STATICLIB_EXT) \
 		$$([ $(OS) = WINNT ] && echo '' -lssp))
 	@$(INSTALL_NAME_CMD)$(notdir $@) $@
 	@$(DSYMUTIL) $@
@@ -226,7 +227,7 @@ $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(buil
 JL_LIBS := julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS := ccalltest
+JL_PRIVATE_LIBS := ccalltest compiler-rt
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS += suitesparse_wrapper
 endif
