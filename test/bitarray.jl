@@ -806,6 +806,7 @@ timesofar("unary arithmetic")
         @check_bit_operation broadcast(/, b1, f2) Matrix{Float64}
         @check_bit_operation broadcast(^, b1, f2) Matrix{Float64}
         @check_bit_operation broadcast(div, b1, f2)  Matrix{Float64}
+        @check_bit_operation broadcast(mod, b1, f2)  Matrix{Float64}
     end
 
     @testset "Number/Matrix" begin
@@ -1391,22 +1392,23 @@ timesofar("cat")
 
     b1 = bitrand(n1, n1)
     @check_bit_operation diag(b1)
+end
 
-    @testset "findmax, findmin" begin
-        b1 = trues(0)
-        @test_throws ArgumentError findmax(b1)
-        @test_throws ArgumentError findmin(b1)
+timesofar("linalg")
 
-        for b1 in [falses(v1), trues(v1),
-                   BitArray([1,0,1,1,0]),
-                   BitArray([0,0,1,1,0]),
-                   bitrand(v1)]
-            @check_bit_operation findmin(b1)
-            @check_bit_operation findmax(b1)
-        end
+@testset "findmax, findmin" begin
+    b1 = trues(0)
+    @test_throws ArgumentError findmax(b1)
+    @test_throws ArgumentError findmin(b1)
+
+    for b1 in [falses(v1), trues(v1),
+               BitArray([1,0,1,1,0]),
+               BitArray([0,0,1,1,0]),
+               bitrand(v1)]
+        @check_bit_operation findmin(b1)
+        @check_bit_operation findmax(b1)
     end
 end
-timesofar("linalg")
 
 @testset "I/O" begin
     b1 = bitrand(v1)
