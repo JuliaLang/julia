@@ -374,8 +374,10 @@ end
 @test (+).([[0,2], [1,3]], [1,-1]) == [[1,3], [0,2]]
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
 
-# Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722).
+# Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
+# and similarly for broadcast!(f, A, numbers...) (#19799).
 @test let z = 1; A = broadcast!(() -> z += 1, zeros(2)); A[1] != A[2]; end
+@test let z = 1; A = broadcast!(x -> z += x, zeros(2), 1); A[1] != A[2]; end
 
 # broadcasting for custom AbstractArray
 immutable Array19745{T,N} <: AbstractArray{T,N}

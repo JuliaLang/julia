@@ -16,7 +16,7 @@ export broadcast_getindex, broadcast_setindex!, dotview
 
 # special cases for "X .= ..." (broadcast!) assignments
 broadcast!(::typeof(identity), X::AbstractArray, x::Number) = fill!(X, x)
-broadcast!(f, X::AbstractArray, x::Number...) = fill!(X, f(x...))
+broadcast!(f, X::AbstractArray, x::Number...) = (@inbounds for I in eachindex(X); X[I] = f(x...); end; X)
 function broadcast!{T,S,N}(::typeof(identity), x::AbstractArray{T,N}, y::AbstractArray{S,N})
     check_broadcast_shape(broadcast_indices(x), broadcast_indices(y))
     copy!(x, y)
