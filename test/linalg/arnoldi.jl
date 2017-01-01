@@ -9,8 +9,8 @@ using Base.Test
         n = 10
         areal  = sprandn(n,n,0.4)
         breal  = sprandn(n,n,0.4)
-        acmplx = complex(sprandn(n,n,0.4), sprandn(n,n,0.4))
-        bcmplx = complex(sprandn(n,n,0.4), sprandn(n,n,0.4))
+        acmplx = complex.(sprandn(n,n,0.4), sprandn(n,n,0.4))
+        bcmplx = complex.(sprandn(n,n,0.4), sprandn(n,n,0.4))
 
         testtol = 1e-6
 

@@ -537,8 +537,6 @@ function copy!(S::SharedArray, R::SharedArray)
     return S
 end
 
-complex(S1::SharedArray,S2::SharedArray) = convert(SharedArray, complex(S1.s, S2.s))
-
 function print_shmem_limits(slen)
     try
         if is_linux()

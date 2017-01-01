@@ -43,7 +43,7 @@ for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}
     elseif elty <: Real
         A = convert(Matrix{elty}, randn(n,n)) + 10I
     else
-        A = convert(Matrix{elty}, complex(randn(n,n), randn(n,n)))
+        A = convert(Matrix{elty}, complex.(randn(n,n), randn(n,n)))
     end
 
     debug && println("element type: $elty")

@@ -354,8 +354,6 @@ float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.row
 
 complex(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), complex(copy(S.nzval)))
 
-complex(A::SparseMatrixCSC, B::SparseMatrixCSC) = A + im*B
-
 # Construct a sparse vector
 
 # Note that unlike `vec` for arrays, this does not share data
