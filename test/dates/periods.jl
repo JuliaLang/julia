@@ -35,8 +35,8 @@ t2 = Dates.Year(2)
 @test_throws MethodError ([t,t,t,t,t] .* Dates.Year(1)) == ([t,t,t,t,t])
 @test ([t,t,t,t,t] * 1) == ([t,t,t,t,t])
 @test ([t,t,t,t,t] .% t2) == ([t,t,t,t,t])
-@test div([t,t,t,t,t],Dates.Year(1)) == ([1,1,1,1,1])
-@test mod([t,t,t,t,t],Dates.Year(2)) == ([t,t,t,t,t])
+@test div.([t,t,t,t,t],Dates.Year(1)) == ([1,1,1,1,1])
+@test mod.([t,t,t,t,t],Dates.Year(2)) == ([t,t,t,t,t])
 @test [t,t,t] / t2 == [0.5,0.5,0.5]
 @test abs(-t) == t
 
