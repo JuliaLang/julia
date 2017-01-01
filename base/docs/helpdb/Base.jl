@@ -450,7 +450,8 @@ If `T` is not a bitstype, an error is thrown.
 ```jldoctest
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
- in sizeof(::Type{T}) at ./essentials.jl:99
+Stacktrace:
+ [1] sizeof(::Type{T}) at ./essentials.jl:99
 ```
 """
 sizeof(::Type)
@@ -2532,7 +2533,8 @@ julia> convert(Int, 3.0)
 
 julia> convert(Int, 3.5)
 ERROR: InexactError()
- in convert(::Type{Int64}, ::Float64) at ./float.jl:656
+Stacktrace:
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:656
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,
@@ -2613,23 +2615,6 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 fma
-
-"""
-
-    eigvals(A,[irange,][vl,][vu]) -> values
-
-Returns the eigenvalues of `A`. If `A` is `Symmetric`, `Hermitian` or `SymTridiagonal`,
-it is possible to calculate only a subset of the eigenvalues by specifying either a
-`UnitRange` `irange` covering indices of the sorted eigenvalues, or a pair `vl` and `vu`
-for the lower and upper boundaries of the eigenvalues.
-
-For general non-symmetric matrices it is possible to specify how the matrix is balanced
-before the eigenvector calculation. The option `permute=true` permutes the matrix to
-become closer to upper triangular, and `scale=true` scales the matrix by its diagonal
-elements to make rows and columns moreequal in norm. The default is `true` for both
-options.
-"""
-eigvals
 
 """
     copy!(dest, src)

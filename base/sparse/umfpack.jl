@@ -131,7 +131,7 @@ The relation between `F` and `A` is
 - [`cond`](@ref)
 - [`det`](@ref)
 
-** Implementation note **
+!!! note
 
 `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
 SuiteSparse. As this library only supports sparse matrices with `Float64` or
@@ -370,8 +370,8 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
                         &0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex(Lx, Lz))),
-             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex(Ux, Uz)),
+            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz))),
+             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
              increment!(P), increment!(Q), Rs)
         end
     end

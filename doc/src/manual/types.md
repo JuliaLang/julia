@@ -1239,7 +1239,7 @@ In many settings, you need to interact with a value of type `T` that may or may 
 handle these settings, Julia provides a parametric type called `Nullable{T}`, which can be thought
 of as a specialized container type that can contain either zero or one values. `Nullable{T}` provides
 a minimal interface designed to ensure that interactions with missing values are safe. At present,
-the interface consists of four possible interactions:
+the interface consists of several possible interactions:
 
   * Construct a [`Nullable`](@ref) object.
   * Check if a [`Nullable`](@ref) object has a missing value.
@@ -1247,6 +1247,14 @@ the interface consists of four possible interactions:
     will be thrown if the object's value is missing.
   * Access the value of a [`Nullable`](@ref) object with a guarantee that a default value of type
     `T` will be returned if the object's value is missing.
+  * Perform an operation on the value (if it exists) of a [`Nullable`](@ref)
+    object, getting a [`Nullable`](@ref) result. The result will be missing
+    if the original value was missing.
+  * Performing a test on the value (if it exists) of a [`Nullable`](@ref)
+    object, getting a result that is missing if either the [`Nullable`](@ref)
+    itself was missing, or the test failed.
+  * Perform general operations on single or multiple [`Nullable`](@ref)
+    objects, propagating the missing data.
 
 ### Constructing [`Nullable`](@ref) objects
 
@@ -1328,3 +1336,93 @@ julia> get(Nullable(1.0), 0.0)
     object match to avoid type instability, which could hurt performance. Use [`convert()`](@ref)
     manually if needed.
 
+### Performing operations on [`Nullable`](@ref) objects
+
+[`Nullable`](@ref) objects represent values that are possibly missing, and it
+is possible to write all code using these objects by first testing to see if
+the value is missing with [`isnull()`](@ref), and then doing an appropriate
+action. However, there are some common use cases where the code could be more
+concise or clear by using a higher-order function.
+
+The [`map`](@ref) function takes as arguments a function `f` and a
+[`Nullable`](@ref) value `x`. It produces a [`Nullable`](@ref):
+
+ - If `x` is a missing value, then it produces a missing value;
+ - If `x` has a value, then it produces a [`Nullable`](@ref) containing
+   `f(get(x))` as value.
+
+This is useful for performing simple operations on values that might be missing
+if the desired behaviour is to simply propagate the missing values forward.
+
+The [`filter`](@ref) function takes as arguments a predicate function `p`
+(that is, a function returning a boolean) and a [`Nullable`](@ref) value `x`.
+It produces a [`Nullable`](@ref) value:
+
+ - If `x` is a missing value, then it produces a missing value;
+ - If `p(get(x))` is true, then it produces the original value `x`;
+ - If `p(get(x))` is false, then it produces a missing value.
+
+In this way, [`filter`](@ref) can be thought of as selecting only allowable
+values, and converting non-allowable values to missing values.
+
+While [`map`](@ref) and [`filter`](@ref) are useful in specific cases, by far
+the most useful higher-order function is [`broadcast`](@ref), which can handle
+a wide variety of cases.
+
+[`broadcast`](@ref) can be thought of as a way to make existing operations work
+on multiple data simultaneously and propagate nulls. An example will motivate
+the need for [`broadcast`](@ref). Suppose we have a function that computes the
+greater of two real roots of a quadratic equation, using the quadratic formula:
+
+```julia
+"""
+Compute the positive real root of ``ax^2 + bx + c = 0``.
+"""
+root(a::Real, b::Real, c::Real) = (-b + √(b^2 - 4a*c)) / 2a
+```
+
+We may verify that the result of `root(1, -9, 20)` is `5.0`, as we expect,
+since `5.0` is the greater of two real roots of the quadratic equation.
+
+Suppose now that we want to find the greatest real root of a quadratic
+equations where the coefficients might be missing values. Having missing values
+in datasets is a common occurrence in real-world data, and so it is important
+to be able to deal with them. But we cannot find the roots of an equation if we
+do not know all the coefficients. The best solution to this will depend on the
+particular use case; perhaps we should throw an error. However, for this
+example, we will assume that the best solution is to propagate the missing
+values forward; that is, if any input is missing, we simply produce a missing
+output.
+
+The [`broadcast()`](@ref) function makes this task easy; we can simply pass the
+`root` function we wrote to `broadcast`:
+
+```julia
+julia> broadcast(root, Nullable(1), Nullable(-9), Nullable(20))
+Nullable{Float64}(5.0)
+
+julia> broadcast(root, Nullable(1), Nullable{Int}(), Nullable{Int}())
+Nullable{Float64}()
+
+julia> broadcast(root, Nullable{Int}(), Nullable(-9), Nullable(20))
+Nullable{Float64}()
+```
+
+If one or more of the inputs is missing, then the output of
+[`broadcast()`](@ref) will be missing.
+
+There exists special syntactic sugar for the [`broadcast()`](@ref) function
+using a dot notation:
+
+```julia
+julia> root.(Nullable(1), Nullable(-9), Nullable(20))
+Nullable{Float64}(5.0)
+```
+
+In particular, the regular arithmetic operators can be [`broadcast()`](@ref)
+conveniently using `.`-prefixed operators:
+
+```julia
+julia> Nullable(2) ./ Nullable(3) .+ Nullable(1.0)
+Nullable{Float64}(1.66667)
+```

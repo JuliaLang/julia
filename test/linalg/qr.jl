@@ -21,14 +21,14 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     asym = a'+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
 
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -148,8 +148,8 @@ end
 @test_throws ErrorException ctranspose(qrfact(randn(3,3)))
 @test_throws ErrorException transpose(qrfact(randn(3,3), Val{false}))
 @test_throws ErrorException ctranspose(qrfact(randn(3,3), Val{false}))
-@test_throws ErrorException transpose(qrfact(big(randn(3,3))))
-@test_throws ErrorException ctranspose(qrfact(big(randn(3,3))))
+@test_throws ErrorException transpose(qrfact(big.(randn(3,3))))
+@test_throws ErrorException ctranspose(qrfact(big.(randn(3,3))))
 
 # Issue 7304
 let

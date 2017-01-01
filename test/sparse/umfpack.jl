@@ -28,12 +28,12 @@ for Tv in (Float64, Complex128)
         @test x ≈ float([1:5;])
 
         @test norm(A*x-b,1) < eps(1e4)
-        z = complex(b,zeros(b))
+        z = complex.(b,zeros(b))
         x = Base.SparseArrays.A_ldiv_B!(lua, z)
         @test x ≈ float([1:5;])
         @test z === x
         y = similar(z)
-        A_ldiv_B!(y, lua, complex(b,zeros(b)))
+        A_ldiv_B!(y, lua, complex.(b,zeros(b)))
         @test y ≈ x
 
         @test norm(A*x-b,1) < eps(1e4)
@@ -43,12 +43,12 @@ for Tv in (Float64, Complex128)
         @test x ≈ float([1:5;])
 
         @test norm(A'*x-b,1) < eps(1e4)
-        z = complex(b,zeros(b))
+        z = complex.(b,zeros(b))
         x = Base.SparseArrays.Ac_ldiv_B!(lua, z)
         @test x ≈ float([1:5;])
         @test x === z
         y = similar(x)
-        Base.SparseArrays.Ac_ldiv_B!(y, lua, complex(b,zeros(b)))
+        Base.SparseArrays.Ac_ldiv_B!(y, lua, complex.(b,zeros(b)))
         @test y ≈ x
 
         @test norm(A'*x-b,1) < eps(1e4)
@@ -56,10 +56,10 @@ for Tv in (Float64, Complex128)
         @test x ≈ float([1:5;])
 
         @test norm(A.'*x-b,1) < eps(1e4)
-        x = Base.SparseArrays.At_ldiv_B!(lua,complex(b,zeros(b)))
+        x = Base.SparseArrays.At_ldiv_B!(lua,complex.(b,zeros(b)))
         @test x ≈ float([1:5;])
         y = similar(x)
-        Base.SparseArrays.At_ldiv_B!(y, lua,complex(b,zeros(b)))
+        Base.SparseArrays.At_ldiv_B!(y, lua,complex.(b,zeros(b)))
         @test y ≈ x
 
         @test norm(A.'*x-b,1) < eps(1e4)
@@ -69,7 +69,7 @@ for Tv in (Float64, Complex128)
     end
 end
 
-Ac0 = complex(A0,A0)
+Ac0 = complex.(A0,A0)
 for Ti in Base.SparseArrays.UMFPACK.UMFITypes.types
     Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
     lua = lufact(Ac)
@@ -79,7 +79,7 @@ end
 
 for elty in (Float64, Complex128)
     for (m, n) in ((10,5), (5, 10))
-        A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex(randn(min(m, n) + 10), randn(min(m, n) + 10)))
+        A = sparse([1:min(m,n); rand(1:m, 10)], [1:min(m,n); rand(1:n, 10)], elty == Float64 ? randn(min(m, n) + 10) : complex.(randn(min(m, n) + 10), randn(min(m, n) + 10)))
         F = lufact(A)
         L, U, p, q, Rs = F[:(:)]
         @test (Diagonal(Rs) * A)[p,q] ≈ L * U

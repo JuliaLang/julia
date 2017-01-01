@@ -349,9 +349,9 @@ X = sprand(10, 5, 0.2)
 svds(X, nsv = 2)
 ```
 
-**Implementation note**
+!!! note "Implementation"
 
-`svds(A)` is formally equivalent to calling `eigs` to perform implicitly restarted
+`svds(A)` is formally equivalent to calling [`eigs`](@ref) to perform implicitly restarted
 Lanczos tridiagonalization on the Hermitian matrix
 ``\\begin{pmatrix} 0 & A^\\prime \\\\ A & 0 \\end{pmatrix}``, whose eigenvalues are
 plus and minus the singular values of ``A``.

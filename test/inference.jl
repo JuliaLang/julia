@@ -465,3 +465,9 @@ function g19348(x)
     return a + b
 end
 test_inferred_static(@code_typed g19348((1, 2.0)))
+
+# Issue 19641
+foo19641() = let a = 1.0
+    Core.Inference.return_type(x -> x + a, Tuple{Float64})
+end
+@inferred foo19641()
