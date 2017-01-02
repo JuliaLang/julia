@@ -103,12 +103,8 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
 # if not absolute, then relative to the directory of the julia executable
-SHIPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys\""
-DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug\""
-
-ifneq ($(CPUID_SPECIFIC_BINARIES), 0)
-override CPPFLAGS += "-DCPUID_SPECIFIC_BINARIES=1"
-endif
+SHIPFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
+DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\""
 
 FLISP_EXECUTABLE_debug := $(BUILDDIR)/flisp/flisp-debug
 FLISP_EXECUTABLE_release := $(BUILDDIR)/flisp/flisp
