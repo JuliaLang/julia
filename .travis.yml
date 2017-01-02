@@ -58,6 +58,7 @@ notifications:
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - make check-whitespace
+    # TODO: put LLVM_ASSERTIONS=1 back in BUILDOPTS, ref #19803
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
         mkdir -p $HOME/bin;
@@ -68,7 +69,7 @@ before_install:
         ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
         BAR="bar -i 30";
-        BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
+        BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1";
         echo "override ARCH=$ARCH" >> Make.user;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
