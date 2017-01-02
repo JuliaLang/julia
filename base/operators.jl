@@ -872,7 +872,7 @@ setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
 """
     to_index(A, i)
 
-Convert index `i` for use into indexing into array `A`. Custom array types
+Convert index `i` for use in indexing into array `A`. Custom array types
 should specialize `to_index(::CustomArray, i)` to provide special indexing
 behaviors. Note that some index types (like `Colon`) require more context in
 order to transform them into an array of indices; those get converted in the
@@ -909,7 +909,7 @@ For simple index types, this simply ends up calling `to_index(A, i)` for each
 index `i`. More complicated index types, however, require more context about
 the dimension into which they index. To support those cases, `to_indices(A, I)`
 calls `to_indices(A, indices(A), I)`, which then recursively walks through both
-the given tuple of indices and the indices in `A` in tandem.
+the given tuple of indices and the dimensional indices of `A` in tandem.
 """
 to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, indices(A), I))
 to_indices(A, inds, ::Tuple{}) = ()
