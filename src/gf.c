@@ -1942,7 +1942,7 @@ JL_DLLEXPORT jl_value_t *jl_invoke_latest(jl_value_t *f, jl_value_t *argtuple)
         argv[i] = jl_fieldref(argtuple, i-1);
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t last_age = ptls->world_age;
-    ptls->world_age = jl_get_world_counter();
+    ptls->world_age = jl_world_counter;
     jl_value_t *v = jl_apply(argv, nargs+1);
     ptls->world_age = last_age;
     JL_GC_POP();
