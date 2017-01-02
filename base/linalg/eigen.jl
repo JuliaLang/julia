@@ -54,6 +54,12 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::B
     return Eigen(complex.(WR, WI), evec)
 end
 
+"""
+    eigfact!(A; permute::Bool=true, scale::Bool=true)
+
+Same as [`eigfact`](@ref), but saves space by overwriting the input `A` (and
+`B`), instead of creating a copy.
+"""
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
@@ -283,6 +289,12 @@ inv(A::Eigen) = A.vectors * inv(Diagonal(A.values)) / A.vectors
 det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
+"""
+    eigfact!(A, B)
+
+Same as [`eigfact`](@ref), but saves space by overwriting the input `A` (and
+`B`), instead of creating a copy.
+"""
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issymmetric(A) && isposdef(B) && return eigfact!(Symmetric(A), Symmetric(B))
     n = size(A, 1)

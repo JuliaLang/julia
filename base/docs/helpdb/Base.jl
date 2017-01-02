@@ -218,86 +218,6 @@ See [`RoundingMode`](@ref) for available rounding modes.
 Float32
 
 """
-    Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-           Mmap.mmap(type::Type{Array{T,N}}, dims)
-
-Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
-convenient way of working with data too large to fit in the computer's memory.
-
-The type is an `Array{T,N}` with a bits-type element of `T` and dimension `N` that
-determines how the bytes of the array are interpreted. Note that the file must be stored in
-binary format, and no format conversions are possible (this is a limitation of operating
-systems, not Julia).
-
-`dims` is a tuple or single `Integer` specifying the size or length of the array.
-
-The file is passed via the stream argument, either as an open `IOStream` or filename string.
-When you initialize the stream, use `"r"` for a "read-only" array, and `"w+"` to create a
-new array used to write values to disk.
-
-If no `type` argument is specified, the default is `Vector{UInt8}`.
-
-Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a
-header in the file. The default value for the offset is the current stream position for an
-`IOStream`.
-
-The `grow` keyword argument specifies whether the disk file should be grown to accommodate
-the requested size of array (if the total file size is < requested array size). Write
-privileges are required to grow the file.
-
-The `shared` keyword argument specifies whether the resulting `Array` and changes made to it
-will be visible to other processes mapping the same file.
-
-For example, the following code
-
-```julia
-# Create a file for mmapping
-# (you could alternatively use mmap to do this step, too)
-A = rand(1:20, 5, 30)
-s = open("/tmp/mmap.bin", "w+")
-# We'll write the dimensions of the array as the first two Ints in the file
-write(s, size(A,1))
-write(s, size(A,2))
-# Now write the data
-write(s, A)
-close(s)
-
-# Test by reading it back in
-s = open("/tmp/mmap.bin")   # default is read-only
-m = read(s, Int)
-n = read(s, Int)
-A2 = Mmap.mmap(s, Matrix{Int}, (m,n))
-```
-
-creates a `m`-by-`n` `Matrix{Int}`, linked to the file associated with stream `s`.
-
-A more portable file would need to encode the word size -- 32 bit or 64 bit -- and endianness
-information in the header. In practice, consider encoding binary data using standard formats
-like HDF5 (which can be used with memory-mapping).
-"""
-Mmap.mmap(io, ::Type, dims, offset)
-
-"""
-    Mmap.mmap(io, BitArray, [dims, offset])
-
-Create a `BitArray` whose values are linked to a file, using memory-mapping; it has the same
-purpose, works in the same way, and has the same arguments, as [`mmap`](@ref Mmap.mmap), but
-the byte representation is different.
-
-**Example**: `B = Mmap.mmap(s, BitArray, (25,30000))`
-
-This would create a 25-by-30000 `BitArray`, linked to the file associated with stream `s`.
-"""
-Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
-
-"""
-    bessely0(x)
-
-Bessel function of the second kind of order 0, ``Y_0(x)``.
-"""
-bessely0
-
-"""
     filter!(function, collection)
 
 Update `collection`, removing elements for which `function` is `false`.
@@ -480,29 +400,6 @@ julia> reshape(A, (2, 8))
 reshape
 
 """
-    randsubseq!(S, A, p)
-
-Like [`randsubseq`](@ref), but the results are stored in `S`
-(which is resized as needed).
-"""
-randsubseq!
-
-"""
-    redisplay(x)
-    redisplay(d::Display, x)
-    redisplay(mime, x)
-    redisplay(d::Display, mime, x)
-
-By default, the `redisplay` functions simply call [`display`](@ref).
-However, some display backends may override `redisplay` to modify an existing
-display of `x` (if any).
-Using `redisplay` is also a hint to the backend that `x` may be redisplayed
-several times, and the backend may choose to defer the display until
-(for example) the next interactive prompt.
-"""
-redisplay
-
-"""
     searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Returns the range of indices of `a` which compare as equal to `x` according to the order
@@ -541,26 +438,6 @@ consume
 Determine whether Julia is running an interactive session.
 """
 isinteractive
-
-"""
-    display(x)
-    display(d::Display, x)
-    display(mime, x)
-    display(d::Display, mime, x)
-
-Display `x` using the topmost applicable display in the display stack, typically using the
-richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) output as a fallback.
-The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
-a `MethodError` if `d` cannot display objects of this type.
-
-There are also two variants with a `mime` argument (a MIME type string, such as
-`"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing
-a `MethodError` if this type is not supported by either the display(s) or by `x`. With these
-variants, one can also supply the "raw" data in the requested MIME type by passing
-`x::AbstractString` (for MIME types with text-based storage, such as text/html or
-application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
-"""
-display
 
 """
     @spawnat
@@ -662,14 +539,6 @@ creating a new stream.
 accept
 
 """
-    Mmap.Anonymous(name, readonly, create)
-
-Create an `IO`-like object for creating zeroed-out mmapped-memory that is not tied to a file
-for use in `Mmap.mmap`. Used by `SharedArray` for creating shared memory arrays.
-"""
-Mmap.Anonymous
-
-"""
     erfi(x)
 
 Compute the imaginary error function of `x`, defined by ``-i \\operatorname{erf}(ix)``.
@@ -697,32 +566,11 @@ Generic error type. The error message, in the `.msg` field, may provide more spe
 ErrorException
 
 """
-    reverse(v [, start=1 [, stop=length(v) ]] )
-
-Return a copy of `v` reversed from start to stop.
-"""
-reverse
-
-"""
-    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
-
-In-place version of [`reverse`](@ref).
-"""
-reverse!
-
-"""
     UndefRefError()
 
 The item or field is not defined for the given object.
 """
 UndefRefError
-
-"""
-    bessely1(x)
-
-Bessel function of the second kind of order 1, ``Y_1(x)``.
-"""
-bessely1
 
 """
     append!(collection, collection2) -> collection.
@@ -811,13 +659,6 @@ Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
 """
 getfield
-
-"""
-    besselj1(x)
-
-Bessel function of the first kind of order 1, ``J_1(x)``.
-"""
-besselj1
 
 """
     select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -946,28 +787,12 @@ Seek a stream to the given position.
 seek
 
 """
-    besselj0(x)
-
-Bessel function of the first kind of order 0, ``J_0(x)``.
-"""
-besselj0
-
-"""
     erfcinv(x)
 
 Compute the inverse error complementary function of a real `x`, defined by
 ``\\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x``.
 """
 erfcinv
-
-"""
-    popdisplay()
-    popdisplay(d::Display)
-
-Pop the topmost backend off of the display-backend stack, or the topmost copy of `d` in the
-second variant.
-"""
-popdisplay
 
 """
     cglobal((symbol, library) [, type=Void])
@@ -1263,14 +1088,6 @@ end
 get
 
 """
-    Mmap.sync!(array)
-
-Forces synchronization between the in-memory version of a memory-mapped `Array` or
-`BitArray` and the on-disk version.
-"""
-Mmap.sync!
-
-"""
     csc(x)
 
 Compute the cosecant of `x`, where `x` is in radians.
@@ -1460,15 +1277,6 @@ In this example, `b` is a runnable `Task` that hasn't started yet.
 Task
 
 """
-    pushdisplay(d::Display)
-
-Pushes a new display `d` on top of the global display-backend stack. Calling `display(x)` or
-`display(mime, x)` will display `x` on the topmost compatible backend in the stack (i.e.,
-the topmost backend that does not throw a `MethodError`).
-"""
-pushdisplay
-
-"""
     produce(value)
 
 Send the given value to the last `consume` call, switching to the consumer task. If the next
@@ -1526,37 +1334,6 @@ seekstart
 Get the number of fields of a `DataType`.
 """
 nfields
-
-"""
-    show(stream, mime, x)
-
-The `display` functions ultimately call `show` in order to write an object `x` as a
-given `mime` type to a given I/O `stream` (usually a memory buffer), if possible. In order
-to provide a rich multimedia representation of a user-defined type `T`, it is only necessary
-to define a new `show` method for `T`, via: `show(stream, ::MIME"mime", x::T) = ...`,
-where `mime` is a MIME-type string and the function body calls `write` (or similar) to write
-that representation of `x` to `stream`. (Note that the `MIME""` notation only supports
-literal strings; to construct `MIME` types in a more flexible manner use
-`MIME{Symbol("")}`.)
-
-For example, if you define a `MyImage` type and know how to write it to a PNG file, you
-could define a function `show(stream, ::MIME"image/png", x::MyImage) = ...` to allow
-your images to be displayed on any PNG-capable `Display` (such as IJulia). As usual, be sure
-to `import Base.show` in order to add new methods to the built-in Julia function
-`show`.
-
-The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
-output that calls `show` with 2 arguments. Therefore, this case should be handled by
-defining a 2-argument `show(stream::IO, x::MyType)` method.
-
-Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
-which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
-of any given type.
-
-The first argument to `show` can be an [`IOContext`](@ref) specifying output format properties.
-See [`IOContext`](@ref) for details.
-"""
-show(stream, mime, x)
 
 """
     mean!(r, v)
@@ -2253,15 +2030,6 @@ Compute the midpoints of the bins with edges `e`. The result is a vector/range o
 midpoints
 
 """
-    reverseind(v, i)
-
-Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
-Unicode string.)
-"""
-reverseind
-
-"""
     signbit(x)
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
@@ -2368,31 +2136,12 @@ julia> widen(1.5f0)
 widen
 
 """
-    Set([itr])
-
-Construct a [`Set`](@ref) of the values generated by the given iterable object, or an
-empty set. Should be used instead of [`IntSet`](@ref) for sparse integer sets, or
-for sets of arbitrary objects.
-"""
-Set
-
-"""
     signed(x)
 
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
 """
 signed
-
-"""
-    Val{c}
-
-Create a "value type" out of `c`, which must be an `isbits` value. The intent of this
-construct is to be able to dispatch on constants, e.g., `f(Val{false})` allows you to
-dispatch directly (at compile-time) to an implementation `f(::Type{Val{false}})`, without
-having to test the boolean value at runtime.
-"""
-Val
 
 """
     |(x, y)

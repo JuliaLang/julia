@@ -937,6 +937,11 @@ function =={T<:BitInteger}(a::Array{T,1}, b::Array{T,1})
         :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
 end
 
+"""
+    reverse(v, start=1, stop=length(v))
+
+Return a copy of `v` reversed from start to stop.
+"""
 function reverse(A::AbstractVector, s=1, n=length(A))
     B = similar(A)
     for i = 1:s-1
@@ -950,8 +955,20 @@ function reverse(A::AbstractVector, s=1, n=length(A))
     end
     return B
 end
+"""
+    reverseind(v, i::Integer)
+
+Given an index `i` in [`reverse(v)`](@ref), return the corresponding index in `v` so that
+`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
+Unicode string.)
+"""
 reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
 
+"""
+    reverse!(v, start=1, stop=length(v)) -> v
+
+In-place version of [`reverse`](@ref).
+"""
 function reverse!(v::AbstractVector, s=1, n=length(v))
     if n <= s  # empty case; ok
     elseif !(1 ≤ s ≤ endof(v))
