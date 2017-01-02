@@ -1470,7 +1470,7 @@ end
 @deprecate (|)(A::AbstractArray, b::Number)         A .| b
 @deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
 
-# Calling promote_op is likely a bad idea, so deprecate to its convenience wrapper promote_eltype_op
+# Calling promote_op is likely a bad idea, so deprecate its convenience wrapper promote_eltype_op
 @deprecate promote_eltype_op(op, As...) promote_op(op, map(eltype, As)...)
 
 # End deprecations scheduled for 0.6
