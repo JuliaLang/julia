@@ -43,7 +43,7 @@ for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}
     elseif elty <: Real
         A = convert(Matrix{elty}, randn(n,n)) + 10I
     else
-        A = convert(Matrix{elty}, complex(randn(n,n), randn(n,n)))
+        A = convert(Matrix{elty}, complex.(randn(n,n), randn(n,n)))
     end
 
     debug && println("element type: $elty")
@@ -235,7 +235,7 @@ end
 @test !issymmetric(NaN)
 
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
-@test qr(big([0 1; 0 0]))[2] == [0 1; 0 0]
+@test qr(big.([0 1; 0 0]))[2] == [0 1; 0 0]
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322

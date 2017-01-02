@@ -1090,9 +1090,9 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     switch (f) {
     case neg_int:
 #if JL_LLVM_VERSION >= 30700
-     return builder.CreateNeg(JL_INT(x));
+        return builder.CreateNeg(JL_INT(x));
 #else
-     return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
+        return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
 #endif
     case add_int: return builder.CreateAdd(JL_INT(x), JL_INT(y));
     case sub_int: return builder.CreateSub(JL_INT(x), JL_INT(y));
@@ -1126,38 +1126,38 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     case div_float_fast: return math_builder(ctx, true)().CreateFDiv(FP(x), FP(y));
     case rem_float_fast: return math_builder(ctx, true)().CreateFRem(FP(x), FP(y));
     case fma_float: {
-      assert(y->getType() == x->getType());
-      assert(z->getType() == y->getType());
-      Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
+        assert(y->getType() == x->getType());
+        assert(z->getType() == y->getType());
+        Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
                                    ArrayRef<Type*>(x->getType()));
 #if JL_LLVM_VERSION >= 30700
-      return builder.CreateCall(fmaintr,{ FP(x), FP(y), FP(z) });
+        return builder.CreateCall(fmaintr,{ FP(x), FP(y), FP(z) });
 #else
-      return builder.CreateCall3(fmaintr, FP(x), FP(y), FP(z));
+        return builder.CreateCall3(fmaintr, FP(x), FP(y), FP(z));
 #endif
     }
     case muladd_float:
 #if JL_LLVM_VERSION >= 30400
     {
-      assert(y->getType() == x->getType());
-      assert(z->getType() == y->getType());
+        assert(y->getType() == x->getType());
+        assert(z->getType() == y->getType());
 #if JL_LLVM_VERSION >= 30700
-      return builder.CreateCall
+        return builder.CreateCall
 #else
-      return builder.CreateCall3
+        return builder.CreateCall3
 #endif
-        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
-                                   ArrayRef<Type*>(x->getType())),
-         #if JL_LLVM_VERSION >= 30700
-         {FP(x), FP(y), FP(z)}
-         #else
-         FP(x), FP(y), FP(z)
-         #endif
-        );
+            (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
+                                       ArrayRef<Type*>(x->getType())),
+#if JL_LLVM_VERSION >= 30700
+             {FP(x), FP(y), FP(z)}
+#else
+             FP(x), FP(y), FP(z)
+#endif
+            );
     }
 #else
-      return math_builder(ctx, true)().
-        CreateFAdd(builder.CreateFMul(FP(x), FP(y)), FP(z));
+        return math_builder(ctx, true)().
+            CreateFAdd(builder.CreateFMul(FP(x), FP(y)), FP(z));
 #endif
 
     case checked_sadd_int:

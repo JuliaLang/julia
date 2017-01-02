@@ -194,7 +194,9 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        showerror(io, ex)
+        with_output_color(have_color ? error_color() : :nothing, io) do io
+            showerror(io, ex)
+        end
     finally
         backtrace && show_backtrace(io, bt)
     end
@@ -222,13 +224,19 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
             if code.func == :nan_dom_err
                 continue
             elseif code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io,"\n$(code.func) will only return a complex result if called with a complex argument. Try $(string(code.func))(complex(x)).")
-            elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) || code.func == :power_by_squaring #3024
-                print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
+                print(io, "\n$(code.func) will only return a complex result if called ",
+                    "with a complex argument. Try $(string(code.func))(complex(x)).")
+            elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) ||
+                    code.func == :power_by_squaring #3024
+                print(io, "\nCannot raise an integer x to a negative power -n. ",
+                    "\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead ",
+                    "of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
             elseif code.func == :^ &&
                     (code.file == Symbol("promotion.jl") || code.file == Symbol("math.jl") ||
-                    code.file == Symbol(joinpath(".","promotion.jl")) || code.file == Symbol(joinpath(".","math.jl")))
-                print(io, "\nExponentiation yielding a complex result requires a complex argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
+                    code.file == Symbol(joinpath(".","promotion.jl")) ||
+                    code.file == Symbol(joinpath(".","math.jl")))
+                print(io, "\nExponentiation yielding a complex result requires a complex ",
+                    "argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
             end
             break
         end
@@ -571,15 +579,21 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     end
 end
 
-function show_trace_entry(io, frame, n)
+function show_trace_entry(io, frame, n; prefix = " in ")
     print(io, "\n")
-    show(io, frame, full_path=true)
+    show(io, frame, full_path=true; prefix = prefix)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
 function show_backtrace(io::IO, t::Vector)
-    process_entry(last_frame, n) =
-        show_trace_entry(io, last_frame, n)
+    n_frames = 0
+    frame_counter = 0
+    process_backtrace((a,b) -> n_frames += 1, t)
+    n_frames != 0 && print(io, "\nStacktrace:")
+    process_entry = (last_frame, n) -> begin
+        frame_counter += 1
+        show_trace_entry(io, last_frame, n, prefix = string(" [", frame_counter, "] "))
+    end
     process_backtrace(process_entry, t)
 end
 

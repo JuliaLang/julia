@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
-
-const Cstring_NULL = convert(Cstring, Ptr{UInt8}(C_NULL))
+import Base.@kwdef
+import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -12,38 +12,56 @@ immutable Oid
 end
 Oid() = Oid(ntuple(i->zero(UInt8), OID_RAWSZ))
 
+"""
+    LibGit2.TimeStruct
+
+Time in a signature.
+Matches the [`git_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_time) struct.
+"""
 immutable TimeStruct
     time::Int64     # time in seconds from epoch
     offset::Cint    # timezone offset in minutes
 end
-TimeStruct() = TimeStruct(zero(Int64), zero(Cint))
 
+"""
+    LibGit2.SignatureStruct
+
+An action signature (e.g. for committers, taggers, etc).
+Matches the [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) struct.
+"""
 immutable SignatureStruct
     name::Ptr{UInt8}  # full name of the author
     email::Ptr{UInt8} # email of the author
     when::TimeStruct  # time when the action happened
 end
-SignatureStruct() = SignatureStruct(Ptr{UInt8}(0),
-                                    Ptr{UInt8}(0),
-                                    TimeStruct())
 
-immutable StrArrayStruct
+"""
+    LibGit2.StrArrayStruct
+
+Array of strings.
+Matches the [`git_strarray`](https://libgit2.github.com/libgit2/#HEAD/type/git_strarray) struct.
+"""
+@kwdef immutable StrArrayStruct
    strings::Ptr{Cstring}
    count::Csize_t
 end
-StrArrayStruct() = StrArrayStruct(Ptr{Cstring}(C_NULL), zero(Csize_t))
 function Base.finalize(sa::StrArrayStruct)
     sa_ptr = Ref(sa)
     ccall((:git_strarray_free, :libgit2), Void, (Ptr{StrArrayStruct},), sa_ptr)
     return sa_ptr[]
 end
 
-immutable Buffer
+"""
+    LibGit2.Buffer
+
+A data buffer for exporting data from libgit2.
+Matches the [`git_buf`](https://libgit2.github.com/libgit2/#HEAD/type/git_buf) struct.
+"""
+@kwdef immutable Buffer
     ptr::Ptr{Cchar}
     asize::Csize_t
     size::Csize_t
 end
-Buffer() = Buffer(Ptr{Cchar}(C_NULL), zero(Csize_t), zero(Csize_t))
 function Base.finalize(buf::Buffer)
     buf_ptr = Ref(buf)
     ccall((:git_buf_free, :libgit2), Void, (Ptr{Buffer},), buf_ptr)
@@ -59,17 +77,22 @@ checkused!(p::Void) = false
 "Resets credentials for another use"
 reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
-immutable CheckoutOptions
-    version::Cuint
+"""
+    LibGit2.CheckoutOptions
 
-    checkout_strategy::Cuint
+Matches the [`git_checkout_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_checkout_options) struct.
+"""
+@kwdef immutable CheckoutOptions
+    version::Cuint = 1
+
+    checkout_strategy::Cuint    = Consts.CHECKOUT_SAFE
 
     disable_filters::Cint
     dir_mode::Cuint
     file_mode::Cuint
     file_open_flags::Cint
 
-    notify_flags::Cuint
+    notify_flags::Cuint         = Consts.CHECKOUT_NOTIFY_NONE
     notify_cb::Ptr{Void}
     notify_payload::Ptr{Void}
 
@@ -89,48 +112,15 @@ immutable CheckoutOptions
     perfdata_cb::Ptr{Void}
     perfdata_payload::Ptr{Void}
 end
-CheckoutOptions(; checkout_strategy::Cuint = Consts.CHECKOUT_SAFE,
-                  disable_filters::Cint = zero(Cint),
-                  dir_mode::Cuint = Cuint(0), # Cuint(0o755),
-                  file_mode::Cuint = Cuint(0), #Cuint(0o644),
-                  file_open_flags::Cint = zero(Cint),
-                  notify_flags::Cuint = Consts.CHECKOUT_NOTIFY_NONE,
-                  notify_cb::Ptr{Void} = Ptr{Void}(0),
-                  notify_payload::Ptr{Void} = Ptr{Void}(0),
-                  progress_cb::Ptr{Void} = Ptr{Void}(0),
-                  progress_payload::Ptr{Void} = Ptr{Void}(0),
-                  paths::StrArrayStruct = StrArrayStruct(),
-                  baseline::Ptr{Void} = Ptr{Void}(0),
-                  baseline_index::Ptr{Void} = Ptr{Void}(0),
-                  target_directory::Cstring = Cstring_NULL,
-                  ancestor_label::Cstring = Cstring_NULL,
-                  our_label::Cstring = Cstring_NULL,
-                  their_label::Cstring = Cstring_NULL,
-                  perfdata_cb::Ptr{Void} = Ptr{Void}(0),
-                  perfdata_payload::Ptr{Void} = Ptr{Void}(0)) =
-    CheckoutOptions(one(Cuint),
-                    checkout_strategy,
-                    disable_filters,
-                    dir_mode,
-                    file_mode,
-                    file_open_flags,
-                    notify_flags,
-                    notify_cb,
-                    notify_payload,
-                    progress_cb,
-                    progress_payload,
-                    paths,
-                    baseline,
-                    baseline_index,
-                    target_directory,
-                    ancestor_label,
-                    our_label,
-                    their_label,
-                    perfdata_cb,
-                    perfdata_payload)
 
-immutable RemoteCallbacks
-    version::Cuint
+"""
+    LibGit2.RemoteCallbacks
+
+Callback settings.
+Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
+"""
+@kwdef immutable RemoteCallbacks
+    version::Cuint                    = 1
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
     credentials::Ptr{Void}
@@ -144,197 +134,78 @@ immutable RemoteCallbacks
     transport::Ptr{Void}
     payload::Ptr{Void}
 end
-RemoteCallbacks(; sideband_progress::Ptr{Void} = C_NULL,
-                  completion::Ptr{Void} = C_NULL,
-                  credentials::Ptr{Void} = C_NULL,
-                  certificate_check::Ptr{Void} = C_NULL,
-                  transfer_progress::Ptr{Void} = C_NULL,
-                  update_tips::Ptr{Void} = C_NULL,
-                  pack_progress::Ptr{Void} = C_NULL,
-                  push_transfer_progress::Ptr{Void} = C_NULL,
-                  push_update_reference::Ptr{Void} = C_NULL,
-                  push_negotiation::Ptr{Void} = C_NULL,
-                  transport::Ptr{Void} = C_NULL,
-                  payload::Ptr{Void} = C_NULL) =
-    RemoteCallbacks(one(Cuint),
-                    sideband_progress,
-                    completion,
-                    credentials,
-                    certificate_check,
-                    transfer_progress,
-                    update_tips,
-                    pack_progress,
-                    push_transfer_progress,
-                    push_update_reference,
-                    push_negotiation,
-                    transport,
-                    payload)
 
 function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractCredentials}})
     RemoteCallbacks(credentials=credentials_cb(), payload=pointer_from_objref(payload))
 end
 
-if LibGit2.version() >= v"0.24.0"
-    immutable FetchOptions
-        version::Cuint
-        callbacks::RemoteCallbacks
-        prune::Cint
-        update_fetchhead::Cint
-        download_tags::Cint
+"""
+    LibGit2.FetchOptions
+
+Matches the [`git_fetch_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_fetch_options) struct.
+"""
+@kwdef immutable FetchOptions
+    version::Cuint                  = 1
+    callbacks::RemoteCallbacks
+    prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
+    update_fetchhead::Cint          = 1
+    download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct
     end
-    FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
-                   prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
-                   update_fetchhead::Cint = one(Cint),
-                   download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO,
-                   custom_headers::StrArrayStruct = StrArrayStruct()) =
-        FetchOptions(one(Cuint),
-                     callbacks,
-                     prune,
-                     update_fetchhead,
-                     download_tags,
-                     custom_headers)
-else
-    immutable FetchOptions
-        version::Cuint
-        callbacks::RemoteCallbacks
-        prune::Cint
-        update_fetchhead::Cint
-        download_tags::Cint
-    end
-    FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
-                   prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
-                   update_fetchhead::Cint = one(Cint),
-                   download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO) =
-        FetchOptions(one(Cuint),
-                     callbacks,
-                     prune,
-                     update_fetchhead,
-                     download_tags)
 end
 
-immutable CloneOptions
-    version::Cuint
+"""
+    LibGit2.CloneOptions
+
+Matches the [`git_clone_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_clone_options) struct.
+"""
+@kwdef immutable CloneOptions
+    version::Cuint                      = 1
     checkout_opts::CheckoutOptions
     fetch_opts::FetchOptions
     bare::Cint
-    localclone::Cint
+    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
     checkout_branch::Cstring
     repository_cb::Ptr{Void}
     repository_cb_payload::Ptr{Void}
     remote_cb::Ptr{Void}
     remote_cb_payload::Ptr{Void}
 end
-CloneOptions(; checkout_opts::CheckoutOptions = CheckoutOptions(),
-               fetch_opts::FetchOptions = FetchOptions(),
-               bare::Cint = zero(Cint),
-               localclone::Cint = Consts.CLONE_LOCAL_AUTO,
-               checkout_branch::Cstring = Cstring_NULL,
-               repository_cb::Ptr{Void} = Ptr{Void}(0),
-               repository_cb_payload::Ptr{Void} = Ptr{Void}(0),
-               remote_cb::Ptr{Void} = Ptr{Void}(0),
-               remote_cb_payload::Ptr{Void} = Ptr{Void}(0)) =
-    CloneOptions(one(Cuint),
-                 checkout_opts,
-                 fetch_opts,
-                 bare,
-                 localclone,
-                 checkout_branch,
-                 repository_cb,
-                 repository_cb_payload,
-                 remote_cb,
-                 remote_cb_payload)
 
-# git diff option struct
-if LibGit2.version() >= v"0.24.0"
-    immutable DiffOptionsStruct
-        version::Cuint
-        flags::UInt32
+"""
+    LibGit2.DiffOptionsStruct
 
-        # options controlling which files are in the diff
-        ignore_submodules::Cint
-        pathspec::StrArrayStruct
-        notify_cb::Ptr{Void}
+Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_options) struct.
+"""
+@kwdef immutable DiffOptionsStruct
+    version::Cuint                           = Consts.DIFF_OPTIONS_VERSION
+    flags::UInt32                            = Consts.DIFF_NORMAL
+
+    # options controlling which files are in the diff
+    ignore_submodules::GIT_SUBMODULE_IGNORE  = Consts.SUBMODULE_IGNORE_UNSPECIFIED
+    pathspec::StrArrayStruct
+    notify_cb::Ptr{Void}
+    @static if LibGit2.VERSION >= v"0.24.0"
         progress_cb::Ptr{Void}
-        payload::Ptr{Void}
-
-        # options controlling how the diff text is generated
-        context_lines::UInt32
-        interhunk_lines::UInt32
-        id_abbrev::UInt16
-        max_size::Int64
-        old_prefix::Cstring
-        new_prefix::Cstring
     end
-    DiffOptionsStruct(; flags::UInt32 = Consts.DIFF_NORMAL,
-                        ignore_submodules::Cint = Cint(Consts.SUBMODULE_IGNORE_UNSPECIFIED),
-                        pathspec::StrArrayStruct = StrArrayStruct(),
-                        notify_cb::Ptr{Void} = C_NULL,
-                        progress_cb::Ptr{Void} = C_NULL,
-                        notify_payload::Ptr{Void} = C_NULL,
-                        context_lines::UInt32 = UInt32(3),
-                        interhunk_lines::UInt32 = zero(UInt32),
-                        id_abbrev::UInt16 = UInt16(7),
-                        max_size::Int64 = Int64(512*1024*1024), #zero(Int64), #512Mb
-                        old_prefix::Cstring = Cstring_NULL,
-                        new_prefix::Cstring = Cstring_NULL) =
-        DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
-                          flags,
-                          ignore_submodules,
-                          pathspec,
-                          notify_cb,
-                          progress_cb,
-                          notify_payload,
-                          context_lines,
-                          interhunk_lines,
-                          id_abbrev,
-                          max_size,
-                          old_prefix,
-                          new_prefix)
-else
-    immutable DiffOptionsStruct
-        version::Cuint
-        flags::UInt32
+    payload::Ptr{Void}
 
-        # options controlling which files are in the diff
-        ignore_submodules::Cint
-        pathspec::StrArrayStruct
-        notify_cb::Ptr{Void}
-        payload::Ptr{Void}
-
-        # options controlling how the diff text is generated
-        context_lines::UInt32
-        interhunk_lines::UInt32
-        id_abbrev::UInt16
-        max_size::Int64
-        old_prefix::Cstring
-        new_prefix::Cstring
-    end
-    DiffOptionsStruct(; flags::UInt32 = Consts.DIFF_NORMAL,
-                        ignore_submodules::Cint = Cint(Consts.SUBMODULE_IGNORE_UNSPECIFIED),
-                        pathspec::StrArrayStruct = StrArrayStruct(),
-                        notify_cb::Ptr{Void} = C_NULL,
-                        notify_payload::Ptr{Void} = C_NULL,
-                        context_lines::UInt32 = UInt32(3),
-                        interhunk_lines::UInt32 = zero(UInt32),
-                        id_abbrev::UInt16 = UInt16(7),
-                        max_size::Int64 = Int64(512*1024*1024), #zero(Int64), #512Mb
-                        old_prefix::Cstring = Cstring_NULL,
-                        new_prefix::Cstring = Cstring_NULL) =
-        DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
-                          flags,
-                          ignore_submodules,
-                          pathspec,
-                          notify_cb,
-                          notify_payload,
-                          context_lines,
-                          interhunk_lines,
-                          id_abbrev,
-                          max_size,
-                          old_prefix,
-                          new_prefix)
+    # options controlling how the diff text is generated
+    context_lines::UInt32                    = UInt32(3)
+    interhunk_lines::UInt32
+    id_abbrev::UInt16                        = UInt16(7)
+    max_size::Int64                          = Int64(512*1024*1024) #512Mb
+    old_prefix::Cstring
+    new_prefix::Cstring
 end
 
+"""
+    LibGit2.DiffFile
+
+Description of one side of a delta.
+Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+"""
 immutable DiffFile
     id::Oid
     path::Cstring
@@ -342,8 +213,13 @@ immutable DiffFile
     flags::UInt32
     mode::UInt16
 end
-DiffFile() = DiffFile(Oid(), Cstring_NULL, Int64(0), UInt32(0), UInt16(0))
 
+"""
+    LibGit2.DiffDelta
+
+Description of changes to one entry.
+Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+"""
 immutable DiffDelta
     status::Cint
     flags::UInt32
@@ -352,123 +228,59 @@ immutable DiffDelta
     old_file::DiffFile
     new_file::DiffFile
 end
-DiffDelta() = DiffDelta(Cint(0), UInt32(0), UInt16(0), UInt16(0), DiffFile(), DiffFile())
 
 # TODO: double check this when libgit2 v0.25.0 is released
-if LibGit2.version() >= v"0.25.0"
-    immutable MergeOptions
-        version::Cuint
-        flags::Cint
-        rename_threshold::Cuint
-        target_limit::Cuint
-        metric::Ptr{Void}
+"""
+    LibGit2.MergeOptions
+
+Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_merge_options) struct.
+"""
+@kwdef immutable MergeOptions
+    version::Cuint                    = 1
+    flags::Cint
+    rename_threshold::Cuint           = 50
+    target_limit::Cuint               = 200
+    metric::Ptr{Void}
+    @static if LibGit2.VERSION >= v"0.24.0"
         recursion_limit::Cuint
+    end
+    @static if LibGit2.VERSION >= v"0.25.0"
         default_driver::Cstring
-        file_favor::Cint
-        file_flags::Cuint
     end
-    MergeOptions(; flags::Cint = Cint(0),
-                   rename_threshold::Cuint = Cuint(50),
-                   target_limit::Cuint = Cuint(200),
-                   metric::Ptr{Void} = C_NULL,
-                   recursion_limit::Cuint = Cuint(0),
-                   default_driver::Cstring = Cstring_NULL,
-                   file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
-                   file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
-        MergeOptions(one(Cuint),
-                     flags,
-                     rename_threshold,
-                     target_limit,
-                     metric,
-                     recursion_limit,
-                     default_driver,
-                     file_favor,
-                     file_flags)
-elseif LibGit2.version() >= v"0.24.0"
-    immutable MergeOptions
-        version::Cuint
-        flags::Cint
-        rename_threshold::Cuint
-        target_limit::Cuint
-        metric::Ptr{Void}
-        recursion_limit::Cuint
-        file_favor::Cint
-        file_flags::Cuint
-    end
-    MergeOptions(; flags::Cint = Cint(0),
-                   rename_threshold::Cuint = Cuint(50),
-                   target_limit::Cuint = Cuint(200),
-                   metric::Ptr{Void} = C_NULL,
-                   recursion_limit::Cuint = Cuint(0),
-                   file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
-                   file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
-        MergeOptions(one(Cuint),
-                     flags,
-                     rename_threshold,
-                     target_limit,
-                     metric,
-                     recursion_limit,
-                     file_favor,
-                     file_flags)
-else
-    immutable MergeOptions
-        version::Cuint
-        flags::Cint
-        rename_threshold::Cuint
-        target_limit::Cuint
-        metric::Ptr{Void}
-        file_favor::Cint
-        file_flags::Cuint
-    end
-    MergeOptions(; flags::Cint = Cint(0),
-                   rename_threshold::Cuint = Cuint(50),
-                   target_limit::Cuint = Cuint(200),
-                   metric::Ptr{Void} = C_NULL,
-                   file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
-                   file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
-        MergeOptions(one(Cuint),
-                     flags,
-                     rename_threshold,
-                     target_limit,
-                     metric,
-                     file_favor,
-                     file_flags)
+    file_favor::GIT_MERGE_FILE_FAVOR  = Consts.MERGE_FILE_FAVOR_NORMAL
+    file_flags::GIT_MERGE_FILE        = Consts.MERGE_FILE_DEFAULT
 end
 
+"""
+    LibGit2.PushOptions
 
-if LibGit2.version() >= v"0.24.0"
-    immutable PushOptions
-        version::Cuint
-        parallelism::Cint
-        callbacks::RemoteCallbacks
+Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
+"""
+@kwdef immutable PushOptions
+    version::Cuint                     = 1
+    parallelism::Cint                  = 1
+    callbacks::RemoteCallbacks
+    @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct
     end
-    PushOptions(; parallelism::Cint=one(Cint),
-                  callbacks::RemoteCallbacks=RemoteCallbacks(),
-                  custom_headers::StrArrayStruct = StrArrayStruct()) =
-        PushOptions(one(Cuint),
-                    parallelism,
-                    callbacks,
-                    custom_headers)
-else
-    immutable PushOptions
-        version::Cuint
-        parallelism::Cint
-        callbacks::RemoteCallbacks
-    end
-    PushOptions(; parallelism::Cint=one(Cint),
-                  callbacks::RemoteCallbacks=RemoteCallbacks()) =
-        PushOptions(one(Cuint),
-                    parallelism,
-                    callbacks)
 end
 
+"""
+    LibGit2.IndexTime
+
+Matches the [`git_index_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_time) struct.
+"""
 immutable IndexTime
     seconds::Int64
     nanoseconds::Cuint
-    IndexTime() = new(zero(Int64), zero(Cuint))
 end
 
+"""
+    LibGit2.IndexEntry
+
+In-memory representation of a file entry in the index.
+Matches the [`git_index_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_entry) struct.
+"""
 immutable IndexEntry
     ctime::IndexTime
     mtime::IndexTime
@@ -487,80 +299,67 @@ immutable IndexEntry
 
     path::Ptr{UInt8}
 end
-IndexEntry() = IndexEntry(IndexTime(),
-                          IndexTime(),
-                          UInt32(0),
-                          UInt32(0),
-                          UInt32(0),
-                          UInt32(0),
-                          UInt32(0),
-                          Int64(0),
-                          Oid(),
-                          UInt16(0),
-                          UInt16(0),
-                          Ptr{UInt8}(0))
 Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
+"""
+    LibGit2.RebaseOptions
 
-if LibGit2.version() >= v"0.24.0"
-    immutable RebaseOptions
-        version::Cuint
-        quiet::Cint
+Matches the `git_rebase_options` struct.
+"""
+@kwdef immutable RebaseOptions
+    version::Cuint                 = 1
+    quiet::Cint                    = 1
+    @static if LibGit2.VERSION >= v"0.24.0"
         inmemory::Cint
-        rewrite_notes_ref::Cstring
+    end
+    rewrite_notes_ref::Cstring
+    @static if LibGit2.VERSION >= v"0.24.0"
         merge_opts::MergeOptions
-        checkout_opts::CheckoutOptions
     end
-    RebaseOptions(; quiet::Cint = Cint(1),
-                    inmemory::Cint = Cint(0),
-                    rewrite_notes_ref::Cstring = Cstring_NULL,
-                    merge_opts::MergeOptions = MergeOptions(),
-                    checkout_opts::CheckoutOptions = CheckoutOptions()) =
-        RebaseOptions(one(Cuint), quiet, inmemory, rewrite_notes_ref, merge_opts, checkout_opts)
-else
-    immutable RebaseOptions
-        version::Cuint
-        quiet::Cint
-        rewrite_notes_ref::Cstring
-        checkout_opts::CheckoutOptions
-    end
-    RebaseOptions(; quiet::Cint = Cint(1),
-                    rewrite_notes_ref::Cstring = Cstring_NULL,
-                    checkout_opts::CheckoutOptions = CheckoutOptions()) =
-        RebaseOptions(one(Cuint), quiet, rewrite_notes_ref, checkout_opts)
+    checkout_opts::CheckoutOptions
 end
 
+"""
+    LibGit2.RebaseOperation
+
+Describes a single instruction/operation to be performed during the rebase.
+Matches the `git_rebase_operation` struct.
+"""
 immutable RebaseOperation
     optype::Cint
     id::Oid
     exec::Cstring
 end
-RebaseOperation() = RebaseOperation(Cint(0), Oid(), Cstring_NULL)
 Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
 
-immutable StatusOptions
-    version::Cuint
-    show::Cint
-    flags::Cuint
-    pathspec::StrArrayStruct
-end
-StatusOptions(; show::Cint = Consts.STATUS_SHOW_INDEX_AND_WORKDIR,
-                flags::Cuint = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
+"""
+    LibGit2.StatusOptions
+
+Options to control how `git_status_foreach_ext()` will issue callbacks.
+Matches the `git_status_options` struct.
+"""
+@kwdef immutable StatusOptions
+    version::Cuint           = 1
+    show::Cint               = Consts.STATUS_SHOW_INDEX_AND_WORKDIR
+    flags::Cuint             = Consts.STATUS_OPT_INCLUDE_UNTRACKED |
                                Consts.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
                                Consts.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
-                               Consts.STATUS_OPT_SORT_CASE_SENSITIVELY,
-                pathspec::StrArrayStruct = StrArrayStruct()) =
-    StatusOptions(one(Cuint),
-                  show,
-                  flags,
-                  pathspec)
+                               Consts.STATUS_OPT_SORT_CASE_SENSITIVELY
+    pathspec::StrArrayStruct
+end
 
+"""
+    LibGit2.StatusEntry
+
+Providing the differences between the file as it exists in HEAD and the index, and
+providing the differences between the index and the working directory.
+Matches the `git_status_entry` struct.
+"""
 immutable StatusEntry
     status::Cuint
     head_to_index::Ptr{DiffDelta}
     index_to_workdir::Ptr{DiffDelta}
 end
-StatusEntry() = StatusEntry(Cuint(0), C_NULL, C_NULL)
 
 immutable FetchHead
     name::String

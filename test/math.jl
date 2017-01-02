@@ -13,8 +13,8 @@
     @test clamp(3.0, 1, 3) == 3.0
     @test clamp(4.0, 1, 3) == 3.0
 
-    @test clamp([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
-    @test clamp([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+    @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+    @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
     begin
         x = [0.0, 1.0, 2.0, 3.0, 4.0]
         clamp!(x, 1, 3)
@@ -394,26 +394,39 @@ end
 end
 
 @testset "airy" begin
-    @test airy(1.8) ≈ airyai(1.8)
-    @test airyprime(1.8) ≈ -0.0685247801186109345638
-    @test airyaiprime(1.8) ≈ airyprime(1.8)
-    @test airybi(1.8) ≈ 2.595869356743906290060
-    @test airybiprime(1.8) ≈ 2.98554005084659907283
-    @test_throws Base.Math.AmosException airy(200im)
+    @test_throws Base.Math.AmosException airyai(200im)
     @test_throws Base.Math.AmosException airybi(200)
-    @test_throws ArgumentError airy(5,one(Complex128))
-    z = 1.8 + 1.0im
-    for elty in [Complex64,Complex128]
-        @test airy(convert(elty,1.8)) ≈ 0.0470362168668458052247
-        z = convert(elty,z)
-        @test airyx(z) ≈ airyx(0,z)
-        @test airyx(0, z) ≈ airy(0, z) * exp(2/3 * z * sqrt(z))
-        @test airyx(1, z) ≈ airy(1, z) * exp(2/3 * z * sqrt(z))
-        @test airyx(2, z) ≈ airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-        @test airyx(3, z) ≈ airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-        @test_throws ArgumentError airyx(5,z)
+
+    for T in [Float32, Float64, Complex64,Complex128]
+        @test airyai(T(1.8)) ≈ 0.0470362168668458052247
+        @test airyaiprime(T(1.8)) ≈ -0.0685247801186109345638
+        @test airybi(T(1.8)) ≈ 2.595869356743906290060
+        @test airybiprime(T(1.8)) ≈ 2.98554005084659907283
     end
-    @test_throws MethodError airy(complex(big(1.0)))
+    for T in [Complex64, Complex128]
+        z = convert(T,1.8 + 1.0im)
+        @test airyaix(z) ≈ airyai(z) * exp(2/3 * z * sqrt(z))
+        @test airyaiprimex(z) ≈ airyaiprime(z) * exp(2/3 * z * sqrt(z))
+        @test airybix(z) ≈ airybi(z) * exp(-abs(real(2/3 * z * sqrt(z))))
+        @test airybiprimex(z) ≈ airybiprime(z) * exp(-abs(real(2/3 * z * sqrt(z))))
+    end
+    @test_throws MethodError airyai(complex(big(1.0)))
+
+    for x = -3:3
+        @test airyai(x) ≈ airyai(complex(x))
+        @test airyaiprime(x) ≈ airyaiprime(complex(x))
+        @test airybi(x) ≈ airybi(complex(x))
+        @test airybiprime(x) ≈ airybiprime(complex(x))
+        if x >= 0
+            @test airyaix(x) ≈ airyaix(complex(x))
+            @test airyaiprimex(x) ≈ airyaiprimex(complex(x))
+        else
+            @test_throws DomainError airyaix(x)
+            @test_throws DomainError airyaiprimex(x)
+        end
+        @test airybix(x) ≈ airybix(complex(x))
+        @test airybiprimex(x) ≈ airybiprimex(complex(x))
+    end
 end
 
 @testset "bessel functions" begin
@@ -748,18 +761,6 @@ end
     @test isnan(zeta(complex(-Inf,0)))
 end
 
-@testset "quadgk" begin
-    @test quadgk(cos, 0,0.7,1)[1] ≈ sin(1)
-    @test quadgk(x -> exp(im*x), 0,0.7,1)[1] ≈ (exp(1im)-1)/im
-    @test quadgk(x -> exp(im*x), 0,1im)[1] ≈ -1im*expm1(-1)
-    @test_approx_eq_eps quadgk(cos, 0,BigFloat(1),order=40)[1] sin(BigFloat(1)) 1000*eps(BigFloat)
-    @test quadgk(x -> exp(-x), 0,0.7,Inf)[1] ≈ 1.0
-    @test quadgk(x -> exp(x), -Inf,0)[1] ≈ 1.0
-    @test quadgk(x -> exp(-x^2), -Inf,Inf)[1] ≈ sqrt(pi)
-    @test quadgk(x -> [exp(-x), exp(-2x)], 0, Inf)[1] ≈ [1,0.5]
-    @test quadgk(cos, 0,0.7,1, norm=abs)[1] ≈ sin(1)
-end
-
 @testset "subnormal flags" begin
     # Ensure subnormal flags functions don't segfault
     @test any(set_zero_subnormals(true) .== [false,true])
@@ -938,7 +939,7 @@ end
 @testset "vectorization of 2-arg functions" begin
     binary_math_functions = [
         copysign, flipsign, log, atan2, hypot, max, min,
-        airy, airyx, besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,
+        besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,
         besseli, besselix, besselj, besseljx, besselk, besselkx, bessely, besselyx,
         polygamma, zeta, beta, lbeta,
     ]

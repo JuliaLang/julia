@@ -443,7 +443,7 @@ d2 = map(x->1, d)
 @test reduce(+, d2) == 100
 
 @test reduce(+, d) == ((50*id_me) + (50*id_other))
-map!(x->1, d)
+map!(x->1, d, d)
 @test reduce(+, d) == 100
 
 @test fill!(d, 1) == ones(10, 10)
@@ -480,7 +480,7 @@ se = SharedArray(Int,10)
     sd[i] = i
     se[i] = i
 end
-sc = complex(sd,se)
+sc = convert(SharedArray, complex.(sd,se))
 for (x,i) in enumerate(sc)
     @test i == complex(x,x)
 end
@@ -953,9 +953,7 @@ if is_unix() # aka have ssh
             end
         end
 
-        @test :ok == remotecall_fetch(1, new_pids) do p
-            rmprocs(p; waitfor=5.0)
-        end
+        remotecall_fetch(plst->rmprocs(plst; waitfor=5.0), 1, new_pids)
     end
 
     print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
@@ -1250,3 +1248,30 @@ function test_add_procs_threaded_blas()
     rmprocs(processes_added)
 end
 test_add_procs_threaded_blas()
+
+#19687
+# ensure no race conditions between rmprocs and addprocs
+for i in 1:5
+    p = addprocs(1)[1]
+    @spawnat p sleep(5)
+    rmprocs(p; waitfor=0)
+end
+
+# Test if a wait has been called on rmprocs(...;waitfor=0), further remotecalls
+# don't throw errors.
+for i in 1:5
+    p = addprocs(1)[1]
+    np = nprocs()
+    @spawnat p sleep(5)
+    wait(rmprocs(p; waitfor=0))
+    for pid in procs()
+        @test pid == remotecall_fetch(myid, pid)
+    end
+    @test nprocs() == np - 1
+end
+
+# Test that an exception is thrown if workers are unable to be removed within requested time.
+if DoFullTest
+    pids=addprocs(4);
+    @test_throws ErrorException rmprocs(pids; waitfor=0.001);
+end

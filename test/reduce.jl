@@ -60,7 +60,7 @@ a = sum(sin, z)
 z = [-4, -3, 2, 5]
 fz = float(z)
 a = randn(32) # need >16 elements to trigger BLAS code path
-b = complex(randn(32), randn(32))
+b = complex.(randn(32), randn(32))
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, Tuple{Any}, itr)
@@ -186,10 +186,10 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test all(x->x>0, [4]) == true
 @test all(x->x>0, [-3, 4, 5]) == false
 
-@test reduce(|, fill(trues(5), 24))  == trues(5)
-@test reduce(|, fill(falses(5), 24)) == falses(5)
-@test reduce(&, fill(trues(5), 24))  == trues(5)
-@test reduce(&, fill(falses(5), 24)) == falses(5)
+@test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
+@test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
+@test reduce((a, b) -> a .& b, fill(trues(5), 24))  == trues(5)
+@test reduce((a, b) -> a .& b, fill(falses(5), 24)) == falses(5)
 
 @test_throws TypeError any(x->0, [false])
 @test_throws TypeError all(x->0, [false])

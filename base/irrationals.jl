@@ -130,7 +130,7 @@ end
 
 big(x::Irrational) = convert(BigFloat,x)
 
-## specific irriational mathematical constants
+## specific irrational mathematical constants
 
 @irrational π        3.14159265358979323846  pi
 @irrational e        2.71828182845904523536  exp(big(1))

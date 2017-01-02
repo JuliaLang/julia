@@ -2,7 +2,8 @@
 
 ## Triangular
 
-abstract AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} # could be renamed to Triangular when than name has been fully deprecated
+# could be renamed to Triangular when that name has been fully deprecated
+abstract AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T}
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
@@ -21,7 +22,10 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
         size(A::$t) = size(A.data)
 
         convert{T,S}(::Type{$t{T}}, A::$t{T,S}) = A
-        convert{Tnew,Told,S}(::Type{$t{Tnew}}, A::$t{Told,S}) = (Anew = convert(AbstractMatrix{Tnew}, A.data); $t(Anew))
+        function convert{Tnew,Told,S}(::Type{$t{Tnew}}, A::$t{Told,S})
+            Anew = convert(AbstractMatrix{Tnew}, A.data)
+            $t(Anew)
+        end
         convert{Tnew,Told,S}(::Type{AbstractMatrix{Tnew}}, A::$t{Told,S}) = convert($t{Tnew}, A)
         convert{T,S}(::Type{Matrix}, A::$t{T,S}) = convert(Matrix{T}, A)
 
@@ -32,7 +36,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
 
         copy(A::$t) = $t(copy(A.data))
 
-        big(A::$t) = $t(big(A.data))
+        broadcast(::typeof(big), A::$t) = $t(big.(A.data))
 
         real{T<:Real}(A::$t{T}) = A
         real{T<:Complex}(A::$t{T}) = (B = real(A.data); $t(B))
@@ -40,8 +44,10 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
     end
 end
 
-LowerTriangular(U::UpperTriangular) = throw(ArgumentError("cannot create a LowerTriangular matrix from an UpperTriangular input"))
-UpperTriangular(U::LowerTriangular) = throw(ArgumentError("cannot create an UpperTriangular matrix from a LowerTriangular input"))
+LowerTriangular(U::UpperTriangular) = throw(ArgumentError(
+    "cannot create a LowerTriangular matrix from an UpperTriangular input"))
+UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
+    "cannot create an UpperTriangular matrix from a LowerTriangular input"))
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
@@ -112,14 +118,19 @@ function full!{T,S}(A::UnitUpperTriangular{T,S})
     B
 end
 
-getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) = i > j ? A.data[i,j] : ifelse(i == j, one(T), zero(T))
-getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(A.data[j,i])
-getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i < j ? A.data[i,j] : ifelse(i == j, one(T), zero(T))
-getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(A.data[j,i])
+getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) =
+    i > j ? A.data[i,j] : ifelse(i == j, one(T), zero(T))
+getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) =
+    i >= j ? A.data[i,j] : zero(A.data[j,i])
+getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) =
+    i < j ? A.data[i,j] : ifelse(i == j, one(T), zero(T))
+getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) =
+    i <= j ? A.data[i,j] : zero(A.data[j,i])
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part ($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
+            "($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -128,9 +139,11 @@ end
 
 function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part ($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
+            "($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
     elseif i == j
-        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) of a UnitUpperTriangular matrix to a non-unit value ($x)"))
+        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
+            "of a UnitUpperTriangular matrix to a non-unit value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -139,7 +152,8 @@ end
 
 function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part ($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part " *
+            "($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -148,9 +162,11 @@ end
 
 function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part ($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part " *
+            "($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
     elseif i == j
-        x == 1 || throw(ArgumentError("cannot set diagonal index ($i, $j) of a UnitLowerTriangular matrix to a non-unit value ($x)"))
+        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
+            "of a UnitLowerTriangular matrix to a non-unit value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -394,40 +410,62 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitUpperTriangular, 'U', 'U'))
     @eval begin
         # Vector multiplication
-        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        At_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
-        Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
-        Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'C', $isunitc, A.data, b)
+        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) =
+            BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
+        At_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) =
+            BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
+        Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) =
+            BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
+        Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) =
+            BLAS.trmv!($uploc, 'C', $isunitc, A.data, b)
 
         # Matrix multiplication
-        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
+        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) =
+            BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
+        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
-        At_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
-        Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B)
-        Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
+        At_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) =
+            BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
+        Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) =
+            BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B)
+        Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) =
+            BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
 
-        A_mul_Bt!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
-        A_mul_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
-        A_mul_Bc!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
+        A_mul_Bt!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
+        A_mul_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
+        A_mul_Bc!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
 
         # Left division
-        A_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'N', $isunitc, A.data, B)
-        At_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
-        Ac_ldiv_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
-        Ac_ldiv_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'C', $isunitc, A.data, B)
+        A_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) =
+            LAPACK.trtrs!($uploc, 'N', $isunitc, A.data, B)
+        At_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) =
+            LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
+        Ac_ldiv_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) =
+            LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
+        Ac_ldiv_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) =
+            LAPACK.trtrs!($uploc, 'C', $isunitc, A.data, B)
 
         # Right division
-        A_rdiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
-        A_rdiv_Bt!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
-        A_rdiv_Bc!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
-        A_rdiv_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
+        A_rdiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trsm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
+        A_rdiv_Bt!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
+        A_rdiv_Bc!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
+        A_rdiv_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trsm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
 
         # Matrix inverse
-        inv!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}) = $t{T,S}(LAPACK.trtri!($uploc, $isunitc, A.data))
+        inv!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}) =
+            $t{T,S}(LAPACK.trtri!($uploc, $isunitc, A.data))
 
         # Error bounds for triangular solve
-        errorbounds{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = LAPACK.trrfs!($uploc, 'N', $isunitc, A.data, B, X)
+        errorbounds{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) =
+            LAPACK.trrfs!($uploc, 'N', $isunitc, A.data, B, X)
 
         # Condition numbers
         function cond{T<:BlasFloat,S}(A::$t{T,S}, p::Real=2)
@@ -454,7 +492,8 @@ end
 inv{T}(A::UnitUpperTriangular{T}) = UnitUpperTriangular(A_ldiv_B!(A, eye(T, size(A, 1))))
 inv{T}(A::UnitLowerTriangular{T}) = UnitLowerTriangular(A_ldiv_B!(A, eye(T, size(A, 1))))
 
-errorbounds{T<:Union{BigFloat, Complex{BigFloat}},S<:StridedMatrix}(A::AbstractTriangular{T,S}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = error("not implemented yet! Please submit a pull request.")
+errorbounds{T<:Union{BigFloat, Complex{BigFloat}},S<:StridedMatrix}(A::AbstractTriangular{T,S}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) =
+    error("not implemented yet! Please submit a pull request.")
 function errorbounds{TA<:Number,S<:StridedMatrix,TX<:Number,TB<:Number}(A::AbstractTriangular{TA,S}, X::StridedVecOrMat{TX}, B::StridedVecOrMat{TB})
     TAXB = promote_type(TA, TB, TX, Float32)
     errorbounds(convert(AbstractMatrix{TAXB}, A), convert(AbstractArray{TAXB}, X), convert(AbstractArray{TAXB}, B))
@@ -462,10 +501,24 @@ end
 
 # Eigensystems
 ## Notice that trecv works for quasi-triangular matrices and therefore the lower sub diagonal must be zeroed before calling the subroutine
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UpperTriangular{T,S}) = LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitUpperTriangular{T,S}) = (for i = 1:size(A, 1); A.data[i,i] = 1;end;LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data)))
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::LowerTriangular{T,S}) = LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)')
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitLowerTriangular{T,S}) = (for i = 1:size(A, 1); A.data[i,i] = 1;end;LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)'))
+function eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UpperTriangular{T,S})
+    LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
+end
+function eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitUpperTriangular{T,S})
+    for i = 1:size(A, 1)
+        A.data[i,i] = 1
+    end
+    LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
+end
+function eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::LowerTriangular{T,S})
+    LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)')
+end
+function eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitLowerTriangular{T,S})
+    for i = 1:size(A, 1)
+        A.data[i,i] = 1
+    end
+    LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)')
+end
 
 ####################
 # Generic routines #
@@ -919,8 +972,10 @@ end
 # manually hoisting x[j] significantly improves performance as of Dec 2015
 # manually eliding bounds checking significantly improves performance as of Dec 2015
 # directly indexing A.data rather than A significantly improves performance as of Dec 2015
-# replacing repeated references to A.data with [Adata = A.data and references to Adata] does not significantly impact performance as of Dec 2015
-# replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj] does not significantly impact performance as of Dec 2015
+# replacing repeated references to A.data with [Adata = A.data and references to Adata]
+# does not significantly impact performance as of Dec 2015
+# replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj]
+# does not significantly impact performance as of Dec 2015
 function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
     n = size(A, 2)
     if !(n == length(b) == length(x))
@@ -1316,9 +1371,14 @@ for f in (:A_mul_Bc!, :A_mul_Bt!, :A_rdiv_Bc!, :A_rdiv_Bt!)
 end
 
 # Promotion
-## Promotion methods in matmul don't apply to triangular multiplication since it is inplace. Hence we have to make very similar definitions, but without allocation of a result array. For multiplication and unit diagonal division the element type doesn't have to be stable under division whereas that is necessary in the general triangular solve problem.
+## Promotion methods in matmul don't apply to triangular multiplication since
+## it is inplace. Hence we have to make very similar definitions, but without
+## allocation of a result array. For multiplication and unit diagonal division
+## the element type doesn't have to be stable under division whereas that is
+## necessary in the general triangular solve problem.
 
-## Some Triangular-Triangular cases. We might want to write taylored methods for these cases, but I'm not sure it is worth it.
+## Some Triangular-Triangular cases. We might want to write taylored methods
+## for these cases, but I'm not sure it is worth it.
 for t in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
     @eval begin
         (*)(A::Tridiagonal, B::$t) = A_mul_B!(full(A), B)

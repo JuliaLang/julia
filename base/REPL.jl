@@ -112,14 +112,12 @@ end
 
 function display_error(io::IO, er, bt)
     print_with_color(Base.error_color(), io, "ERROR: "; bold = true)
-    Base.with_output_color(Base.error_color(), io) do io
-        # remove REPL-related frames from interactive printing
-        eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
-        if eval_ind != 0
-            bt = bt[1:eval_ind-1]
-        end
-        Base.showerror(IOContext(io, :limit => true), er, bt)
+    # remove REPL-related frames from interactive printing
+    eval_ind = findlast(addr->Base.REPL.ip_matches_func(addr, :eval), bt)
+    if eval_ind != 0
+        bt = bt[1:eval_ind-1]
     end
+    showerror(IOContext(io, :limit => true), er, bt)
 end
 
 immutable REPLDisplay{R<:AbstractREPL} <: Display
@@ -167,6 +165,8 @@ function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::B
         catch err
             if bt !== nothing
                 println(errio, "SYSTEM: show(lasterr) caused an error")
+                println(errio, err)
+                Base.show_backtrace(errio, bt)
                 break
             end
             val = err
@@ -854,7 +854,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                     end
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
                     jl_prompt_len = 7
-                     if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
+                    if (firstline || isprompt_paste) && (oldpos + jl_prompt_len <= sizeof(input) && input[oldpos:oldpos+jl_prompt_len-1] == JULIA_PROMPT)
                         isprompt_paste = true
                         oldpos += jl_prompt_len
                     # If we are prompt pasting and current statement does not begin with julia> , skip to next line

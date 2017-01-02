@@ -45,7 +45,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::B
         end
         j += 1
     end
-    return Eigen(complex(WR, WI), evec)
+    return Eigen(complex.(WR, WI), evec)
 end
 
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
@@ -56,19 +56,13 @@ function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale
 end
 
 """
-    eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
+    eigfact(A; permute::Bool=true, scale::Bool=true) -> Eigen
 
 Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
 which contains the eigenvalues in `F[:values]` and the eigenvectors in the columns of the
 matrix `F[:vectors]`. (The `k`th eigenvector can be obtained from the slice `F[:vectors][:, k]`.)
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
-
-If `A` is [`Symmetric`](@ref), [`Hermitian`](@ref) or
-[`SymTridiagonal`](@ref), it is possible to calculate only a subset of
-the eigenvalues by specifying either a `UnitRange` `irange` covering
-indices of the sorted eigenvalues or a pair `vl` and `vu` for the lower and upper boundaries
-of the eigenvalues.
 
 For general nonsymmetric matrices it is possible to specify how the matrix is balanced
 before the eigenvector calculation. The option `permute=true` permutes the matrix to become
@@ -106,11 +100,15 @@ function eig(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=tr
 end
 
 """
-    eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
+    eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> D, V
+    eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> D, V
+    eig(A, permute::Bool=true, scale::Bool=true) -> D, V
 
 Computes eigenvalues (`D`) and eigenvectors (`V`) of `A`.
 See [`eigfact`](@ref) for details on the
 `irange`, `vl`, and `vu` arguments
+(for [`SymTridiagonal`](@ref), `Hermitian`, and
+`Symmetric` matrices)
 and the `permute` and `scale` keyword arguments.
 The eigenvectors are returned columnwise.
 
@@ -131,14 +129,11 @@ function eig(A::AbstractMatrix, args...)
 end
 
 """
-    eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
+    eigvecs(A; permute::Bool=true, scale::Bool=true) -> Matrix
 
 Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.) The `permute` and `scale` keywords are the same as
 for [`eigfact`](@ref).
-
-For [`SymTridiagonal`](@ref) matrices, if the optional vector of
-eigenvalues `eigvals` is specified, returns the specific corresponding eigenvectors.
 
 # Example
 
@@ -157,19 +152,34 @@ eigvecs{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:vecto
 eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:values]::U
 
 """
-    eigvals!(A,[irange,][vl,][vu]) -> values
+    eigvals!(A; permute::Bool=true, scale::Bool=true) -> values
 
 Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+The option `permute=true` permutes the matrix to become
+closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
+make rows and columns more equal in norm.
 """
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
-    return iszero(valsim) ? valsre : complex(valsre, valsim)
+    return iszero(valsim) ? valsre : complex.(valsre, valsim)
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     ishermitian(A) && return eigvals(Hermitian(A))
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
+
+"""
+    eigvals(A; permute::Bool=true, scale::Bool=true) -> values
+
+Returns the eigenvalues of `A`.
+
+For general non-symmetric matrices it is possible to specify how the matrix is balanced
+before the eigenvalue calculation. The option `permute=true` permutes the matrix to
+become closer to upper triangular, and `scale=true` scales the matrix by its diagonal
+elements to make rows and columns more equal in norm. The default is `true` for both
+options.
+"""
 function eigvals{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     return eigvals!(copy_oftype(A, S), permute = permute, scale = scale)
@@ -208,8 +218,9 @@ julia> A = [0 im; -1 0]
 
 julia> eigmax(A)
 ERROR: DomainError:
- in #eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:218
- in eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:216
+Stacktrace:
+ [1] #eigmax#36(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:234
+ [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:232
 ```
 """
 function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -249,8 +260,9 @@ julia> A = [0 im; -1 0]
 
 julia> eigmin(A)
 ERROR: DomainError:
- in #eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:259
- in eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:257
+Stacktrace:
+ [1] #eigmin#37(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:275
+ [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:273
 ```
 """
 function eigmin(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
@@ -285,7 +297,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
         end
         j += 1
     end
-    return GeneralizedEigen(complex(alphar, alphai)./beta, vecs)
+    return GeneralizedEigen(complex.(alphar, alphai)./beta, vecs)
 end
 
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
@@ -352,7 +364,7 @@ Same as [`eigvals`](@ref), but saves space by overwriting the input `A` (and `B`
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
-    return (iszero(alphai) ? alphar : complex(alphar, alphai))./beta
+    return (iszero(alphai) ? alphar : complex.(alphar, alphai))./beta
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
     ishermitian(A) && isposdef(B) && return eigvals!(Hermitian(A), Hermitian(B))

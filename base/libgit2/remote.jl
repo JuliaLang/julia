@@ -34,7 +34,7 @@ end
 
 function url(rmt::GitRemote)
     url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
-    url_ptr == Cstring_NULL && return ""
+    url_ptr == C_NULL && return ""
     return  unsafe_string(url_ptr)
 end
 

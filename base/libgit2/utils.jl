@@ -16,6 +16,7 @@ function version()
           (Ptr{Cint}, Ptr{Cint}, Ptr{Cint}), major, minor, patch)
     return VersionNumber(major[], minor[], patch[])
 end
+const VERSION = version()
 
 isset(val::Integer, flag::Integer) = (val & flag == flag)
 reset(val::Integer, flag::Integer) = (val &= ~flag)

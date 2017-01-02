@@ -918,14 +918,8 @@ hvcat{T}(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) = Base.type
 ### Unary Map
 
 # zero-preserving functions (z->z, nz->nz)
-broadcast(::typeof(abs), x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), abs.(nonzeros(x)))
-for op in [:abs2, :conj]
-    @eval begin
-        $(op)(x::AbstractSparseVector) =
-            SparseVector(length(x), copy(nonzeroinds(x)), $(op).(nonzeros(x)))
-    end
-end
--(x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), -(nonzeros(x)))
+conj(x::SparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), conj(nonzeros(x)))
+-(x::SparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), -(nonzeros(x)))
 
 # functions f, such that
 #   f(x) can be zero or non-zero when x != 0
@@ -1271,18 +1265,19 @@ end
 
 # definition of other binary functions
 
-for (op, TF, mode) in [(:max, :Real, 2),
-                       (:min, :Real, 2),
-                       (:complex, :Real, 1)]
-    @eval begin
-        $(op){Tx<:$(TF),Ty<:$(TF)}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) =
-            _binarymap($(op), x, y, $mode)
-        $(op){Tx<:$(TF),Ty<:$(TF)}(x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) =
-            _binarymap($(op), x, y, $mode)
-        $(op){Tx<:$(TF),Ty<:$(TF)}(x::AbstractSparseVector{Tx}, y::StridedVector{Ty}) =
-            _binarymap($(op), x, y, $mode)
-    end
-end
+broadcast{Tx<:Real,Ty<:Real}(::typeof(min), x::SparseVector{Tx}, y::SparseVector{Ty}) = _binarymap(min, x, y, 2)
+broadcast{Tx<:Real,Ty<:Real}(::typeof(min), x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(min, x, y, 2)
+broadcast{Tx<:Real,Ty<:Real}(::typeof(min), x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(min, x, y, 2)
+broadcast{Tx<:Real,Ty<:Real}(::typeof(min), x::AbstractSparseVector{Tx}, y::StridedVector{Ty}) = _binarymap(min, x, y, 2)
+
+broadcast{Tx<:Real,Ty<:Real}(::typeof(max), x::SparseVector{Tx}, y::SparseVector{Ty}) = _binarymap(max, x, y, 2)
+broadcast{Tx<:Real,Ty<:Real}(::typeof(max), x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(max, x, y, 2)
+broadcast{Tx<:Real,Ty<:Real}(::typeof(max), x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(max, x, y, 2)
+broadcast{Tx<:Real,Ty<:Real}(::typeof(max), x::AbstractSparseVector{Tx}, y::StridedVector{Ty}) = _binarymap(max, x, y, 2)
+
+complex{Tx<:Real,Ty<:Real}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(complex, x, y, 1)
+complex{Tx<:Real,Ty<:Real}(x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) = _binarymap(complex, x, y, 1)
+complex{Tx<:Real,Ty<:Real}(x::AbstractSparseVector{Tx}, y::StridedVector{Ty}) = _binarymap(complex, x, y, 1)
 
 ### Reduction
 

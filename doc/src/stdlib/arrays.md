@@ -25,10 +25,8 @@ Base.LinAlg.checksquare
 ```@docs
 Core.Array
 Base.getindex(::Type, ::Any...)
-Base.zeros(::Any, ::Any)
-Base.zeros(::Any)
-Base.ones(::Any, ::Any)
-Base.ones(::Any)
+Base.zeros
+Base.ones
 Base.BitArray
 Base.trues
 Base.falses
@@ -50,7 +48,6 @@ All mathematical operations and functions are supported for arrays
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
-Base.Broadcast.bitbroadcast
 ```
 
 ## Indexing, Assignment, and Concatenation

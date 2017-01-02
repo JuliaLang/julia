@@ -633,15 +633,19 @@ function getaddrinfo(host::String)
         notify(c,IP)
     end
     r = wait(c)
-    if isa(r,UVError)
-        if r.code in [UV_EAI_NONAME, UV_EAI_AGAIN, UV_EAI_FAIL, UV_EAI_NODATA]
-            throw(DNSError(host, r.code))
-        elseif r.code == UV_EAI_SYSTEM
-            throw(SystemError("uv_getaddrinfocb"))
-        elseif r.code == UV_EAI_MEMORY
+    if isa(r, UVError)
+        r = r::UVError
+        code = r.code
+        if code in (UV_EAI_ADDRFAMILY, UV_EAI_AGAIN, UV_EAI_BADFLAGS,
+                    UV_EAI_BADHINTS, UV_EAI_CANCELED, UV_EAI_FAIL,
+                    UV_EAI_FAMILY, UV_EAI_NODATA, UV_EAI_NONAME,
+                    UV_EAI_OVERFLOW, UV_EAI_PROTOCOL, UV_EAI_SERVICE,
+                    UV_EAI_SOCKTYPE)
+            throw(DNSError(host, code))
+        elseif code == UV_EAI_MEMORY
             throw(OutOfMemoryError())
         else
-            throw(r)
+            throw(SystemError("uv_getaddrinfocb", -code))
         end
     end
     return r::IPAddr
@@ -656,12 +660,11 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 Get the IP address of the local machine.
 """
 function getipaddr()
-    addr = Array{Ptr{UInt8}}(1)
-    addr[1] = C_NULL
-    count = zeros(Int32,1)
+    addr_ref = Ref{Ptr{UInt8}}(C_NULL)
+    count_ref = Ref{Int32}(1)
     lo_present = false
-    err = ccall(:jl_uv_interface_addresses, Int32, (Ptr{Ptr{UInt8}}, Ptr{Int32}), addr, count)
-    addr,  count = addr[1], count[1]
+    err = ccall(:jl_uv_interface_addresses, Int32, (Ref{Ptr{UInt8}}, Ref{Int32}), addr_ref, count_ref)
+    addr, count = addr_ref[], count_ref[]
     if err != 0
         ccall(:uv_free_interface_addresses, Void, (Ptr{UInt8}, Int32), addr, count)
         throw(UVError("getlocalip", err))

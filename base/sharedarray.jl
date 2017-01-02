@@ -142,9 +142,14 @@ file is not writable.
 `offset` allows you to skip the specified number of bytes at the
 beginning of the file.
 """
-function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
-    isabspath(filename) || throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
-    isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int},
+        offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
+    if !isabspath(filename)
+        throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
+    end
+    if !isbits(T)
+        throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+    end
 
     pids, onlocalhost = shared_pids(pids)
 
@@ -156,12 +161,18 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     workermode = mode == "w+" ? "r+" : mode  # workers don't truncate!
 
     # Ensure the file will be readable
-    mode in ("r", "r+", "w+", "a+") || throw(ArgumentError("mode must be readable, but $mode is not"))
+    if !(mode in ("r", "r+", "w+", "a+"))
+        throw(ArgumentError("mode must be readable, but $mode is not"))
+    end
     if init !== false
         typeassert(init, Function)
-        mode in ("r+", "w+", "a+") || throw(ArgumentError("cannot initialize unwritable array (mode = $mode)"))
+        if !(mode in ("r+", "w+", "a+"))
+            throw(ArgumentError("cannot initialize unwritable array (mode = $mode)"))
+        end
     end
-    mode == "r" && !isfile(filename) && throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
+    if mode == "r" && !isfile(filename)
+        throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
+    end
 
     # Create the file if it doesn't exist, map it if it does
     refs = Array{Future}(length(pids))
@@ -238,7 +249,9 @@ size(S::SharedArray) = S.dims
 linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
-    (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
+    if length(a) != prod(dims)
+        throw(DimensionMismatch("dimensions must be consistent with array size"))
+    end
     refs = Array{Future}(length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, a.refs[i], dims) do r,d
@@ -293,9 +306,18 @@ localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray) = unsafe_convert(Ptr{T}, sdata(S))
 
-convert(::Type{SharedArray}, A::Array) = (S = SharedArray(eltype(A), size(A)); copy!(S, A))
-convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); copy!(S, A))
-convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N}) = (S = SharedArray(TS, size(A)); copy!(S, A))
+function convert(::Type{SharedArray}, A::Array)
+    S = SharedArray(eltype(A), size(A))
+    copy!(S, A)
+end
+function convert{T}(::Type{SharedArray{T}}, A::Array)
+    S = SharedArray(T, size(A))
+    copy!(S, A)
+end
+function convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N})
+    S = SharedArray(TS, size(A))
+    copy!(S, A)
+end
 
 function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
     haskey(stackdict, S) && return stackdict[S]
@@ -429,7 +451,7 @@ function fill!(S::SharedArray, v)
 end
 
 function rand!{T}(S::SharedArray{T})
-    f = S->map!(x->rand(T), S.loc_subarr_1d)
+    f = S->map!(x -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)
     end
@@ -437,7 +459,7 @@ function rand!{T}(S::SharedArray{T})
 end
 
 function randn!(S::SharedArray)
-    f = S->map!(x->randn(), S.loc_subarr_1d)
+    f = S->map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)
     end
@@ -453,9 +475,9 @@ shmem_fill(v, I::Int...; kwargs...) = shmem_fill(v, I; kwargs...)
 # rand variant with range
 function shmem_rand(TR::Union{DataType, UnitRange}, dims; kwargs...)
     if isa(TR, UnitRange)
-        SharedArray(Int, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
+        SharedArray(Int, dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
     else
-        SharedArray(TR, dims; init = S -> map!((x)->rand(TR), S.loc_subarr_1d), kwargs...)
+        SharedArray(TR, dims; init = S -> map!(x -> rand(TR), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
     end
 end
 shmem_rand(TR::Union{DataType, UnitRange}, i::Int; kwargs...) = shmem_rand(TR, (i,); kwargs...)
@@ -465,7 +487,7 @@ shmem_rand(dims; kwargs...) = shmem_rand(Float64, dims; kwargs...)
 shmem_rand(I::Int...; kwargs...) = shmem_rand(I; kwargs...)
 
 function shmem_randn(dims; kwargs...)
-    SharedArray(Float64, dims; init = S-> map!((x)->randn(), S.loc_subarr_1d), kwargs...)
+    SharedArray(Float64, dims; init = S-> map!(x -> randn(), S.loc_subarr_1d, S.loc_subarr_1d), kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 
@@ -479,11 +501,14 @@ reduce(f, S::SharedArray) =
               Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
-function map!(f, S::SharedArray)
+function map!(f, S::SharedArray, Q::SharedArray)
+    if !(S === Q) && (procs(S) != procs(Q) || localindexes(S) != localindexes(Q))
+        throw(ArgumentError("incompatible source and destination arguments"))
+    end
     @sync for p in procs(S)
         @spawnat p begin
             for idx in localindexes(S)
-                S.s[idx] = f(S.s[idx])
+                S.s[idx] = f(Q.s[idx])
             end
         end
     end
@@ -511,8 +536,6 @@ function copy!(S::SharedArray, R::SharedArray)
 
     return S
 end
-
-complex(S1::SharedArray,S2::SharedArray) = convert(SharedArray, complex(S1.s, S2.s))
 
 function print_shmem_limits(slen)
     try
@@ -594,6 +617,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint, (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
+shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint,
+    (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
 
 end # os-test

@@ -15,6 +15,30 @@ systemerror
 Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
 the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
 `Foo()` once.
+
+```jldoctest
+julia> A = zeros(2,3)
+2×3 Array{Float64,2}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+
+julia> fill!(A, 2.)
+2×3 Array{Float64,2}:
+ 2.0  2.0  2.0
+ 2.0  2.0  2.0
+
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A
+3-element Array{Array{Int64,1},1}:
+ [2,1,1]
+ [2,1,1]
+ [2,1,1]
+
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())
+3-element Array{Int64,1}:
+ 1
+ 1
+ 1
+```
 """
 fill!
 
@@ -426,7 +450,8 @@ If `T` is not a bitstype, an error is thrown.
 ```jldoctest
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
- in sizeof(::Type{T}) at ./essentials.jl:99
+Stacktrace:
+ [1] sizeof(::Type{T}) at ./essentials.jl:99
 ```
 """
 sizeof(::Type)
@@ -577,16 +602,16 @@ julia> ones(A)
  1  1
  1  1
 
- julia> ones(A, Float64)
+julia> ones(A, Float64)
 2×2 Array{Float64,2}:
- 1.  1.
- 1.  1.
+ 1.0  1.0
+ 1.0  1.0
 
- julia> ones(A, Bool, (3,))
- 3-element Array{Bool,1}:
-  true
-  true
-  true
+julia> ones(A, Bool, (3,))
+3-element Array{Bool,1}:
+ true
+ true
+ true
 ```
 See also [`zeros`](@ref), [`similar`](@ref).
 """
@@ -2467,7 +2492,8 @@ readavailable
 """
     isa(x, type) -> Bool
 
-Determine whether `x` is of the given `type`.
+Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
+`x isa type`.
 """
 isa
 
@@ -2507,7 +2533,8 @@ julia> convert(Int, 3.0)
 
 julia> convert(Int, 3.5)
 ERROR: InexactError()
- in convert(::Type{Int64}, ::Float64) at ./float.jl:656
+Stacktrace:
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:656
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,
@@ -2588,23 +2615,6 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 fma
-
-"""
-
-    eigvals(A,[irange,][vl,][vu]) -> values
-
-Returns the eigenvalues of `A`. If `A` is `Symmetric`, `Hermitian` or `SymTridiagonal`,
-it is possible to calculate only a subset of the eigenvalues by specifying either a
-`UnitRange` `irange` covering indices of the sorted eigenvalues, or a pair `vl` and `vu`
-for the lower and upper boundaries of the eigenvalues.
-
-For general non-symmetric matrices it is possible to specify how the matrix is balanced
-before the eigenvector calculation. The option `permute=true` permutes the matrix to
-become closer to upper triangular, and `scale=true` scales the matrix by its diagonal
-elements to make rows and columns moreequal in norm. The default is `true` for both
-options.
-"""
-eigvals
 
 """
     copy!(dest, src)
@@ -2726,16 +2736,16 @@ julia> zeros(A)
  0  0
  0  0
 
- julia> zeros(A, Float64)
+julia> zeros(A, Float64)
 2×2 Array{Float64,2}:
  0.0  0.0
  0.0  0.0
 
- julia> zeros(A, Bool, (3,))
- 3-element Array{Bool,1}:
-  false
-  false
-  false
+julia> zeros(A, Bool, (3,))
+3-element Array{Bool,1}:
+ false
+ false
+ false
 ```
 See also [`ones`](@ref), [`similar`](@ref).
 """

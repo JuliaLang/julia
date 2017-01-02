@@ -78,7 +78,7 @@ Symbol(x...) = Symbol(string(x...))
 # specific array types etc.
 #  --Here, just define fallback routines for broadcasting with no arguments
 broadcast(f) = f()
-broadcast!(f, X::AbstractArray) = fill!(X, f())
+broadcast!(f, X::AbstractArray) = (@inbounds for I in eachindex(X); X[I] = f(); end; X)
 
 # array structures
 include("array.jl")
@@ -173,15 +173,16 @@ using .Cartesian
 include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
+
+# nullable types
+include("nullable.jl")
+
 include("broadcast.jl")
 importall .Broadcast
 
 # base64 conversions (need broadcast)
 include("base64.jl")
 importall .Base64
-
-# nullable types
-include("nullable.jl")
 
 # version
 include("version.jl")
@@ -330,10 +331,6 @@ include("dft.jl")
 importall .DFT
 include("dsp.jl")
 importall .DSP
-
-# Numerical integration
-include("quadgk.jl")
-importall .QuadGK
 
 # Fast math
 include("fastmath.jl")

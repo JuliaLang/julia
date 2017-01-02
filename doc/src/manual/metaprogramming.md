@@ -332,8 +332,8 @@ objects: the [`parse()`](@ref) function, which takes a string of Julia code and 
 
 ```julia
 julia> function math_expr(op, op1, op2)
-         expr = Expr(:call, op, op1, op2)
-         return expr
+           expr = Expr(:call, op, op1, op2)
+           return expr
        end
 
  julia>  ex = math_expr(:+, 1, Expr(:call, :*, 4, 5))
@@ -348,11 +348,11 @@ alone:
 
 ```julia
 julia> function make_expr2(op, opr1, opr2)
-         opr1f, opr2f = map(x -> isa(x, Number) ? 2*x : x, (opr1, opr2))
-         retexpr = Expr(:call, op, opr1f, opr2f)
+           opr1f, opr2f = map(x -> isa(x, Number) ? 2*x : x, (opr1, opr2))
+           retexpr = Expr(:call, op, opr1f, opr2f)
 
-         return retexpr
-   end
+           return retexpr
+       end
 make_expr2 (generic function with 1 method)
 
 julia> make_expr2(:+, 1, 2)
@@ -485,9 +485,9 @@ macro body:
 
 ```julia
 julia> macro showarg(x)
-   show(x)
-   # ... remainder of macro, returning an expression
-end
+           show(x)
+           # ... remainder of macro, returning an expression
+       end
 
 julia> @showarg(a)
 (:a,)
@@ -624,13 +624,13 @@ final value. The macro might look like this:
 
 ```julia
 macro time(ex)
-  return quote
-    local t0 = time()
-    local val = $ex
-    local t1 = time()
-    println("elapsed time: ", t1-t0, " seconds")
-    val
-  end
+    return quote
+        local t0 = time()
+        local val = $ex
+        local t1 = time()
+        println("elapsed time: ", t1-t0, " seconds")
+        val
+    end
 end
 ```
 
@@ -680,13 +680,13 @@ or manipulate user variables. For example, the following macro sets `x` to zero 
 
 ```julia
 macro zerox()
-  return esc(:(x = 0))
+    return esc(:(x = 0))
 end
 
 function foo()
-  x = 1
-  @zerox
-  x  # is zero
+    x = 1
+    @zerox
+    x  # is zero
 end
 ```
 
@@ -703,9 +703,9 @@ For example, the following code defines a series of operators on three arguments
 
 ```julia
 for op = (:+, :*, :&, :|, :$)
-  eval(quote
-    ($op)(a,b,c) = ($op)(($op)(a,b),c)
-  end)
+    eval(quote
+        ($op)(a,b,c) = ($op)(($op)(a,b),c)
+    end)
 end
 ```
 
@@ -715,7 +715,7 @@ more tersely using the `:` prefix quoting form:
 
 ```julia
 for op = (:+, :*, :&, :|, :$)
-  eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
+    eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
 end
 ```
 
@@ -724,7 +724,7 @@ enough that Julia comes with a macro to abbreviate this pattern:
 
 ```julia
 for op = (:+, :*, :&, :|, :$)
-  @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
+    @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
 end
 ```
 
@@ -734,7 +734,7 @@ block:
 
 ```julia
 @eval begin
-  # multiple lines
+    # multiple lines
 end
 ```
 
@@ -753,7 +753,7 @@ is just the following:
 
 ```julia
 macro r_str(p)
-  Regex(p)
+    Regex(p)
 end
 ```
 
@@ -773,12 +773,12 @@ regular expression occurs in a loop:
 
 ```julia
 for line = lines
-  m = match(r"^\s*(?:#|$)", line)
-  if m === nothing
-    # non-comment
-  else
-    # comment
-  end
+    m = match(r"^\s*(?:#|$)", line)
+    if m === nothing
+        # non-comment
+    else
+        # comment
+    end
 end
 ```
 
@@ -789,12 +789,12 @@ In order to accomplish this without macros, one would have to write this loop li
 ```julia
 re = Regex("^\\s*(?:#|\$)")
 for line = lines
-  m = match(re, line)
-  if m === nothing
-    # non-comment
-  else
-    # comment
-  end
+    m = match(re, line)
+    if m === nothing
+        # non-comment
+    else
+        # comment
+    end
 end
 ```
 
@@ -825,7 +825,7 @@ is implemented with the following innocuous-looking macro:
 
 ```julia
 macro cmd(str)
-  :(cmd_gen($(shell_parse(str)[1])))
+    :(cmd_gen($(shell_parse(str)[1])))
 end
 ```
 

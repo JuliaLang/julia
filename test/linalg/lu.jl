@@ -29,8 +29,8 @@ dreal = randn(n)/2
 dimg  = randn(n)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-    d = eltya == Int ? Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1)) : convert(Tridiagonal{eltya}, eltya <: Complex ? Tridiagonal(complex(dlreal, dlimg), complex(dreal, dimg), complex(dureal, duimg)) : Tridiagonal(dlreal, dreal, dureal))
+    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    d = eltya == Int ? Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1)) : convert(Tridiagonal{eltya}, eltya <: Complex ? Tridiagonal(complex.(dlreal, dlimg), complex.(dreal, dimg), complex.(dureal, duimg)) : Tridiagonal(dlreal, dreal, dureal))
     ε = εa = eps(abs(float(one(eltya))))
 
     if eltya <: BlasFloat
@@ -39,8 +39,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test AbstractArray(lufact(num)) ≈ eltya[num]
     end
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
-        c = eltyb == Int ? rand(1:5, n) : convert(Vector{eltyb}, eltyb <: Complex ? complex(creal, cimg) : creal)
+        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+        c = eltyb == Int ? rand(1:5, n) : convert(Vector{eltyb}, eltyb <: Complex ? complex.(creal, cimg) : creal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 

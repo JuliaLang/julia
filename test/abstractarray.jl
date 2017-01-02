@@ -646,10 +646,10 @@ function test_map(::Type{TestAbstractArray})
 
     # In-place map
     A = Float64[1:10...]
-    map!(x->x*x, A)
-    @test A == map(x->x*x, Float64[1:10...])
+    map!(x -> x*x, A, A)
+    @test A == map(x -> x*x, Float64[1:10...])
     B = Float64[1:10...]
-    Base.asyncmap!(x->x*x, B)
+    Base.asyncmap!(x->x*x, B, B)
     @test A == B
 
     # Map to destination collection
@@ -746,17 +746,17 @@ let
     @test !issparse(m2)
 end
 
-#isinteger and isreal
+# isinteger and isreal
 @test isinteger(Diagonal(rand(1:5,5)))
 @test isreal(Diagonal(rand(5)))
 
-#unary ops
+# unary ops
 let A = Diagonal(rand(1:5,5))
     @test +(A) == A
     @test *(A) == A
 end
 
-#flipdim on empty
+# flipdim on empty
 @test flipdim(Diagonal([]),1) == Diagonal([])
 
 # ndims and friends

@@ -42,14 +42,14 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, Int)
-    ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
-    ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
+    ainit = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    ainit2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     ε = εa = eps(abs(float(one(eltya))))
 
     apd  = ainit'*ainit                 # symmetric positive-definite
     @test isposdef(apd,:U)
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
+        binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -176,8 +176,8 @@ for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
         x = convert(Vector{elty}, [1:3;])
         g = ones(elty, 3)
     else
-        x = convert(Vector{elty}, complex([1:3;], [1:3;]))
-        g = convert(Vector{elty}, complex(ones(3), ones(3)))
+        x = convert(Vector{elty}, complex.([1:3;], [1:3;]))
+        g = convert(Vector{elty}, complex.(ones(3), ones(3)))
     end
     xsub = view(x, 1:size(x, 1))
     @test gradient(x) ≈ g
@@ -232,10 +232,10 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
 
     for i = 1:10
         xinit = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
-                elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
+                elty <: Complex ? convert(Vector{elty}, complex.(randn(nnorm), randn(nnorm))) :
                 convert(Vector{elty}, randn(nnorm))
         yinit = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
-                elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
+                elty <: Complex ? convert(Vector{elty}, complex.(randn(nnorm), randn(nnorm))) :
                 convert(Vector{elty}, randn(nnorm))
         α = elty <: Integer ? randn() :
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
@@ -284,10 +284,10 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
 
     for i = 1:10
         Ainit = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
-                elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
+                elty <: Complex ? convert(Matrix{elty}, complex.(randn(mmat, nmat), randn(mmat, nmat))) :
                 convert(Matrix{elty}, randn(mmat, nmat))
         Binit = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
-                elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
+                elty <: Complex ? convert(Matrix{elty}, complex.(randn(mmat, nmat), randn(mmat, nmat))) :
                 convert(Matrix{elty}, randn(mmat, nmat))
         α = elty <: Integer ? randn() :
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
