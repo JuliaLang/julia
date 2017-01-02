@@ -269,20 +269,27 @@ static jl_unionall_t *rename_unionall(jl_unionall_t *u)
 
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
+static jl_value_t *pick_union_element(jl_value_t *u, jl_stenv_t *e, int8_t R)
+{
+    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
+    do {
+        int ui = statestack_get(state, state->depth);
+        state->depth++;
+        if (ui == 0) {
+            state->more = state->depth; // memorize that this was the deepest available choice
+            u = ((jl_uniontype_t*)u)->a;
+        }
+        else {
+            u = ((jl_uniontype_t*)u)->b;
+        }
+    } while (jl_is_uniontype(u));
+    return u;
+}
+
 // compare the current component of `u` to `t`. `R==1` means `u` came from the right side.
 static int subtype_union(jl_value_t *t, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
-    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
-    int ui = statestack_get(state, state->depth);
-    state->depth++;
-    jl_value_t *choice;
-    if (ui == 0) {
-        state->more = state->depth; // memorize that this was the deepest available choice
-        choice = u->a;
-    }
-    else {
-        choice = u->b;
-    }
+    jl_value_t *choice = pick_union_element((jl_value_t*)u, e, R);
     return R ? subtype(t, choice, e, param) : subtype(choice, t, e, param);
 }
 
@@ -603,6 +610,8 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     return (lx==ly && vx==vy) || (vy && (lx >= (vx ? ly : (ly-1))));
 }
 
+static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -611,6 +620,30 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     if (x == jl_ANY_flag) x = (jl_value_t*)jl_any_type;
     if (y == jl_ANY_flag) y = (jl_value_t*)jl_any_type;
+    if (jl_is_uniontype(x)) {
+        if (x == y) return 1;
+        x = pick_union_element(x, e, 0);
+    }
+    if (jl_is_uniontype(y)) {
+        if (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b)
+            return 1;
+        if (jl_is_unionall(x))
+            return subtype_unionall(y, (jl_unionall_t*)x, e, 0, param);
+        int ui = 1;
+        if (jl_is_typevar(x)) {
+            // The `convert(Type{T},T)` pattern, where T is a Union, required changing priority
+            // of unions and vars: if matching `typevar <: union`, first try to match the whole
+            // union against the variable before trying to take it apart to see if there are any
+            // variables lurking inside.
+            jl_unionstate_t *state = &e->Runions;
+            ui = statestack_get(state, state->depth);
+            state->depth++;
+            if (ui == 0)
+                state->more = state->depth; // memorize that this was the deepest available choice
+        }
+        if (ui == 1)
+            y = pick_union_element(y, e, 1);
+    }
     if (jl_is_typevar(x)) {
         if (jl_is_typevar(y)) {
             if (x == y) return 1;
@@ -643,23 +676,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         return var_gt((jl_tvar_t*)y, x, e, param);
     if (y == (jl_value_t*)jl_any_type && !jl_has_free_typevars(x))
         return 1;
-    if (jl_is_uniontype(x)) {
-        if (x == y) return 1;
-        if (param == 2) {
-            // in invariant context both parts must match in the same environment.
-            // TODO: don't double-count `y` with `param`
-            return subtype(((jl_uniontype_t*)x)->a, y, e, param) &&
-                subtype(((jl_uniontype_t*)x)->b, y, e, param);
-        }
-        return subtype_union(y, (jl_uniontype_t*)x, e, 0, param);
-    }
-    if (jl_is_uniontype(y)) {
-        if (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b)
-            return 1;
-        if (jl_is_unionall(x))
-            return subtype_unionall(y, (jl_unionall_t*)x, e, 0, param);
-        return subtype_union(x, (jl_uniontype_t*)y, e, 1, param);
-    }
     // handle forall ("left") vars first
     if (jl_is_unionall(x)) {
         if (x == y && !(e->envidx < e->envsz))
@@ -696,7 +712,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             }
             else {
                 e->invdepth++;
-                ans = subtype(x, jl_tparam0(yd), e, 2) && subtype(jl_tparam0(yd), x, e, 0);
+                ans = forall_exists_equal(x, jl_tparam0(yd), e);
                 e->invdepth--;
             }
             return ans;
@@ -719,7 +735,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             if (!subtype(xp1, yp1, e, 1)) return 0;
             // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
             e->invdepth++;
-            int ans = subtype(xp2, yp2, e, 2) && subtype(yp2, xp2, e, 0);
+            int ans = forall_exists_equal(xp2, yp2, e);
             e->invdepth--;
             return ans;
         }
@@ -728,7 +744,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         e->invdepth++;
         for (i=0; i < np; i++) {
             jl_value_t *xi = jl_tparam(xd, i), *yi = jl_tparam(yd, i);
-            if (!(xi == yi || (subtype(xi, yi, e, 2) && subtype(yi, xi, e, 0)))) {
+            if (!(xi == yi || forall_exists_equal(xi, yi, e))) {
                 ans = 0; break;
             }
         }
@@ -738,6 +754,28 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     if (jl_is_type(y))
         return x == jl_bottom_type;
     return x == y || jl_egal(x, y);
+}
+
+static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+{
+    jl_unionstate_t oldLunions = e->Lunions;
+    memset(e->Lunions.stack, 0, sizeof(e->Lunions.stack));
+    int lastset = 0;
+    int sub;
+    while (1) {
+        e->Lunions.more = 0;
+        e->Lunions.depth = 0;
+        sub = subtype(x, y, e, 2);
+        int set = e->Lunions.more;
+        if (!sub || !set)
+            break;
+        for (int i = set; i <= lastset; i++)
+            statestack_set(&e->Lunions, i, 0);
+        lastset = set - 1;
+        statestack_set(&e->Lunions, lastset, 1);
+    }
+    e->Lunions = oldLunions;
+    return sub && subtype(y, x, e, 0);
 }
 
 static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_t *saved, jl_savedenv_t *se)
@@ -932,17 +970,7 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
         JL_GC_POP();
         return i;
     }
-    jl_unionstate_t *state = &e->Runions;
-    int ui = statestack_get(state, state->depth);
-    state->depth++;
-    jl_value_t *choice;
-    if (ui == 0) {
-        state->more = state->depth;
-        choice = u->a;
-    }
-    else {
-        choice = u->b;
-    }
+    jl_value_t *choice = pick_union_element((jl_value_t*)u, e, 1);
     // try all possible choices in covariant position; union them all together at the top level
     return R ? intersect(x, choice, e, param) : intersect(choice, x, e, param);
 }
