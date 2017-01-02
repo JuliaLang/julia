@@ -603,6 +603,8 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     return (lx==ly && vx==vy) || (vy && (lx >= (vx ? ly : (ly-1))));
 }
 
+static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -645,12 +647,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         return 1;
     if (jl_is_uniontype(x)) {
         if (x == y) return 1;
-        if (param == 2) {
-            // in invariant context both parts must match in the same environment.
-            // TODO: don't double-count `y` with `param`
-            return subtype(((jl_uniontype_t*)x)->a, y, e, param) &&
-                subtype(((jl_uniontype_t*)x)->b, y, e, param);
-        }
         return subtype_union(y, (jl_uniontype_t*)x, e, 0, param);
     }
     if (jl_is_uniontype(y)) {
@@ -696,7 +692,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             }
             else {
                 e->invdepth++;
-                ans = subtype(x, jl_tparam0(yd), e, 2) && subtype(jl_tparam0(yd), x, e, 0);
+                ans = forall_exists_equal(x, jl_tparam0(yd), e);
                 e->invdepth--;
             }
             return ans;
@@ -719,7 +715,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             if (!subtype(xp1, yp1, e, 1)) return 0;
             // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
             e->invdepth++;
-            int ans = subtype(xp2, yp2, e, 2) && subtype(yp2, xp2, e, 0);
+            int ans = forall_exists_equal(xp2, yp2, e);
             e->invdepth--;
             return ans;
         }
@@ -728,7 +724,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         e->invdepth++;
         for (i=0; i < np; i++) {
             jl_value_t *xi = jl_tparam(xd, i), *yi = jl_tparam(yd, i);
-            if (!(xi == yi || (subtype(xi, yi, e, 2) && subtype(yi, xi, e, 0)))) {
+            if (!(xi == yi || forall_exists_equal(xi, yi, e))) {
                 ans = 0; break;
             }
         }
@@ -738,6 +734,28 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     if (jl_is_type(y))
         return x == jl_bottom_type;
     return x == y || jl_egal(x, y);
+}
+
+static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+{
+    jl_unionstate_t oldLunions = e->Lunions;
+    memset(e->Lunions.stack, 0, sizeof(e->Lunions.stack));
+    int lastset = 0;
+    int sub;
+    while (1) {
+        e->Lunions.more = 0;
+        e->Lunions.depth = 0;
+        sub = subtype(x, y, e, 2);
+        int set = e->Lunions.more;
+        if (!sub || !set)
+            break;
+        for (int i = set; i <= lastset; i++)
+            statestack_set(&e->Lunions, i, 0);
+        lastset = set - 1;
+        statestack_set(&e->Lunions, lastset, 1);
+    }
+    e->Lunions = oldLunions;
+    return sub && subtype(y, x, e, 0);
 }
 
 static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_t *saved, jl_savedenv_t *se)

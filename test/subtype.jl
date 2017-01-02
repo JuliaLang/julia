@@ -339,8 +339,8 @@ function test_5()
     @test isequal_type(Ref{T} where T<:Tuple{Union{Int,Int8},Int16},
                        Ref{T} where T<:Union{Tuple{Int,Int16},Tuple{Int8,Int16}})
 
-    @test_broken isequal_type(Ref{Tuple{Union{Int,Int8},Int16,T}} where T,
-                              Ref{Union{Tuple{Int,Int16,S},Tuple{Int8,Int16,S}}} where S)
+    @test isequal_type(Ref{Tuple{Union{Int,Int8},Int16,T}} where T,
+                       Ref{Union{Tuple{Int,Int16,S},Tuple{Int8,Int16,S}}} where S)
 end
 
 # tricky type variable lower bounds
@@ -407,6 +407,12 @@ function test_6()
 
     BB = @UnionAll S<:Bottom S
     @test issub(Ref{B}, @UnionAll BB<:U<:B Ref{U})
+end
+
+# uncategorized
+function test_7()
+    @test_broken isequal_type(Ref{Union{Int16, T}} where T, Ref{Union{Int16, S}} where S)
+    @test_broken isequal_type(Pair{Union{Int16, T}, T} where T, Pair{Union{Int16, S}, S} where S)
 end
 
 function test_Type()
@@ -807,6 +813,7 @@ test_3()
 test_4()
 test_5()
 test_6()
+test_7()
 test_Type()
 test_old()
 test_intersection()
