@@ -176,62 +176,57 @@ end
 
 function issub_env(x, y)
     e = Env()
-    ans = forall_exists_issub(x, y, e, false)
+    ans = forall_exists_issub(x, y, e)
     ans, e.vars
 end
 issub(x, y) = issub_env(x, y)[1]
 issub(x, y, env) = (x === y)
 issub(x::Ty, y::Ty, env) = (x === y) || x === BottomT
 
-function forall_exists_issub(x, y, env, anyunions::Bool)
+function forall_exists_issub(x, y, env)
     # for all combinations of elements from Unions on the left, there must
     # exist a combination of elements from Unions on the right that makes
     # issub() true. Unions in invariant position are on both the left and
     # the right in this formula.
-    for forall in false:anyunions
-        if !isempty(env.Lunions.stack)
-            env.Lunions.stack[end] = forall
-        end
+    sub = exists_issub(x, y, env)
 
-        !exists_issub(x, y, env, false) && return false
-
-        if env.Lunions.more
-            push!(env.Lunions.stack, false)
-            sub = forall_exists_issub(x, y, env, true)
-            pop!(env.Lunions.stack)
-            !sub && return false
+    if sub && env.Lunions.more
+        push!(env.Lunions.stack, false)
+        sub = forall_exists_issub(x, y, env)
+        if sub
+            env.Lunions.stack[end] = true
+            sub = forall_exists_issub(x, y, env)
         end
+        pop!(env.Lunions.stack)
     end
-    return true
+    return sub
 end
 
-function exists_issub(x, y, env, anyunions::Bool)
-    for exists in false:anyunions
-        if !isempty(env.Runions.stack)
-            env.Runions.stack[end] = exists
-        end
-        env.Lunions.depth = env.Runions.depth = 1
-        env.Lunions.more = env.Runions.more = false
+function exists_issub(x, y, env)
+    env.Lunions.depth = env.Runions.depth = 1
+    env.Lunions.more = env.Runions.more = false
 
-        found = issub(x, y, env)
+    found = issub(x, y, env)
 
-        if env.Lunions.more
-            # return up to forall_exists_issub. the recursion must have this shape:
-            # ∀₁         ∀₁
-            #   ∃₁  =>     ∀₂
-            #                ...
-            #                ∃₁
-            #                  ∃₂
-            return true
-        end
-        if env.Runions.more
-            push!(env.Runions.stack, false)
-            found = exists_issub(x, y, env, true)
-            pop!(env.Runions.stack)
-        end
-        found && return true
+    if env.Lunions.more
+        # return up to forall_exists_issub. the recursion must have this shape:
+        # ∀₁         ∀₁
+        #   ∃₁  =>     ∀₂
+        #                ...
+        #                ∃₁
+        #                  ∃₂
+        return true
     end
-    return false
+    if env.Runions.more
+        push!(env.Runions.stack, false)
+        found = exists_issub(x, y, env)
+        if !found
+            env.Runions.stack[end] = true
+            found = exists_issub(x, y, env)
+        end
+        pop!(env.Runions.stack)
+    end
+    return found
 end
 
 function issub_union(t, u::UnionT, env, R, state::UnionState)
