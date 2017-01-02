@@ -37,8 +37,7 @@
 // the forall/exists loop to grow the stack.
 typedef struct {
     int depth;
-    int8_t more;
-    int stacksize;
+    int more;
     uint32_t stack[10];  // stack of bits represented as a bit vector
 } jl_unionstate_t;
 
@@ -102,31 +101,18 @@ static jl_varbinding_t *lookup(jl_stenv_t *e, jl_tvar_t *v)
 
 static int statestack_get(jl_unionstate_t *st, int i)
 {
-    assert(i < st->stacksize);
+    assert(i >= 0 && i < sizeof(st->stack) * 8);
     // get the `i`th bit in an array of 32-bit words
     return (st->stack[i>>5] & (1<<(i&31))) != 0;
 }
 
 static void statestack_set(jl_unionstate_t *st, int i, int val)
 {
-    assert(i < st->stacksize);
+    assert(i >= 0 && i < sizeof(st->stack) * 8);
     if (val)
         st->stack[i>>5] |= (1<<(i&31));
     else
         st->stack[i>>5] &= ~(1<<(i&31));
-}
-
-static void statestack_push(jl_unionstate_t *st, int val)
-{
-    st->stacksize++;
-    assert(st->stacksize <= sizeof(st->stack)*8);
-    statestack_set(st, st->stacksize-1, val);
-}
-
-static void statestack_pop(jl_unionstate_t *st)
-{
-    assert(st->stacksize > 0);
-    st->stacksize--;
 }
 
 typedef struct {
@@ -287,13 +273,16 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 static int subtype_union(jl_value_t *t, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
-    if (state->depth >= state->stacksize) {
-        state->more = 1;
-        return 1;
-    }
     int ui = statestack_get(state, state->depth);
     state->depth++;
-    jl_value_t *choice = ui==0 ? u->a : u->b;
+    jl_value_t *choice;
+    if (ui == 0) {
+        state->more = state->depth; // memorize that this was the deepest available choice
+        choice = u->a;
+    }
+    else {
+        choice = u->b;
+    }
     return R ? subtype(t, choice, e, param) : subtype(choice, t, e, param);
 }
 
@@ -751,69 +740,56 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     return x == y || jl_egal(x, y);
 }
 
-static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int8_t anyunions, jl_value_t *saved, jl_savedenv_t *se)
+static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_t *saved, jl_savedenv_t *se)
 {
-    int exists;
-    for (exists=0; exists <= anyunions; exists++) {
-        if (e->Runions.stacksize > 0)
-            statestack_set(&e->Runions, e->Runions.stacksize-1, exists);
-        e->Lunions.depth = e->Runions.depth = 0;
-        e->Lunions.more = e->Runions.more = 0;
-        int found = subtype(x, y, e, 0);
-        if (e->Lunions.more) {
-            // If another "forall" decision is found while inside the "exists"
-            // loop, return up to forall_exists_subtype to add it to the "forall"
-            // loop. This gives the recursion the following shape, instead of
-            // simply nesting on each new decision point:
-            // ∀₁         ∀₁
-            //   ∃₁  =>     ∀₂
-            //                ...
-            //                ∃₁
-            //                  ∃₂
+    memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
+    int lastset = 0;
+    while (1) {
+        e->Runions.depth = 0;
+        e->Runions.more = 0;
+        e->Lunions.depth = 0;
+        e->Lunions.more = 0;
+        if (subtype(x, y, e, 0))
             return 1;
-        }
-        if (e->Runions.more) {
-            statestack_push(&e->Runions, 0);
-            found = exists_subtype(x, y, e, 1, saved, se);
-            statestack_pop(&e->Runions);
-        }
-        else {
-            if (!found) restore_env(e, saved, se);
-        }
-        if (found) return 1;
+        restore_env(e, saved, se);
+        int set = e->Runions.more;
+        if (!set)
+            return 0;
+        for (int i = set; i <= lastset; i++)
+            statestack_set(&e->Runions, i, 0);
+        lastset = set - 1;
+        statestack_set(&e->Runions, lastset, 1);
     }
-    return 0;
 }
 
-static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int8_t anyunions)
+static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
+    // The depth recursion has the following shape, after simplification:
+    // ∀₁
+    //   ∃₁
+    assert(e->Runions.depth == 0);
+    assert(e->Lunions.depth == 0);
     jl_value_t *saved=NULL; jl_savedenv_t se;
     JL_GC_PUSH1(&saved);
-    int forall;
-    for (forall=0; forall <= anyunions; forall++) {
-        if (e->Lunions.stacksize > 0)
-            statestack_set(&e->Lunions, e->Lunions.stacksize-1, forall);
-        save_env(e, &saved, &se);
-        if (!exists_subtype(x, y, e, 0, saved, &se)) {
-            free(se.buf);
-            JL_GC_POP();
-            return 0;
-        }
-        if (e->Lunions.more) {
-            restore_env(e, saved, &se);
-            statestack_push(&e->Lunions, 0);
-            int sub = forall_exists_subtype(x, y, e, 1);
-            statestack_pop(&e->Lunions);
-            if (!sub) {
-                free(se.buf);
-                JL_GC_POP();
-                return 0;
-            }
-        }
-        free(se.buf);
+    save_env(e, &saved, &se);
+
+    memset(e->Lunions.stack, 0, sizeof(e->Lunions.stack));
+    int lastset = 0;
+    int sub;
+    while (1) {
+        sub = exists_subtype(x, y, e, saved, &se);
+        int set = e->Lunions.more;
+        if (!sub || !set)
+            break;
+        for (int i = set; i <= lastset; i++)
+            statestack_set(&e->Lunions, i, 0);
+        lastset = set - 1;
+        statestack_set(&e->Lunions, lastset, 1);
     }
+
+    free(se.buf);
     JL_GC_POP();
-    return 1;
+    return sub;
 }
 
 static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
@@ -828,7 +804,6 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->intersection = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
-    e->Lunions.stacksize = 0;  e->Runions.stacksize = 0;
 }
 
 // subtyping entry points
@@ -853,7 +828,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     if (envsz == 0 && (y == (jl_value_t*)jl_any_type || x == jl_bottom_type || x == y))
         return 1;
     init_stenv(&e, env, envsz);
-    return forall_exists_subtype(x, y, &e, 0);
+    return forall_exists_subtype(x, y, &e);
 }
 
 static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -865,7 +840,7 @@ static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e2.ignore_free = e->ignore_free;
     e2.envsz = e->envsz;
     e2.envout = e->envout;
-    return forall_exists_subtype(x, y, &e2, 0);
+    return forall_exists_subtype(x, y, &e2);
 }
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *x, jl_value_t *y)
@@ -958,13 +933,16 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
         return i;
     }
     jl_unionstate_t *state = &e->Runions;
-    if (state->depth >= state->stacksize) {
-        state->more = 1;
-        return jl_bottom_type;
-    }
     int ui = statestack_get(state, state->depth);
     state->depth++;
-    jl_value_t *choice = ui==0 ? u->a : u->b;
+    jl_value_t *choice;
+    if (ui == 0) {
+        state->more = state->depth;
+        choice = u->a;
+    }
+    else {
+        choice = u->b;
+    }
     // try all possible choices in covariant position; union them all together at the top level
     return R ? intersect(x, choice, e, param) : intersect(choice, x, e, param);
 }
@@ -1241,7 +1219,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     JL_GC_PUSH5(&res, &save2, &vb.lb, &vb.ub, &save);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
-    if (res != jl_bottom_type && !e->Runions.more) {
+    if (res != jl_bottom_type) {
         if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov)) {
             restore_env(e, NULL, &se);
             vb.occurs_cov = vb.occurs_inv = 0;
@@ -1255,7 +1233,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.lb = u->var->lb; vb.ub = u->var->ub;
             vb.constraintkind = 2;
             res2 = intersect_unionall_(t, u, e, R, param, &vb);
-            if (res2 == jl_bottom_type && !e->Runions.more) {
+            if (res2 == jl_bottom_type) {
                 restore_env(e, save, &se);
                 vb.occurs_cov = vb.occurs_inv = 0;
                 vb.lb = u->var->lb; vb.ub = u->var->ub;
@@ -1433,8 +1411,6 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     e->invdepth--;
     if (jl_is_typevar(x) && jl_is_typevar(y) && (jl_is_typevar(ii) || !jl_is_type(ii)))
         return ii;
-    if (e->Runions.more)
-        return NULL;
     if (ii == jl_bottom_type) {
         if (!subtype_in_env(x, ii, e))
             return NULL;
@@ -1704,27 +1680,30 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     return jl_bottom_type;
 }
 
-static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int8_t anyunions)
+static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
-    int i;
-    jl_value_t *is[2] = {jl_bottom_type,jl_bottom_type};
-    JL_GC_PUSH2(&is[0], &is[1]);
-    for (i=0; i <= anyunions; i++) {
-        if (e->Runions.stacksize > 0)
-            statestack_set(&e->Runions, e->Runions.stacksize-1, i);
+    e->Runions.depth = 0;
+    e->Runions.more = 0;
+    memset(e->Runions.stack, 0, sizeof(e->Runions.stack));
+    int lastset = 0;
+    jl_value_t *ii = intersect(x, y, e, 0);
+    while (e->Runions.more) {
         e->Runions.depth = 0;
+        int set = e->Runions.more - 1;
         e->Runions.more = 0;
-        jl_value_t *ii = intersect(x, y, e, 0);
-        if (e->Runions.more) {
-            statestack_push(&e->Runions, 0);
-            ii = intersect_all(x, y, e, 1);
-            statestack_pop(&e->Runions);
-        }
-        is[i] = ii;
+        statestack_set(&e->Runions, set, 1);
+        for (int i = set + 1; i <= lastset; i++)
+            statestack_set(&e->Runions, i, 0);
+        lastset = set;
+
+        jl_value_t **is;
+        JL_GC_PUSHARGS(is, 2);
+        is[0] = ii;
+        is[1] = intersect(x, y, e, 0);
+        ii = jl_type_union(is, 2);
+        JL_GC_POP();
     }
-    jl_value_t *res = jl_type_union(is, 2);
-    JL_GC_POP();
-    return res;
+    return ii;
 }
 
 // type intersection entry points
@@ -1734,7 +1713,7 @@ JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
     jl_stenv_t e;
     init_stenv(&e, NULL, 0);
     e.intersection = 1;
-    return intersect_all(x, y, &e, 0);
+    return intersect_all(x, y, &e);
 }
 
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)
@@ -1759,7 +1738,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b, jl_svec_
         e.intersection = 1;
         e.envout = env;
         e.envsz = szb;
-        *ans = intersect_all(a, b, &e, 0);
+        *ans = intersect_all(a, b, &e);
         if (*ans == jl_bottom_type) goto bot;
         // TODO: don't yet use the types returned by `intersect`, since it returns
         // Unions of Tuples and other code can only handle direct Tuples.
