@@ -1170,7 +1170,7 @@ function cat_t(dims, T::Type, X...)
     return _cat(A, shape, catdims, X...)
 end
 
-function _cat(A, shape, catdims, X...)
+function _cat{N}(A, shape::NTuple{N}, catdims, X...)
     N = length(shape)
     offsets = zeros(Int, N)
     inds = Vector{UnitRange{Int}}(N)
@@ -1184,7 +1184,8 @@ function _cat(A, shape, catdims, X...)
                 inds[i] = 1:shape[i]
             end
         end
-        A[inds...] = x
+        I::NTuple{N, UnitRange{Int}} = (inds...,)
+        A[I...] = x
     end
     return A
 end
