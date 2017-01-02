@@ -148,6 +148,11 @@ end
 
 # Parsing
 
+const ipv4_leading_zero_error = """
+Leading zeros in IPv4 addresses are disallowed due to ambiguity.
+If octal or hexadecimal, convert to decimal, otherwise remove leading zero.
+"""
+
 function parse(::Type{IPv4}, str::AbstractString)
     fields = split(str,'.')
     i = 1
@@ -156,18 +161,8 @@ function parse(::Type{IPv4}, str::AbstractString)
         if isempty(f)
             throw(ArgumentError("empty field in IPv4 address"))
         end
-        if f[1] == '0'
-            if length(f) >= 2 && f[2] == 'x'
-                if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
-                    throw(ArgumentError("IPv4 field too large"))
-                end
-                r = parse(Int,f[3:end],16)
-            else
-                if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
-                    throw(ArgumentError("IPv4 field too large"))
-                end
-                r = parse(Int,f,8)
-            end
+        if length(f) > 1 && f[1] == '0'
+            throw(ArgumentError(ipv4_leading_zero_error))
         else
             r = parse(Int,f,10)
         end

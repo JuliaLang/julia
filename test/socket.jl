@@ -2,11 +2,13 @@
 
 @test ip"127.0.0.1" == IPv4(127,0,0,1)
 @test ip"192.0" == IPv4(192,0,0,0)
-@test ip"192.0xFFF" == IPv4(192,0,15,255)
-@test ip"192.0xFFFF" == IPv4(192,0,255,255)
-@test ip"192.0xFFFFF" == IPv4(192,15,255,255)
-@test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
-@test ip"022.0.0.1" == IPv4(18,0,0,1)
+
+# These used to work, but are now disallowed. Check that they error
+@test_throws ArgumentError parse(IPv4, "192.0xFFF") # IPv4(192,0,15,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFF") # IPv4(192,0,255,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFFF") # IPv4(192,15,255,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFFFF") # IPv4(192,255,255,255)
+@test_throws ArgumentError parse(IPv4, "022.0.0.1") # IPv4(18,0,0,1)
 
 @test UInt(IPv4(0x01020304)) == 0x01020304
 @test Int(IPv4("1.2.3.4")) == Int(0x01020304) == Int32(0x01020304)
