@@ -349,4 +349,4 @@ in which case obsolete versions of `f` may otherwise be called.
 (The drawback is that `invokelatest` is somewhat slower than calling
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
-invokelatest(f, args...) = ccall(:jl_invoke_latest, Any, (Any,Any), f, args)
+invokelatest(f, args...) = Core._apply_latest(f, args)
