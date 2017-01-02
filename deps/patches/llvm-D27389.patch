@@ -20,9 +20,9 @@ diff --git a/lib/Analysis/ConstantFolding.cpp b/lib/Analysis/ConstantFolding.cpp
 index 2d1edfe..1c0bf01a 100644
 --- a/lib/Analysis/ConstantFolding.cpp
 +++ b/lib/Analysis/ConstantFolding.cpp
-@@ -734,14 +734,15 @@ Constant *CastGEPIndices(Type *SrcElemTy, ArrayRef<Constant *> Ops,
-                          Type *ResultTy, Optional<unsigned> InRangeIndex,
-                          const DataLayout &DL, const TargetLibraryInfo *TLI) {
+@@ -692,14 +692,15 @@ Constant *CastGEPIndices(Type *SrcElemTy, ArrayRef<Constant *> Ops,
+                          Type *ResultTy, const DataLayout &DL,
+                          const TargetLibraryInfo *TLI) {
    Type *IntPtrTy = DL.getIntPtrType(ResultTy);
 +  Type *IntPtrScalarTy = IntPtrTy->getScalarType();
  
