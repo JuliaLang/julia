@@ -1143,6 +1143,9 @@ function cat_t(dims, T::Type, X...)
     return _cat(A, shape, catdims, X...)
 end
 
+# Compute the indices into which `x` should be stored, recursively walking
+# through each dimension of the output array. `i` keeps track of the recursion
+# count, and it recurses on `tail(shape)` until `shape` is empty.
 _cat_inds(i, x, ::Tuple{}, offsets, concat) = ()
 @inline function _cat_inds(i, x, shape, offsets, concat)
     if concat[i]
@@ -1161,6 +1164,8 @@ function _cat(A, shape, catdims, X...)
     return _catloop(A, shape, offsets, concat, X...)
 end
 
+# Recursively walk through each array to be concatenated, computing the indices
+# into the output array and doing the assignment.
 _catloop{N}(A, shape::NTuple{N}, offsets, concat) = A
 function _catloop{N}(A, shape::NTuple{N}, offsets, concat, x, X...)
     I = _cat_inds(1, x, shape, offsets, concat)
