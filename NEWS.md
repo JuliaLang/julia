@@ -130,6 +130,33 @@ This section lists changes that do not have deprecation warnings.
     (since it is shorthand for `NTuple{N,T} where T`). To get the old behavior of matching
     any tuple, use `NTuple{N,Any}` ([#18457]).
 
+  * `FloatRange` has been replaced by `StepRangeLen`, and the internal
+    representation of `LinSpace` has changed. Aside from changes in
+    the internal field names, this leads to several differences in
+    behavior ([#18777]):
+
+    + Both `StepRangeLen` and `LinSpace` can represent ranges of
+      arbitrary object types---they are no longer limited to
+      floating-point numbers.
+
+    + For ranges that produce `Float64`, `Float32`, or `Float16`
+      numbers, `StepRangeLen` can be used to produce values with
+      little or no roundoff error due to internal arithmetic that is
+      typically twice the precision of the output result.
+
+    + To take advantage of this precision, `linspace(start, stop,
+      len)` now returns a range of type `StepRangeLen` rather than
+      `LinSpace` when `start` and `stop` are
+      `FloatNN`. `LinSpace(start, stop, len)` always returns a
+      `LinSpace`.
+
+    + `StepRangeLen(a, step, len)` constructs a single-precision range
+      using the values and types of `a` and `step` as given, whereas
+      `range(a, step, len)` will attempt to match inputs `a::FloatNN`
+      and `step::FloatNN` to rationals and construct a `StepRangeLen`
+      that internally uses twice-precision arithmetic.  These two
+      outcomes exhibit differences in both precision and speed.
+
 Library improvements
 --------------------
 
@@ -891,6 +918,7 @@ Language tooling improvements
 [#18628]: https://github.com/JuliaLang/julia/issues/18628
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
+[#18777]: https://github.com/JuliaLang/julia/issues/18777
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18965]: https://github.com/JuliaLang/julia/issues/18965
