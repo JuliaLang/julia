@@ -19,15 +19,17 @@ char *shlib_ext = ".dylib";
 char *shlib_ext = ".so";
 #endif
 
-static char default_sysimg_path[512];
+static char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
 static const char *get_default_sysimg_path()
 {
-#ifndef CPUID_SPECIFIC_BINARIES
-    snprintf(default_sysimg_path, 512, "%s%s", JL_SYSTEM_IMAGE_PATH, shlib_ext);
-#else
-    snprintf(default_sysimg_path, 512, "%s_%llx%s", JL_SYSTEM_IMAGE_PATH, jl_cpuid_tag(), shlib_ext);
+#ifdef CPUID_SPECIFIC_BINARIES
+    char *path = &system_image_path[1];
+    size_t existing_length = strlen(path) - strlen(shlib_ext);
+    path += existing_length;
+    snprintf(path, sizeof(system_image_path) - existing_length,
+        "_%" PRIx64 "%s", jl_cpuid_tag(), shlib_ext);
 #endif
-    return default_sysimg_path;
+    return &system_image_path[1];
 }
 
 
