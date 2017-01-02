@@ -33,16 +33,16 @@ let n=10
     aimg  = randn(n,n)/2
     debug && println("symmetric eigendecomposition")
     for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
+        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         asym = a'+a                 # symmetric indefinite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
         y = randn(n)
         b = randn(n,n)/2
-        x = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex(x, zeros(n)) : x)
-        y = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex(y, zeros(n)) : y)
-        b = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(b, zeros(n,n)) : b)
+        x = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(x, zeros(n)) : x)
+        y = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(y, zeros(n)) : y)
+        b = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(b, zeros(n,n)) : b)
 
         debug && println("\ntype of a: ", eltya, "\n")
 
@@ -240,7 +240,7 @@ end
 # 17780
 let a = randn(2,2)
     a = a'a
-    b = complex(a,a)
+    b = complex.(a,a)
     c = Symmetric(b)
     @test conj(c) == conj(Array(c))
     cc = copy(c)

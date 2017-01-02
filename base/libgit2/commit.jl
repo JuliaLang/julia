@@ -4,7 +4,7 @@ function message(c::GitCommit, raw::Bool=false)
     local msg_ptr::Cstring
     msg_ptr = raw? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Void},), c.ptr) :
                    ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Void},), c.ptr)
-    if msg_ptr == Cstring_NULL
+    if msg_ptr == C_NULL
         return nothing
     end
     return unsafe_string(msg_ptr)

@@ -18,8 +18,10 @@ help:
 	@echo "  doctest   to run all doctests embedded in the documentation"
 	@echo "  check     to run linkcheck and doctests"
 
-deps:
+UnicodeData.txt:
 	$(JLDOWNLOAD) http://www.unicode.org/Public/9.0.0/ucd/UnicodeData.txt
+
+deps: UnicodeData.txt
 	$(JLCHECKSUM) UnicodeData.txt
 
 clean:

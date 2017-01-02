@@ -55,13 +55,10 @@ This section lists changes that do not have deprecation warnings.
 
   * `broadcast` now treats `Ref` (except for `Ptr`) arguments as 0-dimensional
     arrays ([#18965]).
+
   * `broadcast` now handles missing data (`Nullable`s) allowing operations to
-    be lifted over `Nullable`s, as if the `Nullable` were like an array with
-    zero or one element. ([#16961]). Note that many situations where `Nullable`
-    types had been treated like scalars before will no longer work. For
-    example, `get.(xs)` on `xs::Array{T <: Nullable}` will now treat the
-    nullables as a container, and attempt to operate on the data contained.
-    This use case will need to be migrated to `map(get, xs)`.
+    be lifted over mixtures of `Nullable`s and scalars, as if the `Nullable`
+    were like an array with zero or one element. ([#16961], [#19787]).
 
   * The runtime now enforces when new method definitions can take effect ([#17057]).
     The flip-side of this is that new method definitions should now reliably actually
@@ -69,6 +66,8 @@ This section lists changes that do not have deprecation warnings.
 
   * The array-scalar operations `div`, `mod`, `rem`, `&`, `|`, `xor`, `/`, `\`, `*`, `+`, and `-`
     now follow broadcast promotion rules ([#19692]).
+
+  * `broadcast!(f, A)` now calls `f()` for each element of `A`, rather than doing `fill!(A, f())` ([#19722]).
 
   * `rmprocs` now throws an exception if requested workers have not been completely
     removed before `waitfor` seconds. With a `waitfor=0`, `rmprocs` returns immediately
@@ -805,3 +804,4 @@ Language tooling improvements
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
 [#19680]: https://github.com/JuliaLang/julia/issues/19680
+[#19787]: https://github.com/JuliaLang/julia/issues/19787

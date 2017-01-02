@@ -340,7 +340,7 @@ seek(io, 0)
 @test readdlm(io, eltype(A)) == parent(A)
 
 amin, amax = extrema(parent(A))
-@test clamp(A, (amax+amin)/2, amax) == clamp(parent(A), (amax+amin)/2, amax)
+@test clamp.(A, (amax+amin)/2, amax).parent == clamp.(parent(A), (amax+amin)/2, amax)
 
 @test unique(A, 1) == parent(A)
 @test unique(A, 2) == parent(A)

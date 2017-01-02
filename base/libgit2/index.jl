@@ -111,13 +111,13 @@ function Base.count(idx::GitIndex)
     return ccall((:git_index_entrycount, :libgit2), Csize_t, (Ptr{Void},), idx.ptr)
 end
 
-function Base.getindex(idx::GitIndex, i::Csize_t)
-    ie_ptr = ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
-                  (Ptr{Void}, Csize_t), idx.ptr, i-1)
+function Base.getindex(idx::GitIndex, i::Integer)
+    ie_ptr = ccall((:git_index_get_byindex, :libgit2),
+                   Ptr{IndexEntry},
+                   (Ptr{Void}, Csize_t), idx.ptr, i-1)
     ie_ptr == C_NULL && return nothing
-    return unsafe_load(convert(Ptr{IndexEntry}, ie_ptr), 1)
+    return unsafe_load(ie_ptr)
 end
-Base.getindex(idx::GitIndex, i::Int) = getindex(idx, Csize_t(i))
 
 function Base.find(path::String, idx::GitIndex)
     pos_ref = Ref{Csize_t}(0)

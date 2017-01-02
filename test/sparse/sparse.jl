@@ -10,7 +10,7 @@ end
 end
 
 @testset "sparse matrix construction" begin
-    @test isequal(Array(sparse(complex(ones(5,5),ones(5,5)))), complex(ones(5,5),ones(5,5)))
+    @test isequal(Array(sparse(complex.(ones(5,5), ones(5,5)))), complex.(ones(5,5), ones(5,5)))
     @test_throws ArgumentError sparse([1,2,3], [1,2], [1,2,3], 3, 3)
     @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2], 3, 3)
     @test_throws ArgumentError sparse([1,2,3], [1,2,3], [1,2,3], 0, 1)
@@ -35,12 +35,12 @@ do33 = ones(3)
         sqrfloatmat, colfloatmat = sprand(4, 4, 0.5), sprand(4, 1, 0.5)
         @test_throws DimensionMismatch (+)(sqrfloatmat, colfloatmat)
         @test_throws DimensionMismatch (-)(sqrfloatmat, colfloatmat)
-        @test_throws DimensionMismatch min(sqrfloatmat, colfloatmat)
-        @test_throws DimensionMismatch max(sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch map(min, sqrfloatmat, colfloatmat)
+        @test_throws DimensionMismatch map(max, sqrfloatmat, colfloatmat)
         sqrboolmat, colboolmat = sprand(Bool, 4, 4, 0.5), sprand(Bool, 4, 1, 0.5)
-        @test_throws DimensionMismatch (&)(sqrboolmat, colboolmat)
-        @test_throws DimensionMismatch (|)(sqrboolmat, colboolmat)
-        # @test_throws DimensionMismatch xor(sqrboolmat, colboolmat) # vectorized xor no longer exists
+        @test_throws DimensionMismatch map(&, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(|, sqrboolmat, colboolmat)
+        @test_throws DimensionMismatch map(xor, sqrboolmat, colboolmat)
     end
 end
 
@@ -546,8 +546,8 @@ end
     # Test representatives of [unary functions that map both zeros and nonzeros to nonzeros]
     @test cos.(Afull) == Array(cos.(A))
     # Test representatives of remaining vectorized-nonbroadcast unary functions
-    @test ceil(Int, Afull) == Array(ceil(Int, A))
-    @test floor(Int, Afull) == Array(floor(Int, A))
+    @test ceil.(Int, Afull) == Array(ceil.(Int, A))
+    @test floor.(Int, Afull) == Array(floor.(Int, A))
     # Tests of real, imag, abs, and abs2 for SparseMatrixCSC{Int,X}s previously elsewhere
     for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
         R = rand(T[1:100;], 2, 2)
@@ -800,7 +800,7 @@ end
     @test countnz(A) == 11
     @test A[I] == A[X] == c
 
-    S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
+    S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
     I = sprand(Bool, 50, 30, 0.2)
     FS = Array(S)
     FI = Array(I)
@@ -828,7 +828,7 @@ end
     S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
 
-    S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
+    S = sprand(50, 30, 0.5, x -> round.(Int, rand(x) * 100))
     N = length(S) >> 2
     I = randperm(N) .* 4
     J = randperm(N)
@@ -1170,89 +1170,6 @@ end
     @test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
 end
 
-@testset "sparse matrix broadcasting" begin
-    A = sprand(10,10,0.3)
-    B = sprand(10,10,0.3)
-    CF = rand(10,10)
-    AF = Array(A)
-    BF = Array(B)
-    C = sparse(CF)
-    @test A .* B == AF .* BF
-    @test A[1,:] .* B == AF[1,:] .* BF
-    @test A[:,1] .* B == AF[:,1] .* BF
-    @test A .* B[1,:] == AF .*  BF[1,:]
-    @test A .* B[:,1] == AF .*  BF[:,1]
-
-    @test A .* B == AF .* BF
-    @test A[1,:] .* BF == AF[1,:] .* BF
-    @test A[:,1] .* BF == AF[:,1] .* BF
-    @test A .* BF[1,:] == AF .*  BF[1,:]
-    @test A .* BF[:,1] == AF .*  BF[:,1]
-
-    @test A .* B == AF .* BF
-    @test AF[1,:] .* B == AF[1,:] .* BF
-    @test AF[:,1] .* B == AF[:,1] .* BF
-    @test AF .* B[1,:] == AF .*  BF[1,:]
-    @test AF .* B[:,1] == AF .*  BF[:,1]
-
-    @test A .* B == AF .* BF
-    @test A[1,:] .* B == AF[1,:] .* BF
-    @test A[:,1] .* B == AF[:,1] .* BF
-    @test A .* B[1,:] == AF .*  BF[1,:]
-    @test A .* B[:,1] == AF .*  BF[:,1]
-
-    @test A .* 3 == AF .* 3
-    @test 3 .* A == 3 .* AF
-    #@test A[1,:] .* 3 == AF[1,:] .* 3
-    @test all(A[1,:] .* 3 .== AF[1,:] .* 3)
-    #@test A[:,1] .* 3 == AF[:,1] .* 3
-    @test all(A[:,1] .* 3 .== AF[:,1] .* 3)
-    #TODO: simple comparation with == returns false because the left side is a (two-dimensional) SparseMatrixCSC
-    #      while the right side is a Vector
-
-    @test A .- 3 == AF .- 3
-    @test 3 .- A == 3 .- AF
-    @test A .- B == AF .- BF
-    @test A - AF == zeros(AF)
-    @test AF - A == zeros(AF)
-    @test A[1,:] .- B == AF[1,:] .- BF
-    @test A[:,1] .- B == AF[:,1] .- BF
-    @test A .- B[1,:] == AF .-  BF[1,:]
-    @test A .- B[:,1] == AF .-  BF[:,1]
-
-    @test A .+ 3 == AF .+ 3
-    @test 3 .+ A == 3 .+ AF
-    @test A .+ B == AF .+ BF
-    @test A + AF == AF + A
-    @test (A .< B) == (AF .< BF)
-    @test (A .!= B) == (AF .!= BF)
-
-    @test A ./ 3 == AF ./ 3
-    @test A .\ 3 == AF .\ 3
-    @test 3 ./ A == 3 ./ AF
-    @test 3 .\ A == 3 .\ AF
-    @test A .\ C == AF .\ CF
-    @test A ./ C == AF ./ CF
-    @test A ./ CF[:,1] == AF ./ CF[:,1]
-    @test A .\ CF[:,1] == AF .\ CF[:,1]
-    @test BF ./ C == BF ./ CF
-    @test BF .\ C == BF .\ CF
-
-    @test A .^ 3 == AF .^ 3
-    @test 3 .^ A == 3 .^ AF
-    @test A .^ BF[:,1] == AF .^ BF[:,1]
-    @test BF[:,1] .^ A == BF[:,1] .^ AF
-end
-
-@testset "empty matrix broadcasting" begin
-    @test spzeros(0,0)  + spzeros(0,0)  == zeros(0,0)
-    @test spzeros(0,0)  * spzeros(0,0)  == zeros(0,0)
-    @test spzeros(1,0) .+ spzeros(2,1)  == zeros(2,0)
-    @test spzeros(1,0) .* spzeros(2,1)  == zeros(2,0)
-    @test spzeros(1,2) .+ spzeros(0,1)  == zeros(0,2)
-    @test spzeros(1,2) .* spzeros(0,1)  == zeros(0,2)
-end
-
 @testset "error conditions for reinterpret, reshape, and squeeze" begin
     A = sprand(Bool, 5,5,0.2)
     @test_throws ArgumentError reinterpret(Complex128,A)
@@ -1330,9 +1247,9 @@ end
         Aposzeros = setindex!(copy(A), 2, poszerosinds)
         Anegzeros = setindex!(copy(A), -2, negzerosinds)
         Abothsigns = setindex!(copy(Aposzeros), -2, negzerosinds)
-        map!(x -> x == 2 ? 0.0 : x, Aposzeros.nzval)
-        map!(x -> x == -2 ? -0.0 : x, Anegzeros.nzval)
-        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, Abothsigns.nzval)
+        map!(x -> x == 2 ? 0.0 : x, Aposzeros.nzval, Aposzeros.nzval)
+        map!(x -> x == -2 ? -0.0 : x, Anegzeros.nzval, Anegzeros.nzval)
+        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, Abothsigns.nzval, Abothsigns.nzval)
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
             @test dropzeros!(copy(Awithzeros)) == A
@@ -1515,17 +1432,17 @@ end
     @test A12118 - B12118 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], [-1,1,3,1,4,7])
     @test typeof(A12118 - B12118) == SparseMatrixCSC{Int,Int}
 
-    @test max(A12118, B12118) == sparse([1,2,3,4,5], [1,2,3,4,5], [2,2,3,4,5])
-    @test typeof(max(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+    @test max.(A12118, B12118) == sparse([1,2,3,4,5], [1,2,3,4,5], [2,2,3,4,5])
+    @test typeof(max.(A12118, B12118)) == SparseMatrixCSC{Int,Int}
 
-    @test min(A12118, B12118) == sparse([1,2,4,5], [1,2,3,5], [1,1,-1,-2])
-    @test typeof(min(A12118, B12118)) == SparseMatrixCSC{Int,Int}
+    @test min.(A12118, B12118) == sparse([1,2,4,5], [1,2,3,5], [1,1,-1,-2])
+    @test typeof(min.(A12118, B12118)) == SparseMatrixCSC{Int,Int}
 end
 
 @testset "sparse matrix norms" begin
     Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
     Ar = sprandn(10,10,.1)
-    Ai = ceil(Int,Ar*100)
+    Ai = ceil.(Int,Ar*100)
     @test norm(Ac,1) ≈ norm(Array(Ac),1)
     @test norm(Ac,Inf) ≈ norm(Array(Ac),Inf)
     @test vecnorm(Ac) ≈ vecnorm(Array(Ac))
@@ -1535,11 +1452,11 @@ end
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
-    Ai = trunc(Int,Ar*100)
+    Ai = trunc.(Int, Ar*100)
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
-    Ai = round(Int,Ar*100)
+    Ai = round.(Int, Ar*100)
     @test norm(Ai,1) ≈ norm(Array(Ai),1)
     @test norm(Ai,Inf) ≈ norm(Array(Ai),Inf)
     @test vecnorm(Ai) ≈ vecnorm(Array(Ai))
@@ -1567,9 +1484,9 @@ end
 
 @testset "sparse matrix normestinv" begin
     Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
-    Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
+    Aci = ceil.(Int64, 100*sprand(20,20,.5)) + im*ceil.(Int64, sprand(20,20,.5))
     Ar = sprandn(20,20,.5)
-    Ari = ceil(Int64,100*Ar)
+    Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
         @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(Array(Ac)),1) 1e-4
         @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(Array(Aci)),1) 1e-4
@@ -1589,27 +1506,26 @@ end
     A13024 = sparse([1,2,3,4,5], [1,2,3,4,5], fill(true,5))
     B13024 = sparse([1,2,4,5],   [1,2,3,5],   fill(true,4))
 
-    @test A13024 & B13024 == sparse([1,2,5], [1,2,5], fill(true,3))
-    @test typeof(A13024 & B13024) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(&, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(broadcast(&, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test A13024 | B13024 == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-    @test typeof(A13024 | B13024) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(|, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(broadcast(|, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
     @test broadcast(⊻, A13024, B13024) == sparse([3,4,4], [3,3,4], fill(true,3), 5, 5)
     @test typeof(broadcast(⊻, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test max(A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
-    @test typeof(max(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(max, A13024, B13024) == sparse([1,2,3,4,4,5], [1,2,3,3,4,5], fill(true,6))
+    @test typeof(broadcast(max, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test min(A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
-    @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
+    @test broadcast(min, A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
+    @test typeof(broadcast(min, A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    @test broadcast(xor, A13024, B13024) == broadcast(xor, Array(A13024), Array(B13024))
-    for op in (+, -, &, |)
+    for op in (+, -)
         @test op(A13024, B13024) == op(Array(A13024), Array(B13024))
     end
-    for op in (max, min)
-        @test op(A13024, B13024) == op.(Array(A13024), Array(B13024))
+    for op in (max, min, &, |, xor)
+        @test op.(A13024, B13024) == op.(Array(A13024), Array(B13024))
     end
 end
 
@@ -1688,7 +1604,7 @@ end
 @testset "issue #16073" begin
     @inferred sprand(1, 1, 1.0)
     @inferred sprand(1, 1, 1.0, rand, Float64)
-    @inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))
+    @inferred sprand(1, 1, 1.0, x -> round.(Int, rand(x) * 100))
 end
 
 # Test that concatenations of combinations of sparse matrices with sparse matrices or dense
@@ -1772,31 +1688,6 @@ end
     @inferred hcat(sparse(rand(2,1)), eye(2,2))
 end
 
-# Test that broadcast[!](f, [C::SparseMatrixCSC], A::SparseMatrixCSC, B::SparseMatrixCSC)
-# returns the correct (densely populated) result when f(zero(eltype(A)), zero(eltype(B))) != 0
-@testset "check that broadcast[!](f, ... yields the correct (densely populated) result when f does not preserve zeros" begin
-    N = 5
-    sparsesqrmat = sprand(N, N, 0.5)
-    sparsesqrmat2 = sprand(N, N, 0.5)
-    sparserowmat = sprand(1, N, 0.5)
-    sparsecolmat = sprand(N, 1, 0.5)
-    sparse1x1matz = spzeros(1, 1)
-    sparse1x1mato = spones(sparse1x1matz)
-    zeroscourge = (x, y) -> x + y + 1
-    # test case where the matrices have the same shape and no singleton dimensions
-    @test broadcast(zeroscourge, sparsesqrmat, sparsesqrmat2) ==
-            broadcast(zeroscourge, Matrix(sparsesqrmat), Matrix(sparsesqrmat2))
-    # test combinations where either or both matrices have one or more singleton dimensions
-    sparsemats = (sparsesqrmat, sparserowmat, sparsecolmat, sparse1x1matz, sparse1x1mato)
-    densemats = map(Matrix, sparsemats)
-    for (sparseA, denseA) in zip(sparsemats, densemats)
-        for (sparseB, denseB) in zip(sparsemats, densemats)
-            @test broadcast(zeroscourge, sparseA, sparseB) ==
-                    broadcast(zeroscourge, denseA, denseB)
-        end
-    end
-end
-
 # Check that `broadcast` methods specialized for unary operations over
 # `SparseMatrixCSC`s determine a reasonable return type.
 @testset "issue #18974" begin
@@ -1806,135 +1697,4 @@ end
 # Check calling of unary minus method specialized for SparseMatrixCSCs
 @testset "issue #19503" begin
     @test which(-, (SparseMatrixCSC,)).module == Base.SparseArrays
-end
-
-@testset "map[!] over sparse matrices" begin
-    N, M = 10, 12
-    # test map/map! implementation specialized for a single (input) sparse matrix
-    # (also tested through broadcast/broadcast! over a single (input) sparse matrix)
-    # --> test map entry point
-    A = sprand(N, M, 0.4)
-    fA = Array(A)
-    @test map(sin, A) == sparse(map(sin, fA))
-    @test map(cos, A) == sparse(map(cos, fA))
-    # --> test map! entry point
-    fX = copy(fA); X = sparse(fX)
-    map!(sin, X, A); X = sparse(fX) # warmup for @allocated
-    @test (@allocated map!(sin, X, A)) == 0
-    @test map!(sin, X, A) == sparse(map!(sin, fX, fA))
-    @test map!(cos, X, A) == sparse(map!(cos, fX, fA))
-    @test_throws DimensionMismatch map!(sin, X, spzeros(N, M - 1))
-    # test map/map! implementation specialized for a pair of (input) sparse matrices
-    f(x, y) = x + y + 1
-    A = sprand(N, M, 0.3)
-    B = convert(SparseMatrixCSC{Float32,Int32}, sprand(N, M, 0.3))
-    # use different types to check internal type stability via allocation tests below
-    fA, fB = map(Array, (A, B))
-    # --> test map entry point
-    @test map(+, A, B) == sparse(map(+, fA, fB))
-    @test map(*, A, B) == sparse(map(*, fA, fB))
-    @test map(f, A, B) == sparse(map(f, fA, fB))
-    @test_throws DimensionMismatch map(+, A, spzeros(N, M - 1))
-    # --> test map! entry point
-    fX = fA .+ fB; X = sparse(fX)
-    map!(+, X, A, B); X = sparse(fX) # warmup for @allocated
-    @test (@allocated map!(+, X, A, B)) == 0
-    @test map!(+, X, A, B) == sparse(map!(+, fX, fA, fB))
-    fX = fA .* fB; X = sparse(fX)
-    map!(*, X, A, B); X = sparse(fX) # warmup for @allocated
-    @test (@allocated map!(*, X, A, B)) == 0
-    @test map!(*, X, A, B) == sparse(map!(*, fX, fA, fB))
-    @test map!(f, X, A, B) == sparse(map!(f, fX, fA, fB))
-    @test_throws DimensionMismatch map!(f, X, A, spzeros(N, M - 1))
-    # test map/map! implementation for an arbitrary number of (input) sparse matrices
-    f(x, y, z) = x + y + z + 1
-    A = sprand(N, M, 0.2)
-    B = sprand(N, M, 0.2)
-    C = convert(SparseMatrixCSC{Float32,Int32}, sprand(N, M, 0.2))
-    # use different types to check internal type stability via allocation tests below
-    fA, fB, fC = map(Array, (A, B, C))
-    # --> test map entry point
-    @test map(+, A, B, C) == sparse(map(+, fA, fB, fC))
-    @test map(*, A, B, C) == sparse(map(*, fA, fB, fC))
-    @test map(f, A, B, C) == sparse(map(f, fA, fB, fC))
-    @test_throws DimensionMismatch map(+, A, B, spzeros(N, M - 1))
-    # --> test map! entry point
-    fX = fA .+ fB .+ fC; X = sparse(fX)
-    map!(+, X, A, B, C); X = sparse(fX) # warmup for @allocated
-    @test (@allocated map!(+, X, A, B, C)) == 0
-    @test map!(+, X, A, B, C) == sparse(map!(+, fX, fA, fB, fC))
-    fX = fA .* fB .* fC; X = sparse(fX)
-    map!(*, X, A, B, C); X = sparse(fX) # warmup for @allocated
-    @test (@allocated map!(*, X, A, B, C)) == 0
-    @test map!(*, X, A, B, C) == sparse(map!(*, fX, fA, fB, fC))
-    @test map!(f, X, A, B, C) == sparse(map!(f, fX, fA, fB, fC))
-    @test_throws DimensionMismatch map!(f, X, A, B, spzeros(N, M - 1))
-end
-
-@testset "test that broadcast! does not allocate unnecessarily" begin
-    # broadcast! over a single sparse matrix falls back to map!, tested above
-    N, M = 10, 12
-    # test broadcast! implementation specialized for a pair of (input) sparse matrices
-    f(x, y) = x + y + 1
-    A = sprand(N, M, 0.3)
-    B = convert(SparseMatrixCSC{Float32,Int32}, sprand(N, 1, 0.3))
-    # use different types to check internal type stability via allocation tests below
-    X = sparse(Array(A) .+ Array(B))
-    broadcast!(+, copy(X), A, B) # warmup for @allocated
-    @test (@allocated broadcast!(+, X, A, B)) == 0
-    X = sparse(Array(A) .* Array(B))
-    broadcast!(*, copy(X), A, B) # warmup for @allocated
-    @test (@allocated broadcast!(*, X, A, B)) == 0
-    X = sparse(broadcast(f, Array(A), Array(B)))
-    broadcast!(f, copy(X), A, B) # warmup for @allocated
-    @test (@allocated broadcast!(f, X, A, B)) == 0
-    # test broadcast! implementation for an arbitrary number of (input) sparse matrices
-    f(x, y, z) = x + y + z + 1
-    A = sprand(N, M, 0.2)
-    B = sprand(N, 1, 0.2)
-    C = convert(SparseMatrixCSC{Float32,Int32}, sprand(1, M, 0.2))
-    # use different types to check internal type stability via allocation tests below
-    X = sparse(Array(A) .+ Array(B) .+ Array(C))
-    broadcast!(+, copy(X), A, B, C) # warmup for @allocated
-    @test (@allocated broadcast!(+, X, A, B, C)) == 0
-    X = sparse(Array(A) .* Array(B) .* Array(C))
-    broadcast!(*, copy(X), A, B, C) # warmup for @allocated
-    @test (@allocated broadcast!(*, X, A, B, C)) == 0
-    X = sparse(broadcast(f, Array(A), Array(B), Array(C)))
-    broadcast!(f, copy(X), A, B, C) # warmup for @allocated
-    @test_broken (@allocated broadcast!(f, X, A, B, C)) == 0
-    # this last test allocates 16 bytes in the entry point for broadcast!, but none of the
-    # earlier tests of the same code path allocate. no allocation shows up with
-    # --track-allocation=user. allocation shows up on the first line of the entry point
-    # for broadcast! with --track-allocation=all, but that first line almost certainly
-    # should not allocate. so not certain what's going on.
-end
-
-@testset "test basic correctness of broadcast/broadcast! implementation for more than two (input) sparse matrices" begin
-    N, M = 10, 12
-    f(xs...) = sum(xs) + 1
-    A = sprand(N, M, 0.2)
-    B = sprand(N, 1, 0.2)
-    C = sprand(1, M, 0.2)
-    D = sprand(1, 1, 1.0)
-    E = spzeros(1, 1)
-    fA, fB, fC, fD, fE = map(Array, (A, B, C, D, E))
-    fX, fY = ones(fA), ones(fB)
-    X, Y = sparse(fX), sparse(fY)
-    for op in (+, *, f)
-        # horizontal expansion only
-        @test broadcast(op, A, B, B) == sparse(broadcast(op, fA, fB, fB))
-        @test broadcast!(op, X, A, B, B) == sparse(broadcast!(op, fX, fA, fB, fB))
-        # vertical expansion only
-        @test broadcast(op, B, D, E) == sparse(broadcast(op, fB, fD, fE))
-        @test broadcast!(op, Y, B, D, E) == sparse(broadcast!(op, fY, fB, fD, fE))
-        # separate horizontal and vertical expansion
-        @test broadcast(op, A, B, C) == sparse(broadcast(op, fA, fB, fC))
-        @test broadcast!(op, X, A, B, C) == sparse(broadcast!(op, fX, fA, fB, fC))
-        # simultaneous horizontal and vertical expansion
-        @test broadcast(op, A, B, C, D) == sparse(broadcast(op, fA, fB, fC, D))
-        @test broadcast!(op, X, A, B, C, D) == sparse(broadcast!(op, fX, fA, fB, fC, fD))
-    end
-    @test_throws DimensionMismatch broadcast(+, A, B, speye(N))
-    @test_throws DimensionMismatch broadcast!(+, X, A, B, speye(N))
 end

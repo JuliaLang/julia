@@ -6,7 +6,7 @@
 @test isequal(map((x)->"$x"[end:end], 9:11), ["9", "0", "1"])
 # TODO: @test map!() much more thoroughly
 let a = [1.0, 2.0]
-    map!(sin, a)
+    map!(sin, a, a)
     @test isequal(a, sin.([1.0, 2.0]))
 end
 # map -- ranges.jl

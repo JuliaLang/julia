@@ -463,7 +463,6 @@ export
     zeta,
 
 # arrays
-    bitbroadcast,
     broadcast!,
     broadcast,
     broadcast_getindex,

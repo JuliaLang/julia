@@ -98,6 +98,11 @@ end
 @test Test6.size == 16
 @test typeof(convert(Integer, _one_Test6)) == UInt128
 
+# enum values must be integers
+@test_throws ArgumentError eval(:(@enum Test7 _zero="zero"))
+@test_throws ArgumentError eval(:(@enum Test8 _zero='0'))
+@test_throws ArgumentError eval(:(@enum Test9 _zero=0.5))
+
 # test macro handles keyword arguments
 @enum(Test11, _zero_Test11=2,
               _one_Test11,
