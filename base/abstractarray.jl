@@ -1170,29 +1170,23 @@ function cat_t(dims, T::Type, X...)
     return _cat(A, shape, catdims, X...)
 end
 
-_cat_inds(i, x, ::Tuple{}, offsets, concat) = ()
-@inline function _cat_inds(i, x, shape, offsets, concat)
-    if concat[i]
-        val = offsets[i] + cat_indices(x, i)
-        offsets[i] += cat_size(x, i)
-    else
-        val = 1:shape[1]
-    end
-    return (val, _cat_inds(i+1, x, tail(shape), offsets, concat)...)
-end
-
 function _cat(A, shape, catdims, X...)
     N = length(shape)
     offsets = zeros(Int, N)
+    inds = Vector{UnitRange{Int}}(N)
     concat = copy!(zeros(Bool, N), catdims)
-    return _catloop(A, shape, offsets, concat, X...)
-end
-
-_catloop{N}(A, shape::NTuple{N}, offsets, concat) = A
-function _catloop{N}(A, shape::NTuple{N}, offsets, concat, x, X...)
-    I = _cat_inds(1, x, shape, offsets, concat)
-    A[I...] = x
-    return _catloop(A, shape, offsets, concat, X...)
+    for x in X
+        for i = 1:N
+            if concat[i]
+                inds[i] = offsets[i] + cat_indices(x, i)
+                offsets[i] += cat_size(x, i)
+            else
+                inds[i] = 1:shape[i]
+            end
+        end
+        A[inds...] = x
+    end
+    return A
 end
 
 """
