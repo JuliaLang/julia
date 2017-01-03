@@ -675,7 +675,6 @@ end
     f0 = (lv-1)*p # 0-based interpolated index
     t0 = trunc(f0)
     h = f0 - t0
-
     i = trunc(Int,t0) + 1
 
     if h == 0
@@ -683,7 +682,11 @@ end
     else
         a = T(v[i])
         b = T(v[i+1])
-        return a + ifelse(a == b, zero(a), h*(b-a))
+        if isfinite(a) && isfinite(b)
+            return a + h*(b-a)
+        else
+            return (1-h)*a + h*b
+        end
     end
 end
 
