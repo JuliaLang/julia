@@ -235,6 +235,24 @@ end
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
+@testset "exp function" for T in (Float64, Float32)
+    @testset "$T accuracy" begin
+        X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
+        for x in X
+            y, yb = exp(x), exp(big(x))
+            @test abs(y-yb) <= 1.0*eps(T(yb))
+        end
+    end
+    @testset "$T edge cases" begin
+        @test isnan(exp(T(NaN)))
+        @test exp(T(-Inf)) === T(0.0)
+        @test exp(T(Inf)) === T(Inf)
+        @test exp(T(0.0)) === T(1.0) # exact
+        @test exp(T(5000.0)) === T(Inf)
+        @test exp(T(-5000.0)) === T(0.0)
+    end
+end
+
 @testset "test abstractarray trig fxns" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA.')/2.

@@ -73,6 +73,7 @@ The following components of Julia's standard library have separate licenses:
 - base/fftw.jl (see [FFTW](http://fftw.org/doc/License-and-Copyright.html))
 - base/linalg/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 - base/linalg/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
+- base/special/exp.jl (see [FREEBSD MSUN](https://github.com/freebsd/freebsd) [FreeBSD/2-clause BSD/Simplified BSD License])
 
 
 Julia's build process uses the following external tools:
