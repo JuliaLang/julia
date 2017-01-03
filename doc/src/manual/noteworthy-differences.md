@@ -27,11 +27,12 @@ may trip up Julia users accustomed to MATLAB:
     similar capabilities.
   * Julia has true one-dimensional arrays. Column vectors are of size `N`, not `Nx1`. For example,
     [`rand(N)`](@ref) makes a 1-dimensional array.
-  * In Julia v0.3, concatenating scalars and arrays with the syntax `[x,y,z]` concatenates in the
-    first dimension ("vertically"). For concatenation in the second dimension ("horizontally"), use
-    spaces as in `[x y z]`. To construct block matrices (concatenating in the first two dimensions),
-    the syntax `[a b; c d]` is used to avoid confusion. In Julia v0.4, the concatenation syntax `[x, [y, z]]`
-    is deprecated in favor of `[x; [y, z]]`.
+  * In Julia, `[x,y,z]` will always construct a 3-element array containing `x`, `y` and `z`.
+    - To concatenate in the first ("vertical") dimension use either [`vcat(x,y,z)`](@ref) or separate
+      with semicolons (`[x; y; z]`).
+    - To concatenate in the second ("horizontal") dimension use either [`hcat(x,y,z)`](@ref) or separate
+      with spaces (`[x y z]`).
+    - To construct block matrices (concatenating in the first two dimensions), use `[a b; c d]`.
   * In Julia, `a:b` and `a:b:c` construct `Range` objects. To construct a full vector like in MATLAB,
     use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. `Range` will
     act like a normal array in most cases but is more efficient because it lazily computes its values.
