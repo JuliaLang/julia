@@ -256,9 +256,12 @@ end
 # If the result is one-dimensional and it's a Colon, then linear
 # indexing uses the indices along the given dimension. Otherwise
 # linear indexing always starts with 1.
-compute_offset1(parent, stride1::Integer, I::Tuple) = (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(I)..., I))
-compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Colon}, I::Tuple) = (@_inline_meta; compute_linindex(parent, I) - stride1*first(indices(parent, dims[1])))  # index-preserving case
-compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) = (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
+compute_offset1(parent, stride1::Integer, I::Tuple) =
+    (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(I)..., I))
+compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Colon}, I::Tuple) =
+    (@_inline_meta; compute_linindex(parent, I) - stride1*first(indices(parent, dims[1])))  # index-preserving case
+compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
+    (@_inline_meta; compute_linindex(parent, I) - stride1)  # linear indexing starts with 1
 
 function compute_linindex{N}(parent, I::NTuple{N})
     @_inline_meta
@@ -283,10 +286,13 @@ end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 
 find_extended_dims(I) = (@_inline_meta; _find_extended_dims((), (), 1, I...))
-_find_extended_dims(dims, inds, dim) = (@_inline_meta; return (dims, inds));
-_find_extended_dims(dims, inds, dim, ::Real, I...) = (@_inline_meta; _find_extended_dims(dims, inds, dim+1, I...))
-_find_extended_dims(dims, inds, dim, i1::AbstractCartesianIndex, I...) = (@_inline_meta; _find_extended_dims(dims, inds, dim, i1.I..., I...))
-_find_extended_dims(dims, inds, dim, i1, I...) = (@_inline_meta; _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...))
+_find_extended_dims(dims, inds, dim) = (@_inline_meta; return (dims, inds))
+_find_extended_dims(dims, inds, dim, ::Real, I...) =
+    (@_inline_meta; _find_extended_dims(dims, inds, dim+1, I...))
+_find_extended_dims(dims, inds, dim, i1::AbstractCartesianIndex, I...) =
+    (@_inline_meta; _find_extended_dims(dims, inds, dim, i1.I..., I...))
+_find_extended_dims(dims, inds, dim, i1, I...) =
+    (@_inline_meta; _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...))
 
 unsafe_convert{T,N,P,I<:Tuple{Vararg{RangeIndex}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
