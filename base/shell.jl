@@ -168,5 +168,20 @@ function print_shell_escaped(
 end
 print_shell_escaped(io::IO; special::String=shell_special) = nothing
 
+"""
+    shell_escape(args::Union{Cmd,AbstractString...}; special::AbstractString="$shell_special")
+
+The unexported `shell_escape` function is the inverse of the unexported `shell_split` function:
+it takes a string or command object and escapes any special characters in such a way that calling
+`shell_split` on it would give back the array of words in the original command. The `special`
+keyword argument controls what characters in addition to whitespace, backslashes, quotes and
+dollar signs are considered to be special. Examples:
+
+    julia> Base.shell_escape("echo", "this", "&&", "that")
+    "echo this '&&' that"
+
+    julia> Base.shell_escape("cat", "/foo/bar baz", "&&", "echo", "done", special="")
+    "cat '/foo/bar baz' && echo done"
+"""
 shell_escape(args::AbstractString...; special::AbstractString=shell_special) =
     sprint(io->print_shell_escaped(io, args..., special=special))
