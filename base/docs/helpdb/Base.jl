@@ -506,9 +506,9 @@ redisplay
     searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Returns the range of indices of `a` which compare as equal to `x` according to the order
-specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already sorted in that
-order. Returns an empty range located at the insertion point if `a` does not contain values
-equal to `x`.
+(using binary search) specified by the `by`, `lt` and `rev` keywords, assuming that `a`
+is already sorted in that order. Returns an empty range located at the insertion point
+if `a` does not contain values equal to `x`.
 """
 searchsorted
 
