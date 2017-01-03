@@ -355,101 +355,139 @@ static Value *julia_binding_gv(jl_binding_t *b)
 
 // --- mapping between julia and llvm types ---
 
-static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed);
+static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua_env, bool *isboxed);
 
 extern "C" {
 JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
-    if (jt == (jl_value_t*)jl_bool_type) return T_int8;
-    if (jt == (jl_value_t*)jl_bottom_type) return T_void;
-    if (!jl_is_leaf_type(jt)) {
-        if (isboxed) *isboxed = true;
-        return T_pjlvalue;
-    }
-    if (jl_is_cpointer_type(jt)) {
-        Type *lt = julia_type_to_llvm(jl_tparam0(jt));
-        if (lt == NULL)
-            return NULL;
-        if (lt == T_void)
-            return T_pint8;
-        return PointerType::get(lt, 0);
-    }
-    if (jl_is_bitstype(jt)) {
-        if (jt == (jl_value_t*)jl_long_type)
-            return T_size;
-        int nb = jl_datatype_size(jt);
-        if (jl_is_floattype(jt)) {
-#ifndef DISABLE_FLOAT16
-            if (nb == 2)
-                return T_float16;
-            else
-#endif
-            if (nb == 4)
-                return T_float32;
-            else if (nb == 8)
-                return T_float64;
-            else if (nb == 16)
-                return T_float128;
+    if (jt == (jl_value_t*)jl_bottom_type)
+        return T_void;
+    if (jl_is_leaf_type(jt)) {
+        if ((jl_is_bitstype(jt) || jl_isbits(jt))) {
+            if (jl_datatype_nbits(jt) == 0)
+                return T_void;
+            Type *t = julia_struct_to_llvm(jt, NULL, isboxed);
+            assert(t != NULL);
+            return t;
         }
-        return Type::getIntNTy(jl_LLVMContext, jl_datatype_nbits(jt));
-    }
-    if (jl_isbits(jt)) {
-        if (jl_datatype_nbits(jt) == 0) {
-            return T_void;
-        }
-        return julia_struct_to_llvm(jt, isboxed);
     }
     if (isboxed) *isboxed = true;
     return T_pjlvalue;
 }
 }
 
-static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
+// converts a julia bitstype into the equivalent LLVM bitstype
+static Type *bitstype_to_llvm(jl_value_t *bt)
+{
+    assert(jl_is_bitstype(bt));
+    if (bt == (jl_value_t*)jl_bool_type)
+        return T_int8;
+    if (bt == (jl_value_t*)jl_long_type)
+        return T_size;
+    if (jl_is_cpointer_type(bt)) {
+        Type *lt = julia_type_to_llvm(jl_tparam0(bt));
+        if (lt == T_void)
+            return T_pint8;
+        return PointerType::get(lt, 0);
+    }
+    int nb = jl_datatype_size(bt);
+    if (jl_is_floattype(bt)) {
+#ifndef DISABLE_FLOAT16
+        if (nb == 2)
+            return T_float16;
+        else
+#endif
+        if (nb == 4)
+            return T_float32;
+        else if (nb == 8)
+            return T_float64;
+        else if (nb == 16)
+            return T_float128;
+    }
+    return Type::getIntNTy(jl_LLVMContext, nb * 8);
+}
+
+// compute whether all leaf subtypes of this type have the same layout
+// (which is conservatively approximated here by asking whether the types of any of the
+// fields depend on any of the parameters of the containing type)
+static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
+{
+    if (dt->layout || dt->struct_decl || jl_is_bitstype(dt) || jl_isbits(dt))
+        return true;
+    if (ua) {
+        size_t i, ntypes = jl_datatype_nfields(dt);
+        for (i = 0; i < ntypes; i++) {
+            jl_value_t *ty = jl_svecref(dt->types, i);
+            if (jl_has_typevar_from_unionall(ty, ua))
+                return false;
+        }
+    }
+    return true;
+}
+
+static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isboxed)
 {
     // this function converts a Julia Type into the equivalent LLVM struct
     // use this where C-compatible (unboxed) structs are desired
     // use julia_type_to_llvm directly when you want to preserve Julia's type semantics
-    bool isTuple = jl_is_tuple_type(jt);
     if (isboxed) *isboxed = false;
+    if (jt == (jl_value_t*)jl_bottom_type)
+        return T_void;
+    if (jl_is_bitstype(jt))
+        return bitstype_to_llvm(jt);
+    bool isTuple = jl_is_tuple_type(jt);
     if ((isTuple || jl_is_structtype(jt)) && !jl_is_array_type(jt)) {
-        if (!jl_is_leaf_type(jt))
-            return NULL;
         jl_datatype_t *jst = (jl_datatype_t*)jt;
         if (jst->struct_decl == NULL) {
-            size_t ntypes = jl_datatype_nfields(jst);
-            if (ntypes == 0 || jl_datatype_nbits(jst) == 0)
+            size_t i, ntypes = jl_svec_len(jst->types);
+            if (ntypes == 0 || (jst->layout && jl_datatype_nbits(jst) == 0))
                 return T_void;
+            if (!julia_struct_has_layout(jst, ua))
+                return NULL;
             StructType *structdecl;
             if (!isTuple) {
                 structdecl = StructType::create(jl_LLVMContext, jl_symbol_name(jst->name->name));
                 jst->struct_decl = structdecl;
             }
             std::vector<Type*> latypes(0);
-            size_t i;
             bool isarray = true;
             bool isvector = true;
-            jl_value_t* jlasttype = NULL;
+            jl_value_t *jlasttype = NULL;
             Type *lasttype = NULL;
-            for(i = 0; i < ntypes; i++) {
+            bool allghost = true;
+            for (i = 0; i < ntypes; i++) {
                 jl_value_t *ty = jl_svecref(jst->types, i);
-                if (jlasttype!=NULL && ty!=jlasttype)
+                if (jlasttype != NULL && ty != jlasttype)
                     isvector = false;
                 jlasttype = ty;
+                bool isptr;
+                if (jst->layout)
+                    isptr = jl_field_isptr(jst, i);
+                else // compute what jl_compute_field_offsets would say
+                    isptr = jl_isbits(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout;
                 Type *lty;
-                if (jl_field_isptr(jst, i))
+                if (isptr)
                     lty = T_pjlvalue;
+                else if (ty == (jl_value_t*)jl_bool_type)
+                    lty = T_int8;
                 else
-                    lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
+                    lty = julia_type_to_llvm(ty);
                 if (lasttype != NULL && lasttype != lty)
                     isarray = false;
                 lasttype = lty;
                 if (type_is_ghost(lty))
                     lty = NoopType;
+                else
+                    allghost = false;
                 latypes.push_back(lty);
             }
-            if (!isTuple) {
+            if (allghost) {
+                assert(jst->layout == NULL); // otherwise should have been caught above
+                jst->struct_decl = T_void;
+            }
+            else if (!isTuple) {
                 if (jl_is_vecelement_type(jt))
                     // VecElement type is unwrapped in LLVM
                     jst->struct_decl = latypes[0];
@@ -458,31 +496,34 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
             }
             else {
                 if (isarray && lasttype != T_int1 && !type_is_ghost(lasttype)) {
-                    if (isvector && jl_special_vector_alignment(ntypes, jlasttype)!=0)
+                    if (isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
                         jst->struct_decl = VectorType::get(lasttype, ntypes);
                     else
                         jst->struct_decl = ArrayType::get(lasttype, ntypes);
                 }
                 else {
-                    jst->struct_decl = StructType::get(jl_LLVMContext,ArrayRef<Type*>(&latypes[0],ntypes));
+                    jst->struct_decl = StructType::get(jl_LLVMContext, ArrayRef<Type*>(&latypes[0], ntypes));
                 }
             }
 #ifndef NDEBUG
             // If LLVM and Julia disagree about alignment, much trouble ensues, so check it!
-            const DataLayout &DL =
+            if (jst->layout) {
+                const DataLayout &DL =
 #if JL_LLVM_VERSION >= 30600
-                jl_ExecutionEngine->getDataLayout();
+                    jl_ExecutionEngine->getDataLayout();
 #else
-                *jl_ExecutionEngine->getDataLayout();
+                    *jl_ExecutionEngine->getDataLayout();
 #endif
-            unsigned llvm_alignment = DL.getABITypeAlignment((Type*)jst->struct_decl);
-            unsigned julia_alignment = jst->layout->alignment;
-            assert(llvm_alignment == julia_alignment);
+                unsigned llvm_alignment = DL.getABITypeAlignment((Type*)jst->struct_decl);
+                unsigned julia_alignment = jst->layout->alignment;
+                assert(llvm_alignment == julia_alignment);
+            }
 #endif
         }
         return (Type*)jst->struct_decl;
     }
-    return julia_type_to_llvm(jt, isboxed);
+    if (isboxed) *isboxed = true;
+    return T_pjlvalue;
 }
 
 static bool is_datatype_all_pointers(jl_datatype_t *dt)
@@ -737,7 +778,7 @@ static void null_pointer_check(Value *v, jl_codectx_t *ctx)
                            literal_pointer_val(jl_undefref_exception), ctx);
 }
 
-static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
+static void emit_type_error(const jl_cgval_t &x, Value *type, const std::string &msg,
                             jl_codectx_t *ctx)
 {
     Value *fname_val = stringConstPtr(ctx->funcName);
@@ -745,11 +786,11 @@ static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::st
 #if JL_LLVM_VERSION >= 30700
     builder.CreateCall(prepare_call(jltypeerror_func),
                        { fname_val, msg_val,
-                         literal_pointer_val(type), boxed(x, ctx, false)}); // x is rooted by jl_type_error_rt
+                         type, boxed(x, ctx, false)}); // x is rooted by jl_type_error_rt
 #else
     builder.CreateCall4(prepare_call(jltypeerror_func),
                         fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x, ctx, false)); // x is rooted by jl_type_error_rt
+                        type, boxed(x, ctx, false)); // x is rooted by jl_type_error_rt
 #endif
 }
 
@@ -762,7 +803,7 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
     //     return;
     // }
     if (jl_type_intersection(x.typ, type) == (jl_value_t*)jl_bottom_type) {
-        emit_type_error(x, type, msg, ctx);
+        emit_type_error(x, literal_pointer_val(type), msg, ctx);
         builder.CreateUnreachable();
         BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
         builder.SetInsertPoint(failBB);
@@ -787,11 +828,22 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
     builder.CreateCondBr(istype, passBB, failBB);
     builder.SetInsertPoint(failBB);
 
-    emit_type_error(x, type, msg, ctx);
+    emit_type_error(x, literal_pointer_val(type), msg, ctx);
     builder.CreateUnreachable();
 
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
+}
+
+static void emit_leafcheck(Value *typ, const std::string &msg, jl_codectx_t *ctx)
+{
+    assert(typ->getType() == T_pjlvalue);
+    emit_typecheck(mark_julia_type(typ, true, jl_any_type, ctx, false), (jl_value_t*)jl_datatype_type, msg, ctx);
+    Value *isleaf;
+    isleaf = builder.CreateConstInBoundsGEP1_32(LLVM37_param(T_int8) emit_bitcast(typ, T_pint8), offsetof(jl_datatype_t, isleaftype));
+    isleaf = builder.CreateLoad(isleaf, tbaa_const);
+    isleaf = builder.CreateTrunc(isleaf, T_int1);
+    error_unless(isleaf, msg, ctx);
 }
 
 #define CHECK_BOUNDS 1
@@ -876,7 +928,6 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
-    assert(elty != NULL);
     if (type_is_ghost(elty))
         return ghostValue(jltype);
     Value *data;
@@ -915,7 +966,6 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
 {
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
-    assert(elty != NULL);
     if (type_is_ghost(elty))
         return;
     Value *r;
@@ -1098,7 +1148,6 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
 {
     jl_value_t *jfty = jl_field_type(jt, idx);
     Type *elty = julia_type_to_llvm(jfty);
-    assert(elty != NULL);
     if (jfty == jl_bottom_type) {
         raise_exception(literal_pointer_val(jl_undefref_exception), ctx);
         return jl_cgval_t(); // unreachable
@@ -1385,11 +1434,11 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, ssize
 static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt);
 static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size,
                             const jl_cgval_t &v);
-static Value *init_bits_value(Value *newv, Value *v, MDNode *tbaa)
+static Value *init_bits_value(Value *newv, Value *v, MDNode *tbaa, unsigned alignment = sizeof(void*)) // min alignment in julia's gc is pointer-aligned
 {
     // newv should already be tagged
     tbaa_decorate(tbaa, builder.CreateAlignedStore(v, emit_bitcast(newv,
-        PointerType::get(v->getType(),0)), sizeof(void*))); // min alignment in julia's gc is pointer-aligned
+        PointerType::get(v->getType(), 0)), alignment));
     return newv;
 }
 static Value *as_value(Type *t, const jl_cgval_t&);
@@ -1583,7 +1632,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
 static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_codectx_t *ctx)
 {
     Value *t = emit_typeof_boxed(x,ctx);
-    emit_typecheck(mark_julia_type(t, true, jl_any_type, ctx), (jl_value_t*)jl_datatype_type, msg, ctx);
+    emit_typecheck(mark_julia_type(t, true, jl_any_type, ctx, false), (jl_value_t*)jl_datatype_type, msg, ctx);
 
     Value *istype =
         builder.CreateICmpEQ(emit_datatype_name(t),
@@ -1593,7 +1642,7 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
     builder.CreateCondBr(istype, passBB, failBB);
     builder.SetInsertPoint(failBB);
 
-    emit_type_error(x, (jl_value_t*)jl_pointer_type, msg, ctx);
+    emit_type_error(x, literal_pointer_val((jl_value_t*)jl_pointer_type), msg, ctx);
     builder.CreateUnreachable();
 
     ctx->f->getBasicBlockList().push_back(passBB);

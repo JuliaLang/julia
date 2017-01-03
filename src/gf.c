@@ -1592,7 +1592,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
         if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
             jl_printf(JL_STDERR, "code missing for ");
             jl_static_show(JL_STDERR, (jl_value_t*)li);
-            jl_printf(JL_STDERR, "  sysimg may not have been built with --compile=all\n");
+            jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");
         }
     }
     jl_llvm_functions_t decls = li->functionObjectsDecls;
@@ -2002,7 +2002,7 @@ static void _precompile_enq_module(jl_module_t *m, jl_array_t *unspec)
     // removes all method caches
     size_t i;
     void **table = m->bindings.table;
-    for(i=1; i < m->bindings.size; i+=2) {
+    for (i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m && b->value && b->constp) {

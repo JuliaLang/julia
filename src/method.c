@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 extern jl_value_t *jl_builtin_getfield;
-jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module)
+jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals)
 {
     if (jl_is_symbol(expr)) {
         if (module == NULL)
@@ -29,6 +29,7 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module)
             e->head == global_sym || e->head == quote_sym || e->head == inert_sym ||
             e->head == line_sym || e->head == meta_sym || e->head == inbounds_sym ||
             e->head == boundscheck_sym || e->head == simdloop_sym) {
+            // ignore these
         }
         else {
             if (e->head == call_sym && jl_expr_nargs(e) == 3 &&
@@ -66,13 +67,38 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module)
                     }
                 }
             }
-            size_t i = 0;
+            size_t i = 0, nargs = jl_array_len(e->args);
+            if (e->head == foreigncall_sym) {
+                JL_NARGSV(ccall method definition, 3); // (fptr, rt, at)
+                jl_value_t *rt = jl_exprarg(e, 1);
+                jl_value_t *at = jl_exprarg(e, 2);
+                if (!jl_is_type(rt)) {
+                    rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+                    jl_exprargset(e, 1, rt);
+                }
+                if (!jl_is_svec(at)) {
+                    at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+                    jl_exprargset(e, 2, at);
+                }
+                if (jl_is_svec(rt))
+                    jl_error("ccall: missing return type");
+                JL_TYPECHK(ccall method definition, type, rt);
+                JL_TYPECHK(ccall method definition, simplevector, at);
+                size_t nargt = jl_svec_len(at);
+                int isVa = (nargt > 0 && jl_is_vararg_type(jl_svecref(at, nargt - 1)));
+                if (nargs % 2 == 0) // ignore calling-convention arg, if present
+                    nargs -= 1;
+                if ((!isVa && nargt    != (nargs - 2) / 2) ||
+                    ( isVa && nargt - 1 > (nargs - 2) / 2))
+                    jl_error("ccall: wrong number of arguments to C function");
+            }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == compositetype_sym ||
-                e->head == bitstype_sym || e->head == module_sym)
+                e->head == bitstype_sym || e->head == module_sym) {
                 i++;
-            for (; i < jl_array_len(e->args); i++) {
+            }
+            for (; i < nargs; i++) {
                 // TODO: this should be making a copy, not mutating the source
-                jl_exprargset(e, i, jl_resolve_globals(jl_exprarg(e, i), module));
+                jl_exprargset(e, i, jl_resolve_globals(jl_exprarg(e, i), module, sparam_vals));
             }
         }
     }
@@ -293,7 +319,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         jl_array_t *stmts = (jl_array_t*)func->code;
         for (i = 0, l = jl_array_len(stmts); i < l; i++) {
-            jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), linfo->def->module));
+            jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), linfo->def->module, env));
         }
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
@@ -348,11 +374,15 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     }
     m->called = called;
 
+    jl_array_t *copy = NULL;
+    jl_svec_t *sparam_vars = m->tvars;
+    if (!jl_is_svec(sparam_vars))
+        sparam_vars = jl_svec1(sparam_vars);
+    JL_GC_PUSH2(&copy, &sparam_vars);
     assert(jl_typeis(src->code, jl_array_any_type));
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, n = jl_array_len(stmts);
-    jl_array_t *copy = jl_alloc_vec_any(n);
-    JL_GC_PUSH1(&copy);
+    copy = jl_alloc_vec_any(n);
     int set_lineno = 0;
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
@@ -365,7 +395,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = jl_resolve_globals(st, m->module);
+            st = jl_resolve_globals(st, m->module, sparam_vars);
         }
         jl_array_ptr_set(copy, i, st);
     }
@@ -399,7 +429,6 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->isstaged = 0;
     m->isva = 0;
     m->nargs = 0;
-    m->needs_sparam_vals_ducttape = 2;
     m->traced = 0;
     m->min_world = 1;
     m->max_world = ~(size_t)0;
