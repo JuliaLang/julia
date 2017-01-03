@@ -32,7 +32,8 @@ may trip up Julia users accustomed to MATLAB:
       with semicolons (`[x; y; z]`).
     - To concatenate in the second ("horizontal") dimension use either [`hcat(x,y,z)`](@ref) or separate
       with spaces (`[x y z]`).
-    - To construct block matrices (concatenating in the first two dimensions), use `[a b; c d]`.
+    - To construct block matrices (concatenating in the first two dimensions), use either [`hvcat()`](@ref)
+      or combine spaces and semicolons (`[a b; c d]`).
   * In Julia, `a:b` and `a:b:c` construct `Range` objects. To construct a full vector like in MATLAB,
     use [`collect(a:b)`](@ref). Generally, there is no need to call `collect` though. `Range` will
     act like a normal array in most cases but is more efficient because it lazily computes its values.
