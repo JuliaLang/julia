@@ -92,7 +92,7 @@ end
     @async begin sleep(2.0); put!(rr3, :ok) end
 
     tic()
-    timedwait(callback, 1.0)
+    timedwait(callback, Dates.Second(1))
     et=toq()
     # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
     try
