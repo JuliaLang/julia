@@ -2,6 +2,8 @@
 
 ## floating point traits ##
 
+typealias IEEEFloat Union{Float16,Float32,Float64}
+
 """
     Inf16
 
@@ -513,16 +515,28 @@ abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 
 Test whether a floating point number is not a number (NaN).
 """
+isnan{T<:IEEEFloat}(x::T) = (reinterpret(Unsigned, x) & ~sign_mask(T)) > exponent_mask(T)
 isnan(x::AbstractFloat) = x != x
-isnan(x::Float16)    = reinterpret(UInt16,x)&0x7fff  > 0x7c00
 isnan(x::Real) = false
 
+"""
+    isfinite(f) -> Bool
+
+Test whether a floating point number is finite, i.e. that `f` is neither infinite or not a number.
+"""
+isfinite{T<:IEEEFloat}(x::T) = (reinterpret(Unsigned, x) & exponent_mask(T)) != exponent_mask(T)
 isfinite(x::AbstractFloat) = x - x == 0
-isfinite(x::Float16) = reinterpret(UInt16,x)&0x7c00 != 0x7c00
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
+"""
+    isinf(f) -> Bool
+
+Test whether a floating point number is an infinity value (positive infinity or negative infinity).
+"""
+isinf{T<:IEEEFloat}(x::T) = (reinterpret(Unsigned, x) & ~sign_mask(T)) == exponent_mask(T)
 isinf(x::Real) = !isnan(x) & !isfinite(x)
+
 
 ## hashing small, built-in numeric types ##
 
