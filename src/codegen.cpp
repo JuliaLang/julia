@@ -934,7 +934,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         else
             pdecls = &decls;
         m = emit_function(li, src, world, pdecls, params);
-        if (world)
+        if (params->cached && world)
             decls = li->functionObjectsDecls;
         //n_emit++;
     }
