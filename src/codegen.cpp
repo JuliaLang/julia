@@ -530,7 +530,8 @@ typedef struct {
 
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
-struct jl_codectx_t {
+class jl_codectx_t {
+public:
     Function *f;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -542,6 +543,7 @@ struct jl_codectx_t {
     jl_code_info_t *source;
     jl_array_t *code;
     size_t world;
+    jl_array_t *roots;
     const char *name;
     StringRef file;
     ssize_t *line;
@@ -563,6 +565,10 @@ struct jl_codectx_t {
     bool is_inbounds{false};
 
     const jl_cgparams_t *params;
+
+    ~jl_codectx_t() {
+        assert(this->roots == NULL);
+    }
 };
 
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx);
@@ -2083,30 +2089,25 @@ static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
     return largs;
 }
 
-static void jl_add_method_root(jl_method_instance_t *li, jl_value_t *val)
+static void jl_add_method_root(jl_codectx_t *ctx, jl_value_t *val)
 {
     if (jl_is_leaf_type(val) || jl_is_bool(val) || jl_is_symbol(val))
         return;
-    jl_method_t *m = li->def;
     JL_GC_PUSH1(&val);
-    JL_LOCK(&m->writelock);
-    if (m->roots == NULL) {
-        m->roots = jl_alloc_vec_any(1);
-        jl_gc_wb(m, m->roots);
-        jl_array_ptr_set(m->roots, 0, val);
+    if (ctx->roots == NULL) {
+        ctx->roots = jl_alloc_vec_any(1);
+        jl_array_ptr_set(ctx->roots, 0, val);
     }
     else {
-        size_t rlen = jl_array_dim0(m->roots);
-        for(size_t i=0; i < rlen; i++) {
-            if (jl_array_ptr_ref(m->roots,i) == val) {
-                JL_UNLOCK(&li->def->writelock);
+        size_t rlen = jl_array_dim0(ctx->roots);
+        for (size_t i = 0; i < rlen; i++) {
+            if (jl_array_ptr_ref(ctx->roots,i) == val) {
                 JL_GC_POP();
                 return;
             }
         }
-        jl_array_ptr_1d_push(m->roots, val);
+        jl_array_ptr_1d_push(ctx->roots, val);
     }
-    JL_UNLOCK(&m->writelock);
     JL_GC_POP();
 }
 
@@ -2815,7 +2816,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             if (ty!=NULL && jl_is_leaf_type(ty)) {
                 if (jl_has_free_typevars(ty)) {
                     // add root for types not cached. issue #7065
-                    jl_add_method_root(ctx->linfo, ty);
+                    jl_add_method_root(ctx, ty);
                 }
                 *ret = mark_julia_const(ty);
                 JL_GC_POP();
@@ -3468,7 +3469,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             }
         }
         if (needroot && ctx->linfo->def) { // toplevel exprs and some integers are already rooted
-            jl_add_method_root(ctx->linfo, expr);
+            jl_add_method_root(ctx, expr);
         }
         return mark_julia_const(expr);
     }
@@ -3486,7 +3487,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         if (ctx->linfo->def) { // don't bother codegen constant-folding for toplevel
             jl_value_t *c = static_eval(expr, ctx, true, true);
             if (c) {
-                jl_add_method_root(ctx->linfo, c);
+                jl_add_method_root(ctx, c);
                 return mark_julia_const(c);
             }
         }
@@ -3985,6 +3986,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     builder.ClearInsertionPoint();
 
     jl_finalize_module(M, true);
+    assert(!ctx.roots);
 
     return cw_proto;
 }
@@ -4157,6 +4159,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, bool
     jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty, tbaa_stack) : mark_julia_type(call, retboxed, jlretty, &ctx, /*needsroot*/false);
     builder.CreateRet(boxed(retval, &ctx, false)); // no gcroot needed since this on the return path
 
+    assert(!ctx.roots);
     return w;
 }
 
@@ -4172,20 +4175,20 @@ static std::unique_ptr<Module> emit_function(
     assert(declarations && "Capturing declarations is always required");
 
     // step 1. unpack AST and allocate codegen context for this function
-    jl_array_t *code = (jl_array_t*)src->code;
-    JL_GC_PUSH1(&code);
-    if (!jl_typeis(code,jl_array_any_type))
-        code = jl_uncompress_ast(lam->def, code);
+    jl_codectx_t ctx = {};
+    JL_GC_PUSH2(&ctx.code, &ctx.roots);
+    ctx.code = (jl_array_t*)src->code;
+    if (!jl_typeis(ctx.code, jl_array_any_type))
+        ctx.code = jl_uncompress_ast(lam->def, ctx.code);
+
     //jl_static_show(JL_STDOUT, (jl_value_t*)ast);
     //jl_printf(JL_STDOUT, "\n");
     std::map<int, jl_arrayvar_t> arrayvars;
     std::map<int, BasicBlock*> labels;
-    jl_codectx_t ctx = {};
     ctx.arrayvars = &arrayvars;
     ctx.module = lam->def ? lam->def->module : ptls->current_module;
     ctx.linfo = lam;
     ctx.source = src;
-    ctx.code = code;
     ctx.world = world;
     ctx.name = jl_symbol_name(lam->def ? lam->def->name : anonymous_sym);
     ctx.funcName = ctx.name;
@@ -4248,7 +4251,7 @@ static std::unique_ptr<Module> emit_function(
         }
     }
 
-    jl_array_t *stmts = code;
+    jl_array_t *stmts = ctx.code;
     size_t stmtslen = jl_array_dim0(stmts);
 
     // finish recording escape info
@@ -5219,8 +5222,34 @@ static std::unique_ptr<Module> emit_function(
         dbuilder.finalize();
     }
 
-    JL_GC_POP();
+    // copy ctx.roots into m->roots
+    // if we created any new roots during codegen
+    if (ctx.roots) {
+        jl_method_t *m = lam->def;
+        JL_LOCK(&m->writelock);
+        if (m->roots == NULL) {
+            m->roots = ctx.roots;
+            jl_gc_wb(m, m->roots);
+        }
+        else {
+            size_t i, ilen = jl_array_dim0(ctx.roots);
+            size_t j, jlen = jl_array_dim0(m->roots);
+            for (i = 0; i < ilen; i++) {
+                jl_value_t *ival = jl_array_ptr_ref(ctx.roots, i);
+                for (j = 0; j < jlen; j++) {
+                    jl_value_t *jval = jl_array_ptr_ref(m->roots, j);
+                    if (ival == jval)
+                        break;
+                }
+                if (j == jlen) // not found - add to array
+                    jl_array_ptr_1d_push(m->roots, ival);
+            }
+        }
+        ctx.roots = NULL;
+        JL_UNLOCK(&m->writelock);
+    }
 
+    JL_GC_POP();
     return std::unique_ptr<Module>(M);
 }
 
