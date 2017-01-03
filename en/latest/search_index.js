@@ -4777,6 +4777,30 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/base.html#Base.@inbounds",
+    "page": "Essentials",
+    "title": "Base.@inbounds",
+    "category": "Macro",
+    "text": "@inbounds(blk)\n\nEliminates array bounds checking within expressions.\n\nIn the example below the bound check of array A is skipped to improve performance.\n\nfunction sum(A::AbstractArray)\n    r = zero(eltype(A))\n    for i = 1:length(A)\n        @inbounds r += A[i]\n    end\n    return r\nend\n\n!!! Warning\n\nUsing `@inbounds` may return incorrect results/crashes/corruption\nfor out-of-bounds indices. The user is responsible for checking it manually.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base.html#Base.@inline",
+    "page": "Essentials",
+    "title": "Base.@inline",
+    "category": "Macro",
+    "text": "@inline\n\nGive a hint to the compiler that this function is worth inlining.\n\nSmall functions typically do not need the @inline annotation, as the compiler does it automatically. By using @inline on bigger functions, an extra nudge can be given to the compiler to inline it. This is shown in the following example:\n\n@inline function bigfunction(x)\n    #=\n        Function Definition\n    =#\nend\n\n\n\n"
+},
+
+{
+    "location": "stdlib/base.html#Base.@noinline",
+    "page": "Essentials",
+    "title": "Base.@noinline",
+    "category": "Macro",
+    "text": "@noinline\n\nPrevents the compiler from inlining a function.\n\nSmall functions are typically inlined automatically. By using @noinline on small functions, auto-inlining can be prevented. This is shown in the following example:\n\n@noinline function smallfunction(x)\n    #=\n        Function Definition\n    =#\nend\n\n\n\n"
+},
+
+{
     "location": "stdlib/base.html#Base.gensym",
     "page": "Essentials",
     "title": "Base.gensym",
@@ -4821,7 +4845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Syntax",
     "category": "section",
-    "text": "Core.eval\nBase.@eval\nBase.evalfile\nBase.esc\nBase.gensym\nBase.@gensym\nBase.@polly\nBase.parse(::Any, ::Any)\nBase.parse(::Any)"
+    "text": "Core.eval\nBase.@eval\nBase.evalfile\nBase.esc\nBase.@inbounds\nBase.@inline\nBase.@noinline\nBase.gensym\nBase.@gensym\nBase.@polly\nBase.parse(::Any, ::Any)\nBase.parse(::Any)"
 },
 
 {
@@ -6477,7 +6501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\ngit merge [–ff-only] [<committish> | FETCH_HEAD] \n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\n\n\n"
 },
 
 {
@@ -12525,7 +12549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\nqrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\n"
+    "text": "qrfact(A, pivot=Val{false}) -> F\n\nComputes the QR factorization of A. The return type of F depends on the element type of A and whether pivoting is specified (with pivot==Val{true}).\n\nReturn type eltype(A) pivot Relationship between F and A\nQR not BlasFloat either A==F[:Q]*F[:R]\nQRCompactWY BlasFloat Val{false} A==F[:Q]*F[:R]\nQRPivoted BlasFloat Val{true} A[:,F[:p]]==F[:Q]*F[:R]\n\nBlasFloat refers to any of: Float32, Float64, Complex64 or Complex128.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description QR QRCompactWY QRPivoted\nF[:Q] Q (orthogonal/unitary) part of QR ✓ (QRPackedQ) ✓ (QRCompactWYQ) ✓ (QRPackedQ)\nF[:R] R (upper right triangular) part of QR ✓ ✓ ✓\nF[:p] pivot Vector   ✓\nF[:P] (pivot) permutation Matrix   ✓\n\nThe following functions are available for the QR objects: size and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.The data contained in QR or QRPivoted can be used to construct the QRPackedQ type, which is a compact representation of the rotation matrix:Q = prod_i=1^min(mn) (I - tau_i v_i v_i^T)where tau_i is the scale factor and v_i is the projection vector associated with the i^th Householder elementary reflector.The data contained in QRCompactWY can be used to construct the QRCompactWYQ type, which is a compact representation of the rotation matrixQ = I + Y T Y^Twhere Y is m times r lower trapezoidal and T is r times r upper triangular. The compact WY representation [Schreiber1989] is not to be confused with the older, WY representation [Bischof1987]. (The LAPACK documentation uses V in lieu of Y.)[Bischof1987]: C Bischof and C Van Loan, \"The WY representation for products of Householder matrices\", SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009[Schreiber1989]: R Schreiber and C Van Loan, \"A storage-efficient WY representation for products of Householder transformations\", SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005\n\n\n\nqrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\n"
 },
 
 {
