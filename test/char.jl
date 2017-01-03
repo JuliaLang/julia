@@ -195,3 +195,5 @@ let
 end
 
 @test !isequal('x', 120)
+
+@test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"

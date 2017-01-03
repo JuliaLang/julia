@@ -5,7 +5,7 @@ module UTF8proc
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase, titlecase
 
-export isgraphemebreak
+export isgraphemebreak, category_abbrev, category_string
 
 # also exported by Base:
 export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
@@ -50,6 +50,40 @@ const UTF8PROC_CATEGORY_CC = 26
 const UTF8PROC_CATEGORY_CF = 27
 const UTF8PROC_CATEGORY_CS = 28
 const UTF8PROC_CATEGORY_CO = 29
+
+# strings corresponding to the category constants"
+const category_strings = [
+    "Other, not assigned",
+    "Letter, uppercase",
+    "Letter, lowercase",
+    "Letter, titlecase",
+    "Letter, modifier",
+    "Letter, other",
+    "Mark, nonspacing",
+    "Mark, spacing combining",
+    "Mark, enclosing",
+    "Number, decimal digit",
+    "Number, letter",
+    "Number, other",
+    "Punctuation, connector",
+    "Punctuation, dash",
+    "Punctuation, open",
+    "Punctuation, close",
+    "Punctuation, initial quote",
+    "Punctuation, final quote",
+    "Punctuation, other",
+    "Symbol, math",
+    "Symbol, currency",
+    "Symbol, modifier",
+    "Symbol, other",
+    "Separator, space",
+    "Separator, line",
+    "Separator, paragraph",
+    "Other, control",
+    "Other, format",
+    "Other, surrogate",
+    "Other, private use"
+]
 
 const UTF8PROC_STABLE    = (1<<1)
 const UTF8PROC_COMPAT    = (1<<2)
@@ -164,9 +198,10 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(
 ############################################################################
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
-function category_code(c)
-    return ccall(:utf8proc_category, Cint, (UInt32,), c)
-end
+category_code(c) = ccall(:utf8proc_category, Cint, (UInt32,), c)
+
+category_abbrev(c) = unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
+category_string(c) = category_strings[category_code(c)+1]
 
 """
     is_assigned_char(c) -> Bool
