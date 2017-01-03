@@ -5,7 +5,7 @@ module UTF8proc
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase, titlecase
 
-export isgraphemebreak, category_abbrev, category_string
+export isgraphemebreak, category_code, category_abbrev, category_string
 
 # also exported by Base:
 export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
@@ -51,7 +51,7 @@ const UTF8PROC_CATEGORY_CF = 27
 const UTF8PROC_CATEGORY_CS = 28
 const UTF8PROC_CATEGORY_CO = 29
 
-# strings corresponding to the category constants"
+# strings corresponding to the category constants
 const category_strings = [
     "Other, not assigned",
     "Letter, uppercase",
@@ -200,6 +200,7 @@ titlecase(c::Char) = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) : Char(ccall(
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 category_code(c) = ccall(:utf8proc_category, Cint, (UInt32,), c)
 
+# more human-readable representations of the category code
 category_abbrev(c) = unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
 category_string(c) = category_strings[category_code(c)+1]
 
