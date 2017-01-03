@@ -313,14 +313,20 @@ emptyperiod = ((y + d) - d) - y
 @test h + 3mi == 63mi
 @test y - m == 11m
 
+# compound periods should avoid automatically converting period types
+@test (d - h).periods == Dates.Period[d, -h]
+@test d - h == 23h
+@test !isequal(d - h, 23h)
+@test isequal(d - h, 2d - 2h - 1d + 1h)
+
 # reduce compound periods into the most basic form
-@test (h - mi).periods == Dates.Period[59mi]
-@test (-h + mi).periods == Dates.Period[-59mi]
-@test (-y + d).periods == Dates.Period[-y, d]
-@test (-y + m - w + d).periods == Dates.Period[-11m, -6d]
-@test (-y + m - w + ms).periods == Dates.Period[-11m, -6d, -23h, -59mi, -59s, -999ms]
-@test (y - m + w - d + h - mi + s - ms).periods == Dates.Period[11m, 6d, 59mi, 999ms]
-@test (-y + m - w + d - h + mi - s + ms).periods == Dates.Period[-11m, -6d, -59mi, -999ms]
+@test Dates.canonicalize(h - mi).periods == Dates.Period[59mi]
+@test Dates.canonicalize(-h + mi).periods == Dates.Period[-59mi]
+@test Dates.canonicalize(-y + d).periods == Dates.Period[-y, d]
+@test Dates.canonicalize(-y + m - w + d).periods == Dates.Period[-11m, -6d]
+@test Dates.canonicalize(-y + m - w + ms).periods == Dates.Period[-11m, -6d, -23h, -59mi, -59s, -999ms]
+@test Dates.canonicalize(y - m + w - d + h - mi + s - ms).periods == Dates.Period[11m, 6d, 59mi, 999ms]
+@test Dates.canonicalize(-y + m - w + d - h + mi - s + ms).periods == Dates.Period[-11m, -6d, -59mi, -999ms]
 
 @test Dates.Date(2009,2,1) - (Dates.Month(1) + Dates.Day(1)) == Dates.Date(2008,12,31)
 @test (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009,2,1) == Dates.Date(2008,12,31)
