@@ -27,7 +27,7 @@ may trip up Julia users accustomed to MATLAB:
     similar capabilities.
   * Julia has true one-dimensional arrays. Column vectors are of size `N`, not `Nx1`. For example,
     [`rand(N)`](@ref) makes a 1-dimensional array.
-  * In Julia v0.3, concatenating scalars and arrays with the syntax `[x,y,z]` concatenates in the
+  * In Julia, concatenating scalars and arrays with the syntax `[x,y,z]` concatenates in the
     first dimension ("vertically"). For concatenation in the second dimension ("horizontally"), use
     spaces as in `[x y z]`. To construct block matrices (concatenating in the first two dimensions),
     the syntax `[a b; c d]` is used to avoid confusion. In Julia v0.4, the concatenation syntax `[x, [y, z]]`
