@@ -97,7 +97,8 @@ end
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
-shell_escape(cmd::Cmd) = shell_escape(cmd.exec...)
+shell_escape(cmd::Cmd; special::AbstractString=shell_special) =
+    shell_escape(cmd.exec..., special=special)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing

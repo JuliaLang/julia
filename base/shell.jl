@@ -2,9 +2,11 @@
 
 ## shell-like command parsing ##
 
-function shell_parse(raw::AbstractString, interp::Bool)
-    s = lstrip(raw)
-    #Strips the end but respects the space when the string endswith "\\ "
+const shell_special = "#{}()[]<>|&*?~;"
+
+function shell_parse(str::AbstractString, interpolate::Bool=true)
+    s = lstrip(str)
+    # strips the end but respects the space when the string ends with "\\ "
     r = RevString(s)
     i = start(r)
     c_old = nothing
@@ -22,7 +24,7 @@ function shell_parse(raw::AbstractString, interp::Bool)
     s = s[1:end-i+1]
 
     last_parse = 0:-1
-    isempty(s) && return interp ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
+    isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
 
     in_single_quotes = false
     in_double_quotes = false
@@ -57,7 +59,7 @@ function shell_parse(raw::AbstractString, interp::Bool)
                 end
                 j = k
             end
-        elseif interp && !in_single_quotes && c == '$'
+        elseif interpolate && !in_single_quotes && c == '$'
             update_arg(s[i:j-1]); i = k; j = k
             if done(s,k)
                 error("\$ right before end of command")
@@ -92,6 +94,8 @@ function shell_parse(raw::AbstractString, interp::Bool)
                     update_arg(s[i:j-1]); i = k
                     c, k = next(s,k)
                 end
+            elseif !in_single_quotes && !in_double_quotes && c in shell_special
+                depwarn("special characters \"$shell_special\" should now be quoted in commands", :shell_parse)
             end
             j = k
         end
@@ -103,18 +107,15 @@ function shell_parse(raw::AbstractString, interp::Bool)
     update_arg(s[i:end])
     append_arg()
 
-    if !interp
-        return (args,last_parse)
-    end
+    interpolate || return args, last_parse
 
     # construct an expression
     ex = Expr(:tuple)
     for arg in args
         push!(ex.args, Expr(:tuple, arg...))
     end
-    (ex,last_parse)
+    return ex, last_parse
 end
-shell_parse(s::AbstractString) = shell_parse(s,true)
 
 function shell_split(s::AbstractString)
     parsed = shell_parse(s,false)[1]
@@ -125,14 +126,14 @@ function shell_split(s::AbstractString)
     args
 end
 
-function print_shell_word(io::IO, word::AbstractString)
+function print_shell_word(io::IO, word::AbstractString, special::AbstractString = shell_special)
     if isempty(word)
         print(io, "''")
     end
     has_single = false
     has_special = false
     for c in word
-        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
+        if isspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$' || c in special
             has_special = true
             if c == '\''
                 has_single = true
@@ -155,13 +156,32 @@ function print_shell_word(io::IO, word::AbstractString)
     end
 end
 
-function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...)
-    print_shell_word(io, cmd)
+function print_shell_escaped(
+        io::IO, cmd::AbstractString, args::AbstractString...;
+        special::AbstractString=shell_special
+    )
+    print_shell_word(io, cmd, special)
     for arg in args
         print(io, ' ')
-        print_shell_word(io, arg)
+        print_shell_word(io, arg, special)
     end
 end
-print_shell_escaped(io::IO) = nothing
+print_shell_escaped(io::IO; special::String=shell_special) = nothing
 
-shell_escape(args::AbstractString...) = sprint(print_shell_escaped, args...)
+"""
+    shell_escape(args::Union{Cmd,AbstractString...}; special::AbstractString="$shell_special")
+
+The unexported `shell_escape` function is the inverse of the unexported `shell_split` function:
+it takes a string or command object and escapes any special characters in such a way that calling
+`shell_split` on it would give back the array of words in the original command. The `special`
+keyword argument controls what characters in addition to whitespace, backslashes, quotes and
+dollar signs are considered to be special. Examples:
+
+    julia> Base.shell_escape("echo", "this", "&&", "that")
+    "echo this '&&' that"
+
+    julia> Base.shell_escape("cat", "/foo/bar baz", "&&", "echo", "done", special="")
+    "cat '/foo/bar baz' && echo done"
+"""
+shell_escape(args::AbstractString...; special::AbstractString=shell_special) =
+    sprint(io->print_shell_escaped(io, args..., special=special))
