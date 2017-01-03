@@ -264,7 +264,7 @@ static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
         fields[i] = val;
     }
 
-    Type *t = julia_struct_to_llvm(bt, NULL);
+    Type *t = julia_struct_to_llvm(bt, NULL, NULL);
     if (type_is_ghost(t))
         return UndefValue::get(NoopType);
     if (t->isVectorTy())
@@ -405,21 +405,6 @@ static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
             return bt;
     }
     return NULL;
-}
-
-static Type *bitstype_to_llvm(jl_value_t *bt)
-{
-    assert(jl_is_bitstype(bt));
-    bool isboxed;
-    Type *to = julia_type_to_llvm(bt, &isboxed);
-    assert(!type_is_ghost(to));
-    if (to == NULL || isboxed) {
-        // might be some sort of incomplete (but valid) Ptr{T} type, for example
-        unsigned int nb = jl_datatype_nbits(bt);
-        to = IntegerType::get(jl_LLVMContext, nb);
-    }
-    assert(!to->isAggregateType()); // expecting a bits type
-    return to; // IntegerType, FloatingPointType, or PointerType
 }
 
 static jl_cgval_t emit_runtime_call(JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs, jl_codectx_t *ctx)

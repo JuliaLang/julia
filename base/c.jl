@@ -27,18 +27,21 @@ else
     typealias Culong UInt
     typealias Cwchar_t Int32
 end
+
 """
     Clong
 
 Equivalent to the native `signed long` c-type.
 """
 Clong
+
 """
     Culong
 
 Equivalent to the native `unsigned long` c-type.
 """
 Culong
+
 """
     Cwchar_t
 

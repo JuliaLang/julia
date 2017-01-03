@@ -442,11 +442,17 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == toplevel_sym);
 }
 
-static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src)
+jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals);
+static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
     li->inferred = (jl_value_t*)src;
     li->specTypes = jl_typeof(jl_emptytuple);
+    jl_array_t *stmts = (jl_array_t*)src->code;
+    size_t i, l;
+    for (i = 0, l = jl_array_len(stmts); i < l; i++) {
+        jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), module, NULL));
+    }
     return li;
 }
 
@@ -574,7 +580,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     }
 
     if (ewc) {
-        li = jl_new_thunk(thk);
+        li = jl_new_thunk(thk, ptls->current_module);
         size_t world = jl_get_ptls_states()->world_age;
         jl_type_infer(&li, world, 0);
         jl_value_t *dummy_f_arg = NULL;

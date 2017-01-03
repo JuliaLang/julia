@@ -937,7 +937,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
         jl_serialize_value(s, (jl_value_t*)m->invokes.unknown);
-        write_int8(s->s, m->needs_sparam_vals_ducttape);
     }
     else if (jl_is_method_instance(v)) {
         writetag(s->s, jl_method_instance_type);
@@ -1685,7 +1684,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         jl_gc_wb(m, m->generator);
     m->invokes.unknown = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
     jl_gc_wb(m, m->invokes.unknown);
-    m->needs_sparam_vals_ducttape = read_int8(s->s);
     m->traced = 0;
     JL_MUTEX_INIT(&m->writelock);
     return (jl_value_t*)m;
