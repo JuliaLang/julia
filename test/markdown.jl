@@ -60,6 +60,10 @@ let text = "Foo ```bar` ``baz`` ```\n",
     @test text == Markdown.plain(md)
 end
 
+@test isempty(Markdown.parse("\r"))
+@test Markdown.parse("hello\r") == MD(Paragraph(["hello"]))
+@test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello ", Italic(Any["julia"])]))
+
 @test md"A footnote [^foo]." == MD(Paragraph(["A footnote ", Footnote("foo", nothing), "."]))
 
 @test md"[^foo]: footnote" == MD([Footnote("foo", Any[Paragraph(Any["footnote"])])])
