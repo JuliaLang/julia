@@ -920,7 +920,7 @@
                (error (string "invalid function name \"" name "\"")))
            `(method ,name))
           ((not (pair? name))                  e)
-          ((eq? (car name) 'tuple)
+          ((memq (car name) '(tuple block))
            (expand-forms `(-> ,name ,(caddr e))))
           ((eq? (car name) 'call)
            (let* ((head    (cadr name))

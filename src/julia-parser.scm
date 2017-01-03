@@ -1195,8 +1195,8 @@
                                     ;; function foo  =>  syntax error
                                     (error (string "expected \"(\" in " word " definition")))
                                 (if (not (and (pair? sig)
-                                              (or (eq? (car sig) 'call)
-                                                  (eq? (car sig) 'tuple)
+                                              (or (memq (car sig) '(call tuple))
+                                                  (and paren (eq? (car sig) 'block))
                                                   (and (eq? (car sig) '|::|)
                                                        (pair? (cadr sig))
                                                        (eq? (car (cadr sig)) 'call)))))
