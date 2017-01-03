@@ -174,7 +174,50 @@ function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractC
     RemoteCallbacks(credentials=credentials_cb(), payload=pointer_from_objref(payload))
 end
 
-if LibGit2.version() >= v"0.24.0"
+immutable ProxyOptions
+    version::Cuint
+    proxytype::Cint
+    url::Cstring
+    credential_cb::Ptr{Void}
+    certificate_cb::Ptr{Void}
+    payload::Ptr{Void}
+end
+ProxyOptions(; proxytype::Cint = zero(Cint),
+               url::Cstring = Cstring(C_NULL),
+               credential_cb::Ptr{Void} = C_NULL,
+               certificate_cb::Ptr{Void} = C_NULL,
+               payload::Ptr{Void} = C_NULL) =
+    ProxyOptions(one(Cuint),
+                 proxytype,
+                 url,
+                 credential_cb,
+                 certificate_cb,
+                 payload)
+
+if LibGit2.version() >= v"0.25.0"
+    immutable FetchOptions
+        version::Cuint
+        callbacks::RemoteCallbacks
+        prune::Cint
+        update_fetchhead::Cint
+        download_tags::Cint
+        proxy_opts::ProxyOptions
+        custom_headers::StrArrayStruct
+    end
+    FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
+                   prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
+                   update_fetchhead::Cint = one(Cint),
+                   download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO,
+                   proxy_opts::ProxyOptions = ProxyOptions(),
+                   custom_headers::StrArrayStruct = StrArrayStruct()) =
+        FetchOptions(one(Cuint),
+                     callbacks,
+                     prune,
+                     update_fetchhead,
+                     download_tags,
+                     proxy_opts,
+                     custom_headers)
+elseif LibGit2.version() >= v"0.24.0"
     immutable FetchOptions
         version::Cuint
         callbacks::RemoteCallbacks
@@ -439,7 +482,24 @@ else
 end
 
 
-if LibGit2.version() >= v"0.24.0"
+if LibGit2.version() >= v"0.25.0"
+    immutable PushOptions
+        version::Cuint
+        parallelism::Cint
+        callbacks::RemoteCallbacks
+        proxy_opts::ProxyOptions
+        custom_headers::StrArrayStruct
+    end
+    PushOptions(; parallelism::Cint=one(Cint),
+                  callbacks::RemoteCallbacks=RemoteCallbacks(),
+                  proxy_opts::ProxyOptions = ProxyOptions(),
+                  custom_headers::StrArrayStruct = StrArrayStruct()) =
+        PushOptions(one(Cuint),
+                    parallelism,
+                    callbacks,
+                    proxy_opts,
+                    custom_headers)
+elseif LibGit2.version() >= v"0.24.0"
     immutable PushOptions
         version::Cuint
         parallelism::Cint
