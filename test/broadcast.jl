@@ -339,6 +339,9 @@ end
 @test broadcast(+, 1.0, (0, -2.0)) == (1.0,-1.0)
 @test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
 @test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]
+let s = "foo"
+    @test s .* ["bar", "baz"] == ["foobar", "foobaz"]
+end
 
 # Ensure that even strange constructors that break `T(x)::T` work with broadcast
 immutable StrangeType18623 end
