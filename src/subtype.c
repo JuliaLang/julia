@@ -269,20 +269,27 @@ static jl_unionall_t *rename_unionall(jl_unionall_t *u)
 
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
+static jl_value_t *pick_union_element(jl_value_t *u, jl_stenv_t *e, int8_t R)
+{
+    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
+    do {
+        int ui = statestack_get(state, state->depth);
+        state->depth++;
+        if (ui == 0) {
+            state->more = state->depth; // memorize that this was the deepest available choice
+            u = ((jl_uniontype_t*)u)->a;
+        }
+        else {
+            u = ((jl_uniontype_t*)u)->b;
+        }
+    } while (jl_is_uniontype(u));
+    return u;
+}
+
 // compare the current component of `u` to `t`. `R==1` means `u` came from the right side.
 static int subtype_union(jl_value_t *t, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
-    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
-    int ui = statestack_get(state, state->depth);
-    state->depth++;
-    jl_value_t *choice;
-    if (ui == 0) {
-        state->more = state->depth; // memorize that this was the deepest available choice
-        choice = u->a;
-    }
-    else {
-        choice = u->b;
-    }
+    jl_value_t *choice = pick_union_element((jl_value_t*)u, e, R);
     return R ? subtype(t, choice, e, param) : subtype(choice, t, e, param);
 }
 
@@ -613,6 +620,30 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
 {
     if (x == jl_ANY_flag) x = (jl_value_t*)jl_any_type;
     if (y == jl_ANY_flag) y = (jl_value_t*)jl_any_type;
+    if (jl_is_uniontype(x)) {
+        if (x == y) return 1;
+        x = pick_union_element(x, e, 0);
+    }
+    if (jl_is_uniontype(y)) {
+        if (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b)
+            return 1;
+        if (jl_is_unionall(x))
+            return subtype_unionall(y, (jl_unionall_t*)x, e, 0, param);
+        int ui = 1;
+        if (jl_is_typevar(x)) {
+            // The `convert(Type{T},T)` pattern, where T is a Union, required changing priority
+            // of unions and vars: if matching `typevar <: union`, first try to match the whole
+            // union against the variable before trying to take it apart to see if there are any
+            // variables lurking inside.
+            jl_unionstate_t *state = &e->Runions;
+            ui = statestack_get(state, state->depth);
+            state->depth++;
+            if (ui == 0)
+                state->more = state->depth; // memorize that this was the deepest available choice
+        }
+        if (ui == 1)
+            y = pick_union_element(y, e, 1);
+    }
     if (jl_is_typevar(x)) {
         if (jl_is_typevar(y)) {
             if (x == y) return 1;
@@ -645,17 +676,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         return var_gt((jl_tvar_t*)y, x, e, param);
     if (y == (jl_value_t*)jl_any_type && !jl_has_free_typevars(x))
         return 1;
-    if (jl_is_uniontype(x)) {
-        if (x == y) return 1;
-        return subtype_union(y, (jl_uniontype_t*)x, e, 0, param);
-    }
-    if (jl_is_uniontype(y)) {
-        if (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b)
-            return 1;
-        if (jl_is_unionall(x))
-            return subtype_unionall(y, (jl_unionall_t*)x, e, 0, param);
-        return subtype_union(x, (jl_uniontype_t*)y, e, 1, param);
-    }
     // handle forall ("left") vars first
     if (jl_is_unionall(x)) {
         if (x == y && !(e->envidx < e->envsz))
@@ -950,17 +970,7 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
         JL_GC_POP();
         return i;
     }
-    jl_unionstate_t *state = &e->Runions;
-    int ui = statestack_get(state, state->depth);
-    state->depth++;
-    jl_value_t *choice;
-    if (ui == 0) {
-        state->more = state->depth;
-        choice = u->a;
-    }
-    else {
-        choice = u->b;
-    }
+    jl_value_t *choice = pick_union_element((jl_value_t*)u, e, 1);
     // try all possible choices in covariant position; union them all together at the top level
     return R ? intersect(x, choice, e, param) : intersect(choice, x, e, param);
 }
