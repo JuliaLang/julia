@@ -289,8 +289,7 @@ Some **bolded**
 - list1
 - list2
 """
-@test latex(book) == "\\section{Title}\nSome discussion\n\\begin{quote}\nA quote\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\\begin{itemize}\n\\item list1\n\n\\item list2\n\\end{itemize}\n"
-
+@test latex(book) == "\\section{Title}\nSome discussion\n\n\\begin{quote}\nA quote\n\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\n\\begin{itemize}\n\\item list1\n\n\n\\item list2\n\n\\end{itemize}\n"
 # mime output
 
 let out =
@@ -334,15 +333,20 @@ let out =
     """
     \\section{Title}
     Some discussion
+
     \\begin{quote}
     A quote
+
     \\end{quote}
     \\subsection{Section \\emph{important}}
     Some \\textbf{bolded}
+
     \\begin{itemize}
     \\item list1
 
+
     \\item list2
+
     \\end{itemize}
     """
     @test sprint(io -> show(io, "text/latex", book)) == out
@@ -528,8 +532,10 @@ let in_dollars =
     out_latex =
     """
     We have \$x^2 < x\$ whenever:
+
     \$\$|x| < 1\$\$
     etc.
+
     """,
     dollars   = Markdown.parse(in_dollars),
     backticks = Markdown.parse(in_backticks),
@@ -744,6 +750,7 @@ let t_1 =
             \n\n
             \\end{quote}
             !!!
+
             """
         @test out == expected
     end
@@ -1026,17 +1033,23 @@ let text =
             \\begin{itemize}
             \\item[42. ] foo
 
+
             \\item[43. ] bar
+
             \\end{itemize}
             \\begin{itemize}
             \\item[1. ] foo
 
+
             \\item[2. ] bar
+
             \\end{itemize}
             \\begin{itemize}
             \\item foo
 
+
             \\item bar
+
             \\end{itemize}
             """
         @test expected == Markdown.latex(md)
