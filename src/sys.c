@@ -216,19 +216,41 @@ JL_DLLEXPORT double jl_stat_atime(char *statbuf)
   return (double)s->st_atim.tv_sec + (double)s->st_atim.tv_nsec * 1e-9;
 }
 */
-
-JL_DLLEXPORT double jl_stat_mtime(char *statbuf)
+  
+JL_DLLEXPORT int jl_gettimeofday(struct jl_timeval *jtv)
 {
-    uv_stat_t *s;
-    s = (uv_stat_t*)statbuf;
-    return (double)s->st_mtim.tv_sec + (double)s->st_mtim.tv_nsec * 1e-9;
+#if defined(_OS_WINDOWS_)
+    struct __timeb64 tb;
+    errno_t code = _ftime64_s(&tb);
+    jtv->sec = tb.time;
+    jtv->usec = tb.millitm * 1000;
+#else
+    struct timeval tv;
+    int code = gettimeofday(&tv, NULL);
+    jtv->sec = tv.tv_sec;
+    jtv->usec = tv.tv_usec;
+#endif
+    return code;
 }
 
-JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
+JL_DLLEXPORT struct jl_stat_mtime(char *statbuf)
 {
+    struct computer_time ct;
     uv_stat_t *s;
     s = (uv_stat_t*)statbuf;
-    return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
+    ct->sec = st_mtim.tv_sec;
+    ct->usec = st_mtim.tv_nsec;
+    return ct;
+}
+
+JL_DLLEXPORT struct jl_stat_ctime(char *statbuf)
+{
+    struct computer_time ct;
+    uv_stat_t *s;
+    s = (uv_stat_t*)statbuf;
+    ct->sec = st_ctim.tv_sec;
+    ct->usec = st_ctim.tv_nsec;
+    return ct;
 }
 
 // --- buffer manipulation ---
