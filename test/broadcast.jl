@@ -340,7 +340,7 @@ end
 @test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
 @test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]
 let s = "foo"
-    @test s .* ["bar", "baz"] == ["foobar", "foobaz"]
+    @test s .* ["bar", "baz"] == ["foobar", "foobaz"] == "foo" .* ["bar", "baz"]
 end
 
 # Ensure that even strange constructors that break `T(x)::T` work with broadcast
