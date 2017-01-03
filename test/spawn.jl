@@ -32,7 +32,7 @@ end
 
 #### Examples used in the manual ####
 
-@test readstring(`$echo hello | sort`) == "hello | sort\n"
+@test readstring(`$echo hello \| sort`) == "hello | sort\n"
 @test readstring(pipeline(`$echo hello`, sortcmd)) == "hello\n"
 @test length(spawn(pipeline(`$echo hello`, sortcmd)).processes) == 2
 

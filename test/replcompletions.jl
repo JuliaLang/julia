@@ -289,7 +289,7 @@ for (T, arg) in [(String,"\")\""),(Char, "')'")]
     @test s[r] == "CompletionFoo.test2"
 end
 
-s = "(1, CompletionFoo.test2(`)`,"
+s = "(1, CompletionFoo.test2(`')'`,"
 c, r, res = test_complete(s)
 @test c[1] == string(first(methods(Main.CompletionFoo.test2, Tuple{Cmd})))
 @test length(c) == 1
