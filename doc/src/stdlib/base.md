@@ -131,6 +131,9 @@ Core.eval
 Base.@eval
 Base.evalfile
 Base.esc
+Base.@inbounds
+Base.@inline
+Base.@noinline
 Base.gensym
 Base.@gensym
 Base.@polly
