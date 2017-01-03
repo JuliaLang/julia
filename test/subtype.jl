@@ -411,8 +411,8 @@ end
 
 # uncategorized
 function test_7()
-    @test_broken isequal_type(Ref{Union{Int16, T}} where T, Ref{Union{Int16, S}} where S)
-    @test_broken isequal_type(Pair{Union{Int16, T}, T} where T, Pair{Union{Int16, S}, S} where S)
+    @test isequal_type(Ref{Union{Int16, T}} where T, Ref{Union{Int16, S}} where S)
+    @test isequal_type(Pair{Union{Int16, T}, T} where T, Pair{Union{Int16, S}, S} where S)
 end
 
 function test_Type()
