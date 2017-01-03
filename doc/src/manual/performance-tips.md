@@ -862,7 +862,7 @@ type from an algorithm.  In the example above, we could have passed a `SubArray`
 [`Array`](@ref), had we so desired.
 
 Taken to its extreme, pre-allocation can make your code uglier, so performance measurements and
-some judgment may be required.   However, for "vectorized" (element-wise) functions, the convenient
+some judgment may be required. However, for "vectorized" (element-wise) functions, the convenient
 syntax `x .= f.(y)` can be used for in-place operations with fused loops and no temporary arrays
 (see the [dot syntax for vectorizing functions](@ref man-vectorized)).
 
@@ -872,14 +872,14 @@ Julia has a special [dot syntax](@ref man-vectorized) that converts
 any scalar function into a "vectorized" function call, and any operator
 into a "vectorized" operator, with the special property that nested
 "dot calls" are *fusing*: they are combined at the syntax level into
-a single loop, without allocating temporary arrays.  If you use `.=` and
+a single loop, without allocating temporary arrays. If you use `.=` and
 similar assignment operators, the result can also be stored in-place
 in a pre-allocated array (see above).
 
 In a linear-algebra context, this means that even though operations like
 `vector + vector` and `vector * scalar` are defined, it can be advantageous
 to instead use `vector .+ vector` and `vector .* scalar` because the
-resulting loops can be fused with surrounding computations.  For example,
+resulting loops can be fused with surrounding computations. For example,
 consider the two functions:
 
 ```julia
@@ -905,7 +905,7 @@ julia> @time f.(x);
 
 That is, `fdot(x)` is more than four times faster and allocates 1/7 the
 memory of `f(x)`, because each `*` and `+` operation in `f(x)` allocates
-a new temporary array and executes in a separate loop.   (Of course,
+a new temporary array and executes in a separate loop. (Of course,
 if you just do `f.(x)` then it is as fast as `fdot(x)` in this
 example, but in many contexts it is more convenient to just sprinkle
 some dots in your expressions rather than defining a separate function
