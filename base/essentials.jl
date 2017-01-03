@@ -148,6 +148,26 @@ macro boundscheck(blk)
       $(Expr(:boundscheck,:pop)))
 end
 
+"""
+    @inbounds(blk)
+
+Eliminates array bounds checking within expressions.
+
+In the example below the bound check of array A is skipped to improve performance.
+```julia
+function sum(A::AbstractArray)
+    r = zero(eltype(A))
+    for i = 1:length(A)
+        @inbounds r += A[i]
+    end
+    return r
+end
+```
+!!! Warning
+
+    Using `@inbounds` may return incorrect results/crashes/corruption
+    for out-of-bounds indices. The user is responsible for checking it manually.
+"""
 macro inbounds(blk)
     :($(Expr(:inbounds,true));
       $(esc(blk));

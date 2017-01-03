@@ -118,10 +118,43 @@ macro eval(x)
     :($(esc(:eval))($(Expr(:quote,x))))
 end
 
+"""
+    @inline
+
+Give a hint to the compiler that this function is worth inlining.
+
+Small functions typically do not need the `@inline` annotation,
+as the compiler does it automatically. By using `@inline` on bigger functions,
+an extra nudge can be given to the compiler to inline it.
+This is shown in the following example:
+```julia
+@inline function bigfunction(x)
+    #=
+        Function Definition
+    =#
+end
+```
+"""
 macro inline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
 end
 
+"""
+    @noinline
+
+Prevents the compiler from inlining a function.
+
+Small functions are typically inlined automatically.
+By using `@noinline` on small functions, auto-inlining can be
+prevented. This is shown in the following example:
+```julia
+@noinline function smallfunction(x)
+    #=
+        Function Definition
+    =#
+end
+```
+"""
 macro noinline(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
 end
