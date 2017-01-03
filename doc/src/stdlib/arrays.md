@@ -139,7 +139,7 @@ Base.reverse!
 
 ## BitArrays
 
-BitArrays are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+`BitArray`s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
  They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
 and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
 

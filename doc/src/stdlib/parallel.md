@@ -95,7 +95,7 @@ Base.localindexes
 
 ## Multi-Threading
 
-This experimental interface supports Julia's multi-threading capabilities. Types and function
+This experimental interface supports Julia's multi-threading capabilities. Types and functions
 described here might (and likely will) change in the future.
 
 ```@docs
@@ -142,9 +142,9 @@ Base.release
 ## Cluster Manager Interface
 
 This interface provides a mechanism to launch and manage Julia workers on different cluster environments.
-LocalManager, for launching additional workers on the same host and SSHManager, for launching
-on remote hosts via ssh are present in Base. TCP/IP sockets are used to connect and transport
-messages between processes. It is possible for Cluster Managers to provide a different transport.
+There are two types of managers present in Base: `LocalManager`, for launching additional workers on the
+same host, and `SSHManager`, for launching on remote hosts via `ssh`. TCP/IP sockets are used to connect
+and transport messages between processes. It is possible for Cluster Managers to provide a different transport.
 
 ```@docs
 Base.launch
