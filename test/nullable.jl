@@ -507,48 +507,6 @@ end
 @test Nullable(10.5) ===
     @inferred(broadcast(+, 1, 2, Nullable(3), Nullable(4.0), Nullable(1//2)))
 
-# broadcasting for arrays
-@test istypeequal(@inferred(broadcast(+, [1, 2, 3], Nullable{Int}(1))),
-                  Nullable{Int}[2, 3, 4])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[1, 2, 3], 1)),
-                  Nullable{Int}[2, 3, 4])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[1, 2, 3], Nullable(1))),
-                  Nullable{Int}[2, 3, 4])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[1, Nullable()], Nullable(1))),
-                  Nullable{Int}[2, Nullable()])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
-                                         Nullable{Int}())),
-                  Nullable{Int}[Nullable(), Nullable()])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
-                                         Nullable{Int}[1, Nullable()])),
-                  Nullable{Int}[Nullable(), Nullable()])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
-                                         Nullable{Int}[Nullable(), 1])),
-                  Nullable{Int}[Nullable(), 2])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), Nullable()],
-                                         Nullable{Int}[1, 2])),
-                  Nullable{Int}[Nullable(), Nullable()])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[Nullable(), 1],
-                                         Nullable{Int}[1])),
-                  Nullable{Int}[Nullable(), 2])
-@test istypeequal(@inferred(broadcast(+, Nullable{Float64}[1.0, 2.0],
-                                         Nullable{Float64}[1.0 2.0; 3.0 4.0])),
-                  Nullable{Float64}[2.0 3.0; 5.0 6.0])
-@test istypeequal(@inferred(broadcast(+, Nullable{Int}[1, 2], [1, 2], 1)),
-                  Nullable{Int}[3, 5])
-
-@test istypeequal(@inferred(broadcast(/, 1, Nullable{Int}[1, 2, 4])),
-                  Nullable{Float64}[1.0, 0.5, 0.25])
-@test istypeequal(@inferred(broadcast(muladd, Nullable(2), 42,
-                                      [Nullable(1337), Nullable{Int}()])),
-                  Nullable{Int}[1421, Nullable()])
-
-# heterogenous types (not inferrable)
-@test istypeequal(broadcast(+, Any[1, 1.0], Nullable(1//2)),
-                  Any[Nullable(3//2), Nullable(1.5)])
-@test istypeequal(broadcast(+, Any[Nullable(1) Nullable(1.0)], Nullable(big"1")),
-                  Any[Nullable(big"2") Nullable(big"2.0")])
-
 # test fast path taken
 for op in (+, *, -)
     for b1 in (false, true)
@@ -557,11 +515,6 @@ for op in (+, *, -)
                 @inferred(broadcast(op, Nullable{Int}(1, b1),
                                         Nullable{Int}(2, b2)))
         end
-        A = [1, 2, 3]
-        res = @inferred(broadcast(op, A, Nullable{Int}(1, b1)))
-        @test res[1] === Nullable{Int}(op(1, 1), b1)
-        @test res[2] === Nullable{Int}(op(2, 1), b1)
-        @test res[3] === Nullable{Int}(op(3, 1), b1)
     end
 end
 

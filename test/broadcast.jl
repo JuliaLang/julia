@@ -363,7 +363,7 @@ StrangeType18623(x,y) = (x,y)
 let
     f(A, n) = broadcast(x -> +(x, n), A)
     @test @inferred(f([1.0], 1)) == [2.0]
-    g() = (a = 1; Base.Broadcast._broadcast_type(Any, x -> x + a, 1.0))
+    g() = (a = 1; Base.Broadcast._broadcast_eltype(x -> x + a, 1.0))
     @test @inferred(g()) === Float64
 end
 
@@ -374,8 +374,10 @@ end
 @test (+).([[0,2], [1,3]], [1,-1]) == [[1,3], [0,2]]
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
 
-# Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722).
+# Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),
+# and similarly for broadcast!(f, A, numbers...) (#19799).
 @test let z = 1; A = broadcast!(() -> z += 1, zeros(2)); A[1] != A[2]; end
+@test let z = 1; A = broadcast!(x -> z += x, zeros(2), 1); A[1] != A[2]; end
 
 # broadcasting for custom AbstractArray
 immutable Array19745{T,N} <: AbstractArray{T,N}
@@ -408,4 +410,17 @@ Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...) =
     @test a .* a' == @inferred(aa .* aa')
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .* aa', Array19745)
+end
+
+# broadcast should only "peel off" one container layer
+@test get.([Nullable(1), Nullable(2)]) == [1, 2]
+let io = IOBuffer()
+    broadcast(x -> print(io, x), [Nullable(1.0)])
+    @test String(take!(io)) == "Nullable{Float64}(1.0)"
+end
+
+# Test that broadcast's promotion mechanism handles closures accepting more than one argument.
+# (See issue #19641 and referenced issues and pull requests.)
+let f() = (a = 1; Base.Broadcast._broadcast_eltype((x, y) -> x + y + a, 1.0, 1.0))
+    @test @inferred(f()) == Float64
 end

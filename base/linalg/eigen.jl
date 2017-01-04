@@ -45,7 +45,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::B
         end
         j += 1
     end
-    return Eigen(complex(WR, WI), evec)
+    return Eigen(complex.(WR, WI), evec)
 end
 
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
@@ -162,7 +162,7 @@ make rows and columns more equal in norm.
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     issymmetric(A) && return eigvals!(Symmetric(A))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
-    return iszero(valsim) ? valsre : complex(valsre, valsim)
+    return iszero(valsim) ? valsre : complex.(valsre, valsim)
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     ishermitian(A) && return eigvals(Hermitian(A))
@@ -297,7 +297,7 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
         end
         j += 1
     end
-    return GeneralizedEigen(complex(alphar, alphai)./beta, vecs)
+    return GeneralizedEigen(complex.(alphar, alphai)./beta, vecs)
 end
 
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
@@ -364,7 +364,7 @@ Same as [`eigvals`](@ref), but saves space by overwriting the input `A` (and `B`
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
     issymmetric(A) && isposdef(B) && return eigvals!(Symmetric(A), Symmetric(B))
     alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
-    return (iszero(alphai) ? alphar : complex(alphar, alphai))./beta
+    return (iszero(alphai) ? alphar : complex.(alphar, alphai))./beta
 end
 function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
     ishermitian(A) && isposdef(B) && return eigvals!(Hermitian(A), Hermitian(B))

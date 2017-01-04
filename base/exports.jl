@@ -233,6 +233,7 @@ export
     ~,
     :,
     =>,
+    ∘,
     A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
@@ -463,7 +464,6 @@ export
     zeta,
 
 # arrays
-    bitbroadcast,
     broadcast!,
     broadcast,
     broadcast_getindex,

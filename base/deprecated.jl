@@ -1239,7 +1239,7 @@ for (Bsig, A1sig, A2sig, gbb, funcname) in
     end  # let broadcast_cache
 end
 _broadcast_zpreserving!(args...) = broadcast!(args...)
-_broadcast_zpreserving(args...) = Base.Broadcast.broadcast_elwise_op(args...)
+_broadcast_zpreserving(f, As...) = broadcast!(f, similar(Array{promote_op(f, map(eltype, As)...)}, Base.Broadcast.broadcast_indices(As...)), As...)
 _broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
     _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
 _broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
@@ -1284,9 +1284,9 @@ function _airy(k::Integer, z::Complex128)
     depwarn("`airy(k,x)` is deprecated, use `airyai(x)`, `airyaiprime(x)`, `airybi(x)` or `airybiprime(x)` instead.",:airy)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
-        return _airy(z, id, Int32(1))
+        return Base.Math._airy(z, id, Int32(1))
     elseif k == 2 || k == 3
-        return _biry(z, id, Int32(1))
+        return Base.Math._biry(z, id, Int32(1))
     else
         throw(ArgumentError("k must be between 0 and 3"))
     end
@@ -1295,9 +1295,9 @@ function _airyx(k::Integer, z::Complex128)
     depwarn("`airyx(k,x)` is deprecated, use `airyaix(x)`, `airyaiprimex(x)`, `airybix(x)` or `airybiprimex(x)` instead.",:airyx)
     id = Int32(k==1 || k==3)
     if k == 0 || k == 1
-        return _airy(z, id, Int32(2))
+        return Base.Math._airy(z, id, Int32(2))
     elseif k == 2 || k == 3
-        return _biry(z, id, Int32(2))
+        return Base.Math._biry(z, id, Int32(2))
     else
         throw(ArgumentError("k must be between 0 and 3"))
     end
@@ -1308,6 +1308,8 @@ for afn in (:airy,:airyx)
     suf  = string(afn)[5:end]
     @eval begin
         function $afn(k::Integer, z::Complex128)
+            afn = $(QuoteNode(afn))
+            suf = $(QuoteNode(suf))
             depwarn("`$afn(k,x)` is deprecated, use `airyai$suf(x)`, `airyaiprime$suf(x)`, `airybi$suf(x)` or `airybiprime$suf(x)` instead.",$(QuoteNode(afn)))
             $_afn(k,z)
         end
@@ -1319,16 +1321,13 @@ for afn in (:airy,:airyx)
         $afn(k::Integer, x::AbstractFloat) = real($afn(k, complex(x)))
 
         function $afn{T<:Number}(k::Number, x::AbstractArray{T})
-            depwarn("`$afn(k::Number,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
-            $_afn.(k,x)
+            $afn.(k,x)
         end
         function $afn{S<:Number}(k::AbstractArray{S}, x::Number)
-            depwarn("`$afn(k::AbstractArray,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
-            $_afn.(k,x)
+            $afn.(k,x)
         end
         function $afn{S<:Number,T<:Number}(k::AbstractArray{S}, x::AbstractArray{T})
-            depwarn("`$afn(k::AbstractArray,x::AbstractArray)` is deprecated, use `airyai$suf.(x)`, `airyaiprime$suf.(x)`, `airybi$suf.(x)` or `airybiprime$suf.(x)` instead.",$(QuoteNode(afn)))
-            $_afn.(k,x)
+            $afn.(k,x)
         end
     end
 end
@@ -1341,10 +1340,147 @@ end
 @deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
 
 # QuadGK moved to a package (#19741)
-function quadgk(args...)
+function quadgk(args...; kwargs...)
     error(string(quadgk, args, " has been moved to the package QuadGK.jl.\n",
                  "Run Pkg.add(\"QuadGK\") to install QuadGK on Julia v0.6 and later, and then run `using QuadGK`."))
 end
 export quadgk
+
+# Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
+@deprecate bitbroadcast broadcast
+
+# Deprecate two-argument map! (map!(f, A)) for a cycle in anticipation of semantic change
+@deprecate map!{F}(f::F, A::AbstractArray) map!(f, A, A)
+@deprecate asyncmap!(f, c; ntasks=0, batch_size=nothing) asyncmap!(f, c, c; ntasks=ntasks, batch_size=batch_size)
+
+# Not exported, but used outside Base
+_promote_array_type(F, ::Type, ::Type, T::Type) = T
+_promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
+_promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
+_promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
+_promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
+_promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
+_promote_array_type{S<:Union{Complex, Real}, T<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{T}}, ::Type) = Complex{T}
+function promote_array_type(F, R, S, T)
+    Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " *
+                 "in Base. See https://github.com/JuliaLang/julia/issues/19669 " *
+                 "for more information.", :promote_array_type)
+    _promote_array_type(F, R, S, T)
+end
+
+# Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
+@deprecate abs2(x::AbstractSparseVector) abs2.(x)
+
+# Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
+for f in (:sec, :sech, :secd, :asec, :asech,
+            :csc, :csch, :cscd, :acsc, :acsch,
+            :cot, :coth, :cotd, :acot, :acoth)
+    @eval @deprecate $f{T<:Number}(A::AbstractArray{T}) $f.(A)
+end
+
+# Deprecate vectorized two-argument complex in favor of compact broadcast syntax
+@deprecate complex(A::AbstractArray, b::Real)           complex.(A, b)
+@deprecate complex(a::Real, B::AbstractArray)           complex.(a, B)
+@deprecate complex(A::AbstractArray, B::AbstractArray)  complex.(A, B)
+
+# Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
+@deprecate clamp(A::AbstractArray, lo, hi) clamp.(A, lo, hi)
+
+# Deprecate manually vectorized round methods in favor of compact broadcast syntax
+@deprecate round(M::Bidiagonal) round.(M)
+@deprecate round(M::Tridiagonal) round.(M)
+@deprecate round(M::SymTridiagonal) round.(M)
+@deprecate round{T}(::Type{T}, x::AbstractArray) round.(T, x)
+@deprecate round{T}(::Type{T}, x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round(x::AbstractArray, r::RoundingMode) round.(x, r)
+@deprecate round(x::AbstractArray, digits::Integer, base::Integer = 10) round.(x, digits, base)
+
+# Deprecate manually vectorized trunc methods in favor of compact broadcast syntax
+@deprecate trunc(M::Bidiagonal) trunc.(M)
+@deprecate trunc(M::Tridiagonal) trunc.(M)
+@deprecate trunc(M::SymTridiagonal) trunc.(M)
+@deprecate trunc{T}(::Type{T}, x::AbstractArray) trunc.(T, x)
+@deprecate trunc(x::AbstractArray, digits::Integer, base::Integer = 10) trunc.(x, digits, base)
+
+# Deprecate manually vectorized floor methods in favor of compact broadcast syntax
+@deprecate floor(M::Bidiagonal) floor.(M)
+@deprecate floor(M::Tridiagonal) floor.(M)
+@deprecate floor(M::SymTridiagonal) floor.(M)
+@deprecate floor{T}(::Type{T}, A::AbstractArray) floor.(T, A)
+@deprecate floor(A::AbstractArray, digits::Integer, base::Integer = 10) floor.(A, digits, base)
+
+# Deprecate manually vectorized ceil methods in favor of compact broadcast syntax
+@deprecate ceil(M::Bidiagonal) ceil.(M)
+@deprecate ceil(M::Tridiagonal) ceil.(M)
+@deprecate ceil(M::SymTridiagonal) ceil.(M)
+@deprecate ceil{T}(::Type{T}, x::AbstractArray) ceil.(T, x)
+@deprecate ceil(x::AbstractArray, digits::Integer, base::Integer = 10) ceil.(x, digits, base)
+
+# Deprecate manually vectorized `big` methods in favor of compact broadcast syntax
+@deprecate big(r::UnitRange) big.(r)
+@deprecate big(r::StepRange) big.(r)
+@deprecate big(r::FloatRange) big.(r)
+@deprecate big(r::LinSpace) big.(r)
+@deprecate big{T<:Integer,N}(x::AbstractArray{T,N}) big.(x)
+@deprecate big{T<:AbstractFloat,N}(x::AbstractArray{T,N}) big.(x)
+@deprecate big(A::LowerTriangular) big.(A)
+@deprecate big(A::UpperTriangular) big.(A)
+@deprecate big(A::Base.LinAlg.UnitLowerTriangular) big.(A)
+@deprecate big(A::Base.LinAlg.UnitUpperTriangular) big.(A)
+@deprecate big(B::Bidiagonal) big.(B)
+@deprecate big{T<:Integer,N}(A::AbstractArray{Complex{T},N}) big.(A)
+@deprecate big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) big.(A)
+@deprecate big{T<:Integer,N}(x::AbstractArray{Complex{Rational{T}},N}) big.(A)
+
+# Deprecate manually vectorized div methods in favor of compact broadcast syntax
+@deprecate div(A::Number, B::AbstractArray) div.(A, B)
+@deprecate div(A::AbstractArray, B::Number) div.(A, B)
+@deprecate div(A::AbstractArray, B::AbstractArray) div.(A, B)
+
+# Deprecate manually vectorized rem methods in favor of compact broadcast syntax
+@deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
+@deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
+
+# Deprecate manually vectorized div, mod, and % methods for dates
+@deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::P)         div.(X, y)
+@deprecate div{P<:Dates.Period}(X::StridedArray{P}, y::Integer)   div.(X, y)
+@deprecate (%){P<:Dates.Period}(X::StridedArray{P}, y::P)         X .% y
+@deprecate mod{P<:Dates.Period}(X::StridedArray{P}, y::P)         mod.(X, y)
+
+# Deprecate manually vectorized mod methods in favor of compact broadcast syntax
+@deprecate mod(B::BitArray, x::Bool) mod.(B, x)
+@deprecate mod(x::Bool, B::BitArray) mod.(x, B)
+@deprecate mod(A::AbstractArray, B::AbstractArray) mod.(A, B)
+@deprecate mod{T}(x::Number, A::AbstractArray{T}) mod.(x, A)
+@deprecate mod{T}(A::AbstractArray{T}, x::Number) mod.(A, x)
+
+# Deprecate vectorized & in favor of dot syntax
+@deprecate (&)(a::Bool, B::BitArray)                a .& B
+@deprecate (&)(A::BitArray, b::Bool)                A .& b
+@deprecate (&)(a::Number, B::AbstractArray)         a .& B
+@deprecate (&)(A::AbstractArray, b::Number)         A .& b
+@deprecate (&)(A::AbstractArray, B::AbstractArray)  A .& B
+
+# Deprecate vectorized | in favor of compact broadcast syntax
+@deprecate (|)(a::Bool, B::BitArray)                a .| B
+@deprecate (|)(A::BitArray, b::Bool)                A .| b
+@deprecate (|)(a::Number, B::AbstractArray)         a .| B
+@deprecate (|)(A::AbstractArray, b::Number)         A .| b
+@deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
+
+function frexp{T<:AbstractFloat}(A::Array{T})
+    depwarn("`frexp(x::Array)` is discontinued.", :frexp)
+    F = similar(A)
+    E = Array{Int}(size(A))
+    for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
+        F[iF], E[iE] = frexp(A[iA])
+    end
+    return (F, E)
+end
+
+# Calling promote_op is likely a bad idea, so deprecate its convenience wrapper promote_eltype_op
+@deprecate promote_eltype_op(op, As...) promote_op(op, map(eltype, As)...)
 
 # End deprecations scheduled for 0.6

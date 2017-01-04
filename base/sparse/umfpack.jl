@@ -370,8 +370,8 @@ for itype in UmfpackIndexTypes
                         Up,Ui,Ux,Uz,
                         P, Q, C_NULL, C_NULL,
                         &0, Rs, lu.numeric)
-            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex(Lx, Lz))),
-             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex(Ux, Uz)),
+            (transpose(SparseMatrixCSC(min(n_row, n_col), n_row, increment!(Lp), increment!(Lj), complex.(Lx, Lz))),
+             SparseMatrixCSC(min(n_row, n_col), n_col, increment!(Up), increment!(Ui), complex.(Ux, Uz)),
              increment!(P), increment!(Q), Rs)
         end
     end

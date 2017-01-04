@@ -122,16 +122,6 @@ end
 # simple Array{Any} operations needed for bootstrap
 setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
 
-function length_checked_equal(args...)
-    n = length(args[1])
-    for i=2:length(args)
-        if length(args[i]) != n
-            error("argument dimensions must match")
-        end
-    end
-    n
-end
-
 map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
@@ -158,6 +148,26 @@ macro boundscheck(blk)
       $(Expr(:boundscheck,:pop)))
 end
 
+"""
+    @inbounds(blk)
+
+Eliminates array bounds checking within expressions.
+
+In the example below the bound check of array A is skipped to improve performance.
+```julia
+function sum(A::AbstractArray)
+    r = zero(eltype(A))
+    for i = 1:length(A)
+        @inbounds r += A[i]
+    end
+    return r
+end
+```
+!!! Warning
+
+    Using `@inbounds` may return incorrect results/crashes/corruption
+    for out-of-bounds indices. The user is responsible for checking it manually.
+"""
 macro inbounds(blk)
     :($(Expr(:inbounds,true));
       $(esc(blk));

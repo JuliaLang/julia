@@ -19,23 +19,14 @@ end
 
 ## Binary arithmetic operators ##
 
-promote_array_type(F, ::Type, ::Type, T::Type) = T
-promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
-promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
-promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
-promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
-promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
-promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
-promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
-
-for f in (:+, :-, :div, :mod, :&, :|)
+for f in (:+, :-)
     @eval function ($f)(A::AbstractArray, B::AbstractArray)
         promote_shape(A, B) # check size compatibility
         broadcast($f, A, B)
     end
 end
 
-for f in (:div, :mod, :rem, :&, :|, :/, :\, :*, :+, :-)
+for f in (:/, :\, :*, :+, :-)
     if f != :/
         @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
     end

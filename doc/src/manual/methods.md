@@ -64,7 +64,7 @@ julia> f(2.0, 3.0)
 7.0
 ```
 
-Applying it to any other types of arguments will result in a `MethodError`:
+Applying it to any other types of arguments will result in a [`MethodError`](@ref):
 
 ```julia
 julia> f(2.0, 3)
@@ -139,7 +139,7 @@ however, shows how clever application of sufficiently advanced technology can be
 from magic. [^Clarke61]
 
 For non-numeric values, and for fewer or more than two arguments, the function `f` remains undefined,
-and applying it will still result in a `MethodError`:
+and applying it will still result in a [`MethodError`](@ref):
 
 ```julia
 julia> f("foo", 3)
@@ -165,7 +165,7 @@ f (generic function with 2 methods)
 ```
 
 This output tells us that `f` is a function object with two methods. To find out what the signatures
-of those methods are, use the `methods()` function:
+of those methods are, use the [`methods()`](@ref) function:
 
 ```julia
 julia> methods(f)
@@ -248,7 +248,7 @@ ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
-method, and neither is more specific than the other. In such cases, Julia raises a `MethodError`
+method, and neither is more specific than the other. In such cases, Julia raises a [`MethodError`](@ref)
 rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate
 method for the intersection case:
 
@@ -346,7 +346,7 @@ Closest candidates are:
 ```
 
 As you can see, the type of the appended element must match the element type of the vector it
-is appended to, or else a `MethodError` is raised. In the following example, the method type parameter
+is appended to, or else a [`MethodError`](@ref) is raised. In the following example, the method type parameter
 `T` is used as the return value:
 
 ```julia

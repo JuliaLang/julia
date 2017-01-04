@@ -241,12 +241,10 @@ typedef struct _jl_method_t {
     // table of all argument types for which we've inferred or compiled this code
     union jl_typemap_t specializations;
 
-    // sparams are the symbols in the tvars vector
-    jl_svec_t *sparam_syms;
-    // the code AST template
-    jl_code_info_t *source; // null for builtins and staged functions
-    // unspecialized executable thunk (for isstaged, code for the generator), or null
-    struct _jl_method_instance_t *unspecialized;
+    jl_svec_t *sparam_syms;  // symbols corresponding to the tvars vector
+    jl_code_info_t *source;  // original code template, null for builtins
+    struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
+    struct _jl_method_instance_t *generator;  // executable code-generating function if isstaged
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
 
     // cache of specializations of this method for invoke(), i.e.
@@ -1234,6 +1232,8 @@ JL_DLLEXPORT long jl_getallocationgranularity(void);
 JL_DLLEXPORT int jl_is_debugbuild(void);
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void);
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void);
+JL_DLLEXPORT uint64_t jl_cpuid_tag(void);
+JL_DLLEXPORT int jl_uses_cpuid_tag(void);
 
 // environment entries
 JL_DLLEXPORT jl_value_t *jl_environ(int i);

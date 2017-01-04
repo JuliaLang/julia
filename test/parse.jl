@@ -868,6 +868,17 @@ let ..(x,y) = x + y
     @test 3 .. 4 === 7
 end
 
+# issue #19685
+let f = function (x; kw...)
+            return (x, kw)
+        end,
+    g = function (x; a = 2)
+            return (x, a)
+        end
+    @test f(1) == (1, Any[])
+    @test g(1) == (1, 2)
+end
+
 # Check `and` & `or`, issue #5238, PR #19788
 @test :(a and b) == :(a && b)
 @test true and :foo == :foo

@@ -75,7 +75,8 @@ airybiprime(z::Complex128) = _biry(z, Int32(1), Int32(1))
 """
     airyaix(x)
 
-Scaled Airy function of the first kind ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x \\sqrt{x}}``.
+Scaled Airy function of the first kind ``\\operatorname{Ai}(x) e^{\\frac{2}{3} x
+\\sqrt{x}}``.  Throws [`DomainError`](@ref) for negative `Real` arguments.
 """
 function airyaix end
 airyaix(z::Complex128) = _airy(z, Int32(0), Int32(2))
@@ -83,7 +84,8 @@ airyaix(z::Complex128) = _airy(z, Int32(0), Int32(2))
 """
     airyaiprimex(x)
 
-Scaled derivative of the Airy function of the first kind ``\\operatorname{Ai}'(x) e^{\\frac{2}{3} x \\sqrt{x}}``.
+Scaled derivative of the Airy function of the first kind ``\\operatorname{Ai}'(x)
+e^{\\frac{2}{3} x \\sqrt{x}}``.  Throws [`DomainError`](@ref) for negative `Real` arguments.
 """
 function airyaiprimex end
 airyaiprimex(z::Complex128) =  _airy(z, Int32(1), Int32(2))
