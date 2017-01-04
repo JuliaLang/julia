@@ -91,7 +91,7 @@ end
 
 # REPL help
 
-function helpmode(line::AbstractString)
+function helpmode(io::IO, line::AbstractString)
     line = strip(line)
     expr =
         if haskey(keywords, Symbol(line))
@@ -109,8 +109,11 @@ function helpmode(line::AbstractString)
             # definition if it exists.
             (isexpr(x, :macrocall, 1) && !endswith(line, "()")) ? quot(x) : x
         end
-    :(Base.Docs.@repl $expr)
+    # the following must call repl(io, expr) via the @repl macro
+    # so that the resulting expressions are evaluated in the Base.Docs namespace
+    :(Base.Docs.@repl $io $expr)
 end
+helpmode(line::AbstractString) = helpmode(STDOUT, line)
 
 function repl_search(io::IO, s)
     pre = "search:"
@@ -118,7 +121,6 @@ function repl_search(io::IO, s)
     printmatches(io, s, completions(s), cols = displaysize(io)[2] - length(pre))
     println(io, "\n")
 end
-
 repl_search(s) = repl_search(STDOUT, s)
 
 function repl_corrections(io::IO, s)
@@ -128,26 +130,24 @@ function repl_corrections(io::IO, s)
     end
     print_correction(io, s)
 end
-
 repl_corrections(s) = repl_corrections(STDOUT, s)
 
-macro repl(ex) repl(ex) end
+macro repl(ex...) length(ex) == 2 ? repl(ex[1], ex[2]) : repl(ex[1]) end
 
-function repl(s::Symbol)
+function repl(io::IO, s::Symbol)
+    str = string(s)
     quote
-        repl_search($(string(s)))
-        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($(string(s)))
+        repl_search($io, $str)
+        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($io, $str)
         $(_repl(s))
     end
 end
-
 isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] === Symbol("@r_str") && !isempty(x.args[2])
+repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
+repl(io::IO, str::AbstractString) = :(apropos($io, $str))
+repl(io::IO, other) = :(@doc $(esc(other)))
 
-repl(ex::Expr) = isregex(ex) ? :(apropos($ex)) : _repl(ex)
-
-repl(str::AbstractString) = :(apropos($str))
-
-repl(other) = :(@doc $(esc(other)))
+repl(x) = repl(STDOUT, x)
 
 function _repl(x)
     docs = (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args)) ?

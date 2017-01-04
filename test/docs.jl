@@ -908,5 +908,7 @@ for (line, expr) in Pair[
     "\"...\""      => "...",
     "r\"...\""     => :(r"..."),
     ]
-    @test Docs.helpmode(line) == :(Base.Docs.@repl($expr))
+    @test Docs.helpmode(line) == :(Base.Docs.@repl($STDOUT, $expr))
+    buf = IOBuffer()
+    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
 end
