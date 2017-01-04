@@ -78,10 +78,9 @@ function show(io::IO, c::Char)
     return
 end
 
-using UTF8proc: category_abbrev, category_string
 function show(io::IO, ::MIME"text/plain", c::Char)
     show(io, c)
     u = UInt32(c)
     print(io, ": ", isascii(c) ? "ASCII/" : "", "Unicode U+", hex(u, u > 0xffff ? 6 : 4))
-    print(io, " (category ", category_abbrev(c), ": ", category_string(c), ")")
+    print(io, " (category ", UTF8proc.category_abbrev(c), ": ", UTF8proc.category_string(c), ")")
 end
