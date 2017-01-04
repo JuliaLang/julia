@@ -293,7 +293,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     form is often used to annotate blocks, as in the parallel `for` construct: `@parallel for i in 1:n; #= body =#; end`.
     Where the end of the macro construct may be unclear, use the function-like form.
   * Julia now has an enumeration type, expressed using the macro `@enum(name, value1, value2, ...)`
-    For example: `@enum(Fruit, Banana=1, Apple, Pear)`
+    For example: `@enum(Fruit, banana=1, apple, pear)`
   * By convention, functions that modify their arguments have a `!` at the end of the name, for example
     `push!`.
   * In C++, by default, you have static dispatch, i.e. you need to annotate a function as virtual,
