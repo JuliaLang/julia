@@ -175,7 +175,8 @@ function repl_latex(io::IO, s::String)
 end
 repl_latex(s::String) = repl_latex(STDOUT, s)
 
-macro repl(ex...) length(ex) == 2 ? repl(ex[1], ex[2]) : repl(ex[1]) end
+macro repl(ex) repl(ex) end
+macro repl(io, ex) repl(io, ex) end
 
 function repl(io::IO, s::Symbol)
     str = string(s)
