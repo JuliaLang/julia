@@ -717,7 +717,7 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
 void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
 {
-    jl_code_info_t *src = m->isstaged ? (jl_code_info_t*)m->unspecialized->inferred : m->source;
+    jl_code_info_t *src = m->source;
     size_t nvars = jl_array_len(src->slotnames);
 
     size_t i, n = jl_svec_len(t);
