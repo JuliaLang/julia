@@ -56,7 +56,7 @@ Using the framework for your own tests
 
 Just include `perfutil.jl`, use `@timeit` on the functions to be
 benchmarked. Alternatively have a look at the
-[Benchmark package](https://github.com/JuliaCI/BenchmarkTools.jl).
+[BenchmarkTools package](https://github.com/JuliaCI/BenchmarkTools.jl).
 
 
 Package dependencies
