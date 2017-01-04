@@ -414,6 +414,26 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
               try = "No"
            """)) == Expr(:error, "unexpected \"=\"")
 
+# issue #19861 make sure macro-expansion happens in the newest world for top-level expression
+@test eval(Base.parse_input_line("""
+           macro X19861()
+             return 23341
+           end
+           @X19861
+           """)::Expr) == 23341
+
+# test parse_input_line for a streaming IO input
+let b = IOBuffer("""
+                 let x = x
+                     x
+                 end
+                 f()
+                 """)
+    @test Base.parse_input_line(b) == Expr(:let, Expr(:block, Expr(:line, 2, :none), :x), Expr(:(=), :x, :x))
+    @test Base.parse_input_line(b) == Expr(:call, :f)
+    @test Base.parse_input_line(b) === nothing
+end
+
 # issue #15763
 # TODO enable post-0.5
 #test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
