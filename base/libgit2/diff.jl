@@ -20,7 +20,7 @@ function diff_tree(repo::GitRepo, tree::GitTree, pathspecs::AbstractString=""; c
     finally
         !emptypathspec && close(sa)
     end
-    return GitDiff(diff_ptr_ptr[])
+    return GitDiff(repo, diff_ptr_ptr[])
 end
 
 function diff_tree(repo::GitRepo, oldtree::GitTree, newtree::GitTree)
@@ -28,7 +28,7 @@ function diff_tree(repo::GitRepo, oldtree::GitTree, newtree::GitTree)
     @check ccall((:git_diff_tree_to_tree, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{DiffOptionsStruct}),
                    diff_ptr_ptr, repo.ptr, oldtree.ptr, newtree.ptr, C_NULL)
-    return GitDiff(diff_ptr_ptr[])
+    return GitDiff(repo, diff_ptr_ptr[])
 end
 
 function Base.count(diff::GitDiff)

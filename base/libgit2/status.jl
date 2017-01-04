@@ -5,7 +5,7 @@ function GitStatus(repo::GitRepo; status_opts=StatusOptions())
     @check ccall((:git_status_list_new, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{StatusOptions}),
                   stat_ptr_ptr, repo.ptr, Ref(status_opts))
-    return GitStatus(stat_ptr_ptr[])
+    return GitStatus(repo, stat_ptr_ptr[])
 end
 
 function Base.length(status::GitStatus)

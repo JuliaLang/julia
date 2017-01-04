@@ -5,7 +5,7 @@ function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractStr
     @check ccall((:git_remote_create, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name, rmt_url)
-    return GitRemote(rmt_ptr_ptr[])
+    return GitRemote(repo, rmt_ptr_ptr[])
 end
 
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString)
@@ -13,7 +13,7 @@ function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractStr
     @check ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name, rmt_url, fetch_spec)
-    return GitRemote(rmt_ptr_ptr[])
+    return GitRemote(repo, rmt_ptr_ptr[])
 end
 
 function GitRemoteAnon(repo::GitRepo, url::AbstractString)
@@ -21,7 +21,7 @@ function GitRemoteAnon(repo::GitRepo, url::AbstractString)
     @check ccall((:git_remote_create_anonymous, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
                 rmt_ptr_ptr, repo.ptr, url)
-    return GitRemote(rmt_ptr_ptr[])
+    return GitRemote(repo, rmt_ptr_ptr[])
 end
 
 function get(::Type{GitRemote}, repo::GitRepo, rmt_name::AbstractString)
@@ -29,7 +29,7 @@ function get(::Type{GitRemote}, repo::GitRepo, rmt_name::AbstractString)
     @check ccall((:git_remote_lookup, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name)
-    return GitRemote(rmt_ptr_ptr[])
+    return GitRemote(repo, rmt_ptr_ptr[])
 end
 
 function url(rmt::GitRemote)

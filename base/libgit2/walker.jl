@@ -1,10 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-function GitRevWalker(r::GitRepo)
+function GitRevWalker(repo::GitRepo)
     w_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_revwalk_new, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}), w_ptr, r.ptr)
-    return GitRevWalker(w_ptr[])
+                  (Ptr{Ptr{Void}}, Ptr{Void}), w_ptr, repo.ptr)
+    return GitRevWalker(repo, w_ptr[])
 end
 
 function Base.start(w::GitRevWalker)
@@ -48,11 +48,7 @@ function Base.sort!(w::GitRevWalker; by::Cint = Consts.SORT_NONE, rev::Bool=fals
     return w
 end
 
-function repository(w::GitRevWalker)
-    ptr = ccall((:git_revwalk_repository, :libgit2), Ptr{Void}, (Ptr{Void},), w.ptr)
-    ptr != C_NULL && return GitRepo(ptr)
-    return  nothing
-end
+repository(w::GitRevWalker) = w.repo
 
 function Base.map(f::Function, walker::GitRevWalker;
                   oid::Oid=Oid(),

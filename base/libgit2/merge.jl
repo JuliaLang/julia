@@ -5,7 +5,7 @@ function GitAnnotated(repo::GitRepo, commit_id::Oid)
     @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Oid}),
                    ann_ptr_ptr, repo.ptr, Ref(commit_id))
-    return GitAnnotated(ann_ptr_ptr[])
+    return GitAnnotated(repo, ann_ptr_ptr[])
 end
 
 function GitAnnotated(repo::GitRepo, ref::GitReference)
@@ -13,7 +13,7 @@ function GitAnnotated(repo::GitRepo, ref::GitReference)
     @check ccall((:git_annotated_commit_from_ref, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ptr{Void}),
                    ann_ref_ref, repo.ptr, ref.ptr)
-    return GitAnnotated(ann_ref_ref[])
+    return GitAnnotated(repo, ann_ref_ref[])
 end
 
 function GitAnnotated(repo::GitRepo, fh::FetchHead)
@@ -21,7 +21,7 @@ function GitAnnotated(repo::GitRepo, fh::FetchHead)
     @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Cstring, Cstring, Ptr{Oid}),
                    ann_ref_ref, repo.ptr, fh.name, fh.url, Ref(fh.oid))
-    return GitAnnotated(ann_ref_ref[])
+    return GitAnnotated(repo, ann_ref_ref[])
 end
 
 function GitAnnotated(repo::GitRepo, comittish::AbstractString)

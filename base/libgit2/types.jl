@@ -398,54 +398,94 @@ abstract AbstractGitObject
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 
 abstract GitObject <: AbstractGitObject
-function Base.close(obj::GitObject)
-    if obj.ptr != C_NULL
-        ccall((:git_object_free, :libgit2), Void, (Ptr{Void},), obj.ptr)
-        obj.ptr = C_NULL
-    end
-end
 
-# Common types
-for (typ, ref, sup, fnc) in (
-            (:GitRemote,     :Void, :AbstractGitObject, :(:git_remote_free)),
-            (:GitRevWalker,  :Void, :AbstractGitObject, :(:git_revwalk_free)),
-            (:GitConfig,     :Void, :AbstractGitObject, :(:git_config_free)),
-            (:GitReference,  :Void, :AbstractGitObject, :(:git_reference_free)),
-            (:GitDiff,       :Void, :AbstractGitObject, :(:git_diff_free)),
-            (:GitIndex,      :Void, :AbstractGitObject, :(:git_index_free)),
-            (:GitRepo,       :Void, :AbstractGitObject, :(:git_repository_free)),
-            (:GitAnnotated,  :Void, :AbstractGitObject, :(:git_annotated_commit_free)),
-            (:GitRebase,     :Void, :AbstractGitObject, :(:git_rebase_free)),
-            (:GitStatus,     :Void, :AbstractGitObject, :(:git_status_list_free)),
-            (:GitBranchIter, :Void, :AbstractGitObject, :(:git_branch_iterator_free)),
-            (:GitTreeEntry,  :Void, :AbstractGitObject, :(:git_tree_entry_free)),
-            (:GitSignature,  :SignatureStruct, :AbstractGitObject, :(:git_signature_free)),
-            (:GitAnyObject,  :Void, :GitObject, nothing),
-            (:GitCommit,     :Void, :GitObject, nothing),
-            (:GitBlob,       :Void, :GitObject, nothing),
-            (:GitTree,       :Void, :GitObject, nothing),
-            (:GitTag,        :Void, :GitObject, nothing)
-        )
+for (typ, reporef, sup, cname) in [
+    (:GitRepo,       nothing,   :AbstractGitObject, :git_repository),
+    (:GitTreeEntry,  nothing,   :AbstractGitObject, :git_tree_entry),
+    (:GitConfig,     :Nullable, :AbstractGitObject, :git_config),
+    (:GitIndex,      :Nullable, :AbstractGitObject, :git_index),
+    (:GitRemote,     :GitRepo,  :AbstractGitObject, :git_remote),
+    (:GitRevWalker,  :GitRepo,  :AbstractGitObject, :git_revwalk),
+    (:GitReference,  :GitRepo,  :AbstractGitObject, :git_reference),
+    (:GitDiff,       :GitRepo,  :AbstractGitObject, :git_diff),
+    (:GitAnnotated,  :GitRepo,  :AbstractGitObject, :git_annotated_commit),
+    (:GitRebase,     :GitRepo,  :AbstractGitObject, :git_rebase),
+    (:GitStatus,     :GitRepo,  :AbstractGitObject, :git_status_list),
+    (:GitBranchIter, :GitRepo,  :AbstractGitObject, :git_branch_iterator),
+    (:GitAnyObject,  :GitRepo,  :GitObject,         :git_object),
+    (:GitCommit,     :GitRepo,  :GitObject,         :git_commit),
+    (:GitBlob,       :GitRepo,  :GitObject,         :git_blob),
+    (:GitTree,       :GitRepo,  :GitObject,         :git_tree),
+    (:GitTag,        :GitRepo,  :GitObject,         :git_tag)]
 
-    @eval type $typ <: $sup
-        ptr::Ptr{$ref}
-        function $typ(ptr::Ptr{$ref})
-            @assert ptr != C_NULL
-            obj = new(ptr)
-            finalizer(obj, Base.close)
-            return obj
+    if reporef === nothing
+        @eval type $typ <: $sup
+            ptr::Ptr{Void}
+            function $typ(ptr::Ptr{Void},fin=true)
+                @assert ptr != C_NULL
+                obj = new(ptr)
+                if fin
+                    finalizer(obj, Base.close)
+                end
+                return obj
+            end
         end
-    end
-
-    if fnc !== nothing
-        @eval function Base.close(obj::$typ)
-            if obj.ptr != C_NULL
-                ccall(($fnc, :libgit2), Void, (Ptr{$ref},), obj.ptr)
-                obj.ptr = C_NULL
+    elseif reporef == :Nullable
+        @eval type $typ <: $sup
+            nrepo::Nullable{GitRepo}
+            ptr::Ptr{Void}
+            function $typ(repo::GitRepo, ptr::Ptr{Void})
+                @assert ptr != C_NULL
+                obj = new(Nullable(repo), ptr)
+                finalizer(obj, Base.close)
+                return obj
+            end
+            function $typ(ptr::Ptr{Void})
+                @assert ptr != C_NULL
+                obj = new(Nullable{GitRepo}(), ptr)
+                finalizer(obj, Base.close)
+                return obj
+            end
+        end
+    elseif reporef == :GitRepo
+        @eval type $typ <: $sup
+            repo::GitRepo
+            ptr::Ptr{Void}
+            function $typ(repo::GitRepo, ptr::Ptr{Void})
+                @assert ptr != C_NULL
+                obj = new(repo, ptr)
+                finalizer(obj, Base.close)
+                return obj
             end
         end
     end
+    @eval function Base.close(obj::$typ)
+        if obj.ptr != C_NULL
+            ccall(($(string(cname, :_free)), :libgit2), Void, (Ptr{Void},), obj.ptr)
+            obj.ptr = C_NULL
+        end
+    end
+end
 
+"""
+    LibGit2.GitSignature
+
+This is a Julia wrapper around a pointer to a [`git_signature`](https://libgit2.github.com/libgit2/#HEAD/type/git_signature) object.
+"""
+type GitSignature <: AbstractGitObject
+    ptr::Ptr{SignatureStruct}
+    function GitSignature(ptr::Ptr{SignatureStruct})
+        @assert ptr != C_NULL
+        obj = new(ptr)
+        finalizer(obj, Base.close)
+        return obj
+    end
+end
+function Base.close(obj::GitSignature)
+    if obj.ptr != C_NULL
+        ccall((:git_signature_free, :libgit2), Void, (Ptr{SignatureStruct},), obj.ptr)
+        obj.ptr = C_NULL
+    end
 end
 
 # Structure has the same layout as SignatureStruct

@@ -4,7 +4,7 @@ function GitIndex(repo::GitRepo)
     idx_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_index, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}), idx_ptr_ptr, repo.ptr)
-    return GitIndex(idx_ptr_ptr[])
+    return GitIndex(repo, idx_ptr_ptr[])
 end
 
 function read!(idx::GitIndex, force::Bool = false)
@@ -25,9 +25,8 @@ function write_tree!(idx::GitIndex)
 end
 
 function owner(idx::GitIndex)
-    repo_ptr = ccall((:git_index_owner, :libgit2), Ptr{Void},
-                     (Ptr{Void},), idx.ptr)
-    return GitRepo(repo_ptr)
+    isnull(idx.nrepo) && throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
+    return Base.get(idx.nrepo)
 end
 
 function read_tree!(idx::GitIndex, tree_id::Oid)

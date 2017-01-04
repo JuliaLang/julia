@@ -14,7 +14,7 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void},
     err != 0 && return Cint(err)
 
     # And set the configuration option to true for the push command
-    config = GitConfig(GitRepo(repo_ptr))
+    config = GitConfig(GitRepo(repo_ptr,false))
     name_str = unsafe_string(name)
     err= try set!(config, "remote.$name_str.mirror", true)
          catch -1

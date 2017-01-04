@@ -16,11 +16,11 @@ function GitConfig(path::AbstractString,
     return cfg
 end
 
-function GitConfig(r::GitRepo)
+function GitConfig(repo::GitRepo)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_config, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, r.ptr)
-    return GitConfig(cfg_ptr_ptr[])
+                  (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, repo.ptr)
+    return GitConfig(repo, cfg_ptr_ptr[])
 end
 
 function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
