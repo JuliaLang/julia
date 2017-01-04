@@ -606,10 +606,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
     if (head == toplevel_sym) {
-        int i=0; jl_value_t *res=jl_nothing;
-        for(i=0; i < jl_array_len(ex->args); i++) {
+        size_t last_age = ptls->world_age;
+        jl_value_t *res = jl_nothing;
+        int i;
+        for (i = 0; i < jl_array_len(ex->args); i++) {
+            ptls->world_age = jl_world_counter; // eval each statement in the newest world age
             res = jl_toplevel_eval_flex(jl_array_ptr_ref(ex->args, i), fast, 0);
         }
+        ptls->world_age = last_age;
         JL_GC_POP();
         return res;
     }
