@@ -55,8 +55,9 @@ julia> 안녕하세요 = "Hello"
 In the Julia REPL and several other Julia editing environments, you can type many Unicode math
 symbols by typing the backslashed LaTeX symbol name followed by tab.  For example, the variable
 name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`-*tab*-`\hat`-
-*tab*-`\_2`-*tab*.  (You can get information on how to type a symbol via tab completion
-by entering it in the REPL help, i.e. typing `?` and then the symbol in the REPL.)
+*tab*-`\_2`-*tab*.  (If you find a symbol somewhere, e.g. in someone else's code,
+that you don't know how to type, the REPL help will tell you: just type `?` and
+then paste the symbol.)
 
 Julia will even let you redefine built-in constants and functions if needed:
 
