@@ -75,6 +75,9 @@ This section lists changes that do not have deprecation warnings.
 
   * `quadgk` has been moved from Base into a separate package. ([#19741])
 
+  * The `RepString` type has been moved to the
+    [LegacyStrings.jl package](https://github.com/JuliaArchive/LegacyStrings.jl).
+
 Library improvements
 --------------------
 

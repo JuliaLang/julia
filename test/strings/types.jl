@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## SubString, RevString, RepString and Cstring tests ##
+## SubString, RevString and Cstring tests ##
 
 ## SubString tests ##
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
@@ -187,34 +187,6 @@ for T in (String, GenericString)
         end
     end
 end
-
-## Repeat strings ##
-
-# issue #7764
-let
-    rs = RepString("foo", 2)
-    @test length(rs) == 6
-    @test sizeof(rs) == 6
-    @test isascii(rs)
-    @test convert(RepString, "foobar") == "foobar"
-    @test typeof(convert(RepString, "foobar")) == RepString
-
-    srep = RepString("Σβ",2)
-    s="Σβ"
-    ss=SubString(s,1,endof(s))
-
-    @test ss^2 == "ΣβΣβ"
-    @test RepString(ss,2) == "ΣβΣβ"
-
-    @test endof(srep) == 7
-
-    @test next(srep, 3) == ('β',5)
-    @test next(srep, 7) == ('β',9)
-
-    @test srep[7] == 'β'
-    @test_throws BoundsError srep[8]
-end
-
 
 ## Cstring tests ##
 
