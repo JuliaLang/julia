@@ -1,7 +1,19 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## generic operations on numbers ##
+"""
+    isinteger(x) -> Bool
 
+Test whether `x` or all its elements are numerically equal to some integer.
+
+```jldoctest
+julia> isinteger(4.0)
+true
+
+julia> isinteger([1; 2; 5.5])
+false
+```
+"""
 isinteger(x::Integer) = true
 
 """
@@ -72,7 +84,19 @@ sign(x::Number) = x == 0 ? x/abs(one(x)) : x/abs(x)
 sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
 sign(x::Unsigned) = ifelse(x > 0, one(x), x)
 abs(x::Real) = ifelse(signbit(x), -x, x)
+
+"""
+    abs2(x)
+
+Squared absolute value of `x`.
+"""
 abs2(x::Real) = x*x
+
+"""
+    flipsign(x, y)
+
+Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
+"""
 flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
 copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
 
@@ -102,8 +126,20 @@ in(x::Number, y::Number) = x == y
 
 map(f, x::Number, ys::Number...) = f(x, ys...)
 
+"""
+    zero(x)
+
+Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+"""
 zero(x::Number) = oftype(x,0)
 zero{T<:Number}(::Type{T}) = convert(T,0)
+
+"""
+    one(x)
+
+Get the multiplicative identity element for the type of `x` (`x` can also specify the type
+itself). For matrices, returns an identity matrix of the appropriate size and type.
+"""
 one(x::Number)  = oftype(x,1)
 one{T<:Number}(::Type{T}) = convert(T,1)
 

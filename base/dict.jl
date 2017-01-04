@@ -283,6 +283,23 @@ function sizehint!(d::Dict, newsz)
     rehash!(d, newsz)
 end
 
+"""
+    empty!(collection) -> collection
+
+Remove all elements from a `collection`.
+
+```jldoctest
+julia> A = Dict("a" => 1, "b" => 2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> empty!(A);
+
+julia> A
+Dict{String,Int64} with 0 entries
+```
+"""
 function empty!{K,V}(h::Dict{K,V})
     fill!(h.slots, 0x0)
     sz = length(h.slots)
