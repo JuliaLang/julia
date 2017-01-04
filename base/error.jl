@@ -21,16 +21,38 @@
 error(s::AbstractString) = throw(ErrorException(s))
 error(s...) = throw(ErrorException(Main.Base.string(s...)))
 
+"""
+    rethrow([e])
+
+Throw an object without changing the current exception backtrace. The default argument is
+the current exception (if called within a `catch` block).
+"""
 rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
+
+"""
+    backtrace()
+
+Get a backtrace object for the current program point.
+"""
 backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, (Int32,), false)
+
+"""
+    catch_backtrace()
+
+Get the backtrace of the current exception, for use within `catch` blocks.
+"""
 catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
 
 ## keyword arg lowering generates calls to this ##
 kwerr(kw, args...) = throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
 
 ## system error handling ##
+"""
+    systemerror(sysfunc, iftrue)
 
+Raises a `SystemError` for `errno` with the descriptive string `sysfunc` if `iftrue` is `true`
+"""
 systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(string(p), Libc.errno(), extrainfo)) : nothing
 
 ## assertion functions and macros ##

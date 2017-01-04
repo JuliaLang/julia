@@ -130,13 +130,22 @@ promote_type{T}(::Type{T}, ::Type{T}) = (@_pure_meta; T)
 promote_type{T}(::Type{T}, ::Type{Bottom}) = (@_pure_meta; T)
 promote_type{T}(::Type{Bottom}, ::Type{T}) = (@_pure_meta; T)
 
-# Try promote_rule in both orders. Typically only one is defined,
-# and there is a fallback returning Bottom below, so the common case is
-#   promote_type(T, S) =>
-#   promote_result(T, S, result, Bottom) =>
-#   typejoin(result, Bottom) => result
+"""
+    promote_type(type1, type2)
+
+Determine a type big enough to hold values of each argument type without loss, whenever
+possible. In some cases, where no type exists to which both types can be promoted
+losslessly, some loss is tolerated; for example, `promote_type(Int64,Float64)` returns
+`Float64` even though strictly, not all `Int64` values can be represented exactly as
+`Float64` values.
+"""
 function promote_type{T,S}(::Type{T}, ::Type{S})
     @_pure_meta
+    # Try promote_rule in both orders. Typically only one is defined,
+    # and there is a fallback returning Bottom below, so the common case is
+    #   promote_type(T, S) =>
+    #   promote_result(T, S, result, Bottom) =>
+    #   typejoin(result, Bottom) => result
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
 end
 
@@ -191,6 +200,12 @@ promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
 *(x::Number, y::Number) = *(promote(x,y)...)
 -(x::Number, y::Number) = -(promote(x,y)...)
 /(x::Number, y::Number) = /(promote(x,y)...)
+
+"""
+    ^(x, y)
+
+Exponentiation operator.
+"""
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
