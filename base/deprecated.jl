@@ -1470,6 +1470,16 @@ end
 @deprecate (|)(A::AbstractArray, b::Number)         A .| b
 @deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
 
+function frexp{T<:AbstractFloat}(A::Array{T})
+    depwarn("`frexp(x::Array)` is discontinued.", :frexp)
+    F = similar(A)
+    E = Array{Int}(size(A))
+    for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
+        F[iF], E[iE] = frexp(A[iA])
+    end
+    return (F, E)
+end
+
 # Calling promote_op is likely a bad idea, so deprecate its convenience wrapper promote_eltype_op
 @deprecate promote_eltype_op(op, As...) promote_op(op, map(eltype, As)...)
 
