@@ -68,6 +68,15 @@ for S in (String, GenericString)
     @test joinpath(splitdir(S(homedir()))...) == homedir()
     @test string(splitdrive(S(homedir()))...) == homedir()
 
+    if is_windows()
+        @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==
+            ("\\\\servername\\hello.world","\\filename.ext")
+        @test splitdrive(S("\\\\servername.com\\hello.world\\filename.ext")) ==
+            ("\\\\servername.com\\hello.world","\\filename.ext")
+        @test splitdrive(S("C:\\foo\\bar")) ==
+            ("C:","\\foo\\bar")
+    end
+
     @test splitext(S("")) == ("", "")
     @test splitext(S(".")) == (".", "")
     @test_broken splitext(S("..")) == ("..", "")
@@ -82,15 +91,6 @@ for S in (String, GenericString)
     @test_broken splitext(S(".foo..")) == (".foo", "..")
     @test_broken splitext(S(".foo...")) == (".foo", "...")
     @test splitext(S(".foo.bar")) == (".foo", ".bar")
-end
-
-if is_windows()
-    @test splitdrive("\\\\servername\\hello.world\\filename.ext") ==
-        ("\\\\servername\\hello.world","\\filename.ext")
-    @test splitdrive("\\\\servername.com\\hello.world\\filename.ext") ==
-        ("\\\\servername.com\\hello.world","\\filename.ext")
-    @test splitdrive("C:\\foo\\bar") ==
-        ("C:","\\foo\\bar")
 end
 
 @test isabspath("~") == false
