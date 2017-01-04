@@ -878,3 +878,10 @@ let f = function (x; kw...)
     @test f(1) == (1, Any[])
     @test g(1) == (1, 2)
 end
+
+# issue #8925
+let
+    global const (c8925, d8925) = (3, 4)
+end
+@test c8925 == 3 && isconst(:c8925)
+@test d8925 == 4 && isconst(:d8925)
