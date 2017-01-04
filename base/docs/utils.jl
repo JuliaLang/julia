@@ -132,11 +132,55 @@ function repl_corrections(io::IO, s)
 end
 repl_corrections(s) = repl_corrections(STDOUT, s)
 
+# inverse of latex_symbols Dict, lazily created as needed
+const symbols_latex = Dict{String,String}()
+function symbol_latex(s::String)
+    if isempty(symbols_latex)
+        for (k,v) in Base.REPLCompletions.latex_symbols
+            symbols_latex[v] = k
+        end
+    end
+    return get(symbols_latex, s, "")
+end
+function repl_latex(io::IO, s::String)
+    latex = symbol_latex(s)
+    if !isempty(latex)
+        print(io, "\"")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, s)
+        end
+        print(io, "\" can be typed by ")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, latex, "<tab>")
+        end
+        println(io, '\n')
+    elseif any(c -> haskey(symbols_latex, string(c)), s)
+        print(io, "\"")
+        Markdown.with_output_format(:cyan, io) do io
+            print(io, s)
+        end
+        print(io, "\" can be typed by ")
+        Markdown.with_output_format(:cyan, io) do io
+            for c in s
+                cstr = string(c)
+                if haskey(symbols_latex, cstr)
+                    print(io, symbols_latex[cstr], "<tab>")
+                else
+                    print(io, c)
+                end
+            end
+        end
+        println(io, '\n')
+    end
+end
+repl_latex(s::String) = repl_latex(STDOUT, s)
+
 macro repl(ex...) length(ex) == 2 ? repl(ex[1], ex[2]) : repl(ex[1]) end
 
 function repl(io::IO, s::Symbol)
     str = string(s)
     quote
+        repl_latex($io, $str)
         repl_search($io, $str)
         ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($io, $str)
         $(_repl(s))
