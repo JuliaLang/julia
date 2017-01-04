@@ -36,13 +36,13 @@ Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values o
 `EnumName` can be used just like other types and enum member values as regular values, such as
 
 ```jldoctest
-julia> @enum FRUIT apple=1 orange=2 kiwi=3
+julia> @enum Fruit apple=1 orange=2 kiwi=3
 
-julia> f(x::FRUIT) = "I'm a FRUIT with value: \$(Int(x))"
+julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
 f (generic function with 1 method)
 
 julia> f(apple)
-"I'm a FRUIT with value: 1"
+"I'm a Fruit with value: 1"
 ```
 
 `BaseType`, which defaults to `Int32`, must be a bitstype subtype of Integer. Member values can be converted between
