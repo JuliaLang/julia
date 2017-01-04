@@ -899,6 +899,26 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 firstline = false
             end
         end,
+
+        # Open the editor at the location of a stackframe
+        # This is accessing a global variable that gets set in
+        # the show_backtrace function.
+        "^Q" => (s, o...) -> begin
+            linfos = Base.LAST_BACKTRACE_LINE_INFOS
+            str = String(take!(LineEdit.buffer(s)))
+            n = tryparse(Int, str)
+            isnull(n) && @goto writeback
+            n = get(n)
+            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "./REPL")
+                @goto writeback
+            end
+            Base.edit(linfos[n][1], linfos[n][2])
+            Base.LineEdit.refresh_line(s)
+            return
+            @label writeback
+            write(Base.LineEdit.buffer(s), str)
+            return
+        end,
     )
 
     prefix_prompt, prefix_keymap = LineEdit.setup_prefix_keymap(hp, julia_prompt)
