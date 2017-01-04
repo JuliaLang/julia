@@ -124,3 +124,12 @@ let ctestptr = cglobal((:ctest, "libccalltest")),
     @test ctest[1].from_c
     @test ctest[1].pointer === UInt64(ctestptr)
 end
+
+# #19655
+let
+    # not in a `catch`, so should return an empty StackTrace
+    st = stacktrace(empty!(backtrace()))
+
+    @test isempty(st)
+    @test isa(st, StackTrace)
+end
